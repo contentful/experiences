@@ -1,0 +1,24 @@
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Coverage reports
+coverage/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated files
+licenses/licenses.json

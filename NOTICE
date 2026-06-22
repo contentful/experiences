@@ -1,0 +1,26 @@
+# Third-Party Licenses
+
+This project includes third-party software components with the following licenses:
+
+## Direct Dependencies
+
+### Component Name
+- **License**: MIT License
+- **Copyright**: Copyright (c) YEAR Author Name
+- **Source**: https://github.com/author/component
+
+## Development Dependencies
+
+### Component Name
+- **License**: MIT License
+- **Copyright**: Copyright (c) YEAR Author Name
+- **Source**: https://github.com/author/component
+
+---
+
+For a complete list of dependencies and their licenses, run:
+```bash
+npm list --all
+```
+
+To generate an updated license report, see [AUTOMATION-FOR-LICENSES.md](AUTOMATION-FOR-LICENSES.md).

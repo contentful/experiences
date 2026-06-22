@@ -1,0 +1,33 @@
+---
+name: "CodeQL Scan for GitHub Actions Workflows"
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+  pull_request:
+    branches: [main]
+    paths: [".github/workflows/**"]
+
+jobs:
+  analyze:
+    name: Analyze GitHub Actions workflows
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # This job is disabled for this repo, and must be enabled on the repo you are using
+      # - name: Initialize CodeQL
+      #   uses: github/codeql-action/init@v3
+      #   with:
+      #     languages: actions
+
+      # - name: Run CodeQL Analysis
+      #   uses: github/codeql-action/analyze@v3
+      #   with:
+      #     category: actions

@@ -1,0 +1,31 @@
+name: CI
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yaml
+
+  check:
+    needs: build
+    uses: ./.github/workflows/check.yaml
+
+  # ⚠️ TEMPLATE NOTE: The release job is commented out for template repos.
+  # Uncomment this section when setting up your actual project to enable automated releases.
+  # If you are in the Contentful Org, then the VAULT_URL is available as an org secret.
+  # If not, ensure you have configured the required VAULT_URL secret in your repository settings.
+  #
+  # release:
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   needs: [build, check]
+  #   permissions:
+  #     contents: write
+  #     id-token: write
+  #     actions: read
+  #   uses: ./.github/workflows/release.yaml
+  #   secrets:
+  #     VAULT_URL: ${{ secrets.VAULT_URL }}

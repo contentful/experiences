@@ -1,0 +1,7 @@
+# Code Owners for this repository
+# These owners will be the default owners for everything in the repo
+# They will be requested for review when someone opens a pull request
+
+# Default owners for everything in the repo
+# TODO: Change this to your actual team name when using this template
+*       @contentful/team-developer-experience

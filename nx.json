@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "release": {
+    "projects": ["."],
+    "version": {
+      "conventionalCommits": true
+    },
+    "changelog": {
+      "workspaceChangelog": {
+        "createRelease": "github",
+        "file": "{workspaceRoot}/CHANGELOG.md",
+        "renderOptions": {
+          "authors": false
+        }
+      }
+    },
+    "git": {
+      "commitMessage": "chore(release): publish {version} [skip ci]",
+      "tagMessage": "Release {version}"
+    },
+    "releaseTagPattern": "v{version}"
+  }
+}
