@@ -31,7 +31,7 @@ import type {
   ViewportDef,
 } from '@contentful/experiences-core';
 
-const MEDIA_QUERY_REGEXP = /(<|>)(\d+)(px|cm|mm|in|pt|pc)$/;
+const MEDIA_QUERY_REGEXP = /^(<|>)(\d+)(px|cm|mm|in|pt|pc)$/;
 
 /**
  * Convert a Contentful viewport `query` string into a CSS media query.

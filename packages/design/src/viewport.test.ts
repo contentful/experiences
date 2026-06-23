@@ -54,6 +54,12 @@ describe('toCssMediaQuery', () => {
       toCssMediaQuery({ id: 'x', query: 'between 100 and 200', displayName: 'X', previewSize: '' })
     ).toBeUndefined();
   });
+
+  it('returns undefined for queries with a leading-prefix garbage', () => {
+    expect(
+      toCssMediaQuery({ id: 'x', query: 'garbage<992px', displayName: 'X', previewSize: '' })
+    ).toBeUndefined();
+  });
 });
 
 describe('getViewportIndex', () => {
