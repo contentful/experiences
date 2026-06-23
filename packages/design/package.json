@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-design",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Viewport math and design-property resolution utilities for Contentful Experiences",
   "license": "MIT",
   "type": "module",
