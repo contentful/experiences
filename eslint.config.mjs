@@ -21,6 +21,19 @@ export default [
         __filename: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        // Browser globals — used in React adapter (gated by typeof window checks)
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        Element: 'readonly',
+        MediaQueryList: 'readonly',
+        MediaQueryListEvent: 'readonly',
+        crypto: 'readonly',
+        globalThis: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
       },
     },
     plugins: {
@@ -41,7 +54,7 @@ export default [
     },
   },
   {
-    files: ['**/*.test.ts', '**/*.spec.ts'],
+    files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
@@ -49,11 +62,13 @@ export default [
   prettierConfig,
   {
     ignores: [
-      'node_modules/',
-      'dist/',
-      'build/',
-      'coverage/',
-      '*.config.{js,mjs}',
+      '**/node_modules/',
+      '**/dist/',
+      '**/build/',
+      '**/coverage/',
+      '**/.next/',
+      '**/next-env.d.ts',
+      '**/*.config.{js,mjs}',
       '.husky/',
     ],
   },

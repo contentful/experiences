@@ -27,11 +27,11 @@ jobs:
         run: npm run build
 
       - name: Check build artifacts
-        run: ls -la dist/
+        run: ls -la packages/*/dist/
 
       - name: Save Build folders
         uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: |
-            dist
+            packages/*/dist
           key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,0 +1,28 @@
+{
+  "name": "adapter-react",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/adapter-react/src",
+  "projectType": "library",
+  "tags": ["scope:adapter", "runtime:react"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-react",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-react",
+        "command": "vitest run"
+      }
+    }
+  }
+}
