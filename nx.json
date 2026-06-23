@@ -60,8 +60,7 @@
     "releaseTagPattern": "{projectName}@{version}",
     "version": {
       "conventionalCommits": true,
-      "updateDependents": "always",
-      "preserveMatchingDependencyRanges": true
+      "updateDependents": "always"
     },
     "changelog": {
       "projectChangelogs": {
