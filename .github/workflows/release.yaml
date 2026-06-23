@@ -26,6 +26,8 @@ jobs:
           path: github-actions
           exportEnv: false
           secrets: |
+            secret/data/github/github_packages_read GITHUB_PACKAGES_READ_TOKEN | GITHUB_PACKAGES_READ_TOKEN;
+            secret/data/github/github_packages_write GITHUB_PACKAGES_WRITE_TOKEN | GITHUB_PACKAGES_WRITE_TOKEN;
             github/token/${{ github.event.repository.name }}-semantic-release token | GITHUB_TOKEN ;
 
       - name: Get Automation Bot User ID
@@ -43,7 +45,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-          # token: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+          token: ${{ steps.vault.outputs.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -63,12 +65,20 @@ jobs:
           path: |
             packages/*/dist
           key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Setup npmrc file
+        # Pins the @contentful scope to GitHub Packages and authenticates
+        # with the bot's package-write token so `nx release` can publish.
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ steps.vault.outputs.GITHUB_PACKAGES_WRITE_TOKEN }}" > ~/.npmrc
+          echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
       - name: NX Release
         # `--first-release` is required on the very first run because there
         # are no prior conventional-commit version tags to derive bumps
         # from. Remove this flag in a follow-up after the first successful
-        # release lands tags like `core@0.1.0`, `experiences-react@0.1.0`,
+        # release lands tags like `core@0.0.1`, `experiences-react@0.0.1`,
         # etc. Subsequent runs use `npx nx release --yes` only.
         run: |
           npx nx release --first-release --yes
