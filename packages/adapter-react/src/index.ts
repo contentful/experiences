@@ -46,10 +46,7 @@ export type {
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
 export { resolveExperience } from '@contentful/experiences-core';
-export type {
-  ResolverConfig,
-  ResolveExperienceOptions,
-} from '@contentful/experiences-core';
+export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-core';
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
 export type {

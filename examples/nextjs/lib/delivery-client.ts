@@ -25,22 +25,15 @@ export interface FetchExperienceResult {
  */
 export async function fetchExperience(
   experienceId: string,
-  options: { locale?: string; preview?: boolean } = {},
+  options: { locale?: string; preview?: boolean } = {}
 ): Promise<FetchExperienceResult> {
-  const spaceId = process.env.SPACE_ID || "";
+  const spaceId = process.env.SPACE_ID || '';
   const environmentId = process.env.ENVIRONMENT_ID ?? 'master';
 
-  const response = await experienceClient.view.getExperience(
-    spaceId,
-    environmentId,
-    experienceId,
-    {
-      locale: options.locale,
-      preview: options.preview ? 'true' : undefined,
-    },
-  );
-
+  const response = await experienceClient.view.getExperience(spaceId, environmentId, experienceId, {
+    locale: options.locale,
+    preview: options.preview ? 'true' : undefined,
+  });
 
   return { payload: response };
-
 }

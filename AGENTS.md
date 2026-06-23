@@ -39,11 +39,11 @@ experiences/
 
 ### Package roles
 
-| Folder | npm name | Audience |
-|---|---|---|
-| `packages/core` | `@contentful/experiences-core` | **Internal.** Runtime-neutral types + `resolveExperience`. |
-| `packages/design` | `@contentful/experiences-design` | **Internal.** Pure viewport math. |
-| `packages/adapter-react` | `@contentful/experiences-react` | **Customer-facing.** React renderer + re-exports of everything. |
+| Folder                   | npm name                         | Audience                                                        |
+| ------------------------ | -------------------------------- | --------------------------------------------------------------- |
+| `packages/core`          | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.      |
+| `packages/design`        | `@contentful/experiences-design` | **Internal.** Pure viewport math.                               |
+| `packages/adapter-react` | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything. |
 
 **Customers install only the framework adapter.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
@@ -134,7 +134,7 @@ The `registration` object exists as a seam for future capabilities/metadata Tyle
 
 ```ts
 export type Components = Record<string, ComponentConfig<any>>;
-export type Templates  = Record<string, TemplateConfig<any>>;
+export type Templates = Record<string, TemplateConfig<any>>;
 ```
 
 Per-entry prop narrowing happens at `defineComponent<Props>(...)` call time, not at registry-lookup time. The renderer dispatches by string key — at that point, the per-component prop type has been erased anyway. Using `any` here is intentional: it's the only way to compose differently-typed entries into one record without forcing customers to wrap entries in a discriminated union.
@@ -190,6 +190,7 @@ Next.js 15 pins `@types/react@19`. Our root devDep is also `@types/react@19`. Mi
 ### Template URN extraction shares logic with components
 
 Both ComponentType and Template URNs use the same path shape:
+
 ```
 crn:contentful:::experience:spaces/$self/environments/$self/{componentTypes|templates}/<id>
 ```
@@ -215,6 +216,7 @@ The current release workflow is shaped for **GitHub Packages** (Vault-supplied `
 ### Nx project name vs npm package name vs folder
 
 These three CAN diverge:
+
 - Folder: `packages/adapter-react`
 - Nx project name: `adapter-react` (in `project.json`)
 - npm package name: `@contentful/experiences-react` (in `package.json`)

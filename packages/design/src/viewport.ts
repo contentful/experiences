@@ -70,7 +70,7 @@ export function getViewportIndex(viewports: ViewportDef[], viewportId?: string):
  * envelope passes through (customer-owned resolution).
  */
 function unwrapInner(
-  inner: ManualDesignValue | DesignToken | undefined,
+  inner: ManualDesignValue | DesignToken | undefined
 ): string | number | boolean | DesignToken | undefined {
   if (!inner) return undefined;
   if (inner.type === 'ManualDesignValue') return inner.value;
@@ -84,7 +84,7 @@ function unwrapInner(
 function resolveValuesByViewport(
   bag: ValuesByViewport,
   viewports: ViewportDef[],
-  activeViewportIndex: number,
+  activeViewportIndex: number
 ): ManualDesignValue | DesignToken | undefined {
   for (let i = activeViewportIndex; i >= 0; i--) {
     const viewport = viewports[i];
@@ -106,7 +106,7 @@ function resolveValuesByViewport(
 export function getValueForViewport(
   prop: DesignPropValue | undefined,
   viewports: ViewportDef[],
-  activeViewportIndex: number,
+  activeViewportIndex: number
 ): string | number | boolean | DesignToken | undefined {
   if (!prop) return undefined;
   if (prop.type === 'ManualDesignValue') return prop.value;
@@ -121,7 +121,7 @@ export function getValueForViewport(
 export function resolveDesignProperties(
   designProperties: Record<string, DesignPropValue> | undefined,
   viewports: ViewportDef[],
-  activeViewportIndex: number,
+  activeViewportIndex: number
 ): Record<string, string | number | boolean | DesignToken> {
   const out: Record<string, string | number | boolean | DesignToken> = {};
   if (!designProperties) return out;

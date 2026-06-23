@@ -20,11 +20,7 @@ import type {
 } from '@contentful/experiences-core';
 
 import { MissingComponent } from './missing-component';
-import {
-  NodesRenderer,
-  WrapWithTemplate,
-  type RenderUnknown,
-} from './nodes-renderer';
+import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
 
@@ -63,7 +59,7 @@ export function ClientExperienceRenderer({
 }: ClientExperienceRendererProps): ReactNode {
   if (typeof window === 'undefined') {
     throw new Error(
-      'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR.',
+      'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR.'
     );
   }
   if (!experience) return null;
@@ -78,8 +74,9 @@ export function ClientExperienceRenderer({
   );
 }
 
-interface InnerProps
-  extends Required<Pick<ClientExperienceRendererProps, 'config' | 'renderUnknown'>> {
+interface InnerProps extends Required<
+  Pick<ClientExperienceRendererProps, 'config' | 'renderUnknown'>
+> {
   experience: PortableRenderPlan;
   initialViewportId?: string;
   context?: Partial<ExperienceContext>;
@@ -92,10 +89,7 @@ function ClientExperienceRendererInner({
   context,
   renderUnknown,
 }: InnerProps): ReactNode {
-  const { activeViewportIndex } = useActiveViewport(
-    experience.viewports,
-    initialViewportId,
-  );
+  const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
   const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
 
   const renderContext: RenderContext = {
@@ -108,11 +102,7 @@ function ClientExperienceRendererInner({
   };
 
   return (
-    <WrapWithTemplate
-      template={experience.template}
-      config={config}
-      experience={renderContext}
-    >
+    <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
       <NodesRenderer
         nodes={experience.nodes}
         config={config}

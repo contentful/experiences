@@ -27,5 +27,5 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       config={experienceConfig}
       context={{ isPreview: previewMode, metadata: { slug } }}
     />
-  )
+  );
 }

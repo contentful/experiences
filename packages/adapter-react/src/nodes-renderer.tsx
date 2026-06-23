@@ -9,10 +9,7 @@
 
 import { Fragment, type ReactNode } from 'react';
 
-import type {
-  PortableRenderNode,
-  PortableTemplate,
-} from '@contentful/experiences-core';
+import type { PortableRenderNode, PortableTemplate } from '@contentful/experiences-core';
 import { resolveDesignProperties } from '@contentful/experiences-design';
 
 import type { MissingComponentProps } from './missing-component';
@@ -56,12 +53,7 @@ interface NodeRendererProps {
   renderUnknown: RenderUnknown;
 }
 
-function NodeRenderer({
-  node,
-  config,
-  experience,
-  renderUnknown,
-}: NodeRendererProps): ReactNode {
+function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererProps): ReactNode {
   const { componentTypeId } = node.registration;
   const componentConfig = config.components[componentTypeId];
   if (!componentConfig) {
@@ -91,7 +83,7 @@ function NodeRenderer({
   const resolvedDesign = resolveDesignProperties(
     node.props.design,
     experience.viewports,
-    experience.activeViewportIndex,
+    experience.activeViewportIndex
   );
 
   // Merge precedence (last wins): defaults < content < design <
@@ -131,7 +123,7 @@ export function WrapWithTemplate({
   if (!templateConfig) {
     if (typeof console !== 'undefined') {
       console.warn(
-        `[@contentful/experiences-react] No template registered for id "${template.templateId}". Rendering nodes without the template wrapper.`,
+        `[@contentful/experiences-react] No template registered for id "${template.templateId}". Rendering nodes without the template wrapper.`
       );
     }
     return <Fragment>{children}</Fragment>;
@@ -140,7 +132,7 @@ export function WrapWithTemplate({
   const resolvedDesign = resolveDesignProperties(
     template.props.design,
     experience.viewports,
-    experience.activeViewportIndex,
+    experience.activeViewportIndex
   );
 
   // Merge precedence mirrors components: defaults < content < design <

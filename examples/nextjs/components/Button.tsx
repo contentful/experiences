@@ -28,7 +28,6 @@ export function Button({ text, url, type = 'primary', children }: ButtonProps) {
     border: palette.border ?? 'none',
     textDecoration: 'none',
     cursor: 'pointer',
-
   };
 
   const content = (

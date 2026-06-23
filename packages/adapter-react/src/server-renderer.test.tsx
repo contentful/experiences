@@ -28,7 +28,7 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
 
 function componentNode(
   typeId: string,
-  rest: Omit<ComponentTypeNode, 'componentType'> = {},
+  rest: Omit<ComponentTypeNode, 'componentType'> = {}
 ): ComponentTypeNode {
   return {
     componentType: {
@@ -58,7 +58,10 @@ const config: Config = {
     },
     'contentful-button': {
       render: (props) => {
-        const { label, cfBackgroundColor } = props as { label?: string; cfBackgroundColor?: string };
+        const { label, cfBackgroundColor } = props as {
+          label?: string;
+          cfBackgroundColor?: string;
+        };
         return (
           <button type="button" style={{ background: cfBackgroundColor }}>
             {label}
@@ -107,7 +110,9 @@ const payload: ExperiencePayload = {
 describe('ServerExperienceRenderer', () => {
   it('renders a nested experience with desktop-resolved design props by default', async () => {
     const plan = await resolveExperience(payload, config);
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={config} />
+    );
 
     expect(html).toContain('data-padding="40px"');
     expect(html).toContain('font-size:32px');
@@ -119,7 +124,7 @@ describe('ServerExperienceRenderer', () => {
   it('honors initialViewportId when resolving design props', async () => {
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />,
+      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />
     );
 
     expect(html).toContain('data-padding="12px"');
@@ -131,7 +136,7 @@ describe('ServerExperienceRenderer', () => {
     // tablet has no cfFontSize defined → cascades to desktop
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="tablet" />,
+      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="tablet" />
     );
 
     expect(html).toContain('font-size:32px'); // cascaded from desktop
@@ -139,8 +144,12 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it('renders null when plan is null/undefined', () => {
-    expect(renderToStaticMarkup(<ServerExperienceRenderer experience={null} config={config} />)).toBe('');
-    expect(renderToStaticMarkup(<ServerExperienceRenderer experience={undefined} config={config} />)).toBe('');
+    expect(
+      renderToStaticMarkup(<ServerExperienceRenderer experience={null} config={config} />)
+    ).toBe('');
+    expect(
+      renderToStaticMarkup(<ServerExperienceRenderer experience={undefined} config={config} />)
+    ).toBe('');
   });
 
   it('injects experience context with isPreview false by default', async () => {
@@ -157,7 +166,7 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig,
+      captureConfig
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={captureConfig} />);
 
@@ -186,11 +195,9 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig,
+      captureConfig
     );
-    renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={captureConfig} />,
-    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={captureConfig} />);
 
     expect(seen).not.toBeNull();
     expect(seen!.activeViewportIndex).toBe(0);
@@ -212,14 +219,14 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig,
+      captureConfig
     );
     renderToStaticMarkup(
       <ServerExperienceRenderer
         experience={plan}
         config={captureConfig}
         initialViewportId="mobile"
-      />,
+      />
     );
 
     expect(seen!.activeViewportIndex).toBe(2);
@@ -261,12 +268,12 @@ describe('ServerExperienceRenderer', () => {
         experience={planWithMissing}
         config={justContainer}
         context={{ isPreview: true }}
-      />,
+      />
     );
     expect(previewHtml).toContain('data-experiences-missing="NotRegistered"');
 
     const productionHtml = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={planWithMissing} config={justContainer} />,
+      <ServerExperienceRenderer experience={planWithMissing} config={justContainer} />
     );
     expect(productionHtml).not.toContain('data-experiences-missing');
     expect(productionHtml).toBe('<div></div>');
@@ -284,9 +291,7 @@ describe('ServerExperienceRenderer', () => {
               variant: string;
               priority: string;
             };
-            return (
-              <span data-variant={variant} data-priority={priority} />
-            );
+            return <span data-variant={variant} data-priority={priority} />;
           },
         },
       },
@@ -301,10 +306,10 @@ describe('ServerExperienceRenderer', () => {
           }),
         ],
       },
-      config,
+      config
     );
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />,
+      <ServerExperienceRenderer experience={plan} config={config} />
     );
     expect(html).toContain('data-variant="fromContent"');
     expect(html).toContain('data-priority="low"');
@@ -339,7 +344,7 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={planWithResolved} config={config} />,
+      <ServerExperienceRenderer experience={planWithResolved} config={config} />
     );
     // resolved wins over content, content wins over default
     expect(html).toContain('data-value="fromResolveData"');
@@ -374,13 +379,11 @@ describe('ServerExperienceRenderer', () => {
         },
       },
       viewports: VIEWPORTS,
-      nodes: [
-        componentNode('item', { id: 'i', contentProperties: { value: 'inside' } }),
-      ],
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />,
+      <ServerExperienceRenderer experience={plan} config={config} />
     );
     expect(html).toContain('data-template="page"');
     expect(html).toContain('data-title="Default Title"');
@@ -406,13 +409,11 @@ describe('ServerExperienceRenderer', () => {
         },
       },
       viewports: VIEWPORTS,
-      nodes: [
-        componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } }),
-      ],
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } })],
     };
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />,
+      <ServerExperienceRenderer experience={plan} config={config} />
     );
     expect(html).toBe('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));

@@ -15,12 +15,11 @@ export default function HomePage() {
       <h1 style={{ marginTop: 0 }}>Contentful Experiences — Next.js example</h1>
       <p style={{ color: '#4b5563' }}>
         This app demonstrates rendering a Contentful Experience payload with{' '}
-        <code>@contentful/experiences-react</code> in a Next.js App Router server
-        component.
+        <code>@contentful/experiences-react</code> in a Next.js App Router server component.
       </p>
       <p style={{ color: '#4b5563' }}>
-        Without <code>EXPERIENCES_CDA_TOKEN</code> set in <code>.env.local</code>,
-        the app uses a built-in mock payload so it works out of the box.
+        Without <code>EXPERIENCES_CDA_TOKEN</code> set in <code>.env.local</code>, the app uses a
+        built-in mock payload so it works out of the box.
       </p>
       <p>
         <Link

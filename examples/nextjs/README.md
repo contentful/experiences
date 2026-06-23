@@ -62,11 +62,7 @@ export function Header({ variant = 'h2', children }) {
 
 ```tsx
 // lib/experience-config.ts — adapter layer
-import {
-  defineComponent,
-  defineTemplate,
-  type Config,
-} from '@contentful/experiences-react';
+import { defineComponent, defineTemplate, type Config } from '@contentful/experiences-react';
 import { Header } from '@/components/Header';
 import { Page } from '@/components/Page';
 
@@ -92,12 +88,12 @@ export const experienceConfig: Config = { components, templates };
 
 The render fn receives a flat prop bag composed of (last-wins):
 
-1. `defaults`            (componentConfig.defaults — fallback values)
-2. `contentProperties`   (editorial values from the payload)
-3. `designProperties`    (viewport-cascaded, envelope-unwrapped to scalars)
-4. `resolveData()`       (return value of componentConfig.resolveData — see below)
-5. slot props            (each named slot becomes a pre-rendered React subtree)
-6. `experience`          ({ isPreview, metadata, viewports, activeViewport, activeViewportIndex })
+1. `defaults` (componentConfig.defaults — fallback values)
+2. `contentProperties` (editorial values from the payload)
+3. `designProperties` (viewport-cascaded, envelope-unwrapped to scalars)
+4. `resolveData()` (return value of componentConfig.resolveData — see below)
+5. slot props (each named slot becomes a pre-rendered React subtree)
+6. `experience` ({ isPreview, metadata, viewports, activeViewport, activeViewportIndex })
 
 So a payload like:
 
@@ -106,7 +102,11 @@ So a payload like:
   "componentType": { "sys": { "urn": ".../componentTypes/button" } },
   "contentProperties": { "text": "Click me", "url": "example.com/go" },
   "designProperties": { "type": { "type": "ManualDesignValue", "value": "primary" } },
-  "slots": { "testSlot": [/* a header node */] }
+  "slots": {
+    "testSlot": [
+      /* a header node */
+    ]
+  }
 }
 ```
 

@@ -17,8 +17,8 @@ This is the **only SDK package customers install** — it re-exports everything 
 ### Authoring
 
 ```ts
-defineComponent<Props>(config)   // Type-narrowing identity for component-type configs
-defineTemplate<Props>(config)    // Same shape, for page-level template wrappers
+defineComponent<Props>(config); // Type-narrowing identity for component-type configs
+defineTemplate<Props>(config); // Same shape, for page-level template wrappers
 ```
 
 ### Resolver
@@ -30,10 +30,10 @@ resolveExperience(payload, config, opts?)   // Async — walks payload, runs res
 ### Renderers
 
 ```ts
-ServerExperienceRenderer        // RSC-friendly, active viewport seeded from initialViewportId
-ClientExperienceRenderer        // 'use client', subscribes to window.matchMedia, alias: ExperienceRenderer
-MissingComponent                // Default fallback for unregistered component types
-useActiveViewport               // Hook used inside ClientExperienceRenderer (rarely needed by consumers)
+ServerExperienceRenderer; // RSC-friendly, active viewport seeded from initialViewportId
+ClientExperienceRenderer; // 'use client', subscribes to window.matchMedia, alias: ExperienceRenderer
+MissingComponent; // Default fallback for unregistered component types
+useActiveViewport; // Hook used inside ClientExperienceRenderer (rarely needed by consumers)
 ```
 
 ### Re-exported types and utilities

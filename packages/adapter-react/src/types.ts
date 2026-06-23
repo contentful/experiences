@@ -1,10 +1,6 @@
 import type { ReactNode } from 'react';
 
-import type {
-  ExperienceContext,
-  ResolveContext,
-  ViewportDef,
-} from '@contentful/experiences-core';
+import type { ExperienceContext, ResolveContext, ViewportDef } from '@contentful/experiences-core';
 
 /**
  * Re-exported for ergonomics: customer code authoring `resolveData` doesn't
@@ -137,7 +133,7 @@ export interface TemplateConfig<Props extends object = Record<string, unknown>> 
  *   });
  */
 export function defineTemplate<Props extends object = Record<string, unknown>>(
-  config: TemplateConfig<Props>,
+  config: TemplateConfig<Props>
 ): TemplateConfig<Props> {
   return config;
 }
@@ -195,7 +191,7 @@ export interface Config {
  *   });
  */
 export function defineComponent<Props extends object = Record<string, unknown>>(
-  config: ComponentConfig<Props>,
+  config: ComponentConfig<Props>
 ): ComponentConfig<Props> {
   return config;
 }

@@ -10,9 +10,5 @@ export default defineConfig({
   outDir: 'dist',
   tsconfig: 'tsconfig.lib.json',
   bundle: false,
-  external: [
-    'react',
-    'react-dom',
-    /^@contentful\//,
-  ],
+  external: ['react', 'react-dom', /^@contentful\//],
 });

@@ -39,7 +39,7 @@ export interface ResolverConfig {
     string,
     {
       resolveData?: (
-        ctx: ResolveContext,
+        ctx: ResolveContext
       ) => Record<string, unknown> | Promise<Record<string, unknown>>;
     }
   >;
@@ -47,7 +47,7 @@ export interface ResolverConfig {
     string,
     {
       resolveData?: (
-        ctx: ResolveContext,
+        ctx: ResolveContext
       ) => Record<string, unknown> | Promise<Record<string, unknown>>;
     }
   >;
@@ -94,12 +94,12 @@ function extractIdFromUrn(urn: string): string {
 function buildNode(
   node: ExperienceNode,
   config: ResolverConfig,
-  nodeRefs: PortableRenderNode[],
+  nodeRefs: PortableRenderNode[]
 ): PortableRenderNode | null {
   if (!isComponentTypeNode(node)) {
     if (typeof console !== 'undefined') {
       console.warn(
-        '[@contentful/experiences-core] Skipping Template-variant node — Templates are not supported in v1.',
+        '[@contentful/experiences-core] Skipping Template-variant node — Templates are not supported in v1.'
       );
     }
     return null;
@@ -112,7 +112,7 @@ function buildNode(
     for (const [slotName, children] of Object.entries(node.slots)) {
       if (!Array.isArray(children)) {
         throw new TypeError(
-          `Slot "${slotName}" on component "${componentTypeId}" must be an array of nodes.`,
+          `Slot "${slotName}" on component "${componentTypeId}" must be an array of nodes.`
         );
       }
       const built: PortableRenderNode[] = [];
@@ -153,7 +153,7 @@ function buildNode(
 export async function resolveExperience(
   payload: ExperiencePayload,
   config: ResolverConfig,
-  options: ResolveExperienceOptions = {},
+  options: ResolveExperienceOptions = {}
 ): Promise<PortableRenderPlan> {
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
@@ -199,7 +199,7 @@ export async function resolveExperience(
     tasks.push(
       Promise.resolve(resolver(ctx)).then((resolved) => {
         node.props.resolved = resolved;
-      }),
+      })
     );
   }
 
@@ -215,7 +215,7 @@ export async function resolveExperience(
       tasks.push(
         Promise.resolve(tplResolver(ctx)).then((resolved) => {
           tpl.props.resolved = resolved;
-        }),
+        })
       );
     }
   }

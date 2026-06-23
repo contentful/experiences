@@ -32,24 +32,26 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
 
 describe('toCssMediaQuery', () => {
   it('returns undefined for the wildcard', () => {
-    expect(toCssMediaQuery({ id: 'd', query: '*', displayName: 'D', previewSize: '' })).toBeUndefined();
+    expect(
+      toCssMediaQuery({ id: 'd', query: '*', displayName: 'D', previewSize: '' })
+    ).toBeUndefined();
   });
 
   it('translates < to max-width minus one', () => {
     expect(toCssMediaQuery({ id: 't', query: '<992px', displayName: 'T', previewSize: '' })).toBe(
-      '(max-width: 991px)',
+      '(max-width: 991px)'
     );
   });
 
   it('translates > to min-width plus one', () => {
     expect(toCssMediaQuery({ id: 'l', query: '>1200px', displayName: 'L', previewSize: '' })).toBe(
-      '(min-width: 1201px)',
+      '(min-width: 1201px)'
     );
   });
 
   it('returns undefined for unrecognized formats', () => {
     expect(
-      toCssMediaQuery({ id: 'x', query: 'between 100 and 200', displayName: 'X', previewSize: '' }),
+      toCssMediaQuery({ id: 'x', query: 'between 100 and 200', displayName: 'X', previewSize: '' })
     ).toBeUndefined();
   });
 });
@@ -80,9 +82,9 @@ describe('getValueForViewport', () => {
   });
 
   it('resolves a ValuesByViewport bag for the active viewport', () => {
-    expect(
-      getValueForViewport(vbv({ desktop: m('40px'), mobile: m('12px') }), VIEWPORTS, 0),
-    ).toBe('40px');
+    expect(getValueForViewport(vbv({ desktop: m('40px'), mobile: m('12px') }), VIEWPORTS, 0)).toBe(
+      '40px'
+    );
   });
 
   it('cascades back through earlier viewports when the active one has no value', () => {
@@ -92,9 +94,9 @@ describe('getValueForViewport', () => {
 
   it('returns the most-specific value when multiple are defined', () => {
     // active = tablet (index 1); tablet has its own value
-    expect(
-      getValueForViewport(vbv({ desktop: m('40px'), tablet: m('24px') }), VIEWPORTS, 1),
-    ).toBe('24px');
+    expect(getValueForViewport(vbv({ desktop: m('40px'), tablet: m('24px') }), VIEWPORTS, 1)).toBe(
+      '24px'
+    );
   });
 
   it('returns undefined when nothing in the cascade has a value', () => {
@@ -110,13 +112,9 @@ describe('getValueForViewport', () => {
       type: 'DesignToken',
       value: 'color.primary',
     };
-    expect(
-      getValueForViewport(
-        vbv({ desktop: token as ManualDesignValue }),
-        VIEWPORTS,
-        0,
-      ),
-    ).toEqual({ type: 'DesignToken', value: 'color.primary' });
+    expect(getValueForViewport(vbv({ desktop: token as ManualDesignValue }), VIEWPORTS, 0)).toEqual(
+      { type: 'DesignToken', value: 'color.primary' }
+    );
   });
 });
 
@@ -128,7 +126,7 @@ describe('resolveDesignProperties', () => {
         cfBorder: vbv({ desktop: m('1px solid #eee') }),
       },
       VIEWPORTS,
-      2, // mobile
+      2 // mobile
     );
 
     expect(resolved.cfPadding).toBe('12px');
@@ -143,7 +141,7 @@ describe('resolveDesignProperties', () => {
         cfColor: { type: 'DesignToken', value: 'color.primary' },
       },
       VIEWPORTS,
-      0,
+      0
     );
 
     expect(resolved.cfPadding).toBe('20px');
@@ -155,7 +153,7 @@ describe('resolveDesignProperties', () => {
     const resolved = resolveDesignProperties(
       { cfPadding: vbv({ mobile: m('12px') }) },
       VIEWPORTS,
-      0, // desktop, no cascade upward
+      0 // desktop, no cascade upward
     );
 
     expect(resolved).toEqual({});

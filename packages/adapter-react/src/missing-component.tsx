@@ -25,7 +25,7 @@ export function MissingComponent({
   if (typeof console !== 'undefined') {
     const idLabel = nodeId ? ` (nodeId: ${nodeId})` : '';
     console.warn(
-      `[@contentful/experiences] No component registered for type "${componentTypeId}"${idLabel}.`,
+      `[@contentful/experiences] No component registered for type "${componentTypeId}"${idLabel}.`
     );
   }
   if (!experience.isPreview) return null;
@@ -40,7 +40,9 @@ export function MissingComponent({
       data-experiences-missing={componentTypeId}
     >
       <strong>Missing component &lsquo;{componentTypeId}&rsquo;</strong>
-      <p>This component is referenced by the Experience payload but is not registered in the Config.</p>
+      <p>
+        This component is referenced by the Experience payload but is not registered in the Config.
+      </p>
     </div>
   );
 }

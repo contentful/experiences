@@ -16,7 +16,7 @@ const VIEWPORTS = [
 
 function componentNode(
   typeId: string,
-  rest: Omit<ComponentTypeNode, 'componentType'> = {},
+  rest: Omit<ComponentTypeNode, 'componentType'> = {}
 ): ComponentTypeNode {
   return {
     componentType: {
@@ -207,9 +207,7 @@ describe('resolveExperience — IR construction', () => {
     expect(plan.nodes[0]!.nodeId).toBe('page');
     expect(plan.nodes[0]!.slots.children![0]!.nodeId).toBe('inner');
     expect(plan.nodes[0]!.slots.children![0]!.slots.children![0]!.nodeId).toBe('btn');
-    expect(
-      plan.nodes[0]!.slots.children![0]!.slots.children![0]!.props.content.label,
-    ).toBe('Go');
+    expect(plan.nodes[0]!.slots.children![0]!.slots.children![0]!.props.content.label).toBe('Go');
   });
 });
 

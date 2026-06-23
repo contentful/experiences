@@ -69,11 +69,7 @@ const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! 
 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const payload = await client.view.getExperience(
-    process.env.SPACE_ID!,
-    'master',
-    slug,
-  );
+  const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug);
 
   const experience = await resolveExperience(payload, experienceConfig);
 
@@ -94,13 +90,14 @@ Each entry in your registry pairs a Contentful component-type id with a render f
 ```tsx
 defineComponent<ButtonProps>({
   // ─── all optional ────────────────────────────────────────────
-  defaults: { type: 'primary' },          // lowest precedence
-  resolveData: async ({ content }) => ({  // sync or async transform
+  defaults: { type: 'primary' }, // lowest precedence
+  resolveData: async ({ content }) => ({
+    // sync or async transform
     url: await localizeUrl(content.url),
   }),
   // ─── required ────────────────────────────────────────────────
-  render: Button,                         // your design-system component
-})
+  render: Button, // your design-system component
+});
 ```
 
 Templates are page-level wrappers. Same shape — their render fn always receives a fixed `children: ReactNode` (the rendered experience nodes).
@@ -109,12 +106,12 @@ Templates are page-level wrappers. Same shape — their render fn always receive
 
 The render fn receives a merged prop bag:
 
-1. `defaults`             — fallback values
-2. `contentProperties`    — editorial values from the payload
-3. `designProperties`     — viewport-cascaded, envelope-unwrapped to scalars
+1. `defaults` — fallback values
+2. `contentProperties` — editorial values from the payload
+3. `designProperties` — viewport-cascaded, envelope-unwrapped to scalars
 4. `resolveData()` output — your transform's return value
-5. slot props             — each named slot becomes a pre-rendered React subtree
-6. `experience`           — `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`
+5. slot props — each named slot becomes a pre-rendered React subtree
+6. `experience` — `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`
 
 So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`.
 
@@ -126,10 +123,10 @@ Design properties don't need this — they're already pre-resolved to scalars be
 
 ### Server vs Client renderer
 
-| Use this when... | Symbol | Behavior |
-|---|---|---|
-| In a server component (RSC) | `ServerExperienceRenderer` | Active viewport seeded once from `initialViewportId` (e.g. derived from User-Agent on the request) |
-| In a `'use client'` component | `ClientExperienceRenderer` (also exported as `ExperienceRenderer`) | Subscribes to `window.matchMedia`, re-renders on viewport changes |
+| Use this when...              | Symbol                                                             | Behavior                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| In a server component (RSC)   | `ServerExperienceRenderer`                                         | Active viewport seeded once from `initialViewportId` (e.g. derived from User-Agent on the request) |
+| In a `'use client'` component | `ClientExperienceRenderer` (also exported as `ExperienceRenderer`) | Subscribes to `window.matchMedia`, re-renders on viewport changes                                  |
 
 Pass `initialViewportId` to both so the SSR output matches the first client paint (avoids hydration drift).
 
@@ -192,11 +189,11 @@ The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in on
 
 This is an Nx monorepo. Customers install only the framework adapter; the rest is workspace-internal.
 
-| Folder | npm name | Audience |
-|---|---|---|
-| [`packages/core`](./packages/core) | `@contentful/experiences-core` | **Internal.** Runtime-neutral types + `resolveExperience`. |
-| [`packages/design`](./packages/design) | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/adapter-react`](./packages/adapter-react) | `@contentful/experiences-react` | **Customer-facing.** React renderer + re-exports of everything else. |
+| Folder                                               | npm name                         | Audience                                                                                           |
+| ---------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                   | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)               | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/adapter-react`](./packages/adapter-react) | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-svelte`, `packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
 

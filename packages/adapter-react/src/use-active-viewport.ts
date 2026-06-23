@@ -23,9 +23,7 @@ interface MediaQueryMatcher {
   signal: MediaQueryList;
 }
 
-function createMediaQueryMatchers(
-  viewports: ViewportDef[],
-): [MediaQueryMatcher[], boolean[]] {
+function createMediaQueryMatchers(viewports: ViewportDef[]): [MediaQueryMatcher[], boolean[]] {
   const mediaQueryMatches: boolean[] = new Array(viewports.length).fill(false);
   // The first viewport is the wildcard "*" and always matches.
   mediaQueryMatches[0] = true;
@@ -79,11 +77,11 @@ export interface UseActiveViewportResult {
 
 export function useActiveViewport(
   viewports: ViewportDef[],
-  initialViewportId?: string,
+  initialViewportId?: string
 ): UseActiveViewportResult {
   const matches = useMediaQueryMatchers(viewports);
   const [activeViewportIndex, setActiveViewportIndex] = useState<number>(() =>
-    getViewportIndex(viewports, initialViewportId),
+    getViewportIndex(viewports, initialViewportId)
   );
 
   useEffect(() => {
