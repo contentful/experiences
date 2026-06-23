@@ -2,7 +2,7 @@
 #  catalog-info.yaml - Backstage Metadata Declaration
 #  --------------------------------------------------------------
 #  This file provides metadata for Backstage, which is used by
-#  Roadie (Contentful’s Backstage service provider) to display,
+#  Roadie (Contentful's Backstage service provider) to display,
 #  manage, and document this library/service in the Contentful
 #  internal developer portal.
 # ================================================================
@@ -10,22 +10,24 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: your-package-name
-  description: A brief description of your SDK/tool/library
+  name: experiences
+  description: Renderer SDK suite for Contentful Experience Orchestration (ExO) — framework adapters, runtime-neutral resolver, design-token + viewport utilities.
   annotations:
-    github.com/project-slug: contentful/repo-name
+    github.com/project-slug: contentful/experiences
   tags:
     - typescript
     - sdk
-    - library
+    - experiences
+    - exo
+    - monorepo
   links:
-    - url: https://github.com/contentful/repo-name
+    - url: https://github.com/contentful/experiences
       title: GitHub Repository
       icon: github
-    - url: https://www.npmjs.com/package/@contentful/your-package-name
-      title: npm Package
+    - url: https://www.npmjs.com/package/@contentful/experiences-react
+      title: '@contentful/experiences-react (npm)'
       icon: npm
 spec:
   type: library
   lifecycle: experimental
-  owner: team-name
+  owner: team-developer-experience

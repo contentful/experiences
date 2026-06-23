@@ -1,0 +1,28 @@
+{
+  "name": "core",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/core/src",
+  "projectType": "library",
+  "tags": ["scope:runtime-neutral", "layer:core"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/core",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/core",
+        "command": "vitest run"
+      }
+    }
+  }
+}
