@@ -65,8 +65,13 @@ jobs:
           key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: NX Release
+        # `--first-release` is required on the very first run because there
+        # are no prior conventional-commit version tags to derive bumps
+        # from. Remove this flag in a follow-up after the first successful
+        # release lands tags like `core@0.1.0`, `experiences-react@0.1.0`,
+        # etc. Subsequent runs use `npx nx release --yes` only.
         run: |
-          npx nx release --yes
+          npx nx release --first-release --yes
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
 
