@@ -27,6 +27,7 @@ import { useActiveViewport } from './use-active-viewport';
 const DEFAULT_CONTEXT: ExperienceContext = {
   isPreview: false,
   metadata: {},
+  viewports: [],
 };
 
 const FALLBACK_VIEWPORT: ViewportDef = {

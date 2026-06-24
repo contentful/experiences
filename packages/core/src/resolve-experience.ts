@@ -64,6 +64,7 @@ export interface ResolveExperienceOptions {
 const DEFAULT_EXPERIENCE: ExperienceContext = {
   isPreview: false,
   metadata: {},
+  viewports: [],
 };
 
 function isComponentTypeNode(node: ExperienceNode): node is ComponentTypeNode {
@@ -164,9 +165,9 @@ export async function resolveExperience(
     if (built !== null) nodes.push(built);
   }
 
-  // Build the page-level template stub if the payload carries one. v1 XDA
+  // Build the page-level template stub if the payload carries one. XDA
   // payloads don't yet emit template-level content/design properties, so
-  // the IR carries empty bags — additive when the API grows them.
+  // the IR carries empty bags.
   const templateUrn = payload.sys?.template?.sys.urn;
   let template: PortableTemplate | undefined;
   if (typeof templateUrn === 'string' && templateUrn.length > 0) {
@@ -177,6 +178,8 @@ export async function resolveExperience(
   }
 
   // Pass 2: run resolveData hooks for components AND the template in parallel.
+  // `viewports` is always sourced from the payload — caller-supplied
+  // options.experience.viewports is ignored (the list is fact, not opinion).
   const experience: ExperienceContext = {
     ...DEFAULT_EXPERIENCE,
     ...options.experience,
@@ -184,6 +187,7 @@ export async function resolveExperience(
       ...DEFAULT_EXPERIENCE.metadata,
       ...(options.experience?.metadata ?? {}),
     },
+    viewports: payload.viewports,
   };
 
   const tasks: Array<Promise<void>> = [];

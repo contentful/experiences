@@ -342,7 +342,11 @@ describe('resolveExperience — resolveData hooks', () => {
     await resolveExperience(payload, config, {
       experience: { isPreview: true, metadata: { locale: 'en-US' } },
     });
-    expect(captured).toEqual({ isPreview: true, metadata: { locale: 'en-US' } });
+    expect(captured).toEqual({
+      isPreview: true,
+      metadata: { locale: 'en-US' },
+      viewports: VIEWPORTS,
+    });
   });
 });
 

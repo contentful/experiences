@@ -1,12 +1,57 @@
 import type { ReactNode } from 'react';
 
-import type { ExperienceContext, ResolveContext, ViewportDef } from '@contentful/experiences-core';
+import type {
+  DesignPropValue,
+  ExperienceContext,
+  ResolveContext,
+  ViewportDef,
+} from '@contentful/experiences-core';
 
 /**
  * Re-exported for ergonomics: customer code authoring `resolveData` doesn't
  * have to dig into the core package for the context type.
  */
 export type { ResolveContext };
+
+/**
+ * The full Contentful-side payload for a single component instance, surfaced
+ * on the `contentful` prop of every customer component. Useful for:
+ *
+ *  - Custom design-property resolution outside the SDK's default cascade
+ *  - Branching by `componentTypeId` in a generic wrapper component
+ *  - Attaching analytics to specific node ids
+ *  - Debugging — rendering a `<details>` block with the raw payload in preview
+ *
+ * Design properties stay in their **raw envelope form** here (the same shape
+ * `ctx.design` carries inside `resolveData`). The flat scalars merged into
+ * top-level props are what `resolveDesignProperties` produced after viewport
+ * cascade. The `contentful` prop is the unprocessed input; the spread props
+ * are the processed output.
+ */
+export interface ContentfulComponent {
+  /** The component-type id from the URN's last slash-segment (e.g. `button`). */
+  componentTypeId: string;
+  /** Optional. Pass-through of `node.id` from the payload when the editor supplied one. */
+  nodeId?: string;
+  /** Editorial values exactly as the payload delivered them. */
+  content: Record<string, unknown>;
+  /** Design-property envelopes (NOT viewport-resolved). Same shape `ctx.design` carries. */
+  design: Record<string, DesignPropValue>;
+  /** Return value of the component's `resolveData` hook, if any. Undefined when no hook is registered. */
+  resolved?: Record<string, unknown>;
+}
+
+/**
+ * Same shape as `ContentfulComponent`, but for the page-level template.
+ * Surfaced on the `contentful` prop of the template's render fn.
+ */
+export interface ContentfulTemplate {
+  /** The template id from the URN's last slash-segment (e.g. `page`). */
+  templateId: string;
+  content: Record<string, unknown>;
+  design: Record<string, DesignPropValue>;
+  resolved?: Record<string, unknown>;
+}
 
 /**
  * Render-time experience context. Extends the core `ExperienceContext` with
@@ -29,8 +74,6 @@ export type { ResolveContext };
  * pre-resolved to plain scalars by the renderer before reaching `render`.
  */
 export interface RenderContext extends ExperienceContext {
-  /** All viewports declared on the experience, in cascade order. */
-  viewports: ViewportDef[];
   /** The currently active viewport — last-matching media query / device trait. */
   activeViewport: ViewportDef;
   /** Index of `activeViewport` in `viewports`. */
@@ -38,7 +81,7 @@ export interface RenderContext extends ExperienceContext {
 }
 
 /**
- * Props that flow into every customer component. Composed from five sources,
+ * Props that flow into every customer component. Composed from seven sources,
  * spread last-wins by `nodes-renderer`:
  *
  *   1. defaults                    (componentConfig.defaults)
@@ -47,6 +90,7 @@ export interface RenderContext extends ExperienceContext {
  *   4. resolved data                (return value of componentConfig.resolveData)
  *   5. slot props                   (each named slot becomes a pre-rendered subtree)
  *   6. `experience`                 (RenderContext — runtime context + active viewport)
+ *   7. `contentful`                 (the raw Contentful-side payload — see `ContentfulComponent`)
  *
  * Last-wins precedence means a slot named `text` would shadow a content
  * property named `text` would shadow a `resolveData` return field named
@@ -54,6 +98,7 @@ export interface RenderContext extends ExperienceContext {
  */
 export type ComponentProps<Props extends object> = Props & {
   experience: RenderContext;
+  contentful: ContentfulComponent;
 };
 
 /**
@@ -98,6 +143,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
 export type TemplateProps<Props extends object> = Props & {
   children: ReactNode;
   experience: RenderContext;
+  contentful: ContentfulTemplate;
 };
 
 /**

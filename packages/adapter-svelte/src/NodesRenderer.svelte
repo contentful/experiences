@@ -27,7 +27,7 @@
 
   import NodesRenderer from './NodesRenderer.svelte';
   import type { RenderUnknown } from './component-props.js';
-  import type { Config, RenderContext } from './types.js';
+  import type { ContentfulComponent, Config, RenderContext } from './types.js';
 
   interface NodesRendererProps {
     nodes: PortableRenderNode[];
@@ -48,15 +48,24 @@
       experience.viewports,
       experience.activeViewportIndex
     );
+    // Reserved escape-hatch prop carrying the raw Contentful-side payload.
+    const contentful: ContentfulComponent = {
+      componentTypeId: node.registration.componentTypeId,
+      nodeId: node.nodeId,
+      content: node.props.content,
+      design: node.props.design,
+      resolved: node.props.resolved,
+    };
     // Merge precedence (last wins): defaults < content < design <
-    // resolveData output < experience. Slots are passed via the
-    // `slot` snippet prop separately.
+    // resolveData output < experience < contentful. Slots are passed via
+    // the `slot` snippet prop separately.
     return {
       ...componentConfig.defaults,
       ...node.props.content,
       ...resolvedDesign,
       ...node.props.resolved,
       experience,
+      contentful,
     };
   }
 </script>

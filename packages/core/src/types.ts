@@ -1,12 +1,18 @@
 /**
  * Per-render runtime context attached to every customer component as the
- * `experience` prop. The conventional, single injection point — kept small
- * at v1. Token resolution, locale, viewport metadata, analytics emitter,
- * etc. land here in later iterations.
+ * `experience` prop, and passed to every `resolveData` hook as `ctx.experience`.
+ * The conventional, single injection point — kept small at v1.
+ *
+ * `viewports` (the *list*) is here so customer resolvers can inspect what
+ * viewports an Experience declares (e.g. "is there a mobile viewport?").
+ * The *active* viewport is render-time only and lives on the framework
+ * adapter's RenderContext — exposing it here would mean async resolvers
+ * re-fire on every viewport change, which would be a footgun.
  */
 export interface ExperienceContext {
   isPreview: boolean;
   metadata: Record<string, unknown>;
+  viewports: ViewportDef[];
 }
 
 /**
@@ -142,10 +148,9 @@ export interface ResolveContext {
 
 /**
  * Registration metadata for a single instance — the SDK's interpreted
- * pointer to the customer's component implementation. v1 carries only the
- * resolved component-type id; capabilities (state requirements, supported
- * events, lifecycle hints, fallback ids) land on this object in later
- * iterations without breaking the IR.
+ * pointer to the customer's component implementation. Today carries only
+ * the resolved component-type id; capabilities (state requirements,
+ * supported events, lifecycle hints, fallback ids) land here when needed.
  */
 export interface PortableRegistration {
   componentTypeId: string;

@@ -360,4 +360,62 @@ describe('ServerExperienceRenderer', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
     warn.mockRestore();
   });
+
+  it('passes the raw Contentful payload to components on the contentful prop', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const cfg: Config = {
+      components: {
+        button: { component: CapturingComponent },
+      },
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('button', {
+            id: 'btn-1',
+            contentProperties: { label: 'Buy now' },
+            designProperties: { cfPadding: vbv({ desktop: m('40px') }) },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg, context: { capture: seen } },
+    });
+
+    expect(seen.length).toBeGreaterThan(0);
+    const props = seen[0]!;
+    expect(props.contentful).toEqual({
+      componentTypeId: 'button',
+      nodeId: 'btn-1',
+      content: { label: 'Buy now' },
+      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
+      resolved: undefined,
+    });
+    // Top-level scalar still reflects the viewport-resolved value
+    expect(props.cfPadding).toBe('40px');
+  });
+
+  it('contentful.resolved carries the resolveData return value', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const cfg: Config = {
+      components: {
+        item: {
+          resolveData: () => ({ enriched: 'yes' }),
+          component: CapturingComponent,
+        },
+      },
+    };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('item', { id: 'i' })] },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg, context: { capture: seen } },
+    });
+
+    expect((seen[0]!.contentful as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
+  });
 });

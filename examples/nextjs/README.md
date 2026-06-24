@@ -7,7 +7,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 - **Server-side fetch** via `@contentful/experience-delivery`'s `ContentfulViewDeliveryClient`. The response is structurally compatible with our `ExperiencePayload` — pass it straight to `resolveExperience`, no normalization.
 - **Runtime-neutral plan resolution** with `resolveExperience` (re-exported from `@contentful/experiences-react`) — one async step walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Hydration-safe viewport seeding** — User-Agent parsed on the server, passed as `initialViewportId`, so SSR output matches the client's first paint.
+- **Three-line page** — `fetch` → `resolveExperience` → `<ServerExperienceRenderer>`. Preview mode, viewport seeding, and metadata are all optional advanced features (see [`opts`](#optional-resolveexperience-opts) below); the minimal app needs none of them.
 - **`defineComponent` authoring** — each component file declares its props and renderer in one place; no casts, no boilerplate map wrappers.
 
 ## Run it
@@ -24,23 +24,44 @@ npm run dev
 
 Then visit `http://localhost:3000/<experience-id>` — the slug becomes the Experience ID passed to `client.view.getExperience`.
 
+## Two routes, same data
+
+The example ships two side-by-side routes so you can see what each SDK option buys you. They render the same Experience id; only the SDK plumbing changes.
+
+| Route              | Page                                                             | Config                           | Demonstrates                                                                                         |
+| ------------------ | ---------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `/[slug]`          | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)                   | `experience-config.tsx`          | The minimum: `fetch` → `resolveExperience(payload, config)` → `<ServerExperienceRenderer>`. 3 lines. |
+| `/advanced/[slug]` | [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx) | `experience-config-advanced.tsx` | Preview mode via `?preview=true`, UA → `initialViewportId`, async `resolveData` with external fetch. |
+
+The minimal `[slug]/page.tsx` is three functional lines:
+
+```tsx
+const { payload } = await fetchExperience(experienceId);
+const experience = await resolveExperience(payload, experienceConfig);
+return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+```
+
+Slug-to-ID mapping is left to the customer — see the SDK roadmap in [`AGENTS.md`](../../AGENTS.md) for the longer-term direction.
+
 ## File map
 
 ```
 examples/nextjs/
 ├── app/
-│   ├── layout.tsx            # root layout
-│   ├── page.tsx              # index
-│   └── [slug]/page.tsx       # dynamic Experience page (server component)
-├── components/               # plain design-system components — no SDK imports
+│   ├── layout.tsx                       # root layout
+│   ├── page.tsx                         # index — links to both demo routes
+│   ├── [slug]/page.tsx                  # SIMPLE — 3-line page
+│   └── advanced/[slug]/page.tsx         # ADVANCED — preview, UA seeding, async resolveData
+├── components/                          # plain design-system components — no SDK imports
 │   ├── Button.tsx
 │   ├── Header.tsx
-│   ├── Page.tsx              # used as the page-level template
+│   ├── Page.tsx                         # used as the page-level template
 │   └── Text.tsx
 └── lib/
-    ├── delivery-client.ts    # ContentfulViewDeliveryClient factory
-    ├── detect-viewport.ts    # User-Agent → viewport-id heuristic
-    └── experience-config.tsx # the integration layer (components + templates → experienceConfig)
+    ├── delivery-client.ts               # ContentfulViewDeliveryClient factory
+    ├── detect-viewport.ts               # User-Agent → viewport id (used by the advanced route)
+    ├── experience-config.tsx            # the integration layer for /[slug]
+    └── experience-config-advanced.tsx   # the integration layer for /advanced/[slug] — async fetch + metadata-aware
 ```
 
 ## Integration pattern
@@ -137,13 +158,33 @@ priceTag: defineComponent<PriceTagProps>({
 The Next.js page calls `resolveExperience` once before rendering:
 
 ```ts
-const experience = await resolveExperience(payload, experienceConfig, {
-  experience: { isPreview, metadata: { slug } },
-});
+const experience = await resolveExperience(payload, experienceConfig);
 ```
 
 Resolvers run in parallel across nodes. Viewport resolution stays at render
 time, so client-side viewport changes never re-trigger `resolveData`.
+
+#### Optional `resolveExperience` opts
+
+The third argument lets you pass per-render context that flows into every
+component's `resolveData` (and into the rendered components as `experience.*`).
+Default is `{ isPreview: false, metadata: {} }` — fine for production. Add
+fields when:
+
+- **Preview mode**: `{ experience: { isPreview: true } }` — `MissingComponent`
+  renders a visible red box; some customer components might branch on this.
+- **Per-page metadata**: `{ experience: { metadata: { slug, locale } } }` —
+  available to every `resolveData` for URL building, locale-aware lookups, etc.
+
+```ts
+const experience = await resolveExperience(payload, experienceConfig, {
+  experience: { isPreview, metadata: { slug, locale } },
+});
+```
+
+Pair with `<ServerExperienceRenderer initialViewportId={...}>` (User-Agent
+parsed on the server) when you want SSR output to match the device's expected
+viewport — otherwise the renderer defaults to `viewports[0]`.
 
 ### `defineTemplate` — page-level wrappers
 

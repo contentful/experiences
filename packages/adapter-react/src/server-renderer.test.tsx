@@ -420,3 +420,108 @@ describe('ServerExperienceRenderer', () => {
     warn.mockRestore();
   });
 });
+
+describe('ServerExperienceRenderer — contentful prop', () => {
+  it('passes the raw Contentful payload to components on the contentful prop', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const cfg: Config = {
+      components: {
+        button: {
+          render: (props) => {
+            captured = props as unknown as Record<string, unknown>;
+            return null;
+          },
+        },
+      },
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('button', {
+            id: 'btn-1',
+            contentProperties: { label: 'Buy now' },
+            designProperties: { cfPadding: vbv({ desktop: m('40px') }) },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(captured).not.toBeNull();
+    expect(captured!.contentful).toEqual({
+      componentTypeId: 'button',
+      nodeId: 'btn-1',
+      content: { label: 'Buy now' },
+      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
+      resolved: undefined,
+    });
+    // Top-level scalar still reflects the viewport-resolved value
+    expect(captured!.cfPadding).toBe('40px');
+  });
+
+  it('contentful.resolved carries the resolveData return value', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const cfg: Config = {
+      components: {
+        item: {
+          resolveData: () => ({ enriched: 'yes' }),
+          render: (props) => {
+            captured = props as unknown as Record<string, unknown>;
+            return null;
+          },
+        },
+      },
+    };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('item', { id: 'i' })] },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect((captured!.contentful as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
+  });
+
+  it('passes contentful prop to templates with templateId and content/design/resolved', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const cfg: Config = {
+      components: {
+        item: { render: () => null },
+      },
+      templates: {
+        page: {
+          defaults: { title: 'Default' },
+          render: (props) => {
+            captured = props as unknown as Record<string, unknown>;
+            return <main />;
+          },
+        },
+      },
+    };
+    const plan = await resolveExperience(
+      {
+        sys: {
+          template: {
+            sys: {
+              type: 'ResourceLink',
+              linkType: 'Contentful:Template',
+              urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            },
+          },
+        },
+        viewports: VIEWPORTS,
+        nodes: [componentNode('item', { id: 'i' })],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(captured!.contentful).toEqual({
+      templateId: 'page',
+      content: {},
+      design: {},
+      resolved: undefined,
+    });
+  });
+});

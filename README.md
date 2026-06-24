@@ -10,16 +10,18 @@ npm install @contentful/experiences-react @contentful/experience-delivery
 
 That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities). The `@contentful/experiences-core` and `@contentful/experiences-design` packages are workspace-internal implementation details.
 
+A Svelte adapter (`@contentful/experiences-svelte`) ships in parallel with the same public-API shape; see [`packages/adapter-svelte`](./packages/adapter-svelte). The rest of this README focuses on React.
+
 ---
 
-## Quick start
+## Getting started — the simple path
 
-The smallest working example. Three steps: register your components, fetch + resolve an Experience, render it.
+Three steps: register your components, fetch + resolve, render. The minimal page is **three functional lines**.
 
 ### 1. Register your components and (optional) templates
 
 ```tsx
-// experience-config.ts
+// lib/experience-config.tsx
 import {
   defineComponent,
   defineTemplate,
@@ -37,7 +39,6 @@ const components: Components = {
   // Example URN: crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/button
   button: defineComponent<ButtonProps>({
     defaults: { type: 'primary' },
-    resolveData: ({ content }) => ({ url: ensureScheme(content.url) }),
     render: Button,
   }),
   header: defineComponent<HeaderProps>({
@@ -57,7 +58,7 @@ const templates: Templates = {
 export const experienceConfig: Config = { components, templates };
 ```
 
-### 2. Fetch + resolve an Experience (server-side)
+### 2. Fetch + resolve + render (server-side)
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
@@ -70,97 +71,196 @@ const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug);
-
   const experience = await resolveExperience(payload, experienceConfig);
 
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 }
 ```
 
-That's it. The renderer walks the payload, resolves design properties to plain scalars at the active viewport, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
+That's it. The renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
+
+A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
 
 ---
 
-## How it works
+## Advanced setup
 
-### `defineComponent` + `defineTemplate`
+When the simple path isn't enough, three knobs cover most production needs: **preview mode + metadata** (per-page context flowing into resolvers), **viewport seeding** (SSR matches the device), **async `resolveData`** (enrich props from external sources). All optional. Mix and match.
 
-Each entry in your registry pairs a Contentful component-type id with a render fn. The customer's render fn receives a flat prop bag plus an `experience` context.
+A full working advanced route is at [`examples/nextjs/app/advanced/[slug]/page.tsx`](./examples/nextjs/app/advanced/[slug]/page.tsx) — visit `/advanced/<id>?preview=true&locale=en-US` after running the example.
 
 ```tsx
-defineComponent<ButtonProps>({
-  // ─── all optional ────────────────────────────────────────────
-  defaults: { type: 'primary' }, // lowest precedence
-  resolveData: async ({ content }) => ({
-    // sync or async transform
-    url: await localizeUrl(content.url),
-  }),
-  // ─── required ────────────────────────────────────────────────
-  render: Button, // your design-system component
-});
+// app/advanced/[slug]/page.tsx
+import { headers } from 'next/headers';
+import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+
+import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
+import { experienceConfig } from '@/lib/experience-config';
+
+export default async function AdvancedPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { slug } = await params;
+  const sp = await searchParams;
+  const previewMode = sp.preview === 'true';
+  const locale = (sp.locale as string) ?? 'en-US';
+
+  // 1. UA → viewport id, so SSR matches the device's expected viewport.
+  const userAgent = (await headers()).get('user-agent') ?? '';
+  const initialViewportId = detectViewportFromUserAgent(userAgent);
+
+  const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug, {
+    locale,
+    preview: previewMode ? 'true' : undefined,
+  });
+
+  // 2. Per-page metadata flows into every resolveData hook.
+  const experience = await resolveExperience(payload, experienceConfig, {
+    experience: { isPreview: previewMode, metadata: { slug, locale } },
+  });
+
+  return (
+    <ServerExperienceRenderer
+      experience={experience}
+      config={experienceConfig}
+      initialViewportId={initialViewportId}
+      context={{ isPreview: previewMode, metadata: { slug, locale } }}
+    />
+  );
+}
 ```
 
-Templates are page-level wrappers. Same shape — their render fn always receives a fixed `children: ReactNode` (the rendered experience nodes).
+### Async `resolveData` with external fetch
+
+Each `defineComponent` entry can declare an async `resolveData` that derives final props from external sources. The SDK fans these out across all nodes via `Promise.all`, so a slow resolver doesn't block its peers.
+
+**When does it run?** Once per page render, inside `resolveExperience(payload, config, opts?)` — _before_ the renderer mounts. By the time `<ServerExperienceRenderer>` walks the tree, every `resolveData` has already settled and its return value is sitting on `node.props.resolved`. Resolvers do **not** re-run on viewport changes, prop changes, or client-side navigation — re-fetch by re-calling `resolveExperience` (typically a fresh server request).
+
+```tsx
+button: defineComponent<ButtonProps>({
+  resolveData: async ({ content, experience }) => {
+    const { formattedText } = await fetchEnrichment(content.text as string);
+    return {
+      text: formattedText,
+      url: `/${experience.metadata.locale}/${experience.metadata.slug}`,
+    };
+  },
+  render: Button,
+}),
+```
+
+`experience.metadata` here is exactly what the page passed into `resolveExperience`'s third argument — that's how per-page context reaches every resolver.
+
+---
+
+## API reference
+
+### `resolveExperience(payload, config, opts?)`
+
+Async. Walks the payload, classifies properties, runs every component's `resolveData` in parallel, and returns a `PortableRenderPlan` ready to hand to a renderer.
+
+| Param     | Type                                                                              | Required | Default | Description                                                                                                                                                           |
+| --------- | --------------------------------------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payload` | `ExperiencePayload` — XDA response (or any structurally-compatible object)        | yes      | —       | The Experience payload to resolve.                                                                                                                                    |
+| `config`  | `Config` — `{ components, templates? }` from `defineComponent` / `defineTemplate` | yes      | —       | Your component + template registry.                                                                                                                                   |
+| `opts`    | `{ experience?: Partial<ExperienceContext> }`                                     | no       | `{}`    | Per-render context shallow-merged into the default `{ isPreview: false, metadata: {} }`. The merged context is what every `resolveData` receives as `ctx.experience`. |
+
+### `<ServerExperienceRenderer />`
+
+SSR-friendly renderer. No reactive subscriptions; the active viewport is resolved once from `initialViewportId`. Safe to use in React Server Components.
+
+| Prop                | Type                                          | Required | Default                              | Description                                                                                            |
+| ------------------- | --------------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `experience`        | `PortableRenderPlan \| null \| undefined`     | yes      | —                                    | The resolved plan from `resolveExperience`. Renders nothing if null/undefined.                         |
+| `config`            | `Config`                                      | yes      | —                                    | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                    |
+| `initialViewportId` | `string`                                      | no       | First viewport id                    | Seeds the active viewport. Typically derived from User-Agent server-side.                              |
+| `context`           | `Partial<ExperienceContext>`                  | no       | `{ isPreview: false, metadata: {} }` | Shallow-merged into the render-time `experience` context customer components receive.                  |
+| `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent`                   | Fallback for unregistered component types. Default: visible red box in preview, silent null otherwise. |
+
+### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)
+
+Client-side renderer with reactive viewport tracking via `window.matchMedia`. Use in `'use client'` components. Throws if rendered on the server. Same prop shape as `ServerExperienceRenderer`.
+
+### `defineComponent<Props>(config)`
+
+Identity helper that narrows `resolveData` and `render` parameter types to your declared `Props`.
+
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence prop bag. Merged in before content / design / resolveData / slots / experience.                                                                                                                                                  |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | —       | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (raw envelopes), experience }`; returns a partial prop bag merged after content + design. |
+| `render`      | `(props: ComponentProps<Props>) => ReactNode`                        | yes      | —       | The component's render function. Receives a flat prop bag plus `experience: RenderContext` and `contentful: ContentfulComponent` (raw Contentful payload — see below).                                                                             |
+
+### `defineTemplate<Props>(config)`
+
+Same shape as `defineComponent`. The `render` fn additionally receives a fixed `children: ReactNode` (the rendered experience nodes) — templates wrap the page-level chrome around them.
+
+| Field         | Type                                                                 | Required | Default | Description                                                                                         |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                 |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | —       | Same as components. Runs once per render against the template's `props`.                            |
+| `render`      | `(props: TemplateProps<Props>) => ReactNode`                         | yes      | —       | Receives `{ ...props, children, experience, contentful }` (where `contentful: ContentfulTemplate`). |
+
+### `useActiveViewport(viewports, initialViewportId?)`
+
+React hook used internally by `ClientExperienceRenderer`. Customers rarely need it directly. Returns `{ activeViewportIndex }` and updates on `matchMedia` changes.
+
+### `MissingComponent`
+
+Default `renderUnknown` fallback. Visible red box when `experience.isPreview === true`, silent null otherwise. Override per-render via the `renderUnknown` prop on either renderer.
+
+### `RenderContext` — what `experience.*` carries
+
+Every customer component and `resolveData` hook sees an `experience` context. The shape:
+
+| Field                 | Type                      | Available in        | Description                                                                                                                                                                                       |
+| --------------------- | ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isPreview`           | `boolean`                 | render, resolveData | True when the page is in editor / preview mode. Components can branch on this for placeholder UI.                                                                                                 |
+| `metadata`            | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` opts / renderer `context` prop. Free-form.                                                                                                    |
+| `viewports`           | `ViewportDef[]`           | render, resolveData | All viewports declared on the experience, in cascade order. Stable for the duration of the page render.                                                                                           |
+| `activeViewport`      | `ViewportDef`             | render only         | The currently active viewport — last-matching media query / device trait. **Not** in `resolveData` because it's a render-time concept and would re-fire async resolvers on every viewport change. |
+| `activeViewportIndex` | `number`                  | render only         | Index of `activeViewport` in `viewports`. Same caveat.                                                                                                                                            |
+
+### `contentful` prop — the raw payload escape hatch
+
+Every customer component (and template) receives a `contentful` prop alongside the merged props and the `experience` context. It's the unprocessed Contentful-side input: raw design envelopes, the originating `componentTypeId`, the `nodeId` if the editor supplied one, and the `resolveData` output.
+
+Use it for:
+
+- **Custom design resolution** outside the SDK's default cascade (e.g. emitting CSS variables, multi-brand theming).
+- **Branching by `componentTypeId`** in a generic wrapper component.
+- **Analytics / instrumentation** keyed off `nodeId`.
+- **Debug overlays** in preview mode (`<details>` with the raw payload).
+
+Components see `ContentfulComponent`:
+
+| Field             | Type                                   | Description                                                                                 |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `componentTypeId` | `string`                               | The id from `componentType.sys.urn`'s last slash-segment.                                   |
+| `nodeId`          | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
+| `content`         | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
+| `design`          | `Record<string, DesignPropValue>`      | Design-property envelopes (NOT viewport-resolved).                                          |
+| `resolved`        | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
+
+Templates see `ContentfulTemplate` — the same shape but with `templateId` instead of `componentTypeId` (and no `nodeId`).
 
 ### Merge precedence (last wins)
 
-The render fn receives a merged prop bag:
+The render fn receives a flat prop bag composed in this order:
 
-1. `defaults` — fallback values
+1. `defaults` — fallback values from `defineComponent`
 2. `contentProperties` — editorial values from the payload
 3. `designProperties` — viewport-cascaded, envelope-unwrapped to scalars
 4. `resolveData()` output — your transform's return value
 5. slot props — each named slot becomes a pre-rendered React subtree
-6. `experience` — `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`
+6. `experience` — the `RenderContext` above
+7. `contentful` — the raw payload escape hatch (see below)
 
 So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`.
-
-### Active viewport
-
-Customer components receive `experience.activeViewport` — the runtime answer to "which viewport am I rendering at?". Useful for conditional logic the SDK can't pre-resolve (different children per viewport, disabling animations on small screens, analytics).
-
-Design properties don't need this — they're already pre-resolved to scalars before reaching `render`.
-
-### Server vs Client renderer
-
-| Use this when...              | Symbol                                                             | Behavior                                                                                           |
-| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| In a server component (RSC)   | `ServerExperienceRenderer`                                         | Active viewport seeded once from `initialViewportId` (e.g. derived from User-Agent on the request) |
-| In a `'use client'` component | `ClientExperienceRenderer` (also exported as `ExperienceRenderer`) | Subscribes to `window.matchMedia`, re-renders on viewport changes                                  |
-
-Pass `initialViewportId` to both so the SSR output matches the first client paint (avoids hydration drift).
-
-```tsx
-import { headers } from 'next/headers';
-
-const userAgent = (await headers()).get('user-agent') ?? '';
-const initialViewportId = detectViewportFromUserAgent(userAgent); // your call
-
-return (
-  <ServerExperienceRenderer
-    experience={experience}
-    config={experienceConfig}
-    initialViewportId={initialViewportId}
-  />
-);
-```
-
----
-
-## Example app
-
-A working Next.js 15 example lives in [`examples/nextjs/`](./examples/nextjs/). It demonstrates:
-
-- Server-side fetch via `@contentful/experience-delivery`
-- `defineComponent` + `defineTemplate` integration layer in `lib/experience-config.ts`
-- Plain design-system components in `components/` (no SDK awareness)
-- User-Agent → viewport-id seeding for hydration-safe SSR
-
-```sh
-cd examples/nextjs
-cp .env.example .env.local      # fill in SPACE_ID + CDA_TOKEN
-npm run dev
-```
 
 ---
 
@@ -181,7 +281,7 @@ export function Button({ text, url, type = 'primary' }: ButtonProps) {
 }
 ```
 
-The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in one file: `lib/experience-config.ts`. Easy to scan, easy to change.
+The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in one file: `lib/experience-config.tsx`. Easy to scan, easy to change.
 
 ---
 
@@ -189,13 +289,14 @@ The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in on
 
 This is an Nx monorepo. Customers install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                               | npm name                         | Audience                                                                                           |
-| ---------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                   | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)               | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/adapter-react`](./packages/adapter-react) | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
+| Folder                                                 | npm name                         | Audience                                                                                           |
+| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
 
-Future framework adapters slot in under the same pattern (`packages/adapter-svelte`, `packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
+Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
 
 ```sh
 npm install --ignore-scripts        # husky prepare can fail in fresh clones; safe to skip

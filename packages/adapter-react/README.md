@@ -82,9 +82,7 @@ const components: Components = {
 const experienceConfig: Config = { components };
 
 // In a server component:
-const experience = await resolveExperience(payload, experienceConfig, {
-  experience: { isPreview: false, metadata: { slug } },
-});
+const experience = await resolveExperience(payload, experienceConfig);
 return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```
 

@@ -20,6 +20,7 @@
   const DEFAULT_CONTEXT: ExperienceContext = {
     isPreview: false,
     metadata: {},
+    viewports: [],
   };
 
   // Fallback used when an experience payload arrives with no declared viewports.

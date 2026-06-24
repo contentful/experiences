@@ -33,11 +33,22 @@ import { Text, type TextProps } from '@/components/Text';
 const components: Components = {
   button: defineComponent<ButtonProps>({
     defaults: { type: 'primary' },
-    resolveData: ({ content }) => ({
-      text: content.text as string,
-      children: content.testSlot as ReactNode,
-    }),
-    render: (props) => <Button {...props} />,
+    resolveData: async ({ content, design, experience }) => {
+      // server side rendering for the contentful design system
+      // console.log("design", design);
+
+      // add expensive thing here and an async call
+      return {
+        text: content.text as string,
+        children: content.testSlot as ReactNode,
+        design: design,
+        experience: experience,
+      };
+    },
+    render: (props) => {
+      // client side rendering for the contentful design system
+      return <Button {...props} />;
+    },
   }),
 
   header: defineComponent<HeaderProps>({
