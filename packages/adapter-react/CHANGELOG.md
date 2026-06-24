@@ -1,3 +1,9 @@
+## 0.1.2 (2026-06-24)
+
+### 🧱 Updated Dependencies
+
+- Updated design to 0.1.2
+
 ## 0.1.1 (2026-06-23)
 
 ### 🧱 Updated Dependencies

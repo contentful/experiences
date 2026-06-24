@@ -1,3 +1,9 @@
+## 0.1.2 (2026-06-24)
+
+### 🩹 Fixes
+
+- **design:** clarify toCssMediaQuery README on unrecognized formats ([54fc9a1](https://github.com/contentful/experiences/commit/54fc9a1))
+
 ## 0.1.1 (2026-06-23)
 
 ### 🩹 Fixes
