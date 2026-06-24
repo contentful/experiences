@@ -1,3 +1,9 @@
+## 0.3.0 (2026-06-24)
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.3.0
+
 ## 0.2.0 (2026-06-24)
 
 ### 🧱 Updated Dependencies

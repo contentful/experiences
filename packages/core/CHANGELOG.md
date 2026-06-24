@@ -1,3 +1,9 @@
+## 0.3.0 (2026-06-24)
+
+### 🚀 Features
+
+- more-robust examples + simple/advanced README split + contentful prop ([#18](https://github.com/contentful/experiences/pull/18))
+
 ## 0.2.0 (2026-06-24)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
