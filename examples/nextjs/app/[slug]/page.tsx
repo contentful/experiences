@@ -6,26 +6,15 @@ import { experienceConfig } from '@/lib/experience-config';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function ExperiencePage({ params, searchParams }: PageProps) {
-  const { slug } = await params;
-  const sp = (await searchParams) ?? {};
-  const previewMode = sp.preview === 'true' || sp.preview === '1';
+export default async function ExperiencePage({ params }: PageProps) {
+  const { slug: experienceId } = await params;
 
-  const { payload } = await fetchExperience(slug, { preview: previewMode });
+  const { payload } = await fetchExperience(experienceId);
   if (!payload.nodes.length) notFound();
 
-  const experience = await resolveExperience(payload, experienceConfig, {
-    experience: { isPreview: previewMode, metadata: { slug } },
-  });
+  const experience = await resolveExperience(payload, experienceConfig);
 
-  return (
-    <ServerExperienceRenderer
-      experience={experience}
-      config={experienceConfig}
-      context={{ isPreview: previewMode, metadata: { slug } }}
-    />
-  );
+  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 }

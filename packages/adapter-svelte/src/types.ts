@@ -1,8 +1,53 @@
 import type { Component, Snippet } from 'svelte';
 
-import type { ExperienceContext, ResolveContext, ViewportDef } from '@contentful/experiences-core';
+import type {
+  DesignPropValue,
+  ExperienceContext,
+  ResolveContext,
+  ViewportDef,
+} from '@contentful/experiences-core';
 
 export type { ResolveContext };
+
+/**
+ * The full Contentful-side payload for a single component instance, surfaced
+ * on the `contentful` prop of every customer component. Useful for:
+ *
+ *  - Custom design-property resolution outside the SDK's default cascade
+ *  - Branching by `componentTypeId` in a generic wrapper component
+ *  - Attaching analytics to specific node ids
+ *  - Debugging — rendering a `<details>` block with the raw payload in preview
+ *
+ * Design properties stay in their **raw envelope form** here (the same shape
+ * `ctx.design` carries inside `resolveData`). The flat scalars merged into
+ * top-level props are what `resolveDesignProperties` produced after viewport
+ * cascade. The `contentful` prop is the unprocessed input; the spread props
+ * are the processed output.
+ */
+export interface ContentfulComponent {
+  /** The component-type id from the URN's last slash-segment (e.g. `button`). */
+  componentTypeId: string;
+  /** Optional. Pass-through of `node.id` from the payload when the editor supplied one. */
+  nodeId?: string;
+  /** Editorial values exactly as the payload delivered them. */
+  content: Record<string, unknown>;
+  /** Design-property envelopes (NOT viewport-resolved). Same shape `ctx.design` carries. */
+  design: Record<string, DesignPropValue>;
+  /** Return value of the component's `resolveData` hook, if any. Undefined when no hook is registered. */
+  resolved?: Record<string, unknown>;
+}
+
+/**
+ * Same shape as `ContentfulComponent`, but for the page-level template.
+ * Surfaced on the `contentful` prop of the template's component.
+ */
+export interface ContentfulTemplate {
+  /** The template id from the URN's last slash-segment (e.g. `page`). */
+  templateId: string;
+  content: Record<string, unknown>;
+  design: Record<string, DesignPropValue>;
+  resolved?: Record<string, unknown>;
+}
 
 /**
  * Render-time experience context. Extends the core `ExperienceContext` with
@@ -26,8 +71,6 @@ export type { ResolveContext };
  * pre-resolved to plain scalars by the renderer before reaching the component.
  */
 export interface RenderContext extends ExperienceContext {
-  /** All viewports declared on the experience, in cascade order. */
-  viewports: ViewportDef[];
   /** The currently active viewport — last-matching media query / device trait. */
   activeViewport: ViewportDef;
   /** Index of `activeViewport` in `viewports`. */
@@ -57,6 +100,7 @@ export interface RenderContext extends ExperienceContext {
 export type ComponentProps<Props extends object> = Props & {
   experience: RenderContext;
   slot: Snippet<[string]>;
+  contentful: ContentfulComponent;
 };
 
 /**
@@ -104,6 +148,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
 export type TemplateProps<Props extends object> = Props & {
   children: Snippet;
   experience: RenderContext;
+  contentful: ContentfulTemplate;
 };
 
 /**

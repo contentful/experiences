@@ -13,7 +13,7 @@ import type { PortableRenderNode, PortableTemplate } from '@contentful/experienc
 import { resolveDesignProperties } from '@contentful/experiences-design';
 
 import type { MissingComponentProps } from './missing-component';
-import type { Config, RenderContext } from './types';
+import type { ContentfulComponent, ContentfulTemplate, Config, RenderContext } from './types';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 
@@ -86,8 +86,19 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
     experience.activeViewportIndex
   );
 
+  // Reserved escape-hatch prop carrying the raw Contentful-side payload
+  // (componentTypeId, raw design envelopes, resolveData output, etc.).
+  // Cheap to assemble — five reference fields, no clones.
+  const contentful: ContentfulComponent = {
+    componentTypeId,
+    nodeId: node.nodeId,
+    content: node.props.content,
+    design: node.props.design,
+    resolved: node.props.resolved,
+  };
+
   // Merge precedence (last wins): defaults < content < design <
-  // resolveData output < slots < experience.
+  // resolveData output < slots < experience < contentful.
   return componentConfig.render({
     ...componentConfig.defaults,
     ...node.props.content,
@@ -95,6 +106,7 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
     ...node.props.resolved,
     ...slotProps,
     experience,
+    contentful,
   });
 }
 
@@ -135,8 +147,15 @@ export function WrapWithTemplate({
     experience.activeViewportIndex
   );
 
+  const contentful: ContentfulTemplate = {
+    templateId: template.templateId,
+    content: template.props.content,
+    design: template.props.design,
+    resolved: template.props.resolved,
+  };
+
   // Merge precedence mirrors components: defaults < content < design <
-  // resolveData output < children/experience.
+  // resolveData output < children/experience/contentful.
   return templateConfig.render({
     ...templateConfig.defaults,
     ...template.props.content,
@@ -144,5 +163,6 @@ export function WrapWithTemplate({
     ...template.props.resolved,
     children,
     experience,
+    contentful,
   });
 }

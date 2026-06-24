@@ -38,6 +38,8 @@ export type {
   ComponentProps,
   Components,
   Config,
+  ContentfulComponent,
+  ContentfulTemplate,
   RenderContext,
   TemplateConfig,
   TemplateProps,

@@ -11,7 +11,7 @@
   import type { PortableTemplate } from '@contentful/experiences-core';
   import { resolveDesignProperties } from '@contentful/experiences-design';
 
-  import type { Config, RenderContext } from './types.js';
+  import type { ContentfulTemplate, Config, RenderContext } from './types.js';
 
   interface WrapWithTemplateProps {
     template: PortableTemplate | undefined;
@@ -42,12 +42,19 @@
     experience.viewports,
     experience.activeViewportIndex
   )}
+  {@const contentful = {
+    templateId: template.templateId,
+    content: template.props.content,
+    design: template.props.design,
+    resolved: template.props.resolved,
+  } satisfies ContentfulTemplate}
   {@const composedProps = {
     ...templateConfig.defaults,
     ...template.props.content,
     ...resolvedDesign,
     ...template.props.resolved,
     experience,
+    contentful,
   }}
   <Tpl {...composedProps} {children} />
 {:else}
