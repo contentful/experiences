@@ -31,18 +31,26 @@ export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { RenderUnknown } from './nodes-renderer';
 
+// ─── Runtime context hooks (the SDK escape hatches) ───────────────────────
+export { useExperience, useContentfulComponent, useContentfulTemplate } from './context';
+
 // ─── Authoring helpers + Config types ─────────────────────────────────────
-export { defineComponent, defineTemplate } from './types';
+export {
+  defineComponent,
+  defineTemplate,
+  normalizeComponentRegistration,
+  normalizeTemplateRegistration,
+} from './types';
 export type {
   ComponentConfig,
-  ComponentProps,
   Components,
   Config,
   ContentfulComponent,
   ContentfulTemplate,
+  Registration,
   RenderContext,
   TemplateConfig,
-  TemplateProps,
+  TemplateRegistration,
   Templates,
 } from './types';
 

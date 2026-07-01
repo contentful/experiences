@@ -30,27 +30,33 @@ import type {
 } from './types';
 
 /**
- * Structural type the resolver walker depends on. Matches the React
- * adapter's `Config` shape but doesn't require importing it — render-core
- * stays decoupled from React.
+ * Structural type the resolver walker depends on. Matches the React /
+ * Svelte adapter `Config` shape but doesn't require importing them —
+ * render-core stays decoupled from any framework.
+ *
+ * Registry values are typed as `unknown` because each adapter accepts
+ * either a bare framework component (function / Svelte class / etc.) OR
+ * a config-object shape with `{ component, defaults?, resolveData? }`.
+ * The resolver only cares about `resolveData`; it duck-types each entry
+ * at runtime and ignores anything without it.
  */
 export interface ResolverConfig {
-  components: Record<
-    string,
-    {
-      resolveData?: (
+  components: Record<string, unknown>;
+  templates?: Record<string, unknown>;
+}
+
+function getResolver(
+  entry: unknown
+):
+  | ((ctx: ResolveContext) => Record<string, unknown> | Promise<Record<string, unknown>>)
+  | undefined {
+  if (typeof entry !== 'object' || entry === null) return undefined;
+  const candidate = (entry as { resolveData?: unknown }).resolveData;
+  return typeof candidate === 'function'
+    ? (candidate as (
         ctx: ResolveContext
-      ) => Record<string, unknown> | Promise<Record<string, unknown>>;
-    }
-  >;
-  templates?: Record<
-    string,
-    {
-      resolveData?: (
-        ctx: ResolveContext
-      ) => Record<string, unknown> | Promise<Record<string, unknown>>;
-    }
-  >;
+      ) => Record<string, unknown> | Promise<Record<string, unknown>>)
+    : undefined;
 }
 
 export interface ResolveExperienceOptions {
@@ -135,7 +141,7 @@ function buildNode(
     slots,
   };
   if (node.id) built.nodeId = node.id;
-  if (config.components[componentTypeId]?.resolveData) {
+  if (getResolver(config.components[componentTypeId])) {
     nodeRefs.push(built);
   }
   return built;
@@ -193,7 +199,7 @@ export async function resolveExperience(
   const tasks: Array<Promise<void>> = [];
 
   for (const node of nodeRefs) {
-    const resolver = config.components[node.registration.componentTypeId]?.resolveData;
+    const resolver = getResolver(config.components[node.registration.componentTypeId]);
     if (!resolver) continue;
     const ctx: ResolveContext = {
       content: node.props.content,
@@ -208,7 +214,7 @@ export async function resolveExperience(
   }
 
   if (template) {
-    const tplResolver = config.templates?.[template.templateId]?.resolveData;
+    const tplResolver = getResolver(config.templates?.[template.templateId]);
     if (tplResolver) {
       const ctx: ResolveContext = {
         content: template.props.content,

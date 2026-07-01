@@ -2,77 +2,37 @@
  * The integration layer between Contentful's Experience payload shape and
  * the customer's design system.
  *
- * The design-system components in `../components/` stay free of any
- * `@contentful/*` imports — they remain portable and don't know they're
- * being driven by Contentful. This file is where SDK-shaped concerns
- * (defaults, async resolvers, slot binding, prop reshaping) live.
+ * Design-system components live in `../components/` and stay free of any
+ * `@contentful/*` imports — they remain portable. When a component needs
+ * SDK runtime context or the raw Contentful payload, it opts in via
+ * `useExperience()` / `useContentfulComponent()` rather than receiving
+ * SDK-shaped props it didn't declare.
  *
- * - `components` — `componentTypeId` → `defineComponent(...)`. Keys match
- *   the segment after the last slash in `componentType.sys.urn`.
- * - `templates`  — `templateId` → `defineTemplate(...)`. Keys match the
- *   segment after the last slash in `payload.sys.template.sys.urn`.
- * - `experienceConfig` — the composed `Config` object handed to
- *   `resolveExperience` and `<ServerExperienceRenderer>`.
+ * - `components` — `componentTypeId` → bare component OR config object.
+ *   Keys match the segment after the last slash in `componentType.sys.urn`.
+ * - `templates`  — `templateId` → bare component OR config object. Keys
+ *   match the segment after the last slash in `payload.sys.template.sys.urn`.
  */
 
-import type { ReactNode } from 'react';
+import { type Components, type Config, type Templates } from '@contentful/experiences-react';
 
-import {
-  defineComponent,
-  defineTemplate,
-  type Components,
-  type Config,
-  type Templates,
-} from '@contentful/experiences-react';
-
-import { Button, type ButtonProps } from '@/components/Button';
-import { Header, type HeaderProps } from '@/components/Header';
-import { Page, type PageProps } from '@/components/Page';
-import { Text, type TextProps } from '@/components/Text';
+import { Button } from '@/components/Button';
+import { Header } from '@/components/Header';
+import { Page } from '@/components/Page';
+import { Text } from '@/components/Text';
 
 const components: Components = {
-  button: defineComponent<ButtonProps>({
-    defaults: { type: 'primary' },
-    resolveData: async ({ content, design, experience }) => {
-      // server side rendering for the contentful design system
-      // console.log("design", design);
+  // Bare-component registrations — no defaults, no resolveData, no boilerplate.
+  button: Button,
+  text: Text,
 
-      // add expensive thing here and an async call
-      return {
-        text: content.text as string,
-        children: content.testSlot as ReactNode,
-        design: design,
-        experience: experience,
-      };
-    },
-    render: (props) => {
-      // client side rendering for the contentful design system
-      return <Button {...props} />;
-    },
-  }),
-
-  header: defineComponent<HeaderProps>({
-    defaults: { variant: 'h2', text: 'Hello World' },
-    render: Header,
-  }),
-
-  text: defineComponent<TextProps>({
-    render: Text,
-  }),
+  // Config-object shape when you need defaults / resolveData.
+  header: { component: Header, defaults: { variant: 'h2', text: 'Hello World' } },
 };
 
 const templates: Templates = {
-  hi: defineTemplate<PageProps>({
-    defaults: { title: 'Welcome' },
-    render: Page,
-  }),
-  hero: defineTemplate<PageProps>({
-    defaults: { title: 'Featured' },
-    render: Page,
-  }),
+  hi: { component: Page, defaults: { title: 'Welcome' } },
+  hero: { component: Page, defaults: { title: 'Featured' } },
 };
 
-export const experienceConfig: Config = {
-  components,
-  templates,
-};
+export const experienceConfig: Config = { components, templates };

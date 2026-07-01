@@ -15,7 +15,7 @@ import type { Component } from 'svelte';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-core';
 
-import type { Config, RenderContext } from './types.js';
+import type { Config } from './types.js';
 
 export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
@@ -31,7 +31,6 @@ export interface MissingComponentProps {
   componentTypeId: string;
   /** Optional — only present when the payload supplied an id for this node. */
   nodeId?: string;
-  experience: RenderContext;
 }
 
 export type RenderUnknown = Component<MissingComponentProps>;

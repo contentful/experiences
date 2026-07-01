@@ -7,8 +7,10 @@
 -->
 <script lang="ts">
   import type { MissingComponentProps } from './component-props.js';
+  import { getExperience } from './context.js';
 
-  let { componentTypeId, nodeId, experience }: MissingComponentProps = $props();
+  let { componentTypeId, nodeId }: MissingComponentProps = $props();
+  const experience = getExperience();
 
   $effect(() => {
     if (typeof console !== 'undefined') {

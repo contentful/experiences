@@ -1,5 +1,5 @@
 import { render } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   ComponentTypeNode,
@@ -19,6 +19,7 @@ import HeadingFixture from './test-fixtures/HeadingFixture.svelte';
 import ItemFixture from './test-fixtures/ItemFixture.svelte';
 import PrecedenceFixture from './test-fixtures/PrecedenceFixture.svelte';
 import TemplateFixture from './test-fixtures/TemplateFixture.svelte';
+import { captureSink } from './test-fixtures/capture-sink.js';
 
 const VIEWPORTS = [
   { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
@@ -49,11 +50,15 @@ function componentNode(
   };
 }
 
+beforeEach(() => {
+  captureSink.splice(0);
+});
+
 const config: Config = {
   components: {
-    'contentful-container': { component: ContainerFixture },
-    'contentful-heading': { component: HeadingFixture },
-    'contentful-button': { component: ButtonFixture },
+    'contentful-container': ContainerFixture,
+    'contentful-heading': HeadingFixture,
+    'contentful-button': ButtonFixture,
   },
 };
 
@@ -131,8 +136,6 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it('renders nothing meaningful when plan is null/undefined', () => {
-    // Svelte emits an empty `<!---->` comment placeholder for skipped {#if} blocks;
-    // assert that no real DOM nodes were rendered rather than an empty string.
     const { container: nullContainer } = render(ServerExperienceRenderer, {
       props: { experience: null, config },
     });
@@ -145,36 +148,24 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it('exposes the active viewport on render context (defaults to viewport[0])', async () => {
-    const seen: Array<Record<string, unknown>> = [];
-    const captureConfig: Config = {
-      components: {
-        capture: {
-          component: CapturingComponent,
-        },
-      },
-    };
+    const captureConfig: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
       captureConfig
     );
     render(ServerExperienceRenderer, {
-      props: { experience: plan, config: captureConfig, context: { capture: seen } },
+      props: { experience: plan, config: captureConfig },
     });
 
-    expect(seen.length).toBeGreaterThan(0);
-    const ctx = seen[0]!.experience as Record<string, unknown>;
+    expect(captureSink.length).toBe(1);
+    const ctx = captureSink[0]!.experience;
     expect(ctx.activeViewportIndex).toBe(0);
     expect(ctx.activeViewport).toBe(VIEWPORTS[0]);
     expect(ctx.viewports).toBe(VIEWPORTS);
   });
 
   it('honors initialViewportId when computing the active viewport', async () => {
-    const seen: Array<Record<string, unknown>> = [];
-    const captureConfig: Config = {
-      components: {
-        capture: { component: CapturingComponent },
-      },
-    };
+    const captureConfig: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
       captureConfig
@@ -184,11 +175,10 @@ describe('ServerExperienceRenderer', () => {
         experience: plan,
         config: captureConfig,
         initialViewportId: 'mobile',
-        context: { capture: seen },
       },
     });
 
-    const ctx = seen[0]!.experience as Record<string, unknown>;
+    const ctx = captureSink[0]!.experience;
     expect(ctx.activeViewportIndex).toBe(2);
     expect(ctx.activeViewport).toBe(VIEWPORTS[2]);
   });
@@ -196,9 +186,7 @@ describe('ServerExperienceRenderer', () => {
   it('renders missing-component fallback in preview mode', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const justContainer: Config = {
-      components: {
-        'contentful-container': { component: ContainerFixture },
-      },
+      components: { 'contentful-container': ContainerFixture },
     };
     const planWithMissing = {
       viewports: VIEWPORTS,
@@ -266,7 +254,7 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).toContain('data-priority="low"');
   });
 
-  it('respects merge precedence: defaults < content < design < resolved < experience', () => {
+  it('respects merge precedence: defaults < content < design < resolved', () => {
     const precedenceConfig: Config = {
       components: {
         item: {
@@ -275,7 +263,6 @@ describe('ServerExperienceRenderer', () => {
         },
       },
     };
-    // Simulate a plan that already went through resolveExperience.
     const planWithResolved = {
       viewports: VIEWPORTS,
       nodes: [
@@ -294,20 +281,14 @@ describe('ServerExperienceRenderer', () => {
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: planWithResolved, config: precedenceConfig },
     });
-    // resolved wins over content, content wins over default
     expect(container.innerHTML).toContain('data-value="fromResolveData"');
   });
 
   it('wraps rendered nodes with the registered template', async () => {
     const tplConfig: Config = {
-      components: {
-        item: { component: PrecedenceFixture },
-      },
+      components: { item: PrecedenceFixture },
       templates: {
-        page: {
-          defaults: { title: 'Default Title' },
-          component: TemplateFixture,
-        },
+        page: { component: TemplateFixture, defaults: { title: 'Default Title' } },
       },
     };
     const tplPayload: ExperiencePayload = {
@@ -334,10 +315,7 @@ describe('ServerExperienceRenderer', () => {
 
   it('renders nodes unwrapped + warns when the template is not registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const cfg: Config = {
-      components: { item: { component: PrecedenceFixture } },
-      // No templates registered — the experience references one that's missing.
-    };
+    const cfg: Config = { components: { item: PrecedenceFixture } };
     const tplPayload: ExperiencePayload = {
       sys: {
         template: {
@@ -360,19 +338,58 @@ describe('ServerExperienceRenderer', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
     warn.mockRestore();
   });
+});
 
-  it('passes the raw Contentful payload to components on the contentful prop', async () => {
-    const seen: Array<Record<string, unknown>> = [];
-    const cfg: Config = {
-      components: {
-        button: { component: CapturingComponent },
+describe('ServerExperienceRenderer — bare-component registrations', () => {
+  it('accepts a bare Svelte component as a registry entry', async () => {
+    const cfg: Config = { components: { item: PrecedenceFixture } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('item', { id: 'b', contentProperties: { value: 'hi' } })],
       },
-    };
+      cfg
+    );
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    expect(container.innerHTML).toContain('data-value="hi"');
+  });
+
+  it('does NOT spread experience/contentful as props onto components', async () => {
+    const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
         viewports: VIEWPORTS,
         nodes: [
-          componentNode('button', {
+          componentNode('capture', {
+            id: 'c',
+            contentProperties: { text: 'hi' },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    const keys = Object.keys(captureSink[0]!.props);
+    expect(keys).toContain('text');
+    expect(keys).not.toContain('experience');
+    expect(keys).not.toContain('contentful');
+    // Children is always injected as a Snippet by the renderer.
+    expect(keys).toContain('children');
+  });
+});
+
+describe('ServerExperienceRenderer — getContentfulComponent()', () => {
+  it('exposes the raw Contentful payload to descendants', async () => {
+    const cfg: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('capture', {
             id: 'btn-1',
             contentProperties: { label: 'Buy now' },
             designProperties: { cfPadding: vbv({ desktop: m('40px') }) },
@@ -382,40 +399,36 @@ describe('ServerExperienceRenderer', () => {
       cfg
     );
     render(ServerExperienceRenderer, {
-      props: { experience: plan, config: cfg, context: { capture: seen } },
+      props: { experience: plan, config: cfg },
     });
 
-    expect(seen.length).toBeGreaterThan(0);
-    const props = seen[0]!;
-    expect(props.contentful).toEqual({
-      componentTypeId: 'button',
+    const contentful = captureSink[0]!.contentful;
+    expect(contentful).toMatchObject({
+      componentTypeId: 'capture',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
-      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
+      design: { cfPadding: vbv({ desktop: m('40px') }) },
       resolved: undefined,
     });
-    // Top-level scalar still reflects the viewport-resolved value
-    expect(props.cfPadding).toBe('40px');
   });
 
   it('contentful.resolved carries the resolveData return value', async () => {
-    const seen: Array<Record<string, unknown>> = [];
     const cfg: Config = {
       components: {
-        item: {
+        capture: {
           resolveData: () => ({ enriched: 'yes' }),
           component: CapturingComponent,
         },
       },
     };
     const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('item', { id: 'i' })] },
+      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'i' })] },
       cfg
     );
     render(ServerExperienceRenderer, {
-      props: { experience: plan, config: cfg, context: { capture: seen } },
+      props: { experience: plan, config: cfg },
     });
 
-    expect((seen[0]!.contentful as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
+    expect(captureSink[0]!.contentful?.resolved).toEqual({ enriched: 'yes' });
   });
 });

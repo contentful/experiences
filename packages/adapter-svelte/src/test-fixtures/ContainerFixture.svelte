@@ -2,13 +2,13 @@
   import type { Snippet } from 'svelte';
   let {
     cfPadding,
-    slot,
+    children,
   }: {
     cfPadding?: string;
-    slot?: Snippet<[string]>;
+    children?: Snippet;
   } = $props();
 </script>
 
 <div data-padding={cfPadding}>
-  {#if slot}{@render slot('children')}{/if}
+  {#if children}{@render children()}{/if}
 </div>
