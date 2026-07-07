@@ -17,10 +17,7 @@ import { Fragment, createElement, type ReactNode } from 'react';
 import type { PortableRenderNode, PortableTemplate } from '@contentful/experiences-core';
 import { resolveDesignProperties } from '@contentful/experiences-design';
 
-import {
-  ContentfulComponentProvider,
-  ContentfulTemplateProvider,
-} from './context';
+import { ContentfulComponentProvider, ContentfulTemplateProvider } from './context';
 import type { MissingComponentProps } from './missing-component';
 import {
   normalizeComponentRegistration,

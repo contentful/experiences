@@ -11,7 +11,12 @@
  *    metadata is threaded through every resolver.
  */
 
-import { defineComponent, type Components, type Config, type Templates } from '@contentful/experiences-react';
+import {
+  defineComponent,
+  type Components,
+  type Config,
+  type Templates,
+} from '@contentful/experiences-react';
 
 import { Button, type ButtonProps } from '@/components/Button';
 import { Header } from '@/components/Header';

@@ -26,11 +26,7 @@ export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
 // ─── Runtime context helpers ─────────────────────────────────────────────
-export {
-  getExperience,
-  getContentfulComponent,
-  getContentfulTemplate,
-} from './context.js';
+export { getExperience, getContentfulComponent, getContentfulTemplate } from './context.js';
 
 // Component prop shapes live in component-props.ts (not .svelte module
 // blocks) so `tsc --noEmit` can see them without the Svelte language server.

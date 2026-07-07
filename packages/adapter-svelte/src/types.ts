@@ -87,8 +87,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
  */
 export type Registration<Props extends object = Record<string, unknown>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | Component<any>
-  | ComponentConfig<Props>;
+  Component<any> | ComponentConfig<Props>;
 
 export interface TemplateConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
@@ -99,8 +98,7 @@ export interface TemplateConfig<Props extends object = Record<string, unknown>> 
 
 export type TemplateRegistration<Props extends object = Record<string, unknown>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | Component<any>
-  | TemplateConfig<Props>;
+  Component<any> | TemplateConfig<Props>;
 
 export function defineTemplate<Props extends object = Record<string, unknown>>(
   config: TemplateConfig<Props>
