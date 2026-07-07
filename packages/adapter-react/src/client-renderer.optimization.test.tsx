@@ -66,10 +66,12 @@ describe('ClientExperienceRenderer — optimization prop', () => {
     expect(html).toBe('<span>hello</span>');
   });
 
-  it('degrades to a no-op when the optional peer is not installed (workspace has no peer)', async () => {
-    // In this workspace `@contentful/optimization-react-web` is not installed,
-    // so `adapterFactory === null` and the runtime never mounts. Proves the
-    // flag degrades gracefully instead of crashing when the peer is missing.
+  it('leaves useOptimization().resolved null when the plan carries no sourceMap', async () => {
+    // With the optional peer installed, `optimization.enabled: true` mounts
+    // the provider — but the plan here has no `sourceMap`, so
+    // `InstrumentedNode` isn't invoked, `useOptimization().resolved` stays
+    // null, and the DOM has no `data-ctfl-*` attrs. Same regression path the
+    // renderer relies on when nothing is personalized.
     let captured: unknown;
     const CaptureResolved = () => {
       captured = useOptimization().resolved;

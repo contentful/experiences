@@ -63,6 +63,7 @@ export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/exper
 export type {
   ComponentTypeNode,
   ComponentTypeRef,
+  DeliveryViewSourceMap,
   DesignPropValue,
   DesignToken,
   ExperienceContext,

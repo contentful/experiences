@@ -22,7 +22,41 @@ cp .env.example .env.local    # fill in SPACE_ID + CDA_TOKEN
 npm run dev
 ```
 
-Then visit `http://localhost:3000/<experience-id>` — the slug becomes the Experience ID passed to `client.view.getExperience`.
+Then visit `http://localhost:3000/<experience-id>` — the slug becomes the Experience ID passed to `client.view.getExperienceWithOverrides`.
+
+## Personalization (NT-3613 spike smoke)
+
+This example was clobbered as the manual browser smoke for **Milestone 13** of the [optimization spike](../../../optimization/documentation/specs/2026-07-07-exo-optimization-personalization-and-analytics-spike-plan.md). Not intended to be merged as-is.
+
+**What's wired:**
+
+- `lib/delivery-client.ts` now calls `view.getExperienceWithOverrides(...)` with `extensions.sourceMap: {}` so the response carries `extensions.sourceMap` — the per-node personalization provenance table.
+- `lib/optimization-client.ts` (new, `'use client'`) constructs a browser-only `ContentfulOptimization` instance keyed off `NEXT_PUBLIC_OPTIMIZATION_CLIENT_ID`. Module-scope singleton so navigation doesn't spin up a second instance.
+- `components/ClientExperience.tsx` (new client boundary) mounts `<ClientExperienceRenderer>` with `optimization={{ enabled: true, client: optimizationClient }}`. After hydration, `ClientExperienceRenderer` publishes `OptimizationProvider` to the subtree and calls `attachInteractionRuntime({ views, clicks, hovers })`.
+- `app/[slug]/page.tsx` — server component fetches with sourceMap, threads it through `resolveExperience(view, config, { sourceMap })`, and hands the plan to `<ClientExperience>`.
+
+**One-time setup (the optimization peer isn't published to npm):**
+
+```sh
+# 1. Build + pack the sibling repo's packages
+cd /path/to/contentful/optimization
+pnpm build:pkgs
+
+# 2. Back to this workspace — the file: link in package.json points at ../../../optimization/pkgs/*.tgz
+cd /path/to/contentful/experiences
+npm install
+```
+
+**What to look for in the browser:**
+
+- Personalized nodes carry `data-ctfl-node-id` + six more `data-ctfl-*` attrs in the SSR HTML (`view-source`).
+- `exo_node_view` fires on scroll into a personalized node (Network → filter `insights`).
+- `click` / `hover` fire for personalized nodes only; non-personalized nodes emit nothing.
+- `display: contents` on the wrapper does not break flex / grid layout in the fixture.
+
+**What's not wired (deferred from the spike):**
+
+- The `getPersonalizationRequest()` → server POST → `ingestPersonalizationResponse()` round-trip described in spec §4. The SDK is browser-only, so this needs a fetch layer between client and the delivery-client-owning server. Left as follow-up.
 
 ## Two routes, same data
 

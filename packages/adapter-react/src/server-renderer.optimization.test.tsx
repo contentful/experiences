@@ -57,7 +57,10 @@ describe('ServerExperienceRenderer — optimization prop', () => {
     expect(html).toBe('<span>x</span>');
   });
 
-  it('degrades to a no-op when the peer is missing (workspace has no peer)', async () => {
+  it('leaves the tree byte-untouched when the plan carries no sourceMap', async () => {
+    // With the optional peer resolved, `enabled: true` still no-ops when
+    // `plan.sourceMap` is absent — `InstrumentedNode` never fires, so
+    // markup is identical to the disabled path.
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
       <ServerExperienceRenderer
