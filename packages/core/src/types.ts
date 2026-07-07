@@ -205,6 +205,28 @@ export interface PortableTemplate {
 }
 
 /**
+ * The XDA `extensions.sourceMap` payload, treated as opaque data by core.
+ * Structurally compatible with
+ * `GetExperienceWithOverridesViewResponseExtensionsSourceMap` in
+ * `@contentful/experience-delivery` and with the wire authority
+ * `DeliveryViewSourceMap` in `contentful/assemblies`. Core threads it
+ * through unchanged; adapters that consume it (e.g. the optimization
+ * seam) are responsible for validation and interpretation.
+ */
+export interface DeliveryViewSourceMap {
+  version: number;
+  variants: unknown[];
+  spaces: string[];
+  environments: string[];
+  locales: string[];
+  entries: unknown[];
+  assets: unknown[];
+  layers: unknown[];
+  dataAssemblies: unknown[];
+  nodes: Record<string, unknown>;
+}
+
+/**
  * The interpreted experience tree.
  *
  * Top-level is `nodes: PortableRenderNode[]` (array, not single root) to
@@ -212,9 +234,14 @@ export interface PortableTemplate {
  * and recurse into `node.slots`. When `template` is present, the renderer
  * wraps the nodes with the matching template config; otherwise nodes
  * render at the top level.
+ *
+ * `sourceMap` is a verbatim passthrough of the XDA `extensions.sourceMap`
+ * when the consumer opts into it via `resolveExperience`'s options.
+ * Adapters that don't consume it treat the field as opaque data.
  */
 export interface PortableRenderPlan {
   viewports: ViewportDef[];
   nodes: PortableRenderNode[];
   template?: PortableTemplate;
+  sourceMap?: DeliveryViewSourceMap;
 }

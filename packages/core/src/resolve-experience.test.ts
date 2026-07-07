@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import type {
   ComponentTypeNode,
+  DeliveryViewSourceMap,
   ExperiencePayload,
   TemplateNode,
 } from '@contentful/experiences-core';
@@ -431,5 +432,36 @@ describe('resolveExperience — templates', () => {
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.template?.templateId).toBe('not-registered');
     expect(plan.template?.props.resolved).toBeUndefined();
+  });
+});
+
+describe('resolveExperience — sourceMap passthrough', () => {
+  const payload: ExperiencePayload = {
+    viewports: VIEWPORTS,
+    nodes: [componentNode('hero', { id: 'h' })],
+  };
+
+  const sourceMap: DeliveryViewSourceMap = {
+    version: 1,
+    variants: [],
+    spaces: [],
+    environments: [],
+    locales: [],
+    entries: [],
+    assets: [],
+    layers: [],
+    dataAssemblies: [],
+    nodes: {},
+  };
+
+  it('attaches the sourceMap option to the returned plan by reference', async () => {
+    const plan = await resolveExperience(payload, emptyConfig, { sourceMap });
+    expect(plan.sourceMap).toBe(sourceMap);
+  });
+
+  it('omits sourceMap on the plan when the option is not supplied', async () => {
+    const plan = await resolveExperience(payload, emptyConfig);
+    expect(plan.sourceMap).toBeUndefined();
+    expect('sourceMap' in plan).toBe(false);
   });
 });

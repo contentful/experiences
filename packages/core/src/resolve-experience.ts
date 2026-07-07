@@ -19,6 +19,7 @@
 
 import type {
   ComponentTypeNode,
+  DeliveryViewSourceMap,
   DesignPropValue,
   ExperienceContext,
   ExperienceNode,
@@ -65,6 +66,12 @@ export interface ResolveExperienceOptions {
    * Defaults to `{ isPreview: false, metadata: {} }`.
    */
   experience?: Partial<ExperienceContext>;
+  /**
+   * The XDA response's `extensions.sourceMap`, attached to the returned plan
+   * verbatim when supplied. Core does not validate or interpret it — that is
+   * the adapter's concern at consumption time.
+   */
+  sourceMap?: DeliveryViewSourceMap;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -236,5 +243,6 @@ export async function resolveExperience(
     viewports: payload.viewports,
     nodes,
     ...(template ? { template } : {}),
+    ...(options.sourceMap ? { sourceMap: options.sourceMap } : {}),
   };
 }
