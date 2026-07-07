@@ -33,6 +33,7 @@ export type { RenderUnknown } from './nodes-renderer';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulTemplate } from './context';
+export { useOptimization } from './optimization/context';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
