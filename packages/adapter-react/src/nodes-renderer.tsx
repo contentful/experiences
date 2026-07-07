@@ -19,6 +19,8 @@ import { resolveDesignProperties } from '@contentful/experiences-design';
 
 import { ContentfulComponentProvider, ContentfulTemplateProvider } from './context';
 import type { MissingComponentProps } from './missing-component';
+import { useOptimizationRuntime } from './optimization/context';
+import { InstrumentedNode } from './optimization/instrumented-node';
 import {
   normalizeComponentRegistration,
   normalizeTemplateRegistration,
@@ -114,10 +116,23 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
     ...slotProps,
   };
 
+  const optimizationRuntime = useOptimizationRuntime();
+  const rendered = createElement(componentConfig.component, composed);
+  const instrumented =
+    optimizationRuntime && optimizationRuntime.sourceMap && node.nodeId ? (
+      <InstrumentedNode
+        adapter={optimizationRuntime.adapter}
+        nodeId={node.nodeId}
+        sourceMap={optimizationRuntime.sourceMap}
+      >
+        {rendered}
+      </InstrumentedNode>
+    ) : (
+      rendered
+    );
+
   return (
-    <ContentfulComponentProvider value={contentful}>
-      {createElement(componentConfig.component, composed)}
-    </ContentfulComponentProvider>
+    <ContentfulComponentProvider value={contentful}>{instrumented}</ContentfulComponentProvider>
   );
 }
 
