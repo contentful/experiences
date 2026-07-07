@@ -1,15 +1,9 @@
 /*
- * React context providers + hooks for runtime escape hatches.
- *
- * The renderer no longer injects `experience` / `contentful` as props onto
- * customer components. Components stay plain React with their own prop type
- * and receive only the merged content / design / resolveData / slots prop bag.
- *
- * When a component needs the runtime context or the raw Contentful payload,
- * it calls the hook explicitly. This makes the coupling visible at the call
- * site, keeps unused-context components free of extra props, and lets generic
- * wrappers (debug overlays, analytics, theming) read the context without
- * being threaded the data manually.
+ * React context providers + hooks that expose runtime context and the raw
+ * Contentful payload to descendants of a rendered Experience. Customer
+ * components receive only their declared props via the renderer; anything
+ * that needs the Experience runtime context or the underlying payload calls
+ * the hook explicitly at the top of its component body.
  */
 
 'use client';
@@ -28,10 +22,8 @@ export const ContentfulTemplateProvider = ContentfulTemplateContext.Provider;
 
 /**
  * Read the current Experience runtime context — viewports, the active
- * viewport, preview flag, and free-form metadata.
- *
- * Throws when called outside any Experience renderer to surface misuse early
- * rather than silently returning null.
+ * viewport, preview flag, and free-form metadata. Throws when called outside
+ * any Experience renderer subtree.
  */
 export function useExperience(): RenderContext {
   const ctx = useContext(ExperienceContext);
@@ -45,11 +37,8 @@ export function useExperience(): RenderContext {
 
 /**
  * Read the raw Contentful payload for the nearest enclosing Experience node.
- * Returns `null` outside any rendered node (e.g. when called from a template's
- * chrome that wraps the nodes but isn't itself a node).
- *
- * Use for analytics keyed on `nodeId`, generic wrappers branching on
- * `componentTypeId`, custom design-prop resolution, or debug overlays.
+ * Returns `null` outside any rendered node (e.g. from a template's chrome
+ * that wraps the nodes but isn't itself a node).
  */
 export function useContentfulComponent(): ContentfulComponent | null {
   return useContext(ContentfulComponentContext);

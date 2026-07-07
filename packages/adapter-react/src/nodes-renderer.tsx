@@ -1,13 +1,12 @@
 /*
  * Recursive renderer over PortableRenderNodes. Pre-renders slot subtrees
- * into ReactNodes during recursion — customer components receive already-
+ * into ReactNodes during recursion so customer components receive already-
  * rendered ReactNodes by slot name (typically `children`).
  *
- * Customer components are plain React: they receive only the merged prop bag
- * (defaults + content + viewport-resolved design + resolveData output + slots).
- * The Experience runtime context and the raw Contentful payload are exposed
- * via context (see `./context`) rather than spread as props — keeping
- * customer components portable.
+ * Customer components receive the merged prop bag (defaults + content +
+ * viewport-resolved design + resolveData output + slots). The Experience
+ * runtime context and the raw Contentful payload are read via the hooks in
+ * `./context`.
  *
  * Server vs client variants share this component; they differ only in how
  * the active viewport is sourced (initial seed vs reactive matchMedia).
@@ -109,8 +108,7 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
   };
 
   // Merge precedence (last wins): defaults < content < design <
-  // resolveData output < slots. No SDK-shaped extras spread into the bag —
-  // those are reachable via useExperience() / useContentfulComponent().
+  // resolveData output < slots.
   const composed = {
     ...componentConfig.defaults,
     ...node.props.content,

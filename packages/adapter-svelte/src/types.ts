@@ -12,13 +12,10 @@ export type { ResolveContext };
 /**
  * The full Contentful-side payload for a single component instance, exposed
  * via `getContentfulComponent()` to any descendant of a rendered Experience
- * node. Useful for:
- *
- *  - Custom design-property resolution outside the SDK's default cascade
- *  - Branching by `componentTypeId` in a generic wrapper component
- *  - Attaching analytics to specific node ids
- *  - Debugging — rendering a `<details>` block with the raw payload in preview
- *  - Rendering non-`children` slots through `<NodesRenderer />` directly
+ * node. Useful for custom design-property resolution outside the SDK's
+ * cascade, branching by `componentTypeId` in a generic wrapper, keying
+ * analytics on `nodeId`, rendering a raw-payload panel in preview, or
+ * rendering non-`children` slots through the exported `<NodesRenderer />`.
  *
  * Design properties stay in their **raw envelope form** here (the same shape
  * `ctx.design` carries inside `resolveData`). The flat scalars merged into
@@ -53,8 +50,8 @@ export interface ContentfulTemplate {
 
 /**
  * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — info that only exists at render time, not at
- * `resolveData` time. Exposed via `getExperience()`.
+ * the active viewport — a render-time value that resolvers cannot see.
+ * Exposed via `getExperience()`.
  */
 export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
@@ -63,14 +60,14 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a Svelte 5 Component — it receives only the merged prop bag (defaults +
- * content + design + resolveData + slot Snippets). The Experience runtime
- * context and the raw Contentful payload are NOT injected as props; reach for
- * them via `getExperience()` / `getContentfulComponent()`.
+ * is a Svelte 5 Component receiving the merged prop bag (defaults + content +
+ * design + resolveData + the `children` Snippet). The Experience runtime
+ * context and the raw Contentful payload are reachable via `getExperience()`
+ * and `getContentfulComponent()`.
  *
- * Slots are spread as named Snippet props. Customer writes
- * `let { children, header }: { children?: Snippet; header?: Snippet } = $props()`
- * and renders with `{@render children?.()}`.
+ * The `children` slot is passed as a named Snippet prop. The customer writes
+ * `let { children, ... }: { children?: Snippet; ... } = $props()` and renders
+ * it with `{@render children?.()}`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
@@ -80,9 +77,9 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
 }
 
 /**
- * Registry value. Customers can register a bare Svelte component for the
- * common case, or the full `ComponentConfig` shape when they need defaults
- * or a `resolveData` hook.
+ * Registry value. Register a bare Svelte component for the common case, or
+ * the full `ComponentConfig` shape when you need defaults or a `resolveData`
+ * hook.
  *
  *   button: Button,                                 // bare
  *   header: { component: Header, defaults: {...} }, // with defaults
@@ -130,8 +127,8 @@ export interface Config {
 /**
  * Normalize a registry entry — bare Svelte component OR config object —
  * into the common `ComponentConfig` shape used by the renderer. Svelte 5
- * Components are functions (callable); config objects have a `component`
- * field. We discriminate by `typeof`.
+ * Components are callable functions; config objects are plain objects with
+ * a `component` field, so `typeof` is enough to discriminate.
  */
 export function normalizeComponentRegistration<P extends object>(
   reg: Registration<P>

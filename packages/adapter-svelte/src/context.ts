@@ -1,24 +1,19 @@
 /*
- * Svelte context keys + helpers for runtime escape hatches.
+ * Svelte context keys + helpers that expose runtime context and the raw
+ * Contentful payload to descendants of a rendered Experience. Customer
+ * components receive only their declared props via the renderer; anything
+ * that needs the Experience runtime context or the underlying payload calls
+ * the helper from the top of its `<script>` block.
  *
- * The renderer no longer injects `experience` / `contentful` as props onto
- * customer components. Components stay plain Svelte with their own prop
- * type and receive only the merged content / design / resolveData / slot
- * Snippet prop bag.
+ * Reactivity: the client renderer stores a `$state` proxy in context, so
+ * reads through the returned object (`exp.activeViewport`, from the
+ * template or a `$derived`) stay reactive across viewport changes.
+ * Destructuring the return of `getExperience()` loses that reactivity —
+ * same rule as Svelte 5 `$props()`.
  *
- * When a component needs the runtime context or the raw Contentful payload,
- * it calls the helper explicitly. This makes the coupling visible at the
- * call site and keeps unused-context components free of extra props.
- *
- * Reactivity: the renderer stores a `$state` proxy in context, so reads
- * through the returned object (`exp.activeViewport`, in template or in a
- * `$derived`) stay reactive across client viewport changes. Calling
- * `getExperience()` once and destructuring loses that reactivity — same
- * rule as Svelte 5 `$props()`.
- *
- * NOTE: `getContext` / `setContext` must be called during synchronous
- * component initialization (top of the `<script>` block), not inside async
- * callbacks or event handlers.
+ * `getContext` / `setContext` must be called during synchronous component
+ * initialization (top of the `<script>` block), not inside async callbacks
+ * or event handlers.
  */
 
 import { getContext, setContext } from 'svelte';

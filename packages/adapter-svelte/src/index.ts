@@ -25,7 +25,7 @@ export { default as NodesRenderer } from './NodesRenderer.svelte';
 export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
-// ─── Runtime context helpers (the SDK escape hatches) ─────────────────────
+// ─── Runtime context helpers ─────────────────────────────────────────────
 export {
   getExperience,
   getContentfulComponent,

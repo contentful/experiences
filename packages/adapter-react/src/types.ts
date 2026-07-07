@@ -16,18 +16,14 @@ export type { ResolveContext };
 /**
  * The full Contentful-side payload for a single component instance, exposed
  * via `useContentfulComponent()` to any descendant of a rendered Experience
- * node. Useful for:
- *
- *  - Custom design-property resolution outside the SDK's default cascade
- *  - Branching by `componentTypeId` in a generic wrapper component
- *  - Attaching analytics to specific node ids
- *  - Debugging — rendering a `<details>` block with the raw payload in preview
+ * node. Useful for custom design-property resolution outside the SDK's
+ * cascade, branching by `componentTypeId` in a generic wrapper, keying
+ * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
  * Design properties stay in their **raw envelope form** here (the same shape
  * `ctx.design` carries inside `resolveData`). The flat scalars merged into
  * top-level props are what `resolveDesignProperties` produced after viewport
- * cascade. This is the unprocessed input; the spread props are the processed
- * output.
+ * cascade.
  */
 export interface ContentfulComponent {
   componentTypeId: string;
@@ -50,11 +46,9 @@ export interface ContentfulTemplate {
 
 /**
  * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — info that only exists at render time, not at
- * `resolveData` time (resolvers run once before viewport resolution; viewport
- * changes on the client should not re-trigger resolvers).
- *
- * Exposed via `useExperience()` to any descendant of the renderer.
+ * the active viewport — a render-time value that resolvers cannot see (they
+ * run once before viewport resolution and are not re-triggered by viewport
+ * changes). Exposed via `useExperience()` to any descendant of the renderer.
  */
 export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
@@ -63,11 +57,10 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a plain React component — it receives only the props you'd expect from
- * the payload (content + design + resolveData merged, plus any slot subtrees).
- * The Experience runtime context and the raw Contentful payload are NOT
- * injected as props; reach for them via `useExperience()` and
- * `useContentfulComponent()` when you need them.
+ * is a plain React component that receives the merged prop bag (content +
+ * design + resolveData + slots). The Experience runtime context and the raw
+ * Contentful payload are reachable via `useExperience()` and
+ * `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
@@ -82,16 +75,15 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
    */
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   /**
-   * The React component to render. Receives the merged prop bag with no
-   * SDK-shaped extras spread in.
+   * The React component to render. Receives the merged prop bag as its props.
    */
   component: ComponentType<Props>;
 }
 
 /**
- * Registry value. Customers can register a bare React component for the
- * common case, or the full `ComponentConfig` shape when they need defaults
- * or a `resolveData` hook.
+ * Registry value. Register a bare React component for the common case, or
+ * the full `ComponentConfig` shape when you need defaults or a `resolveData`
+ * hook.
  *
  *   button: Button,                                  // bare
  *   header: { component: Header, defaults: {...} }, // with defaults
@@ -139,18 +131,17 @@ export function defineTemplate<Props extends object = Record<string, unknown>>(
 
 /**
  * Component registry — keyed by `componentTypeId` (last slash-segment of
- * `componentType.sys.urn`). Per-entry prop narrowing happens at the
- * `defineComponent<Props>` call site (or implicitly when the bare component
- * shorthand is used).
+ * `componentType.sys.urn`). Per-entry prop narrowing happens at
+ * `defineComponent<Props>` or at the bare-component's own type.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at defineComponent / component-type author time.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at the registration author's call site.
 export type Components = Record<string, Registration<any>>;
 
 /**
  * Template registry — keyed by `templateId` (last slash-segment of
  * `payload.sys.template.sys.urn`).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at defineTemplate / template author time.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at the registration author's call site.
 export type Templates = Record<string, TemplateRegistration<any>>;
 
 export interface Config {
@@ -160,13 +151,12 @@ export interface Config {
 
 /**
  * Normalize a registry entry — bare component OR config object — into the
- * common `ComponentConfig` shape used by the renderer. Exported for tests
- * and for adapters that want to introspect the registry.
+ * common `ComponentConfig` shape used by the renderer.
  *
- * React function components are functions; `React.memo` / `React.forwardRef`
- * yield objects with a `$$typeof` symbol. Both qualify as "bare component"
- * for our purposes — the discriminator is the presence of a literal
- * `component` field with no `$$typeof`.
+ * React function components are plain functions; `React.memo` /
+ * `React.forwardRef` yield objects carrying a `$$typeof` symbol. Both count
+ * as bare components; a config object is discriminated by having a
+ * `component` field and no `$$typeof`.
  */
 export function normalizeComponentRegistration<P extends object>(
   reg: Registration<P>

@@ -1,7 +1,7 @@
 <!--
  * Recursive renderer over PortableRenderNodes. Customer components receive
- * plain Svelte props — the merged content / design / resolveData prop bag
- * plus the default `children` slot as a named Snippet:
+ * the merged content / design / resolveData prop bag plus the default
+ * `children` slot as a named Snippet:
  *
  *     <script lang="ts">
  *       import type { Snippet } from 'svelte';
@@ -14,14 +14,12 @@
  *
  * Only the `children` slot is rendered automatically — Svelte 5 Snippets are
  * compile-time entities, so the renderer can't synthesize an unbounded set
- * of named Snippet props from runtime payload data. The `children` slot is
- * what every payload uses in practice. If a payload carries additional named
- * slots, they're reachable through `getContentfulComponent().slots` and the
- * exported `<NodesRenderer />` component — see README.
+ * of named Snippet props from runtime payload data. Additional named slots
+ * are reachable through `getContentfulComponent().slots` and can be rendered
+ * with the exported `<NodesRenderer />` (see README).
  *
- * The Experience runtime context and the raw Contentful payload are exposed
- * via Svelte context (`getExperience`, `getContentfulComponent`) rather than
- * spread as props — keeping customer components portable.
+ * The Experience runtime context and the raw Contentful payload are read
+ * via `getExperience` / `getContentfulComponent`.
  *
  * Server vs client variants share this component; they differ only in how
  * the active viewport is sourced (initial seed vs reactive matchMedia).

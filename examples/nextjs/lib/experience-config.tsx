@@ -3,10 +3,9 @@
  * the customer's design system.
  *
  * Design-system components live in `../components/` and stay free of any
- * `@contentful/*` imports — they remain portable. When a component needs
- * SDK runtime context or the raw Contentful payload, it opts in via
- * `useExperience()` / `useContentfulComponent()` rather than receiving
- * SDK-shaped props it didn't declare.
+ * `@contentful/*` imports. A component that needs the Experience runtime
+ * context or the raw Contentful payload calls `useExperience()` /
+ * `useContentfulComponent()` at its top.
  *
  * - `components` — `componentTypeId` → bare component OR config object.
  *   Keys match the segment after the last slash in `componentType.sys.urn`.
@@ -22,11 +21,11 @@ import { Page } from '@/components/Page';
 import { Text } from '@/components/Text';
 
 const components: Components = {
-  // Bare-component registrations — no defaults, no resolveData, no boilerplate.
+  // Bare-component form — for the common case with no defaults / resolveData.
   button: Button,
   text: Text,
 
-  // Config-object shape when you need defaults / resolveData.
+  // Config-object form — when you need defaults or resolveData.
   header: { component: Header, defaults: { variant: 'h2', text: 'Hello World' } },
 };
 

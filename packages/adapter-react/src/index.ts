@@ -31,7 +31,7 @@ export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { RenderUnknown } from './nodes-renderer';
 
-// ─── Runtime context hooks (the SDK escape hatches) ───────────────────────
+// ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulTemplate } from './context';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
