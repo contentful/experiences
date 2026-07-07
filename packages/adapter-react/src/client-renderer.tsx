@@ -5,9 +5,8 @@
  * when the viewport changes.
  *
  * Safe to render on the server: when `typeof window === 'undefined'`, the
- * hook returns the seeded index and registers no listeners, so the server
- * output matches `<ServerExperienceRenderer>`. Hydration picks up the live
- * matcher transparently.
+ * hook returns the seeded index and registers no listeners, so SSR output
+ * matches `<ServerExperienceRenderer>`.
  */
 
 'use client';

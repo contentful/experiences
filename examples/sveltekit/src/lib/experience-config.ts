@@ -3,10 +3,9 @@
  * the customer's design system.
  *
  * Design-system components in `./components/` stay free of any
- * `@contentful/*` imports — they remain portable. When a component needs
- * SDK runtime context or the raw Contentful payload, it opts in via
- * `getExperience()` / `getContentfulComponent()` rather than receiving
- * SDK-shaped props it didn't declare.
+ * `@contentful/*` imports. A component that needs the Experience runtime
+ * context or the raw Contentful payload calls `getExperience()` /
+ * `getContentfulComponent()` at the top of its `<script>` block.
  */
 
 import { type Components, type Config, type Templates } from '@contentful/experiences-svelte';
@@ -17,11 +16,11 @@ import Page from './components/Page.svelte';
 import Text from './components/Text.svelte';
 
 const components: Components = {
-  // Bare-component registrations — no defaults, no resolveData, no boilerplate.
+  // Bare-component form — for the common case with no defaults / resolveData.
   button: Button,
   text: Text,
 
-  // Config-object shape when you need defaults / resolveData.
+  // Config-object form — when you need defaults or resolveData.
   header: { component: Header, defaults: { variant: 'h2', text: 'Hello World' } },
 };
 

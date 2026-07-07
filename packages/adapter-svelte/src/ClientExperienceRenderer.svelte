@@ -5,8 +5,8 @@
  * when the viewport changes.
  *
  * Safe to render on the server: `useActiveViewport` no-ops outside the
- * browser, so SSR matches `<ServerExperienceRenderer>` byte-for-byte (given
- * the same seed). Hydration picks up the live matcher transparently.
+ * browser, so SSR output matches `<ServerExperienceRenderer>` given the
+ * same seed.
 -->
 <script lang="ts">
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';

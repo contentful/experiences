@@ -1,19 +1,14 @@
 /**
  * Advanced integration config — shows the knobs you reach for when the
- * simple config (`./experience-config.tsx`) isn't enough.
+ * simple config (`./experience-config.tsx`) isn't enough:
  *
- * Differences from the simple config:
  *  - **Async `resolveData`** on `button` — a deliberately slow fake fetch,
  *    plus a synthetic localized URL derived from `experience.metadata.locale`.
- *    Demonstrates that resolvers run **in parallel across nodes** before
- *    rendering, and that they have access to `experience.metadata` (which the
- *    advanced page passes in via `resolveExperience`'s third argument).
- *  - **Reads `experience.metadata`** to build a per-page URL — proves the
+ *    Resolvers run in parallel across nodes before rendering, and they
+ *    receive `experience.metadata` (which the advanced page passes in via
+ *    `resolveExperience`'s third argument).
+ *  - **Reads `experience.metadata`** to build a per-page URL, proving that
  *    metadata is threaded through every resolver.
- *  - **DebugPanel** — a generic wrapper component using `useContentfulComponent`
- *    to render a `<details>` block in preview mode. Demonstrates the runtime
- *    escape hatch: customer code reaches the raw payload without the SDK
- *    spreading it onto every component.
  */
 
 import { defineComponent, type Components, type Config, type Templates } from '@contentful/experiences-react';

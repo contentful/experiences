@@ -1,8 +1,6 @@
 <!--
-  Test fixture: pushes its full props + the current experience/contentful
-  context into a `capture` array, which tests pull from a module-level
-  store. Stripped of the smuggle-through-experience.metadata trick used in
-  the old design — context helpers replace it cleanly.
+  Test fixture: pushes its full props plus the current experience /
+  contentful context into a module-level `captureSink` that tests pull from.
 -->
 <script lang="ts">
   import { getExperience, getContentfulComponent } from '../context.js';
