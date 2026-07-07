@@ -31,6 +31,35 @@ export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { RenderUnknown } from './nodes-renderer';
 
+// ─── Preview (editor integration) ─────────────────────────────────────────
+export { usePreviewOverride } from './use-preview-override';
+export type {
+  UsePreviewOverrideOptions,
+  UsePreviewOverrideResult,
+} from './use-preview-override';
+
+// Advanced-use re-exports from core for customers building custom preview
+// flows on top of the primitives (custom transports, non-renderer consumers).
+export {
+  MESSAGE as PREVIEW_MESSAGE,
+  PROTOCOL_VERSION as PREVIEW_PROTOCOL_VERSION,
+  SOURCE as PREVIEW_SOURCE,
+  PreviewClient,
+  createPostMessageChannel,
+  isEnvelope as isPreviewEnvelope,
+  isMessage as isPreviewMessage,
+} from '@contentful/experiences-core';
+export type {
+  CreatePostMessageChannelOptions,
+  HandshakeStatus as PreviewHandshakeStatus,
+  MessageHandler as PreviewMessageHandler,
+  PreviewCapabilities,
+  PreviewChannel,
+  PreviewClientOptions,
+  PreviewSnapshot,
+  RenderStatus as PreviewRenderStatus,
+} from '@contentful/experiences-core';
+
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export { defineComponent, defineTemplate } from './types';
 export type {

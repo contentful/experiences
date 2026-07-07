@@ -7,15 +7,24 @@
  * server) to seed the first render, matching what the server emitted; the
  * hook then takes over via media queries to switch viewports as the window
  * resizes.
+ *
+ * When `enablePreview` is set, the renderer also runs the preview client
+ * against the parent editor. Until `init` arrives (or forever, when the app
+ * is not embedded in an editor), it renders the `experience` prop as usual.
+ * Once `init` arrives, the editor-delivered plan takes precedence and any
+ * subsequent `viewUpdate` messages replace it. The flag is safe to leave on
+ * in production: no matching editor parent → no override arrives → identical
+ * behavior to today.
  */
 
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import type {
   ExperienceContext,
   PortableRenderPlan,
+  PreviewCapabilities,
   ViewportDef,
 } from '@contentful/experiences-core';
 
@@ -23,6 +32,7 @@ import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
+import { usePreviewOverride } from './use-preview-override';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   isPreview: false,
@@ -49,6 +59,36 @@ export interface ClientExperienceRendererProps {
   initialViewportId?: string;
   context?: Partial<ExperienceContext>;
   renderUnknown?: RenderUnknown;
+
+  /**
+   * Opt in to Contentful editor preview.
+   *
+   * When enabled, the renderer connects to the parent editor via postMessage
+   * on mount. Before `init` arrives — or when the app is not embedded in a
+   * known editor origin — rendering falls back to the `experience` prop.
+   * Once `init` arrives, the editor's plan is rendered instead and every
+   * subsequent `viewUpdate` from the editor replaces it in place.
+   *
+   * Safe to leave on in production: the SDK checks `ancestorOrigins` against
+   * a hardcoded allow-list of Contentful editor origins and is a no-op when
+   * no match is found.
+   */
+  enablePreview?: boolean;
+
+  /**
+   * Preview capabilities advertised to the editor. Defaults to fully
+   * reactive (`liveUpdate: true`). Set `liveUpdate: false` to opt out of
+   * `viewUpdate` — the editor will reload the iframe on save instead of
+   * pushing incremental updates. Ignored when `enablePreview` is false.
+   */
+  previewCapabilities?: Partial<PreviewCapabilities>;
+
+  /**
+   * Optional origin override for the editor postMessage target. Accepts a
+   * single origin or an array. Useful for self-hosted proxies, staging
+   * setups, or tests. Ignored when `enablePreview` is false.
+   */
+  previewTargetOrigin?: string | string[];
 }
 
 export function ClientExperienceRenderer({
@@ -57,16 +97,40 @@ export function ClientExperienceRenderer({
   initialViewportId,
   context,
   renderUnknown = MissingComponent,
+  enablePreview = false,
+  previewCapabilities,
+  previewTargetOrigin,
 }: ClientExperienceRendererProps): ReactNode {
   if (typeof window === 'undefined') {
     throw new Error(
       'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR.'
     );
   }
-  if (!experience) return null;
+
+  // Set of component-type ids the customer registered — used by the
+  // preview hook to detect missing components in the incoming view and
+  // report `partial` render status back to the editor.
+  const knownComponentTypeIds = useMemo(
+    () => new Set(Object.keys(config.components)),
+    [config.components]
+  );
+
+  const preview = usePreviewOverride(
+    {
+      enabled: enablePreview,
+      capabilities: previewCapabilities,
+      targetOrigin: previewTargetOrigin,
+    },
+    enablePreview ? knownComponentTypeIds : null
+  );
+
+  // postMessage view wins once it arrives; otherwise the prop is authoritative.
+  const activeExperience = preview.view ?? experience;
+  if (!activeExperience) return null;
+
   return (
     <ClientExperienceRendererInner
-      experience={experience}
+      experience={activeExperience}
       config={config}
       initialViewportId={initialViewportId}
       context={context}
