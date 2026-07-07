@@ -18,7 +18,7 @@ export {
   ClientExperienceRenderer,
 } from './client-renderer';
 export type { ClientExperienceRendererProps as ExperienceRendererProps } from './client-renderer';
-export type { ClientExperienceRendererProps } from './client-renderer';
+export type { ClientExperienceRendererProps, OptimizationOption } from './client-renderer';
 
 export { ServerExperienceRenderer } from './server-renderer';
 export type { ServerExperienceRendererProps } from './server-renderer';
