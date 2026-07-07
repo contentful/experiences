@@ -161,12 +161,7 @@ export interface Config {
 export function normalizeComponentRegistration<P extends object>(
   reg: Registration<P>
 ): ComponentConfig<P> {
-  if (
-    typeof reg === 'object' &&
-    reg !== null &&
-    !('$$typeof' in reg) &&
-    'component' in reg
-  ) {
+  if (typeof reg === 'object' && reg !== null && !('$$typeof' in reg) && 'component' in reg) {
     return reg as ComponentConfig<P>;
   }
   return { component: reg as ComponentType<P> };
@@ -175,12 +170,7 @@ export function normalizeComponentRegistration<P extends object>(
 export function normalizeTemplateRegistration<P extends object>(
   reg: TemplateRegistration<P>
 ): TemplateConfig<P> {
-  if (
-    typeof reg === 'object' &&
-    reg !== null &&
-    !('$$typeof' in reg) &&
-    'component' in reg
-  ) {
+  if (typeof reg === 'object' && reg !== null && !('$$typeof' in reg) && 'component' in reg) {
     return reg as TemplateConfig<P>;
   }
   return { component: reg as ComponentType<P & { children?: ReactNode }> };

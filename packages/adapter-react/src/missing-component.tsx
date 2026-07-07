@@ -16,10 +16,7 @@ export interface MissingComponentProps {
   nodeId?: string;
 }
 
-export function MissingComponent({
-  componentTypeId,
-  nodeId,
-}: MissingComponentProps): ReactNode {
+export function MissingComponent({ componentTypeId, nodeId }: MissingComponentProps): ReactNode {
   const { isPreview } = useExperience();
   if (typeof console !== 'undefined') {
     const idLabel = nodeId ? ` (nodeId: ${nodeId})` : '';

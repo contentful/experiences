@@ -51,7 +51,13 @@ const Heading = ({ text, cfFontSize }: { text?: string; cfFontSize?: string }) =
   <h1 style={{ fontSize: cfFontSize }}>{text}</h1>
 );
 
-const SimpleButton = ({ label, cfBackgroundColor }: { label?: string; cfBackgroundColor?: string }) => (
+const SimpleButton = ({
+  label,
+  cfBackgroundColor,
+}: {
+  label?: string;
+  cfBackgroundColor?: string;
+}) => (
   <button type="button" style={{ background: cfBackgroundColor }}>
     {label}
   </button>
@@ -338,9 +344,7 @@ describe('ServerExperienceRenderer', () => {
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={cfg} />
-    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-template="page"');
     expect(html).toContain('data-title="Default Title"');
     expect(html).toContain('<span>inside</span>');
@@ -364,9 +368,7 @@ describe('ServerExperienceRenderer', () => {
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } })],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={cfg} />
-    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toBe('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
     warn.mockRestore();
