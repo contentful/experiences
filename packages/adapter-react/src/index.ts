@@ -18,7 +18,7 @@ export {
   ClientExperienceRenderer,
 } from './client-renderer';
 export type { ClientExperienceRendererProps as ExperienceRendererProps } from './client-renderer';
-export type { ClientExperienceRendererProps } from './client-renderer';
+export type { ClientExperienceRendererProps, OptimizationOption } from './client-renderer';
 
 export { ServerExperienceRenderer } from './server-renderer';
 export type { ServerExperienceRendererProps } from './server-renderer';
@@ -33,6 +33,7 @@ export type { RenderUnknown } from './nodes-renderer';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulTemplate } from './context';
+export { useOptimization } from './optimization/context';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
@@ -62,6 +63,7 @@ export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/exper
 export type {
   ComponentTypeNode,
   ComponentTypeRef,
+  DeliveryViewSourceMap,
   DesignPropValue,
   DesignToken,
   ExperienceContext,

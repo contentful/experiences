@@ -18,9 +18,12 @@ import type {
 } from '@contentful/experiences-core';
 import { getViewportIndex } from '@contentful/experiences-design';
 
+import type { OptimizationOption } from './client-renderer';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
+import { adapterFactory } from './optimization/load-adapter';
+import { OptimizationProvider, type OptimizationRuntime } from './optimization/context';
 import type { Config, RenderContext } from './types';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
@@ -49,6 +52,15 @@ export interface ServerExperienceRendererProps {
   context?: Partial<ExperienceContext>;
   /** Override the fallback rendered for unregistered component types. */
   renderUnknown?: RenderUnknown;
+  /**
+   * Personalization runtime. The server renderer publishes the
+   * `OptimizationRuntime` context so first-paint markup carries the
+   * `data-ctfl-*` attrs — matching the client renderer's hydration output.
+   * Interaction tracking (views/clicks/hovers) is attached only after
+   * hydration by `ClientExperienceRenderer` — there is no post-render
+   * lifecycle on the server.
+   */
+  optimization?: OptimizationOption;
 }
 
 export function ServerExperienceRenderer({
@@ -57,6 +69,7 @@ export function ServerExperienceRenderer({
   initialViewportId,
   context,
   renderUnknown = MissingComponent,
+  optimization,
 }: ServerExperienceRendererProps): ReactNode {
   if (!experience) return null;
 
@@ -72,7 +85,9 @@ export function ServerExperienceRenderer({
     activeViewportIndex,
   };
 
-  return (
+  const runtime = buildOptimizationRuntime(experience, optimization);
+
+  const tree = (
     <ExperienceProvider value={renderContext}>
       <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
         <NodesRenderer
@@ -84,4 +99,19 @@ export function ServerExperienceRenderer({
       </WrapWithTemplate>
     </ExperienceProvider>
   );
+
+  if (runtime === null) return tree;
+  return <OptimizationProvider value={runtime}>{tree}</OptimizationProvider>;
+}
+
+function buildOptimizationRuntime(
+  experience: PortableRenderPlan,
+  optimization: OptimizationOption | undefined,
+): OptimizationRuntime | null {
+  if (!optimization?.enabled || !optimization.client) return null;
+  if (adapterFactory === null) return null;
+  return {
+    adapter: adapterFactory(optimization.client),
+    sourceMap: experience.sourceMap,
+  };
 }

@@ -13,6 +13,11 @@
   "dependencies": {
     "@contentful/experiences-react": "*",
     "@contentful/experience-delivery": "1.0.0-dev.3",
+    "@contentful/optimization-api-client": "file:../../../optimization/pkgs/contentful-optimization-api-client-0.0.0.tgz",
+    "@contentful/optimization-api-schemas": "file:../../../optimization/pkgs/contentful-optimization-api-schemas-0.0.0.tgz",
+    "@contentful/optimization-core": "file:../../../optimization/pkgs/contentful-optimization-core-0.0.0.tgz",
+    "@contentful/optimization-web": "file:../../../optimization/pkgs/contentful-optimization-web-0.0.0.tgz",
+    "@contentful/optimization-react-web": "file:../../../optimization/pkgs/contentful-optimization-react-web-0.0.0.tgz",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
