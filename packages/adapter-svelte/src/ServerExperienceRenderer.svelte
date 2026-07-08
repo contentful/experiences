@@ -15,6 +15,7 @@
   import NodesRenderer from './NodesRenderer.svelte';
   import WrapWithTemplate from './WrapWithTemplate.svelte';
   import type { ServerExperienceRendererProps } from './component-props.js';
+  import { setExperience } from './context.js';
   import type { RenderContext } from './types.js';
 
   const DEFAULT_CONTEXT: ExperienceContext = {
@@ -23,10 +24,6 @@
     viewports: [],
   };
 
-  // Fallback used when an experience payload arrives with no declared viewports.
-  // `getValueForViewport` will treat any design value as `undefined` because
-  // the cascade list is empty, so this only exists to keep `activeViewport`
-  // non-null in the render context's type.
   const FALLBACK_VIEWPORT: ViewportDef = {
     id: '_',
     query: '*',
@@ -42,22 +39,24 @@
     renderUnknown = MissingComponent,
   }: ServerExperienceRendererProps = $props();
 
-  const renderContext = $derived.by((): RenderContext | null => {
-    if (!experience) return null;
-    const activeViewportIndex = getViewportIndex(experience.viewports, initialViewportId);
-    const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
+  function buildContext(): RenderContext {
+    const viewports = experience?.viewports ?? [];
+    const idx = experience ? getViewportIndex(experience.viewports, initialViewportId) : 0;
     return {
       ...DEFAULT_CONTEXT,
       ...context,
       metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
-      viewports: experience.viewports,
-      activeViewport,
-      activeViewportIndex,
+      viewports,
+      activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
+      activeViewportIndex: idx,
     };
-  });
+  }
+
+  const renderContext = buildContext();
+  setExperience(renderContext);
 </script>
 
-{#if experience && renderContext}
+{#if experience}
   <WrapWithTemplate template={experience.template} {config} experience={renderContext}>
     {#snippet children()}
       <NodesRenderer

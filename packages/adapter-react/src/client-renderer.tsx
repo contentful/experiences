@@ -1,12 +1,12 @@
 /*
- * Client-side Experience renderer. Uses `useActiveViewport` to react to
- * window.matchMedia changes.
+ * Client Experience renderer. First paint matches the server renderer
+ * (active viewport resolved from `initialViewportId`); after hydration,
+ * `useActiveViewport` takes over via `window.matchMedia` and re-renders
+ * when the viewport changes.
  *
- * Throws if rendered on the server — pair with `ServerExperienceRenderer`
- * for SSR. Use `initialViewportId` (typically derived from User-Agent on the
- * server) to seed the first render, matching what the server emitted; the
- * hook then takes over via media queries to switch viewports as the window
- * resizes.
+ * Safe to render on the server: when `typeof window === 'undefined'`, the
+ * hook returns the seeded index and registers no listeners, so SSR output
+ * matches `<ServerExperienceRenderer>`.
  */
 
 'use client';
@@ -19,6 +19,7 @@ import type {
   ViewportDef,
 } from '@contentful/experiences-core';
 
+import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
@@ -38,11 +39,6 @@ const FALLBACK_VIEWPORT: ViewportDef = {
 };
 
 export interface ClientExperienceRendererProps {
-  /**
-   * The resolved experience returned by `resolveExperience`. The prop is
-   * named `experience` because it's what customers think of as "the
-   * experience to render"; `PortableRenderPlan` is the internal IR name.
-   */
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   /** Initial viewport seed; should match what the server-rendered output used. */
@@ -58,38 +54,7 @@ export function ClientExperienceRenderer({
   context,
   renderUnknown = MissingComponent,
 }: ClientExperienceRendererProps): ReactNode {
-  if (typeof window === 'undefined') {
-    throw new Error(
-      'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR.'
-    );
-  }
   if (!experience) return null;
-  return (
-    <ClientExperienceRendererInner
-      experience={experience}
-      config={config}
-      initialViewportId={initialViewportId}
-      context={context}
-      renderUnknown={renderUnknown ?? MissingComponent}
-    />
-  );
-}
-
-interface InnerProps extends Required<
-  Pick<ClientExperienceRendererProps, 'config' | 'renderUnknown'>
-> {
-  experience: PortableRenderPlan;
-  initialViewportId?: string;
-  context?: Partial<ExperienceContext>;
-}
-
-function ClientExperienceRendererInner({
-  experience,
-  config,
-  initialViewportId,
-  context,
-  renderUnknown,
-}: InnerProps): ReactNode {
   const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
   const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
 
@@ -103,13 +68,15 @@ function ClientExperienceRendererInner({
   };
 
   return (
-    <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
-      <NodesRenderer
-        nodes={experience.nodes}
-        config={config}
-        experience={renderContext}
-        renderUnknown={renderUnknown}
-      />
-    </WrapWithTemplate>
+    <ExperienceProvider value={renderContext}>
+      <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
+        <NodesRenderer
+          nodes={experience.nodes}
+          config={config}
+          experience={renderContext}
+          renderUnknown={renderUnknown}
+        />
+      </WrapWithTemplate>
+    </ExperienceProvider>
   );
 }

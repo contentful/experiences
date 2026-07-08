@@ -10,6 +10,7 @@ import type {
 } from '@contentful/experiences-core';
 import { resolveExperience } from '@contentful/experiences-core';
 
+import { useContentfulComponent, useContentfulTemplate, useExperience } from './context';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 
@@ -42,33 +43,31 @@ function componentNode(
   };
 }
 
+const Container = ({ children, cfPadding }: { children?: ReactNode; cfPadding?: string }) => (
+  <div data-padding={cfPadding}>{children}</div>
+);
+
+const Heading = ({ text, cfFontSize }: { text?: string; cfFontSize?: string }) => (
+  <h1 style={{ fontSize: cfFontSize }}>{text}</h1>
+);
+
+const SimpleButton = ({
+  label,
+  cfBackgroundColor,
+}: {
+  label?: string;
+  cfBackgroundColor?: string;
+}) => (
+  <button type="button" style={{ background: cfBackgroundColor }}>
+    {label}
+  </button>
+);
+
 const config: Config = {
   components: {
-    'contentful-container': {
-      render: (props) => {
-        const { children, cfPadding } = props as { children?: ReactNode; cfPadding?: string };
-        return <div data-padding={cfPadding}>{children}</div>;
-      },
-    },
-    'contentful-heading': {
-      render: (props) => {
-        const { text, cfFontSize } = props as { text?: string; cfFontSize?: string };
-        return <h1 style={{ fontSize: cfFontSize }}>{text}</h1>;
-      },
-    },
-    'contentful-button': {
-      render: (props) => {
-        const { label, cfBackgroundColor } = props as {
-          label?: string;
-          cfBackgroundColor?: string;
-        };
-        return (
-          <button type="button" style={{ background: cfBackgroundColor }}>
-            {label}
-          </button>
-        );
-      },
-    },
+    'contentful-container': Container,
+    'contentful-heading': Heading,
+    'contentful-button': SimpleButton,
   },
 };
 
@@ -133,7 +132,6 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it('cascades design values when the active viewport has none', async () => {
-    // tablet has no cfFontSize defined → cascades to desktop
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
       <ServerExperienceRenderer experience={plan} config={config} initialViewportId="tablet" />
@@ -152,18 +150,13 @@ describe('ServerExperienceRenderer', () => {
     ).toBe('');
   });
 
-  it('injects experience context with isPreview false by default', async () => {
+  it('exposes experience context via useExperience() with isPreview false by default', async () => {
     const seen: Array<Record<string, unknown>> = [];
-    const captureConfig: Config = {
-      components: {
-        capture: {
-          render: ({ experience }) => {
-            seen.push(experience as Record<string, unknown>);
-            return null;
-          },
-        },
-      },
+    const Capture = () => {
+      seen.push(useExperience() as unknown as Record<string, unknown>);
+      return null;
     };
+    const captureConfig: Config = { components: { capture: Capture } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
       captureConfig
@@ -183,16 +176,11 @@ describe('ServerExperienceRenderer', () => {
 
   it('exposes the active viewport on render context (defaults to viewport[0])', async () => {
     let seen: Record<string, unknown> | null = null;
-    const captureConfig: Config = {
-      components: {
-        capture: {
-          render: ({ experience }) => {
-            seen = experience as unknown as Record<string, unknown>;
-            return null;
-          },
-        },
-      },
+    const Capture = () => {
+      seen = useExperience() as unknown as Record<string, unknown>;
+      return null;
     };
+    const captureConfig: Config = { components: { capture: Capture } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
       captureConfig
@@ -207,16 +195,11 @@ describe('ServerExperienceRenderer', () => {
 
   it('honors initialViewportId when computing the active viewport', async () => {
     let seen: Record<string, unknown> | null = null;
-    const captureConfig: Config = {
-      components: {
-        capture: {
-          render: ({ experience }) => {
-            seen = experience as unknown as Record<string, unknown>;
-            return null;
-          },
-        },
-      },
+    const Capture = () => {
+      seen = useExperience() as unknown as Record<string, unknown>;
+      return null;
     };
+    const captureConfig: Config = { components: { capture: Capture } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
       captureConfig
@@ -237,9 +220,7 @@ describe('ServerExperienceRenderer', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const justContainer: Config = {
       components: {
-        'contentful-container': {
-          render: ({ children }) => <div>{children as ReactNode}</div>,
-        },
+        'contentful-container': ({ children }: { children?: ReactNode }) => <div>{children}</div>,
       },
     };
     const planWithMissing = {
@@ -282,18 +263,12 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it('merges defaults beneath content (content wins)', async () => {
-    const config: Config = {
+    const Item = ({ variant, priority }: { variant: string; priority: string }) => (
+      <span data-variant={variant} data-priority={priority} />
+    );
+    const itemConfig: Config = {
       components: {
-        item: {
-          defaults: { variant: 'fallback', priority: 'low' },
-          render: (props) => {
-            const { variant, priority } = props as {
-              variant: string;
-              priority: string;
-            };
-            return <span data-variant={variant} data-priority={priority} />;
-          },
-        },
+        item: { component: Item, defaults: { variant: 'fallback', priority: 'low' } },
       },
     };
     const plan = await resolveExperience(
@@ -306,25 +281,20 @@ describe('ServerExperienceRenderer', () => {
           }),
         ],
       },
-      config
+      itemConfig
     );
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />
+      <ServerExperienceRenderer experience={plan} config={itemConfig} />
     );
     expect(html).toContain('data-variant="fromContent"');
     expect(html).toContain('data-priority="low"');
   });
 
-  it('respects merge precedence: defaults < content < design < resolved < slots < experience', () => {
-    const config: Config = {
+  it('respects merge precedence: defaults < content < design < resolved < slots', () => {
+    const Item = ({ value }: { value: string }) => <span data-value={value} />;
+    const cfg: Config = {
       components: {
-        item: {
-          defaults: { value: 'fromDefault' },
-          render: (props) => {
-            const { value } = props as { value: string };
-            return <span data-value={value} />;
-          },
-        },
+        item: { component: Item, defaults: { value: 'fromDefault' } },
       },
     };
     // Simulate a plan that already went through resolveExperience.
@@ -344,31 +314,23 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={planWithResolved} config={config} />
+      <ServerExperienceRenderer experience={planWithResolved} config={cfg} />
     );
-    // resolved wins over content, content wins over default
     expect(html).toContain('data-value="fromResolveData"');
   });
 
   it('wraps rendered nodes with the registered template', async () => {
-    const config: Config = {
-      components: {
-        item: {
-          render: ({ value }) => <span>{value as string}</span>,
-        },
-      },
-      templates: {
-        page: {
-          defaults: { title: 'Default Title' },
-          render: ({ title, children }) => (
-            <main data-template="page" data-title={title as string}>
-              {children}
-            </main>
-          ),
-        },
-      },
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const Template = ({ title, children }: { title?: string; children?: ReactNode }) => (
+      <main data-template="page" data-title={title}>
+        {children}
+      </main>
+    );
+    const cfg: Config = {
+      components: { item: Item },
+      templates: { page: { component: Template, defaults: { title: 'Default Title' } } },
     };
-    const payload: ExperiencePayload = {
+    const tplPayload: ExperiencePayload = {
       sys: {
         template: {
           sys: {
@@ -381,10 +343,8 @@ describe('ServerExperienceRenderer', () => {
       viewports: VIEWPORTS,
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
-    const plan = await resolveExperience(payload, config);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />
-    );
+    const plan = await resolveExperience(tplPayload, cfg);
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-template="page"');
     expect(html).toContain('data-title="Default Title"');
     expect(html).toContain('<span>inside</span>');
@@ -392,13 +352,9 @@ describe('ServerExperienceRenderer', () => {
 
   it('renders nodes unwrapped + warns when the template is not registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const config: Config = {
-      components: {
-        item: { render: ({ value }) => <span>{value as string}</span> },
-      },
-      // No templates registered — the experience references one that's missing.
-    };
-    const payload: ExperiencePayload = {
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const cfg: Config = { components: { item: Item } };
+    const tplPayload: ExperiencePayload = {
       sys: {
         template: {
           sys: {
@@ -411,29 +367,81 @@ describe('ServerExperienceRenderer', () => {
       viewports: VIEWPORTS,
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } })],
     };
-    const plan = await resolveExperience(payload, config);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />
-    );
+    const plan = await resolveExperience(tplPayload, cfg);
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toBe('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
     warn.mockRestore();
   });
 });
 
-describe('ServerExperienceRenderer — contentful prop', () => {
-  it('passes the raw Contentful payload to components on the contentful prop', async () => {
-    let captured: Record<string, unknown> | null = null;
-    const cfg: Config = {
-      components: {
-        button: {
-          render: (props) => {
-            captured = props as unknown as Record<string, unknown>;
-            return null;
+describe('ServerExperienceRenderer — bare-component registrations', () => {
+  it('accepts a bare function component as a registry entry', async () => {
+    const Bare = ({ text }: { text?: string }) => <p data-from="bare">{text}</p>;
+    const cfg: Config = { components: { bare: Bare } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('bare', { id: 'b', contentProperties: { text: 'hi' } })],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toBe('<p data-from="bare">hi</p>');
+  });
+
+  it('accepts a bare component for a template', async () => {
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const Tpl = ({ children }: { children?: ReactNode }) => <main data-tpl>{children}</main>;
+    const cfg: Config = { components: { item: Item }, templates: { page: Tpl } };
+    const tplPayload: ExperiencePayload = {
+      sys: {
+        template: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Template',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
           },
         },
       },
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
+    const plan = await resolveExperience(tplPayload, cfg);
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toContain('data-tpl');
+    expect(html).toContain('<span>inside</span>');
+  });
+
+  it('does NOT spread experience/contentful as props onto bare components', async () => {
+    let receivedKeys: string[] = [];
+    const Probe = (props: Record<string, unknown>) => {
+      receivedKeys = Object.keys(props);
+      return null;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('probe', { id: 'p', contentProperties: { text: 'hi' } })],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(receivedKeys).toContain('text');
+    expect(receivedKeys).not.toContain('experience');
+    expect(receivedKeys).not.toContain('contentful');
+  });
+});
+
+describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTemplate', () => {
+  it('exposes the raw Contentful payload via useContentfulComponent()', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const Capture = () => {
+      captured = useContentfulComponent() as unknown as Record<string, unknown>;
+      return null;
+    };
+    const cfg: Config = { components: { button: Capture } };
     const plan = await resolveExperience(
       {
         viewports: VIEWPORTS,
@@ -449,29 +457,24 @@ describe('ServerExperienceRenderer — contentful prop', () => {
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    expect(captured).not.toBeNull();
-    expect(captured!.contentful).toEqual({
+    expect(captured).toEqual({
       componentTypeId: 'button',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
       design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
       resolved: undefined,
     });
-    // Top-level scalar still reflects the viewport-resolved value
-    expect(captured!.cfPadding).toBe('40px');
   });
 
   it('contentful.resolved carries the resolveData return value', async () => {
     let captured: Record<string, unknown> | null = null;
+    const Capture = () => {
+      captured = useContentfulComponent() as unknown as Record<string, unknown>;
+      return null;
+    };
     const cfg: Config = {
       components: {
-        item: {
-          resolveData: () => ({ enriched: 'yes' }),
-          render: (props) => {
-            captured = props as unknown as Record<string, unknown>;
-            return null;
-          },
-        },
+        item: { component: Capture, resolveData: () => ({ enriched: 'yes' }) },
       },
     };
     const plan = await resolveExperience(
@@ -480,24 +483,19 @@ describe('ServerExperienceRenderer — contentful prop', () => {
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    expect((captured!.contentful as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
+    expect((captured as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
   });
 
-  it('passes contentful prop to templates with templateId and content/design/resolved', async () => {
+  it('exposes templateId/content/design/resolved via useContentfulTemplate()', async () => {
     let captured: Record<string, unknown> | null = null;
+    const CaptureTpl = ({ children }: { children?: ReactNode }) => {
+      captured = useContentfulTemplate() as unknown as Record<string, unknown>;
+      return <main>{children}</main>;
+    };
+    const Item = () => null;
     const cfg: Config = {
-      components: {
-        item: { render: () => null },
-      },
-      templates: {
-        page: {
-          defaults: { title: 'Default' },
-          render: (props) => {
-            captured = props as unknown as Record<string, unknown>;
-            return <main />;
-          },
-        },
-      },
+      components: { item: Item },
+      templates: { page: { component: CaptureTpl, defaults: { title: 'Default' } } },
     };
     const plan = await resolveExperience(
       {
@@ -517,7 +515,7 @@ describe('ServerExperienceRenderer — contentful prop', () => {
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    expect(captured!.contentful).toEqual({
+    expect(captured).toEqual({
       templateId: 'page',
       content: {},
       design: {},

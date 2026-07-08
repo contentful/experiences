@@ -1,5 +1,5 @@
 <!--
- * Wraps the rendered experience nodes with the page-level template when the
+ * Wraps the rendered Experience nodes with the page-level template when the
  * plan carries one and the customer registered a template config under that
  * id. When the template is referenced but unregistered, warns once and
  * renders children unwrapped — graceful degradation matches the
@@ -11,7 +11,13 @@
   import type { PortableTemplate } from '@contentful/experiences-core';
   import { resolveDesignProperties } from '@contentful/experiences-design';
 
-  import type { ContentfulTemplate, Config, RenderContext } from './types.js';
+  import { setContentfulTemplate } from './context.js';
+  import {
+    normalizeTemplateRegistration,
+    type ContentfulTemplate,
+    type Config,
+    type RenderContext,
+  } from './types.js';
 
   interface WrapWithTemplateProps {
     template: PortableTemplate | undefined;
@@ -22,9 +28,19 @@
 
   let { template, config, experience, children }: WrapWithTemplateProps = $props();
 
-  const templateConfig = $derived(
-    template ? config.templates?.[template.templateId] : undefined
-  );
+  // setContext must run during synchronous component init — call once with
+  // the initial template value (templates don't toggle on/off mid-mount).
+  if (template) {
+    setContentfulTemplate({
+      templateId: template.templateId,
+      content: template.props.content,
+      design: template.props.design,
+      resolved: template.props.resolved,
+    } satisfies ContentfulTemplate);
+  }
+
+  const entry = $derived(template ? config.templates?.[template.templateId] : undefined);
+  const templateConfig = $derived(entry ? normalizeTemplateRegistration(entry) : null);
 
   $effect(() => {
     if (template && !templateConfig && typeof console !== 'undefined') {
@@ -42,21 +58,13 @@
     experience.viewports,
     experience.activeViewportIndex
   )}
-  {@const contentful = {
-    templateId: template.templateId,
-    content: template.props.content,
-    design: template.props.design,
-    resolved: template.props.resolved,
-  } satisfies ContentfulTemplate}
-  {@const composedProps = {
+  {@const composed = {
     ...templateConfig.defaults,
     ...template.props.content,
     ...resolvedDesign,
     ...template.props.resolved,
-    experience,
-    contentful,
   }}
-  <Tpl {...composedProps} {children} />
+  <Tpl {...composed} {children} />
 {:else}
   {@render children()}
 {/if}

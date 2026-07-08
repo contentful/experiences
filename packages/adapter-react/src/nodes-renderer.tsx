@@ -1,19 +1,32 @@
 /*
- * Recursive renderer over PortableRenderNodes. Pre-renders slots into React
- * subtrees during recursion — customer components receive already-rendered
- * ReactNodes by slot name.
+ * Recursive renderer over PortableRenderNodes. Pre-renders slot subtrees
+ * into ReactNodes during recursion so customer components receive already-
+ * rendered ReactNodes by slot name (typically `children`).
+ *
+ * Customer components receive the merged prop bag (defaults + content +
+ * viewport-resolved design + resolveData output + slots). The Experience
+ * runtime context and the raw Contentful payload are read via the hooks in
+ * `./context`.
  *
  * Server vs client variants share this component; they differ only in how
  * the active viewport is sourced (initial seed vs reactive matchMedia).
  */
 
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, createElement, type ReactNode } from 'react';
 
 import type { PortableRenderNode, PortableTemplate } from '@contentful/experiences-core';
 import { resolveDesignProperties } from '@contentful/experiences-design';
 
+import { ContentfulComponentProvider, ContentfulTemplateProvider } from './context';
 import type { MissingComponentProps } from './missing-component';
-import type { ContentfulComponent, ContentfulTemplate, Config, RenderContext } from './types';
+import {
+  normalizeComponentRegistration,
+  normalizeTemplateRegistration,
+  type ContentfulComponent,
+  type ContentfulTemplate,
+  type Config,
+  type RenderContext,
+} from './types';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 
@@ -55,17 +68,14 @@ interface NodeRendererProps {
 
 function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererProps): ReactNode {
   const { componentTypeId } = node.registration;
-  const componentConfig = config.components[componentTypeId];
-  if (!componentConfig) {
-    return renderUnknown({
-      componentTypeId,
-      nodeId: node.nodeId,
-      experience,
-    });
+  const entry = config.components[componentTypeId];
+  if (!entry) {
+    return renderUnknown({ componentTypeId, nodeId: node.nodeId });
   }
+  const componentConfig = normalizeComponentRegistration(entry);
 
-  // Pre-render slot subtrees so the parent's render fn receives ReactNodes,
-  // not callables.
+  // Pre-render slot subtrees so the parent's component receives ReactNodes,
+  // not callables. Each named slot becomes a prop with the same name.
   const slotProps: Record<string, ReactNode> = {};
   for (const [slotName, children] of Object.entries(node.slots)) {
     slotProps[slotName] = (
@@ -86,9 +96,6 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
     experience.activeViewportIndex
   );
 
-  // Reserved escape-hatch prop carrying the raw Contentful-side payload
-  // (componentTypeId, raw design envelopes, resolveData output, etc.).
-  // Cheap to assemble — five reference fields, no clones.
   const contentful: ContentfulComponent = {
     componentTypeId,
     nodeId: node.nodeId,
@@ -98,16 +105,20 @@ function NodeRenderer({ node, config, experience, renderUnknown }: NodeRendererP
   };
 
   // Merge precedence (last wins): defaults < content < design <
-  // resolveData output < slots < experience < contentful.
-  return componentConfig.render({
+  // resolveData output < slots.
+  const composed = {
     ...componentConfig.defaults,
     ...node.props.content,
     ...resolvedDesign,
     ...node.props.resolved,
     ...slotProps,
-    experience,
-    contentful,
-  });
+  };
+
+  return (
+    <ContentfulComponentProvider value={contentful}>
+      {createElement(componentConfig.component, composed)}
+    </ContentfulComponentProvider>
+  );
 }
 
 export interface WrapWithTemplateProps {
@@ -118,7 +129,7 @@ export interface WrapWithTemplateProps {
 }
 
 /**
- * Wraps the rendered experience nodes with the page-level template when the
+ * Wraps the rendered Experience nodes with the page-level template when the
  * plan carries one and the customer registered a template config under that
  * id. When the template is referenced but unregistered, warns once and
  * renders children unwrapped — graceful degradation matches the
@@ -131,8 +142,8 @@ export function WrapWithTemplate({
   children,
 }: WrapWithTemplateProps): ReactNode {
   if (!template) return <Fragment>{children}</Fragment>;
-  const templateConfig = config.templates?.[template.templateId];
-  if (!templateConfig) {
+  const entry = config.templates?.[template.templateId];
+  if (!entry) {
     if (typeof console !== 'undefined') {
       console.warn(
         `[@contentful/experiences-react] No template registered for id "${template.templateId}". Rendering nodes without the template wrapper.`
@@ -140,6 +151,7 @@ export function WrapWithTemplate({
     }
     return <Fragment>{children}</Fragment>;
   }
+  const templateConfig = normalizeTemplateRegistration(entry);
 
   const resolvedDesign = resolveDesignProperties(
     template.props.design,
@@ -154,15 +166,17 @@ export function WrapWithTemplate({
     resolved: template.props.resolved,
   };
 
-  // Merge precedence mirrors components: defaults < content < design <
-  // resolveData output < children/experience/contentful.
-  return templateConfig.render({
+  const composed = {
     ...templateConfig.defaults,
     ...template.props.content,
     ...resolvedDesign,
     ...template.props.resolved,
     children,
-    experience,
-    contentful,
-  });
+  };
+
+  return (
+    <ContentfulTemplateProvider value={contentful}>
+      {createElement(templateConfig.component, composed)}
+    </ContentfulTemplateProvider>
+  );
 }
