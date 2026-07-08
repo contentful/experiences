@@ -8,27 +8,26 @@
 
 import type { ReactNode } from 'react';
 
-import type { RenderContext } from './types';
+import { useExperience } from './context';
 
 export interface MissingComponentProps {
   componentTypeId: string;
   /** Optional — only present when the payload supplied an id for this node. */
   nodeId?: string;
-  experience: RenderContext;
 }
 
 export function MissingComponent({
   componentTypeId,
   nodeId,
-  experience,
 }: MissingComponentProps): ReactNode {
+  const { isPreview } = useExperience();
   if (typeof console !== 'undefined') {
     const idLabel = nodeId ? ` (nodeId: ${nodeId})` : '';
     console.warn(
       `[@contentful/experiences] No component registered for type "${componentTypeId}"${idLabel}.`
     );
   }
-  if (!experience.isPreview) return null;
+  if (!isPreview) return null;
   return (
     <div
       style={{

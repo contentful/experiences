@@ -18,6 +18,7 @@ import type {
 } from '@contentful/experiences-core';
 import { getViewportIndex } from '@contentful/experiences-design';
 
+import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
@@ -40,11 +41,6 @@ const FALLBACK_VIEWPORT: ViewportDef = {
 };
 
 export interface ServerExperienceRendererProps {
-  /**
-   * The resolved experience returned by `resolveExperience`. The prop is
-   * named `experience` because it's what customers think of as "the
-   * experience to render"; `PortableRenderPlan` is the internal IR name.
-   */
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   /** Initial viewport seed (e.g. derived from User-Agent). Defaults to viewport[0]. */
@@ -77,13 +73,15 @@ export function ServerExperienceRenderer({
   };
 
   return (
-    <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
-      <NodesRenderer
-        nodes={experience.nodes}
-        config={config}
-        experience={renderContext}
-        renderUnknown={renderUnknown}
-      />
-    </WrapWithTemplate>
+    <ExperienceProvider value={renderContext}>
+      <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
+        <NodesRenderer
+          nodes={experience.nodes}
+          config={config}
+          experience={renderContext}
+          renderUnknown={renderUnknown}
+        />
+      </WrapWithTemplate>
+    </ExperienceProvider>
   );
 }

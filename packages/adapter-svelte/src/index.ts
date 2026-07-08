@@ -18,8 +18,19 @@ export { default as ExperienceRenderer } from './ClientExperienceRenderer.svelte
 export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.svelte';
 export { default as MissingComponent } from './MissingComponent.svelte';
 
+// Exposed so advanced customers can render non-`children` slots manually:
+// e.g. `<NodesRenderer nodes={contentful.slots.header as PortableRenderNode[]} ... />`.
+export { default as NodesRenderer } from './NodesRenderer.svelte';
+
 export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
+
+// ─── Runtime context helpers (the SDK escape hatches) ─────────────────────
+export {
+  getExperience,
+  getContentfulComponent,
+  getContentfulTemplate,
+} from './context.js';
 
 // Component prop shapes live in component-props.ts (not .svelte module
 // blocks) so `tsc --noEmit` can see them without the Svelte language server.
@@ -32,17 +43,22 @@ export type {
 } from './component-props.js';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
-export { defineComponent, defineTemplate } from './types.js';
+export {
+  defineComponent,
+  defineTemplate,
+  normalizeComponentRegistration,
+  normalizeTemplateRegistration,
+} from './types.js';
 export type {
   ComponentConfig,
-  ComponentProps,
   Components,
   Config,
   ContentfulComponent,
   ContentfulTemplate,
+  Registration,
   RenderContext,
   TemplateConfig,
-  TemplateProps,
+  TemplateRegistration,
   Templates,
 } from './types.js';
 
