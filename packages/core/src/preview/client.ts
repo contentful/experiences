@@ -5,13 +5,13 @@
  * an equivalent adapter in any other framework.
  */
 
-import type { PortableRenderPlan } from '../types';
 import type { PreviewChannel } from './channel';
 import {
   MESSAGE,
   PROTOCOL_VERSION,
   SOURCE,
   isMessage,
+  type HydratedView,
   type InitContext,
   type InitMessage,
   type PreviewCapabilities,
@@ -31,7 +31,7 @@ export interface PreviewSnapshot {
   handshakeStatus: HandshakeStatus;
   renderStatus: RenderStatus;
   sessionId: string | undefined;
-  view: PortableRenderPlan | undefined;
+  view: HydratedView | undefined;
   context: InitContext | undefined;
   missingComponents: string[];
   error: { message: string; stack?: string } | undefined;

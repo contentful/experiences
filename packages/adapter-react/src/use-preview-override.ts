@@ -11,13 +11,18 @@
  * the hook returns `undefined` — the renderer falls back to the `experience`
  * prop. Once `init` arrives, the returned view takes precedence and
  * subsequent `viewUpdate` messages replace it.
+ *
+ * The `view` in the returned result is the API-generic `HydratedView`
+ * (structurally an `ExperiencePayload`). Callers convert it into a
+ * `PortableRenderPlan` via `resolveExperience` before handing it to a
+ * renderer.
  */
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import type {
-  PortableRenderNode,
-  PortableRenderPlan,
+  ExperienceNode,
+  HydratedView,
   PreviewCapabilities,
   PreviewSnapshot,
   RenderStatus,
@@ -48,7 +53,7 @@ export interface UsePreviewOverrideOptions {
 export interface UsePreviewOverrideResult {
   // The view to render, or `undefined` when preview is off / not yet
   // received. Callers fall back to their own `experience` prop.
-  view: PortableRenderPlan | undefined;
+  view: HydratedView | undefined;
 
   handshakeStatus: PreviewSnapshot['handshakeStatus'];
   renderStatus: RenderStatus;
@@ -147,8 +152,9 @@ export function usePreviewOverride(
     () => INERT_SNAPSHOT
   );
 
-  // After each init/viewUpdate, walk the view and report render status
-  // by comparing component-type ids against the known set.
+  // After each init/viewUpdate, walk the view and report render status by
+  // extracting component-type ids from URNs and comparing against the
+  // known set.
   useEffect(() => {
     if (snapshot.handshakeStatus !== 'initialized') return;
     if (!snapshot.view) return;
@@ -187,15 +193,24 @@ export function usePreviewOverride(
   };
 }
 
+// Same URN convention resolveExperience uses: the id is the last non-empty
+// path segment. Template nodes are skipped (out of v1 renderer scope).
+function extractIdFromUrn(urn: string): string {
+  const segments = urn.split('/').filter((s) => s.length > 0);
+  return segments[segments.length - 1] ?? urn;
+}
+
 function collectMissing(
-  nodes: PortableRenderNode[] | undefined,
+  nodes: ExperienceNode[] | undefined,
   known: ReadonlySet<string>,
   out: Set<string>
 ): void {
   if (!nodes) return;
   for (const node of nodes) {
-    const id = node.registration.componentTypeId;
-    if (!known.has(id)) out.add(id);
+    if ('componentType' in node) {
+      const id = extractIdFromUrn(node.componentType.sys.urn);
+      if (!known.has(id)) out.add(id);
+    }
     if (node.slots) {
       for (const children of Object.values(node.slots)) {
         collectMissing(children, known, out);

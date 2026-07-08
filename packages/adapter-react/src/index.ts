@@ -52,6 +52,7 @@ export {
 export type {
   CreatePostMessageChannelOptions,
   HandshakeStatus as PreviewHandshakeStatus,
+  HydratedView,
   MessageHandler as PreviewMessageHandler,
   PreviewCapabilities,
   PreviewChannel,

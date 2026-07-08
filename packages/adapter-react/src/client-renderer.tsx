@@ -33,6 +33,7 @@ import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-ren
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
 import { usePreviewOverride } from './use-preview-override';
+import { useResolvedPreviewPlan } from './use-resolved-preview-plan';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   isPreview: false,
@@ -124,8 +125,14 @@ export function ClientExperienceRenderer({
     enablePreview ? knownComponentTypeIds : null
   );
 
-  // postMessage view wins once it arrives; otherwise the prop is authoritative.
-  const activeExperience = preview.view ?? experience;
+  // Convert the API-generic HydratedView from the wire into the renderer's
+  // internal `PortableRenderPlan` via the same `resolveExperience` path
+  // customers use for their fetched payloads.
+  const previewPlan = useResolvedPreviewPlan(preview.view, config);
+
+  // postMessage view wins once it arrives (and finishes resolving);
+  // otherwise the prop is authoritative.
+  const activeExperience = previewPlan ?? experience;
   if (!activeExperience) return null;
 
   return (

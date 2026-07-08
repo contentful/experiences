@@ -13,6 +13,7 @@ export type {
   ErrorPayload,
   GeometryMessage,
   GeometryPayload,
+  HydratedView,
   InitContext,
   InitMessage,
   InitPayload,

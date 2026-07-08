@@ -7,12 +7,22 @@
  * WebSocket, WebRTC data channel, or any other duplex pipe. The transport
  * is isolated in the `PreviewChannel` interface.
  *
- * The `view` on the wire is a `PortableRenderPlan` — the same interpreted
- * shape a renderer consumes today. Editor and renderer agree on this type
- * directly; no separate "hydrated view" indirection.
+ * The `view` on the wire is a `HydratedView` — the same API-generic
+ * payload the Experience Delivery API delivers today. Renderers convert it
+ * to their internal IR (a `PortableRenderPlan`) via `resolveExperience`
+ * at the boundary. The wire deliberately stays API-shaped so third-party
+ * renderers, native adapters, and test harnesses can consume it without
+ * depending on any renderer's internal IR.
  */
 
-import type { PortableRenderPlan } from '../types';
+import type { ExperiencePayload } from '../types';
+
+/**
+ * The API-generic view payload — structurally the response body of
+ * `GetExperienceViewResponse` from the Experience Delivery API. Alias
+ * only; the protocol never redefines the shape.
+ */
+export type HydratedView = ExperiencePayload;
 
 // -- Protocol constants --------------------------------------------------
 
@@ -83,7 +93,7 @@ export interface InitContext {
 export interface InitPayload {
   supportedFeatures: string[];
   context: InitContext;
-  initialView: PortableRenderPlan;
+  initialView: HydratedView;
 }
 
 export interface RenderedPayload {
@@ -93,7 +103,7 @@ export interface RenderedPayload {
 }
 
 export interface ViewUpdatePayload {
-  view: PortableRenderPlan;
+  view: HydratedView;
 }
 
 export interface ErrorPayload {
