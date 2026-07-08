@@ -1,3 +1,9 @@
+## 0.4.0 (2026-07-08)
+
+### 🚀 Features
+
+- idiomatic adapters — bare components + context hooks ([0365bfb](https://github.com/contentful/experiences/commit/0365bfb))
+
 ## 0.3.0 (2026-06-24)
 
 ### 🚀 Features
