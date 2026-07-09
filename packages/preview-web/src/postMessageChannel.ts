@@ -14,8 +14,13 @@
  * extension or test harness inject messages without spoofing the origin.
  */
 
-import type { MessageHandler, PreviewChannel } from './channel';
-import { SOURCE, isEnvelope, type AnyMessage, type MessageType } from './protocol';
+import type { MessageHandler, PreviewChannel } from '@contentful/experiences-preview-core';
+import {
+  SOURCE,
+  isEnvelope,
+  type AnyMessage,
+  type MessageType,
+} from '@contentful/experiences-preview-core';
 
 const LOCALHOST_PREFIX = 'http://localhost:';
 

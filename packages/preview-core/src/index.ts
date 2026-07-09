@@ -39,6 +39,3 @@ export type {
   PreviewSnapshot,
   RenderStatus,
 } from './client';
-
-export { createPostMessageChannel } from './postMessageChannel';
-export type { CreatePostMessageChannelOptions } from './postMessageChannel';

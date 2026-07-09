@@ -7,9 +7,19 @@
  * the server) to seed the first render, matching what the server emitted;
  * the rune then takes over via media queries to switch viewports as the
  * window resizes.
+ *
+ * When `enablePreview` is set, the renderer connects to the parent editor
+ * via postMessage on mount. Before `init` arrives — or when the app is
+ * not embedded in a known editor origin — rendering falls back to the
+ * `experience` prop. Once `init` arrives, the editor's plan is rendered
+ * instead and subsequent `viewUpdate` messages replace it.
 -->
 <script lang="ts">
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';
+  import {
+    createPreviewOverride,
+    createResolvedPreviewPlan,
+  } from '@contentful/experiences-preview-svelte';
 
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
@@ -37,6 +47,9 @@
     initialViewportId,
     context,
     renderUnknown = MissingComponent,
+    enablePreview = false,
+    previewCapabilities,
+    previewTargetOrigin,
   }: ClientExperienceRendererProps = $props();
 
   if (typeof window === 'undefined') {
@@ -45,28 +58,52 @@
     );
   }
 
-  const viewports = $derived(experience?.viewports ?? []);
+  // Set of component-type ids the customer registered — used by the
+  // preview override to detect missing components in the incoming view
+  // and report `partial` render status back to the editor.
+  const knownComponentTypeIds = $derived(new Set(Object.keys(config.components)));
+
+  const preview = createPreviewOverride(
+    {
+      enabled: enablePreview,
+      capabilities: previewCapabilities,
+      targetOrigin: previewTargetOrigin,
+    },
+    // Only pass the known set when preview is on; otherwise the override
+    // reports `ok` unconditionally (and no work happens in the effect
+    // because the handshake never advances).
+    enablePreview ? knownComponentTypeIds : null
+  );
+
+  const resolved = createResolvedPreviewPlan(() => preview.view, config);
+
+  // postMessage view wins once it arrives (and finishes resolving);
+  // otherwise the prop is authoritative.
+  const activeExperience = $derived(resolved.plan ?? experience);
+
+  const viewports = $derived(activeExperience?.viewports ?? []);
   const tracker = useActiveViewport(viewports, initialViewportId);
 
   const renderContext = $derived.by((): RenderContext | null => {
-    if (!experience) return null;
-    const activeViewport = experience.viewports[tracker.activeViewportIndex] ?? FALLBACK_VIEWPORT;
+    if (!activeExperience) return null;
+    const activeViewport =
+      activeExperience.viewports[tracker.activeViewportIndex] ?? FALLBACK_VIEWPORT;
     return {
       ...DEFAULT_CONTEXT,
       ...context,
       metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
-      viewports: experience.viewports,
+      viewports: activeExperience.viewports,
       activeViewport,
       activeViewportIndex: tracker.activeViewportIndex,
     };
   });
 </script>
 
-{#if experience && renderContext}
-  <WrapWithTemplate template={experience.template} {config} experience={renderContext}>
+{#if activeExperience && renderContext}
+  <WrapWithTemplate template={activeExperience.template} {config} experience={renderContext}>
     {#snippet children()}
       <NodesRenderer
-        nodes={experience.nodes}
+        nodes={activeExperience.nodes}
         {config}
         experience={renderContext}
         {renderUnknown}

@@ -15,7 +15,7 @@
  * depending on any renderer's internal IR.
  */
 
-import type { ExperiencePayload } from '../types';
+import type { ExperiencePayload } from '@contentful/experiences-core';
 
 /**
  * The API-generic view payload — structurally the response body of

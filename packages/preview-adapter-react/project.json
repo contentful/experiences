@@ -1,0 +1,19 @@
+{
+  "name": "preview-adapter-react",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/preview-adapter-react/src",
+  "projectType": "library",
+  "tags": ["scope:preview", "runtime:react"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/preview-adapter-react",
+        "command": "tsup"
+      }
+    }
+  }
+}

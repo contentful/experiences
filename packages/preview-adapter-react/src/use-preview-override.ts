@@ -20,18 +20,18 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
+import type { ExperienceNode } from '@contentful/experiences-core';
 import type {
-  ExperienceNode,
   HydratedView,
   PreviewCapabilities,
   PreviewSnapshot,
   RenderStatus,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-preview-core';
+import { PreviewClient } from '@contentful/experiences-preview-core';
 import {
-  PreviewClient,
   createPostMessageChannel,
   type CreatePostMessageChannelOptions,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-preview-web';
 
 export interface UsePreviewOverrideOptions {
   // Master gate. When false, the hook returns an inert snapshot and

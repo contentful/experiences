@@ -21,6 +21,42 @@ export { default as MissingComponent } from './MissingComponent.svelte';
 export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
+// ─── Preview (editor integration) ─────────────────────────────────────────
+// The Svelte preview adapter is a sibling package; everything below is
+// re-exported so consumers of `@contentful/experiences-svelte` never need
+// to install or import from the preview packages directly.
+export {
+  createPreviewOverride,
+  createResolvedPreviewPlan,
+} from '@contentful/experiences-preview-svelte';
+export type {
+  CreatePreviewOverrideOptions,
+  PreviewOverride,
+  ResolvedPreviewPlan,
+} from '@contentful/experiences-preview-svelte';
+
+// Advanced-use re-exports for customers building custom preview flows.
+export {
+  MESSAGE as PREVIEW_MESSAGE,
+  PROTOCOL_VERSION as PREVIEW_PROTOCOL_VERSION,
+  SOURCE as PREVIEW_SOURCE,
+  PreviewClient,
+  createPostMessageChannel,
+  isEnvelope as isPreviewEnvelope,
+  isMessage as isPreviewMessage,
+} from '@contentful/experiences-preview-svelte';
+export type {
+  CreatePostMessageChannelOptions,
+  HandshakeStatus as PreviewHandshakeStatus,
+  HydratedView,
+  MessageHandler as PreviewMessageHandler,
+  PreviewCapabilities,
+  PreviewChannel,
+  PreviewClientOptions,
+  PreviewSnapshot,
+  RenderStatus as PreviewRenderStatus,
+} from '@contentful/experiences-preview-svelte';
+
 // Component prop shapes live in component-props.ts (not .svelte module
 // blocks) so `tsc --noEmit` can see them without the Svelte language server.
 export type {

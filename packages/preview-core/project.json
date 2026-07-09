@@ -1,0 +1,19 @@
+{
+  "name": "preview-core",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/preview-core/src",
+  "projectType": "library",
+  "tags": ["scope:preview", "layer:core"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/preview-core",
+        "command": "tsup"
+      }
+    }
+  }
+}

@@ -32,14 +32,17 @@ export type { UseActiveViewportResult } from './use-active-viewport';
 export type { RenderUnknown } from './nodes-renderer';
 
 // ─── Preview (editor integration) ─────────────────────────────────────────
-export { usePreviewOverride } from './use-preview-override';
+// The React preview adapter is a sibling package; everything below is
+// re-exported so consumers of `@contentful/experiences-react` never need
+// to install or import from the preview packages directly.
+export { usePreviewOverride, useResolvedPreviewPlan } from '@contentful/experiences-preview-react';
 export type {
   UsePreviewOverrideOptions,
   UsePreviewOverrideResult,
-} from './use-preview-override';
+} from '@contentful/experiences-preview-react';
 
-// Advanced-use re-exports from core for customers building custom preview
-// flows on top of the primitives (custom transports, non-renderer consumers).
+// Advanced-use re-exports for customers building custom preview flows on
+// top of the primitives (custom transports, non-renderer consumers).
 export {
   MESSAGE as PREVIEW_MESSAGE,
   PROTOCOL_VERSION as PREVIEW_PROTOCOL_VERSION,
@@ -48,7 +51,7 @@ export {
   createPostMessageChannel,
   isEnvelope as isPreviewEnvelope,
   isMessage as isPreviewMessage,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-preview-react';
 export type {
   CreatePostMessageChannelOptions,
   HandshakeStatus as PreviewHandshakeStatus,
@@ -59,7 +62,7 @@ export type {
   PreviewClientOptions,
   PreviewSnapshot,
   RenderStatus as PreviewRenderStatus,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-preview-react';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export { defineComponent, defineTemplate } from './types';

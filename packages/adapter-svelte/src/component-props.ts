@@ -14,6 +14,7 @@
 import type { Component } from 'svelte';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-core';
+import type { PreviewCapabilities } from '@contentful/experiences-preview-svelte';
 
 import type { Config, RenderContext } from './types.js';
 
@@ -25,7 +26,19 @@ export interface ServerExperienceRendererProps {
   renderUnknown?: RenderUnknown;
 }
 
-export type ClientExperienceRendererProps = ServerExperienceRendererProps;
+export interface ClientExperienceRendererProps extends ServerExperienceRendererProps {
+  /**
+   * Opt in to Contentful editor preview. See `ClientExperienceRenderer` in
+   * `@contentful/experiences-react` for full docs — behavior is identical.
+   */
+  enablePreview?: boolean;
+
+  /** Preview capabilities advertised to the editor. Ignored when `enablePreview` is false. */
+  previewCapabilities?: Partial<PreviewCapabilities>;
+
+  /** Editor origin override for the postMessage target. Ignored when `enablePreview` is false. */
+  previewTargetOrigin?: string | string[];
+}
 
 export interface MissingComponentProps {
   componentTypeId: string;

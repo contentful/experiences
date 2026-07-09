@@ -38,6 +38,12 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        // Svelte 5 runes — read by the language server as compiler-time
+        // magic; the ESLint parser doesn't know about them.
+        $state: 'readonly',
+        $effect: 'readonly',
+        $derived: 'readonly',
+        $props: 'readonly',
       },
     },
     plugins: {

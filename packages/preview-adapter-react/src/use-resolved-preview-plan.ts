@@ -17,14 +17,13 @@
 
 import { useEffect, useState } from 'react';
 
-import type { HydratedView, PortableRenderPlan } from '@contentful/experiences-core';
+import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-core';
 import { resolveExperience } from '@contentful/experiences-core';
-
-import type { Config } from './types';
+import type { HydratedView } from '@contentful/experiences-preview-core';
 
 export function useResolvedPreviewPlan(
   view: HydratedView | undefined,
-  config: Config
+  config: ResolverConfig
 ): PortableRenderPlan | undefined {
   const [plan, setPlan] = useState<PortableRenderPlan | undefined>(undefined);
 

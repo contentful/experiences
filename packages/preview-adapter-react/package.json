@@ -1,7 +1,7 @@
 {
-  "name": "@contentful/experiences-react",
-  "version": "0.3.0",
-  "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
+  "name": "@contentful/experiences-preview-react",
+  "version": "0.1.0",
+  "description": "React adapter for the Contentful Experiences preview protocol",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,20 +27,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/contentful/experiences.git",
-    "directory": "packages/adapter-react"
+    "directory": "packages/preview-adapter-react"
   },
   "dependencies": {
     "@contentful/experiences-core": "*",
-    "@contentful/experiences-design": "*",
-    "@contentful/experiences-preview-react": "*"
+    "@contentful/experiences-preview-core": "*",
+    "@contentful/experiences-preview-web": "*"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react-dom": {
-      "optional": true
-    }
+    "react": "^18.0.0 || ^19.0.0"
   }
 }

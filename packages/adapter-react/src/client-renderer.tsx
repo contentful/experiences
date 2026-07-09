@@ -24,16 +24,18 @@ import { useMemo, type ReactNode } from 'react';
 import type {
   ExperienceContext,
   PortableRenderPlan,
-  PreviewCapabilities,
   ViewportDef,
 } from '@contentful/experiences-core';
+import type { PreviewCapabilities } from '@contentful/experiences-preview-react';
+import {
+  usePreviewOverride,
+  useResolvedPreviewPlan,
+} from '@contentful/experiences-preview-react';
 
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
-import { usePreviewOverride } from './use-preview-override';
-import { useResolvedPreviewPlan } from './use-resolved-preview-plan';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   isPreview: false,

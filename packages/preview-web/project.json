@@ -1,0 +1,19 @@
+{
+  "name": "preview-web",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/preview-web/src",
+  "projectType": "library",
+  "tags": ["scope:preview", "layer:web"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/preview-web",
+        "command": "tsup"
+      }
+    }
+  }
+}

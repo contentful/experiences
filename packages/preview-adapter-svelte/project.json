@@ -1,0 +1,19 @@
+{
+  "name": "preview-adapter-svelte",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/preview-adapter-svelte/src",
+  "projectType": "library",
+  "tags": ["scope:preview", "runtime:svelte"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/preview-adapter-svelte",
+        "command": "svelte-package -i src -o dist"
+      }
+    }
+  }
+}
