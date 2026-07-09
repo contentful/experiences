@@ -13,7 +13,6 @@ describe('createExperienceClient', () => {
     expect(client.preview).toBe(false);
     expect(client.spaceId).toBe('space-1');
     expect(client.environmentId).toBe('master');
-    expect(client.accessToken).toBe('token-abc');
   });
 
   it('defaults preview to false when omitted', () => {

@@ -10,25 +10,24 @@ export interface ExperienceClientOptions {
   preview?: boolean;
 }
 
-export interface ExperienceClient {
+export class ExperienceClient extends ContentfulViewDeliveryClient {
   readonly spaceId: string;
   readonly environmentId: string;
-  readonly accessToken: string;
   readonly preview: boolean;
-  readonly view: ContentfulViewDeliveryClient['view'];
+
+  constructor({ spaceId, environmentId, accessToken, preview = false }: ExperienceClientOptions) {
+    if (!spaceId) throw new Error('createExperienceClient: spaceId is required');
+    if (!environmentId) throw new Error('createExperienceClient: environmentId is required');
+    if (!accessToken) throw new Error('createExperienceClient: accessToken is required');
+
+    super({ token: accessToken, baseUrl: preview ? XPA_BASE_URL : XDN_BASE_URL });
+
+    this.spaceId = spaceId;
+    this.environmentId = environmentId;
+    this.preview = preview;
+  }
 }
 
 export function createExperienceClient(options: ExperienceClientOptions): ExperienceClient {
-  const { spaceId, environmentId, accessToken, preview = false } = options;
-
-  if (!spaceId) throw new Error('createExperienceClient: spaceId is required');
-  if (!environmentId) throw new Error('createExperienceClient: environmentId is required');
-  if (!accessToken) throw new Error('createExperienceClient: accessToken is required');
-
-  const inner = new ContentfulViewDeliveryClient({
-    token: accessToken,
-    baseUrl: preview ? XPA_BASE_URL : XDN_BASE_URL,
-  });
-
-  return { spaceId, environmentId, accessToken, preview, view: inner.view };
+  return new ExperienceClient(options);
 }

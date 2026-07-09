@@ -1,2 +1,2 @@
-export { createExperienceClient } from './create-client.js';
-export type { ExperienceClient, ExperienceClientOptions } from './create-client.js';
+export { createExperienceClient, ExperienceClient } from './create-client.js';
+export type { ExperienceClientOptions } from './create-client.js';
