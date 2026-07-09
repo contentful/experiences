@@ -1,7 +1,6 @@
 {
   "name": "@contentful/experiences-client",
   "version": "0.1.0",
-  "private": true,
   "description": "Internal delivery client for Contentful Experiences — wraps @contentful/experience-delivery and handles XDN/XPA selection",
   "license": "MIT",
   "type": "module",
@@ -22,6 +21,9 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/contentful/experiences.git",
