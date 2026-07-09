@@ -5,10 +5,10 @@
 The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using customer-supplied React components.
 
 ```sh
-npm install @contentful/experiences-react @contentful/experience-delivery
+npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core` and `@contentful/experiences-design` that consumers need. The other packages are workspace-internal.
+This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` that consumers need. The other packages are workspace-internal.
 
 ---
 
@@ -36,6 +36,14 @@ MissingComponent; // Default fallback for unregistered component types
 useActiveViewport; // Hook used inside ClientExperienceRenderer (rarely needed by consumers)
 ```
 
+### Delivery client
+
+```ts
+createExperienceClient(options); // Factory — returns an ExperienceClient (XDN or XPA based on preview flag)
+type ExperienceClient;           // Extends ContentfulViewDeliveryClient with spaceId, environmentId, preview
+type ExperienceClientOptions;
+```
+
 ### Re-exported types and utilities
 
 ```ts
@@ -60,6 +68,7 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
 
 ```tsx
 import {
+  createExperienceClient,
   defineComponent,
   defineTemplate,
   resolveExperience,
@@ -70,6 +79,12 @@ import {
 } from '@contentful/experiences-react';
 
 import { Button, type ButtonProps } from './components/Button';
+
+const client = createExperienceClient({
+  spaceId: process.env.SPACE_ID!,
+  environmentId: 'master',
+  accessToken: process.env.CDA_TOKEN!,
+});
 
 const components: Components = {
   button: defineComponent<ButtonProps>({
@@ -82,6 +97,7 @@ const components: Components = {
 const experienceConfig: Config = { components };
 
 // In a server component:
+const payload = await client.view.getExperience(client.spaceId, client.environmentId, slug);
 const experience = await resolveExperience(payload, experienceConfig);
 return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```

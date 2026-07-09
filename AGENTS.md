@@ -32,6 +32,7 @@ experiences/
 ├── packages/
 │   ├── core/                 # @contentful/experiences-core (internal)
 │   ├── design/               # @contentful/experiences-design (internal)
+│   ├── client/               # @contentful/experiences-client (internal)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   └── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 └── examples/
@@ -41,12 +42,13 @@ experiences/
 
 ### Package roles
 
-| Folder                    | npm name                         | Audience                                                           |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.         |
-| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                  |
-| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.    |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything. |
+| Folder                    | npm name                           | Audience                                                                                       |
+| ------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `packages/core`           | `@contentful/experiences-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
+| `packages/design`         | `@contentful/experiences-design`   | **Internal.** Pure viewport math.                                                              |
+| `packages/client`         | `@contentful/experiences-client`   | **Internal.** XDN/XPA delivery client factory; re-exported from each adapter.                  |
+| `packages/adapter-react`  | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything.                                |
+| `packages/adapter-svelte` | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
@@ -119,9 +121,11 @@ React's RSC compilation requires a `'use client'` directive at the top of files 
 
 Each `defineComponent<Props>(...)` is parameterized over the design-system component's prop type. No separate `ContentfulButtonProps` interface to keep in sync. The design system owns the contract; the integration layer adapts to it. When a Contentful payload field doesn't map 1:1, the customer either (a) renames at the render-fn call site, or (b) uses `resolveData` to reshape, or (c) extends the type at the map level (`type ButtonMapProps = ButtonProps & { testSlot?: ReactNode }`).
 
-### Why is the delivery client (`@contentful/experience-delivery`) a customer dep, not bundled?
+### Why is the delivery client bundled in `packages/client` rather than a direct customer dep?
 
-Three reasons. (1) Customers can pin it independently. (2) The renderer SDK can render any compatible payload — mocks, local fixtures, custom fetch paths — not just the official client. (3) The delivery client is large (~3,000 generated files); bundling it would dwarf our package's bundle budget.
+Customers should not need to install or configure `@contentful/experience-delivery` themselves — doing so exposes Fern-generated internals as customer-facing API surface and requires them to wire up XDN vs. XPA selection manually. `packages/client` encapsulates that selection behind `createExperienceClient()`, which each framework adapter re-exports. Customers install only the adapter.
+
+`@contentful/experience-delivery` is a dep of `packages/client` (not peer-dep, not bundled into the dist — it's a normal transitive install). The delivery client version is pinned in `packages/client/package.json`; customers get the version the SDK is tested against.
 
 ### Why two separate registries (`components` and `templates`) instead of one?
 

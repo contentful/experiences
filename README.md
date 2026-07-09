@@ -5,10 +5,10 @@
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
 ```sh
-npm install @contentful/experiences-react @contentful/experience-delivery
+npm install @contentful/experiences-react
 ```
 
-That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities). The `@contentful/experiences-core` and `@contentful/experiences-design` packages are workspace-internal implementation details.
+That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities, and the delivery client factory). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
 A Svelte adapter (`@contentful/experiences-svelte`) ships in parallel with the same public-API shape; see [`packages/adapter-svelte`](./packages/adapter-svelte). The rest of this README focuses on React.
 
@@ -62,15 +62,18 @@ export const experienceConfig: Config = { components, templates };
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
-import { resolveExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+import { createExperienceClient, resolveExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
 
-const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
+const client = createExperienceClient({
+  spaceId: process.env.SPACE_ID!,
+  environmentId: 'master',
+  accessToken: process.env.CDA_TOKEN!,
+});
 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug);
+  const payload = await client.view.getExperience(client.spaceId, client.environmentId, slug);
   const experience = await resolveExperience(payload, experienceConfig);
 
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
@@ -289,12 +292,13 @@ The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in on
 
 This is an Nx monorepo. Customers install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                         | Audience                                                                                           |
-| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
+| Folder                                                 | npm name                           | Audience                                                                                           |
+| ------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                 | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                 | `@contentful/experiences-client`   | **Internal.** XDN/XPA delivery client factory; re-exported from each adapter.                      |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything else.                               |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
 
