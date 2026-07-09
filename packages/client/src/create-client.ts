@@ -15,7 +15,7 @@ export interface ExperienceClient {
   readonly environmentId: string;
   readonly accessToken: string;
   readonly preview: boolean;
-  readonly _inner: ContentfulViewDeliveryClient;
+  readonly view: ContentfulViewDeliveryClient['view'];
 }
 
 export function createExperienceClient(options: ExperienceClientOptions): ExperienceClient {
@@ -30,5 +30,5 @@ export function createExperienceClient(options: ExperienceClientOptions): Experi
     baseUrl: preview ? XPA_BASE_URL : XDN_BASE_URL,
   });
 
-  return { spaceId, environmentId, accessToken, preview, _inner: inner };
+  return { spaceId, environmentId, accessToken, preview, view: inner.view };
 }

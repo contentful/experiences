@@ -26,10 +26,10 @@ describe('createExperienceClient', () => {
     expect(client.preview).toBe(true);
   });
 
-  it('exposes the inner delivery client', () => {
+  it('exposes the view client', () => {
     const client = createExperienceClient(BASE_OPTS);
-    expect(client._inner).toBeDefined();
-    expect(typeof client._inner.view.getExperience).toBe('function');
+    expect(client.view).toBeDefined();
+    expect(typeof client.view.getExperience).toBe('function');
   });
 
   it('throws when spaceId is missing', () => {

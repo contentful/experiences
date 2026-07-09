@@ -25,7 +25,7 @@ export async function fetchExperience(
     preview: options.preview ?? false,
   });
 
-  const response = await client._inner.view.getExperience(
+  const response = await client.view.getExperience(
     client.spaceId,
     client.environmentId,
     experienceId,
