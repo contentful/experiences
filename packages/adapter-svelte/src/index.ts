@@ -91,3 +91,7 @@ export {
   resolveDesignProperties,
   toCssMediaQuery,
 } from '@contentful/experiences-design';
+
+// ─── Delivery client factory ───────────────────────────────────────────────
+export { createExperienceClient } from '@contentful/experiences-client';
+export type { ExperienceClient, ExperienceClientOptions } from '@contentful/experiences-client';

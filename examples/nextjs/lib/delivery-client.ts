@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createExperienceClient } from '@contentful/experiences-client';
+import { createExperienceClient } from '@contentful/experiences-react';
 import type { ExperiencePayload } from '@contentful/experiences-react';
 
 export interface FetchExperienceResult {

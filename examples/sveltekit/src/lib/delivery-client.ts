@@ -6,8 +6,7 @@
  * bundle. The values are inlined at build time.
  */
 
-import { createExperienceClient } from '@contentful/experiences-client';
-import type { ExperiencePayload } from '@contentful/experiences-svelte';
+import { createExperienceClient, type ExperiencePayload } from '@contentful/experiences-svelte';
 
 import { CDA_TOKEN, CPA_TOKEN, ENVIRONMENT_ID, SPACE_ID } from '$env/static/private';
 
