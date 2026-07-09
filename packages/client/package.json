@@ -1,7 +1,7 @@
 {
-  "name": "@contentful/experiences-react",
-  "version": "0.4.0",
-  "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
+  "name": "@contentful/experiences-client",
+  "version": "0.1.0",
+  "description": "Internal delivery client for Contentful Experiences — wraps @contentful/experience-delivery and handles XDN/XPA selection",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,20 +27,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/contentful/experiences.git",
-    "directory": "packages/adapter-react"
+    "directory": "packages/client"
   },
   "dependencies": {
-    "@contentful/experiences-client": "*",
-    "@contentful/experiences-core": "*",
-    "@contentful/experiences-design": "*"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react-dom": {
-      "optional": true
-    }
+    "@contentful/experience-delivery": "1.0.0-dev.3"
   }
 }

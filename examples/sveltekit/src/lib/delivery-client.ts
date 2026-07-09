@@ -1,11 +1,4 @@
 /**
- * Server-side fetch of an Experience via @contentful/experience-delivery.
- * Requires SPACE_ID and CDA_TOKEN in the environment (.env file).
- *
- * The delivery client's `GetExperienceViewResponse` is structurally
- * compatible with our `ExperiencePayload`, so we hand it straight to
- * `resolveExperience` without normalization.
- *
  * Env access goes through `$env/static/private` (SvelteKit's typed
  * server-only env import) instead of `process.env`. SvelteKit doesn't
  * auto-populate `process.env` from `.env` like Next.js does — it exposes
@@ -13,12 +6,10 @@
  * bundle. The values are inlined at build time.
  */
 
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import { createExperienceClient } from '@contentful/experiences-client';
 import type { ExperiencePayload } from '@contentful/experiences-svelte';
 
-import { CDA_TOKEN, ENVIRONMENT_ID, SPACE_ID } from '$env/static/private';
-
-const experienceClient = new ContentfulViewDeliveryClient({ token: CDA_TOKEN });
+import { CDA_TOKEN, CPA_TOKEN, ENVIRONMENT_ID, SPACE_ID } from '$env/static/private';
 
 export interface FetchExperienceResult {
   payload: ExperiencePayload;
@@ -28,15 +19,19 @@ export async function fetchExperience(
   experienceId: string,
   options: { locale?: string; preview?: boolean } = {}
 ): Promise<FetchExperienceResult> {
-  const response = await experienceClient.view.getExperience(
-    SPACE_ID,
-    ENVIRONMENT_ID || 'master',
+  const client = createExperienceClient({
+    spaceId: SPACE_ID,
+    environmentId: ENVIRONMENT_ID || 'master',
+    accessToken: options.preview ? CPA_TOKEN : CDA_TOKEN,
+    preview: options.preview ?? false,
+  });
+
+  const response = await client._inner.view.getExperience(
+    client.spaceId,
+    client.environmentId,
     experienceId,
-    {
-      locale: options.locale,
-      preview: options.preview ? 'true' : undefined,
-    }
+    { locale: options.locale }
   );
 
-  return { payload: response };
+  return { payload: response as ExperiencePayload };
 }
