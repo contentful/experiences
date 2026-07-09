@@ -7,10 +7,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": [
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "vitest.config.ts",
-    "tsup.config.ts"
-  ]
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "vitest.config.ts", "tsup.config.ts"]
 }
