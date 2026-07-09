@@ -62,7 +62,11 @@ export const experienceConfig: Config = { components, templates };
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
-import { createExperienceClient, resolveExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+import {
+  createExperienceClient,
+  resolveExperience,
+  ServerExperienceRenderer,
+} from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
 
 const client = createExperienceClient({
@@ -292,13 +296,13 @@ The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in on
 
 This is an Nx monorepo. Customers install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                           | Audience                                                                                           |
-| ------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                 | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                 | `@contentful/experiences-client`   | **Internal.** XDN/XPA delivery client factory; re-exported from each adapter.                      |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything else.                               |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
+| Folder                                                 | npm name                         | Audience                                                                                           |
+| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                 | `@contentful/experiences-client` | **Internal.** XDN/XPA delivery client factory; re-exported from each adapter.                      |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
 
