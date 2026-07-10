@@ -1,5 +1,8 @@
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import {
+  ExperienceRenderer,
+  resolveExperience,
+} from '@contentful/experiences-react';
 
 import { fetchExperience } from '@/lib/delivery-client';
 import { experienceConfig } from '@/lib/experience-config';
@@ -16,5 +19,11 @@ export default async function ExperiencePage({ params }: PageProps) {
 
   const experience = await resolveExperience(payload, experienceConfig);
 
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  return (
+    <ExperienceRenderer
+      experience={experience}
+      config={experienceConfig}
+      enablePreview
+    />
+  );
 }
