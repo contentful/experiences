@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer } from '@contentful/experiences-react';
+import { ServerExperienceRenderer, fetchExperience } from '@contentful/experiences-react';
 
-import { fetchExperiencePage } from '@/lib/delivery-client';
 import { experienceConfig } from '@/lib/experience-config';
 
 interface PageProps {
@@ -11,7 +10,13 @@ interface PageProps {
 export default async function ExperiencePage({ params }: PageProps) {
   const { slug: experienceId } = await params;
 
-  const experience = await fetchExperiencePage(experienceId, experienceConfig);
+  const experience = await fetchExperience({
+    accessToken: process.env.CDA_TOKEN!,
+    spaceId: process.env.SPACE_ID ?? '',
+    environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+    experienceId,
+    config: experienceConfig,
+  });
   if (!experience) notFound();
 
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;

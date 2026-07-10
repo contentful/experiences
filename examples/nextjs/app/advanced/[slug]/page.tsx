@@ -1,8 +1,7 @@
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer } from '@contentful/experiences-react';
+import { ServerExperienceRenderer, fetchExperience } from '@contentful/experiences-react';
 
-import { fetchExperiencePage } from '@/lib/delivery-client';
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
 
@@ -16,7 +15,7 @@ interface PageProps {
  * minimal three-line page in `app/[slug]/page.tsx` doesn't reach for:
  *
  *  1. **Preview mode + per-page metadata** via the `context` arg of
- *     `fetchExperiencePage`. `?preview=true` flips `MissingComponent` from
+ *     `fetchExperience`. `?preview=true` flips `MissingComponent` from
  *     "silent null" to "visible red box"; metadata flows into every
  *     `resolveData` hook.
  *  2. **User-Agent → viewport seeding** via `initialViewportId` so SSR
@@ -38,13 +37,18 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const experience = await fetchExperiencePage(experienceId, advancedExperienceConfig, {
+  const experience = await fetchExperience({
+    accessToken: process.env.CDA_TOKEN!,
     preview: previewMode,
+    spaceId: process.env.SPACE_ID ?? '',
+    environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+    experienceId,
     locale,
     context: {
       isPreview: previewMode,
       metadata: { slug: experienceId, locale },
     },
+    config: advancedExperienceConfig,
   });
   if (!experience) notFound();
 

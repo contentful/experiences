@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 
-import { fetchExperiencePage } from '$lib/delivery-client.js';
+import { fetchExperience } from '@contentful/experiences-svelte';
+import { CDA_TOKEN, ENVIRONMENT_ID, SPACE_ID } from '$env/static/private';
 import { detectViewportFromUserAgent } from '$lib/detect-viewport.js';
 import { experienceConfig } from '$lib/experience-config.js';
 
@@ -11,9 +12,14 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
     url.searchParams.get('preview') === 'true' || url.searchParams.get('preview') === '1';
   const initialViewportId = detectViewportFromUserAgent(request.headers.get('user-agent') ?? '');
 
-  const experience = await fetchExperiencePage(params.slug, experienceConfig, {
+  const experience = await fetchExperience({
+    accessToken: CDA_TOKEN,
     preview: previewMode,
+    spaceId: SPACE_ID,
+    environmentId: ENVIRONMENT_ID || 'master',
+    experienceId: params.slug,
     context: { isPreview: previewMode, metadata: { slug: params.slug } },
+    config: experienceConfig,
   });
   if (!experience) error(404, 'Experience not found');
 
