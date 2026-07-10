@@ -1,6 +1,9 @@
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import {
+  ExperienceRenderer,
+  resolveExperience,
+} from '@contentful/experiences-react';
 
 import { fetchExperience } from '@/lib/delivery-client';
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
@@ -27,6 +30,13 @@ interface PageProps {
  *     `button` component and uppercases the editorial text. The SDK runs
  *     resolvers in parallel across nodes, so the slow resolver doesn't
  *     block the others.
+ *
+ * `ExperienceRenderer` is the hybrid renderer: this server component
+ * renders it directly, producing static first-paint HTML (via
+ * `ServerExperienceRenderer` internally). After hydration, it hands off
+ * to `ClientExperienceRenderer`, and the `enablePreview` flag arms the
+ * preview wire — a no-op outside the Contentful editor, an
+ * editor-driven live preview inside it.
  */
 export default async function AdvancedExperiencePage({ params, searchParams }: PageProps) {
   const { slug: experienceId } = await params;
@@ -49,11 +59,12 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   });
 
   return (
-    <ServerExperienceRenderer
+    <ExperienceRenderer
       experience={experience}
       config={advancedExperienceConfig}
       initialViewportId={initialViewportId}
       context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+      enablePreview
     />
   );
 }
