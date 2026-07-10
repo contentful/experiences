@@ -1,8 +1,8 @@
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import { ServerExperienceRenderer } from '@contentful/experiences-react';
 
-import { fetchExperience } from '@/lib/delivery-client';
+import { fetchExperiencePage } from '@/lib/delivery-client';
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
 
@@ -15,8 +15,8 @@ interface PageProps {
  * Advanced version of the [slug] route. Demonstrates three SDK features the
  * minimal three-line page in `app/[slug]/page.tsx` doesn't reach for:
  *
- *  1. **Preview mode + per-page metadata** via the `opts` arg of
- *     `resolveExperience`. `?preview=true` flips `MissingComponent` from
+ *  1. **Preview mode + per-page metadata** via the `context` arg of
+ *     `fetchExperiencePage`. `?preview=true` flips `MissingComponent` from
  *     "silent null" to "visible red box"; metadata flows into every
  *     `resolveData` hook.
  *  2. **User-Agent → viewport seeding** via `initialViewportId` so SSR
@@ -38,15 +38,15 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const { payload } = await fetchExperience(experienceId, { preview: previewMode, locale });
-  if (!payload.nodes.length) notFound();
-
-  const experience = await resolveExperience(payload, advancedExperienceConfig, {
-    experience: {
+  const experience = await fetchExperiencePage(experienceId, advancedExperienceConfig, {
+    preview: previewMode,
+    locale,
+    context: {
       isPreview: previewMode,
       metadata: { slug: experienceId, locale },
     },
   });
+  if (!experience) notFound();
 
   return (
     <ServerExperienceRenderer

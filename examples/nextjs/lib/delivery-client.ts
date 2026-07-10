@@ -1,39 +1,28 @@
-/**
- * Server-side fetch of an Experience via @contentful/experience-delivery.
- * Requires SPACE_ID and CDA_TOKEN in the environment.
- *
- * The delivery client's `GetExperienceViewResponse` is structurally
- * compatible with our `ExperiencePayload`, so we hand it straight to
- * `buildPlan` without normalization.
- */
-
 import 'server-only';
 
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
-import type { ExperiencePayload } from '@contentful/experiences-react';
+import { fetchExperience } from '@contentful/experiences-react';
+import type { PortableRenderPlan, ResolveExperienceOptions, Config } from '@contentful/experiences-react';
 
-const experienceClient = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
+const spaceId = process.env.SPACE_ID ?? '';
+const environmentId = process.env.ENVIRONMENT_ID ?? 'master';
 
-export interface FetchExperienceResult {
-  payload: ExperiencePayload;
-}
-
-/**
- * The delivery client returns a `GetExperienceViewResponse` whose shape is
- * structurally compatible with our `ExperiencePayload`. No normalization
- * step needed — pass it straight to `buildPlan`.
- */
-export async function fetchExperience(
+export async function fetchExperiencePage(
   experienceId: string,
-  options: { locale?: string; preview?: boolean } = {}
-): Promise<FetchExperienceResult> {
-  const spaceId = process.env.SPACE_ID || '';
-  const environmentId = process.env.ENVIRONMENT_ID ?? 'master';
-
-  const response = await experienceClient.view.getExperience(spaceId, environmentId, experienceId, {
+  config: Config,
+  options: {
+    locale?: string;
+    preview?: boolean;
+    context?: ResolveExperienceOptions['experience'];
+  } = {},
+): Promise<PortableRenderPlan | null> {
+  return fetchExperience({
+    accessToken: process.env.CDA_TOKEN!,
+    preview: options.preview,
+    spaceId,
+    environmentId,
+    experienceId,
     locale: options.locale,
-    preview: options.preview ? 'true' : undefined,
+    context: options.context,
+    config,
   });
-
-  return { payload: response };
 }
