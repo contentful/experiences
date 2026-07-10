@@ -1,11 +1,15 @@
 <!--
- * Server-safe Experience renderer. Resolves the active viewport once from
- * `initialViewportId` (typically derived from User-Agent on the request)
- * and renders without any reactive subscription. SSR-friendly.
+ * Server-only Experience renderer. Resolves the active viewport once
+ * from `initialViewportId` (typically derived from User-Agent on the
+ * request) and renders without any reactive subscription. Produces
+ * static HTML with zero client-JS overhead.
  *
- * SSR + interactive editor mode are mutually exclusive — the message-event
- * preview client requires window listeners and lives only in the client
- * renderer. For editor mode, render the client variant on a hydrated route.
+ * Pick this when the route has no client-side interactivity — pure
+ * marketing pages, blog posts, landing pages. For routes that also need
+ * `enablePreview` (or any other client-side behavior once hydrated), use
+ * `ExperienceRenderer` — it emits the same SSR HTML this component
+ * would for first paint, then hands off to `ClientExperienceRenderer`
+ * on hydration.
 -->
 <script lang="ts">
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';

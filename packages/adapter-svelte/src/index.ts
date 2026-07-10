@@ -8,13 +8,17 @@
  * `@contentful/experiences-design` packages are workspace-only implementation
  * details; they are not part of the public API.
  *
- * `ExperienceRenderer` is an alias for `ClientExperienceRenderer`; SSR
- * consumers explicitly import `ServerExperienceRenderer`.
+ * Three renderers, one per intent:
+ *   - `ServerExperienceRenderer` — SSR-only, static HTML, zero client-JS.
+ *   - `ClientExperienceRenderer` — client-only; throws on the server.
+ *     Use for tests, native shells, or apps that never SSR.
+ *   - `ExperienceRenderer` — hybrid; SSR first paint + client hydration +
+ *     `enablePreview`. Pick this for any route that needs both.
  */
 
 // ─── Renderers ─────────────────────────────────────────────────────────────
+export { default as ExperienceRenderer } from './ExperienceRenderer.svelte';
 export { default as ClientExperienceRenderer } from './ClientExperienceRenderer.svelte';
-export { default as ExperienceRenderer } from './ClientExperienceRenderer.svelte';
 export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.svelte';
 export { default as MissingComponent } from './MissingComponent.svelte';
 

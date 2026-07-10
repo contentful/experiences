@@ -1,27 +1,27 @@
 /*
- * Universal Experience renderer — safe to render on the server AND on the
- * client. Emits the same output as `ServerExperienceRenderer` for first
- * paint (SSR / RSC); after hydration, `useActiveViewport` takes over via
- * `window.matchMedia` and re-renders as viewports change.
+ * Client-side Experience renderer. Uses `useActiveViewport` to react to
+ * `window.matchMedia` changes; throws on the server so pair it with
+ * `ServerExperienceRenderer` for SSR, or use `ExperienceRenderer` for the
+ * hybrid case (SSR first paint + client hydration + preview wire).
  *
  * Use `initialViewportId` (typically derived from User-Agent on the
- * server) to seed the first render, matching what the server emitted.
- * `useActiveViewport` registers no listeners when `typeof window ===
- * 'undefined'`, so SSR output is deterministic.
+ * server) to seed the first render, matching what the server emitted; the
+ * hook then takes over via media queries to switch viewports as the
+ * window resizes.
  *
  * When `enablePreview` is set, the renderer additionally connects to the
- * parent editor via postMessage — but only after hydration on the
- * client. Before `init` arrives (or when the app is not embedded in a
- * known editor origin), rendering falls back to the `experience` prop.
- * Once `init` arrives, the editor-delivered plan is rendered instead and
- * every subsequent `viewUpdate` from the editor replaces it in place.
- * Safe to leave on in production: the preview SDK's `ancestorOrigins`
- * check refuses to connect when no editor is above the iframe.
+ * parent editor via postMessage on mount. Before `init` arrives — or when
+ * the app is not embedded in a known editor origin — rendering falls back
+ * to the `experience` prop. Once `init` arrives, the editor-delivered
+ * plan is rendered instead and every subsequent `viewUpdate` from the
+ * editor replaces it in place. Safe to leave on in production: the
+ * preview SDK's `ancestorOrigins` check refuses to connect when no editor
+ * is above the iframe.
  */
 
 'use client';
 
-import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import type {
   ExperienceContext,
@@ -38,13 +38,6 @@ import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
-
-// Constants for the useSyncExternalStore-based hydration check. Kept at
-// module scope so their identity is stable across renders — passing a
-// fresh subscribe/snapshot each render would refire the store.
-const NOOP_SUBSCRIBE = (): (() => void) => () => {};
-const IS_HYDRATED_TRUE = (): boolean => true;
-const IS_HYDRATED_FALSE = (): boolean => false;
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   isPreview: false,
@@ -75,13 +68,12 @@ export interface ClientExperienceRendererProps {
   /**
    * Opt in to Contentful editor preview.
    *
-   * SSR remains untouched — the flag only activates after hydration on the
-   * client, so first paint still comes from the server-rendered HTML.
-   * Once hydrated, the renderer connects to the parent editor via
-   * postMessage. Before `init` arrives — or when the app is not embedded
-   * in a known editor origin — rendering stays with the `experience`
-   * prop. Once `init` arrives, the editor's plan is rendered instead and
-   * every subsequent `viewUpdate` from the editor replaces it in place.
+   * When enabled, the renderer connects to the parent editor via
+   * postMessage on mount. Before `init` arrives — or when the app is not
+   * embedded in a known editor origin — rendering falls back to the
+   * `experience` prop. Once `init` arrives, the editor's plan is rendered
+   * instead and every subsequent `viewUpdate` from the editor replaces it
+   * in place.
    *
    * Safe to leave on in production: the SDK checks `ancestorOrigins`
    * against a hardcoded allow-list of Contentful editor origins and is a
@@ -115,17 +107,11 @@ export function ClientExperienceRenderer({
   previewCapabilities,
   previewTargetOrigin,
 }: ClientExperienceRendererProps): ReactNode {
-  // Detect hydration state without diverging server + client output.
-  // `useSyncExternalStore` with a getServerSnapshot returning `false`
-  // guarantees SSR sees `isHydrated: false`; the first client render
-  // after hydration flips it to `true`. Server output matches
-  // ServerExperienceRenderer exactly; the preview wire only activates
-  // once the tree has been hydrated on the client.
-  const isHydrated = useSyncExternalStore(
-    NOOP_SUBSCRIBE,
-    IS_HYDRATED_TRUE,
-    IS_HYDRATED_FALSE
-  );
+  if (typeof window === 'undefined') {
+    throw new Error(
+      'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR-only routes, or ExperienceRenderer for the hybrid case.'
+    );
+  }
 
   // Set of component-type ids the customer registered — used by the
   // preview hook to detect missing components in the incoming view and
@@ -137,10 +123,7 @@ export function ClientExperienceRenderer({
 
   const preview = usePreviewOverride(
     {
-      // Only arm the preview wire after hydration. Before that, the
-      // hook returns an inert snapshot and installs nothing, so SSR
-      // output is unaffected.
-      enabled: enablePreview && isHydrated,
+      enabled: enablePreview,
       capabilities: previewCapabilities,
       targetOrigin: previewTargetOrigin,
     },
