@@ -2,26 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { fetchExperience } from './fetch-experience.js';
 
-const { mockGetExperience, mockGetExperienceWithOverrides, mockPayload, mockPlan } = vi.hoisted(
-  () => {
-    const mockPayload = {
-      sys: { id: 'exp-1' },
-      viewports: [{ id: 'default', query: '*' }],
-      nodes: [{ sys: { urn: 'urn:ctfl:component:hero' }, content: {}, design: {}, slots: {} }],
-      errors: [],
-    };
+const { mockGetExperience, mockPayload, mockPlan } = vi.hoisted(() => {
+  const mockPayload = {
+    sys: { id: 'exp-1' },
+    viewports: [{ id: 'default', query: '*' }],
+    nodes: [{ sys: { urn: 'urn:ctfl:component:hero' }, content: {}, design: {}, slots: {} }],
+    errors: [],
+  };
 
-    const mockPlan = {
-      viewports: mockPayload.viewports,
-      nodes: [],
-    };
+  const mockPlan = {
+    viewports: mockPayload.viewports,
+    nodes: [],
+  };
 
-    const mockGetExperience = vi.fn().mockResolvedValue(mockPayload);
-    const mockGetExperienceWithOverrides = vi.fn().mockResolvedValue(mockPayload);
+  const mockGetExperience = vi.fn().mockResolvedValue(mockPayload);
 
-    return { mockGetExperience, mockGetExperienceWithOverrides, mockPayload, mockPlan };
-  }
-);
+  return { mockGetExperience, mockPayload, mockPlan };
+});
 
 vi.mock('@contentful/experiences-core', () => ({
   resolveExperience: vi.fn().mockResolvedValue(mockPlan),
@@ -31,7 +28,6 @@ vi.mock('@contentful/experience-delivery', () => ({
   ContentfulViewDeliveryClient: vi.fn().mockImplementation(() => ({
     view: {
       getExperience: mockGetExperience,
-      getExperienceWithOverrides: mockGetExperienceWithOverrides,
     },
   })),
 }));
@@ -47,7 +43,6 @@ describe('fetchExperience', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetExperience.mockResolvedValue(mockPayload);
-    mockGetExperienceWithOverrides.mockResolvedValue(mockPayload);
   });
 
   describe('inline credentials', () => {
@@ -89,33 +84,6 @@ describe('fetchExperience', () => {
       expect(mockGetExperience).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
         locale: undefined,
       });
-    });
-  });
-
-  describe('personalization', () => {
-    it('calls getExperienceWithOverrides with sourceMap extension', async () => {
-      await fetchExperience({
-        ...baseOptions,
-        accessToken: 'token-123',
-        personalization: { audienceIds: ['visitor-eu'] },
-      });
-
-      expect(mockGetExperienceWithOverrides).toHaveBeenCalledWith(
-        'space-1',
-        'master',
-        'exp-1',
-        expect.objectContaining({
-          extensions: expect.objectContaining({ sourceMap: {} }),
-        })
-      );
-      expect(mockGetExperience).not.toHaveBeenCalled();
-    });
-
-    it('calls getExperience when personalization is absent', async () => {
-      await fetchExperience({ ...baseOptions, accessToken: 'token-123' });
-
-      expect(mockGetExperience).toHaveBeenCalled();
-      expect(mockGetExperienceWithOverrides).not.toHaveBeenCalled();
     });
   });
 
