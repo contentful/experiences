@@ -1,6 +1,6 @@
 import {
   ContentfulViewDeliveryClient,
-  type GetExperienceWithOverridesViewRequest,
+  type ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
 import { resolveExperience } from '@contentful/experiences-core';
 import type {
@@ -45,7 +45,7 @@ export async function fetchExperience(
   let payload: ExperiencePayload;
 
   if (personalization) {
-    const request: GetExperienceWithOverridesViewRequest = {
+    const request: ContentfulViewDelivery.GetExperienceWithOverridesViewRequest = {
       locale,
       extensions: {
         // Opt into sourceMap data automatically when personalization is requested
