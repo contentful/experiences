@@ -1,18 +1,22 @@
 <!--
- * Client-side Experience renderer. Uses the `useActiveViewport` rune to
- * react to `window.matchMedia` changes.
+ * Universal Experience renderer — safe to render on the server AND on
+ * the client. SSR emits the same output as `ServerExperienceRenderer`
+ * for first paint; after hydration, `useActiveViewport` takes over via
+ * `window.matchMedia` and re-renders as viewports change.
  *
- * Throws if rendered on the server — pair with `ServerExperienceRenderer`
- * for SSR. Use `initialViewportId` (typically derived from User-Agent on
- * the server) to seed the first render, matching what the server emitted;
- * the rune then takes over via media queries to switch viewports as the
- * window resizes.
+ * Use `initialViewportId` (typically derived from User-Agent on the
+ * server) to seed the first render, matching what the server emitted.
+ * `useActiveViewport` registers no listeners when `typeof window ===
+ * 'undefined'`, so SSR output is deterministic.
  *
- * When `enablePreview` is set, the renderer connects to the parent editor
- * via postMessage on mount. Before `init` arrives — or when the app is
- * not embedded in a known editor origin — rendering falls back to the
- * `experience` prop. Once `init` arrives, the editor's plan is rendered
- * instead and subsequent `viewUpdate` messages replace it.
+ * When `enablePreview` is set, the renderer additionally connects to the
+ * parent editor via postMessage — but only after the component mounts
+ * on the client (Svelte 5 `$effect` runs client-only, so the preview
+ * override's effect is inherently SSR-safe). Before `init` arrives — or
+ * when the app is not embedded in a known editor origin — rendering
+ * stays with the `experience` prop. Once `init` arrives, the editor's
+ * plan is rendered instead and subsequent `viewUpdate` messages replace
+ * it in place.
 -->
 <script lang="ts">
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';
@@ -51,12 +55,6 @@
     previewCapabilities,
     previewTargetOrigin,
   }: ClientExperienceRendererProps = $props();
-
-  if (typeof window === 'undefined') {
-    throw new Error(
-      'ClientExperienceRenderer cannot be used on the server. Use ServerExperienceRenderer for SSR.'
-    );
-  }
 
   // Set of component-type ids the customer registered — used by the
   // preview override to detect missing components in the incoming view
