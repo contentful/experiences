@@ -20,7 +20,7 @@ const { mockGetExperience, mockGetExperienceWithOverrides, mockPayload, mockPlan
     const mockGetExperienceWithOverrides = vi.fn().mockResolvedValue(mockPayload);
 
     return { mockGetExperience, mockGetExperienceWithOverrides, mockPayload, mockPlan };
-  },
+  }
 );
 
 vi.mock('@contentful/experiences-core', () => ({
@@ -106,7 +106,7 @@ describe('fetchExperience', () => {
         'exp-1',
         expect.objectContaining({
           extensions: expect.objectContaining({ sourceMap: {} }),
-        }),
+        })
       );
       expect(mockGetExperience).not.toHaveBeenCalled();
     });

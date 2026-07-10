@@ -25,13 +25,10 @@ export type FetchExperienceOptions = {
   };
   config: ResolverConfig;
   context?: ResolveExperienceOptions['experience'];
-} & (
-  | { accessToken: string; preview?: boolean }
-  | { client: ContentfulViewDeliveryClient }
-);
+} & ({ accessToken: string; preview?: boolean } | { client: ContentfulViewDeliveryClient });
 
 export async function fetchExperience(
-  options: FetchExperienceOptions,
+  options: FetchExperienceOptions
 ): Promise<PortableRenderPlan | null> {
   const { spaceId, environmentId, experienceId, locale, personalization, config, context } =
     options;
@@ -59,7 +56,7 @@ export async function fetchExperience(
       spaceId,
       environmentId,
       experienceId,
-      request,
+      request
     )) as unknown as ExperiencePayload;
   } else {
     payload = (await client.view.getExperience(spaceId, environmentId, experienceId, {
