@@ -30,6 +30,7 @@
     "directory": "packages/adapter-react"
   },
   "dependencies": {
+    "@contentful/experiences-client": "*",
     "@contentful/experiences-core": "*",
     "@contentful/experiences-design": "*"
   },
