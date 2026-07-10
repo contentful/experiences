@@ -32,6 +32,7 @@ experiences/
 ├── packages/
 │   ├── core/                 # @contentful/experiences-core (internal)
 │   ├── design/               # @contentful/experiences-design (internal)
+│   ├── client/               # @contentful/experiences-client (internal)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   └── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 └── examples/
@@ -41,12 +42,13 @@ experiences/
 
 ### Package roles
 
-| Folder                    | npm name                         | Audience                                                           |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.         |
-| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                  |
-| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.    |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything. |
+| Folder                    | npm name                         | Audience                                                                                    |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                  |
+| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                                           |
+| `packages/client`         | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
+| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.                             |
+| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                          |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
@@ -59,10 +61,12 @@ Future framework adapters slot in under the same naming pattern: `packages/adapt
 The customer pipeline is three steps:
 
 ```
-fetch payload (delivery client) → resolveExperience(payload, config) → <ExperienceRenderer experience={…} />
+fetchExperience(options) → <ExperienceRenderer experience={…} />
 ```
 
-`resolveExperience` is the **single async entry**:
+`fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Experience Delivery API and calls `resolveExperience` internally. Customers who want to manage the delivery client themselves can import `ContentfulViewDeliveryClient` from the adapter and call `resolveExperience` directly.
+
+`resolveExperience` (called internally by `fetchExperience`) is the **resolve step**:
 
 1. Walks the XDA payload's `nodes[]` recursively.
 2. Extracts `componentTypeId` from each node's `componentType.sys.urn` (last slash-segment).
@@ -119,9 +123,9 @@ React's RSC compilation requires a `'use client'` directive at the top of files 
 
 Each `defineComponent<Props>(...)` is parameterized over the design-system component's prop type. No separate `ContentfulButtonProps` interface to keep in sync. The design system owns the contract; the integration layer adapts to it. When a Contentful payload field doesn't map 1:1, the customer either (a) renames at the render-fn call site, or (b) uses `resolveData` to reshape, or (c) extends the type at the map level (`type ButtonMapProps = ButtonProps & { testSlot?: ReactNode }`).
 
-### Why is the delivery client (`@contentful/experience-delivery`) a customer dep, not bundled?
+### Why is the delivery client (`@contentful/experience-delivery`) isolated in `packages/client`, not a direct dep of the adapters?
 
-Three reasons. (1) Customers can pin it independently. (2) The renderer SDK can render any compatible payload — mocks, local fixtures, custom fetch paths — not just the official client. (3) The delivery client is large (~3,000 generated files); bundling it would dwarf our package's bundle budget.
+Two reasons. (1) `packages/core` must stay zero-dep and runtime-neutral — pulling the delivery client into core would break that invariant for all current and future adapters. (2) The delivery client is large (~3,000 generated files); centralizing it in one internal package (`packages/client`) means adapters that don't need it (e.g. a future server-only adapter) won't pull it in transitively. Customers who want to manage the client themselves can import `ContentfulViewDeliveryClient` directly from the adapter and call `resolveExperience` with their own payload.
 
 ### Why two separate registries (`components` and `templates`) instead of one?
 
@@ -152,8 +156,9 @@ Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.). Enforced via `c
 
 ### Package boundaries
 
-- **`core` may not depend on `react` or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
+- **`core` may not depend on `react`, the delivery client, or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` may not depend on `core` for runtime; it imports types only.** This keeps `design` a pure-utility package usable in isolation.
+- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`.
 - **The customer-facing adapter (`adapter-react`) is the ONLY package that re-exports everything**. Internal packages don't re-export from each other.
 
 ### File naming

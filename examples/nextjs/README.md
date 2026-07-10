@@ -4,10 +4,9 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 ## What it shows
 
-- **Server-side fetch** via `@contentful/experience-delivery`'s `ContentfulViewDeliveryClient`. The response is structurally compatible with our `ExperiencePayload` — pass it straight to `resolveExperience`, no normalization.
-- **Runtime-neutral plan resolution** with `resolveExperience` (re-exported from `@contentful/experiences-react`) — one async step walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
+- **Server-side fetch + resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`) — one async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Three-line page** — `fetch` → `resolveExperience` → `<ServerExperienceRenderer>`. Preview mode, viewport seeding, and metadata are all optional advanced features (see [`opts`](#optional-resolveexperience-opts) below); the minimal app needs none of them.
+- **Three-line page** — `fetchExperience` → `<ServerExperienceRenderer>`. Preview mode, viewport seeding, and metadata are all optional advanced features; the minimal app needs none of them.
 - **`defineComponent` authoring** — each component file declares its props and renderer in one place; no casts, no boilerplate map wrappers.
 
 ## Run it
@@ -30,14 +29,20 @@ The example ships two side-by-side routes so you can see what each SDK option bu
 
 | Route              | Page                                                             | Config                           | Demonstrates                                                                                         |
 | ------------------ | ---------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `/[slug]`          | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)                   | `experience-config.tsx`          | The minimum: `fetch` → `resolveExperience(payload, config)` → `<ServerExperienceRenderer>`. 3 lines. |
+| `/[slug]`          | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)                   | `experience-config.tsx`          | The minimum: `fetchExperience` → `<ServerExperienceRenderer>`. 3 lines.                              |
 | `/advanced/[slug]` | [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx) | `experience-config-advanced.tsx` | Preview mode via `?preview=true`, UA → `initialViewportId`, async `resolveData` with external fetch. |
 
 The minimal `[slug]/page.tsx` is three functional lines:
 
 ```tsx
-const { payload } = await fetchExperience(experienceId);
-const experience = await resolveExperience(payload, experienceConfig);
+const experience = await fetchExperience({
+  accessToken,
+  spaceId,
+  environmentId,
+  experienceId,
+  config: experienceConfig,
+});
+if (!experience) notFound();
 return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```
 
@@ -58,7 +63,6 @@ examples/nextjs/
 │   ├── Page.tsx                         # used as the page-level template
 │   └── Text.tsx
 └── lib/
-    ├── delivery-client.ts               # ContentfulViewDeliveryClient factory
     ├── detect-viewport.ts               # User-Agent → viewport id (used by the advanced route)
     ├── experience-config.tsx            # the integration layer for /[slug]
     └── experience-config-advanced.tsx   # the integration layer for /advanced/[slug] — async fetch + metadata-aware
@@ -155,30 +159,44 @@ priceTag: defineComponent<PriceTagProps>({
 }),
 ```
 
-The Next.js page calls `resolveExperience` once before rendering:
+The route calls `fetchExperience` once — it handles the API call and resolution in one step:
 
 ```ts
-const experience = await resolveExperience(payload, experienceConfig);
+const experience = await fetchExperience({
+  accessToken: process.env.CDA_TOKEN!,
+  spaceId: process.env.SPACE_ID!,
+  environmentId: 'master',
+  experienceId: slug,
+  config: experienceConfig,
+});
 ```
 
 Resolvers run in parallel across nodes. Viewport resolution stays at render
 time, so client-side viewport changes never re-trigger `resolveData`.
 
-#### Optional `resolveExperience` opts
+#### Optional `context`
 
-The third argument lets you pass per-render context that flows into every
-component's `resolveData` (and into the rendered components as `experience.*`).
+The `context` option passes per-render context into every component's `resolveData`
+hook (and into the rendered components as `experience.*`).
 Default is `{ isPreview: false, metadata: {} }` — fine for production. Add
 fields when:
 
-- **Preview mode**: `{ experience: { isPreview: true } }` — `MissingComponent`
-  renders a visible red box; some customer components might branch on this.
-- **Per-page metadata**: `{ experience: { metadata: { slug, locale } } }` —
-  available to every `resolveData` for URL building, locale-aware lookups, etc.
+- **Preview mode**: `{ isPreview: true }` — `MissingComponent` renders a visible
+  red box; some customer components might branch on this. Pass `preview: true`
+  at the top level to also hit the preview API endpoint.
+- **Per-page metadata**: `{ metadata: { slug, locale } }` — available to every
+  `resolveData` for URL building, locale-aware lookups, etc.
 
 ```ts
-const experience = await resolveExperience(payload, experienceConfig, {
-  experience: { isPreview, metadata: { slug, locale } },
+const experience = await fetchExperience({
+  accessToken: process.env.CDA_TOKEN!,
+  preview: previewMode,
+  spaceId: process.env.SPACE_ID!,
+  environmentId: 'master',
+  experienceId: slug,
+  locale,
+  context: { isPreview: previewMode, metadata: { slug, locale } },
+  config: experienceConfig,
 });
 ```
 

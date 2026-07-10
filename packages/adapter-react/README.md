@@ -5,10 +5,10 @@
 The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using customer-supplied React components.
 
 ```sh
-npm install @contentful/experiences-react @contentful/experience-delivery
+npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core` and `@contentful/experiences-design` that consumers need. The other packages are workspace-internal.
+This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` that consumers need. The other packages are workspace-internal.
 
 ---
 
@@ -19,6 +19,14 @@ This is the **only SDK package customers install** — it re-exports everything 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
 defineTemplate<Props>(config); // Same shape, for page-level template wrappers
+```
+
+### Fetching
+
+```ts
+fetchExperience(options)                    // Async — fetches from Experience Delivery API + resolves in one call
+ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
+type FetchExperienceOptions
 ```
 
 ### Resolver
@@ -62,7 +70,7 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
 import {
   defineComponent,
   defineTemplate,
-  resolveExperience,
+  fetchExperience,
   ServerExperienceRenderer,
   type Config,
   type Components,
@@ -82,7 +90,13 @@ const components: Components = {
 const experienceConfig: Config = { components };
 
 // In a server component:
-const experience = await resolveExperience(payload, experienceConfig);
+const experience = await fetchExperience({
+  accessToken: process.env.CDA_TOKEN!,
+  spaceId: process.env.SPACE_ID!,
+  environmentId: 'master',
+  experienceId: slug,
+  config: experienceConfig,
+});
 return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```
 

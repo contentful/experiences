@@ -4,8 +4,7 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 
 ## What it shows
 
-- **Server-side fetch** via `@contentful/experience-delivery`'s `ContentfulViewDeliveryClient` (same client as the React example).
-- **Runtime-neutral plan resolution** with `resolveExperience` re-exported from `@contentful/experiences-svelte` — proves the resolver is genuinely framework-agnostic.
+- **Server-side fetch + resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte` — proves the fetch + resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
 - **Hydration-safe viewport seeding** — User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
 - **`defineComponent` authoring** — same pattern as the React example, with `component: SvelteComponent` instead of `render: () => ReactNode`.
@@ -41,7 +40,6 @@ examples/sveltekit/
 │       │   ├── Header.svelte
 │       │   ├── Page.svelte   # used as the page-level template
 │       │   └── Text.svelte
-│       ├── delivery-client.ts
 │       ├── detect-viewport.ts
 │       └── experience-config.ts    # integration layer (components + templates → experienceConfig)
 ├── svelte.config.js
@@ -55,6 +53,6 @@ Identical to the Next.js example:
 
 1. **Design-system components** stay portable — no `@contentful/*` imports.
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
-3. **Routes** call `fetchExperience` → `resolveExperience` → `<ServerExperienceRenderer>`.
+3. **Routes** call `fetchExperience` → `<ServerExperienceRenderer>`.
 
 The only Svelte-specific divergence: a customer component opts into slots via the `slot: Snippet<[string]>` dispatcher prop, calling `{@render slot('children')}` to render a named slot. Compare to the React adapter where each slot becomes its own named prop. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.

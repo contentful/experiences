@@ -5,10 +5,10 @@
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
 ```sh
-npm install @contentful/experiences-react @contentful/experience-delivery
+npm install @contentful/experiences-react
 ```
 
-That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities). The `@contentful/experiences-core` and `@contentful/experiences-design` packages are workspace-internal implementation details.
+That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities, and the experience delivery client). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
 A Svelte adapter (`@contentful/experiences-svelte`) ships in parallel with the same public-API shape; see [`packages/adapter-svelte`](./packages/adapter-svelte). The rest of this README focuses on React.
 
@@ -62,22 +62,24 @@ export const experienceConfig: Config = { components, templates };
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
-import { resolveExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
-
-const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug);
-  const experience = await resolveExperience(payload, experienceConfig);
+  const experience = await fetchExperience({
+    accessToken: process.env.CDA_TOKEN!,
+    spaceId: process.env.SPACE_ID!,
+    environmentId: 'master',
+    experienceId: slug,
+    config: experienceConfig,
+  });
 
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 }
 ```
 
-That's it. The renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
+`fetchExperience` fetches the payload from the Experience Delivery API and resolves it in one call — the renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
 
 A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
 
@@ -92,10 +94,10 @@ A full working advanced route is at [`examples/nextjs/app/advanced/[slug]/page.t
 ```tsx
 // app/advanced/[slug]/page.tsx
 import { headers } from 'next/headers';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
-import { experienceConfig } from '@/lib/experience-config';
+import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
 
 export default async function AdvancedPage({
   params,
@@ -104,7 +106,7 @@ export default async function AdvancedPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { slug } = await params;
+  const { slug: experienceId } = await params;
   const sp = await searchParams;
   const previewMode = sp.preview === 'true';
   const locale = (sp.locale as string) ?? 'en-US';
@@ -113,22 +115,24 @@ export default async function AdvancedPage({
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const payload = await client.view.getExperience(process.env.SPACE_ID!, 'master', slug, {
+  // 2. Per-page metadata flows into every resolveData hook via context.
+  const experience = await fetchExperience({
+    accessToken: process.env.CDA_TOKEN!,
+    preview: previewMode,
+    spaceId: process.env.SPACE_ID!,
+    environmentId: 'master',
+    experienceId,
     locale,
-    preview: previewMode ? 'true' : undefined,
-  });
-
-  // 2. Per-page metadata flows into every resolveData hook.
-  const experience = await resolveExperience(payload, experienceConfig, {
-    experience: { isPreview: previewMode, metadata: { slug, locale } },
+    context: { isPreview: previewMode, metadata: { slug: experienceId, locale } },
+    config: advancedExperienceConfig,
   });
 
   return (
     <ServerExperienceRenderer
       experience={experience}
-      config={experienceConfig}
+      config={advancedExperienceConfig}
       initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug, locale } }}
+      context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
     />
   );
 }
@@ -158,6 +162,31 @@ button: defineComponent<ButtonProps>({
 ---
 
 ## API reference
+
+### `fetchExperience(options)`
+
+Async. Fetches an Experience from the Experience Delivery API and resolves it in one call — equivalent to fetching the payload yourself and then calling `resolveExperience`. Returns a `PortableRenderPlan | null` (null when the payload has no nodes).
+
+Pass either an `accessToken` (client created internally) or a pre-created `ContentfulViewDeliveryClient`:
+
+```ts
+// Inline credentials — client created internally
+const plan = await fetchExperience({
+  accessToken: process.env.CDA_TOKEN!,
+  preview: false, // true → fetches from the preview API endpoint
+  spaceId: '...',
+  environmentId: 'master',
+  experienceId: slug,
+  config: experienceConfig,
+  // locale?: string
+  // context?: Partial<ExperienceContext>  — flows into resolveData hooks
+});
+
+// Pre-created client — useful when you manage the client yourself
+import { ContentfulViewDeliveryClient } from '@contentful/experiences-react';
+const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
+const plan = await fetchExperience({ client, spaceId, environmentId, experienceId, config });
+```
 
 ### `resolveExperience(payload, config, opts?)`
 
@@ -293,6 +322,7 @@ This is an Nx monorepo. Customers install only the framework adapter; the rest i
 | ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
 | [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
 | [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                 | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`.                                      |
 | [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
 | [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
 
