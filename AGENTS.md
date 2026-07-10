@@ -42,13 +42,13 @@ experiences/
 
 ### Package roles
 
-| Folder                    | npm name                         | Audience                                                                                    |
-| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
-| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                  |
-| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                                           |
+| Folder                    | npm name                         | Audience                                                                                       |
+| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
+| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                                              |
 | `packages/client`         | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
-| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.                             |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                          |
+| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.                                |
+| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
