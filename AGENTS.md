@@ -61,10 +61,12 @@ Future framework adapters slot in under the same naming pattern: `packages/adapt
 The customer pipeline is three steps:
 
 ```
-fetchExperience(options) → <ExperienceRenderer experience={…} />
+fetchExperience(experienceOptions, clientOptions, resolveOptions) → <ExperienceRenderer experience={…} />
 ```
 
-`fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Experience Delivery API and calls `resolveExperience` internally. Customers who want to manage the delivery client themselves can import `ContentfulViewDeliveryClient` from the adapter and call `resolveExperience` directly.
+`fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Experience Delivery API and calls `resolveExperience` internally. The three positional args group by concern: **which experience**, **how to fetch**, **how to resolve**. Each grouping evolves independently (personalization slots into arg 3; digital-property identifiers widen arg 1) — a shape chosen to avoid one flat options object growing unbounded.
+
+Customers who want to manage the delivery client themselves have two paths: `createClient({ accessToken, host? })` (functional constructor, our option shape), or `new ContentfulViewDeliveryClient({ token, baseUrl? })` (underlying delivery client, its option shape). Either way, pass the resulting client as `{ client }` in `clientOptions`.
 
 `resolveExperience` (called internally by `fetchExperience`) is the **resolve step**:
 
@@ -89,6 +91,37 @@ The React adapter then:
 ---
 
 ## Design decisions worth knowing
+
+### Why three positional args on `fetchExperience` instead of one options object?
+
+Earlier the SDK had a single flat options object with an `accessToken | client` discriminated union mixed in. As `fetchExperience` picked up more responsibilities (fetch + resolve, preview mode, per-render context) the object was already ~7 fields and had two more inbound (personalization params, digital-property identifiers from the channels RFC). Rather than let one bag balloon to a dozen fields with three different concerns, the signature is split into three grouped args:
+
+1. `experienceOptions` — **which** experience (`spaceId`, `environmentId`, `experienceId`, `locale`). Digital-property identifiers widen this type when the channels RFC lands.
+2. `clientOptions` — **how** to fetch. Discriminated union: `{ accessToken, host? }` OR `{ client }`. Kept intentionally as one arg (not split further) so users can move between inline creds and a pre-made client with only that arg changing.
+3. `resolveOptions` — **how** to resolve (`config`, `context`). Personalization params (`audienceIds`, `userTraits`, etc.) go here.
+
+Each grouping evolves without touching the others.
+
+### Why `host: string` instead of `preview: boolean`?
+
+Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — those are Contentful platform concerns that can add non-prod endpoints (staging, EU-region, per-account) which a boolean can't express. (2) A raw base URL passes cleanly to `ContentfulViewDeliveryClient.Options.baseUrl` — no translation layer. Callers write `host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com'` at the call site; the SDK just passes through.
+
+### Why `createClient` in addition to the raw `ContentfulViewDeliveryClient` constructor?
+
+`createClient` is a value-added passthrough that maps the SDK's option names (`accessToken`, `host`) onto the underlying client's names (`token`, `baseUrl`). Everything else flows through unchanged. It exists so the "inline creds" and "bring your own client" paths of `fetchExperience` share exactly the same field names — users can move between them mechanically instead of relearning vocabulary.
+
+`fetchExperience`'s own inline-creds branch routes through `createClient` — single source of truth for the name mapping. If we ever add auth flavors beyond bearer-token, this is where they'd land.
+
+### Why an empty-nodes payload is NOT a "not found"
+
+`fetchExperience` used to return `null` when the payload had `nodes: []`. That conflated two states the CMS considers distinct:
+
+- **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
+- **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
+
+The empty-nodes payload now flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience`'s return type narrowed from `PortableRenderPlan | null` to `PortableRenderPlan`.
+
+For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch without adding `@contentful/experience-delivery` as a direct dep — preserving the invariant that customers install only the framework adapter.
 
 ### Why a single `resolveExperience` entry instead of `buildPlan` + `resolveExperience`?
 

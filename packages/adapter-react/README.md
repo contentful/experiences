@@ -24,9 +24,12 @@ defineTemplate<Props>(config); // Same shape, for page-level template wrappers
 ### Fetching
 
 ```ts
-fetchExperience(options)                    // Async — fetches from Experience Delivery API + resolves in one call
+fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async — fetches from XDA + resolves in one call
+createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
-type FetchExperienceOptions
+NotFoundError                               // Thrown when the Experience ID doesn't exist
+ContentfulViewDelivery                      // Full error namespace from the delivery client
+type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
 ### Resolver
@@ -67,10 +70,12 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
 ## Quick reference
 
 ```tsx
+import { notFound } from 'next/navigation';
 import {
   defineComponent,
   defineTemplate,
   fetchExperience,
+  NotFoundError,
   ServerExperienceRenderer,
   type Config,
   type Components,
@@ -90,14 +95,17 @@ const components: Components = {
 const experienceConfig: Config = { components };
 
 // In a server component:
-const experience = await fetchExperience({
-  accessToken: process.env.CDA_TOKEN!,
-  spaceId: process.env.SPACE_ID!,
-  environmentId: 'master',
-  experienceId: slug,
-  config: experienceConfig,
-});
-return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+try {
+  const experience = await fetchExperience(
+    { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+    { accessToken: process.env.CDA_TOKEN! },
+    { config: experienceConfig }
+  );
+  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+} catch (err) {
+  if (err instanceof NotFoundError) notFound();
+  throw err;
+}
 ```
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).

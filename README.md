@@ -16,7 +16,7 @@ A Svelte adapter (`@contentful/experiences-svelte`) ships in parallel with the s
 
 ## Getting started — the simple path
 
-Three steps: register your components, fetch + resolve, render. The minimal page is **three functional lines**.
+Three steps: register your components, fetch + resolve, render. The minimal page is one `fetchExperience` call feeding one `<ServerExperienceRenderer>`.
 
 ### 1. Register your components and (optional) templates
 
@@ -62,24 +62,33 @@ export const experienceConfig: Config = { components, templates };
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
-import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+import { notFound } from 'next/navigation';
+import {
+  fetchExperience,
+  NotFoundError,
+  ServerExperienceRenderer,
+} from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const experience = await fetchExperience({
-    accessToken: process.env.CDA_TOKEN!,
-    spaceId: process.env.SPACE_ID!,
-    environmentId: 'master',
-    experienceId: slug,
-    config: experienceConfig,
-  });
-
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  try {
+    const experience = await fetchExperience(
+      { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+      { accessToken: process.env.CDA_TOKEN! },
+      { config: experienceConfig }
+    );
+    return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    throw err;
+  }
 }
 ```
 
 `fetchExperience` fetches the payload from the Experience Delivery API and resolves it in one call — the renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
+
+The signature is three grouped params: **what to fetch** (space/env/experience), **how to fetch** (auth), **how to resolve** (component config + per-render context). Each grouping evolves independently — future personalization params, digital-property identifiers, and transport options fit their respective group without cross-cutting the signature.
 
 A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
 
@@ -94,7 +103,12 @@ A full working advanced route is at [`examples/nextjs/app/advanced/[slug]/page.t
 ```tsx
 // app/advanced/[slug]/page.tsx
 import { headers } from 'next/headers';
-import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+import { notFound } from 'next/navigation';
+import {
+  fetchExperience,
+  NotFoundError,
+  ServerExperienceRenderer,
+} from '@contentful/experiences-react';
 
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
@@ -115,26 +129,32 @@ export default async function AdvancedPage({
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  // 2. Per-page metadata flows into every resolveData hook via context.
-  const experience = await fetchExperience({
-    accessToken: process.env.CDA_TOKEN!,
-    preview: previewMode,
-    spaceId: process.env.SPACE_ID!,
-    environmentId: 'master',
-    experienceId,
-    locale,
-    context: { isPreview: previewMode, metadata: { slug: experienceId, locale } },
-    config: advancedExperienceConfig,
-  });
+  try {
+    // 2. Per-page metadata flows into every resolveData hook via context.
+    const experience = await fetchExperience(
+      { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
+      {
+        accessToken: process.env.CDA_TOKEN!,
+        host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+      },
+      {
+        config: advancedExperienceConfig,
+        context: { isPreview: previewMode, metadata: { slug: experienceId, locale } },
+      }
+    );
 
-  return (
-    <ServerExperienceRenderer
-      experience={experience}
-      config={advancedExperienceConfig}
-      initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
-    />
-  );
+    return (
+      <ServerExperienceRenderer
+        experience={experience}
+        config={advancedExperienceConfig}
+        initialViewportId={initialViewportId}
+        context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+      />
+    );
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    throw err;
+  }
 }
 ```
 
@@ -163,29 +183,62 @@ button: defineComponent<ButtonProps>({
 
 ## API reference
 
-### `fetchExperience(options)`
+### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
-Async. Fetches an Experience from the Experience Delivery API and resolves it in one call — equivalent to fetching the payload yourself and then calling `resolveExperience`. Returns a `PortableRenderPlan | null` (null when the payload has no nodes).
+Async. Fetches an Experience from the Experience Delivery API and resolves it in one call — equivalent to fetching the payload yourself and then calling `resolveExperience`. Returns a `PortableRenderPlan`.
 
-Pass either an `accessToken` (client created internally) or a pre-created `ContentfulViewDeliveryClient`:
+Three positional args map to three concerns that evolve independently:
+
+| Arg                 | Type                                                | Purpose                                                                                                 |
+| ------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }` | Which Experience to fetch. Future digital-property identifiers widen this type.                         |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`        | How to fetch. Discriminated union — pass creds inline or bring your own `ContentfulViewDeliveryClient`. |
+| `resolveOptions`    | `{ config, context? }`                              | How to resolve. `context` flows into every `resolveData` hook as `ctx.experience`.                      |
+
+`host` is a full base-URL string (e.g. `'https://preview.xdn.contentful.com'` for the preview API). When omitted, the delivery client's default endpoint is used.
 
 ```ts
 // Inline credentials — client created internally
-const plan = await fetchExperience({
-  accessToken: process.env.CDA_TOKEN!,
-  preview: false, // true → fetches from the preview API endpoint
-  spaceId: '...',
-  environmentId: 'master',
-  experienceId: slug,
-  config: experienceConfig,
-  // locale?: string
-  // context?: Partial<ExperienceContext>  — flows into resolveData hooks
-});
+const plan = await fetchExperience(
+  { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
+  { accessToken: process.env.CDA_TOKEN!, host: 'https://preview.xdn.contentful.com' },
+  { config: experienceConfig, context: { isPreview: true, metadata: { slug } } }
+);
 
-// Pre-created client — useful when you manage the client yourself
-import { ContentfulViewDeliveryClient } from '@contentful/experiences-react';
-const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
-const plan = await fetchExperience({ client, spaceId, environmentId, experienceId, config });
+// Pre-created client — useful when you manage the client lifecycle yourself
+import { createClient } from '@contentful/experiences-react';
+const client = createClient({ accessToken: process.env.CDA_TOKEN! });
+const plan = await fetchExperience(
+  { spaceId, environmentId, experienceId },
+  { client },
+  { config: experienceConfig }
+);
+```
+
+**Error handling.** The underlying delivery client throws `NotFoundError` (re-exported from the adapter) when the Experience ID doesn't exist, plus `UnauthorizedError`, `ForbiddenError`, etc. on other 4xx/5xx responses. An Experience with no published nodes is **not** a 404 — it resolves to a valid `PortableRenderPlan` with `nodes: []` (draft / unpublished / empty-locale content). Route the missing-experience case to your framework's 404 idiom:
+
+```ts
+try {
+  const experience = await fetchExperience(/* … */);
+  return <ServerExperienceRenderer experience={experience} config={config} />;
+} catch (err) {
+  if (err instanceof NotFoundError) notFound();
+  throw err;
+}
+```
+
+### `createClient(options)`
+
+Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape — maps `accessToken → token` and `host → baseUrl`, passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-creds path.
+
+```ts
+import { createClient } from '@contentful/experiences-react';
+
+const client = createClient({
+  accessToken: process.env.CDA_TOKEN!,
+  host: 'https://preview.xdn.contentful.com', // optional — overrides the default endpoint
+  // headers, timeoutInSeconds, maxRetries, fetch, logging, etc. all pass through
+});
 ```
 
 ### `resolveExperience(payload, config, opts?)`
@@ -204,7 +257,7 @@ SSR-friendly renderer. No reactive subscriptions; the active viewport is resolve
 
 | Prop                | Type                                          | Required | Default                              | Description                                                                                            |
 | ------------------- | --------------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `experience`        | `PortableRenderPlan \| null \| undefined`     | yes      | —                                    | The resolved plan from `resolveExperience`. Renders nothing if null/undefined.                         |
+| `experience`        | `PortableRenderPlan`                          | yes      | —                                    | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.  |
 | `config`            | `Config`                                      | yes      | —                                    | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                    |
 | `initialViewportId` | `string`                                      | no       | First viewport id                    | Seeds the active viewport. Typically derived from User-Agent server-side.                              |
 | `context`           | `Partial<ExperienceContext>`                  | no       | `{ isPreview: false, metadata: {} }` | Shallow-merged into the render-time `experience` context customer components receive.                  |

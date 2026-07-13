@@ -53,6 +53,6 @@ Identical to the Next.js example:
 
 1. **Design-system components** stay portable — no `@contentful/*` imports.
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
-3. **Routes** call `fetchExperience` → `<ServerExperienceRenderer>`.
+3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` → `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
 
 The only Svelte-specific divergence: a customer component opts into slots via the `slot: Snippet<[string]>` dispatcher prop, calling `{@render slot('children')}` to render a named slot. Compare to the React adapter where each slot becomes its own named prop. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.
