@@ -37,19 +37,25 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const experience = await fetchExperience({
-    accessToken: process.env.CDA_TOKEN!,
-    preview: previewMode,
-    spaceId: process.env.SPACE_ID ?? '',
-    environmentId: process.env.ENVIRONMENT_ID ?? 'master',
-    experienceId,
-    locale,
-    context: {
-      isPreview: previewMode,
-      metadata: { slug: experienceId, locale },
+  const experience = await fetchExperience(
+    {
+      spaceId: process.env.SPACE_ID ?? '',
+      environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+      experienceId,
+      locale,
     },
-    config: advancedExperienceConfig,
-  });
+    {
+      accessToken: process.env.CDA_TOKEN!,
+      host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+    },
+    {
+      config: advancedExperienceConfig,
+      context: {
+        isPreview: previewMode,
+        metadata: { slug: experienceId, locale },
+      },
+    }
+  );
   if (!experience) notFound();
 
   return (

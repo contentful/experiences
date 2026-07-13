@@ -10,13 +10,15 @@ interface PageProps {
 export default async function ExperiencePage({ params }: PageProps) {
   const { slug: experienceId } = await params;
 
-  const experience = await fetchExperience({
-    accessToken: process.env.CDA_TOKEN!,
-    spaceId: process.env.SPACE_ID ?? '',
-    environmentId: process.env.ENVIRONMENT_ID ?? 'master',
-    experienceId,
-    config: experienceConfig,
-  });
+  const experience = await fetchExperience(
+    {
+      spaceId: process.env.SPACE_ID ?? '',
+      environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+      experienceId,
+    },
+    { accessToken: process.env.CDA_TOKEN! },
+    { config: experienceConfig }
+  );
   if (!experience) notFound();
 
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;

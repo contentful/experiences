@@ -7,29 +7,38 @@ import type {
   ResolverConfig,
 } from '@contentful/experiences-core';
 
-const XDN_BASE_URL = 'https://xdn.contentful.com';
-const XPA_BASE_URL = 'https://preview.xdn.contentful.com';
+const DEFAULT_HOST = 'https://xdn.contentful.com';
 
-export type FetchExperienceOptions = {
+export type ExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
   locale?: string;
+};
+
+export type ClientOptions =
+  | { accessToken: string; host?: string }
+  | { client: ContentfulViewDeliveryClient };
+
+export type ResolveOptions = {
   config: ResolverConfig;
   context?: ResolveExperienceOptions['experience'];
-} & ({ accessToken: string; preview?: boolean } | { client: ContentfulViewDeliveryClient });
+};
 
 export async function fetchExperience(
-  options: FetchExperienceOptions
+  experienceOptions: ExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan | null> {
-  const { spaceId, environmentId, experienceId, locale, config, context } = options;
+  const { spaceId, environmentId, experienceId, locale } = experienceOptions;
+  const { config, context } = resolveOptions;
 
   const client =
-    'client' in options
-      ? options.client
+    'client' in clientOptions
+      ? clientOptions.client
       : new ContentfulViewDeliveryClient({
-          token: options.accessToken,
-          baseUrl: options.preview ? XPA_BASE_URL : XDN_BASE_URL,
+          token: clientOptions.accessToken,
+          baseUrl: clientOptions.host ?? DEFAULT_HOST,
         });
 
   // Response from the experience delivery client is structurally compatible with ExperiencePayload (superset)

@@ -32,10 +32,13 @@ vi.mock('@contentful/experience-delivery', () => ({
   })),
 }));
 
-const baseOptions = {
+const experienceOptions = {
   spaceId: 'space-1',
   environmentId: 'master',
   experienceId: 'exp-1',
+};
+
+const resolveOptions = {
   config: { components: {} },
 };
 
@@ -46,8 +49,8 @@ describe('fetchExperience', () => {
   });
 
   describe('inline credentials', () => {
-    it('constructs client with XDN base URL by default', async () => {
-      await fetchExperience({ ...baseOptions, accessToken: 'token-123' });
+    it('constructs client with default XDN host when host is not provided', async () => {
+      await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
         token: 'token-123',
@@ -55,8 +58,12 @@ describe('fetchExperience', () => {
       });
     });
 
-    it('constructs client with XPA base URL when preview is true', async () => {
-      await fetchExperience({ ...baseOptions, accessToken: 'token-123', preview: true });
+    it('constructs client with provided host', async () => {
+      await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123', host: 'https://preview.xdn.contentful.com' },
+        resolveOptions
+      );
 
       expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
         token: 'token-123',
@@ -65,7 +72,11 @@ describe('fetchExperience', () => {
     });
 
     it('calls getExperience with spaceId, environmentId, experienceId, locale', async () => {
-      await fetchExperience({ ...baseOptions, accessToken: 'token-123', locale: 'en-US' });
+      await fetchExperience(
+        { ...experienceOptions, locale: 'en-US' },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
 
       expect(mockGetExperience).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
         locale: 'en-US',
@@ -78,7 +89,7 @@ describe('fetchExperience', () => {
       const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
       vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
-      await fetchExperience({ ...baseOptions, client });
+      await fetchExperience(experienceOptions, { client }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
       expect(mockGetExperience).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
@@ -91,13 +102,21 @@ describe('fetchExperience', () => {
     it('returns null when payload has no nodes', async () => {
       mockGetExperience.mockResolvedValue({ ...mockPayload, nodes: [] });
 
-      const result = await fetchExperience({ ...baseOptions, accessToken: 'token-123' });
+      const result = await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
 
       expect(result).toBeNull();
     });
 
     it('returns resolved PortableRenderPlan on success', async () => {
-      const result = await fetchExperience({ ...baseOptions, accessToken: 'token-123' });
+      const result = await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
 
       expect(result).toEqual(mockPlan);
     });
