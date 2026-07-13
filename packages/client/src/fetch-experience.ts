@@ -1,4 +1,4 @@
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { resolveExperience } from '@contentful/experiences-core';
 import type {
   ExperiencePayload,
@@ -6,8 +6,7 @@ import type {
   ResolveExperienceOptions,
   ResolverConfig,
 } from '@contentful/experiences-core';
-
-const DEFAULT_HOST = 'https://xdn.contentful.com';
+import { createClient } from './create-client.js';
 
 export type ExperienceOptions = {
   spaceId: string;
@@ -36,10 +35,7 @@ export async function fetchExperience(
   const client =
     'client' in clientOptions
       ? clientOptions.client
-      : new ContentfulViewDeliveryClient({
-          token: clientOptions.accessToken,
-          baseUrl: clientOptions.host ?? DEFAULT_HOST,
-        });
+      : createClient({ accessToken: clientOptions.accessToken, host: clientOptions.host });
 
   // Response from the experience delivery client is structurally compatible with ExperiencePayload (superset)
   const payload = (await client.view.getExperience(spaceId, environmentId, experienceId, {

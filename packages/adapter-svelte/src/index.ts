@@ -93,9 +93,14 @@ export {
 } from '@contentful/experiences-design';
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
-export { ContentfulViewDeliveryClient, fetchExperience } from '@contentful/experiences-client';
+export {
+  ContentfulViewDeliveryClient,
+  createClient,
+  fetchExperience,
+} from '@contentful/experiences-client';
 export type {
-  ExperienceOptions,
   ClientOptions,
+  CreateClientOptions,
+  ExperienceOptions,
   ResolveOptions,
 } from '@contentful/experiences-client';

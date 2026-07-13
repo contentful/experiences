@@ -49,12 +49,12 @@ describe('fetchExperience', () => {
   });
 
   describe('inline credentials', () => {
-    it('constructs client with default XDN host when host is not provided', async () => {
+    it('constructs client without baseUrl when host is not provided', async () => {
       await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
         token: 'token-123',
-        baseUrl: 'https://xdn.contentful.com',
+        baseUrl: undefined,
       });
     });
 
