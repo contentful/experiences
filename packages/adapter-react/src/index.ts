@@ -90,7 +90,9 @@ export {
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {
+  ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
+  NotFoundError,
   createClient,
   fetchExperience,
 } from '@contentful/experiences-client';

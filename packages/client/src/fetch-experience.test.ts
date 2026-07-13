@@ -99,8 +99,10 @@ describe('fetchExperience', () => {
   });
 
   describe('return value', () => {
-    it('returns null when payload has no nodes', async () => {
-      mockGetExperience.mockResolvedValue({ ...mockPayload, nodes: [] });
+    it('passes empty-nodes payloads through to the resolver', async () => {
+      const emptyPayload = { ...mockPayload, nodes: [] };
+      mockGetExperience.mockResolvedValue(emptyPayload);
+      const { resolveExperience } = await import('@contentful/experiences-core');
 
       const result = await fetchExperience(
         experienceOptions,
@@ -108,7 +110,12 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(result).toBeNull();
+      expect(resolveExperience).toHaveBeenCalledWith(
+        emptyPayload,
+        resolveOptions.config,
+        expect.anything()
+      );
+      expect(result).toEqual(mockPlan);
     });
 
     it('returns resolved PortableRenderPlan on success', async () => {
@@ -119,6 +126,15 @@ describe('fetchExperience', () => {
       );
 
       expect(result).toEqual(mockPlan);
+    });
+
+    it('propagates NotFoundError from the delivery client to the caller', async () => {
+      class MockNotFoundError extends Error {}
+      mockGetExperience.mockRejectedValue(new MockNotFoundError('experience not found'));
+
+      await expect(
+        fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions)
+      ).rejects.toThrow('experience not found');
     });
   });
 });

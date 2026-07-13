@@ -28,7 +28,7 @@ export async function fetchExperience(
   experienceOptions: ExperienceOptions,
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
-): Promise<PortableRenderPlan | null> {
+): Promise<PortableRenderPlan> {
   const { spaceId, environmentId, experienceId, locale } = experienceOptions;
   const { config, context } = resolveOptions;
 
@@ -41,8 +41,6 @@ export async function fetchExperience(
   const payload = (await client.view.getExperience(spaceId, environmentId, experienceId, {
     locale,
   })) as unknown as ExperiencePayload;
-
-  if (!payload?.nodes?.length) return null;
 
   return resolveExperience(payload, config, { experience: context });
 }
