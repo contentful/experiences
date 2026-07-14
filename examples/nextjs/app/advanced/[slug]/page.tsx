@@ -1,8 +1,11 @@
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import {
+  NotFoundError,
+  ServerExperienceRenderer,
+  fetchExperience,
+} from '@contentful/experiences-react';
 
-import { fetchExperience } from '@/lib/delivery-client';
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
 
@@ -15,8 +18,8 @@ interface PageProps {
  * Advanced version of the [slug] route. Demonstrates three SDK features the
  * minimal three-line page in `app/[slug]/page.tsx` doesn't reach for:
  *
- *  1. **Preview mode + per-page metadata** via the `opts` arg of
- *     `resolveExperience`. `?preview=true` flips `MissingComponent` from
+ *  1. **Preview mode + per-page metadata** via the `context` arg of
+ *     `fetchExperience`. `?preview=true` flips `MissingComponent` from
  *     "silent null" to "visible red box"; metadata flows into every
  *     `resolveData` hook.
  *  2. **User-Agent → viewport seeding** via `initialViewportId` so SSR
@@ -38,22 +41,37 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const { payload } = await fetchExperience(experienceId, { preview: previewMode, locale });
-  if (!payload.nodes.length) notFound();
+  try {
+    const experience = await fetchExperience(
+      {
+        spaceId: process.env.SPACE_ID ?? '',
+        environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+        experienceId,
+        locale,
+      },
+      {
+        accessToken: process.env.CDA_TOKEN!,
+        host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+      },
+      {
+        config: advancedExperienceConfig,
+        context: {
+          isPreview: previewMode,
+          metadata: { slug: experienceId, locale },
+        },
+      }
+    );
 
-  const experience = await resolveExperience(payload, advancedExperienceConfig, {
-    experience: {
-      isPreview: previewMode,
-      metadata: { slug: experienceId, locale },
-    },
-  });
-
-  return (
-    <ServerExperienceRenderer
-      experience={experience}
-      config={advancedExperienceConfig}
-      initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
-    />
-  );
+    return (
+      <ServerExperienceRenderer
+        experience={experience}
+        config={advancedExperienceConfig}
+        initialViewportId={initialViewportId}
+        context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+      />
+    );
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    throw err;
+  }
 }

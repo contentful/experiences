@@ -5,10 +5,10 @@
 The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using customer-supplied React components.
 
 ```sh
-npm install @contentful/experiences-react @contentful/experience-delivery
+npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core` and `@contentful/experiences-design` that consumers need. The other packages are workspace-internal.
+This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` that consumers need. The other packages are workspace-internal.
 
 ---
 
@@ -19,6 +19,17 @@ This is the **only SDK package customers install** — it re-exports everything 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
 defineTemplate<Props>(config); // Same shape, for page-level template wrappers
+```
+
+### Fetching
+
+```ts
+fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async — fetches from XDA + resolves in one call
+createClient(options)                       // Functional constructor matching the SDK's option shape
+ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
+NotFoundError                               // Thrown when the Experience ID doesn't exist
+ContentfulViewDelivery                      // Full error namespace from the delivery client
+type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
 ### Resolver
@@ -59,10 +70,12 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
 ## Quick reference
 
 ```tsx
+import { notFound } from 'next/navigation';
 import {
   defineComponent,
   defineTemplate,
-  resolveExperience,
+  fetchExperience,
+  NotFoundError,
   ServerExperienceRenderer,
   type Config,
   type Components,
@@ -82,8 +95,17 @@ const components: Components = {
 const experienceConfig: Config = { components };
 
 // In a server component:
-const experience = await resolveExperience(payload, experienceConfig);
-return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+try {
+  const experience = await fetchExperience(
+    { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+    { accessToken: process.env.CDA_TOKEN! },
+    { config: experienceConfig }
+  );
+  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+} catch (err) {
+  if (err instanceof NotFoundError) notFound();
+  throw err;
+}
 ```
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).

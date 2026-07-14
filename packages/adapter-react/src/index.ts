@@ -87,3 +87,18 @@ export {
   resolveDesignProperties,
   toCssMediaQuery,
 } from '@contentful/experiences-design';
+
+// ─── Delivery client + fetchExperience ────────────────────────────────────
+export {
+  ContentfulViewDelivery,
+  ContentfulViewDeliveryClient,
+  NotFoundError,
+  createClient,
+  fetchExperience,
+} from '@contentful/experiences-client';
+export type {
+  ClientOptions,
+  CreateClientOptions,
+  ExperienceOptions,
+  ResolveOptions,
+} from '@contentful/experiences-client';

@@ -35,6 +35,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@contentful/experiences-client": "*",
     "@contentful/experiences-core": "*",
     "@contentful/experiences-design": "*"
   },

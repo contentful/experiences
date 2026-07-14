@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation';
-import { ServerExperienceRenderer, resolveExperience } from '@contentful/experiences-react';
+import {
+  NotFoundError,
+  ServerExperienceRenderer,
+  fetchExperience,
+} from '@contentful/experiences-react';
 
-import { fetchExperience } from '@/lib/delivery-client';
 import { experienceConfig } from '@/lib/experience-config';
 
 interface PageProps {
@@ -11,10 +14,20 @@ interface PageProps {
 export default async function ExperiencePage({ params }: PageProps) {
   const { slug: experienceId } = await params;
 
-  const { payload } = await fetchExperience(experienceId);
-  if (!payload.nodes.length) notFound();
+  try {
+    const experience = await fetchExperience(
+      {
+        spaceId: process.env.SPACE_ID ?? '',
+        environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+        experienceId,
+      },
+      { accessToken: process.env.CDA_TOKEN! },
+      { config: experienceConfig }
+    );
 
-  const experience = await resolveExperience(payload, experienceConfig);
-
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+    return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    throw err;
+  }
 }
