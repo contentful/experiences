@@ -13,7 +13,7 @@
   "dependencies": {
     "@contentful/experiences-react": "*",
     "@contentful/experience-delivery": "1.0.0-dev.3",
-    "next": "^15.0.0",
+    "next": "^16.2.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
