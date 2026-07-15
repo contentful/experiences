@@ -396,6 +396,14 @@ For deeper context — design decisions, multi-framework architecture notes, con
 
 ---
 
+## Contributing
+
+Contributions are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development setup, coding standards, and the PR process, and our [Code of Conduct](https://github.com/contentful/.github/blob/master/CODE_OF_CONDUCT.md).
+
+## Support
+
+For usage questions and support, [visit the Contentful support center](https://support.contentful.com/hc/en-us). Use [GitHub issues](https://github.com/contentful/experiences/issues) for bugs and feature requests.
+
 ## License
 
 MIT. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE).

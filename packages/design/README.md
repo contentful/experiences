@@ -16,3 +16,7 @@ Pure, framework-agnostic viewport math for resolving Contentful's `DesignPropVal
 Viewport order in the payload encodes cascade direction (desktop-first descending, mobile-first ascending). `getValueForViewport` walks backwards from the active viewport toward `viewports[0]`, returning the first defined value — emulating CSS cascade behavior at runtime.
 
 See [`../../AGENTS.md`](../../AGENTS.md) for the design rationale and multi-framework story.
+
+## License
+
+MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.
