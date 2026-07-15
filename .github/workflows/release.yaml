@@ -26,8 +26,6 @@ jobs:
           path: github-actions
           exportEnv: false
           secrets: |
-            secret/data/github/github_packages_read GITHUB_PACKAGES_READ_TOKEN | GITHUB_PACKAGES_READ_TOKEN;
-            secret/data/github/github_packages_write GITHUB_PACKAGES_WRITE_TOKEN | GITHUB_PACKAGES_WRITE_TOKEN;
             github/token/${{ github.event.repository.name }}-semantic-release token | GITHUB_TOKEN ;
 
       - name: Get Automation Bot User ID
@@ -51,6 +49,7 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Install latest npm
@@ -67,30 +66,26 @@ jobs:
           key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}
           fail-on-cache-miss: true
 
-      - name: Setup npmrc file
-        # Pins the @contentful scope to GitHub Packages and authenticates
-        # with the bot's package-write token so `nx release` can publish.
+      - name: Release packages
+        # Each package runs semantic-release-monorepo in its own dir. The
+        # wrapper filters commits by directory so packages version
+        # independently. Internal packages run first (core, design, client)
+        # so their new versions are published before adapters try to bump
+        # their dependency ranges. `git pull --rebase` between runs picks
+        # up the CHANGELOG.md + package.json commits from prior releases.
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${{ steps.vault.outputs.GITHUB_PACKAGES_WRITE_TOKEN }}" > ~/.npmrc
-          echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
-
-      - name: NX Release
-        run: |
-          npx nx release --yes
+          set -e
+          for pkg in core design client adapter-react adapter-svelte; do
+            echo "::group::Releasing packages/$pkg"
+            (cd packages/$pkg && npm run semantic-release)
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            echo "::endgroup::"
+          done
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
 
-      - name: Get latest release tag
-        id: get-tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0)
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Summary
         run: |
-          VERSION=$(echo "${{ steps.get-tag.outputs.tag }}" | sed 's/^v//')
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.get-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Packages**: https://github.com/${{ github.repository }}/packages" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Release**: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "See the [Releases](https://github.com/${{ github.repository }}/releases) page for per-package versions published in this run." >> $GITHUB_STEP_SUMMARY
