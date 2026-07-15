@@ -111,3 +111,7 @@ const client = new ContentfulViewDeliveryClient({
 - Re-export only what framework adapters need to surface to customers.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
 - Name mappings between SDK options and delivery-client options live in `create-client.ts` — one place to change.
+
+## License
+
+MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.

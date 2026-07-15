@@ -14,3 +14,7 @@ Runtime-neutral primitives shared across all framework adapters.
 Future Angular, Svelte, Vue, SwiftUI, and Compose adapters consume the same plan. Sharing core means each adapter has zero plan-building or prop-classification logic to duplicate — the seam is the `PortableRenderPlan` contract.
 
 See [`../../AGENTS.md`](../../AGENTS.md) for the full architecture and design decisions.
+
+## License
+
+MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.
