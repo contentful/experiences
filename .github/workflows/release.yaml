@@ -67,8 +67,9 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Release packages
-        # Each package runs semantic-release-monorepo in its own dir. The
-        # wrapper filters commits by directory so packages version
+        # Each package runs semantic-release in its own dir, extending
+        # semantic-release-monorepo via `release.extends` in package.json.
+        # That wrapper filters commits by directory so packages version
         # independently. Internal packages run first (core, design, client)
         # so their new versions are published before adapters try to bump
         # their dependency ranges. `git pull --rebase` between runs picks

@@ -30,9 +30,10 @@
     "directory": "packages/core"
   },
   "scripts": {
-    "semantic-release": "semantic-release-monorepo"
+    "semantic-release": "semantic-release"
   },
   "release": {
+    "extends": "semantic-release-monorepo",
     "tagFormat": "core@${version}",
     "branches": [
       "main",

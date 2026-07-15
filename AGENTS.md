@@ -254,7 +254,7 @@ Next regenerates it on every `next build`. It's in `.gitignore`. If you see lint
 
 Packages publish **direct to npmjs.org via OIDC trusted publishing** — same pattern as `contentful/contentful.js` and `contentful/contentful-management.js`. No `NPM_TOKEN` needed; the workflow's `permissions: id-token: write` + `setup-node registry-url: https://registry.npmjs.org` wires OIDC into `NODE_AUTH_TOKEN` automatically. Vault only provides `GITHUB_TOKEN` for the release commits/tags.
 
-Each of the 5 publishable packages runs its own `semantic-release-monorepo` invocation from its own dir in a sequential loop (topological order: core → design → client → adapter-react → adapter-svelte). The wrapper filters commits by directory so packages version independently. Between packages, `git pull --rebase` picks up the `package.json` + `CHANGELOG.md` commits that `@semantic-release/git` pushes back.
+Each of the 5 publishable packages runs its own `semantic-release` invocation from its own dir in a sequential loop (topological order: core → design → client → adapter-react → adapter-svelte). Each package's `release.extends: "semantic-release-monorepo"` filters commits by directory so packages version independently. Between packages, `git pull --rebase` picks up the `package.json` + `CHANGELOG.md` commits that `@semantic-release/git` pushes back.
 
 **One-time OIDC bootstrap** (per package name) is required on npmjs.org — a trusted-publisher configuration linking `github.com/contentful/experiences` to each package name. Coordinate with npm org admin before the first live release.
 
@@ -386,7 +386,7 @@ Local dry-run to preview what a package would release without publishing:
 
 ```sh
 cd packages/<pkg>
-npx semantic-release-monorepo --dry-run --no-ci --branches main
+npx semantic-release --dry-run --no-ci
 ```
 
 Each publishable package's release config lives in its own `package.json` under `release` — see any of the existing five for the canonical shape.

@@ -33,7 +33,7 @@
     "build": "svelte-package -i src -o dist && publint",
     "test": "vitest run",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "semantic-release": "semantic-release-monorepo"
+    "semantic-release": "semantic-release"
   },
   "dependencies": {
     "@contentful/experiences-client": "*",
@@ -54,6 +54,7 @@
     "svelte-check": "^4.0.0"
   },
   "release": {
+    "extends": "semantic-release-monorepo",
     "tagFormat": "adapter-svelte@${version}",
     "branches": [
       "main",
