@@ -32,11 +32,6 @@
     },
     "lint": {
       "cache": true
-    },
-    "nx-release-publish": {
-      "options": {
-        "registry": "https://npm.pkg.github.com"
-      }
     }
   },
   "plugins": [
@@ -59,30 +54,5 @@
       }
     }
   ],
-  "release": {
-    "projects": ["packages/*"],
-    "projectsRelationship": "independent",
-    "releaseTagPattern": "{projectName}@{version}",
-    "version": {
-      "conventionalCommits": true,
-      "updateDependents": "always",
-      "preserveMatchingDependencyRanges": true
-    },
-    "changelog": {
-      "projectChangelogs": {
-        "createRelease": "github",
-        "file": "{projectRoot}/CHANGELOG.md",
-        "renderOptions": {
-          "authors": false
-        }
-      }
-    },
-    "git": {
-      "commit": true,
-      "tag": true,
-      "commitMessage": "chore(release): publish {version} [skip ci]",
-      "tagMessage": "Release {version}"
-    }
-  },
   "analytics": false
 }
