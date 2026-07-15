@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-svelte",
-  "version": "0.2.0",
+  "version": "0.0.0-determined-by-semantic-release",
   "description": "Svelte adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -32,7 +32,8 @@
   "scripts": {
     "build": "svelte-package -i src -o dist && publint",
     "test": "vitest run",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "semantic-release": "semantic-release-monorepo"
   },
   "dependencies": {
     "@contentful/experiences-client": "*",
@@ -51,5 +52,48 @@
     "publint": "^0.2.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0"
+  },
+  "release": {
+    "tagFormat": "adapter-svelte@${version}",
+    "branches": [
+      "main",
+      {
+        "name": "canary",
+        "channel": "canary",
+        "prerelease": true
+      }
+    ],
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "releaseRules": [
+            {
+              "breaking": true,
+              "release": "minor"
+            },
+            {
+              "type": "build",
+              "scope": "deps",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/changelog",
+      "@semantic-release/npm",
+      "@semantic-release/github",
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "CHANGELOG.md"
+          ],
+          "message": "chore(release): ${nextRelease.gitTag} [skip ci]"
+        }
+      ]
+    ]
   }
 }

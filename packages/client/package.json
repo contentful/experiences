@@ -32,5 +32,51 @@
   "dependencies": {
     "@contentful/experience-delivery": "1.0.0-dev.3",
     "@contentful/experiences-core": "*"
+  },
+  "scripts": {
+    "semantic-release": "semantic-release-monorepo"
+  },
+  "release": {
+    "tagFormat": "client@${version}",
+    "branches": [
+      "main",
+      {
+        "name": "canary",
+        "channel": "canary",
+        "prerelease": true
+      }
+    ],
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "releaseRules": [
+            {
+              "breaking": true,
+              "release": "minor"
+            },
+            {
+              "type": "build",
+              "scope": "deps",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/changelog",
+      "@semantic-release/npm",
+      "@semantic-release/github",
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "CHANGELOG.md"
+          ],
+          "message": "chore(release): ${nextRelease.gitTag} [skip ci]"
+        }
+      ]
+    ]
   }
 }

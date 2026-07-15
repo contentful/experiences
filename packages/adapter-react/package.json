@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-react",
-  "version": "0.4.0",
+  "version": "0.0.0-determined-by-semantic-release",
   "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -42,5 +42,51 @@
     "react-dom": {
       "optional": true
     }
+  },
+  "scripts": {
+    "semantic-release": "semantic-release-monorepo"
+  },
+  "release": {
+    "tagFormat": "adapter-react@${version}",
+    "branches": [
+      "main",
+      {
+        "name": "canary",
+        "channel": "canary",
+        "prerelease": true
+      }
+    ],
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "releaseRules": [
+            {
+              "breaking": true,
+              "release": "minor"
+            },
+            {
+              "type": "build",
+              "scope": "deps",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/changelog",
+      "@semantic-release/npm",
+      "@semantic-release/github",
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "CHANGELOG.md"
+          ],
+          "message": "chore(release): ${nextRelease.gitTag} [skip ci]"
+        }
+      ]
+    ]
   }
 }
