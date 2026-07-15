@@ -1,6 +1,6 @@
 # @contentful/experiences-client
 
-> **Internal package.** Not published separately. Consumed via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
+> **Internal package.** Published to npm so framework adapters can resolve it at install time, but not intended for direct customer import. Consumed transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
 Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-core` stays zero-dep and framework adapters that don't need network access don't pull it in transitively.
 

@@ -389,8 +389,9 @@ npm test                            # nx run-many -t test
 npm run lint                        # nx run-many -t lint
 npm run typecheck                   # nx run-many -t typecheck
 npx nx graph                        # visual dep graph
-npm run release:dry                 # rehearse independent release
 ```
+
+Releases are automated by CI on push to `main` — see `AGENTS.md` for the semantic-release setup and dry-run instructions.
 
 For deeper context — design decisions, multi-framework architecture notes, conventions, gotchas — see [`AGENTS.md`](./AGENTS.md).
 
