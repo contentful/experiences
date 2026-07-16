@@ -1,0 +1,71 @@
+'use client';
+
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
+
+import { useDesignValues } from '@contentful/experiences-react';
+
+/**
+ * Minimal Contentful rich-text renderer — just enough for the demo payload
+ * (paragraphs + bold/italic marks). A real integration would reach for
+ * `@contentful/rich-text-react-renderer`; we hand-roll it here to keep the
+ * example dependency-free.
+ */
+
+interface Mark {
+  type: string;
+}
+interface RichTextNode {
+  nodeType: string;
+  value?: string;
+  marks?: Mark[];
+  content?: RichTextNode[];
+}
+
+/**
+ * The `document` content property arrives wrapped: XDA emits
+ * `{ __typename, document: <the actual rich-text document> }`, and the inner
+ * `document` can be `null` when the field is empty.
+ */
+export interface RichTextProps {
+  document?: {
+    document?: RichTextNode | null;
+  } | null;
+}
+
+function renderNode(node: RichTextNode, key: number): ReactNode {
+  switch (node.nodeType) {
+    case 'document':
+      return <Fragment key={key}>{(node.content ?? []).map(renderNode)}</Fragment>;
+    case 'paragraph':
+      return (
+        <p key={key} style={{ margin: '0 0 12px' }}>
+          {(node.content ?? []).map(renderNode)}
+        </p>
+      );
+    case 'text': {
+      let el: ReactNode = node.value ?? '';
+      for (const mark of node.marks ?? []) {
+        if (mark.type === 'bold') el = <strong>{el}</strong>;
+        if (mark.type === 'italic') el = <em>{el}</em>;
+      }
+      return <Fragment key={key}>{el}</Fragment>;
+    }
+    default:
+      return <Fragment key={key}>{(node.content ?? []).map(renderNode)}</Fragment>;
+  }
+}
+
+export function RichText({ document }: RichTextProps) {
+  const design = useDesignValues();
+  const doc = document?.document;
+  if (!doc) return null;
+
+  const style: CSSProperties = {
+    color: '#4b5563',
+    lineHeight: 1.6,
+    fontSize: (design.fontSize as string) ?? undefined,
+    textAlign: (design.align as CSSProperties['textAlign']) ?? undefined,
+  };
+
+  return <div style={style}>{renderNode(doc, 0)}</div>;
+}

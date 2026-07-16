@@ -1,11 +1,8 @@
 <script lang="ts">
-  let {
-    text,
-    cfFontSize,
-  }: {
-    text?: string;
-    cfFontSize?: string;
-  } = $props();
+  import { getDesignValues } from '../get-design-values.js';
+
+  let { text }: { text?: string } = $props();
+  const design = $derived(getDesignValues());
 </script>
 
-<h1 data-font-size={cfFontSize}>{text}</h1>
+<h1 data-font-size={design.cfFontSize as string}>{text}</h1>

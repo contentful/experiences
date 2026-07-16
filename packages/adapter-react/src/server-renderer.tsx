@@ -61,24 +61,40 @@ export function ServerExperienceRenderer({
   if (!experience) return null;
 
   const activeViewportIndex = getViewportIndex(experience.viewports, initialViewportId);
-  const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
+
+  // The render context is published as the value of `ExperienceProvider`, a
+  // client component — React's RSC (Flight) serializer serializes and freezes
+  // it. It must therefore share NO object identity with anything else in the
+  // serialized tree: a repeated reference can become a forward reference the
+  // serializer back-patches into already-frozen props, throwing "Cannot
+  // assign to read only property …". So the context gets its own deep-ish
+  // copies of `viewports` / `activeViewport`, independent of the plan's arrays
+  // that the internal renderers read from below.
+  const contextViewports = experience.viewports.map((v) => ({ ...v }));
+  const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
     ...context,
     metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
-    viewports: experience.viewports,
+    viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
   };
 
   return (
     <ExperienceProvider value={renderContext}>
-      <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
+      <WrapWithTemplate
+        template={experience.template}
+        config={config}
+        viewports={experience.viewports}
+        activeViewportIndex={activeViewportIndex}
+      >
         <NodesRenderer
           nodes={experience.nodes}
           config={config}
-          experience={renderContext}
+          viewports={experience.viewports}
+          activeViewportIndex={activeViewportIndex}
           renderUnknown={renderUnknown}
         />
       </WrapWithTemplate>

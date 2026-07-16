@@ -27,6 +27,7 @@ import type {
   DesignPropValue,
   DesignToken,
   ManualDesignValue,
+  ResolveToken,
   ValuesByViewport,
   ViewportDef,
 } from '@contentful/experiences-core';
@@ -130,4 +131,39 @@ export function resolveDesignProperties(
     if (value !== undefined) out[key] = value;
   }
   return out;
+}
+
+/**
+ * Runs token resolution over an already viewport-resolved design record.
+ * Every `DesignToken` envelope goes through the customer's `resolveToken`
+ * hook; plain scalars are left alone.
+ *
+ * With no `resolveToken`, the record comes back unchanged (envelopes and
+ * all), which is how the SDK behaved before the hook existed — so customers
+ * who don't opt in aren't affected.
+ *
+ * When `resolveToken` returns `undefined`, that key is dropped and its token
+ * id is collected in `unresolved`. Adapters use that list to log one grouped
+ * warning instead of one per prop.
+ */
+export function applyTokenResolver(
+  props: Record<string, string | number | boolean | DesignToken>,
+  resolveToken?: ResolveToken
+): { props: Record<string, unknown>; unresolved: string[] } {
+  if (!resolveToken) return { props, unresolved: [] };
+  const out: Record<string, unknown> = {};
+  const unresolved: string[] = [];
+  for (const [key, value] of Object.entries(props)) {
+    if (typeof value === 'object' && value !== null && value.type === 'DesignToken') {
+      const resolved = resolveToken(value);
+      if (resolved === undefined) {
+        unresolved.push(value.value);
+        continue;
+      }
+      out[key] = resolved;
+      continue;
+    }
+    out[key] = value;
+  }
+  return { props: out, unresolved };
 }

@@ -56,24 +56,34 @@ export function ClientExperienceRenderer({
 }: ClientExperienceRendererProps): ReactNode {
   if (!experience) return null;
   const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
-  const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
+  // Give the context its own copies so it shares no object identity with the
+  // plan arrays the internal renderers read below — keeps parity with the
+  // server renderer. See the note in `server-renderer.tsx`.
+  const contextViewports = experience.viewports.map((v) => ({ ...v }));
+  const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
     ...context,
     metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
-    viewports: experience.viewports,
+    viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
   };
 
   return (
     <ExperienceProvider value={renderContext}>
-      <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
+      <WrapWithTemplate
+        template={experience.template}
+        config={config}
+        viewports={experience.viewports}
+        activeViewportIndex={activeViewportIndex}
+      >
         <NodesRenderer
           nodes={experience.nodes}
           config={config}
-          experience={renderContext}
+          viewports={experience.viewports}
+          activeViewportIndex={activeViewportIndex}
           renderUnknown={renderUnknown}
         />
       </WrapWithTemplate>

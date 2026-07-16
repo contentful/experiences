@@ -20,6 +20,7 @@ import ItemFixture from './test-fixtures/ItemFixture.svelte';
 import PrecedenceFixture from './test-fixtures/PrecedenceFixture.svelte';
 import TemplateFixture from './test-fixtures/TemplateFixture.svelte';
 import { captureSink } from './test-fixtures/capture-sink.js';
+import { toCss } from './design-utils.js';
 
 const VIEWPORTS = [
   { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
@@ -33,6 +34,8 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
   type: 'ValuesByViewport',
   values,
 });
+
+const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
 function componentNode(
   typeId: string,
@@ -254,7 +257,7 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).toContain('data-priority="low"');
   });
 
-  it('respects merge precedence: defaults < content < design < resolved', () => {
+  it('respects merge precedence: defaults < content < resolved', () => {
     const precedenceConfig: Config = {
       components: {
         item: {
@@ -430,5 +433,241 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
     });
 
     expect(captureSink[0]!.contentful?.resolved).toEqual({ enriched: 'yes' });
+  });
+});
+
+describe('ServerExperienceRenderer — resolveToken', () => {
+  it('passes DesignToken envelopes through the resolver before render', async () => {
+    const cfg: Config = {
+      components: { 'contentful-button': ButtonFixture },
+      resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('contentful-button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
+          }),
+        ],
+      },
+      cfg
+    );
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    expect(container.innerHTML).toContain('data-bg="#4f39f6"');
+    expect(container.innerHTML).not.toContain('DesignToken');
+  });
+
+  it('warns and drops the key from the design bag when the resolver returns undefined', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cfg: Config = {
+      components: { 'contentful-button': CapturingComponent },
+      resolveToken: () => undefined,
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('contentful-button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/unknown') },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+
+    expect(captureSink[0]!.designValues).not.toHaveProperty('cfBackgroundColor');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
+    warn.mockRestore();
+  });
+
+  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+    const cfg: Config = { components: { 'contentful-button': ButtonFixture } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('contentful-button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
+          }),
+        ],
+      },
+      cfg
+    );
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    // Svelte stringifies the envelope object into "[object Object]" on the
+    // attribute — the point is that the raw envelope reaches the component
+    // unchanged, so the customer can inspect it or resolve it themselves.
+    expect(container.innerHTML).toContain('data-bg="[object Object]"');
+  });
+
+  it('runs on page-level template design props too', async () => {
+    const tplConfig: Config = {
+      components: { item: PrecedenceFixture },
+      templates: { page: TemplateFixture },
+      resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
+    };
+    const tplPayload: ExperiencePayload = {
+      sys: {
+        template: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Template',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+          },
+        },
+      },
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
+    };
+    const plan = await resolveExperience(tplPayload, tplConfig);
+    // Templates don't carry design props in the current XDA payload shape;
+    // seed one on the resolved plan so we exercise the template path.
+    plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: tplConfig },
+    });
+    expect(container.innerHTML).toContain('data-bg="#111827"');
+  });
+});
+
+describe('ServerExperienceRenderer — design values are not injected as props', () => {
+  it('does NOT spread resolved design values onto component props', async () => {
+    const cfg: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('capture', {
+            id: 'p',
+            contentProperties: { label: 'keep me' },
+            designProperties: { cfBackgroundColor: m('#f00'), cfPadding: m('10px') },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    const keys = Object.keys(captureSink[0]!.props);
+    // Content still flows as a prop; design does not.
+    expect(keys).toContain('label');
+    expect(keys).not.toContain('cfBackgroundColor');
+    expect(keys).not.toContain('cfPadding');
+    // The values are still readable through getDesignValues().
+    expect(captureSink[0]!.designValues).toEqual({
+      cfBackgroundColor: '#f00',
+      cfPadding: '10px',
+    });
+  });
+});
+
+describe('ServerExperienceRenderer — getDesignValues()', () => {
+  it('returns the resolved design bag for the current node', async () => {
+    const cfg: Config = {
+      components: { capture: CapturingComponent },
+      resolveToken: (ref) => (ref.value === 'brand/primary' ? '#4f39f6' : undefined),
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('capture', {
+            id: 'p',
+            designProperties: {
+              cfBackgroundColor: dt('brand/primary'),
+              cfPadding: m('24px'),
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, { props: { experience: plan, config: cfg } });
+    expect(captureSink[0]!.designValues).toEqual({
+      cfBackgroundColor: '#4f39f6',
+      cfPadding: '24px',
+    });
+  });
+
+  it('honors the active viewport when reading design values', async () => {
+    const cfg: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('capture', {
+            id: 'p',
+            designProperties: {
+              cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg, initialViewportId: 'mobile' },
+    });
+    expect(captureSink[0]!.designValues).toEqual({ cfPadding: '12px' });
+  });
+});
+
+describe('toCss (Svelte)', () => {
+  it('converts bare (non-cf) CSS keys — the shape real payloads use', () => {
+    expect(toCss({ fontSize: '20px', backgroundColor: '#4f39f6' })).toEqual({
+      fontSize: '20px',
+      backgroundColor: '#4f39f6',
+    });
+  });
+
+  it('still handles cf-prefixed and kebab/snake CSS keys', () => {
+    expect(toCss({ cfBackgroundColor: '#4f39f6', 'font-size': '10px', font_weight: 700 })).toEqual({
+      backgroundColor: '#4f39f6',
+      fontSize: '10px',
+      fontWeight: 700,
+    });
+  });
+
+  it('drops keys that are not known CSS properties (variant, as, ratio, target)', () => {
+    expect(
+      toCss({ backgroundColor: '#4f39f6', variant: 'h1', as: 'h2', ratio: '1:2', target: '_self' })
+    ).toEqual({ backgroundColor: '#4f39f6' });
+  });
+
+  it('drops non-scalar (object/array/bool) values by design', () => {
+    // toCss produces something spreadable into an inline style — booleans
+    // and objects can't be inline-styled without opinionation, so they drop.
+    expect(
+      toCss({
+        padding: '10px',
+        reverse: true,
+        nested: { color: 'red' } as unknown as string,
+      })
+    ).toEqual({ padding: '10px' });
+  });
+
+  it('respects include/exclude lists', () => {
+    expect(
+      toCss({ backgroundColor: '#4f39f6', padding: '10px' }, { include: ['backgroundColor'] })
+    ).toEqual({ backgroundColor: '#4f39f6' });
+    expect(
+      toCss({ backgroundColor: '#4f39f6', padding: '10px' }, { exclude: ['padding'] })
+    ).toEqual({ backgroundColor: '#4f39f6' });
   });
 });

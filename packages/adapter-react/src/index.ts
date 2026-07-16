@@ -33,6 +33,9 @@ export type { RenderUnknown } from './nodes-renderer';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulTemplate } from './context';
+export { useDesignValues } from './use-design-values';
+export { toCss } from './design-utils';
+export type { ToCssOptions } from './design-utils';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
@@ -49,6 +52,7 @@ export type {
   ContentfulTemplate,
   Registration,
   RenderContext,
+  ResolveToken,
   TemplateConfig,
   TemplateRegistration,
   Templates,
@@ -82,9 +86,12 @@ export type {
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
 export {
+  CSS_PROPERTIES,
   getValueForViewport,
   getViewportIndex,
+  isCssProperty,
   resolveDesignProperties,
+  toCssKey,
   toCssMediaQuery,
 } from '@contentful/experiences-design';
 

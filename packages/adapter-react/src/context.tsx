@@ -8,17 +8,71 @@
 
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 
 import type { ContentfulComponent, ContentfulTemplate, RenderContext } from './types';
 
 const ExperienceContext = createContext<RenderContext | null>(null);
 const ContentfulComponentContext = createContext<ContentfulComponent | null>(null);
 const ContentfulTemplateContext = createContext<ContentfulTemplate | null>(null);
+// The design values the renderer already resolved (viewport-cascaded +
+// token-resolved) for the enclosing node/template. Plain data only — never
+// the Config or its functions — so it crosses the RSC boundary cleanly.
+const ResolvedDesignContext = createContext<Record<string, unknown> | null>(null);
 
-export const ExperienceProvider = ExperienceContext.Provider;
-export const ContentfulComponentProvider = ContentfulComponentContext.Provider;
-export const ContentfulTemplateProvider = ContentfulTemplateContext.Provider;
+// Providers are wrapped as explicit client-component functions rather than
+// re-exported as raw `Context.Provider` objects. A server component (the
+// server renderer) imports these across the RSC boundary, and Next.js needs
+// a client reference that's a real function there — a bare Provider object
+// resolves to a promise and blows up with "Element type is invalid".
+
+export function ExperienceProvider({
+  value,
+  children,
+}: {
+  value: RenderContext;
+  children: ReactNode;
+}): ReactNode {
+  return <ExperienceContext.Provider value={value}>{children}</ExperienceContext.Provider>;
+}
+
+export function ContentfulComponentProvider({
+  value,
+  children,
+}: {
+  value: ContentfulComponent;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <ContentfulComponentContext.Provider value={value}>
+      {children}
+    </ContentfulComponentContext.Provider>
+  );
+}
+
+export function ContentfulTemplateProvider({
+  value,
+  children,
+}: {
+  value: ContentfulTemplate;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <ContentfulTemplateContext.Provider value={value}>
+      {children}
+    </ContentfulTemplateContext.Provider>
+  );
+}
+
+export function ResolvedDesignProvider({
+  value,
+  children,
+}: {
+  value: Record<string, unknown>;
+  children: ReactNode;
+}): ReactNode {
+  return <ResolvedDesignContext.Provider value={value}>{children}</ResolvedDesignContext.Provider>;
+}
 
 /**
  * Read the current Experience runtime context — viewports, the active
@@ -50,4 +104,14 @@ export function useContentfulComponent(): ContentfulComponent | null {
  */
 export function useContentfulTemplate(): ContentfulTemplate | null {
   return useContext(ContentfulTemplateContext);
+}
+
+/**
+ * Read the design values the renderer already resolved for the enclosing
+ * node or template — viewport-cascaded and token-resolved, the same bag that
+ * feeds the component's props. Returns `null` outside a rendered node/
+ * template, which `useDesignValues` treats as "nothing to read."
+ */
+export function useResolvedDesign(): Record<string, unknown> | null {
+  return useContext(ResolvedDesignContext);
 }

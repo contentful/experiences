@@ -7,9 +7,9 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-core';
-  import { resolveDesignProperties } from '@contentful/experiences-design';
+  import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
-  import { setContentfulComponent } from './context.js';
+  import { setContentfulComponent, setResolvedDesign } from './context.js';
   import type { RenderUnknown } from './component-props.js';
   import {
     normalizeComponentRegistration,
@@ -41,17 +41,35 @@
   };
   setContentfulComponent(contentful);
 
-  const composed = $derived.by(() => {
-    if (!componentConfig) return null;
+  // Resolve the node's design once (viewport cascade, then the Config's
+  // resolveToken). The getter published on context lets getDesignValues()
+  // read these values — reactive across viewport changes since it re-reads
+  // this $derived. They are NOT merged into the component's prop bag.
+  const tokenResolvedDesign = $derived.by(() => {
     const resolvedDesign = resolveDesignProperties(
       node.props.design,
       experience.viewports,
       experience.activeViewportIndex
     );
+    const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
+    if (unresolved.length && typeof console !== 'undefined') {
+      console.warn(
+        `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on "${node.registration.componentTypeId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
+      );
+    }
+    return props;
+  });
+
+  setResolvedDesign(() => tokenResolvedDesign);
+
+  // Design values are deliberately excluded from the prop bag — the
+  // component reads them via getDesignValues() so the SDK never injects
+  // unknown cf-prefixed props.
+  const composed = $derived.by(() => {
+    if (!componentConfig) return null;
     return {
       ...componentConfig.defaults,
       ...node.props.content,
-      ...resolvedDesign,
       ...node.props.resolved,
       children,
     };

@@ -27,6 +27,9 @@ export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
 // ─── Runtime context helpers ─────────────────────────────────────────────
 export { getExperience, getContentfulComponent, getContentfulTemplate } from './context.js';
+export { getDesignValues } from './get-design-values.js';
+export { toCss } from './design-utils.js';
+export type { ToCssOptions } from './design-utils.js';
 
 // Component prop shapes live in component-props.ts (not .svelte module
 // blocks) so `tsc --noEmit` can see them without the Svelte language server.
@@ -53,6 +56,7 @@ export type {
   ContentfulTemplate,
   Registration,
   RenderContext,
+  ResolveToken,
   TemplateConfig,
   TemplateRegistration,
   Templates,
@@ -86,9 +90,12 @@ export type {
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
 export {
+  CSS_PROPERTIES,
   getValueForViewport,
   getViewportIndex,
+  isCssProperty,
   resolveDesignProperties,
+  toCssKey,
   toCssMediaQuery,
 } from '@contentful/experiences-design';
 

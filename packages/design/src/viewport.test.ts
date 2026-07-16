@@ -8,6 +8,7 @@ import type {
 } from '@contentful/experiences-core';
 
 import {
+  applyTokenResolver,
   getValueForViewport,
   getViewportIndex,
   resolveDesignProperties,
@@ -167,5 +168,63 @@ describe('resolveDesignProperties', () => {
 
   it('returns {} for missing input', () => {
     expect(resolveDesignProperties(undefined, VIEWPORTS, 0)).toEqual({});
+  });
+});
+
+describe('applyTokenResolver', () => {
+  const token = (value: string): DesignPropValue => ({ type: 'DesignToken', value });
+
+  it('returns the input untouched when no resolver is supplied', () => {
+    const input = {
+      cfPadding: '20px',
+      cfColor: { type: 'DesignToken' as const, value: 'color.primary' },
+    };
+    const { props, unresolved } = applyTokenResolver(input);
+    expect(props).toBe(input);
+    expect(unresolved).toEqual([]);
+  });
+
+  it('replaces DesignToken envelopes with the resolver output', () => {
+    const { props, unresolved } = applyTokenResolver(
+      {
+        cfPadding: '20px',
+        cfColor: { type: 'DesignToken', value: 'color.primary' },
+        cfBackground: { type: 'DesignToken', value: 'bg/hero' },
+      },
+      (ref) =>
+        ref.value === 'color.primary' ? '#4f39f6' : ref.value === 'bg/hero' ? '#fafafa' : undefined
+    );
+    expect(props).toEqual({ cfPadding: '20px', cfColor: '#4f39f6', cfBackground: '#fafafa' });
+    expect(unresolved).toEqual([]);
+  });
+
+  it('drops props and reports unresolved ids when the resolver returns undefined', () => {
+    const { props, unresolved } = applyTokenResolver(
+      {
+        cfPadding: '20px',
+        cfColor: token('color.primary'),
+        cfBackground: token('bg/unknown'),
+      },
+      (ref) => (ref.value === 'color.primary' ? '#4f39f6' : undefined)
+    );
+    expect(props).toEqual({ cfPadding: '20px', cfColor: '#4f39f6' });
+    expect(unresolved).toEqual(['bg/unknown']);
+  });
+
+  it('leaves scalar props alone even when the resolver would map them', () => {
+    const { props } = applyTokenResolver({ cfPadding: '20px', cfActive: true }, () => 'nope');
+    expect(props).toEqual({ cfPadding: '20px', cfActive: true });
+  });
+
+  it('preserves the id shape verbatim in unresolved reports', () => {
+    const { unresolved } = applyTokenResolver(
+      {
+        a: token('color.surface.hero'),
+        b: token('color/surface/hero'),
+        c: token('colorSurfaceLight'),
+      },
+      () => undefined
+    );
+    expect(unresolved).toEqual(['color.surface.hero', 'color/surface/hero', 'colorSurfaceLight']);
   });
 });

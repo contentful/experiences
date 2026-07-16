@@ -1,14 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  let {
-    cfPadding,
-    children,
-  }: {
-    cfPadding?: string;
-    children?: Snippet;
-  } = $props();
+
+  import { getDesignValues } from '../get-design-values.js';
+
+  let { children }: { children?: Snippet } = $props();
+  const design = $derived(getDesignValues());
 </script>
 
-<div data-padding={cfPadding}>
+<div data-padding={design.cfPadding as string}>
   {#if children}{@render children()}{/if}
 </div>

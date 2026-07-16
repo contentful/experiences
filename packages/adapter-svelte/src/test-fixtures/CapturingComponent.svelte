@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { getExperience, getContentfulComponent } from '../context.js';
+  import { getDesignValues } from '../get-design-values.js';
   import { captureSink } from './capture-sink.js';
 
   // Capture every prop the renderer passes in.
@@ -12,5 +13,6 @@
     props: { ...rest },
     experience: getExperience(),
     contentful: getContentfulComponent(),
+    designValues: getDesignValues<Record<string, unknown>>(),
   });
 </script>

@@ -11,8 +11,10 @@ import type {
 import { resolveExperience } from '@contentful/experiences-core';
 
 import { useContentfulComponent, useContentfulTemplate, useExperience } from './context';
+import { toCss } from './design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
+import { useDesignValues } from './use-design-values';
 
 const VIEWPORTS = [
   { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
@@ -26,6 +28,8 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
   type: 'ValuesByViewport',
   values,
 });
+
+const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
 function componentNode(
   typeId: string,
@@ -43,25 +47,26 @@ function componentNode(
   };
 }
 
-const Container = ({ children, cfPadding }: { children?: ReactNode; cfPadding?: string }) => (
-  <div data-padding={cfPadding}>{children}</div>
-);
+// Fixtures read their design through useDesignValues() — the SDK never
+// injects design as props — and apply it however they like.
+const Container = ({ children }: { children?: ReactNode }) => {
+  const design = useDesignValues();
+  return <div data-padding={design.cfPadding as string}>{children}</div>;
+};
 
-const Heading = ({ text, cfFontSize }: { text?: string; cfFontSize?: string }) => (
-  <h1 style={{ fontSize: cfFontSize }}>{text}</h1>
-);
+const Heading = ({ text }: { text?: string }) => {
+  const design = useDesignValues();
+  return <h1 style={{ fontSize: design.cfFontSize as string }}>{text}</h1>;
+};
 
-const SimpleButton = ({
-  label,
-  cfBackgroundColor,
-}: {
-  label?: string;
-  cfBackgroundColor?: string;
-}) => (
-  <button type="button" style={{ background: cfBackgroundColor }}>
-    {label}
-  </button>
-);
+const SimpleButton = ({ label }: { label?: string }) => {
+  const design = useDesignValues();
+  return (
+    <button type="button" style={{ background: design.cfBackgroundColor as string }}>
+      {label}
+    </button>
+  );
+};
 
 const config: Config = {
   components: {
@@ -189,8 +194,14 @@ describe('ServerExperienceRenderer', () => {
 
     expect(seen).not.toBeNull();
     expect(seen!.activeViewportIndex).toBe(0);
-    expect(seen!.activeViewport).toBe(VIEWPORTS[0]);
-    expect(seen!.viewports).toBe(VIEWPORTS);
+    // The render context gets its own copies of viewports / activeViewport
+    // (value-equal, not the same reference) so it shares no object identity
+    // with the plan arrays — otherwise React's RSC serializer can back-patch a
+    // shared reference into frozen props and throw.
+    expect(seen!.activeViewport).toStrictEqual(VIEWPORTS[0]);
+    expect(seen!.activeViewport).not.toBe(VIEWPORTS[0]);
+    expect(seen!.viewports).toStrictEqual(VIEWPORTS);
+    expect(seen!.viewports).not.toBe(VIEWPORTS);
   });
 
   it('honors initialViewportId when computing the active viewport', async () => {
@@ -213,7 +224,8 @@ describe('ServerExperienceRenderer', () => {
     );
 
     expect(seen!.activeViewportIndex).toBe(2);
-    expect(seen!.activeViewport).toBe(VIEWPORTS[2]);
+    expect(seen!.activeViewport).toStrictEqual(VIEWPORTS[2]);
+    expect(seen!.activeViewport).not.toBe(VIEWPORTS[2]);
   });
 
   it('renders missing-component fallback in preview mode', () => {
@@ -290,7 +302,7 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('data-priority="low"');
   });
 
-  it('respects merge precedence: defaults < content < design < resolved < slots', () => {
+  it('respects merge precedence: defaults < content < resolved < slots', () => {
     const Item = ({ value }: { value: string }) => <span data-value={value} />;
     const cfg: Config = {
       components: {
@@ -521,5 +533,352 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTem
       design: {},
       resolved: undefined,
     });
+  });
+});
+
+describe('ServerExperienceRenderer — resolveToken', () => {
+  // Reads its background through useDesignValues() — the resolved value the
+  // renderer publishes on context, not an injected prop.
+  const Button = ({ label }: { label?: string }) => {
+    const design = useDesignValues();
+    return (
+      <button type="button" data-bg={design.cfBackgroundColor as string}>
+        {label}
+      </button>
+    );
+  };
+
+  it('passes DesignToken envelopes through the resolver before render', async () => {
+    const cfg: Config = {
+      components: { button: Button },
+      resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
+          }),
+        ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toContain('data-bg="#4f39f6"');
+    expect(html).not.toContain('DesignToken');
+  });
+
+  it('warns and drops the key from the design bag when the resolver returns undefined', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let captured: Record<string, unknown> = {};
+    const Probe = () => {
+      captured = useDesignValues();
+      return null;
+    };
+    const cfg: Config = {
+      components: { button: Probe },
+      resolveToken: () => undefined,
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/unknown') },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(captured).not.toHaveProperty('cfBackgroundColor');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('button'));
+    warn.mockRestore();
+  });
+
+  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+    const cfg: Config = { components: { button: Button } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('button', {
+            id: 'b',
+            contentProperties: { label: 'Go' },
+            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
+          }),
+        ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    // React stringifies the object envelope into "[object Object]" — the key
+    // point is that the raw envelope reaches the component, unchanged.
+    expect(html).toContain('data-bg="[object Object]"');
+  });
+
+  it('runs on page-level template design props too', async () => {
+    const Tpl = ({ children }: { children?: ReactNode }) => {
+      const design = useDesignValues();
+      return <main data-bg={design.cfBackground as string}>{children}</main>;
+    };
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const cfg: Config = {
+      components: { item: Item },
+      templates: { page: Tpl },
+      resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
+    };
+    const tplPayload: ExperiencePayload = {
+      sys: {
+        template: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Template',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+          },
+        },
+      },
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
+    };
+    const plan = await resolveExperience(tplPayload, cfg);
+    // Templates don't carry design props in the current XDA payload shape;
+    // seed one on the resolved plan so we exercise the template path.
+    plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toContain('data-bg="#111827"');
+  });
+});
+
+describe('ServerExperienceRenderer — design values are not injected as props', () => {
+  it('does NOT spread resolved design values onto component props', async () => {
+    let received: Record<string, unknown> = {};
+    const Probe = (props: Record<string, unknown>) => {
+      received = props;
+      return null;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('probe', {
+            id: 'p',
+            contentProperties: { label: 'keep me' },
+            designProperties: { cfBackgroundColor: m('#f00'), cfPadding: m('10px') },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    // Content still flows as a prop; design does not.
+    expect(received).toHaveProperty('label', 'keep me');
+    expect(received).not.toHaveProperty('cfBackgroundColor');
+    expect(received).not.toHaveProperty('cfPadding');
+  });
+
+  it('does NOT spread resolved design values onto template props', async () => {
+    let received: Record<string, unknown> = {};
+    const Tpl = (props: Record<string, unknown>) => {
+      received = props;
+      return <main>{props.children as ReactNode}</main>;
+    };
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const cfg: Config = {
+      components: { item: Item },
+      templates: { page: Tpl },
+    };
+    const tplPayload: ExperiencePayload = {
+      sys: {
+        template: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Template',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+          },
+        },
+      },
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
+    };
+    const plan = await resolveExperience(tplPayload, cfg);
+    plan!.template!.props.design = { cfBackground: m('#111827') };
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(received).not.toHaveProperty('cfBackground');
+  });
+});
+
+describe('ServerExperienceRenderer — useDesignValues()', () => {
+  it('returns the resolved design bag for the current node', async () => {
+    let captured: Record<string, unknown> = {};
+    const Probe = () => {
+      captured = useDesignValues();
+      return null;
+    };
+    const cfg: Config = {
+      components: { probe: Probe },
+      resolveToken: (ref) => (ref.value === 'brand/primary' ? '#4f39f6' : undefined),
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('probe', {
+            id: 'p',
+            designProperties: {
+              cfBackgroundColor: dt('brand/primary'),
+              cfPadding: m('24px'),
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(captured).toEqual({ cfBackgroundColor: '#4f39f6', cfPadding: '24px' });
+  });
+
+  it('accepts a type argument that types the returned bag (useState-style)', async () => {
+    interface MyDesign {
+      cfBackgroundColor?: string;
+      cfPadding?: string;
+    }
+    let typed: MyDesign = {};
+    const Probe = () => {
+      const design = useDesignValues<MyDesign>();
+      // Compile-time: keys are typed off MyDesign, not `unknown`.
+      typed = { cfBackgroundColor: design.cfBackgroundColor, cfPadding: design.cfPadding };
+      return null;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('probe', { id: 'p', designProperties: { cfPadding: m('24px') } })],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(typed).toEqual({ cfBackgroundColor: undefined, cfPadding: '24px' });
+  });
+
+  it('honors the active viewport when called deep inside a node subtree', async () => {
+    let captured: Record<string, unknown> = {};
+    const Probe = () => {
+      captured = useDesignValues();
+      return null;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('probe', {
+            id: 'p',
+            designProperties: {
+              cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={cfg} initialViewportId="mobile" />
+    );
+    expect(captured).toEqual({ cfPadding: '12px' });
+  });
+
+  it('returns {} when there is no design in scope', async () => {
+    // Put the probe in a template that carries no design and wraps a node
+    // with no design either, so the hook has nothing to resolve.
+    let captured: Record<string, unknown> | null = null;
+    const Probe = ({ children }: { children?: ReactNode }) => {
+      captured = useDesignValues();
+      return <>{children}</>;
+    };
+    const Item = () => null;
+    const cfg: Config = {
+      components: { item: Item },
+      templates: { page: Probe },
+    };
+    const tplPayload: ExperiencePayload = {
+      sys: {
+        template: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Template',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+          },
+        },
+      },
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i' })],
+    };
+    const plan = await resolveExperience(tplPayload, cfg);
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(captured).toEqual({});
+  });
+
+  it('returns {} when called outside any renderer subtree', () => {
+    let captured: Record<string, unknown> | null = null;
+    const Probe = () => {
+      captured = useDesignValues();
+      return null;
+    };
+    renderToStaticMarkup(<Probe />);
+    expect(captured).toEqual({});
+  });
+});
+
+describe('toCss', () => {
+  it('converts bare (non-cf) CSS keys — the shape real payloads use', () => {
+    expect(toCss({ fontSize: '20px', backgroundColor: '#4f39f6' })).toEqual({
+      fontSize: '20px',
+      backgroundColor: '#4f39f6',
+    });
+  });
+
+  it('still handles cf-prefixed and kebab/snake CSS keys', () => {
+    expect(toCss({ cfBackgroundColor: '#4f39f6', 'font-size': '10px', font_weight: 700 })).toEqual({
+      backgroundColor: '#4f39f6',
+      fontSize: '10px',
+      fontWeight: 700,
+    });
+  });
+
+  it('drops keys that are not known CSS properties (variant, as, ratio, target)', () => {
+    expect(
+      toCss({ backgroundColor: '#4f39f6', variant: 'h1', as: 'h2', ratio: '1:2', target: '_self' })
+    ).toEqual({ backgroundColor: '#4f39f6' });
+  });
+
+  it('drops null and undefined values', () => {
+    expect(toCss({ padding: null, margin: undefined, color: '#111' })).toEqual({
+      color: '#111',
+    });
+  });
+
+  it('respects an exclude list even for valid CSS keys', () => {
+    expect(
+      toCss({ backgroundColor: '#4f39f6', padding: '10px' }, { exclude: ['padding'] })
+    ).toEqual({ backgroundColor: '#4f39f6' });
+  });
+
+  it('respects an include list (still whitelist-filtered)', () => {
+    expect(
+      toCss(
+        { backgroundColor: '#4f39f6', padding: '10px', variant: 'h1' },
+        { include: ['backgroundColor', 'variant'] }
+      )
+    ).toEqual({ backgroundColor: '#4f39f6' });
   });
 });
