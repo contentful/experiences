@@ -250,9 +250,11 @@ Next regenerates it on every `next build`. It's in `.gitignore`. If you see lint
 
 `build.yaml` saves `packages/*/dist` to a job-scoped cache; `check.yaml` and `release.yaml` restore it. **The cache key is `build-cache-${run_id}-${run_attempt}`** — meaning each CI run is its own cache. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Don't change the cache path unless you also update both restore steps.
 
-### npm publish vs GitHub Packages
+### Publishing
 
-The current release workflow is shaped for **GitHub Packages** (Vault-supplied `GITHUB_TOKEN`, summary linking to `github.com/.../packages`). It is NOT yet wired to publish to npmjs.org. Per-package `publishConfig` does NOT yet declare a registry URL — adding `"registry": "https://npm.pkg.github.com"` is needed before the first release if we go GitHub Packages. Decision pending; flagged in the meeting-prep doc.
+Packages publish to **GitHub Packages**, and org infrastructure mirrors to npmjs.org via trusted publishing. This matches every other Contentful monorepo (`mcp-server`, `rich-text`, `field-editors`, `live-preview`, `apps`, etc.). Auth is Vault-provisioned `GITHUB_PACKAGES_WRITE_TOKEN`. The `nx-release-publish` target in `nx.json` pins the registry to `https://npm.pkg.github.com`.
+
+**One-time bootstrap per package**: on first release of a new package name to GitHub Packages, a manual `npm publish` to npmjs is required to establish the package there so the mirror can pick it up on subsequent releases. See `contentful/contentful-experience-delivery.js/RELEASING.md` for the runbook.
 
 ### Nx project name vs npm package name vs folder
 
@@ -371,12 +373,30 @@ npm run dev                  # http://localhost:3000/<experience-id>
 
 ### Cut a release
 
+Releases are fully automated by CI on push to `main` (stable) or `dev` (prerelease). Every `feat:` / `fix:` commit that touched a package's directory triggers a version bump for that package on the next merge.
+
+- **Stable** — push to `main` → `release.yaml` runs `npx nx release --yes`. Publishes to npm's `latest` dist-tag; creates git tags and GitHub Releases; commits `chore(release): publish {version} [skip ci]` back to `main`.
+- **Prerelease** — push to `dev` → `prerelease.yaml` runs `npx nx release --specifier prerelease --preid dev --yes`. Publishes to npm's `dev` dist-tag as `X.Y.Z-dev.N`; creates git tags and GitHub Releases marked "pre-release"; commits back to `dev`.
+
+Consumers install with:
+
 ```sh
-npm run release:dry            # rehearse
-npm run release                # actually publish (CI does this)
+npm install @contentful/experiences-react           # latest stable
+npm install @contentful/experiences-react@dev       # newest dev prerelease
 ```
 
-The first release ever needs `--first-release`. After that, `nx release` derives bumps from conventional commits since the last per-project tag.
+**`dev` is not meant to be merged into `main`.** The two branches accumulate independent CHANGELOG histories so `main`'s file stays clean of prerelease entries. Features that should ship on both branches should be committed to each independently. Matches the pattern in `contentful/contentful-mcp-server`.
+
+**`releaseTagPatternStrictPreid: true`** in `nx.json` ensures stable `nx release` on `main` skips over any preid-suffixed tag (e.g., `adapter-react@0.5.0-dev.3`) when computing the next version — dev tags cannot poison main's stable release computation.
+
+Local dry-run to preview:
+
+```sh
+npx nx release --dry-run                                            # what a stable release would do
+npx nx release --specifier prerelease --preid dev --dry-run         # what a dev prerelease would do
+```
+
+The first-ever release for a new package needs `--first-release` on its first run so nx doesn't look for a prior tag.
 
 ---
 
