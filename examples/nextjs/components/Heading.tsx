@@ -11,7 +11,6 @@ export interface HeadingProps {
   children?: ReactNode;
 }
 
-/** The design values this heading reads — passed to `useDesignValues<T>()`. */
 interface HeadingDesign {
   as?: HeadingTag;
   align?: CSSProperties['textAlign'];
@@ -20,14 +19,9 @@ interface HeadingDesign {
 }
 
 /**
- * A heading whose tag and typography are driven entirely by design.
- * `useDesignValues<HeadingDesign>()` types the design bag (same ergonomics as
- * `useState<T>()`), so `as` / `align` read without casts. `as` is the author-
- * defined element to render (semantic, not CSS); the CSS-shaped values go
- * through `toCss`, which keeps only keys that map to real CSS properties (so
- * `as` is dropped automatically). The payload's `align` is this design
- * system's own shorthand for `text-align`, so the component maps it by name —
- * that's exactly the semantic-vs-CSS split `toCss` leaves to the component.
+ * `useDesignValues<HeadingDesign>()` types the design bag (like `useState<T>()`).
+ * `as` picks the tag (semantic); `toCss` keeps the CSS-shaped keys and drops
+ * `as`; `align` is this design system's shorthand for `text-align`, mapped by name.
  */
 export function Heading({ text, children }: HeadingProps) {
   const design = useDesignValues<HeadingDesign>();

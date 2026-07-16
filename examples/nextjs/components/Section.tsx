@@ -18,12 +18,9 @@ const ALIGN: Record<Align, CSSProperties['alignItems']> = {
 };
 
 /**
- * The layout primitive of this design system — a flex (or grid) container.
- * Every knob comes off `useDesignValues()`: these keys are author-defined
- * *semantic* styling (`direction`, `itemAlign`, `ratio`, …), not `cf`-
- * prefixed CSS, so the component reads them by name rather than through
- * `toCss`. Token-valued keys (`gap`, spacing, colors, `radius`) arrive
- * already resolved to CSS strings by the Config's `resolveToken`.
+ * Flex/grid layout primitive. Reads its semantic design keys (`direction`,
+ * `ratio`, …) by name off `useDesignValues()`; token-valued keys arrive
+ * already resolved to CSS by `resolveToken`.
  */
 export function Section({ children }: SectionProps) {
   const design = useDesignValues();
@@ -48,8 +45,7 @@ export function Section({ children }: SectionProps) {
     borderRadius: (design.radius as string) ?? undefined,
   };
 
-  // A colon-delimited ratio (e.g. "1:2:1") lays direct children out in a grid
-  // with matching fractional tracks; "equal" / "auto" fall back to flex.
+  // A colon ratio ("1:2:1") lays children out in grid tracks; else flex.
   if (ratio && ratio.includes(':')) {
     const tracks = ratio
       .split(':')

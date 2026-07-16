@@ -1,12 +1,6 @@
 /*
  * Server-safe Experience renderer. Resolves the active viewport once from
- * `initialViewportId` (typically derived from User-Agent on the request)
- * and renders without any reactive subscription. RSC-friendly.
- *
- * SSR + interactive editor mode are mutually exclusive — the message-event
- * preview client requires window listeners and lives only in the client
- * renderer. For editor mode, dynamically import the client variant behind
- * a `"use client"` boundary.
+ * `initialViewportId` and renders without any reactive subscription.
  */
 
 import type { ReactNode } from 'react';
@@ -29,10 +23,7 @@ const DEFAULT_CONTEXT: ExperienceContext = {
   viewports: [],
 };
 
-// Fallback used when an experience payload arrives with no declared viewports.
-// `getValueForViewport` will treat any design value as `undefined` because
-// the cascade list is empty, so this only exists to keep `activeViewport`
-// non-null in the render context's type.
+// Keeps `activeViewport` non-null when a payload declares no viewports.
 const FALLBACK_VIEWPORT: ViewportDef = {
   id: '_',
   query: '*',
@@ -62,14 +53,9 @@ export function ServerExperienceRenderer({
 
   const activeViewportIndex = getViewportIndex(experience.viewports, initialViewportId);
 
-  // The render context is published as the value of `ExperienceProvider`, a
-  // client component — React's RSC (Flight) serializer serializes and freezes
-  // it. It must therefore share NO object identity with anything else in the
-  // serialized tree: a repeated reference can become a forward reference the
-  // serializer back-patches into already-frozen props, throwing "Cannot
-  // assign to read only property …". So the context gets its own deep-ish
-  // copies of `viewports` / `activeViewport`, independent of the plan's arrays
-  // that the internal renderers read from below.
+  // Copy viewports/activeViewport so the context (serialized + frozen by RSC)
+  // shares no object identity with the plan arrays the renderers read below —
+  // a shared reference makes Flight back-patch into frozen props and throw.
   const contextViewports = experience.viewports.map((v) => ({ ...v }));
   const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
 

@@ -1,17 +1,7 @@
 /*
- * Recursive renderer over PortableRenderNodes. Pre-renders slot subtrees
- * into ReactNodes during recursion so customer components receive already-
- * rendered ReactNodes by slot name (typically `children`).
- *
- * Customer components receive the merged prop bag (defaults + content +
- * resolveData output + slots). Design values are NOT injected as props — a
- * component reads them via `useDesignValues()`. The renderer resolves each
- * node's design once (viewport cascade + `resolveToken`) and publishes it on
- * context for that hook. The Experience runtime context and the raw
- * Contentful payload are read via the hooks in `./context`.
- *
- * Server vs client variants share this component; they differ only in how
- * the active viewport is sourced (initial seed vs reactive matchMedia).
+ * Recursive renderer over PortableRenderNodes. Customer components receive the
+ * merged prop bag (defaults + content + resolveData + slots); design values
+ * are read via `useDesignValues()`, not injected as props.
  */
 
 import { Fragment, createElement, type ReactNode } from 'react';
@@ -39,17 +29,10 @@ import {
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 
-/*
- * The internal renderers take `viewports` + `activeViewportIndex` as separate
- * props rather than the whole `RenderContext` object. The full context is
- * published once through `ExperienceProvider` (a client component); threading
- * the same object again as an element prop would make React's RSC (Flight)
- * serializer emit it as a shared reference and then back-patch it into the
- * frozen element props on the client — "Cannot assign to read only property
- * 'experience'". Passing the two primitives keeps each element's props a
- * self-contained value with no shared object identity to reconcile.
- */
-
+// Internal renderers take `viewports` + `activeViewportIndex`, not the whole
+// RenderContext object — the context is published once via ExperienceProvider,
+// and re-threading it as an element prop makes React's RSC serializer back-patch
+// a shared reference into frozen props ("Cannot assign to read only property").
 export interface NodesRendererProps {
   nodes: PortableRenderNode[];
   config: Config;
@@ -104,8 +87,7 @@ function NodeRenderer({
   }
   const componentConfig = normalizeComponentRegistration(entry);
 
-  // Pre-render slot subtrees so the parent's component receives ReactNodes,
-  // not callables. Each named slot becomes a prop with the same name.
+  // Pre-render slot subtrees so components receive ReactNodes by slot name.
   const slotProps: Record<string, ReactNode> = {};
   for (const [slotName, children] of Object.entries(node.slots)) {
     slotProps[slotName] = (
@@ -119,11 +101,8 @@ function NodeRenderer({
     );
   }
 
-  // Resolve viewport-keyed design values into plain scalars at render time
-  // (so client viewport changes don't invalidate the resolveData step), then
-  // pass any DesignToken envelopes through the customer's resolveToken hook.
-  // The result is published on context for useDesignValues(); it is NOT
-  // spread onto the component's props.
+  // Cascade design to the active viewport, then resolve DesignToken envelopes.
+  // Published on context for useDesignValues() — never spread onto props.
   const resolvedDesign = resolveDesignProperties(node.props.design, viewports, activeViewportIndex);
   const { props: tokenResolvedDesign, unresolved } = applyTokenResolver(
     resolvedDesign,
@@ -143,9 +122,7 @@ function NodeRenderer({
     resolved: node.props.resolved,
   };
 
-  // Merge precedence (last wins): defaults < content < resolveData output <
-  // slots. Design values are deliberately excluded — components read them via
-  // useDesignValues() so the SDK never injects unknown cf-prefixed props.
+  // Merge precedence (last wins): defaults < content < resolveData < slots.
   const composed = {
     ...componentConfig.defaults,
     ...node.props.content,
@@ -171,11 +148,8 @@ export interface WrapWithTemplateProps {
 }
 
 /**
- * Wraps the rendered Experience nodes with the page-level template when the
- * plan carries one and the customer registered a template config under that
- * id. When the template is referenced but unregistered, warns once and
- * renders children unwrapped — graceful degradation matches the
- * unknown-component fallback story.
+ * Wraps the rendered nodes with the page-level template. If the template is
+ * referenced but unregistered, warns once and renders children unwrapped.
  */
 export function WrapWithTemplate({
   template,
@@ -219,8 +193,6 @@ export function WrapWithTemplate({
     resolved: template.props.resolved,
   };
 
-  // Design values are excluded from props here too — template chrome reads
-  // them via useDesignValues().
   const composed = {
     ...templateConfig.defaults,
     ...template.props.content,

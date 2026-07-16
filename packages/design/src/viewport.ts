@@ -134,17 +134,10 @@ export function resolveDesignProperties(
 }
 
 /**
- * Runs token resolution over an already viewport-resolved design record.
- * Every `DesignToken` envelope goes through the customer's `resolveToken`
- * hook; plain scalars are left alone.
- *
- * With no `resolveToken`, the record comes back unchanged (envelopes and
- * all), which is how the SDK behaved before the hook existed — so customers
- * who don't opt in aren't affected.
- *
- * When `resolveToken` returns `undefined`, that key is dropped and its token
- * id is collected in `unresolved`. Adapters use that list to log one grouped
- * warning instead of one per prop.
+ * Resolves `DesignToken` envelopes in a viewport-resolved design record via
+ * `resolveToken`; scalars pass through, and with no resolver the record is
+ * returned unchanged. Keys that resolve to `undefined` are dropped and their
+ * token ids collected in `unresolved` for a single grouped warning.
  */
 export function applyTokenResolver(
   props: Record<string, string | number | boolean | DesignToken>,

@@ -15,16 +15,12 @@ import type { ContentfulComponent, ContentfulTemplate, RenderContext } from './t
 const ExperienceContext = createContext<RenderContext | null>(null);
 const ContentfulComponentContext = createContext<ContentfulComponent | null>(null);
 const ContentfulTemplateContext = createContext<ContentfulTemplate | null>(null);
-// The design values the renderer already resolved (viewport-cascaded +
-// token-resolved) for the enclosing node/template. Plain data only — never
-// the Config or its functions — so it crosses the RSC boundary cleanly.
+// Plain data only (never the Config or its functions) so it crosses RSC cleanly.
 const ResolvedDesignContext = createContext<Record<string, unknown> | null>(null);
 
-// Providers are wrapped as explicit client-component functions rather than
-// re-exported as raw `Context.Provider` objects. A server component (the
-// server renderer) imports these across the RSC boundary, and Next.js needs
-// a client reference that's a real function there — a bare Provider object
-// resolves to a promise and blows up with "Element type is invalid".
+// Wrapped as real client-component functions, not re-exported `Context.Provider`
+// objects — the server renderer imports these across the RSC boundary and
+// Next.js requires a function reference there ("Element type is invalid" otherwise).
 
 export function ExperienceProvider({
   value,

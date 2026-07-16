@@ -1,44 +1,19 @@
-/*
- * Turns the `getDesignValues()` record into a plain style object.
- * Framework-agnostic; safe to import from server code.
- *
- * The record `getDesignValues()` returns mixes real CSS-shaped design values
- * (`fontSize`, `backgroundColor`, … — bare or `cf`-prefixed depending on how
- * the customer authored them) with author-defined styling that is NOT css
- * (`variant`, `as`, `ratio`, `target`). `toCss` normalizes each key and keeps
- * it only if the result names a known CSS property (see `CSS_PROPERTIES` in
- * `@contentful/experiences-design`), so semantic keys are dropped rather than
- * leaking into a style object. It does not depend on a `cf` prefix.
- */
-
 import { isCssProperty, toCssKey } from '@contentful/experiences-design';
 
 export interface ToCssOptions {
-  /**
-   * Keys to skip even if they ARE valid CSS — matched against the original
-   * record key. Useful when a component drives one CSS prop itself.
-   */
+  /** Keys to skip, matched against the original record key. */
   exclude?: string[];
-  /**
-   * When set, only these keys pass through (still subject to the CSS-property
-   * whitelist) — matched against the original record key.
-   */
+  /** When set, only these keys pass through (still whitelist-filtered). */
   include?: string[];
 }
 
 /**
- * Convert a design record into a plain `Record<string, string | number>`
- * ready to spread into an inline `style` object or to serialize, keeping only
- * the keys that normalize to a known CSS property.
+ * Convert a design record into a plain style object, keeping only keys that
+ * normalize to a known CSS property. Non-CSS keys (`variant`, `as`, …) and
+ * non-scalar values are dropped; read those off the `getDesignValues()`
+ * record directly.
  *
- *   toCss({ fontSize: '20px', backgroundColor: '#4f39f6', variant: 'h1' })
- *   //=> { fontSize: '20px', backgroundColor: '#4f39f6' }
- *
- * Non-CSS keys (author-defined styling like `variant`) are dropped — read
- * those straight off the `getDesignValues()` record. Keys may be bare
- * (`fontSize`), `cf`-prefixed (`cfFontSize`), or kebab/snake-cased
- * (`font-size`); all normalize to `fontSize`. Non-scalar values also drop,
- * since they can't be inline-styled.
+ *   toCss({ fontSize: '20px', variant: 'h1' }) //=> { fontSize: '20px' }
  */
 export function toCss(
   design: object,

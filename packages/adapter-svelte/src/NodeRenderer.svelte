@@ -41,10 +41,8 @@
   };
   setContentfulComponent(contentful);
 
-  // Resolve the node's design once (viewport cascade, then the Config's
-  // resolveToken). The getter published on context lets getDesignValues()
-  // read these values — reactive across viewport changes since it re-reads
-  // this $derived. They are NOT merged into the component's prop bag.
+  // Cascade design + resolve tokens; published on context for getDesignValues(),
+  // never merged into props.
   const tokenResolvedDesign = $derived.by(() => {
     const resolvedDesign = resolveDesignProperties(
       node.props.design,
@@ -62,9 +60,6 @@
 
   setResolvedDesign(() => tokenResolvedDesign);
 
-  // Design values are deliberately excluded from the prop bag — the
-  // component reads them via getDesignValues() so the SDK never injects
-  // unknown cf-prefixed props.
   const composed = $derived.by(() => {
     if (!componentConfig) return null;
     return {

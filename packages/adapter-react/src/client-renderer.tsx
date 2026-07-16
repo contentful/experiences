@@ -1,12 +1,8 @@
 /*
- * Client Experience renderer. First paint matches the server renderer
- * (active viewport resolved from `initialViewportId`); after hydration,
- * `useActiveViewport` takes over via `window.matchMedia` and re-renders
- * when the viewport changes.
- *
- * Safe to render on the server: when `typeof window === 'undefined'`, the
- * hook returns the seeded index and registers no listeners, so SSR output
- * matches `<ServerExperienceRenderer>`.
+ * Client Experience renderer. First paint matches the server renderer; after
+ * hydration `useActiveViewport` takes over via `matchMedia`. Server-safe: the
+ * hook returns the seeded index and registers no listeners when there's no
+ * window, so SSR output matches `<ServerExperienceRenderer>`.
  */
 
 'use client';
@@ -56,9 +52,8 @@ export function ClientExperienceRenderer({
 }: ClientExperienceRendererProps): ReactNode {
   if (!experience) return null;
   const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
-  // Give the context its own copies so it shares no object identity with the
-  // plan arrays the internal renderers read below — keeps parity with the
-  // server renderer. See the note in `server-renderer.tsx`.
+  // Copy so the context shares no object identity with the plan arrays — see
+  // the note in `server-renderer.tsx`.
   const contextViewports = experience.viewports.map((v) => ({ ...v }));
   const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
 

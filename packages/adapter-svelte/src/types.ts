@@ -60,20 +60,10 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a Svelte 5 Component receiving the merged prop bag (defaults + content +
- * resolveData + the `children` Snippet). The Experience runtime context and
- * the raw Contentful payload are reachable via `getExperience()` and
- * `getContentfulComponent()`.
- *
- * Design values are NOT injected as props. A component styles itself by
- * calling `getDesignValues()` and (optionally) `toCss()` at the top of its
- * `<script>` block — that helper is the single, explicit entry point for
- * design, so the SDK never spreads unknown `cf`-prefixed props onto customer
- * components.
- *
- * The `children` slot is passed as a named Snippet prop. The customer writes
- * `let { children, ... }: { children?: Snippet; ... } = $props()` and renders
- * it with `{@render children?.()}`.
+ * receives the merged prop bag (content + resolveData + `children` Snippet).
+ * Design values are not injected — a component reads them via
+ * `getDesignValues()`. Runtime context and raw payload come from
+ * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
@@ -127,17 +117,9 @@ export interface Config {
   components: Components;
   templates?: Templates;
   /**
-   * Optional customer-supplied resolver that turns `DesignToken` envelopes
-   * into runtime values before they reach a component. Called for each
-   * design prop that arrived as (or cascaded to) a `DesignToken`.
-   *
-   * Runs sync at render time inside `<NodesRenderer />` (also inside
-   * `<WrapWithTemplate />` for page-level template design props). If omitted,
-   * envelopes pass through unchanged — customer components can still
-   * inspect them via `getContentfulComponent().design`.
-   *
-   * See `ResolveToken` in `@contentful/experiences-core` for the full
-   * contract, including the undefined-return warning behavior.
+   * Resolves `DesignToken` envelopes to runtime values before they reach a
+   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * in `@contentful/experiences-core` for the full contract.
    */
   resolveToken?: ResolveToken;
 }

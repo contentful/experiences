@@ -58,9 +58,7 @@
     return props;
   });
 
-  // Publish the resolved design for getDesignValues() called from template
-  // chrome — a getter so it stays reactive across viewport changes. Design
-  // values are not merged into the template's prop bag.
+  // A getter (not a snapshot) so getDesignValues() stays reactive; not merged into props.
   setResolvedDesign(() => tokenResolvedDesign);
 
   const composed = $derived.by(() => {

@@ -29,12 +29,8 @@
 
   let { text, children }: HeaderProps = $props();
 
-  // Design is read through getDesignValues() — the single entry point — not
-  // received as injected props. The record carries both the author-defined
-  // `variant` (which picks the heading tag; not CSS) and the `cf`-prefixed
-  // CSS values. Reading it inside a $derived keeps it reactive across
-  // viewport changes; `toCss` keeps only the CSS-shaped keys so `variant`
-  // never lands in the style string.
+  // Read in a $derived to stay reactive; `variant` picks the tag, `toCss`
+  // keeps the CSS-shaped keys.
   const design = $derived(getDesignValues());
   const variant = $derived((design.variant as HeaderVariant | undefined) ?? 'h2');
   const v = $derived(VARIANT_DEFAULTS[variant]);

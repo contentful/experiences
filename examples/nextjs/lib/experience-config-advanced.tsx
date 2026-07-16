@@ -1,14 +1,6 @@
 /**
- * Advanced integration config — shows the knobs you reach for when the
- * simple config (`./experience-config.tsx`) isn't enough:
- *
- *  - **Async `resolveData`** on `button` — a deliberately slow fake fetch,
- *    plus a synthetic localized URL derived from `experience.metadata.locale`.
- *    Resolvers run in parallel across nodes before rendering, and they
- *    receive `experience.metadata` (which the advanced page passes in via
- *    `resolveExperience`'s third argument).
- *  - **Reads `experience.metadata`** to build a per-page URL, proving that
- *    metadata is threaded through every resolver.
+ * Advanced config: async `resolveData` on `Button` (fake fetch + a localized
+ * URL from `experience.metadata`), on top of the simple `./experience-config`.
  */
 
 import {
@@ -26,9 +18,7 @@ import { RichText } from '@/components/RichText';
 import { Section } from '@/components/Section';
 import { Text } from '@/components/Text';
 
-// Pretend this fetches enrichment from a catalog or pricing API. The point is
-// just that it's async and takes non-trivial time — the SDK fans these out
-// across all nodes in parallel via Promise.all in resolveExperience.
+// Stand-in for an async enrichment fetch; resolvers run in parallel per node.
 async function fetchButtonEnrichment(label: string): Promise<{ formattedLabel: string }> {
   await new Promise((resolve) => setTimeout(resolve, 50));
   return { formattedLabel: label.toUpperCase() };

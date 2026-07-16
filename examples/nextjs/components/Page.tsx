@@ -5,13 +5,7 @@ export interface PageProps {
   children?: ReactNode;
 }
 
-/**
- * The page-level template. It wraps every top-level Experience node as
- * `children` and provides the outer page chrome (centered column, vertical
- * rhythm between sections). `title` is an optional editorial default from the
- * Config — this payload's `page` template carries no props, so it's unused
- * here but kept for the general case.
- */
+/** Page-level template: wraps all top-level nodes in the outer page chrome. */
 export function Page({ children }: PageProps) {
   const wrapper: CSSProperties = {
     maxWidth: 1024,

@@ -4,12 +4,8 @@ import { Fragment, type CSSProperties, type ReactNode } from 'react';
 
 import { useDesignValues } from '@contentful/experiences-react';
 
-/**
- * Minimal Contentful rich-text renderer — just enough for the demo payload
- * (paragraphs + bold/italic marks). A real integration would reach for
- * `@contentful/rich-text-react-renderer`; we hand-roll it here to keep the
- * example dependency-free.
- */
+// Minimal rich-text renderer (paragraphs + bold/italic) so the example stays
+// dependency-free; a real app would use @contentful/rich-text-react-renderer.
 
 interface Mark {
   type: string;
@@ -21,11 +17,7 @@ interface RichTextNode {
   content?: RichTextNode[];
 }
 
-/**
- * The `document` content property arrives wrapped: XDA emits
- * `{ __typename, document: <the actual rich-text document> }`, and the inner
- * `document` can be `null` when the field is empty.
- */
+// XDA wraps the document as `{ __typename, document }`; inner can be null.
 export interface RichTextProps {
   document?: {
     document?: RichTextNode | null;

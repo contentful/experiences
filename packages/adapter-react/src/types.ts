@@ -57,14 +57,9 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a plain React component that receives the merged prop bag (content +
- * resolveData + slots). The Experience runtime context and the raw Contentful
- * payload are reachable via `useExperience()` and `useContentfulComponent()`.
- *
- * Design values are NOT injected as props. A component styles itself by
- * calling `useDesignValues()` and (optionally) `toCss()` at its top — that
- * hook is the single, explicit entry point for design, so the SDK never
- * spreads unknown `cf`-prefixed props onto customer components.
+ * receives the merged prop bag (content + resolveData + slots). Design values
+ * are not injected — a component reads them via `useDesignValues()`. Runtime
+ * context and raw payload come from `useExperience()` / `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
@@ -152,17 +147,9 @@ export interface Config {
   components: Components;
   templates?: Templates;
   /**
-   * Optional customer-supplied resolver that turns `DesignToken` envelopes
-   * into runtime values before they reach a component. Called for each
-   * design prop that arrived as (or cascaded to) a `DesignToken`.
-   *
-   * Runs sync at render time inside `NodesRenderer` (also inside
-   * `WrapWithTemplate` for page-level template design props). If omitted,
-   * envelopes pass through unchanged — customer components can still
-   * inspect them via `useContentfulComponent().design`.
-   *
-   * See `ResolveToken` in `@contentful/experiences-core` for the full
-   * contract, including the undefined-return warning behavior.
+   * Resolves `DesignToken` envelopes to runtime values before they reach a
+   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * in `@contentful/experiences-core` for the full contract.
    */
   resolveToken?: ResolveToken;
 }

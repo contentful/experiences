@@ -51,16 +51,9 @@ export interface DesignToken {
 }
 
 /**
- * Customer-supplied resolver that turns a `DesignToken` envelope into a
- * runtime value (typically a scalar the component consumes as a prop). The
- * `value` on the envelope is the token id from the payload — its shape is
- * customer-defined (dotted, slashed, flat, uuid, whatever the DTCG import
- * emitted). Returning `undefined` signals "not resolvable" — the adapter
- * warns and drops the prop so the component's default takes over.
- *
- * Sync only in v1: the resolver runs at render time inside the framework
- * adapter's node renderer, so async work here would re-fire on every
- * viewport change.
+ * Turns a `DesignToken` envelope into a runtime value. `ref.value` is the
+ * customer-defined token id; returning `undefined` means "not resolvable" and
+ * the adapter drops the key (with a warning). Sync only — it runs at render time.
  */
 export type ResolveToken = (ref: DesignToken) => unknown;
 

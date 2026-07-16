@@ -9,11 +9,6 @@ export interface TextProps {
   children?: ReactNode;
 }
 
-/**
- * A paragraph of plain text. `text` is a content prop; typography (`fontSize`
- * as a resolved token, plain `align`) comes off `useDesignValues()`. Renders
- * nothing when the payload supplies no text (this happens in the demo).
- */
 export function Text({ text, children }: TextProps) {
   const design = useDesignValues();
   if (!text && !children) return null;

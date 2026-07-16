@@ -9,10 +9,6 @@ export interface ImageProps {
   alt?: string | null;
 }
 
-/**
- * A plain responsive image. Any design values (e.g. a token-resolved
- * `radius`) come off `useDesignValues()`; `src`/`alt` are content props.
- */
 export function Image({ src, alt }: ImageProps) {
   const design = useDesignValues();
   if (!src) return null;

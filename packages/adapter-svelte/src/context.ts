@@ -38,11 +38,9 @@ export function setContentfulTemplate(tpl: ContentfulTemplate): void {
 }
 
 /**
- * Publish the design values the renderer already resolved (viewport-cascaded
- * + token-resolved) for the enclosing node/template. Takes a getter rather
- * than a snapshot so a caller reading it inside a `$derived` stays reactive
- * across viewport changes — the getter re-reads the renderer's `$derived`
- * each call. Plain data only crosses here, never the Config or its functions.
+ * Publish the resolved design values for the enclosing node/template. Takes a
+ * getter (not a snapshot) so callers reading it inside a `$derived` stay
+ * reactive across viewport changes.
  */
 export function setResolvedDesign(getDesign: () => Record<string, unknown>): void {
   setContext(RESOLVED_DESIGN_KEY, getDesign);
