@@ -361,15 +361,36 @@ npm run dev                  # http://localhost:3000/<experience-id>
 1. `mkdir packages/adapter-vue && cd packages/adapter-vue`
 2. Copy structure from `packages/adapter-react` (or `adapter-svelte`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish), `vitest.config.ts`
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
-4. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
-5. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
-6. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
+4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
+5. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
+6. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
+7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
 
 ### Add a new internal package (e.g. `tokens`)
 
 1. `mkdir packages/tokens && cd packages/tokens`
 2. Mirror `packages/design`'s structure (it's the simplest internal package)
-3. Each adapter that wants to expose its API re-exports from it
+3. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
+4. Each adapter that wants to expose its API re-exports from it
+
+### Bootstrapping a new package for release
+
+Nx release computes each package's next version by finding the most recent git tag matching `{projectName}@{version}` and analyzing conventional commits since that tag. A brand-new package has no such tag, and `nx release` on `main` iterates every package in `packages/*` atomically — so a single missing tag will fail the release for the entire workspace, not just the new package.
+
+Order matters:
+
+1. On the new-package branch, set `package.json#version` to `"0.0.0"`. (Don't create `CHANGELOG.md` — nx generates it on first release.)
+2. **Before merging**, seed the tag against `main`:
+   ```sh
+   git checkout main
+   git pull
+   git tag <dir>@0.0.0
+   git push origin <dir>@0.0.0
+   ```
+3. Merge the new-package PR to `main`.
+4. The next push to `main` (or `dev`) with a `feat:` / `fix:` commit that touches `packages/<dir>` triggers nx release. It sees the `<dir>@0.0.0` tag, computes bumps from commits since, and cuts the first real release (typically `0.1.0` from a `feat:` or `0.0.1` from a `fix:`). Nx also creates `packages/<dir>/CHANGELOG.md` on this first run.
+
+If you merge before seeding the tag, the next `feat:` / `fix:` commit on `main` will fail CI's release step for every package in the workspace. Recovery: push the missing tag (steps above), then push a new commit to re-trigger CI.
 
 ### Cut a release
 
