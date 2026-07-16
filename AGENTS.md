@@ -388,17 +388,26 @@ Nx release computes each package's next version by finding the most recent git t
 Order matters:
 
 1. On the new-package branch, set `package.json#version` to `"0.0.0"`. (Don't create `CHANGELOG.md` — nx generates it on first release.)
-2. **Before merging**, seed the tag against `main`:
+2. **Before merging**, seed the tag against `main`. Tag the commit **just before** the new-package introduction commit — this way nx sees the introduction as an unreleased `feat:`, so the first release actually publishes to npm. If you tag AT the introduction commit, the package sits at `0.0.0` until the next feat/fix touches it, which breaks any other package that lists it as a runtime dep.
    ```sh
    git checkout main
    git pull
-   git tag <dir>@0.0.0
+   git tag -a <dir>@0.0.0 <sha> -m "Baseline tag so nx-release can derive bumps for <dir>"
    git push origin <dir>@0.0.0
    ```
 3. Merge the new-package PR to `main`.
-4. The next push to `main` (or `dev`) with a `feat:` / `fix:` commit that touches `packages/<dir>` triggers nx release. It sees the `<dir>@0.0.0` tag, computes bumps from commits since, and cuts the first real release (typically `0.1.0` from a `feat:` or `0.0.1` from a `fix:`). Nx also creates `packages/<dir>/CHANGELOG.md` on this first run.
+4. The next push to `main` triggers nx release. It sees the `<dir>@0.0.0` tag, scans commits from there forward, finds the `feat:` that introduced the package, and computes the first real release. Nx also creates `packages/<dir>/CHANGELOG.md` on this first run.
 
-If you merge before seeding the tag, the next `feat:` / `fix:` commit on `main` will fail CI's release step for every package in the workspace. Recovery: push the missing tag (steps above), then push a new commit to re-trigger CI.
+**If you merge before seeding the tag**, the next release run on `main` will fail for the whole workspace. Recovery:
+
+```sh
+git checkout main && git pull
+git tag -a <dir>@0.0.0 <parent-of-introduction-sha> -m "Baseline tag so nx-release can derive bumps for <dir>"
+git push origin <dir>@0.0.0
+# Then push any new commit to main (or re-run the failed workflow) to trigger CI.
+```
+
+Same-shape command as step 2 — just done after the fact.
 
 ### Cut a release
 
