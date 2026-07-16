@@ -1,0 +1,104 @@
+name: Prerelease
+
+# Publishes affected packages to npm's `dev` dist-tag as prereleases
+# (X.Y.Z-dev.N). Full release parity with the stable flow: commits
+# CHANGELOG.md updates back to `dev`, creates git tags, and creates
+# GitHub Releases (marked as pre-releases).
+#
+# This means the `dev` branch accumulates its own CHANGELOG history
+# and is not meant to be merged back into `main` — features should
+# land on `main` independently to keep main's CHANGELOG clean. 
+#
+# Combined with nx's releaseTagPatternStrictPreid (set in nx.json),
+# dev tags cannot affect main's stable release computation — stable
+# `nx release` skips over any preid-suffixed tag when computing the
+# next version.
+#
+# Consumers install with:
+#   npm install @contentful/experiences-react@dev
+#
+# The plain `latest` dist-tag is only ever moved by release.yaml on main.
+
+on:
+  workflow_call:
+    secrets:
+      VAULT_URL:
+        required: true
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: 'Retrieve Secrets from Vault'
+        id: vault
+        uses: hashicorp/vault-action@v3.4.0
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          role: ${{ github.event.repository.name }}-github-action
+          method: jwt
+          path: github-actions
+          exportEnv: false
+          secrets: |
+            secret/data/github/github_packages_read GITHUB_PACKAGES_READ_TOKEN | GITHUB_PACKAGES_READ_TOKEN;
+            secret/data/github/github_packages_write GITHUB_PACKAGES_WRITE_TOKEN | GITHUB_PACKAGES_WRITE_TOKEN;
+            github/token/${{ github.event.repository.name }}-semantic-release token | GITHUB_TOKEN ;
+
+      - name: Get Automation Bot User ID
+        id: get-user-id
+        run: echo "user-id=$(gh api "/users/contentful-automation[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+
+      - name: Setting up Git User Credentials
+        run: |
+          git config --global user.name 'contentful-automation[bot]'
+          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+contentful-automation[bot]@users.noreply.github.com'
+
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          token: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install latest npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore the build folders
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            packages/*/dist
+          key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Setup npmrc file
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ steps.vault.outputs.GITHUB_PACKAGES_WRITE_TOKEN }}" > ~/.npmrc
+          echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          # Steer nx-release-publish (which reads `npm config get tag`) to the
+          # dev dist-tag, so `latest` is never moved by a prerelease build.
+          echo "tag=dev" >> ~/.npmrc
+
+      - name: NX Prerelease
+        # `prerelease` specifier + `dev` preid → X.Y.Z-dev.N versions.
+        # Nx handles the version bump, CHANGELOG.md prepend, commit back to
+        # the `dev` branch, git tag, GitHub Release, and npm publish (under
+        # the `dev` dist-tag via ~/.npmrc).
+        run: npx nx release --specifier prerelease --preid dev --yes
+        env:
+          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
