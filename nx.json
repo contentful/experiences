@@ -67,7 +67,8 @@
     "version": {
       "conventionalCommits": true,
       "updateDependents": "auto",
-      "preserveMatchingDependencyRanges": true
+      "preserveMatchingDependencyRanges": true,
+      "adjustSemverBumpsForZeroMajorVersion": true
     },
     "changelog": {
       "projectChangelogs": {
