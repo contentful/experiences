@@ -1,3 +1,15 @@
+## 0.5.1 (2026-07-17)
+
+### 🚀 Features
+
+- design-token resolution via resolveToken + useDesignValues [AIS-149] ([#53](https://github.com/contentful/experiences/pull/53))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.1.1
+- Updated design to 0.5.1
+- Updated core to 0.5.1
+
 ## 0.5.0 (2026-07-17)
 
 ### 🚀 Features

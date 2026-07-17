@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-design",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Viewport math and design-property resolution utilities for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -30,6 +30,6 @@
     "directory": "packages/design"
   },
   "dependencies": {
-    "@contentful/experiences-core": "*"
+    "@contentful/experiences-core": "0.5.1"
   }
 }
