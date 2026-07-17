@@ -5,7 +5,7 @@
 The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using your own Svelte 5 components.
 
 ```sh
-npm install @contentful/experiences-svelte @contentful/experience-delivery
+npm install @contentful/experiences-svelte
 ```
 
 This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
