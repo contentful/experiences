@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-react",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
