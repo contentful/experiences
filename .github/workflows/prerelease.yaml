@@ -90,15 +90,21 @@ jobs:
         run: |
           echo "//npm.pkg.github.com/:_authToken=${{ steps.vault.outputs.GITHUB_PACKAGES_WRITE_TOKEN }}" > ~/.npmrc
           echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          # Steer nx-release-publish (which reads `npm config get tag`) to the
-          # dev dist-tag, so `latest` is never moved by a prerelease build.
-          echo "tag=dev" >> ~/.npmrc
 
       - name: NX Prerelease
         # `prerelease` specifier + `dev` preid → X.Y.Z-dev.N versions.
         # Nx handles the version bump, CHANGELOG.md prepend, commit back to
-        # the `dev` branch, git tag, GitHub Release, and npm publish (under
-        # the `dev` dist-tag via ~/.npmrc).
-        run: npx nx release --specifier prerelease --preid dev --yes
+        # the `dev` branch, git tag, and GitHub Release. `--skip-publish`
+        # defers the actual npm publish to the next step so we can pass
+        # `--tag dev` explicitly 
+        run: npx nx release --specifier prerelease --preid dev --skip-publish
+        env:
+          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+
+      - name: NX Publish
+        # Explicit `--tag dev` ensures the `latest` dist-tag on npm is never
+        # moved by a prerelease build. Consumers install with:
+        #   npm install @contentful/experiences-react@dev
+        run: npx nx release publish --tag dev
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
