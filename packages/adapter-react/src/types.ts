@@ -4,6 +4,7 @@ import type {
   DesignPropValue,
   ExperienceContext,
   ResolveContext,
+  ResolveToken,
   ViewportDef,
 } from '@contentful/experiences-core';
 
@@ -11,7 +12,7 @@ import type {
  * Re-exported for ergonomics: customer code authoring `resolveData` doesn't
  * have to dig into the core package for the context type.
  */
-export type { ResolveContext };
+export type { ResolveContext, ResolveToken };
 
 /**
  * The full Contentful-side payload for a single component instance, exposed
@@ -21,9 +22,8 @@ export type { ResolveContext };
  * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
  * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The flat scalars merged into
- * top-level props are what `resolveDesignProperties` produced after viewport
- * cascade.
+ * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
+ * resolved values are what `useDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentTypeId: string;
@@ -57,14 +57,13 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a plain React component that receives the merged prop bag (content +
- * design + resolveData + slots). The Experience runtime context and the raw
- * Contentful payload are reachable via `useExperience()` and
- * `useContentfulComponent()`.
+ * receives the merged prop bag (content + resolveData + slots). Design values
+ * are not injected — a component reads them via `useDesignValues()`. Runtime
+ * context and raw payload come from `useExperience()` / `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
-   * Lowest-precedence prop bag. Merged in before content / design / resolveData /
+   * Lowest-precedence prop bag. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
    */
   defaults?: Partial<Props>;
@@ -147,6 +146,12 @@ export type Templates = Record<string, TemplateRegistration<any>>;
 export interface Config {
   components: Components;
   templates?: Templates;
+  /**
+   * Resolves `DesignToken` envelopes to runtime values before they reach a
+   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * in `@contentful/experiences-core` for the full contract.
+   */
+  resolveToken?: ResolveToken;
 }
 
 /**

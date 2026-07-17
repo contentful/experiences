@@ -4,10 +4,11 @@ import type {
   DesignPropValue,
   ExperienceContext,
   ResolveContext,
+  ResolveToken,
   ViewportDef,
 } from '@contentful/experiences-core';
 
-export type { ResolveContext };
+export type { ResolveContext, ResolveToken };
 
 /**
  * The full Contentful-side payload for a single component instance, exposed
@@ -18,9 +19,8 @@ export type { ResolveContext };
  * rendering non-`children` slots through the exported `<NodesRenderer />`.
  *
  * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The flat scalars merged into
- * top-level props are what `resolveDesignProperties` produced after viewport
- * cascade.
+ * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
+ * resolved values are what `getDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentTypeId: string;
@@ -60,14 +60,10 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * is a Svelte 5 Component receiving the merged prop bag (defaults + content +
- * design + resolveData + the `children` Snippet). The Experience runtime
- * context and the raw Contentful payload are reachable via `getExperience()`
- * and `getContentfulComponent()`.
- *
- * The `children` slot is passed as a named Snippet prop. The customer writes
- * `let { children, ... }: { children?: Snippet; ... } = $props()` and renders
- * it with `{@render children?.()}`.
+ * receives the merged prop bag (content + resolveData + `children` Snippet).
+ * Design values are not injected — a component reads them via
+ * `getDesignValues()`. Runtime context and raw payload come from
+ * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
@@ -120,6 +116,12 @@ export type Templates = Record<string, TemplateRegistration<any>>;
 export interface Config {
   components: Components;
   templates?: Templates;
+  /**
+   * Resolves `DesignToken` envelopes to runtime values before they reach a
+   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * in `@contentful/experiences-core` for the full contract.
+   */
+  resolveToken?: ResolveToken;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import type {
   DesignPropValue,
@@ -8,6 +8,7 @@ import type {
 } from '@contentful/experiences-core';
 
 import {
+  applyTokenResolver,
   getValueForViewport,
   getViewportIndex,
   resolveDesignProperties,
@@ -167,5 +168,86 @@ describe('resolveDesignProperties', () => {
 
   it('returns {} for missing input', () => {
     expect(resolveDesignProperties(undefined, VIEWPORTS, 0)).toEqual({});
+  });
+});
+
+describe('applyTokenResolver', () => {
+  const token = (value: string): DesignPropValue => ({ type: 'DesignToken', value });
+
+  it('returns the input untouched when no resolver is supplied', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const input = {
+      cfPadding: '20px',
+      cfColor: { type: 'DesignToken' as const, value: 'color.primary' },
+    };
+    const { props, unresolved } = applyTokenResolver(input);
+    expect(props).toBe(input);
+    expect(unresolved).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it('warns once when tokens are present but no resolver is supplied', async () => {
+    // Fresh module so the one-time warning latch is reset for this assertion.
+    vi.resetModules();
+    const { applyTokenResolver: freshApply } = await import('./viewport');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    freshApply({ cfColor: { type: 'DesignToken', value: 'color.primary' } });
+    freshApply({ cfBg: { type: 'DesignToken', value: 'bg.hero' } });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('no `resolveToken`');
+    vi.restoreAllMocks();
+  });
+
+  it('does not warn when no resolver is supplied and there are no tokens', async () => {
+    vi.resetModules();
+    const { applyTokenResolver: freshApply } = await import('./viewport');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    freshApply({ cfPadding: '20px' });
+    expect(warn).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('replaces DesignToken envelopes with the resolver output', () => {
+    const { props, unresolved } = applyTokenResolver(
+      {
+        cfPadding: '20px',
+        cfColor: { type: 'DesignToken', value: 'color.primary' },
+        cfBackground: { type: 'DesignToken', value: 'bg/hero' },
+      },
+      (ref) =>
+        ref.value === 'color.primary' ? '#4f39f6' : ref.value === 'bg/hero' ? '#fafafa' : undefined
+    );
+    expect(props).toEqual({ cfPadding: '20px', cfColor: '#4f39f6', cfBackground: '#fafafa' });
+    expect(unresolved).toEqual([]);
+  });
+
+  it('drops props and reports unresolved ids when the resolver returns undefined', () => {
+    const { props, unresolved } = applyTokenResolver(
+      {
+        cfPadding: '20px',
+        cfColor: token('color.primary'),
+        cfBackground: token('bg/unknown'),
+      },
+      (ref) => (ref.value === 'color.primary' ? '#4f39f6' : undefined)
+    );
+    expect(props).toEqual({ cfPadding: '20px', cfColor: '#4f39f6' });
+    expect(unresolved).toEqual(['bg/unknown']);
+  });
+
+  it('leaves scalar props alone even when the resolver would map them', () => {
+    const { props } = applyTokenResolver({ cfPadding: '20px', cfActive: true }, () => 'nope');
+    expect(props).toEqual({ cfPadding: '20px', cfActive: true });
+  });
+
+  it('preserves the id shape verbatim in unresolved reports', () => {
+    const { unresolved } = applyTokenResolver(
+      {
+        a: token('color.surface.hero'),
+        b: token('color/surface/hero'),
+        c: token('colorSurfaceLight'),
+      },
+      () => undefined
+    );
+    expect(unresolved).toEqual(['color.surface.hero', 'color/surface/hero', 'colorSurfaceLight']);
   });
 });

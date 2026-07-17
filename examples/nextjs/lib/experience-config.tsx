@@ -1,37 +1,41 @@
 /**
- * The integration layer between Contentful's Experience payload shape and
- * the customer's design system.
- *
- * Design-system components live in `../components/` and stay free of any
- * `@contentful/*` imports. A component that needs the Experience runtime
- * context or the raw Contentful payload calls `useExperience()` /
- * `useContentfulComponent()` at its top.
- *
- * - `components` — `componentTypeId` → bare component OR config object.
- *   Keys match the segment after the last slash in `componentType.sys.urn`.
- * - `templates`  — `templateId` → bare component OR config object. Keys
- *   match the segment after the last slash in `payload.sys.template.sys.urn`.
+ * Maps Contentful component/template ids to the app's components, and wires
+ * `resolveToken`. Registry keys match the last URN segment of each node's
+ * `componentType` / `template`. Components read design via `useDesignValues()`.
  */
 
-import { type Components, type Config, type Templates } from '@contentful/experiences-react';
+import {
+  type Components,
+  type Config,
+  type ResolveToken,
+  type Templates,
+} from '@contentful/experiences-react';
 
 import { Button } from '@/components/Button';
-import { Header } from '@/components/Header';
+import { Heading } from '@/components/Heading';
+import { Image } from '@/components/Image';
 import { Page } from '@/components/Page';
+import { RichText } from '@/components/RichText';
+import { Section } from '@/components/Section';
 import { Text } from '@/components/Text';
+import { designTokens } from '@/lib/design-tokens';
 
 const components: Components = {
-  // Bare-component form — for the common case with no defaults / resolveData.
-  button: Button,
-  text: Text,
-
-  // Config-object form — when you need defaults or resolveData.
-  header: { component: Header, defaults: { variant: 'h2', text: 'Hello World' } },
+  Section,
+  Heading,
+  RichText,
+  Text,
+  Button,
+  Image,
 };
 
 const templates: Templates = {
-  hi: { component: Page, defaults: { title: 'Welcome' } },
-  hero: { component: Page, defaults: { title: 'Featured' } },
+  page: Page,
 };
 
-export const experienceConfig: Config = { components, templates };
+// Maps DesignToken ids (`size.xl`, `color.text`) to CSS values. Returning
+// undefined drops the key. A real app might use CSS vars or a tokens package,
+// e.g. `(token) => `var(--${token.value.replaceAll('.', '-')})``.
+const resolveToken: ResolveToken = (token) => designTokens[token.value];
+
+export const experienceConfig: Config = { components, templates, resolveToken };

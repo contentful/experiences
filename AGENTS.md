@@ -85,7 +85,7 @@ The React adapter then:
 1. Computes the active viewport (server: from `initialViewportId`; client: from `useActiveViewport` + `matchMedia`).
 2. Builds a `RenderContext` with `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`.
 3. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
-4. For each node: looks up the customer's component config by `node.registration.componentTypeId`, resolves design-prop envelopes to scalars at the active viewport, merges everything, calls `render`.
+4. For each node: looks up the customer's component config by `node.registration.componentTypeId`, resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), and publishes that record on context for `useDesignValues()` / `getDesignValues()`. Design is **not** merged into the component's props — the merged prop bag is `defaults < content < resolveData < slots`. A component styles itself by calling the design hook and (optionally) `toCss`.
 5. If `plan.template` is set and registered, wraps the whole thing with the template's render fn.
 
 ---

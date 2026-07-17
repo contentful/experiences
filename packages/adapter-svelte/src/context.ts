@@ -23,6 +23,7 @@ import type { ContentfulComponent, ContentfulTemplate, RenderContext } from './t
 const EXPERIENCE_KEY = Symbol('@contentful/experiences-svelte::experience');
 const COMPONENT_KEY = Symbol('@contentful/experiences-svelte::contentful-component');
 const TEMPLATE_KEY = Symbol('@contentful/experiences-svelte::contentful-template');
+const RESOLVED_DESIGN_KEY = Symbol('@contentful/experiences-svelte::resolved-design');
 
 export function setExperience(ctx: RenderContext): void {
   setContext(EXPERIENCE_KEY, ctx);
@@ -34,6 +35,15 @@ export function setContentfulComponent(node: ContentfulComponent): void {
 
 export function setContentfulTemplate(tpl: ContentfulTemplate): void {
   setContext(TEMPLATE_KEY, tpl);
+}
+
+/**
+ * Publish the resolved design values for the enclosing node/template. Takes a
+ * getter (not a snapshot) so callers reading it inside a `$derived` stay
+ * reactive across viewport changes.
+ */
+export function setResolvedDesign(getDesign: () => Record<string, unknown>): void {
+  setContext(RESOLVED_DESIGN_KEY, getDesign);
 }
 
 export function getExperience(): RenderContext {
@@ -52,4 +62,14 @@ export function getContentfulComponent(): ContentfulComponent | undefined {
 
 export function getContentfulTemplate(): ContentfulTemplate | undefined {
   return getContext<ContentfulTemplate | undefined>(TEMPLATE_KEY);
+}
+
+/**
+ * Read the design values the renderer resolved for the enclosing node or
+ * template. Returns `undefined` outside a rendered node/template, which
+ * `getDesignValues` treats as "nothing to read."
+ */
+export function getResolvedDesign(): Record<string, unknown> | undefined {
+  const getDesign = getContext<(() => Record<string, unknown>) | undefined>(RESOLVED_DESIGN_KEY);
+  return getDesign?.();
 }

@@ -1,44 +1,42 @@
-import type { CSSProperties, ReactNode } from 'react';
+'use client';
 
-export type ButtonType = 'primary' | 'secondary';
+import type { CSSProperties } from 'react';
+
+import { useDesignValues } from '@contentful/experiences-react';
 
 export interface ButtonProps {
-  text?: string;
-  url?: string;
-  type?: ButtonType;
-  children?: ReactNode;
+  label?: string;
+  url?: string | null;
 }
 
-const PALETTE: Record<ButtonType, CSSProperties> = {
-  primary: { background: '#4f39f6', color: '#ffffff' },
-  secondary: { background: '#ffffff', color: '#1f2937', border: '1px solid #d1d5db' },
-};
+export function Button({ label, url }: ButtonProps) {
+  const design = useDesignValues();
+  const target = (design.target as string | undefined) ?? '_self';
 
-export function Button({ text, url, type = 'primary', children }: ButtonProps) {
-  const palette = PALETTE[type];
   const style: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
     padding: '12px 18px',
     borderRadius: 8,
-    background: palette.background,
-    color: palette.color,
+    background: (design.backgroundColor as string) ?? '#4f39f6',
+    color: (design.color as string) ?? '#ffffff',
     fontWeight: 500,
-    border: palette.border ?? 'none',
+    border: 'none',
     textDecoration: 'none',
     cursor: 'pointer',
   };
 
-  const content = (
-    <>
-      {text ?? 'Button'}
-      {children}
-    </>
-  );
+  const content = <>{label ?? 'Button'}</>;
+
   if (url) {
     return (
-      <a href={url} style={style} rel="noopener noreferrer">
+      <a
+        href={url}
+        target={target}
+        style={style}
+        rel={target === '_blank' ? 'noopener noreferrer' : undefined}
+      >
         {content}
       </a>
     );

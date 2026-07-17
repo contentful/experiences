@@ -7,9 +7,9 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-core';
-  import { resolveDesignProperties } from '@contentful/experiences-design';
+  import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
-  import { setContentfulComponent } from './context.js';
+  import { setContentfulComponent, setResolvedDesign } from './context.js';
   import type { RenderUnknown } from './component-props.js';
   import {
     normalizeComponentRegistration,
@@ -41,17 +41,30 @@
   };
   setContentfulComponent(contentful);
 
-  const composed = $derived.by(() => {
-    if (!componentConfig) return null;
+  // Cascade design + resolve tokens; published on context for getDesignValues(),
+  // never merged into props.
+  const tokenResolvedDesign = $derived.by(() => {
     const resolvedDesign = resolveDesignProperties(
       node.props.design,
       experience.viewports,
       experience.activeViewportIndex
     );
+    const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
+    if (unresolved.length && typeof console !== 'undefined') {
+      console.warn(
+        `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on "${node.registration.componentTypeId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
+      );
+    }
+    return props;
+  });
+
+  setResolvedDesign(() => tokenResolvedDesign);
+
+  const composed = $derived.by(() => {
+    if (!componentConfig) return null;
     return {
       ...componentConfig.defaults,
       ...node.props.content,
-      ...resolvedDesign,
       ...node.props.resolved,
       children,
     };

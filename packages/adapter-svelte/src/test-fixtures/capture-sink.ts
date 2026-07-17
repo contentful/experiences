@@ -10,6 +10,7 @@ export interface Capture {
   props: Record<string, unknown>;
   experience: RenderContext;
   contentful: ContentfulComponent | undefined;
+  designValues?: Record<string, unknown>;
 }
 
 export const captureSink: Capture[] = [];

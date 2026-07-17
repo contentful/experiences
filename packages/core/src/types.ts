@@ -50,6 +50,13 @@ export interface DesignToken {
   value: string;
 }
 
+/**
+ * Turns a `DesignToken` envelope into a runtime value. `ref.value` is the
+ * customer-defined token id; returning `undefined` means "not resolvable" and
+ * the adapter drops the key (with a warning). Sync only — it runs at render time.
+ */
+export type ResolveToken = (ref: DesignToken) => unknown;
+
 export interface ValuesByViewport {
   type: 'ValuesByViewport';
   values: Record<string, ManualDesignValue | DesignToken>;

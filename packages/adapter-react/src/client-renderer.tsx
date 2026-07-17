@@ -1,12 +1,8 @@
 /*
- * Client Experience renderer. First paint matches the server renderer
- * (active viewport resolved from `initialViewportId`); after hydration,
- * `useActiveViewport` takes over via `window.matchMedia` and re-renders
- * when the viewport changes.
- *
- * Safe to render on the server: when `typeof window === 'undefined'`, the
- * hook returns the seeded index and registers no listeners, so SSR output
- * matches `<ServerExperienceRenderer>`.
+ * Client Experience renderer. First paint matches the server renderer; after
+ * hydration `useActiveViewport` takes over via `matchMedia`. Server-safe: the
+ * hook returns the seeded index and registers no listeners when there's no
+ * window, so SSR output matches `<ServerExperienceRenderer>`.
  */
 
 'use client';
@@ -56,24 +52,33 @@ export function ClientExperienceRenderer({
 }: ClientExperienceRendererProps): ReactNode {
   if (!experience) return null;
   const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
-  const activeViewport = experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT;
+  // Copy so the context shares no object identity with the plan arrays — see
+  // the note in `server-renderer.tsx`.
+  const contextViewports = experience.viewports.map((v) => ({ ...v }));
+  const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
     ...context,
     metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
-    viewports: experience.viewports,
+    viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
   };
 
   return (
     <ExperienceProvider value={renderContext}>
-      <WrapWithTemplate template={experience.template} config={config} experience={renderContext}>
+      <WrapWithTemplate
+        template={experience.template}
+        config={config}
+        viewports={experience.viewports}
+        activeViewportIndex={activeViewportIndex}
+      >
         <NodesRenderer
           nodes={experience.nodes}
           config={config}
-          experience={renderContext}
+          viewports={experience.viewports}
+          activeViewportIndex={activeViewportIndex}
           renderUnknown={renderUnknown}
         />
       </WrapWithTemplate>

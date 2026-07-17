@@ -5,7 +5,6 @@
 
   export interface HeaderProps {
     text?: string;
-    variant?: HeaderVariant;
     children?: Snippet;
   }
 
@@ -14,14 +13,33 @@
     h2: { fontSize: '24px', fontWeight: 600, lineHeight: '1.3' },
     h3: { fontSize: '20px', fontWeight: 600, lineHeight: '1.35' },
   };
+
+  function toInlineStyle(record: Record<string, string | number>): string {
+    return Object.entries(record)
+      .map(
+        ([k, v]) =>
+          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`
+      )
+      .join('; ');
+  }
 </script>
 
 <script lang="ts">
-  let { text, variant = 'h2', children }: HeaderProps = $props();
+  import { getDesignValues, toCss } from '@contentful/experiences-svelte';
+
+  let { text, children }: HeaderProps = $props();
+
+  // Read in a $derived to stay reactive; `variant` picks the tag, `toCss`
+  // keeps the CSS-shaped keys.
+  const design = $derived(getDesignValues());
+  const variant = $derived((design.variant as HeaderVariant | undefined) ?? 'h2');
   const v = $derived(VARIANT_DEFAULTS[variant]);
-  const style = $derived(
-    `font-size: ${v.fontSize}; font-weight: ${v.fontWeight}; line-height: ${v.lineHeight}; color: #1f2937; margin: 0`
-  );
+  const style = $derived.by(() => {
+    const base = `font-size: ${v.fontSize}; font-weight: ${v.fontWeight}; line-height: ${v.lineHeight}; color: #1f2937; margin: 0`;
+    const css = toCss(design);
+    if (Object.keys(css).length === 0) return base;
+    return `${base}; ${toInlineStyle(css)}`;
+  });
 </script>
 
 {#if variant === 'h1'}
