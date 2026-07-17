@@ -8,7 +8,7 @@ The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience 
 npm install @contentful/experiences-svelte @contentful/experience-delivery
 ```
 
-This is the **only SDK package you install** — it re-exports everything you need from `@contentful/experiences-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
+This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
 
 The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the rendering primitives change (Svelte 5 `Component`s, Snippets instead of `children: ReactNode`, and `getDesignValues()` instead of `useDesignValues()`).
 
@@ -26,7 +26,7 @@ defineTemplate<Props>(config); // Same shape, for page-level template wrappers
 ### Resolver
 
 ```ts
-resolveExperience(payload, config, opts?); // Async — walks payload, runs resolveData, returns a PortableRenderPlan
+resolveExperience(payload, config, opts?); // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
 
 ### Renderers
@@ -42,15 +42,15 @@ useActiveViewport; // Rune-backed reactive object; you'll rarely need it directl
 ### Styling + runtime context (helpers)
 
 ```ts
-getDesignValues<T>(); // Resolved design values for the current node — read in a $derived to stay reactive
-toCss(design, options?); // Design record → plain style object, keeping only real CSS keys
+getDesignValues<T>(); // Resolved design values for the current node; read in a $derived to stay reactive
+toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
 getExperience(); // RenderContext: isPreview, metadata, viewports, activeViewport
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
 getContentfulTemplate(); // Same, for the page-level template
 type ToCssOptions;
 ```
 
-Design is **not** injected as props — components read it via `getDesignValues()` from the top of their `<script>` block. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Design is **not** injected as props; components read it via `getDesignValues()` from the top of their `<script>` block. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -76,7 +76,7 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 ## Quick reference
 
 ```svelte
-<!-- Button.svelte — content via props, design via the helper -->
+<!-- Button.svelte: content via props, design via the helper -->
 <script lang="ts">
   import { getDesignValues, toCss } from '@contentful/experiences-svelte';
 

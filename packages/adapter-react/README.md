@@ -8,7 +8,7 @@ The React adapter for the Contentful Experiences SDK suite. Renders Experience p
 npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package you install** — it re-exports everything you need from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
+This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
 
 ---
 
@@ -24,7 +24,7 @@ defineTemplate<Props>(config); // Same shape, for page-level template wrappers
 ### Fetching
 
 ```ts
-fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async — fetches from XDA + resolves in one call
+fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async; fetches from XDA and resolves in one call
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID doesn't exist
@@ -35,7 +35,7 @@ type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ### Resolver
 
 ```ts
-resolveExperience(payload, config, opts?)   // Async — walks payload, runs resolveData, returns a PortableRenderPlan
+resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
 
 ### Renderers
@@ -51,14 +51,14 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 
 ```ts
 useDesignValues<T>(); // Resolved design values for the current node (viewport-cascaded + token-resolved)
-toCss(design, options?); // Design record → CSSProperties, keeping only real CSS keys
+toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: isPreview, metadata, viewports, activeViewport
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
 useContentfulTemplate(); // Same, for the page-level template
 type ToCssOptions;
 ```
 
-Design is **not** injected as props — components read it via `useDesignValues()`. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Design is **not** injected as props; components read it via `useDesignValues()`. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -84,7 +84,7 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 ## Quick reference
 
 ```tsx
-// components/Button.tsx — reads content props; reads design via the hook
+// components/Button.tsx: reads content props; reads design via the hook
 'use client';
 import { toCss, useDesignValues } from '@contentful/experiences-react';
 
@@ -123,7 +123,7 @@ export const experienceConfig: Config = { components, resolveToken };
 ```
 
 ```tsx
-// app/[slug]/page.tsx — in a server component
+// app/[slug]/page.tsx: in a server component
 import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 
 const experience = await fetchExperience(
