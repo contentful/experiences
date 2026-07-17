@@ -30,8 +30,9 @@ const templates: Templates = {
   hero: { component: Page, defaults: { title: 'Featured' } },
 };
 
-// Maps DesignToken ids to CSS values; returning undefined drops the key. A
-// real app might use CSS vars, a Tailwind theme, or a tokens package.
+// Resolves opaque token ids to their underlying values — only you know what a
+// token id means. Returning undefined drops the key. A real app might use CSS
+// vars, a Tailwind theme, or a tokens package.
 const brandTokens: Record<string, string> = {
   'color.surface.hero': '#4f39f6',
   'color.surface.subtle': '#f4f4f5',
