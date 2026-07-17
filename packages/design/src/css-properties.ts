@@ -15,8 +15,11 @@ export function isCssProperty(normalizedKey: string): boolean {
   return CSS_PROPERTIES.has(normalizedKey);
 }
 
-/** Whitelist of CSS property names (camelCase) `toCss` emits. Extend as needed. */
-export const CSS_PROPERTIES: ReadonlySet<string> = new Set([
+/**
+ * Whitelist of CSS property names (camelCase) `toCss` emits. Curated, not
+ * exhaustive — `add()` a property here to have `toCss` pass it through.
+ */
+export const CSS_PROPERTIES: Set<string> = new Set([
   // Box model / sizing
   'width',
   'minWidth',

@@ -133,17 +133,37 @@ export function resolveDesignProperties(
   return out;
 }
 
+let warnedMissingResolver = false;
+
 /**
  * Resolves `DesignToken` envelopes in a viewport-resolved design record via
  * `resolveToken`; scalars pass through, and with no resolver the record is
  * returned unchanged. Keys that resolve to `undefined` are dropped and their
  * token ids collected in `unresolved` for a single grouped warning.
+ *
+ * When no `resolveToken` is configured but the record contains `DesignToken`
+ * envelopes, warns once — those keys reach components as raw envelope objects
+ * (e.g. rendering as `[object Object]`), which is almost always a missing-
+ * config mistake rather than intent.
  */
 export function applyTokenResolver(
   props: Record<string, string | number | boolean | DesignToken>,
   resolveToken?: ResolveToken
 ): { props: Record<string, unknown>; unresolved: string[] } {
-  if (!resolveToken) return { props, unresolved: [] };
+  if (!resolveToken) {
+    if (!warnedMissingResolver && typeof console !== 'undefined') {
+      const tokenKeys = Object.entries(props)
+        .filter(([, v]) => typeof v === 'object' && v !== null && v.type === 'DesignToken')
+        .map(([k]) => k);
+      if (tokenKeys.length) {
+        warnedMissingResolver = true;
+        console.warn(
+          `[@contentful/experiences] Design tokens are present but no \`resolveToken\` is configured on the Config; token-valued design props (${tokenKeys.join(', ')}) reach components unresolved. Add \`resolveToken\` to your Config to map token ids to values.`
+        );
+      }
+    }
+    return { props, unresolved: [] };
+  }
   const out: Record<string, unknown> = {};
   const unresolved: string[] = [];
   for (const [key, value] of Object.entries(props)) {
