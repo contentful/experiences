@@ -55,7 +55,7 @@ const templates: Templates = {
   page: Page,
 };
 
-// Optional. Maps design-token ids to runtime CSS values (see "Design tokens").
+// Optional. Resolves opaque design-token ids to their underlying values (see "Design tokens").
 const resolveToken: ResolveToken = (token) => `var(--${token.value.replaceAll('.', '-')})`;
 
 export const experienceConfig: Config = { components, templates, resolveToken };
@@ -67,29 +67,21 @@ Components are registered by id and receive only their **content** props. They r
 
 ```tsx
 // app/[slug]/page.tsx (Next.js App Router)
-import { notFound } from 'next/navigation';
-import {
-  fetchExperience,
-  NotFoundError,
-  ServerExperienceRenderer,
-} from '@contentful/experiences-react';
+import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
 
 export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  try {
-    const experience = await fetchExperience(
-      { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
-      { accessToken: process.env.CDA_TOKEN! },
-      { config: experienceConfig }
-    );
-    return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
-  } catch (err) {
-    if (err instanceof NotFoundError) notFound();
-    throw err;
-  }
+  const experience = await fetchExperience(
+    { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+    { accessToken: process.env.CDA_TOKEN! },
+    { config: experienceConfig }
+  );
+  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 }
 ```
+
+`fetchExperience` throws `NotFoundError` when the id doesn't exist — see [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing that to your framework's 404.
 
 `fetchExperience` fetches the payload from the Experience Delivery API and resolves it in one call — the renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks (in parallel), and dispatches each node to your registered React component.
 
@@ -135,7 +127,7 @@ The Svelte adapter is identical with `getDesignValues()` — see [Svelte / Svelt
 
 ## Design tokens
 
-When a design property's value is an ExO **design token** rather than a literal, XDA delivers a `{ type: 'DesignToken', value: '<token-id>' }` envelope. Supply a `resolveToken` on your `Config` to map each token id to a runtime value before it reaches a component:
+When a design property's value is an ExO **design token** rather than a literal, XDA delivers a `{ type: 'DesignToken', value: '<token-id>' }` envelope. The id is just an **opaque reference** — the actual value lives in your design system, and only you know how to look it up. `resolveToken` is where you turn that reference into its underlying value before it reaches a component:
 
 ```ts
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
@@ -143,7 +135,7 @@ const resolveToken: ResolveToken = (token) => designTokens[token.value];
 export const experienceConfig: Config = { components, resolveToken };
 ```
 
-You define the token id shape (dotted, slashed, flat, whatever your DTCG export emits), so the SDK never normalizes it — your `resolveToken` owns the mapping. A few common patterns:
+The id shape is yours (dotted, slashed, flat, whatever your DTCG export emits) — the SDK never interprets it, it just hands you `token.value` and uses whatever you return. However you store your tokens, that's what `resolveToken` reaches into:
 
 ```ts
 // 1. CSS custom properties — no JS cost, browser handles theme swaps.
@@ -304,23 +296,17 @@ export const experienceConfig: Config = { components, resolveToken };
 
 ```ts
 // routes/[slug]/+page.server.ts
-import { error } from '@sveltejs/kit';
-import { fetchExperience, NotFoundError } from '@contentful/experiences-svelte';
+import { fetchExperience } from '@contentful/experiences-svelte';
 import { CDA_TOKEN, SPACE_ID } from '$env/static/private';
 import { experienceConfig } from '$lib/experience-config';
 
 export const load = async ({ params }) => {
-  try {
-    const experience = await fetchExperience(
-      { spaceId: SPACE_ID, environmentId: 'master', experienceId: params.slug },
-      { accessToken: CDA_TOKEN },
-      { config: experienceConfig }
-    );
-    return { experience };
-  } catch (err) {
-    if (err instanceof NotFoundError) error(404, 'Experience not found');
-    throw err;
-  }
+  const experience = await fetchExperience(
+    { spaceId: SPACE_ID, environmentId: 'master', experienceId: params.slug },
+    { accessToken: CDA_TOKEN },
+    { config: experienceConfig }
+  );
+  return { experience };
 };
 ```
 

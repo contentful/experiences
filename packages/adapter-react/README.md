@@ -124,24 +124,14 @@ export const experienceConfig: Config = { components, resolveToken };
 
 ```tsx
 // app/[slug]/page.tsx — in a server component
-import { notFound } from 'next/navigation';
-import {
-  fetchExperience,
-  NotFoundError,
-  ServerExperienceRenderer,
-} from '@contentful/experiences-react';
+import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 
-try {
-  const experience = await fetchExperience(
-    { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
-    { accessToken: process.env.CDA_TOKEN! },
-    { config: experienceConfig }
-  );
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
-} catch (err) {
-  if (err instanceof NotFoundError) notFound();
-  throw err;
-}
+const experience = await fetchExperience(
+  { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+  { accessToken: process.env.CDA_TOKEN! },
+  { config: experienceConfig }
+);
+return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).

@@ -33,7 +33,8 @@ const templates: Templates = {
   page: Page,
 };
 
-// Maps DesignToken ids (`size.xl`, `color.text`) to CSS values. Returning
+// Resolves opaque token ids (`size.xl`, `color.text`) to their underlying
+// values — the SDK doesn't know what a token id means, only you do. Returning
 // undefined drops the key. A real app might use CSS vars or a tokens package,
 // e.g. `(token) => `var(--${token.value.replaceAll('.', '-')})``.
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
