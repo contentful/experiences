@@ -53,7 +53,7 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 useDesignValues<T>(); // Resolved design values for the current node (viewport-cascaded + token-resolved)
 toCss(design, options?); // Design record → CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: isPreview, metadata, viewports, activeViewport
-useContentfulComponent(); // Raw payload escape hatch for the enclosing node (or null)
+useContentfulComponent(); // Raw payload for the enclosing node (or null)
 useContentfulTemplate(); // Same, for the page-level template
 type ToCssOptions;
 ```

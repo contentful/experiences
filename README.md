@@ -19,7 +19,7 @@ Both adapters share the same public-API shape: the same `Config`, the same `fetc
 
 ## Getting started: the simple path
 
-Three steps: register your components, fetch and resolve, render. The minimal page is one `fetchExperience` call feeding one `<ServerExperienceRenderer>`.
+Three steps: register your components, fetch and resolve, render. The minimal page is one `fetchExperience` call whose result goes straight into one `<ServerExperienceRenderer>`.
 
 ### 1. Register your components and (optional) templates
 
@@ -127,7 +127,7 @@ The Svelte adapter works the same way with `getDesignValues()`, covered in [Svel
 
 ## Design tokens
 
-When a design property's value is an ExO **design token** rather than a literal, XDA delivers a `{ type: 'DesignToken', value: '<token-id>' }` envelope. The id is just an opaque reference. The actual value lives in your design system, and only you know how to look it up, so `resolveToken` is where you turn that reference into its underlying value before it reaches a component:
+When a design property's value is an ExO **design token** rather than a literal, XDA delivers it as `{ type: 'DesignToken', value: '<token-id>' }`. The id is just an opaque reference. The actual value lives in your design system, and only you know how to look it up, so `resolveToken` is where you turn that reference into its underlying value before it reaches a component:
 
 ```ts
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
@@ -135,7 +135,7 @@ const resolveToken: ResolveToken = (token) => designTokens[token.value];
 export const experienceConfig: Config = { components, resolveToken };
 ```
 
-The id shape is yours (dotted, slashed, flat, whatever your DTCG export emits). The SDK never interprets it; it hands you `token.value` and uses whatever you return. However you store your tokens, that's what `resolveToken` reaches into:
+The id shape is yours (dotted, slashed, flat, whatever your DTCG export emits). The SDK never interprets it; it passes you `token.value` and uses whatever you return. `resolveToken` looks the id up wherever you keep your tokens:
 
 ```ts
 // 1. CSS custom properties. No JS cost, and the browser handles theme swaps.
@@ -148,13 +148,13 @@ resolveToken: (token) => designTokens[token.value];
 resolveToken: (token) => token.value.split('.').reduce((o, k) => o?.[k], tw.theme);
 ```
 
-Returning `undefined` means "not resolvable": the SDK drops that key so the component's own default takes over, and `useDesignValues()` won't include it. With no `resolveToken` configured, token envelopes pass through unresolved and the SDK warns once in development.
+Returning `undefined` means "not resolvable": the SDK drops that key so the component's own default takes over, and `useDesignValues()` won't include it. With no `resolveToken` configured, tokens pass through unresolved and the SDK warns once in development.
 
 ---
 
 ## Advanced setup
 
-When the simple path isn't enough, three optional knobs cover most production needs. Preview mode plus metadata flows per-page context into resolvers. Viewport seeding makes SSR match the device. Async `resolveData` enriches props from external sources. Mix and match as needed.
+When the simple path isn't enough, three optional features cover most production needs. Preview mode plus metadata flows per-page context into resolvers. Viewport seeding makes SSR match the device. Async `resolveData` enriches props from external sources. Use any combination of them.
 
 A full working advanced route is at [`examples/nextjs/app/advanced/[slug]/page.tsx`](./examples/nextjs/app/advanced/[slug]/page.tsx). Visit `/advanced/<id>?preview=true&locale=en-US` after running the example.
 
@@ -328,7 +328,7 @@ Everything else applies identically: advanced setup (preview, viewport seeding, 
 
 ## Examples
 
-Runnable apps for both frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework chrome differs.
+Runnable apps for both frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs.
 
 | Example                                      | Stack                   | Shows                                                                                              |
 | -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
@@ -438,15 +438,15 @@ Client-side renderer with reactive viewport tracking via `window.matchMedia`. Us
 
 Identity helper that narrows `resolveData` and `component` parameter types to your declared `Props`. A registry entry can also be a **bare component** (`Button` instead of `{ component: Button }`) when it needs no `defaults` or `resolveData`.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                              |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence prop bag. Merged in before content / resolveData / slots.                                                                                                              |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (raw envelopes), experience }`. |
-| `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged **content** prop bag. Reads design via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence props. Merged in before content / resolveData / slots.                                                                                                              |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`. |
+| `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged **content** props. Reads design via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
 
 ### `defineTemplate<Props>(config)`
 
-Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so templates wrap the page-level chrome around them.
+Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so a template renders the page-level layout around them.
 
 | Field         | Type                                                                 | Required | Default | Description                                                                                 |
 | ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
@@ -456,13 +456,13 @@ Same shape as `defineComponent`. The `component` also receives a fixed `children
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`
 
-`useDesignValues()` returns the current node's resolved design record (viewport-cascaded and token-resolved). The optional type argument shapes the bag as an assertion, not a runtime check. `toCss()` converts that record to a `CSSProperties` object, keeping only keys that map to a real CSS property and dropping semantic ones. See [Styling components](#styling-components).
+`useDesignValues()` returns the current node's resolved design record (viewport-cascaded and token-resolved). The optional type argument shapes the record as an assertion, not a runtime check. `toCss()` converts that record to a `CSSProperties` object, keeping only keys that map to a real CSS property and dropping semantic ones. See [Styling components](#styling-components).
 
 `ToCssOptions`: `{ include?: string[]; exclude?: string[] }`, key filters applied against the original record keys.
 
 ### `useExperience()` / `useContentfulComponent()` / `useContentfulTemplate()`
 
-Read the runtime context and raw Contentful payload from inside a component. Call them at the top of your component body; nothing is injected as props. `useExperience()` returns the `RenderContext` (below). `useContentfulComponent()` and `useContentfulTemplate()` return the raw payload escape hatch (below) or `null` outside a node/template.
+Read the runtime context and raw Contentful payload from inside a component. Call them at the top of your component body; nothing is injected as props. `useExperience()` returns the `RenderContext` (below). `useContentfulComponent()` and `useContentfulTemplate()` return the raw payload (below) or `null` outside a node/template.
 
 ### `useActiveViewport(viewports, initialViewportId?)`
 
@@ -484,9 +484,9 @@ Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experie
 | `activeViewport`      | `ViewportDef`             | render only         | The currently active viewport, the last-matching media query or device trait. Absent in `resolveData` because it's a render-time value that would re-fire async resolvers on every viewport change. |
 | `activeViewportIndex` | `number`                  | render only         | Index of `activeViewport` in `viewports`. Same caveat.                                                                                                                                              |
 
-### `useContentfulComponent()`: the raw payload escape hatch
+### `useContentfulComponent()`: the raw payload
 
-`useContentfulComponent()` returns the unprocessed Contentful-side input for the enclosing node: raw design envelopes, the originating `componentTypeId`, the `nodeId` if the editor supplied one, and the `resolveData` output. (`useContentfulTemplate()` is the template equivalent.)
+`useContentfulComponent()` returns the unprocessed Contentful-side input for the enclosing node: unresolved design values, the originating `componentTypeId`, the `nodeId` if the editor supplied one, and the `resolveData` output. (`useContentfulTemplate()` is the template equivalent.)
 
 Use it for:
 
@@ -502,14 +502,14 @@ Components see `ContentfulComponent`:
 | `componentTypeId` | `string`                               | The id from `componentType.sys.urn`'s last slash-segment.                                   |
 | `nodeId`          | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
 | `content`         | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
-| `design`          | `Record<string, DesignPropValue>`      | Design-property envelopes (not viewport-resolved).                                          |
+| `design`          | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                |
 | `resolved`        | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
 
 Templates see `ContentfulTemplate`, the same shape but with `templateId` instead of `componentTypeId` (and no `nodeId`).
 
 ### Merge precedence (last wins)
 
-The component receives a flat prop bag composed in this order:
+The component receives a flat set of props composed in this order:
 
 1. `defaults`, fallback values from `defineComponent`
 2. `contentProperties`, editorial values from the payload
@@ -518,7 +518,7 @@ The component receives a flat prop bag composed in this order:
 
 So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`.
 
-Design values are deliberately absent from this bag. They're published on context and read via `useDesignValues()`, so the SDK never spreads `cf`-prefixed or unknown keys onto your component. Runtime context and the raw payload are read the same way, through `useExperience()` and `useContentfulComponent()`, not injected.
+Design values are deliberately left out of these props. They're published on context and read via `useDesignValues()`, so the SDK never spreads `cf`-prefixed or unknown keys onto your component. Runtime context and the raw payload are read the same way, through `useExperience()` and `useContentfulComponent()`, not injected.
 
 ---
 
@@ -539,7 +539,7 @@ export function Button({ text, url, type = 'primary' }: ButtonProps) {
 }
 ```
 
-The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in one file, `lib/experience-config.tsx`, so it's easy to scan and easy to change.
+The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all lives in one file, `lib/experience-config.tsx`, so it's easy to scan and easy to change.
 
 ---
 

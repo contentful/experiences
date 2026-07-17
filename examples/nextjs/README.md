@@ -123,14 +123,14 @@ export const experienceConfig: Config = { components, templates, resolveToken };
 
 ### Merge precedence
 
-The component receives a flat prop bag composed of (last-wins):
+The component receives a flat set of props composed of (last-wins):
 
-1. `defaults` (componentConfig.defaults — fallback values)
+1. `defaults` (componentConfig.defaults, fallback values)
 2. `contentProperties` (editorial values from the payload)
-3. `resolveData()` (return value of componentConfig.resolveData — see below)
+3. `resolveData()` (return value of componentConfig.resolveData, see below)
 4. slot props (each named slot becomes a pre-rendered React subtree)
 
-Design values are **not** in this bag — they're read via `useDesignValues()`. So a payload like:
+Design values are **not** included here; they're read via `useDesignValues()`. So a payload like:
 
 ```json
 {
