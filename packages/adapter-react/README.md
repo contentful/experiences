@@ -47,14 +47,27 @@ MissingComponent; // Default fallback for unregistered component types
 useActiveViewport; // Hook used inside ClientExperienceRenderer (rarely needed by consumers)
 ```
 
+### Styling + runtime context (hooks)
+
+```ts
+useDesignValues<T>(); // Resolved design values for the current node (viewport-cascaded + token-resolved)
+toCss(design, options?); // Design record → CSSProperties, keeping only real CSS keys
+useExperience(); // RenderContext: isPreview, metadata, viewports, activeViewport
+useContentfulComponent(); // Raw payload escape hatch for the enclosing node (or null)
+useContentfulTemplate(); // Same, for the page-level template
+type ToCssOptions;
+```
+
+Design is **not** injected as props — components read it via `useDesignValues()`. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+
 ### Re-exported types and utilities
 
 ```ts
 // From core
-type Config, Components, Templates,
+type Config, Components, Templates, Registration, TemplateRegistration,
 type ComponentConfig, TemplateConfig,
-type ComponentProps, TemplateProps,
-type RenderContext,
+type ContentfulComponent, ContentfulTemplate,
+type RenderContext, ResolveToken,
 type ExperiencePayload, ExperienceNode, ComponentTypeNode, TemplateNode,
 type PortableRenderPlan, PortableRenderNode, PortableTemplate,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
@@ -62,7 +75,8 @@ type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
 // From design (for customers who want to do their own viewport-aware resolution)
-getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
+getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
+isCssProperty, toCssKey, CSS_PROPERTIES
 ```
 
 ---
@@ -70,31 +84,53 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery
 ## Quick reference
 
 ```tsx
-import { notFound } from 'next/navigation';
+// components/Button.tsx — reads content props; reads design via the hook
+'use client';
+import { toCss, useDesignValues } from '@contentful/experiences-react';
+
+export function Button({ label, url }: { label?: string; url?: string }) {
+  const design = useDesignValues();
+  return (
+    <a href={url} style={toCss(design)}>
+      {label}
+    </a>
+  );
+}
+```
+
+```tsx
+// lib/experience-config.tsx
 import {
   defineComponent,
-  defineTemplate,
-  fetchExperience,
-  NotFoundError,
-  ServerExperienceRenderer,
-  type Config,
   type Components,
-  type Templates,
+  type Config,
+  type ResolveToken,
 } from '@contentful/experiences-react';
 
-import { Button, type ButtonProps } from './components/Button';
+import { Button } from './components/Button';
 
 const components: Components = {
-  button: defineComponent<ButtonProps>({
-    defaults: { type: 'primary' },
+  // Bare component, or defineComponent({...}) when you need defaults/resolveData.
+  Button: defineComponent({
     resolveData: ({ content }) => ({ url: ensureScheme(content.url) }),
-    render: Button,
+    component: Button,
   }),
 };
 
-const experienceConfig: Config = { components };
+const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
-// In a server component:
+export const experienceConfig: Config = { components, resolveToken };
+```
+
+```tsx
+// app/[slug]/page.tsx — in a server component
+import { notFound } from 'next/navigation';
+import {
+  fetchExperience,
+  NotFoundError,
+  ServerExperienceRenderer,
+} from '@contentful/experiences-react';
+
 try {
   const experience = await fetchExperience(
     { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },

@@ -7,7 +7,9 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 - **Server-side fetch + resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte` — proves the fetch + resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
 - **Hydration-safe viewport seeding** — User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
-- **`defineComponent` authoring** — same pattern as the React example, with `component: SvelteComponent` instead of `render: () => ReactNode`.
+- **Styling via `getDesignValues()` + `toCss()`** — components read their own design inside a `$derived` (reactive across viewport changes); design is never injected as props.
+- **Design tokens** — `experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
+- **Component registration** — bare Svelte components for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`.
 
 ## Run it
 
@@ -55,4 +57,4 @@ Identical to the Next.js example:
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
 3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` → `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
 
-The only Svelte-specific divergence: a customer component opts into slots via the `slot: Snippet<[string]>` dispatcher prop, calling `{@render slot('children')}` to render a named slot. Compare to the React adapter where each slot becomes its own named prop. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.
+The only Svelte-specific divergence is slots: the default `children` slot is passed as a `children` Snippet prop (render it with `{@render children()}`), and any additional named slots are reachable via `getContentfulComponent().slots` and rendered through the exported `<NodesRenderer />`. Compare to the React adapter where each slot becomes its own named React-node prop. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.
