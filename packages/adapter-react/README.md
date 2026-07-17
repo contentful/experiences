@@ -2,13 +2,13 @@
 
 > ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
 
-The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using customer-supplied React components.
+The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using your own React components.
 
 ```sh
 npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` that consumers need. The other packages are workspace-internal.
+This is the **only SDK package you install** — it re-exports everything you need from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
 
 ---
 
@@ -44,7 +44,7 @@ resolveExperience(payload, config, opts?)   // Async — walks payload, runs res
 ServerExperienceRenderer; // RSC-friendly, active viewport seeded from initialViewportId
 ClientExperienceRenderer; // 'use client', subscribes to window.matchMedia, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
-useActiveViewport; // Hook used inside ClientExperienceRenderer (rarely needed by consumers)
+useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely need it directly)
 ```
 
 ### Styling + runtime context (hooks)
@@ -74,7 +74,7 @@ type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
-// From design (for customers who want to do their own viewport-aware resolution)
+// From design (if you want to do your own viewport-aware resolution)
 getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
 isCssProperty, toCssKey, CSS_PROPERTIES
 ```

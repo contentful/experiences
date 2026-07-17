@@ -11,7 +11,7 @@ npm install @contentful/experiences-react     # React / Next.js
 npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 ```
 
-That's the only SDK package customers install — the adapter re-exports everything you need (resolver, types, renderer, design utilities, and the experience delivery client). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
+That's the only SDK package you install — the adapter re-exports everything you need (resolver, types, renderer, design utilities, and the experience delivery client). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
 **Both adapters share the same public-API shape** — same `Config`, same `fetchExperience`, same design-token + `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React; the [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, and the differences are called out inline. Runnable apps for both live in [`examples/`](#examples).
 
@@ -143,7 +143,7 @@ const resolveToken: ResolveToken = (token) => designTokens[token.value];
 export const experienceConfig: Config = { components, resolveToken };
 ```
 
-The token id shape is customer-defined (dotted, slashed, flat, whatever your DTCG export emits), so the SDK never normalizes it — `resolveToken` owns the mapping. Common patterns:
+You define the token id shape (dotted, slashed, flat, whatever your DTCG export emits), so the SDK never normalizes it — your `resolveToken` owns the mapping. A few common patterns:
 
 ```ts
 // 1. CSS custom properties — no JS cost, browser handles theme swaps.
@@ -441,7 +441,7 @@ SSR-friendly renderer. No reactive subscriptions; the active viewport is resolve
 | `experience`        | `PortableRenderPlan`                          | yes      | —                                    | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.  |
 | `config`            | `Config`                                      | yes      | —                                    | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                    |
 | `initialViewportId` | `string`                                      | no       | First viewport id                    | Seeds the active viewport. Typically derived from User-Agent server-side.                              |
-| `context`           | `Partial<ExperienceContext>`                  | no       | `{ isPreview: false, metadata: {} }` | Shallow-merged into the render-time `experience` context customer components receive.                  |
+| `context`           | `Partial<ExperienceContext>`                  | no       | `{ isPreview: false, metadata: {} }` | Shallow-merged into the render-time `experience` context your components receive.                      |
 | `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent`                   | Fallback for unregistered component types. Default: visible red box in preview, silent null otherwise. |
 
 ### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)
@@ -476,11 +476,11 @@ Same shape as `defineComponent`. The `component` additionally receives a fixed `
 
 ### `useExperience()` / `useContentfulComponent()` / `useContentfulTemplate()`
 
-Hooks that read the runtime context and raw Contentful payload from inside a customer component — the values are read explicitly at the top of a component body, never injected as props. `useExperience()` returns the `RenderContext` (below); `useContentfulComponent()` / `useContentfulTemplate()` return the raw payload escape hatch (below) or `null` outside a node/template.
+Read the runtime context and raw Contentful payload from inside a component — call them at the top of your component body, nothing is injected as props. `useExperience()` returns the `RenderContext` (below); `useContentfulComponent()` / `useContentfulTemplate()` return the raw payload escape hatch (below) or `null` outside a node/template.
 
 ### `useActiveViewport(viewports, initialViewportId?)`
 
-React hook used internally by `ClientExperienceRenderer`. Customers rarely need it directly. Returns `{ activeViewportIndex }` and updates on `matchMedia` changes.
+React hook used internally by `ClientExperienceRenderer`. You'll rarely need it directly. Returns `{ activeViewportIndex }` and updates on `matchMedia` changes.
 
 ### `MissingComponent`
 
@@ -488,7 +488,7 @@ Default `renderUnknown` fallback. Visible red box when `useExperience().isPrevie
 
 ### `RenderContext` — what `useExperience()` returns
 
-Every customer component (via `useExperience()`) and `resolveData` hook (via `ctx.experience`) sees an experience context. The shape:
+Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experience`) sees an experience context. The shape:
 
 | Field                 | Type                      | Available in        | Description                                                                                                                                                                                       |
 | --------------------- | ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -559,15 +559,15 @@ The SDK glue (defaults, resolvers, prop reshaping, slot binding) all lives in on
 
 ## Workspace internals
 
-This is an Nx monorepo. Customers install only the framework adapter; the rest is workspace-internal.
+This is an Nx monorepo. You install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                         | Audience                                                                                           |
+| Folder                                                 | npm name                         | Scope                                                                                              |
 | ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
 | [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
 | [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
 | [`packages/client`](./packages/client)                 | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything else.                               |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer with the same public API shape.                             |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Public.** React renderer + re-exports of everything else.                                        |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Public.** Svelte 5 renderer with the same public API shape.                                      |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, …) and consume the same internal core + design packages.
 

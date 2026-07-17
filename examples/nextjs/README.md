@@ -52,7 +52,7 @@ try {
 
 `NotFoundError` is thrown by the delivery client on 404 (Experience ID doesn't exist). An empty-nodes payload (draft / unpublished / empty locale) is **not** a 404 — it resolves to a plan with `nodes: []` and renders as an empty page.
 
-Slug-to-ID mapping is left to the customer — see the SDK roadmap in [`AGENTS.md`](../../AGENTS.md) for the longer-term direction.
+Slug-to-ID mapping is up to you — see the SDK roadmap in [`AGENTS.md`](../../AGENTS.md) for the longer-term direction.
 
 ## File map
 
@@ -178,7 +178,7 @@ Default is `{ isPreview: false, metadata: {} }` — fine for production. Add
 fields when:
 
 - **Preview mode**: `{ isPreview: true }` — `MissingComponent` renders a visible
-  red box; some customer components might branch on this. Set `host` to the
+  red box, and your own components can branch on it too. Set `host` to the
   preview endpoint on `clientOptions` to also hit the preview API.
 - **Per-page metadata**: `{ metadata: { slug, locale } }` — available to every
   `resolveData` for URL building, locale-aware lookups, etc.

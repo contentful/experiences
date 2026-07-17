@@ -2,13 +2,13 @@
 
 > ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
 
-The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using customer-supplied Svelte 5 components.
+The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using your own Svelte 5 components.
 
 ```sh
 npm install @contentful/experiences-svelte @contentful/experience-delivery
 ```
 
-This is the **only SDK package customers install** — it re-exports everything from `@contentful/experiences-core` and `@contentful/experiences-design` that consumers need. The other packages are workspace-internal.
+This is the **only SDK package you install** — it re-exports everything you need from `@contentful/experiences-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
 
 The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the rendering primitives change (Svelte 5 `Component`s, Snippets instead of `children: ReactNode`, and `getDesignValues()` instead of `useDesignValues()`).
 
@@ -35,8 +35,8 @@ resolveExperience(payload, config, opts?); // Async — walks payload, runs reso
 ServerExperienceRenderer; // SSR-safe; active viewport seeded from initialViewportId
 ClientExperienceRenderer; // Subscribes to window.matchMedia via runes
 MissingComponent; // Default fallback for unregistered component types
-NodesRenderer; // Exposed so advanced customers can render non-`children` slots manually
-useActiveViewport; // Rune-backed reactive object; rarely needed by consumers
+NodesRenderer; // Exposed so you can render non-`children` slots manually
+useActiveViewport; // Rune-backed reactive object; you'll rarely need it directly
 ```
 
 ### Styling + runtime context (helpers)
@@ -66,7 +66,7 @@ type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
-// From design (for customers who want to do their own viewport-aware resolution)
+// From design (if you want to do your own viewport-aware resolution)
 getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
 isCssProperty, toCssKey, CSS_PROPERTIES
 ```
