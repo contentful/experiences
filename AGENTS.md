@@ -187,6 +187,14 @@ Per-entry prop narrowing happens at `defineComponent<Props>(...)` call time, not
 
 Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.). Enforced via `commitlint.config.js` + `.husky/commit-msg`. **`feat:` and `fix:` trigger version bumps via `nx release`. `chore:` does NOT trigger a release.**
 
+**Alpha-phase bump behavior**: `nx.json` sets `version.adjustSemverBumpsForZeroMajorVersion: true`, which applies SemVer V2 semantics for 0.x versions. While packages are on 0.x:
+
+- `feat!` / `BREAKING CHANGE:` → minor bump (e.g., `0.4.0` → `0.5.0`), NOT major
+- `feat:` → patch bump (e.g., `0.4.0` → `0.4.1`), NOT minor
+- `fix:` → patch bump (unchanged)
+
+Packages stay under `1.0.0` no matter what commit types land. **Remove this setting from `nx.json` when we're ready to ship 1.0.0 GA**
+
 ### Package boundaries
 
 - **`core` may not depend on `react`, the delivery client, or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
@@ -250,9 +258,11 @@ Next regenerates it on every `next build`. It's in `.gitignore`. If you see lint
 
 `build.yaml` saves `packages/*/dist` to a job-scoped cache; `check.yaml` and `release.yaml` restore it. **The cache key is `build-cache-${run_id}-${run_attempt}`** — meaning each CI run is its own cache. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Don't change the cache path unless you also update both restore steps.
 
-### npm publish vs GitHub Packages
+### Publishing
 
-The current release workflow is shaped for **GitHub Packages** (Vault-supplied `GITHUB_TOKEN`, summary linking to `github.com/.../packages`). It is NOT yet wired to publish to npmjs.org. Per-package `publishConfig` does NOT yet declare a registry URL — adding `"registry": "https://npm.pkg.github.com"` is needed before the first release if we go GitHub Packages. Decision pending; flagged in the meeting-prep doc.
+Packages publish to **GitHub Packages**, and org infrastructure mirrors to npmjs.org via trusted publishing. This matches every other Contentful monorepo (`mcp-server`, `rich-text`, `field-editors`, `live-preview`, `apps`, etc.). Auth is Vault-provisioned `GITHUB_PACKAGES_WRITE_TOKEN`. The `nx-release-publish` target in `nx.json` pins the registry to `https://npm.pkg.github.com`.
+
+**One-time bootstrap per package**: on first release of a new package name to GitHub Packages, a manual `npm publish` to npmjs is required to establish the package there so the mirror can pick it up on subsequent releases. See `contentful/contentful-experience-delivery.js/RELEASING.md` for the runbook.
 
 ### Nx project name vs npm package name vs folder
 
@@ -359,24 +369,72 @@ npm run dev                  # http://localhost:3000/<experience-id>
 1. `mkdir packages/adapter-vue && cd packages/adapter-vue`
 2. Copy structure from `packages/adapter-react` (or `adapter-svelte`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish), `vitest.config.ts`
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
-4. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
-5. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
-6. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
+4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
+5. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
+6. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
+7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
 
 ### Add a new internal package (e.g. `tokens`)
 
 1. `mkdir packages/tokens && cd packages/tokens`
 2. Mirror `packages/design`'s structure (it's the simplest internal package)
-3. Each adapter that wants to expose its API re-exports from it
+3. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
+4. Each adapter that wants to expose its API re-exports from it
+
+### Bootstrapping a new package for release
+
+Nx release computes each package's next version by finding the most recent git tag matching `{projectName}@{version}` and analyzing conventional commits since that tag. A brand-new package has no such tag, and `nx release` on `main` iterates every package in `packages/*` atomically — so a single missing tag will fail the release for the entire workspace, not just the new package.
+
+Order matters:
+
+1. On the new-package branch, set `package.json#version` to `"0.0.0"`. (Don't create `CHANGELOG.md` — nx generates it on first release.)
+2. **Before merging**, seed the tag against `main`. Tag the commit **just before** the new-package introduction commit — this way nx sees the introduction as an unreleased `feat:`, so the first release actually publishes to npm. If you tag AT the introduction commit, the package sits at `0.0.0` until the next feat/fix touches it, which breaks any other package that lists it as a runtime dep.
+   ```sh
+   git checkout main
+   git pull
+   git tag -a <dir>@0.0.0 <sha> -m "Baseline tag so nx-release can derive bumps for <dir>"
+   git push origin <dir>@0.0.0
+   ```
+3. Merge the new-package PR to `main`.
+4. The next push to `main` triggers nx release. It sees the `<dir>@0.0.0` tag, scans commits from there forward, finds the `feat:` that introduced the package, and computes the first real release. Nx also creates `packages/<dir>/CHANGELOG.md` on this first run.
+
+**If you merge before seeding the tag**, the next release run on `main` will fail for the whole workspace. Recovery:
+
+```sh
+git checkout main && git pull
+git tag -a <dir>@0.0.0 <parent-of-introduction-sha> -m "Baseline tag so nx-release can derive bumps for <dir>"
+git push origin <dir>@0.0.0
+# Then push any new commit to main (or re-run the failed workflow) to trigger CI.
+```
+
+Same-shape command as step 2 — just done after the fact.
 
 ### Cut a release
 
+Releases are fully automated by CI on push to `main` (stable) or `dev` (prerelease). Every `feat:` / `fix:` commit that touched a package's directory triggers a version bump for that package on the next merge.
+
+- **Stable** — push to `main` → `release.yaml` runs `npx nx release --yes`. Publishes to npm's `latest` dist-tag; creates git tags and GitHub Releases; commits `chore(release): publish {version} [skip ci]` back to `main`.
+- **Prerelease** — push to `dev` → `prerelease.yaml` runs `npx nx release --specifier prerelease --preid dev --yes`. Publishes to npm's `dev` dist-tag as `X.Y.Z-dev.N`; creates git tags and GitHub Releases marked "pre-release"; commits back to `dev`.
+
+Consumers install with:
+
 ```sh
-npm run release:dry            # rehearse
-npm run release                # actually publish (CI does this)
+npm install @contentful/experiences-react           # latest stable
+npm install @contentful/experiences-react@dev       # newest dev prerelease
 ```
 
-The first release ever needs `--first-release`. After that, `nx release` derives bumps from conventional commits since the last per-project tag.
+**`dev` is not meant to be merged into `main`.** The two branches accumulate independent CHANGELOG histories so `main`'s file stays clean of prerelease entries. Features that should ship on both branches should be committed to each independently. Matches the pattern in `contentful/contentful-mcp-server`.
+
+**`releaseTagPatternStrictPreid: true`** in `nx.json` ensures stable `nx release` on `main` skips over any preid-suffixed tag (e.g., `adapter-react@0.5.0-dev.3`) when computing the next version — dev tags cannot poison main's stable release computation.
+
+Local dry-run to preview:
+
+```sh
+npx nx release --dry-run                                            # what a stable release would do
+npx nx release --specifier prerelease --preid dev --dry-run         # what a dev prerelease would do
+```
+
+The first-ever release for a new package needs `--first-release` on its first run so nx doesn't look for a prior tag.
 
 ---
 

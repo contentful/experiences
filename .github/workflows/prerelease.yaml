@@ -1,4 +1,23 @@
-name: Release
+name: Prerelease
+
+# Publishes affected packages to npm's `dev` dist-tag as prereleases
+# (X.Y.Z-dev.N). Full release parity with the stable flow: commits
+# CHANGELOG.md updates back to `dev`, creates git tags, and creates
+# GitHub Releases (marked as pre-releases).
+#
+# This means the `dev` branch accumulates its own CHANGELOG history
+# and is not meant to be merged back into `main` — features should
+# land on `main` independently to keep main's CHANGELOG clean. 
+#
+# Combined with nx's releaseTagPatternStrictPreid (set in nx.json),
+# dev tags cannot affect main's stable release computation — stable
+# `nx release` skips over any preid-suffixed tag when computing the
+# next version.
+#
+# Consumers install with:
+#   npm install @contentful/experiences-react@dev
+#
+# The plain `latest` dist-tag is only ever moved by release.yaml on main.
 
 on:
   workflow_call:
@@ -7,7 +26,7 @@ on:
         required: true
 
 jobs:
-  release:
+  prerelease:
     runs-on: ubuntu-latest
 
     permissions:
@@ -68,29 +87,24 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Setup npmrc file
-        # Pins the @contentful scope to GitHub Packages and authenticates
-        # with the bot's package-write token so `nx release` can publish.
         run: |
           echo "//npm.pkg.github.com/:_authToken=${{ steps.vault.outputs.GITHUB_PACKAGES_WRITE_TOKEN }}" > ~/.npmrc
           echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
-      - name: NX Release
-        run: |
-          npx nx release --yes
+      - name: NX Prerelease
+        # `prerelease` specifier + `dev` preid → X.Y.Z-dev.N versions.
+        # Nx handles the version bump, CHANGELOG.md prepend, commit back to
+        # the `dev` branch, git tag, and GitHub Release. `--skip-publish`
+        # defers the actual npm publish to the next step so we can pass
+        # `--tag dev` explicitly 
+        run: npx nx release --specifier prerelease --preid dev --skip-publish
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
 
-      - name: Get latest release tag
-        id: get-tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0)
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
-      - name: Summary
-        run: |
-          VERSION=$(echo "${{ steps.get-tag.outputs.tag }}" | sed 's/^v//')
-          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.get-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Packages**: https://github.com/${{ github.repository }}/packages" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Release**: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+      - name: NX Publish
+        # Explicit `--tag dev` ensures the `latest` dist-tag on npm is never
+        # moved by a prerelease build. Consumers install with:
+        #   npm install @contentful/experiences-react@dev
+        run: npx nx release publish --tag dev
+        env:
+          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}

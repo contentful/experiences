@@ -63,10 +63,12 @@
     "projects": ["packages/*"],
     "projectsRelationship": "independent",
     "releaseTagPattern": "{projectName}@{version}",
+    "releaseTagPatternStrictPreid": true,
     "version": {
       "conventionalCommits": true,
-      "updateDependents": "always",
-      "preserveMatchingDependencyRanges": true
+      "updateDependents": "auto",
+      "preserveMatchingDependencyRanges": false,
+      "adjustSemverBumpsForZeroMajorVersion": true
     },
     "changelog": {
       "projectChangelogs": {
