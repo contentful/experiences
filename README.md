@@ -4,13 +4,16 @@
 
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
+Install the adapter for your framework:
+
 ```sh
-npm install @contentful/experiences-react
+npm install @contentful/experiences-react     # React / Next.js
+npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 ```
 
-That's the only SDK package customers install — it re-exports everything you need (resolver, types, renderer, design utilities, and the experience delivery client). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
+That's the only SDK package customers install — the adapter re-exports everything you need (resolver, types, renderer, design utilities, and the experience delivery client). The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
-A Svelte adapter (`@contentful/experiences-svelte`) ships in parallel with the same public-API shape; see [`packages/adapter-svelte`](./packages/adapter-svelte). The rest of this README focuses on React.
+**Both adapters share the same public-API shape** — same `Config`, same `fetchExperience`, same design-token + `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React; the [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, and the differences are called out inline. Runnable apps for both live in [`examples/`](#examples).
 
 ---
 
@@ -128,7 +131,7 @@ export function Heading({ text }: { text?: string }) {
 - `toCss(design, { include, exclude })` accepts optional key filters. Read semantic keys (`as`, `variant`) by name.
 - Reading a value that `toCss` doesn't recognize? The property whitelist is extensible — see [`packages/design`](./packages/design).
 
-The Svelte adapter is identical with `getDesignValues()`; read it inside a `$derived` to stay reactive across viewport changes.
+The Svelte adapter is identical with `getDesignValues()` — see [Svelte / SvelteKit](#svelte--sveltekit).
 
 ## Design tokens
 
@@ -241,6 +244,121 @@ Button: defineComponent<ButtonProps>({
 ```
 
 `experience.metadata` here is exactly what the page passed into `resolveExperience`'s third argument — that's how per-page context reaches every resolver.
+
+---
+
+## Svelte / SvelteKit
+
+`@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one-for-one — same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineTemplate`. Three differences, all mechanical:
+
+| Concern              | React                                          | Svelte                                                                                                  |
+| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Register a component | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
+| Read design          | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)                                                          |
+| Runtime context      | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
+| Slots                | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
+
+### 1. Register your components
+
+```ts
+// lib/experience-config.ts
+import {
+  defineComponent,
+  type Components,
+  type Config,
+  type ResolveToken,
+} from '@contentful/experiences-svelte';
+
+import Button from './components/Button.svelte';
+import Heading, { type HeadingProps } from './components/Heading.svelte';
+
+const components: Components = {
+  Button, // bare component…
+  Heading: defineComponent<HeadingProps>({ defaults: { text: 'Untitled' }, component: Heading }),
+};
+
+const resolveToken: ResolveToken = (token) => designTokens[token.value];
+
+export const experienceConfig: Config = { components, resolveToken };
+```
+
+### 2. Style a component with `getDesignValues()`
+
+```svelte
+<!-- components/Heading.svelte -->
+<script lang="ts">
+  import { getDesignValues, toCss } from '@contentful/experiences-svelte';
+
+  let { text }: { text?: string } = $props();
+
+  // Read inside a $derived so it stays reactive across viewport changes.
+  const design = $derived(getDesignValues<{ as?: 'h1' | 'h2' | 'h3' }>());
+  const tag = $derived(design.as ?? 'h2');
+  const style = $derived(toCss(design)); // keeps CSS-shaped keys, drops `as`
+</script>
+
+<svelte:element this={tag} {style}>{text}</svelte:element>
+```
+
+### 3. Fetch + render (SvelteKit)
+
+```ts
+// routes/[slug]/+page.server.ts
+import { error } from '@sveltejs/kit';
+import { fetchExperience, NotFoundError } from '@contentful/experiences-svelte';
+import { CDA_TOKEN, SPACE_ID } from '$env/static/private';
+import { experienceConfig } from '$lib/experience-config';
+
+export const load = async ({ params }) => {
+  try {
+    const experience = await fetchExperience(
+      { spaceId: SPACE_ID, environmentId: 'master', experienceId: params.slug },
+      { accessToken: CDA_TOKEN },
+      { config: experienceConfig }
+    );
+    return { experience };
+  } catch (err) {
+    if (err instanceof NotFoundError) error(404, 'Experience not found');
+    throw err;
+  }
+};
+```
+
+```svelte
+<!-- routes/[slug]/+page.svelte -->
+<script lang="ts">
+  import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
+  import { experienceConfig } from '$lib/experience-config';
+
+  let { data } = $props();
+</script>
+
+<ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
+```
+
+Everything else — advanced setup (preview, viewport seeding, async `resolveData`), the API reference below, merge precedence, design tokens — applies identically; substitute the Svelte spelling of each hook.
+
+---
+
+## Examples
+
+Runnable apps for both frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically — only the framework chrome differs.
+
+| Example                                      | Stack                   | Shows                                                                                              |
+| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Simple + advanced routes (preview, UA→viewport, async `resolveData`), design tokens, styling hooks |
+| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts`             |
+
+```sh
+npm install --ignore-scripts
+npm run build                       # build the SDK packages
+
+cd examples/nextjs                  # or examples/sveltekit
+cp .env.example .env.local          # sveltekit: .env — fill in SPACE_ID + CDA_TOKEN
+npm run dev
+```
+
+Then visit `/<experience-id>`. See each example's README for its file map and route-by-route walkthrough.
 
 ---
 
