@@ -45,8 +45,8 @@
   "devDependencies": {
     "@sveltejs/package": "^2.5.8",
     "@sveltejs/vite-plugin-svelte": "^4.0.4",
-    "@testing-library/jest-dom": "^6.5.0",
-    "@testing-library/svelte": "^5.2.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.4.2",
     "jsdom": "^25.0.1",
     "publint": "^0.3.21",
     "svelte": "^5.0.0",
