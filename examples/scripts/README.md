@@ -28,17 +28,17 @@ The script prints the resulting experienceId at the end — paste it into the ex
 
 The demo is a minimal `landing` Experience — one hero + two cards — that exercises the ExO composition pattern end-to-end. It provisions:
 
-| Step | Resource type      | Count | Notes                                                                              |
-| ---- | ------------------ | ----- | ---------------------------------------------------------------------------------- |
-| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                         |
-| 2    | Asset              | 3     | hero background + 2 card images, uploaded from the source demo space's public CDN |
-| 3    | Entry              | 3     | 3 `promotion` entries (hero + 2 cards)                                             |
-| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by ComponentTypes                 |
-| 5    | ComponentType      | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card  |
-| 6    | Template           | 1     | `page` (passthrough)                                                               |
-| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to CT props)      |
-| 8    | (linkage)          | 2     | Append DA links to hero-plain and card ComponentTypes, republish                   |
-| 9    | Experience         | 1     | `landing` — hero + Section(card, card)                                             |
+| Step | Resource type | Count | Notes                                                                             |
+| ---- | ------------- | ----- | --------------------------------------------------------------------------------- |
+| 1    | ContentType   | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                        |
+| 2    | Asset         | 3     | hero background + 2 card images, uploaded from the source demo space's public CDN |
+| 3    | Entry         | 3     | 3 `promotion` entries (hero + 2 cards)                                            |
+| 4    | DesignToken   | 15    | color/size/fontSize/fontWeight tokens referenced by ComponentTypes                |
+| 5    | ComponentType | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card  |
+| 6    | Template      | 1     | `page` (passthrough)                                                              |
+| 7    | DataAssembly  | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to CT props)      |
+| 8    | (linkage)     | 2     | Append DA links to hero-plain and card ComponentTypes, republish                  |
+| 9    | Experience    | 1     | `landing` — hero + Section(card, card)                                            |
 
 Each step is idempotent: if a resource with the fixture's id already exists, that step is skipped. Re-running against a half-seeded env picks up where a previous run left off.
 

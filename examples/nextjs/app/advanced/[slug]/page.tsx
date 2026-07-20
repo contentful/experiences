@@ -55,9 +55,7 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
         // mode is on but CPA_TOKEN is unset, we still call preview but the
         // request will 401; document this in .env.example.
         accessToken:
-          previewMode && process.env.CPA_TOKEN
-            ? process.env.CPA_TOKEN
-            : process.env.CDA_TOKEN!,
+          previewMode && process.env.CPA_TOKEN ? process.env.CPA_TOKEN : process.env.CDA_TOKEN!,
         host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
       },
       {

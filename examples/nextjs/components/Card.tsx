@@ -34,13 +34,17 @@ export function Card({ title, teaser, ctaLabel, ctaUrl, image }: CardProps) {
   return (
     <article style={style}>
       {image && (
-        <img
-          src={image}
-          alt=""
-          style={{ width: '100%', height: '180px', objectFit: 'cover' }}
-        />
+        <img src={image} alt="" style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
       )}
-      <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
+      <div
+        style={{
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          flex: 1,
+        }}
+      >
         {title && <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{title}</h3>}
         {teaser && <p style={{ margin: 0, lineHeight: 1.5 }}>{teaser}</p>}
         {ctaLabel && ctaUrl && (

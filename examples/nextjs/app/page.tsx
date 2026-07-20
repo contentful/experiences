@@ -78,9 +78,8 @@ export default function HomePage() {
       </p>
 
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
-        <code>landing</code> is the id the bootstrap script (
-        <code>examples/scripts</code>) seeds by default. Replace it in the URL with any other
-        Experience id from your space.
+        <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
+        default. Replace it in the URL with any other Experience id from your space.
       </p>
     </main>
   );

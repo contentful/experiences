@@ -4,7 +4,8 @@ export const contentTypes: ContentTypeFixture[] = [
   {
     id: 'promotion',
     name: 'Promotion',
-    description: 'A promotional card: title + short teaser + long-form body + CTA + hero image. One entry backs one node in the demo Experience.',
+    description:
+      'A promotional card: title + short teaser + long-form body + CTA + hero image. One entry backs one node in the demo Experience.',
     displayField: 'internalName',
     fields: [
       { id: 'internalName', name: 'Internal name', type: 'Symbol', required: true },

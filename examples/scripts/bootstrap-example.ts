@@ -114,8 +114,7 @@ const resolveId = (tempId: TempId): string => {
 
 // A stable Contentful sys.id derived from a fixture tempId — keeps the seed
 // idempotent since we can .get() by known id before .create()ing.
-const stableId = (tempId: TempId) =>
-  `demo-${tempId.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+const stableId = (tempId: TempId) => `demo-${tempId.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
 
 // --- URN builders ------------------------------------------------------------
 
@@ -297,25 +296,22 @@ async function seedComponentType(fixture: ComponentTypeFixture) {
     if (!isNotFound(err)) throw err;
   }
 
-  const created = await cma.componentType.upsert(
-    { componentTypeId },
-    {
-      sys: { id: componentTypeId, type: 'ComponentType' },
-      name: fixture.name,
-      description: fixture.description ?? '',
-      viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
-      contentProperties: (fixture.contentProperties ?? []).map((p) => ({
-        ...p,
-        required: p.required ?? false,
-      })),
-      designProperties: fixture.designProperties ?? [],
-      slots: (fixture.slots ?? []).map((s) => ({
-        ...s,
-        required: false,
-        validations: [],
-      })),
-    } as never
-  );
+  const created = await cma.componentType.upsert({ componentTypeId }, {
+    sys: { id: componentTypeId, type: 'ComponentType' },
+    name: fixture.name,
+    description: fixture.description ?? '',
+    viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
+    contentProperties: (fixture.contentProperties ?? []).map((p) => ({
+      ...p,
+      required: p.required ?? false,
+    })),
+    designProperties: fixture.designProperties ?? [],
+    slots: (fixture.slots ?? []).map((s) => ({
+      ...s,
+      required: false,
+      validations: [],
+    })),
+  } as never);
   await cma.componentType.publish({
     componentTypeId,
     version: created.sys.version,
@@ -369,10 +365,10 @@ async function seedTemplate(fixture: TemplateFixture) {
   };
 
   if (!existing) {
-    const created = await cma.template.upsert(
-      { templateId },
-      { sys: { id: templateId, type: 'Template' }, ...templateBody } as never
-    );
+    const created = await cma.template.upsert({ templateId }, {
+      sys: { id: templateId, type: 'Template' },
+      ...templateBody,
+    } as never);
     await cma.template.publish({ templateId, version: created.sys.version });
     log(`  ✓ Template "${fixture.id}" created + published`);
     return;
@@ -407,13 +403,10 @@ async function seedTemplate(fixture: TemplateFixture) {
     }
   }
 
-  const updated = await cma.template.upsert(
-    { templateId },
-    {
-      sys: { id: templateId, type: 'Template', version: existing.sys.version },
-      ...templateBody,
-    } as never
-  );
+  const updated = await cma.template.upsert({ templateId }, {
+    sys: { id: templateId, type: 'Template', version: existing.sys.version },
+    ...templateBody,
+  } as never);
   await cma.template.publish({ templateId, version: updated.sys.version });
   log(`  ✓ Template "${fixture.id}" updated + published`);
 }
@@ -444,24 +437,21 @@ async function seedDataAssembly(fixture: DataAssemblyFixture) {
     };
   }
 
-  const created = await cma.dataAssembly.create(
-    {},
-    {
-      sys: {
-        type: 'DataAssembly',
-        dataType: fixture.dataType.map((p) => ({
-          ...p,
-          required: p.required ?? false,
-        })),
-      },
-      name: fixture.name,
-      description: fixture.description ?? '',
-      metadata: { tags: [] },
-      parameters,
-      resolvers: fixture.resolvers,
-      return: fixture.return,
-    } as never
-  );
+  const created = await cma.dataAssembly.create({}, {
+    sys: {
+      type: 'DataAssembly',
+      dataType: fixture.dataType.map((p) => ({
+        ...p,
+        required: p.required ?? false,
+      })),
+    },
+    name: fixture.name,
+    description: fixture.description ?? '',
+    metadata: { tags: [] },
+    parameters,
+    resolvers: fixture.resolvers,
+    return: fixture.return,
+  } as never);
   await cma.dataAssembly.publish({
     dataAssemblyId: created.sys.id,
     version: created.sys.version,
@@ -505,19 +495,16 @@ async function linkDataAssembliesToComponentTypes() {
         },
       })),
     ];
-    const updated = await cma.componentType.upsert(
-      { componentTypeId },
-      {
-        sys: { id: componentTypeId, type: 'ComponentType', version: current.sys.version },
-        name: current.name,
-        description: current.description,
-        viewports: current.viewports,
-        contentProperties: current.contentProperties,
-        designProperties: current.designProperties,
-        slots: current.slots,
-        dataAssemblies: newLinks,
-      } as never
-    );
+    const updated = await cma.componentType.upsert({ componentTypeId }, {
+      sys: { id: componentTypeId, type: 'ComponentType', version: current.sys.version },
+      name: current.name,
+      description: current.description,
+      viewports: current.viewports,
+      contentProperties: current.contentProperties,
+      designProperties: current.designProperties,
+      slots: current.slots,
+      dataAssemblies: newLinks,
+    } as never);
     await cma.componentType.publish({
       componentTypeId,
       version: updated.sys.version,
@@ -613,10 +600,19 @@ async function seedExperience(fixture: ExperienceFixture) {
   const upserted = await cma.experience.upsert(
     { experienceId },
     (existing
-      ? { sys: { id: experienceId, type: 'Experience', version: existing.sys.version }, ...commonBody }
-      : { sys: { id: experienceId, type: 'Experience' }, template: templateLink, ...commonBody }) as never
+      ? {
+          sys: { id: experienceId, type: 'Experience', version: existing.sys.version },
+          ...commonBody,
+        }
+      : {
+          sys: { id: experienceId, type: 'Experience' },
+          template: templateLink,
+          ...commonBody,
+        }) as never
   );
-  log(existing ? `  ✓ Experience "${fixture.id}" updated` : `  ✓ Experience "${fixture.id}" created`);
+  log(
+    existing ? `  ✓ Experience "${fixture.id}" updated` : `  ✓ Experience "${fixture.id}" created`
+  );
 
   const isPublished =
     !!upserted.sys.publishedVersion && upserted.sys.publishedVersion === upserted.sys.version;

@@ -43,11 +43,11 @@ Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in
 
 ### Tokens summary
 
-| Token       | API                | Used by                                | Required?                    |
-| ----------- | ------------------ | -------------------------------------- | ---------------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)   | Yes, to run bootstrap        |
-| `CDA_TOKEN` | Content Delivery   | The example app                        | Yes, to run the app          |
-| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`   | Only for preview mode        |
+| Token       | API                | Used by                              | Required?             |
+| ----------- | ------------------ | ------------------------------------ | --------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
+| `CDA_TOKEN` | Content Delivery   | The example app                      | Yes, to run the app   |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true` | Only for preview mode |
 
 ## File map
 

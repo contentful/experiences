@@ -2,7 +2,13 @@ import type { ComponentTypeFixture } from './types.js';
 
 // Shared allowed-resource lists. The token strings must match the design-token
 // table in the example app (examples/nextjs/lib/design-tokens.ts).
-const COLOR_TOKENS = ['color.primary', 'color.primaryText', 'color.text', 'color.white', 'color.none'];
+const COLOR_TOKENS = [
+  'color.primary',
+  'color.primaryText',
+  'color.text',
+  'color.white',
+  'color.none',
+];
 const SIZE_TOKENS = ['size.xl', 'size.md', 'size.sm', 'size.none'];
 const FONT_SIZE_TOKENS = ['fontSize.3xl', 'fontSize.lg', 'fontSize.md', 'fontSize.sm'];
 const FONT_WEIGHT_TOKENS = ['fontWeight.bold', 'fontWeight.normal'];

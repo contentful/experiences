@@ -27,8 +27,7 @@ export const entries: EntryFixture[] = [
       internalName: { 'en-US': 'Hero — Modernize your content stack' },
       title: { 'en-US': 'Ready to modernize your content stack?' },
       teaser: {
-        'en-US':
-          'Unify your content operations and deliver experiences that convert.',
+        'en-US': 'Unify your content operations and deliver experiences that convert.',
       },
       body: {
         'en-US': rt([
@@ -86,8 +85,7 @@ export const entries: EntryFixture[] = [
         'en-US': rt([
           [
             {
-              text:
-                'Contentful isn’t just a CMS — it’s a content infrastructure layer for developers building modern digital experiences.',
+              text: 'Contentful isn’t just a CMS — it’s a content infrastructure layer for developers building modern digital experiences.',
             },
           ],
         ]),

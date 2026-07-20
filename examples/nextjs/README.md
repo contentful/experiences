@@ -56,20 +56,20 @@ Then visit `http://localhost:3000/advanced/landing?preview=true&locale=en-US`.
 
 ### Tokens summary
 
-| Token       | API                | Used by                                           | Required?                              |
-| ----------- | ------------------ | ------------------------------------------------- | -------------------------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)              | Yes, to run bootstrap                  |
+| Token       | API                | Used by                                          | Required?                              |
+| ----------- | ------------------ | ------------------------------------------------ | -------------------------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)             | Yes, to run bootstrap                  |
 | `CDA_TOKEN` | Content Delivery   | The example app for `/landing` and `/advanced/*` | Yes, to run the app                    |
-| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`              | Only for preview mode on `/advanced/*` |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`             | Only for preview mode on `/advanced/*` |
 
 ## Two routes, same data
 
 The example ships two side-by-side routes so you can see what each SDK option gives you. They render the same Experience id; only the SDK setup changes.
 
-| Route              | Try it locally                                                              | Config                           | Demonstrates                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `/[slug]`          | `http://localhost:3000/landing`                                             | `experience-config.tsx`          | The minimum: `fetchExperience` into `<ServerExperienceRenderer>` with `NotFoundError` routed to Next's `notFound()`. |
-| `/advanced/[slug]` | `http://localhost:3000/advanced/landing?preview=true&locale=en-US`          | `experience-config-advanced.tsx` | Preview mode via `?preview=true` (needs `CPA_TOKEN`), User-Agent to `initialViewportId`, async `resolveData`.        |
+| Route              | Try it locally                                                     | Config                           | Demonstrates                                                                                                         |
+| ------------------ | ------------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/[slug]`          | `http://localhost:3000/landing`                                    | `experience-config.tsx`          | The minimum: `fetchExperience` into `<ServerExperienceRenderer>` with `NotFoundError` routed to Next's `notFound()`. |
+| `/advanced/[slug]` | `http://localhost:3000/advanced/landing?preview=true&locale=en-US` | `experience-config-advanced.tsx` | Preview mode via `?preview=true` (needs `CPA_TOKEN`), User-Agent to `initialViewportId`, async `resolveData`.        |
 
 Source: [`app/[slug]/page.tsx`](./app/[slug]/page.tsx), [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx).
 

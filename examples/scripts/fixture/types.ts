@@ -17,9 +17,32 @@ export type ContentTypeFixture = {
 };
 
 export type ContentTypeField =
-  | { id: string; name: string; type: 'Symbol' | 'Text' | 'Date' | 'RichText' | 'Object' | 'Boolean' | 'Integer' | 'Number'; required?: boolean; localized?: boolean }
-  | { id: string; name: string; type: 'Link'; linkType: 'Asset' | 'Entry'; required?: boolean; localized?: boolean; validations?: unknown[] }
-  | { id: string; name: string; type: 'Array'; items: { type: 'Link'; linkType: 'Asset' | 'Entry'; validations?: unknown[] } | { type: 'Symbol'; validations?: unknown[] }; required?: boolean; localized?: boolean };
+  | {
+      id: string;
+      name: string;
+      type: 'Symbol' | 'Text' | 'Date' | 'RichText' | 'Object' | 'Boolean' | 'Integer' | 'Number';
+      required?: boolean;
+      localized?: boolean;
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'Link';
+      linkType: 'Asset' | 'Entry';
+      required?: boolean;
+      localized?: boolean;
+      validations?: unknown[];
+    }
+  | {
+      id: string;
+      name: string;
+      type: 'Array';
+      items:
+        | { type: 'Link'; linkType: 'Asset' | 'Entry'; validations?: unknown[] }
+        | { type: 'Symbol'; validations?: unknown[] };
+      required?: boolean;
+      localized?: boolean;
+    };
 
 // --- Assets -------------------------------------------------------------------
 
@@ -54,8 +77,12 @@ export type ComponentTypeFixture = {
   slots?: SlotDef[];
 };
 
-export type ContentPropertyDef =
-  | { id: string; name: string; type: 'String' | 'RichText' | 'Boolean' | 'Number'; required?: boolean };
+export type ContentPropertyDef = {
+  id: string;
+  name: string;
+  type: 'String' | 'RichText' | 'Boolean' | 'Number';
+  required?: boolean;
+};
 
 export type DesignPropertyDef = {
   id: string;
@@ -139,9 +166,7 @@ export type ExperienceFixture = {
   slots: { content: ExperienceNode[] };
 };
 
-export type ExperienceNode =
-  | InlineFragmentNode
-  | ContainerNode;
+export type ExperienceNode = InlineFragmentNode | ContainerNode;
 
 // An InlineFragment node has its content sourced from a DataAssembly binding.
 export type InlineFragmentNode = {

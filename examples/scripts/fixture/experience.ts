@@ -77,7 +77,8 @@ const cardsContainerNode: ExperienceNode = {
 export const experience: ExperienceFixture = {
   id: 'landing',
   name: 'Landing (demo)',
-  description: 'Minimal ExO demo — 1 hero + 2 cards, all bound via DataAssembly to promotion entries',
+  description:
+    'Minimal ExO demo — 1 hero + 2 cards, all bound via DataAssembly to promotion entries',
   templateId: 'page',
   viewports: [{ id: '_', query: '*', displayName: 'Default', previewSize: '1024px' }],
   slots: {
