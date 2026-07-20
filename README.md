@@ -15,6 +15,21 @@ That's the only SDK package you install. The adapter re-exports everything you n
 
 Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same design-token plus `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
 
+## Contents
+
+- [Getting started: the simple path](#getting-started-the-simple-path)
+- [Styling components](#styling-components)
+- [Design tokens](#design-tokens)
+- [Advanced setup](#advanced-setup)
+- [Svelte / SvelteKit](#svelte--sveltekit)
+- [Examples](#examples)
+- [API reference](#api-reference)
+- [Design system stays portable](#design-system-stays-portable)
+- [Workspace internals](#workspace-internals)
+- [Contributing](#contributing)
+- [Support](#support)
+- [License](#license)
+
 ---
 
 ## Getting started: the simple path
