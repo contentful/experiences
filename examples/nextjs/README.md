@@ -13,17 +13,27 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 ## Run it
 
+You need a Contentful space seeded with the demo Experience before this app can render anything. The `examples/scripts/bootstrap-example.ts` script provisions everything (ContentType, entries, assets, design tokens, component types, template, data assemblies, and the Experience itself) via the management API — see [`examples/scripts/README.md`](../scripts/README.md) for the full breakdown.
+
 ```sh
 # From the repo root:
 npm install --ignore-scripts
-npm run build                 # builds the SDK packages
+npm run build                          # build the SDK packages
 
-cd examples/nextjs
-cp .env.example .env.local    # fill in SPACE_ID + CDA_TOKEN
+# 1. Seed the demo Experience into your Contentful space.
+cd examples/scripts
+cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
+npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+
+# 2. Run the example against the seeded space.
+cd ../nextjs
+cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
-Then visit `http://localhost:3000/<experience-id>`. The slug becomes the Experience ID passed to `client.view.getExperience`.
+Then visit `http://localhost:3000/landing` (or whichever experienceId the bootstrap printed). The slug becomes the Experience ID passed to `client.view.getExperience`.
+
+**Tokens.** `CMA_TOKEN` is a Personal Access Token used only by the one-time bootstrap; the example app itself never sees it. `CDA_TOKEN` is a Content Delivery API token scoped to the space — this is what the running app uses.
 
 ## Two routes, same data
 

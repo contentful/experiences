@@ -362,10 +362,18 @@ npx nx run-many -t build --skip-nx-cache
 ### Run the example app
 
 ```sh
-cd examples/nextjs
-cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
-npm run dev                  # http://localhost:3000/<experience-id>
+# 1. Seed the demo Experience into your target space (one-time).
+cd examples/scripts
+cp .env.example .env         # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
+npm run bootstrap            # prints experienceId (default: `landing`)
+
+# 2. Run the app.
+cd ../nextjs
+cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+npm run dev                  # http://localhost:3000/landing
 ```
+
+The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, ComponentTypes, Template, DataAssemblies, Experience — via the experiences management API (currently `contentful-management@12.6.0-dev.4`). Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
 
 ### Add a new framework adapter
 

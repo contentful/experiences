@@ -335,16 +335,26 @@ Runnable apps for both frameworks live in [`examples/`](./examples). They regist
 | [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Simple + advanced routes (preview, UA→viewport, async `resolveData`), design tokens, styling hooks |
 | [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts`             |
 
+Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, ComponentTypes, template, DataAssemblies, and the Experience itself.
+
 ```sh
 npm install --ignore-scripts
-npm run build                       # build the SDK packages
+npm run build                          # build the SDK packages
 
-cd examples/nextjs                  # or examples/sveltekit
-cp .env.example .env.local          # sveltekit uses .env; fill in SPACE_ID + CDA_TOKEN
+# 1. Seed the demo Experience into your Contentful space (one-time).
+cd examples/scripts
+cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
+npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+
+# 2. Run one of the example apps against the seeded space.
+cd ../nextjs                           # or ../sveltekit
+cp .env.example .env.local             # sveltekit uses .env; fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
-Then visit `/<experience-id>`. See each example's README for its file map and route-by-route walkthrough.
+Then visit `/landing` (or whichever experienceId the bootstrap printed). See each example's README for its file map and route-by-route walkthrough.
+
+**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime.
 
 ---
 
