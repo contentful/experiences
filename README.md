@@ -17,7 +17,7 @@ Both adapters share the same public-API shape: the same `Config`, the same `fetc
 
 ## Contents
 
-- [Getting started: the simple path](#getting-started-the-simple-path)
+- [Getting started](#getting-started-the-simple-path)
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
@@ -32,7 +32,7 @@ Both adapters share the same public-API shape: the same `Config`, the same `fetc
 
 ---
 
-## Getting started: the simple path
+## Getting started
 
 Three steps: register your components, fetch and resolve, render. The minimal page is one `fetchExperience` call whose result goes straight into one `<ServerExperienceRenderer>`.
 
@@ -108,9 +108,9 @@ A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextj
 
 ## Styling components
 
-Design values are **not** injected as props. A component reads them itself through the `useDesignValues()` hook, the one place design comes from. That keeps the SDK from spreading unknown `cf`-prefixed props onto your components and keeps your prop types clean.
+Design values are **not** injected as props. A component reads them itself through the `useDesignValues()` hook, the one place design comes from.
 
-The hook returns a flat record of every resolved design value for the current node: viewport-cascaded, token-resolved, keyed exactly as authored. That includes real CSS-shaped values like `fontSize` and `backgroundColor`, plus author-defined semantic styling like `variant`, `as`, and `ratio`.
+The hook returns a flat record of every resolved design value for the current node. That includes real CSS-shaped values like `fontSize` and `backgroundColor`, plus author-defined semantic styling like `variant`, `as`, and `ratio`.
 
 `toCss()` turns that record into a ready-to-spread `CSSProperties` object, keeping only the keys that map to a real CSS property and dropping the semantic ones:
 
