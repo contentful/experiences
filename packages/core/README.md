@@ -1,4 +1,4 @@
-# @contentful/experiences-core
+# @contentful/experiences-sdk-core
 
 > ⚠️ **Internal package.** Customers do not install this directly. The framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports everything customers need.
 

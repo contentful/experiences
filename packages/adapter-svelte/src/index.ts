@@ -4,7 +4,7 @@
  * Customers add ONLY this package to their app's dependencies. Everything
  * needed to render an Experience — types, the resolver, viewport utilities,
  * the renderer components, the authoring helpers — is re-exported from here.
- * The internal `@contentful/experiences-core` and
+ * The internal `@contentful/experiences-sdk-core` and
  * `@contentful/experiences-design` packages are workspace-only implementation
  * details; they are not part of the public API.
  *
@@ -63,8 +63,8 @@ export type {
 } from './types.js';
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
-export { resolveExperience } from '@contentful/experiences-core';
-export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-core';
+export { resolveExperience } from '@contentful/experiences-sdk-core';
+export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
 export type {
@@ -86,7 +86,7 @@ export type {
   TemplateRef,
   ValuesByViewport,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
 export {

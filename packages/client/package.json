@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "@contentful/experience-delivery": "1.0.0-dev.3",
-    "@contentful/experiences-core": "0.5.1"
+    "@contentful/experiences-sdk-core": "0.5.1"
   }
 }

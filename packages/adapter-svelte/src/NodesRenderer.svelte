@@ -25,7 +25,7 @@
  * the active viewport is sourced (initial seed vs reactive matchMedia).
 -->
 <script lang="ts">
-  import type { PortableRenderNode } from '@contentful/experiences-core';
+  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
   import NodeRenderer from './NodeRenderer.svelte';
   import NodesRenderer from './NodesRenderer.svelte';

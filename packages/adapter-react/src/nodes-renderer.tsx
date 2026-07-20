@@ -10,7 +10,7 @@ import type {
   PortableRenderNode,
   PortableTemplate,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
 import {

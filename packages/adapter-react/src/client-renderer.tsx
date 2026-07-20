@@ -13,7 +13,7 @@ import type {
   ExperienceContext,
   PortableRenderPlan,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';

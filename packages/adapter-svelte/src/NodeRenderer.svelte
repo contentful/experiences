@@ -6,7 +6,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import type { PortableRenderNode } from '@contentful/experiences-core';
+  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
   import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
   import { setContentfulComponent, setResolvedDesign } from './context.js';

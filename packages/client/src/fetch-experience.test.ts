@@ -20,7 +20,7 @@ const { mockGetExperience, mockPayload, mockPlan } = vi.hoisted(() => {
   return { mockGetExperience, mockPayload, mockPlan };
 });
 
-vi.mock('@contentful/experiences-core', () => ({
+vi.mock('@contentful/experiences-sdk-core', () => ({
   resolveExperience: vi.fn().mockResolvedValue(mockPlan),
 }));
 
@@ -102,7 +102,7 @@ describe('fetchExperience', () => {
     it('passes empty-nodes payloads through to the resolver', async () => {
       const emptyPayload = { ...mockPayload, nodes: [] };
       mockGetExperience.mockResolvedValue(emptyPayload);
-      const { resolveExperience } = await import('@contentful/experiences-core');
+      const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
       const result = await fetchExperience(
         experienceOptions,

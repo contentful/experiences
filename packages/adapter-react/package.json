@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@contentful/experiences-client": "0.1.1",
-    "@contentful/experiences-core": "0.5.1",
+    "@contentful/experiences-sdk-core": "0.5.1",
     "@contentful/experiences-design": "0.5.1"
   },
   "peerDependencies": {

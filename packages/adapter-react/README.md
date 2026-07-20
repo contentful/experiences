@@ -8,7 +8,7 @@ The React adapter for the Contentful Experiences SDK suite. Renders Experience p
 npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
+This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
 
 ---
 

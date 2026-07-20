@@ -78,7 +78,7 @@ The SvelteKit example under `examples/sveltekit` mirrors it 1:1.
 
 ```
 packages/
-├── core/            # @contentful/experiences-core   — runtime-neutral types + resolveExperience
+├── core/            # @contentful/experiences-sdk-core   — runtime-neutral types + resolveExperience
 ├── design/          # @contentful/experiences-design — pure viewport + design-value math
 ├── client/          # @contentful/experiences-client — delivery client + fetchExperience
 ├── adapter-react/   # @contentful/experiences-react  — React renderer (customer-facing)
