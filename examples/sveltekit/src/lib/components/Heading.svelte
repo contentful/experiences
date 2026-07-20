@@ -1,5 +1,7 @@
 <script lang="ts" module>
-  export interface TextProps {
+  export type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+
+  export interface HeadingProps {
     text?: string;
   }
 </script>
@@ -7,11 +9,12 @@
 <script lang="ts">
   import { getDesignValues, toCss } from '@contentful/experiences-svelte';
 
-  let { text }: TextProps = $props();
+  let { text }: HeadingProps = $props();
 
   const design = $derived(getDesignValues());
+  const tag = $derived<HeadingTag>((design.as as HeadingTag | undefined) ?? 'h2');
   const style = $derived.by(() => {
-    const base = 'font-size: 16px; line-height: 1.5; color: #4b5563; margin: 0';
+    const base = 'margin: 0; color: #1f2937';
     const css = toCss(design);
     const cssStr = Object.entries(css)
       .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
@@ -21,4 +24,4 @@
   });
 </script>
 
-<p {style}>{text ?? ''}</p>
+<svelte:element this={tag} {style}>{text ?? ''}</svelte:element>
