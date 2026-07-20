@@ -1,6 +1,6 @@
 # Contentful Experiences SDK
 
-> ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
+> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
 
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
