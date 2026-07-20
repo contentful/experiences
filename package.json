@@ -47,7 +47,7 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.0.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.5.2",
+    "lint-staged": "^17.0.8",
     "nx": "^22.7.6",
     "prettier": "^3.0.0",
     "react": "^19.2.7",
