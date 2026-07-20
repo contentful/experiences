@@ -33,7 +33,11 @@ npm run dev
 
 Then visit `http://localhost:3000/landing` (or whichever experienceId the bootstrap printed). The slug becomes the Experience ID passed to `client.view.getExperience`.
 
-**Tokens.** `CMA_TOKEN` is a Personal Access Token used only by the one-time bootstrap; the example app itself never sees it. `CDA_TOKEN` is a Content Delivery API token scoped to the space — this is what the running app uses.
+**Tokens.**
+
+- `CMA_TOKEN` — Personal Access Token used only by the one-time bootstrap; the example app itself never sees it.
+- `CDA_TOKEN` — Content Delivery API token scoped to the space. This is what the running app uses for the simple route.
+- `CPA_TOKEN` — Content Preview API token, only needed for the `/advanced/[slug]?preview=true` path (preview reads from a separate host that rejects CDA tokens). Leave blank if you don't need preview mode; the "Advanced demo (preview)" button on the index page requires it.
 
 ## Two routes, same data
 
