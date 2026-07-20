@@ -76,6 +76,18 @@ export type TemplateFixture = {
   description?: string;
   contentProperties?: ContentPropertyDef[];
   designProperties?: DesignPropertyDef[];
+  // Slot declarations — Experiences using this template put their top-level
+  // nodes into a slot with a matching id. `slots: [{ id: 'content' }]` on the
+  // template + a `componentTree` node with `{ nodeType: 'Slot', slotId: 'content' }`
+  // is the mechanism that says "render the Experience's `content` slot here."
+  slots?: SlotDef[];
+  componentTree?: TemplateTreeNode[];
+};
+
+export type TemplateTreeNode = {
+  id: string;
+  nodeType: 'Slot';
+  slotId: string;
 };
 
 // --- DataAssemblies -----------------------------------------------------------

@@ -325,30 +325,97 @@ async function seedComponentType(fixture: ComponentTypeFixture) {
 
 async function seedTemplate(fixture: TemplateFixture) {
   const templateId = fixture.id;
+  let existing: Awaited<ReturnType<typeof cma.template.get>> | null = null;
   try {
-    await cma.template.get({ templateId });
-    log(`  ✓ Template "${fixture.id}" already exists — skipping`);
-    return;
+    existing = await cma.template.get({ templateId });
   } catch (err) {
     if (!isNotFound(err)) throw err;
   }
 
-  const created = await cma.template.upsert(
+  const desiredSlots = (fixture.slots ?? []).map((s) => ({
+    ...s,
+    required: false,
+    validations: [],
+  }));
+  const desiredTree = fixture.componentTree ?? [];
+
+  const templateBody = {
+    name: fixture.name,
+    description: fixture.description ?? '',
+    viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
+    contentProperties: (fixture.contentProperties ?? []).map((p) => ({
+      ...p,
+      required: p.required ?? false,
+    })),
+    designProperties: fixture.designProperties ?? [],
+    slots: desiredSlots,
+    componentTree: desiredTree,
+    // Composed (not Coded) — a Coded template requires an empty componentTree.
+    // The `page` template has a Slot node in its tree, so it must be composed.
+    metadata: {
+      tags: [],
+      annotations: {
+        Template: [
+          {
+            sys: {
+              id: 'Contentful:ComposedImplementation',
+              type: 'Link',
+              linkType: 'Annotation',
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  if (!existing) {
+    const created = await cma.template.upsert(
+      { templateId },
+      { sys: { id: templateId, type: 'Template' }, ...templateBody } as never
+    );
+    await cma.template.publish({ templateId, version: created.sys.version });
+    log(`  ✓ Template "${fixture.id}" created + published`);
+    return;
+  }
+
+  // Always upsert on existing so any fixture edit (slots, tree, annotations,
+  // whatever) takes effect. If we're already published at the current version
+  // we can skip the network round-trip.
+  const isPublished =
+    !!existing.sys.publishedVersion && existing.sys.publishedVersion === existing.sys.version;
+  if (isPublished) {
+    // Compare desired vs. current to decide if we still need to write.
+    const currentTree = JSON.stringify(existing.componentTree ?? []);
+    const desiredTreeJson = JSON.stringify(desiredTree);
+    const currentSlotIds = (existing.slots ?? []).map((s) => s.id).sort();
+    const desiredSlotIds = desiredSlots.map((s) => s.id).sort();
+    const currentImpl = (
+      ((existing.metadata as { annotations?: { Template?: Array<{ sys: { id: string } }> } })
+        ?.annotations?.Template ?? []) as Array<{ sys: { id: string } }>
+    )
+      .map((a) => a.sys.id)
+      .sort()
+      .join(',');
+    const desiredImpl = 'Contentful:ComposedImplementation';
+    if (
+      currentTree === desiredTreeJson &&
+      JSON.stringify(currentSlotIds) === JSON.stringify(desiredSlotIds) &&
+      currentImpl === desiredImpl
+    ) {
+      log(`  ✓ Template "${fixture.id}" already exists — skipping`);
+      return;
+    }
+  }
+
+  const updated = await cma.template.upsert(
     { templateId },
     {
-      sys: { id: templateId, type: 'Template' },
-      name: fixture.name,
-      description: fixture.description ?? '',
-      viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
-      contentProperties: (fixture.contentProperties ?? []).map((p) => ({
-        ...p,
-        required: p.required ?? false,
-      })),
-      designProperties: fixture.designProperties ?? [],
+      sys: { id: templateId, type: 'Template', version: existing.sys.version },
+      ...templateBody,
     } as never
   );
-  await cma.template.publish({ templateId, version: created.sys.version });
-  log(`  ✓ Template "${fixture.id}" created + published`);
+  await cma.template.publish({ templateId, version: updated.sys.version });
+  log(`  ✓ Template "${fixture.id}" updated + published`);
 }
 
 async function seedDataAssembly(fixture: DataAssemblyFixture) {
@@ -519,44 +586,45 @@ async function seedExperience(fixture: ExperienceFixture) {
     if (!isNotFound(err)) throw err;
   }
 
-  // Create if missing.
-  if (!existing) {
-    const slots: Record<string, unknown[]> = {};
-    for (const [slotName, children] of Object.entries(fixture.slots)) {
-      slots[slotName] = children.map(resolveNode);
-    }
-    existing = await cma.experience.upsert(
-      { experienceId },
-      {
-        sys: { id: experienceId, type: 'Experience' },
-        template: {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: templateUrn(fixture.templateId),
-          },
-        },
-        name: fixture.name,
-        description: fixture.description ?? '',
-        viewports: fixture.viewports,
-        designProperties: {},
-        metadata: { tags: [], concepts: [] },
-        slots,
-      } as never
-    );
-    log(`  ✓ Experience "${fixture.id}" created`);
-  } else {
-    log(`  ✓ Experience "${fixture.id}" already exists`);
+  const slots: Record<string, unknown[]> = {};
+  for (const [slotName, children] of Object.entries(fixture.slots)) {
+    slots[slotName] = children.map(resolveNode);
   }
 
-  // Publish if not yet published.
+  // Always upsert so we pick up template/DA changes from earlier steps in the
+  // run — the CMA rejects Experience publish with `DefiningEntityIsChanged` if
+  // any referenced entity has moved on since the Experience's last version.
+  // `template` is immutable after creation, so include it only on create.
+  const templateLink = {
+    sys: {
+      type: 'ResourceLink' as const,
+      linkType: 'Contentful:Template' as const,
+      urn: templateUrn(fixture.templateId),
+    },
+  };
+  const commonBody = {
+    name: fixture.name,
+    description: fixture.description ?? '',
+    viewports: fixture.viewports,
+    designProperties: {},
+    metadata: { tags: [], concepts: [] },
+    slots,
+  };
+  const upserted = await cma.experience.upsert(
+    { experienceId },
+    (existing
+      ? { sys: { id: experienceId, type: 'Experience', version: existing.sys.version }, ...commonBody }
+      : { sys: { id: experienceId, type: 'Experience' }, template: templateLink, ...commonBody }) as never
+  );
+  log(existing ? `  ✓ Experience "${fixture.id}" updated` : `  ✓ Experience "${fixture.id}" created`);
+
   const isPublished =
-    !!existing.sys.publishedVersion && existing.sys.publishedVersion === existing.sys.version;
+    !!upserted.sys.publishedVersion && upserted.sys.publishedVersion === upserted.sys.version;
   if (isPublished) {
     log(`  ✓ Experience "${fixture.id}" already published`);
   } else {
     await cma.experience.publish(
-      { experienceId: existing.sys.id, version: existing.sys.version },
+      { experienceId: upserted.sys.id, version: upserted.sys.version },
       { add: ['en-US'] }
     );
     log(`  ✓ Experience "${fixture.id}" published`);
