@@ -5,15 +5,18 @@ export interface PageProps {
   children?: ReactNode;
 }
 
-/** Page-level template: wraps all top-level nodes in the outer page chrome. */
+/**
+ * Page-level template: passthrough wrapper. Each top-level node handles its
+ * own containment — the hero goes edge-to-edge, the cards Section applies
+ * its own horizontal padding via design values. Keeping the template thin
+ * matches the Svelte example and lets full-width heroes render without a
+ * fight against a max-width parent.
+ */
 export function Page({ children }: PageProps) {
   const wrapper: CSSProperties = {
-    maxWidth: 1024,
-    margin: '0 auto',
-    padding: '48px 24px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 48,
+    gap: 16,
   };
   return <main style={wrapper}>{children}</main>;
 }
