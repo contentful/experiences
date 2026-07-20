@@ -13,31 +13,41 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 
 ## Run it
 
-You need a Contentful space seeded with the demo Experience before this app can render anything. The `examples/scripts/bootstrap-example.ts` script provisions everything (ContentType, entries, assets, design tokens, component types, template, data assemblies, and the Experience itself) via the management API — see [`examples/scripts/README.md`](../scripts/README.md) for the full breakdown.
+The example is a real integration against Contentful, not a mock. You need a Contentful space with the demo content model + Experience seeded, plus a Content Delivery API token. The [`examples/scripts/bootstrap-example.ts`](../scripts/bootstrap-example.ts) script does the seeding via the management API — see [`examples/scripts/README.md`](../scripts/README.md) for what it provisions.
+
+### 1. Seed the demo Experience (one-time)
 
 ```sh
 # From the repo root:
 npm install --ignore-scripts
 npm run build                          # build the SDK packages
 
-# 1. Seed the demo Experience into your Contentful space.
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
 npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+```
 
-# 2. Run the example against the seeded space.
+### 2. Run the app
+
+```sh
 cd ../sveltekit
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
-Then visit `http://localhost:5173/landing` (or whichever experienceId the bootstrap printed). The slug becomes the Experience ID passed to `client.view.getExperience`.
+Visit `http://localhost:5173/landing`. `landing` is the Experience id the bootstrap printed; any other Experience id in your space works too.
 
-**Tokens.**
+### Optional: preview mode
 
-- `CMA_TOKEN` — Personal Access Token used only by the one-time bootstrap; the example app itself never sees it.
-- `CDA_TOKEN` — Content Delivery API token scoped to the space. This is what the running app uses.
-- `CPA_TOKEN` — Content Preview API token, only needed when hitting a route with `?preview=true` (preview reads from a separate host that rejects CDA tokens). Leave blank if you don't need preview mode.
+Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
+
+### Tokens summary
+
+| Token       | API                | Used by                                | Required?                    |
+| ----------- | ------------------ | -------------------------------------- | ---------------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)   | Yes, to run bootstrap        |
+| `CDA_TOKEN` | Content Delivery   | The example app                        | Yes, to run the app          |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`   | Only for preview mode        |
 
 ## File map
 

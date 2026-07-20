@@ -13,40 +13,65 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 ## Run it
 
-You need a Contentful space seeded with the demo Experience before this app can render anything. The `examples/scripts/bootstrap-example.ts` script provisions everything (ContentType, entries, assets, design tokens, component types, template, data assemblies, and the Experience itself) via the management API — see [`examples/scripts/README.md`](../scripts/README.md) for the full breakdown.
+The example is a real integration against Contentful, not a mock. You need:
+
+1. **A Contentful space** with the demo content model + Experience seeded into it (a one-time step below), and
+2. **Environment tokens** for the paths you want to hit — different Contentful APIs use different tokens.
+
+The [`examples/scripts/bootstrap-example.ts`](../scripts/bootstrap-example.ts) script does the seeding via the management API. See [`examples/scripts/README.md`](../scripts/README.md) for what it provisions.
+
+### 1. Seed the demo Experience (one-time)
 
 ```sh
 # From the repo root:
 npm install --ignore-scripts
 npm run build                          # build the SDK packages
 
-# 1. Seed the demo Experience into your Contentful space.
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
 npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+```
 
-# 2. Run the example against the seeded space.
+### 2a. Run the basic route (`/landing`)
+
+```sh
 cd ../nextjs
 cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
-Then visit `http://localhost:3000/landing` (or whichever experienceId the bootstrap printed). The slug becomes the Experience ID passed to `client.view.getExperience`.
+Visit `http://localhost:3000/landing`. This route is the minimal three-line integration described below — `fetchExperience` → `<ServerExperienceRenderer>`. It reads from the Content Delivery API using `CDA_TOKEN`.
 
-**Tokens.**
+### 2b. Run the advanced route (`/advanced/landing?preview=true`)
 
-- `CMA_TOKEN` — Personal Access Token used only by the one-time bootstrap; the example app itself never sees it.
-- `CDA_TOKEN` — Content Delivery API token scoped to the space. This is what the running app uses for the simple route.
-- `CPA_TOKEN` — Content Preview API token, only needed for the `/advanced/[slug]?preview=true` path (preview reads from a separate host that rejects CDA tokens). Leave blank if you don't need preview mode; the "Advanced demo (preview)" button on the index page requires it.
+The advanced route can also be reached at `http://localhost:3000/advanced/landing` (no query params) using the same `CDA_TOKEN` — you'll get the enrichment + viewport-seeding demo. To exercise **preview mode** as well (the "Advanced demo (preview)" button on the index page), you also need a **Content Preview API token** — preview requests hit `preview.xdn.contentful.com`, which rejects CDA tokens.
+
+Add it to `.env.local`:
+
+```
+CPA_TOKEN=...   # Content Preview API token, from Settings → API keys in your space
+```
+
+Then visit `http://localhost:3000/advanced/landing?preview=true&locale=en-US`.
+
+### Tokens summary
+
+| Token       | API                | Used by                                           | Required?                              |
+| ----------- | ------------------ | ------------------------------------------------- | -------------------------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)              | Yes, to run bootstrap                  |
+| `CDA_TOKEN` | Content Delivery   | The example app for `/landing` and `/advanced/*` | Yes, to run the app                    |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`              | Only for preview mode on `/advanced/*` |
 
 ## Two routes, same data
 
 The example ships two side-by-side routes so you can see what each SDK option gives you. They render the same Experience id; only the SDK setup changes.
 
-| Route              | Page                                                             | Config                           | Demonstrates                                                                                                         |
-| ------------------ | ---------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `/[slug]`          | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)                   | `experience-config.tsx`          | The minimum: `fetchExperience` into `<ServerExperienceRenderer>` with `NotFoundError` routed to Next's `notFound()`. |
-| `/advanced/[slug]` | [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx) | `experience-config-advanced.tsx` | Preview mode via `?preview=true`, User-Agent to `initialViewportId`, async `resolveData` with external fetch.        |
+| Route              | Try it locally                                                              | Config                           | Demonstrates                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/[slug]`          | `http://localhost:3000/landing`                                             | `experience-config.tsx`          | The minimum: `fetchExperience` into `<ServerExperienceRenderer>` with `NotFoundError` routed to Next's `notFound()`. |
+| `/advanced/[slug]` | `http://localhost:3000/advanced/landing?preview=true&locale=en-US`          | `experience-config-advanced.tsx` | Preview mode via `?preview=true` (needs `CPA_TOKEN`), User-Agent to `initialViewportId`, async `resolveData`.        |
+
+Source: [`app/[slug]/page.tsx`](./app/[slug]/page.tsx), [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx).
 
 The minimal `[slug]/page.tsx`:
 
