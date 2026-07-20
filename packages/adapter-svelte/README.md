@@ -8,7 +8,7 @@ The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience 
 npm install @contentful/experiences-svelte
 ```
 
-This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
+This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`. The other packages are workspace-internal.
 
 The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the rendering primitives change (Svelte 5 `Component`s, Snippets instead of `children: ReactNode`, and `getDesignValues()` instead of `useDesignValues()`).
 

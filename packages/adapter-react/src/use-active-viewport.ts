@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from 'react';
 
-import type { ViewportDef } from '@contentful/experiences-core';
+import type { ViewportDef } from '@contentful/experiences-sdk-core';
 import { getViewportIndex, toCssMediaQuery } from '@contentful/experiences-design';
 
 interface MediaQueryMatcher {

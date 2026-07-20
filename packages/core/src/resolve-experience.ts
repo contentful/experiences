@@ -106,7 +106,7 @@ function buildNode(
   if (!isComponentTypeNode(node)) {
     if (typeof console !== 'undefined') {
       console.warn(
-        '[@contentful/experiences-core] Skipping Template-variant node — Templates are not supported in v1.'
+        '[@contentful/experiences-sdk-core] Skipping Template-variant node — Templates are not supported in v1.'
       );
     }
     return null;

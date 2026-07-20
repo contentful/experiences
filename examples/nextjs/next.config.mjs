@@ -7,7 +7,7 @@ const nextConfig = {
     '@contentful/experiences-react',
     // Workspace-internal deps — Next still needs to compile their source
     // even though the customer's package.json only lists experiences-react.
-    '@contentful/experiences-core',
+    '@contentful/experiences-sdk-core',
     '@contentful/experiences-design',
   ],
 };

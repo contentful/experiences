@@ -6,8 +6,8 @@ import type {
   ExperiencePayload,
   ManualDesignValue,
   ValuesByViewport,
-} from '@contentful/experiences-core';
-import { resolveExperience } from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
+import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
 import type { Config } from './types.js';

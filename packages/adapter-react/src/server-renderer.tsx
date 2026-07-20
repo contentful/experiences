@@ -9,7 +9,7 @@ import type {
   ExperienceContext,
   PortableRenderPlan,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 import { getViewportIndex } from '@contentful/experiences-design';
 
 import { ExperienceProvider } from './context';

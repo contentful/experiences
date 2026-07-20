@@ -5,7 +5,7 @@ import type {
   ManualDesignValue,
   ValuesByViewport,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 import {
   applyTokenResolver,

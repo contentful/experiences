@@ -1,5 +1,5 @@
 {
-  "name": "@contentful/experiences-core",
+  "name": "@contentful/experiences-sdk-core",
   "version": "0.5.1",
   "description": "Runtime-neutral types + experience resolution for Contentful Experiences",
   "license": "MIT",

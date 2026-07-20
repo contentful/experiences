@@ -30,7 +30,7 @@ experiences/
 ├── .contentful/              # Repo-local Vault config + GitHub Action permissions
 ├── .github/workflows/        # CI: build → check → release (release runs only on main)
 ├── packages/
-│   ├── core/                 # @contentful/experiences-core (internal)
+│   ├── core/                 # @contentful/experiences-sdk-core (internal)
 │   ├── design/               # @contentful/experiences-design (internal)
 │   ├── client/               # @contentful/experiences-client (internal)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
@@ -42,13 +42,13 @@ experiences/
 
 ### Package roles
 
-| Folder                    | npm name                         | Audience                                                                                       |
-| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
-| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                                              |
-| `packages/client`         | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
-| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.                                |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
+| Folder                    | npm name                           | Audience                                                                                       |
+| ------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `packages/core`           | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
+| `packages/design`         | `@contentful/experiences-design`   | **Internal.** Pure viewport math.                                                              |
+| `packages/client`         | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
+| `packages/adapter-react`  | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything.                                |
+| `packages/adapter-svelte` | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
@@ -370,7 +370,7 @@ npm run dev                  # http://localhost:3000/<experience-id>
 2. Copy structure from `packages/adapter-react` (or `adapter-svelte`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish), `vitest.config.ts`
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
 4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
-5. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
+5. Re-export everything from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
 6. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
 7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
 

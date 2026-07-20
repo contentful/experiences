@@ -11,7 +11,7 @@ npm install @contentful/experiences-react     # React / Next.js
 npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 ```
 
-That's the only SDK package you install. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
+That's the only SDK package you install. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
 Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same design-token plus `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
 
@@ -547,13 +547,13 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 This is an Nx monorepo. You install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                         | Scope                                                                                              |
-| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                     | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                 | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Public.** Svelte 5 renderer with the same public API shape.                                      |
+| Folder                                                 | npm name                           | Scope                                                                                              |
+| ------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                     | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                 | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                 | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`.                                      |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`    | **Public.** React renderer + re-exports of everything else.                                        |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte`   | **Public.** Svelte 5 renderer with the same public API shape.                                      |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, and so on) and consume the same internal core and design packages.
 
