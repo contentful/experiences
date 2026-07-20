@@ -547,13 +547,13 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 This is an Nx monorepo. You install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                         | Scope                                                                                              |
-| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                     | `@contentful/experiences-sdk-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                 | `@contentful/experiences-design` | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                 | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`  | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte` | **Public.** Svelte 5 renderer with the same public API shape.                                      |
+| Folder                                                 | npm name                           | Scope                                                                                              |
+| ------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                     | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                 | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                 | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`.                                      |
+| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`    | **Public.** React renderer + re-exports of everything else.                                        |
+| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte`   | **Public.** Svelte 5 renderer with the same public API shape.                                      |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, and so on) and consume the same internal core and design packages.
 
