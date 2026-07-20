@@ -12,7 +12,9 @@ import {
 } from '@contentful/experiences-react';
 
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { Heading } from '@/components/Heading';
+import { HeroPlain } from '@/components/HeroPlain';
 import { Image } from '@/components/Image';
 import { Page } from '@/components/Page';
 import { RichText } from '@/components/RichText';
@@ -27,6 +29,8 @@ const components: Components = {
   Text,
   Button,
   Image,
+  'hero-plain': HeroPlain,
+  card: Card,
 };
 
 const templates: Templates = {

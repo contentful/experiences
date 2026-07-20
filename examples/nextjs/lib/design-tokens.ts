@@ -10,6 +10,8 @@ export const designTokens: Record<string, string> = {
   'color.none': 'transparent', // resolves "no background" to a real value
   'color.white': '#ffffff',
   'color.text': '#1f2937',
+  'color.primary': '#0f172a', // hero background
+  'color.primaryText': '#f8fafc', // hero foreground
 
   'fontSize.sm': '14px',
   'fontSize.md': '16px',
