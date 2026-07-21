@@ -268,4 +268,3 @@ export const experienceConfig: Config = { components, templates };
 If the payload references a template id that isn't registered, the renderer
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.
-
