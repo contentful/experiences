@@ -1,6 +1,6 @@
 # @contentful/experiences-sdk-core
 
-> ⚠️ **Internal package.** Customers do not install this directly. The framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports everything customers need.
+> ⚠️ **Internal package.** You don't install this directly — the framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports everything you need.
 
 Runtime-neutral primitives shared across all framework adapters.
 
