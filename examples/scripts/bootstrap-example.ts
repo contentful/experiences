@@ -26,6 +26,10 @@
 /* eslint-disable no-console */
 import { createClient, type PlainClientAPI } from 'contentful-management';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import {
   contentTypes,
@@ -183,10 +187,13 @@ async function seedAsset(fixture: AssetFixture) {
     if (!isNotFound(err)) throw err;
   }
 
-  log(`  … downloading ${fixture.sourceUrl}`);
-  const res = await fetch(fixture.sourceUrl);
-  if (!res.ok) throw new Error(`Failed to fetch ${fixture.sourceUrl}: ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
+  // Bytes live on disk under fixture/assets/; resolved relative to this file
+  // so the script works from any CWD.
+  const absPath = resolvePath(__dirname, 'fixture', fixture.sourcePath);
+  log(`  … reading ${fixture.sourcePath}`);
+  const bytes = readFileSync(absPath);
+  // Node's Buffer is a Uint8Array; the upload API accepts ArrayBuffer/Stream.
+  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
   const upload = await cma.upload.create({}, { file: arrayBuffer });
 

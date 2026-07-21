@@ -31,7 +31,7 @@ The demo is a minimal `landing` Experience — one hero + two cards — that exe
 | Step | Resource type | Count | Notes                                                                             |
 | ---- | ------------- | ----- | --------------------------------------------------------------------------------- |
 | 1    | ContentType   | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                        |
-| 2    | Asset         | 3     | hero background + 2 card images, uploaded from the source demo space's public CDN |
+| 2    | Asset         | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space |
 | 3    | Entry         | 3     | 3 `promotion` entries (hero + 2 cards)                                            |
 | 4    | DesignToken   | 15    | color/size/fontSize/fontWeight tokens referenced by ComponentTypes                |
 | 5    | ComponentType | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card  |

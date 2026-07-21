@@ -51,7 +51,11 @@ export type AssetFixture = {
   title: string;
   fileName: string;
   contentType: string;
-  sourceUrl: string;
+  // Path to the source file on disk, relative to the fixture/ directory.
+  // The bootstrap reads the bytes locally and uploads them to the caller's
+  // space — nothing gets fetched over HTTP, so the demo doesn't depend on
+  // any external CDN staying up.
+  sourcePath: string;
 };
 
 // --- Entries ------------------------------------------------------------------
