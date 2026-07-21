@@ -1,6 +1,6 @@
 # Contentful Experiences SDK
 
-> ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
+> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
 
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
@@ -15,9 +15,24 @@ That's the only SDK package you install. The adapter re-exports everything you n
 
 Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same design-token plus `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
 
+## Contents
+
+- [Getting started](#getting-started-the-simple-path)
+- [Styling components](#styling-components)
+- [Design tokens](#design-tokens)
+- [Advanced setup](#advanced-setup)
+- [Svelte / SvelteKit](#svelte--sveltekit)
+- [Examples](#examples)
+- [API reference](#api-reference)
+- [Design system stays portable](#design-system-stays-portable)
+- [Workspace internals](#workspace-internals)
+- [Contributing](#contributing)
+- [Support](#support)
+- [License](#license)
+
 ---
 
-## Getting started: the simple path
+## Getting started
 
 Three steps: register your components, fetch and resolve, render. The minimal page is one `fetchExperience` call whose result goes straight into one `<ServerExperienceRenderer>`.
 
@@ -93,9 +108,9 @@ A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextj
 
 ## Styling components
 
-Design values are **not** injected as props. A component reads them itself through the `useDesignValues()` hook, the one place design comes from. That keeps the SDK from spreading unknown `cf`-prefixed props onto your components and keeps your prop types clean.
+Design values are **not** injected as props. A component reads them itself through the `useDesignValues()` hook, the one place design comes from.
 
-The hook returns a flat record of every resolved design value for the current node: viewport-cascaded, token-resolved, keyed exactly as authored. That includes real CSS-shaped values like `fontSize` and `backgroundColor`, plus author-defined semantic styling like `variant`, `as`, and `ratio`.
+The hook returns a flat record of every resolved design value for the current node. That includes real CSS-shaped values like `fontSize` and `backgroundColor`, plus author-defined semantic styling like `variant`, `as`, and `ratio`.
 
 `toCss()` turns that record into a ready-to-spread `CSSProperties` object, keeping only the keys that map to a real CSS property and dropping the semantic ones:
 
