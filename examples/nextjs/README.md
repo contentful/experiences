@@ -16,7 +16,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 The example is a real integration against Contentful, not a mock. You need:
 
 1. **A Contentful space** with the demo content model + Experience seeded into it (a one-time step below), and
-2. **Environment tokens** for the paths you want to hit — different Contentful APIs use different tokens.
+2. **Tokens** for the paths you want to hit — different Contentful APIs use different tokens.
 
 The [`examples/scripts/bootstrap-example.ts`](../scripts/bootstrap-example.ts) script does the seeding via the management API. See [`examples/scripts/README.md`](../scripts/README.md) for what it provisions.
 
@@ -24,7 +24,7 @@ The [`examples/scripts/bootstrap-example.ts`](../scripts/bootstrap-example.ts) s
 
 ```sh
 # From the repo root:
-npm install --ignore-scripts
+npm install
 npm run build                          # build the SDK packages
 
 cd examples/scripts
@@ -44,7 +44,9 @@ Visit `http://localhost:3000/landing`. This route is the minimal three-line inte
 
 ### 2b. Run the advanced route (`/advanced/landing?preview=true`)
 
-The advanced route can also be reached at `http://localhost:3000/advanced/landing` (no query params) using the same `CDA_TOKEN` — you'll get the enrichment + viewport-seeding demo. To exercise **preview mode** as well (the "Advanced demo (preview)" button on the index page), you also need a **Content Preview API token** — preview requests hit `preview.xdn.contentful.com`, which rejects CDA tokens.
+The advanced route can be reached at `http://localhost:3000/advanced/landing` (no query params) using the same `CDA_TOKEN` — you'll get the enrichment + viewport-seeding demo.
+
+To exercise **preview mode** as well (the "Advanced demo (preview)" button on the index page), you also need a **Content Preview API token** — preview requests hit `preview.xdn.contentful.com`.
 
 Add it to `.env.local`:
 
@@ -267,6 +269,3 @@ If the payload references a template id that isn't registered, the renderer
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.
 
-## Where the live preview / editor support fits
-
-Live preview (postMessage from the Contentful editor iframe) lands in a separate increment with a client-component wrapper that uses `ClientExperienceRenderer` and a `useMessagingClient`-style hook. SSR and interactive editor mode are mutually exclusive: the editor mode requires `'use client'` so the message listener can attach.

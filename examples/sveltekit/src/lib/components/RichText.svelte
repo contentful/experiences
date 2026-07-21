@@ -14,7 +14,6 @@
 
   function extractDoc(input: unknown): RichDoc | null {
     if (!input || typeof input !== 'object') return null;
-    // Handle both { document: {...} } wrappers (from GraphQL) and bare docs.
     const outer = input as { document?: unknown; nodeType?: string };
     if (outer.nodeType === 'document') return outer as RichDoc;
     if (outer.document && typeof outer.document === 'object') {

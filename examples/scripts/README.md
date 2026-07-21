@@ -1,6 +1,6 @@
 # examples/scripts
 
-One-time setup scripts for the customer-facing example apps in [`../nextjs`](../nextjs) and [`../sveltekit`](../sveltekit). Not published; not part of the SDK; not something the running example apps depend on. This directory only exists to make the examples runnable from a clean checkout.
+One-time setup scripts for the customer-facing example apps in [`../nextjs`](../nextjs) and [`../sveltekit`](../sveltekit).
 
 ## bootstrap-example.ts
 
@@ -48,6 +48,5 @@ The concrete data the script provisions lives in [`fixture/`](./fixture) — one
 
 ### Known limitations
 
-- **RichText body is currently omitted from the DataAssembly return mapping.** The DA validator rejects our `body { document: json }` GraphQL alias with "Field path `_node.body` not found." Symbol fields (title, ctaLabel, ctaUrl, image.url) all work. Follow-up needed to figure out the right RichText mapping shape.
 - **CMA is pinned to `12.6.0-dev.4`** — this is a dev build that exposes the ExO plain client (component types, templates, data assemblies, experiences). Newer stable versions of `contentful-management` don't ship these APIs yet.
-- **`/design_tokens` is called via raw `fetch()`** — the CMA dev build's plain client doesn't cover that endpoint yet, so the script talks to it directly.
+- **`/design_tokens` is called via raw `fetch()`** — the CMA dev build's plain client doesn't cover that endpoint yet. Customers setting up Experience Orchestration are encouraged to use the [Design System Import CLI tool](https://github.com/contentful/experience-design-system-sdk-public)

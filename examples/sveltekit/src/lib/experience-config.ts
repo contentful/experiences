@@ -3,9 +3,6 @@
  * and wires `resolveToken`. Registry keys match the last URN segment of
  * each node's `componentType` / `template`. Components read design via
  * `getDesignValues()`.
- *
- * 1:1 parity with examples/nextjs/lib/experience-config.tsx — same 8
- * ComponentType registrations, same 1 template, same design-token table.
  */
 
 import type { Components, Config, ResolveToken, Templates } from '@contentful/experiences-svelte';

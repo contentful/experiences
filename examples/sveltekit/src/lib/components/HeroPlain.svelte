@@ -6,7 +6,7 @@
 <script lang="ts" module>
   export interface HeroPlainProps {
     title?: string;
-    body?: unknown; // RichText document — omitted from the DA return for now
+    body?: unknown;
     ctaLabel?: string;
     ctaUrl?: string;
     image?: string;

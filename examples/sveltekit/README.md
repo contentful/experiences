@@ -19,7 +19,7 @@ The example is a real integration against Contentful, not a mock. You need a Con
 
 ```sh
 # From the repo root:
-npm install --ignore-scripts
+npm install
 npm run build                          # build the SDK packages
 
 cd examples/scripts

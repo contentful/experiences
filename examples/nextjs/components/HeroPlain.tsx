@@ -6,7 +6,7 @@ import { toCss, useDesignValues } from '@contentful/experiences-react';
 
 export interface HeroPlainProps {
   title?: string;
-  body?: unknown; // RichText document; omitted in the DA return for now
+  body?: unknown;
   ctaLabel?: string;
   ctaUrl?: string;
   image?: string;
