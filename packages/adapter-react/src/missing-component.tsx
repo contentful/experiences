@@ -5,6 +5,7 @@
  * Behavior: a visible red error box in preview, silent null in production.
  * Customers can override per-render via <ExperienceRenderer renderUnknown=...>.
  */
+'use client';
 
 import type { ReactNode } from 'react';
 
