@@ -12,7 +12,7 @@
   </p>
   <p>
     <a
-      href="/demo"
+      href="/landing"
       style="display: inline-block; padding: 10px 16px; border-radius: 8px; background: #4f39f6; color: #ffffff; text-decoration: none; font-weight: 500;"
     >
       View the demo experience

@@ -1,0 +1,19 @@
+{
+  "name": "@contentful/experiences-example-scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bootstrap scripts for the customer-facing example apps",
+  "scripts": {
+    "bootstrap": "tsx bootstrap-example.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "contentful-management": "12.6.0-dev.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -69,16 +69,17 @@ export default function HomePage() {
       </ul>
 
       <p style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-        <Link href="/demo" style={linkStyle}>
+        <Link href="/landing" style={linkStyle}>
           Simple demo
         </Link>
-        <Link href="/advanced/demo?preview=true&locale=en-US" style={secondaryLinkStyle}>
+        <Link href="/advanced/landing?preview=true&locale=en-US" style={secondaryLinkStyle}>
           Advanced demo (preview)
         </Link>
       </p>
 
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
-        Replace <code>demo</code> in either URL with a real Experience id from your space.
+        <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
+        default. Replace it in the URL with any other Experience id from your space.
       </p>
     </main>
   );
