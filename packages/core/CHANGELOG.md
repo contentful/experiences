@@ -1,3 +1,9 @@
+## 0.5.3 (2026-07-21)
+
+### 🩹 Fixes
+
+- render missing-component fallback as element in RSC [AIS-316] ([#79](https://github.com/contentful/experiences/pull/79))
+
 ## 0.5.2 (2026-07-20)
 
 ### 🩹 Fixes
