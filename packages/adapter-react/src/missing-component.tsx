@@ -4,7 +4,11 @@
  *
  * Behavior: a visible red error box in preview, silent null in production.
  * Customers can override per-render via <ExperienceRenderer renderUnknown=...>.
+ *
+ * Client component: reads useExperience(), so it must render on the client even
+ * when reached from ServerExperienceRenderer (an RSC).
  */
+'use client';
 
 import type { ReactNode } from 'react';
 
