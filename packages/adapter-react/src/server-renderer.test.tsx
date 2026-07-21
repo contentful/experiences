@@ -276,12 +276,6 @@ describe('ServerExperienceRenderer', () => {
     warn.mockRestore();
   });
 
-  // Regression (AIS-316): MissingComponent reads useExperience(), so it must be
-  // a client component to render inside ServerExperienceRenderer (an RSC).
-  // renderToStaticMarkup can't reproduce the RSC boundary (it resolves the hook
-  // regardless), so the crash isn't observable here — assert the invariant at
-  // the source instead. The paired call-site fix (rendering renderUnknown as an
-  // element, not calling it) is covered by the Next.js example app.
   it("declares MissingComponent as a client component ('use client')", () => {
     const source = readFileSync(new URL('./missing-component.tsx', import.meta.url), 'utf8');
     expect(source).toMatch(/^\s*['"]use client['"];/m);

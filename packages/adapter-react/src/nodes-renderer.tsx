@@ -83,11 +83,6 @@ function NodeRenderer({
   const { componentTypeId } = node.registration;
   const entry = config.components[componentTypeId];
   if (!entry) {
-    // Render the fallback as an element, not a direct call. NodeRenderer is a
-    // Server Component; invoking renderUnknown() inline would run any hooks it
-    // uses (the default MissingComponent reads useExperience()) in server
-    // context and throw. As an element, React mounts it across the client
-    // boundary like any registered component.
     return createElement(renderUnknown, { componentTypeId, nodeId: node.nodeId });
   }
   const componentConfig = normalizeComponentRegistration(entry);
