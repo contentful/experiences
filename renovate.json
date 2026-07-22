@@ -1,4 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>contentful/renovate-config:defaultNxMonorepo"]
+  "extends": ["local>contentful/renovate-config:defaultNxMonorepo"],
+  "automergeSchedule": ["after 5pm and before 9pm every weekday"],
+  "timezone": "America/Denver",
+  "platformAutomerge": false
 }
