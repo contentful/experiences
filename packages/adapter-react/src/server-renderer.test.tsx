@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -272,6 +274,11 @@ describe('ServerExperienceRenderer', () => {
     expect(productionHtml).toBe('<div></div>');
 
     warn.mockRestore();
+  });
+
+  it("declares MissingComponent as a client component ('use client')", () => {
+    const source = readFileSync(new URL('./missing-component.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(/^\s*['"]use client['"];/m);
   });
 
   it('merges defaults beneath content (content wins)', async () => {

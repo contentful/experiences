@@ -1,4 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>contentful/renovate-config:defaultNxMonorepo"]
+  "extends": ["local>contentful/renovate-config:defaultNxMonorepo"],
+  "packageRules": [
+    {
+      "description": "Never auto-merge major updates. Renovate still opens a PR and runs CI, but it waits for a human to merge.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major-update", "needs-review"]
+    }
+  ]
 }

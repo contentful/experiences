@@ -22,7 +22,7 @@ There are several ways to help:
 
 ### Prerequisites
 
-- Node.js >= 18
+- Node.js >= 22
 - npm (the repo uses npm workspaces — don't substitute another package manager)
 
 ### About Nx

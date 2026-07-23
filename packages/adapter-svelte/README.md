@@ -1,8 +1,8 @@
 # @contentful/experiences-svelte
 
-> ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
+> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
 
-The Svelte adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using your own Svelte 5 components.
+The Svelte adapter for the Contentful Experiences SDK. You bring your own Svelte 5 components; it renders Experience payloads from the Experience Delivery API (XDA) with them.
 
 ```sh
 npm install @contentful/experiences-svelte

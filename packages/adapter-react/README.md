@@ -1,8 +1,8 @@
 # @contentful/experiences-react
 
-> ⚠️ **Pre-alpha.** Not yet published to npm. APIs are unstable and will change.
+> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
 
-The React adapter for the Contentful Experiences SDK suite. Renders Experience payloads from the Experience Delivery API (XDA) using your own React components.
+The React adapter for the Contentful Experiences SDK. You bring your own React components; it renders Experience payloads from the Experience Delivery API (XDA) with them.
 
 ```sh
 npm install @contentful/experiences-react
