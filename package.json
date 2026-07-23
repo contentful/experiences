@@ -49,7 +49,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "nx": "^23.0.1",
-    "prettier": "^3.0.0",
+    "prettier": "^3.9.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "rimraf": "^6.1.3",
