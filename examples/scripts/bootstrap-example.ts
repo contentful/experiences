@@ -669,9 +669,7 @@ async function main() {
 
   log(`\n✅ Done.\n`);
   log(`   Experience id: ${experienceId}`);
-  log(
-    `   Set NEXT_PUBLIC_EXPERIENCE_ID=${experienceId} (or paste it into your .env.local) and run \`npm run dev\`.`
-  );
+  log(`   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit /${experienceId}.`);
 }
 
 main().catch((err) => {

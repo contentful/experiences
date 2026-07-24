@@ -76,33 +76,28 @@ One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<Ser
 The route in one glance:
 
 ```tsx
-try {
-  const experience = await fetchExperience(
-    { spaceId, environmentId, experienceId, locale },
-    {
-      accessToken: previewMode ? CPA_TOKEN : CDA_TOKEN,
-      host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
-    },
-    {
-      config: experienceConfig,
-      context: { isPreview: previewMode, metadata: { slug, locale } },
-    }
-  );
-  return (
-    <ServerExperienceRenderer
-      experience={experience}
-      config={experienceConfig}
-      initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug, locale } }}
-    />
-  );
-} catch (err) {
-  if (err instanceof NotFoundError) notFound();
-  throw err;
-}
+const experience = await fetchExperience(
+  { spaceId, environmentId, experienceId, locale },
+  {
+    accessToken: previewMode ? CPA_TOKEN : CDA_TOKEN,
+    host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+  },
+  {
+    config: experienceConfig,
+    context: { isPreview: previewMode, metadata: { slug, locale } },
+  }
+);
+return (
+  <ServerExperienceRenderer
+    experience={experience}
+    config={experienceConfig}
+    initialViewportId={initialViewportId}
+    context={{ isPreview: previewMode, metadata: { slug, locale } }}
+  />
+);
 ```
 
-`NotFoundError` is thrown by the delivery client on 404 (Experience ID doesn't exist). An empty-nodes payload (draft, unpublished, or empty locale) is **not** a 404; it resolves to a plan with `nodes: []` and renders as an empty page.
+An empty-nodes payload (draft, unpublished, or empty locale) resolves to a plan with `nodes: []` and renders as an empty page — not a 404.
 
 Slug-to-ID mapping is up to you. See the SDK roadmap in [`AGENTS.md`](../../AGENTS.md) for the longer-term direction.
 
