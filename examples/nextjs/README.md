@@ -6,7 +6,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Preview mode via `?preview=true`**: swaps the delivery host to `preview.xdn.contentful.com` and flips `isPreview` on so `MissingComponent` renders a visible red box.
+- **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. `isPreview` on the render context also flips, so `MissingComponent` renders a visible red box.
 - **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Styling via `useDesignValues()` and `toCss()`**: components read their own design (spacing, color, typography, layout) from the hook; design is never injected as props. `Section`, `Heading`, `Text`, `Button`, `Image`, and `RichText` all follow this pattern.
@@ -55,6 +55,8 @@ CPA_TOKEN=...   # Content Preview API token, from Settings → API keys in your 
 ```
 
 Then visit `http://localhost:3000/landing?preview=true&locale=en-US`.
+
+The route wires this through `fetchExperience`'s client options — both tokens are passed up front and `preview: previewMode` selects which one to use per request. See the snippet in [The route](#the-route) below.
 
 ### Tokens summary
 
