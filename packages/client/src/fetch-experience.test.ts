@@ -113,10 +113,27 @@ describe('fetchExperience', () => {
   });
 
   describe('preview toggle', () => {
-    it('uses accessToken and default host when preview is false (default)', async () => {
+    it('uses accessToken and default host when preview is unset', async () => {
       await fetchExperience(
         experienceOptions,
         { accessToken: 'delivery-token', previewToken: 'preview-token' },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+        token: 'delivery-token',
+        baseUrl: undefined,
+      });
+    });
+
+    it('uses accessToken and default host when preview is explicitly false', async () => {
+      await fetchExperience(
+        experienceOptions,
+        {
+          accessToken: 'delivery-token',
+          previewToken: 'preview-token',
+          preview: false,
+        },
         resolveOptions
       );
 
