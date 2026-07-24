@@ -10,13 +10,6 @@ const linkStyle = {
   fontWeight: 500,
 };
 
-const secondaryLinkStyle = {
-  ...linkStyle,
-  background: '#ffffff',
-  color: '#1f2937',
-  border: '1px solid #d1d5db',
-};
-
 export default function HomePage() {
   return (
     <main
@@ -35,51 +28,16 @@ export default function HomePage() {
         <code>@contentful/experiences-react</code> in a Next.js App Router server component.
       </p>
 
-      <h2 style={{ marginBottom: 8, fontSize: 18 }}>Two routes, same data</h2>
-      <p style={{ color: '#4b5563', marginTop: 0 }}>
-        Both routes render the same Experience id. Compare to see what each SDK option buys you.
-      </p>
-
-      <ul
-        style={{
-          paddingLeft: 20,
-          color: '#4b5563',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <li>
-          <strong>
-            <code>/[slug]</code>
-          </strong>{' '}
-          — minimal three-line page. <code>fetch</code> →{' '}
-          <code>resolveExperience(payload, config)</code> →{' '}
-          <code>&lt;ServerExperienceRenderer&gt;</code>. No preview mode, no UA seeding, no
-          metadata.
-        </li>
-        <li>
-          <strong>
-            <code>/advanced/[slug]</code>
-          </strong>{' '}
-          — same render, opts dialed up: preview mode via <code>?preview=true</code>, User-Agent →{' '}
-          <code>initialViewportId</code> for hydration-safe SSR, async <code>resolveData</code> with
-          external fetch + per-page metadata.
-        </li>
-      </ul>
-
-      <p style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+      <p>
         <Link href="/landing" style={linkStyle}>
-          Simple demo
-        </Link>
-        <Link href="/advanced/landing?preview=true&locale=en-US" style={secondaryLinkStyle}>
-          Advanced demo (preview)
+          View the demo experience
         </Link>
       </p>
 
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
         <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
-        default. Replace it in the URL with any other Experience id from your space.
+        default. Replace it in the URL with any other Experience id from your space. Append{' '}
+        <code>?preview=true</code> to read from the preview API (requires <code>CPA_TOKEN</code>).
       </p>
     </main>
   );

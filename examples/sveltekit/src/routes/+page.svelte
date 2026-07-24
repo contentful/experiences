@@ -6,10 +6,6 @@
     This app demonstrates rendering a Contentful Experience payload with
     <code>@contentful/experiences-svelte</code> in a SvelteKit server load function.
   </p>
-  <p style="color: #4b5563;">
-    Without <code>CDA_TOKEN</code> set in <code>.env</code>, the app uses a built-in mock payload so it
-    works out of the box.
-  </p>
   <p>
     <a
       href="/landing"
@@ -17,5 +13,10 @@
     >
       View the demo experience
     </a>
+  </p>
+  <p style="color: #9ca3af; font-size: 13px; margin-top: 24px; margin-bottom: 0;">
+    <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
+    default. Replace it in the URL with any other Experience id from your space. Append
+    <code>?preview=true</code> to read from the preview API (requires <code>CPA_TOKEN</code>).
   </p>
 </main>

@@ -171,10 +171,10 @@ Returning `undefined` means "not resolvable": the SDK drops that key so the comp
 
 When the simple path isn't enough, three optional features cover most production needs. Preview mode plus metadata flows per-page context into resolvers. Viewport seeding makes SSR match the device. Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working advanced route is at [`examples/nextjs/app/advanced/[slug]/page.tsx`](./examples/nextjs/app/advanced/[slug]/page.tsx). Visit `/advanced/<id>?preview=true&locale=en-US` after running the example.
+A full working route with all three features is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). Visit `/<id>?preview=true&locale=en-US` after running the example.
 
 ```tsx
-// app/advanced/[slug]/page.tsx
+// app/[slug]/page.tsx
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
@@ -184,9 +184,9 @@ import {
 } from '@contentful/experiences-react';
 
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
-import { advancedExperienceConfig } from '@/lib/experience-config-advanced';
+import { experienceConfig } from '@/lib/experience-config';
 
-export default async function AdvancedPage({
+export default async function ExperiencePage({
   params,
   searchParams,
 }: {
@@ -207,11 +207,11 @@ export default async function AdvancedPage({
     const experience = await fetchExperience(
       { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
       {
-        accessToken: process.env.CDA_TOKEN!,
+        accessToken: previewMode ? process.env.CPA_TOKEN! : process.env.CDA_TOKEN!,
         host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
       },
       {
-        config: advancedExperienceConfig,
+        config: experienceConfig,
         context: { isPreview: previewMode, metadata: { slug: experienceId, locale } },
       }
     );
@@ -219,7 +219,7 @@ export default async function AdvancedPage({
     return (
       <ServerExperienceRenderer
         experience={experience}
-        config={advancedExperienceConfig}
+        config={experienceConfig}
         initialViewportId={initialViewportId}
         context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
       />
@@ -347,7 +347,7 @@ Runnable apps for both frameworks live in [`examples/`](./examples). They regist
 
 | Example                                      | Stack                   | Shows                                                                                              |
 | -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Simple + advanced routes (preview, UA→viewport, async `resolveData`), design tokens, styling hooks |
+| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks                       |
 | [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts`             |
 
 Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, ComponentTypes, template, DataAssemblies, and the Experience itself.
@@ -369,7 +369,7 @@ npm run dev
 
 Then visit `/landing` (or whichever experienceId the bootstrap printed). See each example's README for its file map and route-by-route walkthrough.
 
-**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true` routes; see each example's README for details.
+**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
 
 ---
 

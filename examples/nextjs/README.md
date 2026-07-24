@@ -6,7 +6,9 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Minimal page**: `fetchExperience` feeding `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to Next's `notFound()`. Preview mode, viewport seeding, and metadata are all optional advanced features; the minimal app needs none of them.
+- **Preview mode via `?preview=true`**: swaps the delivery host to `preview.xdn.contentful.com` and flips `isPreview` on so `MissingComponent` renders a visible red box.
+- **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
+- **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Styling via `useDesignValues()` and `toCss()`**: components read their own design (spacing, color, typography, layout) from the hook; design is never injected as props. `Section`, `Heading`, `Text`, `Button`, `Image`, and `RichText` all follow this pattern.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
 - **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
@@ -32,7 +34,7 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_T
 npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
 ```
 
-### 2a. Run the basic route (`/landing`)
+### 2. Run the app
 
 ```sh
 cd ../nextjs
@@ -40,13 +42,11 @@ cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-Visit `http://localhost:3000/landing`. This route is the minimal three-line integration described below — `fetchExperience` → `<ServerExperienceRenderer>`. It reads from the Content Delivery API using `CDA_TOKEN`.
+Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
-### 2b. Run the advanced route (`/advanced/landing?preview=true`)
+### Optional: preview mode
 
-The advanced route can be reached at `http://localhost:3000/advanced/landing` (no query params) using the same `CDA_TOKEN` — you'll get the enrichment + viewport-seeding demo.
-
-To exercise **preview mode** as well (the "Advanced demo (preview)" button on the index page), you also need a **Content Preview API token** — preview requests hit `preview.xdn.contentful.com`.
+Append `?preview=true` to any experience URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
 
 Add it to `.env.local`:
 
@@ -54,37 +54,48 @@ Add it to `.env.local`:
 CPA_TOKEN=...   # Content Preview API token, from Settings → API keys in your space
 ```
 
-Then visit `http://localhost:3000/advanced/landing?preview=true&locale=en-US`.
+Then visit `http://localhost:3000/landing?preview=true&locale=en-US`.
 
 ### Tokens summary
 
-| Token       | API                | Used by                                          | Required?                              |
-| ----------- | ------------------ | ------------------------------------------------ | -------------------------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)             | Yes, to run bootstrap                  |
-| `CDA_TOKEN` | Content Delivery   | The example app for `/landing` and `/advanced/*` | Yes, to run the app                    |
-| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true`             | Only for preview mode on `/advanced/*` |
+| Token       | API                | Used by                              | Required?             |
+| ----------- | ------------------ | ------------------------------------ | --------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
+| `CDA_TOKEN` | Content Delivery   | The example app                      | Yes, to run the app   |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true` | Only for preview mode |
 
-## Two routes, same data
+## The route
 
-The example ships two side-by-side routes so you can see what each SDK option gives you. They render the same Experience id; only the SDK setup changes.
+One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, viewport seeding, and per-page metadata are all wired up as `searchParams` + header reads.
 
-| Route              | Try it locally                                                     | Config                           | Demonstrates                                                                                                         |
-| ------------------ | ------------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `/[slug]`          | `http://localhost:3000/landing`                                    | `experience-config.tsx`          | The minimum: `fetchExperience` into `<ServerExperienceRenderer>` with `NotFoundError` routed to Next's `notFound()`. |
-| `/advanced/[slug]` | `http://localhost:3000/advanced/landing?preview=true&locale=en-US` | `experience-config-advanced.tsx` | Preview mode via `?preview=true` (needs `CPA_TOKEN`), User-Agent to `initialViewportId`, async `resolveData`.        |
+| Try it locally                                              | Source                                                       | Config                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
+| `http://localhost:3000/landing`                             | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)               | [`lib/experience-config.tsx`](./lib/experience-config.tsx) |
+| `http://localhost:3000/landing?preview=true&locale=en-US`   | same route                                                   | same config                                         |
 
-Source: [`app/[slug]/page.tsx`](./app/[slug]/page.tsx), [`app/advanced/[slug]/page.tsx`](./app/advanced/[slug]/page.tsx).
-
-The minimal `[slug]/page.tsx`:
+The route in one glance:
 
 ```tsx
 try {
   const experience = await fetchExperience(
-    { spaceId, environmentId, experienceId },
-    { accessToken },
-    { config: experienceConfig }
+    { spaceId, environmentId, experienceId, locale },
+    {
+      accessToken: previewMode ? CPA_TOKEN : CDA_TOKEN,
+      host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+    },
+    {
+      config: experienceConfig,
+      context: { isPreview: previewMode, metadata: { slug, locale } },
+    }
   );
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  return (
+    <ServerExperienceRenderer
+      experience={experience}
+      config={experienceConfig}
+      initialViewportId={initialViewportId}
+      context={{ isPreview: previewMode, metadata: { slug, locale } }}
+    />
+  );
 } catch (err) {
   if (err instanceof NotFoundError) notFound();
   throw err;
@@ -101,9 +112,8 @@ Slug-to-ID mapping is up to you. See the SDK roadmap in [`AGENTS.md`](../../AGEN
 examples/nextjs/
 ├── app/
 │   ├── layout.tsx                       # root layout
-│   ├── page.tsx                         # index; links to both demo routes
-│   ├── [slug]/page.tsx                  # SIMPLE: fetch + render + 404 handling
-│   └── advanced/[slug]/page.tsx         # ADVANCED: preview, UA seeding, async resolveData
+│   ├── page.tsx                         # index; links to the demo experience
+│   └── [slug]/page.tsx                  # fetch + render + 404, preview, UA seeding, metadata
 ├── components/                          # design-system components; read design via useDesignValues()
 │   ├── Section.tsx                      # flex/grid layout primitive
 │   ├── Heading.tsx
@@ -114,9 +124,8 @@ examples/nextjs/
 │   └── Page.tsx                         # used as the page-level template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
-    ├── detect-viewport.ts               # User-Agent to viewport id (used by the advanced route)
-    ├── experience-config.tsx            # the integration layer for /[slug]
-    └── experience-config-advanced.tsx   # the integration layer for /advanced/[slug]; async fetch + metadata-aware
+    ├── detect-viewport.ts               # User-Agent to viewport id
+    └── experience-config.tsx            # the integration layer: component registry + async resolveData + tokens
 ```
 
 ## Integration pattern
