@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 
 import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
-import { CDA_TOKEN, ENVIRONMENT_ID, SPACE_ID } from '$env/static/private';
+import { CDA_TOKEN, ENVIRONMENT_ID, PREVIEW_TOKEN, SPACE_ID } from '$env/static/private';
 import { detectViewportFromUserAgent } from '$lib/detect-viewport.js';
 import { experienceConfig } from '$lib/experience-config.js';
 
@@ -21,7 +21,8 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       },
       {
         accessToken: CDA_TOKEN,
-        host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+        previewToken: PREVIEW_TOKEN,
+        preview: previewMode,
       },
       {
         config: experienceConfig,

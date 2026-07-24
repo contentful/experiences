@@ -19,7 +19,7 @@ npm install --ignore-scripts
 npm run build                 # builds the SDK packages
 
 cd examples/sveltekit
-cp .env.example .env          # fill in SPACE_ID + CDA_TOKEN
+cp .env.example .env          # fill in SPACE_ID + CDA_TOKEN (and PREVIEW_TOKEN for ?preview=true)
 npm run dev
 ```
 

@@ -96,6 +96,98 @@ describe('fetchExperience', () => {
         locale: undefined,
       });
     });
+
+    it('ignores the preview flag when a pre-made client is provided', async () => {
+      const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
+      vi.mocked(ContentfulViewDeliveryClient).mockClear();
+
+      await fetchExperience(
+        experienceOptions,
+        // @ts-expect-error — mixing `client` with `preview` is not a valid public shape; verify runtime tolerates it.
+        { client, preview: true },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('preview toggle', () => {
+    it('uses accessToken and default host when preview is false (default)', async () => {
+      await fetchExperience(
+        experienceOptions,
+        { accessToken: 'delivery-token', previewToken: 'preview-token' },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+        token: 'delivery-token',
+        baseUrl: undefined,
+      });
+    });
+
+    it('uses previewToken and the preview host when preview is true', async () => {
+      await fetchExperience(
+        experienceOptions,
+        {
+          accessToken: 'delivery-token',
+          previewToken: 'preview-token',
+          preview: true,
+        },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+        token: 'preview-token',
+        baseUrl: 'https://preview.xdn.contentful.com',
+      });
+    });
+
+    it('throws when preview is true but previewToken is missing', async () => {
+      await expect(
+        fetchExperience(
+          experienceOptions,
+          { accessToken: 'delivery-token', preview: true },
+          resolveOptions
+        )
+      ).rejects.toThrow(
+        'fetchExperience() called with preview: true but no previewToken was provided'
+      );
+    });
+
+    it('uses an explicit custom host with the preview token when preview is true', async () => {
+      await fetchExperience(
+        experienceOptions,
+        {
+          accessToken: 'delivery-token',
+          previewToken: 'preview-token',
+          preview: true,
+          host: 'https://preview-staging.example.com',
+        },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+        token: 'preview-token',
+        baseUrl: 'https://preview-staging.example.com',
+      });
+    });
+
+    it('uses an explicit custom host with the delivery token when preview is unset', async () => {
+      await fetchExperience(
+        experienceOptions,
+        {
+          accessToken: 'delivery-token',
+          host: 'https://delivery-staging.example.com',
+        },
+        resolveOptions
+      );
+
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+        token: 'delivery-token',
+        baseUrl: 'https://delivery-staging.example.com',
+      });
+    });
   });
 
   describe('return value', () => {

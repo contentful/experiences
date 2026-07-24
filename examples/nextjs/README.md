@@ -19,7 +19,7 @@ npm install --ignore-scripts
 npm run build                 # builds the SDK packages
 
 cd examples/nextjs
-cp .env.example .env.local    # fill in SPACE_ID + CDA_TOKEN
+cp .env.example .env.local    # fill in SPACE_ID + CDA_TOKEN (and PREVIEW_TOKEN for /advanced?preview=true)
 npm run dev
 ```
 
@@ -178,8 +178,8 @@ Default is `{ isPreview: false, metadata: {} }`, which is fine for production. A
 fields when:
 
 - **Preview mode**: `{ isPreview: true }`. `MissingComponent` renders a visible
-  red box, and your own components can branch on it too. Set `host` to the
-  preview endpoint on `clientOptions` to also hit the preview API.
+  red box, and your own components can branch on it too. Configure both tokens
+  on `clientOptions` and flip `preview: true` to hit the preview API.
 - **Per-page metadata**: `{ metadata: { slug, locale } }`, available to every
   `resolveData` for URL building, locale-aware lookups, and so on.
 
@@ -188,7 +188,8 @@ const experience = await fetchExperience(
   { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug, locale },
   {
     accessToken: process.env.CDA_TOKEN!,
-    host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+    previewToken: process.env.PREVIEW_TOKEN,
+    preview: previewMode,
   },
   {
     config: experienceConfig,

@@ -14,11 +14,11 @@ The primary fetch + resolve entry point. Fetches an Experience payload from the 
 
 Three positional args group by concern:
 
-| Arg                 | Type                                                | Purpose                                           |
-| ------------------- | --------------------------------------------------- | ------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }` | Which Experience to fetch.                        |
-| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`        | How to fetch — inline creds or a pre-made client. |
-| `resolveOptions`    | `{ config, context? }`                              | How to resolve — component registry + context.    |
+| Arg                 | Type                                                                  | Purpose                                                                          |
+| ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch.                                                       |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch — inline creds (with optional preview toggle) or a pre-made client. |
+| `resolveOptions`    | `{ config, context? }`                                                | How to resolve — component registry + context.                                   |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte
@@ -28,7 +28,8 @@ const plan = await fetchExperience(
   { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
   {
     accessToken: process.env.CDA_TOKEN!,
-    host: 'https://preview.xdn.contentful.com', // optional — omit for default endpoint
+    previewToken: process.env.PREVIEW_TOKEN!, // optional — only required when preview: true
+    preview: false, // flip to true for preview mode; picks previewToken + preview host
   },
   {
     config: experienceConfig,
@@ -48,16 +49,41 @@ const plan = await fetchExperience(
 
 Returns `PortableRenderPlan`. An empty-nodes payload (draft / unpublished / empty locale) resolves to a valid plan with `nodes: []` — it is not a 404. For the missing-experience case, catch `NotFoundError` (re-exported below).
 
+#### Preview mode
+
+Configure both tokens up front and flip `preview: true` per call to hit the preview API. Matches the `contentful.js` ergonomic — swap tier at request time without constructing a second client.
+
+```ts
+const experience = await fetchExperience(
+  { spaceId, environmentId, experienceId },
+  {
+    accessToken: process.env.CDA_TOKEN!,
+    previewToken: process.env.PREVIEW_TOKEN!,
+    preview: previewMode, // boolean — flip per request
+  },
+  { config: experienceConfig }
+);
+```
+
+Semantics:
+
+- `preview: false` (or unset) → uses `accessToken` against the delivery host.
+- `preview: true` → uses `previewToken` against the preview host. Throws `fetchExperience() called with preview: true but no previewToken was provided` if `previewToken` is missing.
+- `host` is only for custom base URLs (staging, proxy, per-region). When set, it wins over the `preview`-derived host — so `{ previewToken, preview: true, host: 'https://preview-staging…' }` uses the preview token against your custom URL.
+- With the `{ client }` escape hatch, `preview` is ignored (bring your own client, bring your own token/host choice).
+
 ### `createClient(options)`
 
 Functional constructor over `ContentfulViewDeliveryClient` matching the SDK's option shape. Maps `accessToken → token` and `host → baseUrl`; passes everything else through unchanged. Prefer over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-creds path.
+
+`createClient` does not participate in the preview toggle — it builds one client bound to one token. Use `fetchExperience`'s inline-creds path for `preview: true`, or construct a second client with the preview token and preview host if you need to manage lifecycles yourself.
 
 ```ts
 import { createClient } from '@contentful/experiences-react';
 
 const client = createClient({
   accessToken: process.env.CDA_TOKEN!,
-  host: 'https://preview.xdn.contentful.com', // optional
+  host: 'https://preview-staging.example.com', // optional custom base URL
   // headers, timeoutInSeconds, maxRetries, fetch, logging pass through
 });
 ```
