@@ -13,17 +13,41 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 
 ## Run it
 
+The example is a real integration against Contentful, not a mock. You need a Contentful space with the demo content model + Experience seeded, plus a Content Delivery API token. The [`examples/scripts/bootstrap-example.ts`](../scripts/bootstrap-example.ts) script does the seeding via the management API — see [`examples/scripts/README.md`](../scripts/README.md) for what it provisions.
+
+### 1. Seed the demo Experience (one-time)
+
 ```sh
 # From the repo root:
-npm install --ignore-scripts
-npm run build                 # builds the SDK packages
+npm install
+npm run build                          # build the SDK packages
 
-cd examples/sveltekit
-cp .env.example .env          # fill in SPACE_ID + CDA_TOKEN
+cd examples/scripts
+cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
+npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+```
+
+### 2. Run the app
+
+```sh
+cd ../sveltekit
+cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
-Then visit `http://localhost:5173/<experience-id>`. The slug becomes the Experience ID passed to `client.view.getExperience`.
+Visit `http://localhost:5173/landing`. `landing` is the Experience id the bootstrap printed; any other Experience id in your space works too.
+
+### Optional: preview mode
+
+Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
+
+### Tokens summary
+
+| Token       | API                | Used by                              | Required?             |
+| ----------- | ------------------ | ------------------------------------ | --------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
+| `CDA_TOKEN` | Content Delivery   | The example app                      | Yes, to run the app   |
+| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true` | Only for preview mode |
 
 ## File map
 

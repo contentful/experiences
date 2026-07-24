@@ -1,0 +1,25 @@
+{
+  "name": "@contentful/experiences-testapp-sveltekit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal SvelteKit scratchpad for iterating on @contentful/experiences-svelte — not customer-facing. See examples/sveltekit for the stable external example.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@contentful/experiences-svelte": "*"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^3.3.0",
+    "@sveltejs/kit": "^2.8.0",
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0"
+  }
+}

@@ -1,44 +1,41 @@
 /**
- * Maps Contentful component/template ids to the app's components, and wires
- * `resolveToken`. Components read design via `getDesignValues()`.
+ * Maps Contentful component/template ids to the app's Svelte components,
+ * and wires `resolveToken`. Registry keys match the last URN segment of
+ * each node's `componentType` / `template`. Components read design via
+ * `getDesignValues()`.
  */
 
-import {
-  defineComponent,
-  type Components,
-  type Config,
-  type ResolveToken,
-  type Templates,
-} from '@contentful/experiences-svelte';
+import type { Components, Config, ResolveToken, Templates } from '@contentful/experiences-svelte';
 
 import Button from './components/Button.svelte';
-import Header, { type HeaderProps } from './components/Header.svelte';
+import Card from './components/Card.svelte';
+import Heading from './components/Heading.svelte';
+import HeroPlain from './components/HeroPlain.svelte';
+import Image from './components/Image.svelte';
 import Page from './components/Page.svelte';
+import RichText from './components/RichText.svelte';
+import Section from './components/Section.svelte';
 import Text from './components/Text.svelte';
+import { designTokens } from './design-tokens.js';
 
 const components: Components = {
-  button: Button,
-  text: Text,
-  header: defineComponent<HeaderProps>({
-    component: Header,
-    defaults: { text: 'Hello World' },
-  }),
+  Section,
+  Heading,
+  RichText,
+  Text,
+  Button,
+  Image,
+  'hero-plain': HeroPlain,
+  card: Card,
 };
 
 const templates: Templates = {
-  hi: { component: Page, defaults: { title: 'Welcome' } },
-  hero: { component: Page, defaults: { title: 'Featured' } },
+  page: Page,
 };
 
-// Resolves opaque token ids to their underlying values — only you know what a
-// token id means. Returning undefined drops the key. A real app might use CSS
-// vars, a Tailwind theme, or a tokens package.
-const brandTokens: Record<string, string> = {
-  'color.surface.hero': '#4f39f6',
-  'color.surface.subtle': '#f4f4f5',
-  'color.text.onPrimary': '#ffffff',
-};
-
-const resolveToken: ResolveToken = (token) => brandTokens[token.value];
+// Resolves opaque token ids (`size.xl`, `color.text`) to their underlying
+// values — the SDK doesn't know what a token id means, only you do. Returning
+// undefined drops the key.
+const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
 export const experienceConfig: Config = { components, templates, resolveToken };
