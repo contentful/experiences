@@ -1,3 +1,9 @@
+## 0.1.5 (2026-07-24)
+
+### 🚀 Features
+
+- add preview toggle to fetchExperience with dual-token client options [AIS-233] ([#93](https://github.com/contentful/experiences/pull/93))
+
 ## 0.1.4 (2026-07-24)
 
 ### 🧱 Updated Dependencies

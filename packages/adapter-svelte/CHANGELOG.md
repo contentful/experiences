@@ -1,3 +1,9 @@
+## 0.3.5 (2026-07-24)
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.1.5
+
 ## 0.3.4 (2026-07-24)
 
 ### 🧱 Updated Dependencies
