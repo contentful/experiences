@@ -68,10 +68,10 @@ Then visit `http://localhost:3000/landing?preview=true&locale=en-US`.
 
 One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, viewport seeding, and per-page metadata are all wired up as `searchParams` + header reads.
 
-| Try it locally                                              | Source                                                       | Config                                              |
-| ----------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| `http://localhost:3000/landing`                             | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx)               | [`lib/experience-config.tsx`](./lib/experience-config.tsx) |
-| `http://localhost:3000/landing?preview=true&locale=en-US`   | same route                                                   | same config                                         |
+| Try it locally                                            | Source                                         | Config                                                     |
+| --------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `http://localhost:3000/landing`                           | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx) |
+| `http://localhost:3000/landing?preview=true&locale=en-US` | same route                                     | same config                                                |
 
 The route in one glance:
 

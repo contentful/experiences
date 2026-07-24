@@ -669,7 +669,9 @@ async function main() {
 
   log(`\n✅ Done.\n`);
   log(`   Experience id: ${experienceId}`);
-  log(`   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit /${experienceId}.`);
+  log(
+    `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit /${experienceId}.`
+  );
 }
 
 main().catch((err) => {

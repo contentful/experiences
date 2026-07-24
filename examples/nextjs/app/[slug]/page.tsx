@@ -1,8 +1,5 @@
 import { headers } from 'next/headers';
-import {
-  ServerExperienceRenderer,
-  fetchExperience,
-} from '@contentful/experiences-react';
+import { ServerExperienceRenderer, fetchExperience } from '@contentful/experiences-react';
 
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { experienceConfig } from '@/lib/experience-config';

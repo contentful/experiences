@@ -335,10 +335,10 @@ Everything else applies identically: advanced setup (preview, viewport seeding, 
 
 Runnable apps for both frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs.
 
-| Example                                      | Stack                   | Shows                                                                                              |
-| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks                       |
-| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts`             |
+| Example                                      | Stack                   | Shows                                                                                  |
+| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks           |
+| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts` |
 
 Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, ComponentTypes, template, DataAssemblies, and the Experience itself.
 
