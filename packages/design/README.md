@@ -1,6 +1,6 @@
 # @contentful/experiences-design
 
-> ⚠️ **Internal package.** Customers do not install this directly. The framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports the utilities customers need.
+> ⚠️ **Internal package.** You don't install this directly — the framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports the utilities you need.
 
 Pure, framework-agnostic viewport math for resolving Contentful's `DesignPropValue` envelopes against an active viewport.
 
@@ -8,7 +8,7 @@ Pure, framework-agnostic viewport math for resolving Contentful's `DesignPropVal
 
 - **`toCssMediaQuery(viewport)`** — convert Contentful's media-query DSL (`<992px`, `>1200px`, `*`) to a CSS media query string. The wildcard and any unrecognized format return `undefined`.
 - **`getViewportIndex(viewports, id?)`** — resolve a viewport id to its index in the cascade list.
-- **`getValueForViewport(prop, viewports, activeIdx)`** — unwrap a `DesignPropValue`. `ManualDesignValue` → its scalar; `ValuesByViewport` → cascade-lookup at the active viewport, then unwrap; `DesignToken` → pass the envelope through (customer-resolved in v1).
+- **`getValueForViewport(prop, viewports, activeIdx)`** — unwrap a `DesignPropValue`. `ManualDesignValue` → its scalar; `ValuesByViewport` → cascade-lookup at the active viewport, then unwrap; `DesignToken` → pass the envelope through (you resolve it via `resolveToken` in v1).
 - **`resolveDesignProperties(designProps, viewports, activeIdx)`** — apply `getValueForViewport` to every key of a node's design-property bag.
 - **`applyTokenResolver(props, resolveToken?)`** — run a resolved design record through the Config's `resolveToken`. Scalars pass through; `DesignToken` envelopes are resolved, and any that resolve to `undefined` are dropped and reported in `unresolved`. With no resolver the record is returned unchanged — and if it still contains tokens, a one-time console warning fires (they'd otherwise reach components as raw envelope objects).
 - **`toCssKey(key)`** — normalize a design-record key to a candidate CSS property name: strip an optional `cf` prefix and camelCase kebab/snake (`cf-font-size` → `fontSize`).

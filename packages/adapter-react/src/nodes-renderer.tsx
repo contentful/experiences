@@ -10,7 +10,7 @@ import type {
   PortableRenderNode,
   PortableTemplate,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
 import {
@@ -83,7 +83,7 @@ function NodeRenderer({
   const { componentTypeId } = node.registration;
   const entry = config.components[componentTypeId];
   if (!entry) {
-    return renderUnknown({ componentTypeId, nodeId: node.nodeId });
+    return createElement(renderUnknown, { componentTypeId, nodeId: node.nodeId });
   }
   const componentConfig = normalizeComponentRegistration(entry);
 

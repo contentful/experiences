@@ -6,7 +6,7 @@ import type {
   ResolveContext,
   ResolveToken,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 /**
  * Re-exported for ergonomics: customer code authoring `resolveData` doesn't
@@ -149,7 +149,7 @@ export interface Config {
   /**
    * Resolves `DesignToken` envelopes to runtime values before they reach a
    * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
-   * in `@contentful/experiences-core` for the full contract.
+   * in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;
 }

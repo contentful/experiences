@@ -8,7 +8,7 @@
  * renderer. For editor mode, render the client variant on a hydrated route.
 -->
 <script lang="ts">
-  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';
+  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
   import { getViewportIndex } from '@contentful/experiences-design';
 
   import MissingComponent from './MissingComponent.svelte';

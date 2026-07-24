@@ -30,7 +30,7 @@ import type {
   ResolveToken,
   ValuesByViewport,
   ViewportDef,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 const MEDIA_QUERY_REGEXP = /^(<|>)(\d+)(px|cm|mm|in|pt|pc)$/;
 

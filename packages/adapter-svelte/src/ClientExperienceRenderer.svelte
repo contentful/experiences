@@ -9,7 +9,7 @@
  * same seed.
 -->
 <script lang="ts">
-  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-core';
+  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
 
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';

@@ -13,7 +13,7 @@
 
 import type { Component } from 'svelte';
 
-import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-core';
+import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import type { Config } from './types.js';
 

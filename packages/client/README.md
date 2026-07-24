@@ -1,8 +1,8 @@
 # @contentful/experiences-client
 
-> **Internal package.** Published to npm so framework adapters can resolve it at install time, but not intended for direct customer import. Consumed transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
+> **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-core` stays zero-dep and framework adapters that don't need network access don't pull it in transitively.
+Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays zero-dep and framework adapters that don't need network access don't pull it in transitively.
 
 ---
 
@@ -97,7 +97,7 @@ const client = new ContentfulViewDeliveryClient({
 
 ## Why a separate package?
 
-`@contentful/experiences-core` is intentionally zero-dep and runtime-neutral — it must stay importable without pulling in any network or platform code. The experience delivery client is large (~3,000 generated files) and only needed when doing server-side fetching. Isolating it here means:
+`@contentful/experiences-sdk-core` is intentionally zero-dep and runtime-neutral — it must stay importable without pulling in any network or platform code. The experience delivery client is large (~3,000 generated files) and only needed when doing server-side fetching. Isolating it here means:
 
 - Core stays lean and usable in any environment (edge, SSR, test fixtures).
 - Future adapters that render from local fixtures or a custom fetch path don't pay the delivery client's weight.
@@ -108,7 +108,7 @@ const client = new ContentfulViewDeliveryClient({
 ## Package conventions
 
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
-- Re-export only what framework adapters need to surface to customers.
+- Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
 - Name mappings between SDK options and delivery-client options live in `create-client.ts` — one place to change.
 

@@ -4,7 +4,7 @@ import type {
   ComponentTypeNode,
   ExperiencePayload,
   TemplateNode,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 
 import { resolveExperience, type ResolverConfig } from './resolve-experience';
 

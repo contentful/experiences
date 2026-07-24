@@ -30,25 +30,30 @@ experiences/
 ├── .contentful/              # Repo-local Vault config + GitHub Action permissions
 ├── .github/workflows/        # CI: build → check → release (release runs only on main)
 ├── packages/
-│   ├── core/                 # @contentful/experiences-core (internal)
+│   ├── core/                 # @contentful/experiences-sdk-core (internal)
 │   ├── design/               # @contentful/experiences-design (internal)
 │   ├── client/               # @contentful/experiences-client (internal)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   └── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
-└── examples/
-    ├── nextjs/               # Next.js 15 example app
-    └── sveltekit/            # SvelteKit 2 example app (1:1 parity with nextjs)
+├── examples/                # Customer-facing example apps
+│   ├── nextjs/               # Next.js 15 example (external developers run this)
+│   └── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
+└── test-apps/               # Internal testing
+    ├── nextjs/               # Next.js scratchpad
+    └── sveltekit/            # SvelteKit scratchpad
 ```
+
+**`examples/` vs `test-apps/`.** `examples/` is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working. `test-apps/` is where you experiment: try new component patterns, break things, prototype features. Don't reach into `examples/` when you just need a place to poke — copy your changes into `test-apps/` first, iterate there, then port back deliberately.
 
 ### Package roles
 
-| Folder                    | npm name                         | Audience                                                                                       |
-| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/core`           | `@contentful/experiences-core`   | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
-| `packages/design`         | `@contentful/experiences-design` | **Internal.** Pure viewport math.                                                              |
-| `packages/client`         | `@contentful/experiences-client` | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
-| `packages/adapter-react`  | `@contentful/experiences-react`  | **Customer-facing.** React renderer + re-exports of everything.                                |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte` | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
+| Folder                    | npm name                           | Audience                                                                                       |
+| ------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `packages/core`           | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
+| `packages/design`         | `@contentful/experiences-design`   | **Internal.** Pure viewport math.                                                              |
+| `packages/client`         | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
+| `packages/adapter-react`  | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything.                                |
+| `packages/adapter-svelte` | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
@@ -357,10 +362,18 @@ npx nx run-many -t build --skip-nx-cache
 ### Run the example app
 
 ```sh
-cd examples/nextjs
-cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
-npm run dev                  # http://localhost:3000/<experience-id>
+# 1. Seed the demo Experience into your target space (one-time).
+cd examples/scripts
+cp .env.example .env         # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
+npm run bootstrap            # prints experienceId (default: `landing`)
+
+# 2. Run the app.
+cd ../nextjs
+cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+npm run dev                  # http://localhost:3000/landing
 ```
+
+The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, ComponentTypes, Template, DataAssemblies, Experience — via the experiences management API (currently `contentful-management@12.6.0-dev.4`). Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
 
 ### Add a new framework adapter
 
@@ -370,7 +383,7 @@ npm run dev                  # http://localhost:3000/<experience-id>
 2. Copy structure from `packages/adapter-react` (or `adapter-svelte`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish), `vitest.config.ts`
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
 4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
-5. Re-export everything from `@contentful/experiences-core` and `@contentful/experiences-design`
+5. Re-export everything from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
 6. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
 7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
 

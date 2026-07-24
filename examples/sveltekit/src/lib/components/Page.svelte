@@ -15,12 +15,10 @@
   let { title, children }: PageProps = $props();
 </script>
 
-<main
-  style="max-width: 720px; margin: 40px auto; padding: 32px; background: #ffffff; border-radius: 16px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 16px;"
->
+<main style="display: flex; flex-direction: column; gap: 16px;">
   {#if title}
     <p
-      style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin: 0;"
+      style="max-width: 720px; margin: 40px auto 0; padding: 0 32px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280;"
     >
       {title}
     </p>

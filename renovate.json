@@ -3,5 +3,13 @@
   "extends": ["local>contentful/renovate-config:defaultNxMonorepo"],
   "automergeSchedule": ["after 5pm and before 9pm every weekday"],
   "timezone": "America/Denver",
-  "platformAutomerge": false
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Never auto-merge major updates. Renovate still opens a PR and runs CI, but it waits for a human to merge.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major-update", "needs-review"]
+    }
+  ]
 }

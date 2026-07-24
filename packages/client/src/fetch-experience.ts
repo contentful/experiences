@@ -1,11 +1,11 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
-import { resolveExperience } from '@contentful/experiences-core';
+import { resolveExperience } from '@contentful/experiences-sdk-core';
 import type {
   ExperiencePayload,
   PortableRenderPlan,
   ResolveExperienceOptions,
   ResolverConfig,
-} from '@contentful/experiences-core';
+} from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
 
 export type ExperienceOptions = {
