@@ -1,53 +1,38 @@
-<!--
-  Design-system button. Knows nothing about Contentful — it's a plain
-  Svelte component the experience-config wires up.
--->
 <script lang="ts" module>
-  import type { Snippet } from 'svelte';
-
-  export type ButtonType = 'primary' | 'secondary';
-
   export interface ButtonProps {
-    text?: string;
+    label?: string;
     url?: string;
-    type?: ButtonType;
-    children?: Snippet;
   }
-
-  const PALETTE: Record<ButtonType, { background: string; color: string; border: string }> = {
-    primary: { background: '#4f39f6', color: '#ffffff', border: 'none' },
-    secondary: { background: '#ffffff', color: '#1f2937', border: '1px solid #d1d5db' },
-  };
 </script>
 
 <script lang="ts">
-  let { text = 'Button', url, type = 'primary', children }: ButtonProps = $props();
-  const palette = $derived(PALETTE[type]);
-  const style = $derived(
-    [
+  import { getDesignValues } from '@contentful/experiences-svelte';
+
+  let { label = 'Button', url }: ButtonProps = $props();
+
+  const design = $derived(getDesignValues());
+  const style = $derived.by(() => {
+    const parts = [
       'display: inline-flex',
       'align-items: center',
       'gap: 6px',
-      'padding: 12px 18px',
-      'border-radius: 8px',
-      `background: ${palette.background}`,
-      `color: ${palette.color}`,
-      'font-weight: 500',
-      `border: ${palette.border}`,
+      'padding: 0.75rem 1.5rem',
+      'border-radius: 0.25rem',
+      'background: #111',
+      'color: #fff',
       'text-decoration: none',
+      'font-weight: 500',
       'cursor: pointer',
-    ].join('; ')
-  );
+    ];
+    if (design.backgroundColor) parts.push(`background: ${design.backgroundColor}`);
+    if (design.color) parts.push(`color: ${design.color}`);
+    return parts.join('; ');
+  });
+  const target = $derived((design.target as string | undefined) ?? '_self');
 </script>
 
 {#if url}
-  <a href={url} {style} rel="noopener noreferrer">
-    {text}
-    {#if children}{@render children()}{/if}
-  </a>
+  <a href={url} {style} {target} rel="noopener noreferrer">{label}</a>
 {:else}
-  <button type="button" {style}>
-    {text}
-    {#if children}{@render children()}{/if}
-  </button>
+  <button type="button" {style}>{label}</button>
 {/if}

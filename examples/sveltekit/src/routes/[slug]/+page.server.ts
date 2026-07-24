@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 
 import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
-import { CDA_TOKEN, ENVIRONMENT_ID, PREVIEW_TOKEN, SPACE_ID } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { detectViewportFromUserAgent } from '$lib/detect-viewport.js';
 import { experienceConfig } from '$lib/experience-config.js';
 
@@ -15,13 +15,13 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
   try {
     const experience = await fetchExperience(
       {
-        spaceId: SPACE_ID,
-        environmentId: ENVIRONMENT_ID || 'master',
+        spaceId: env.SPACE_ID,
+        environmentId: env.ENVIRONMENT_ID || 'master',
         experienceId: params.slug,
       },
       {
-        accessToken: CDA_TOKEN,
-        previewToken: PREVIEW_TOKEN,
+        accessToken: env.CDA_TOKEN,
+        previewToken: env.CPA_TOKEN,
         preview: previewMode,
       },
       {
