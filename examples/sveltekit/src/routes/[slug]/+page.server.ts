@@ -20,10 +20,9 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
         experienceId: params.slug,
       },
       {
-        // Preview mode reads from the CPA endpoint, which needs a Content
-        // Preview token — the CDA token is rejected by that host.
-        accessToken: previewMode && env.CPA_TOKEN ? env.CPA_TOKEN : env.CDA_TOKEN,
-        host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+        accessToken: env.CDA_TOKEN,
+        previewToken: env.CPA_TOKEN,
+        preview: previewMode,
       },
       {
         config: experienceConfig,

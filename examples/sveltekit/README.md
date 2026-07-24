@@ -41,6 +41,8 @@ Visit `http://localhost:5173/landing`. `landing` is the Experience id the bootst
 
 Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
 
+The route ([`src/routes/[slug]/+page.server.ts`](./src/routes/[slug]/+page.server.ts)) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request.
+
 ### Tokens summary
 
 | Token       | API                | Used by                              | Required?             |

@@ -201,8 +201,9 @@ export default async function ExperiencePage({
   const experience = await fetchExperience(
     { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
     {
-      accessToken: previewMode ? process.env.CPA_TOKEN! : process.env.CDA_TOKEN!,
-      host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+      accessToken: process.env.CDA_TOKEN!,
+      previewToken: process.env.CPA_TOKEN,
+      preview: previewMode,
     },
     {
       config: experienceConfig,
@@ -371,19 +372,23 @@ Async. Fetches an Experience from the Experience Delivery API and resolves it in
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                | Purpose                                                                                                |
-| ------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }` | Which Experience to fetch. Future digital-property identifiers widen this type.                        |
-| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`        | How to fetch. Discriminated union: pass creds inline or bring your own `ContentfulViewDeliveryClient`. |
-| `resolveOptions`    | `{ config, context? }`                              | How to resolve. `context` flows into every `resolveData` hook as `ctx.experience`.                     |
+| Arg                 | Type                                                                  | Purpose                                                                                                                                       |
+| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch. Future digital-property identifiers widen this type.                                                               |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`. |
+| `resolveOptions`    | `{ config, context? }`                                                | How to resolve. `context` flows into every `resolveData` hook as `ctx.experience`.                                                            |
 
-`host` is a full base-URL string (for example `'https://preview.xdn.contentful.com'` for the preview API). When omitted, the delivery client's default endpoint is used.
+Configure both tokens up front and flip `preview: true` per call to hit the preview API. `preview: true` without `previewToken` throws an error. `host` is a full base-URL string for custom endpoints (staging, proxy, per-region); when set, it wins over the `preview`-derived default host.
 
 ```ts
 // Inline credentials, client created internally
 const plan = await fetchExperience(
   { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
-  { accessToken: process.env.CDA_TOKEN!, host: 'https://preview.xdn.contentful.com' },
+  {
+    accessToken: process.env.CDA_TOKEN!,
+    previewToken: process.env.CPA_TOKEN!,
+    preview: true, // flip per request; omit or set false for delivery
+  },
   { config: experienceConfig, context: { isPreview: true, metadata: { slug } } }
 );
 
@@ -411,14 +416,18 @@ try {
 
 ### `createClient(options)`
 
-Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape. It maps `accessToken` to `token` and `host` to `baseUrl`, and passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-creds path.
+Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape. It maps `accessToken` to `token` and `host` to `baseUrl`, and passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
+
+`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It does not participate in the per-request `preview` toggle.
+
+> **If you need runtime-dynamic swaps between delivery and preview use `fetchExperience`'s inline-credentials path**. Pass `{ accessToken, previewToken, preview }` directly instead of pre-building a client and passing `{ client }`. The `preview` boolean is a per-call selector; a pre-built client is bound to whichever token it was constructed with and can't swap.
 
 ```ts
 import { createClient } from '@contentful/experiences-react';
 
 const client = createClient({
   accessToken: process.env.CDA_TOKEN!,
-  host: 'https://preview.xdn.contentful.com', // optional; overrides the default endpoint
+  host: 'https://preview-staging.example.com', // optional custom base URL
   // headers, timeoutInSeconds, maxRetries, fetch, logging, etc. all pass through
 });
 ```

@@ -27,11 +27,9 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       locale,
     },
     {
-      // Preview mode reads from the CPA endpoint, which needs a Content
-      // Preview token — the CDA token is rejected by that host.
-      accessToken:
-        previewMode && process.env.CPA_TOKEN ? process.env.CPA_TOKEN : process.env.CDA_TOKEN!,
-      host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+      accessToken: process.env.CDA_TOKEN!,
+      previewToken: process.env.CPA_TOKEN,
+      preview: previewMode,
     },
     {
       config: experienceConfig,

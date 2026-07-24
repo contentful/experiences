@@ -8,6 +8,8 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
 
+const PREVIEW_HOST = 'https://preview.xdn.contentful.com';
+
 export type ExperienceOptions = {
   spaceId: string;
   environmentId: string;
@@ -16,7 +18,27 @@ export type ExperienceOptions = {
 };
 
 export type ClientOptions =
-  | { accessToken: string; host?: string }
+  | {
+      accessToken: string;
+      /**
+       * Preview access token. Required when calling with `preview: true`.
+       */
+      previewToken?: string;
+      /**
+       * Flip between delivery (default) and preview at request time. When
+       * `true`, `fetchExperience` uses `previewToken` and the preview host;
+       * when `false` or unset, it uses `accessToken` and the delivery host.
+       * Ignored when a pre-made `client` is passed instead of inline creds.
+       */
+      preview?: boolean;
+      /**
+       * Custom base URL for the delivery client (staging, proxy, per-region).
+       * Wins over the `preview`-derived default host — combine `host` with
+       * `preview: true` to point preview mode at a non-prod endpoint.
+       * Omit for the standard delivery / preview hosts.
+       */
+      host?: string;
+    }
   | { client: ContentfulViewDeliveryClient };
 
 export type ResolveOptions = {
@@ -32,10 +54,21 @@ export async function fetchExperience(
   const { spaceId, environmentId, experienceId, locale } = experienceOptions;
   const { config, context } = resolveOptions;
 
-  const client =
-    'client' in clientOptions
-      ? clientOptions.client
-      : createClient({ accessToken: clientOptions.accessToken, host: clientOptions.host });
+  let client: ContentfulViewDeliveryClient;
+  if ('client' in clientOptions) {
+    client = clientOptions.client;
+  } else {
+    const { accessToken, previewToken, preview, host } = clientOptions;
+    if (preview && !previewToken) {
+      throw new Error(
+        'fetchExperience() called with preview: true but no previewToken was provided'
+      );
+    }
+    client = createClient({
+      accessToken: preview ? (previewToken as string) : accessToken,
+      host: host ?? (preview ? PREVIEW_HOST : undefined),
+    });
+  }
 
   // Response from the experience delivery client is structurally compatible with ExperiencePayload (superset)
   const payload = (await client.view.getExperience(spaceId, environmentId, experienceId, {

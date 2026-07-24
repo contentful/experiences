@@ -51,7 +51,8 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
       },
       {
         accessToken: process.env.CDA_TOKEN!,
-        host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com',
+        previewToken: process.env.PREVIEW_TOKEN,
+        preview: previewMode,
       },
       {
         config: advancedExperienceConfig,
