@@ -2,7 +2,8 @@
  * Default fallback rendered when an instance references a component type
  * not present in the Config.
  *
- * Behavior: a visible red error box in preview, silent null in production.
+ * Behavior: a visible debug box when `debug` is on, silent null otherwise.
+ * The console.warn fires either way so the miss is never fully silent.
  * Customers can override per-render via <ServerExperienceRenderer renderUnknown=... />.
 -->
 <script lang="ts">
@@ -22,14 +23,20 @@
   });
 </script>
 
-{#if experience.isPreview}
+{#if experience.debug}
   <div
-    style="border: 2px solid red; padding: 1rem; color: red; background: #fff;"
+    style="border: 2px solid red; padding: 1rem; color: red; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem;"
     data-experiences-missing={componentTypeId}
   >
     <strong>Missing component &lsquo;{componentTypeId}&rsquo;</strong>
-    <p>
+    <p style="margin: 0.5rem 0;">
       This component is referenced by the Experience payload but is not registered in the Config.
+      Register it under this key in your <code>components</code> map:
     </p>
+    <pre style="margin: 0; white-space: pre-wrap;">{JSON.stringify(
+        { componentTypeId, nodeId: nodeId ?? null },
+        null,
+        2
+      )}</pre>
   </div>
 {/if}

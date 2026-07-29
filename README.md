@@ -100,7 +100,7 @@ One `fetchExperience` call fetches the payload from the Experience Delivery API 
 
 It throws `NotFoundError` when the id doesn't exist. See [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing that to your framework's 404.
 
-The signature is three grouped params: what to fetch (space, env, experience), how to fetch (auth), and how to resolve (component config plus per-render context). Each group evolves on its own, so future personalization params, digital-property identifiers, and transport options fit their respective group without reshaping the signature.
+The signature is three grouped params: what to fetch (space, env, experience), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so future personalization params, digital-property identifiers, and transport options fit their respective group without reshaping the signature.
 
 A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
 
@@ -169,9 +169,9 @@ Returning `undefined` means "not resolvable": the SDK drops that key so the comp
 
 ## Advanced setup
 
-When the simple path isn't enough, three optional features cover most production needs. Preview mode plus metadata flows per-page context into resolvers. Viewport seeding makes SSR match the device. Async `resolveData` enriches props from external sources. Use any combination of them.
+When the simple path isn't enough, a few optional features cover most production needs. Per-page `metadata` flows into resolvers. `debug` mode surfaces what the SDK saw (visible missing-component boxes, verbose logs, a JSON dump panel). Viewport seeding makes SSR match the device. Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working route with all three features is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). Visit `/<id>?preview=true&locale=en-US` after running the example.
+A full working route is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). Visit `/<id>?debug=true&locale=en-US` after running the example.
 
 ```tsx
 // app/[slug]/page.tsx
@@ -191,13 +191,17 @@ export default async function ExperiencePage({
   const { slug: experienceId } = await params;
   const sp = await searchParams;
   const previewMode = sp.preview === 'true';
+  const debug = sp.debug === 'true';
   const locale = (sp.locale as string) ?? 'en-US';
 
   // 1. UA → viewport id, so SSR matches the device's expected viewport.
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  // 2. Per-page metadata flows into every resolveData hook via context.
+  // 2. Per-page metadata flows into every resolveData hook; debug is the
+  //    single observability switch (logs + missing-component box + JSON dump).
+  //    Note: `debug` (render/observability) is independent of `preview`
+  //    (which token + host to fetch from).
   const experience = await fetchExperience(
     { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
     {
@@ -207,7 +211,8 @@ export default async function ExperiencePage({
     },
     {
       config: experienceConfig,
-      context: { isPreview: previewMode, metadata: { slug: experienceId, locale } },
+      metadata: { slug: experienceId, locale },
+      debug,
     }
   );
 
@@ -216,7 +221,8 @@ export default async function ExperiencePage({
       experience={experience}
       config={experienceConfig}
       initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+      metadata={{ slug: experienceId, locale }}
+      debug={debug}
     />
   );
 }
@@ -241,7 +247,68 @@ Button: defineComponent<ButtonProps>({
 }),
 ```
 
-`experience.metadata` here is exactly what the page passed into `resolveExperience`'s third argument. That's how per-page context reaches every resolver.
+`experience.metadata` here is exactly what the page passed into `resolveExperience`'s third argument. That's how per-page metadata reaches every resolver.
+
+### Debug mode
+
+`debug: true` is the single observability switch, threaded end-to-end from `fetchExperience` through resolve and render. Turning it on:
+
+- **Logs** the fetch (host, ids), the raw payload, the resolution steps, and per-node `resolveData` timings under the `[experiences:debug]` prefix.
+- **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentTypeId` (silent `null` when debug is off).
+- **Auto-mounts `<DebugExperience>`** after the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
+
+Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It's independent of `preview` (which selects the delivery vs. preview token and host); debug is purely a render/observability concern.
+
+```tsx
+const debug = sp.debug === 'true';
+
+const experience = await fetchExperience(fetchOpts, clientOpts, {
+  config: experienceConfig,
+  metadata: { slug, locale },
+  debug, // logs + missing-component box + JSON dump panel
+});
+
+// The renderer takes the same top-level `debug` (auto-mounts <DebugExperience>):
+<ServerExperienceRenderer experience={experience} config={experienceConfig} debug={debug} />;
+```
+
+Read it inside a component with `useExperience().debug` (React) / `getExperience().debug` (Svelte) to add your own debug affordances.
+
+#### `<DebugExperience>`
+
+The JSON-dump panel auto-mounts when `debug` is on, but you can also mount it manually anywhere — pass the resolved plan and, optionally, `defaultOpen`:
+
+```tsx
+import { DebugExperience } from '@contentful/experiences-react';
+
+<DebugExperience experience={experience} defaultOpen />;
+```
+
+It renders a native `<details>` (collapses without extra JS) with a circular-reference-safe JSON serialization of the plan. v1 is the JSON dump; it has room to grow into a node-tree explorer and a `resolveData` timing panel.
+
+### Custom fallback for unregistered components (`renderUnknown`)
+
+When the payload references a component type that isn't in your `Config`, the renderer falls back to `MissingComponent` (a visible box when `debug` is on, silent `null` otherwise). Override it per-render with the `renderUnknown` prop on either renderer to ship your own fallback — a branded placeholder, an error boundary, a logging shim:
+
+```tsx
+import type { MissingComponentProps } from '@contentful/experiences-react';
+
+function Fallback({ componentTypeId, nodeId }: MissingComponentProps) {
+  return (
+    <div data-unregistered={componentTypeId}>
+      Unregistered component “{componentTypeId}”{nodeId ? ` (#${nodeId})` : ''}.
+    </div>
+  );
+}
+
+<ServerExperienceRenderer
+  experience={experience}
+  config={experienceConfig}
+  renderUnknown={Fallback}
+/>;
+```
+
+`renderUnknown` receives `{ componentTypeId, nodeId? }`. It renders unconditionally (your override, not the SDK, decides whether to gate on `debug` via `useExperience().debug`). The Svelte adapter takes the same prop with a Svelte component.
 
 ---
 
@@ -372,11 +439,11 @@ Async. Fetches an Experience from the Experience Delivery API and resolves it in
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                  | Purpose                                                                                                                                       |
-| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch. Future digital-property identifiers widen this type.                                                               |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`. |
-| `resolveOptions`    | `{ config, context? }`                                                | How to resolve. `context` flows into every `resolveData` hook as `ctx.experience`.                                                            |
+| Arg                 | Type                                                                  | Purpose                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch. Future digital-property identifiers widen this type.                                                                            |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                       | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
 
 Configure both tokens up front and flip `preview: true` per call to hit the preview API. `preview: true` without `previewToken` throws an error. `host` is a full base-URL string for custom endpoints (staging, proxy, per-region); when set, it wins over the `preview`-derived default host.
 
@@ -389,7 +456,7 @@ const plan = await fetchExperience(
     previewToken: process.env.CPA_TOKEN!,
     preview: true, // flip per request; omit or set false for delivery
   },
-  { config: experienceConfig, context: { isPreview: true, metadata: { slug } } }
+  { config: experienceConfig, metadata: { slug }, debug: true }
 );
 
 // Pre-created client, useful when you manage the client lifecycle yourself
@@ -436,23 +503,24 @@ const client = createClient({
 
 Async. Walks the payload, classifies properties, runs every component's `resolveData` in parallel, and returns a `PortableRenderPlan` ready to hand to a renderer.
 
-| Param     | Type                                                                             | Required | Default | Description                                                                                                                                                           |
-| --------- | -------------------------------------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)     | yes      | n/a     | The Experience payload to resolve.                                                                                                                                    |
-| `config`  | `Config`, `{ components, templates? }` from `defineComponent` / `defineTemplate` | yes      | n/a     | Your component + template registry.                                                                                                                                   |
-| `opts`    | `{ experience?: Partial<ExperienceContext> }`                                    | no       | `{}`    | Per-render context shallow-merged into the default `{ isPreview: false, metadata: {} }`. The merged context is what every `resolveData` receives as `ctx.experience`. |
+| Param     | Type                                                                             | Required | Default | Description                                                                                                                                                                                                                      |
+| --------- | -------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)     | yes      | n/a     | The Experience payload to resolve.                                                                                                                                                                                               |
+| `config`  | `Config`, `{ components, templates? }` from `defineComponent` / `defineTemplate` | yes      | n/a     | Your component + template registry.                                                                                                                                                                                              |
+| `opts`    | `{ metadata?: Record<string, unknown>; debug?: boolean }`                        | no       | `{}`    | `metadata` (default `{}`) is exposed to every `resolveData` as `ctx.experience.metadata`. `debug` (default `false`) logs the resolution steps and per-node `resolveData` timings, and threads through as `ctx.experience.debug`. |
 
 ### `<ServerExperienceRenderer />`
 
 SSR-friendly renderer. No reactive subscriptions; the active viewport is resolved once from `initialViewportId`. Safe to use in React Server Components.
 
-| Prop                | Type                                          | Required | Default                              | Description                                                                                            |
-| ------------------- | --------------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `experience`        | `PortableRenderPlan`                          | yes      | n/a                                  | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.  |
-| `config`            | `Config`                                      | yes      | n/a                                  | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                    |
-| `initialViewportId` | `string`                                      | no       | First viewport id                    | Seeds the active viewport. Typically derived from User-Agent server-side.                              |
-| `context`           | `Partial<ExperienceContext>`                  | no       | `{ isPreview: false, metadata: {} }` | Shallow-merged into the render-time `experience` context your components receive.                      |
-| `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent`                   | Fallback for unregistered component types. Default: visible red box in preview, silent null otherwise. |
+| Prop                | Type                                          | Required | Default            | Description                                                                                                                                  |
+| ------------------- | --------------------------------------------- | -------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experience`        | `PortableRenderPlan`                          | yes      | n/a                | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.                                        |
+| `config`            | `Config`                                      | yes      | n/a                | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                                                          |
+| `initialViewportId` | `string`                                      | no       | First viewport id  | Seeds the active viewport. Typically derived from User-Agent server-side.                                                                    |
+| `metadata`          | `Record<string, unknown>`                     | no       | `{}`               | Per-render metadata merged onto the render-time `experience` context. Read via `useExperience().metadata`.                                   |
+| `debug`             | `boolean`                                     | no       | `false`            | Observability switch. Shows the missing-component box, and auto-mounts `<DebugExperience>` after the tree. Read via `useExperience().debug`. |
+| `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent` | Fallback for unregistered component types. Default `MissingComponent`: visible box when `debug` is on, silent null otherwise.                |
 
 ### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)
 
@@ -494,19 +562,23 @@ React hook used internally by `ClientExperienceRenderer`. You'll rarely need it 
 
 ### `MissingComponent`
 
-Default `renderUnknown` fallback. Visible red box when `useExperience().isPreview === true`, silent null otherwise. Override per-render via the `renderUnknown` prop on either renderer.
+Default `renderUnknown` fallback. Visible box naming the unregistered `componentTypeId` when `useExperience().debug === true`, silent null otherwise (a `console.warn` fires in both cases). Override per-render via the `renderUnknown` prop on either renderer — see [Custom fallback for unregistered components](#custom-fallback-for-unregistered-components-renderunknown).
+
+### `<DebugExperience experience={plan} defaultOpen? />`
+
+First-party debug panel. Renders the resolved `PortableRenderPlan` as pretty, circular-safe JSON inside a collapsible native `<details>`. Auto-mounted by the renderers when `debug` is on, or mount it manually anywhere. `defaultOpen` (default `false`) expands it on first paint. Import `DebugExperienceProps` for the prop type.
 
 ### `RenderContext`: what `useExperience()` returns
 
 Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experience`) sees an experience context. The shape:
 
-| Field                 | Type                      | Available in        | Description                                                                                                                                                                                         |
-| --------------------- | ------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isPreview`           | `boolean`                 | render, resolveData | True when the page is in editor / preview mode. Components can branch on this for placeholder UI.                                                                                                   |
-| `metadata`            | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` opts / renderer `context` prop. Free-form.                                                                                                      |
-| `viewports`           | `ViewportDef[]`           | render, resolveData | All viewports declared on the experience, in cascade order. Stable for the duration of the page render.                                                                                             |
-| `activeViewport`      | `ViewportDef`             | render only         | The currently active viewport, the last-matching media query or device trait. Absent in `resolveData` because it's a render-time value that would re-fire async resolvers on every viewport change. |
-| `activeViewportIndex` | `number`                  | render only         | Index of `activeViewport` in `viewports`. Same caveat.                                                                                                                                              |
+| Field                 | Type                      | Available in        | Description                                                                                                                                                                                                                             |
+| --------------------- | ------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`               | `boolean`                 | render, resolveData | The single observability switch (replaces the old `isPreview`). Drives verbose logging, the visible missing-component box, and the auto-mounted `<DebugExperience>` panel. Components can branch on it for their own debug affordances. |
+| `metadata`            | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` opts / renderer `metadata` prop. Free-form.                                                                                                                                         |
+| `viewports`           | `ViewportDef[]`           | render, resolveData | All viewports declared on the experience, in cascade order. Stable for the duration of the page render.                                                                                                                                 |
+| `activeViewport`      | `ViewportDef`             | render only         | The currently active viewport, the last-matching media query or device trait. Absent in `resolveData` because it's a render-time value that would re-fire async resolvers on every viewport change.                                     |
+| `activeViewportIndex` | `number`                  | render only         | Index of `activeViewport` in `viewports`. Same caveat.                                                                                                                                                                                  |
 
 ### `useContentfulComponent()`: the raw payload
 
@@ -517,7 +589,7 @@ Use it for:
 - **Custom design resolution** outside the SDK's default cascade, such as emitting CSS variables or multi-brand theming.
 - **Branching by `componentTypeId`** in a generic wrapper component.
 - **Analytics / instrumentation** keyed off `nodeId`.
-- **Debug overlays** in preview mode (a `<details>` with the raw payload).
+- **Debug overlays** when `useExperience().debug` is on (a `<details>` with the raw payload) — or reach for the built-in [`<DebugExperience>`](#debugexperience-experienceplan-defaultopen-).
 
 Components see `ContentfulComponent`:
 

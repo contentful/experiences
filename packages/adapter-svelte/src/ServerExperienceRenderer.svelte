@@ -11,6 +11,7 @@
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
   import { getViewportIndex } from '@contentful/experiences-design';
 
+  import DebugExperience from './DebugExperience.svelte';
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
   import WrapWithTemplate from './WrapWithTemplate.svelte';
@@ -19,7 +20,7 @@
   import type { RenderContext } from './types.js';
 
   const DEFAULT_CONTEXT: ExperienceContext = {
-    isPreview: false,
+    debug: false,
     metadata: {},
     viewports: [],
   };
@@ -35,7 +36,8 @@
     experience,
     config,
     initialViewportId,
-    context,
+    metadata,
+    debug = false,
     renderUnknown = MissingComponent,
   }: ServerExperienceRendererProps = $props();
 
@@ -44,8 +46,8 @@
     const idx = experience ? getViewportIndex(experience.viewports, initialViewportId) : 0;
     return {
       ...DEFAULT_CONTEXT,
-      ...context,
-      metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
+      debug,
+      metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
       viewports,
       activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
       activeViewportIndex: idx,
@@ -67,4 +69,7 @@
       />
     {/snippet}
   </WrapWithTemplate>
+  {#if debug}
+    <DebugExperience {experience} />
+  {/if}
 {/if}

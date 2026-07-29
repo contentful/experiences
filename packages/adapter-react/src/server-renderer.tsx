@@ -12,13 +12,14 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import { getViewportIndex } from '@contentful/experiences-design';
 
+import { DebugExperience } from './debug-experience';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
-  isPreview: false,
+  debug: false,
   metadata: {},
   viewports: [],
 };
@@ -36,8 +37,18 @@ export interface ServerExperienceRendererProps {
   config: Config;
   /** Initial viewport seed (e.g. derived from User-Agent). Defaults to viewport[0]. */
   initialViewportId?: string;
-  /** Per-render context shallow-merged onto defaults. */
-  context?: Partial<ExperienceContext>;
+  /**
+   * Arbitrary per-render metadata, readable by descendants via
+   * `useExperience()` and by resolvers via `ctx.experience.metadata`.
+   */
+  metadata?: Record<string, unknown>;
+  /**
+   * Observability switch. When on: renders the visible missing-component box,
+   * turns the default `renderUnknown` fallback into the debug component, and
+   * auto-mounts `<DebugExperience>` (the resolved-plan JSON panel) after the
+   * tree. Pair with `debug` on `fetchExperience` for end-to-end logging.
+   */
+  debug?: boolean;
   /** Override the fallback rendered for unregistered component types. */
   renderUnknown?: RenderUnknown;
 }
@@ -46,7 +57,8 @@ export function ServerExperienceRenderer({
   experience,
   config,
   initialViewportId,
-  context,
+  metadata,
+  debug = false,
   renderUnknown = MissingComponent,
 }: ServerExperienceRendererProps): ReactNode {
   if (!experience) return null;
@@ -61,8 +73,8 @@ export function ServerExperienceRenderer({
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
-    ...context,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
+    debug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
     viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
@@ -84,6 +96,7 @@ export function ServerExperienceRenderer({
           renderUnknown={renderUnknown}
         />
       </WrapWithTemplate>
+      {debug ? <DebugExperience experience={experience} /> : null}
     </ExperienceProvider>
   );
 }

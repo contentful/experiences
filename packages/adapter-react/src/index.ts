@@ -26,6 +26,9 @@ export type { ServerExperienceRendererProps } from './server-renderer';
 export { MissingComponent } from './missing-component';
 export type { MissingComponentProps } from './missing-component';
 
+export { DebugExperience } from './debug-experience';
+export type { DebugExperienceProps } from './debug-experience';
+
 export { useActiveViewport } from './use-active-viewport';
 export type { UseActiveViewportResult } from './use-active-viewport';
 

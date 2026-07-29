@@ -44,7 +44,7 @@ useActiveViewport; // Rune-backed reactive object; you'll rarely need it directl
 ```ts
 getDesignValues<T>(); // Resolved design values for the current node; read in a $derived to stay reactive
 toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
-getExperience(); // RenderContext: isPreview, metadata, viewports, activeViewport
+getExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
 getContentfulTemplate(); // Same, for the page-level template
 type ToCssOptions;

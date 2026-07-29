@@ -18,7 +18,7 @@ Three positional args group by concern:
 | ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch.                                                             |
 | `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
-| `resolveOptions`    | `{ config, context? }`                                                | How to resolve — component registry + context.                                         |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte
@@ -33,7 +33,8 @@ const plan = await fetchExperience(
   },
   {
     config: experienceConfig,
-    context: { isPreview: false, metadata: { slug } }, // flows into resolveData hooks
+    metadata: { slug }, // flows into resolveData hooks as ctx.experience.metadata
+    debug: false, // logs + visible missing-component box when true
   }
 );
 

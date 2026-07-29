@@ -6,7 +6,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Minimal page**: `fetchExperience` feeding `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to Next's `notFound()`. Preview mode, viewport seeding, and metadata are all optional advanced features; the minimal app needs none of them.
+- **Minimal page**: `fetchExperience` feeding `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to Next's `notFound()`. Preview mode, debug mode, viewport seeding, and metadata are all optional advanced features; the minimal app needs none of them.
 - **Styling via `useDesignValues()` and `toCss()`**: components read their own design (spacing, color, typography, layout) from the hook; design is never injected as props. `Section`, `Heading`, `Text`, `Button`, `Image`, and `RichText` all follow this pattern.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
 - **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
@@ -171,17 +171,19 @@ const experience = await fetchExperience(
 Resolvers run in parallel across nodes. Viewport resolution stays at render
 time, so client-side viewport changes never re-trigger `resolveData`.
 
-#### Optional `context`
+#### Optional `metadata` + `debug`
 
-The `context` option (on `resolveOptions`, the third arg) passes per-render context into every component's `resolveData` hook (and to components via `useExperience()`).
-Default is `{ isPreview: false, metadata: {} }`, which is fine for production. Add
-fields when:
+Two top-level `resolveOptions` (the third arg) tune resolve + render. Both are
+optional and default off; production usually needs neither.
 
-- **Preview mode**: `{ isPreview: true }`. `MissingComponent` renders a visible
-  red box, and your own components can branch on it too. Set `host` to the
-  preview endpoint on `clientOptions` to also hit the preview API.
-- **Per-page metadata**: `{ metadata: { slug, locale } }`, available to every
-  `resolveData` for URL building, locale-aware lookups, and so on.
+- **Per-page metadata**: `metadata: { slug, locale }` is passed into every
+  component's `resolveData` hook (as `ctx.experience.metadata`) and readable at
+  render time via `useExperience().metadata` — for URL building, locale-aware
+  lookups, and so on.
+- **Debug mode**: `debug: true` turns on verbose SDK logging, flips
+  `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>`. It's
+  independent of the fetch host; set `host` on `clientOptions` to hit the preview
+  API.
 
 ```ts
 const experience = await fetchExperience(
@@ -192,7 +194,8 @@ const experience = await fetchExperience(
   },
   {
     config: experienceConfig,
-    context: { isPreview: previewMode, metadata: { slug, locale } },
+    metadata: { slug, locale },
+    debug,
   }
 );
 ```

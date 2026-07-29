@@ -17,6 +17,7 @@ export { default as ClientExperienceRenderer } from './ClientExperienceRenderer.
 export { default as ExperienceRenderer } from './ClientExperienceRenderer.svelte';
 export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.svelte';
 export { default as MissingComponent } from './MissingComponent.svelte';
+export { default as DebugExperience } from './DebugExperience.svelte';
 
 // Exposed so advanced customers can render non-`children` slots manually:
 // e.g. `<NodesRenderer nodes={contentful.slots.header as PortableRenderNode[]} ... />`.
@@ -36,6 +37,7 @@ export type { ToCssOptions } from './design-utils.js';
 export type {
   ClientExperienceRendererProps,
   ClientExperienceRendererProps as ExperienceRendererProps,
+  DebugExperienceProps,
   MissingComponentProps,
   RenderUnknown,
   ServerExperienceRendererProps,

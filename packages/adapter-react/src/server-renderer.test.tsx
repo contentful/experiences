@@ -157,7 +157,7 @@ describe('ServerExperienceRenderer', () => {
     ).toBe('');
   });
 
-  it('exposes experience context via useExperience() with isPreview false by default', async () => {
+  it('exposes experience context via useExperience() with debug false by default', async () => {
     const seen: Array<Record<string, unknown>> = [];
     const Capture = () => {
       seen.push(useExperience() as unknown as Record<string, unknown>);
@@ -172,7 +172,7 @@ describe('ServerExperienceRenderer', () => {
 
     expect(seen).toEqual([
       {
-        isPreview: false,
+        debug: false,
         metadata: {},
         viewports: VIEWPORTS,
         activeViewport: VIEWPORTS[0],
@@ -230,7 +230,7 @@ describe('ServerExperienceRenderer', () => {
     expect(seen!.activeViewport).not.toBe(VIEWPORTS[2]);
   });
 
-  it('renders missing-component fallback in preview mode', () => {
+  it('renders missing-component fallback in debug mode', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const justContainer: Config = {
       components: {
@@ -258,14 +258,10 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const previewHtml = renderToStaticMarkup(
-      <ServerExperienceRenderer
-        experience={planWithMissing}
-        config={justContainer}
-        context={{ isPreview: true }}
-      />
+    const debugHtml = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={planWithMissing} config={justContainer} debug />
     );
-    expect(previewHtml).toContain('data-experiences-missing="NotRegistered"');
+    expect(debugHtml).toContain('data-experiences-missing="NotRegistered"');
 
     const productionHtml = renderToStaticMarkup(
       <ServerExperienceRenderer experience={planWithMissing} config={justContainer} />
@@ -274,6 +270,46 @@ describe('ServerExperienceRenderer', () => {
     expect(productionHtml).toBe('<div></div>');
 
     warn.mockRestore();
+  });
+
+  it('auto-mounts DebugExperience only when debug is on', async () => {
+    const captureConfig: Config = { components: { capture: () => null } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
+      captureConfig
+    );
+
+    const off = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={captureConfig} />
+    );
+    expect(off).not.toContain('data-experiences-debug');
+
+    const on = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={captureConfig} debug />
+    );
+    expect(on).toContain('data-experiences-debug');
+    expect(on).toContain('Experience debug');
+  });
+
+  it('threads top-level metadata into useExperience()', async () => {
+    let seen: Record<string, unknown> | null = null;
+    const Capture = () => {
+      seen = useExperience() as unknown as Record<string, unknown>;
+      return null;
+    };
+    const captureConfig: Config = { components: { capture: Capture } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
+      captureConfig
+    );
+    renderToStaticMarkup(
+      <ServerExperienceRenderer
+        experience={plan}
+        config={captureConfig}
+        metadata={{ slug: 'home', locale: 'en-US' }}
+      />
+    );
+    expect(seen!.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
   it("declares MissingComponent as a client component ('use client')", () => {

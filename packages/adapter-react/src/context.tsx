@@ -72,8 +72,8 @@ export function ResolvedDesignProvider({
 
 /**
  * Read the current Experience runtime context — viewports, the active
- * viewport, preview flag, and free-form metadata. Throws when called outside
- * any Experience renderer subtree.
+ * viewport, the `debug` flag, and free-form metadata. Throws when called
+ * outside any Experience renderer subtree.
  */
 export function useExperience(): RenderContext {
   const ctx = useContext(ExperienceContext);

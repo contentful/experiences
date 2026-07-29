@@ -10,6 +10,7 @@ import type { PageServerLoad } from './$types.js';
 export const load: PageServerLoad = async ({ params, url, request }) => {
   const previewMode =
     url.searchParams.get('preview') === 'true' || url.searchParams.get('preview') === '1';
+  const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
   const initialViewportId = detectViewportFromUserAgent(request.headers.get('user-agent') ?? '');
 
   try {
@@ -25,11 +26,12 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       },
       {
         config: experienceConfig,
-        context: { isPreview: previewMode, metadata: { slug: params.slug } },
+        metadata: { slug: params.slug },
+        debug,
       }
     );
 
-    return { experience, previewMode, slug: params.slug, initialViewportId };
+    return { experience, previewMode, debug, slug: params.slug, initialViewportId };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Experience not found');
     throw err;

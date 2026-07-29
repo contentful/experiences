@@ -13,7 +13,7 @@
 
 import type { Component } from 'svelte';
 
-import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import type { Config } from './types.js';
 
@@ -21,7 +21,17 @@ export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   initialViewportId?: string;
-  context?: Partial<ExperienceContext>;
+  /**
+   * Arbitrary per-render metadata, readable by descendants via
+   * `getExperience()` and by resolvers via `ctx.experience.metadata`.
+   */
+  metadata?: Record<string, unknown>;
+  /**
+   * Observability switch. When on: renders the visible missing-component box,
+   * turns the default `renderUnknown` fallback into the debug component, and
+   * auto-mounts `<DebugExperience>` after the tree.
+   */
+  debug?: boolean;
   renderUnknown?: RenderUnknown;
 }
 
@@ -34,3 +44,10 @@ export interface MissingComponentProps {
 }
 
 export type RenderUnknown = Component<MissingComponentProps>;
+
+export interface DebugExperienceProps {
+  /** The resolved plan to inspect (what a renderer receives as `experience`). */
+  experience: PortableRenderPlan;
+  /** Start expanded. Defaults to collapsed to stay out of the way. */
+  defaultOpen?: boolean;
+}

@@ -22,6 +22,12 @@ const { mockGetExperience, mockPayload, mockPlan } = vi.hoisted(() => {
 
 vi.mock('@contentful/experiences-sdk-core', () => ({
   resolveExperience: vi.fn().mockResolvedValue(mockPlan),
+  createDebugLogger: vi.fn(() => ({
+    log: vi.fn(),
+    lazy: vi.fn(),
+    time: (_label: string, fn: () => Promise<unknown>) => fn(),
+    enabled: false,
+  })),
 }));
 
 vi.mock('@contentful/experience-delivery', () => ({
@@ -225,6 +231,21 @@ describe('fetchExperience', () => {
         expect.anything()
       );
       expect(result).toEqual(mockPlan);
+    });
+
+    it('forwards flattened metadata + debug to resolveExperience', async () => {
+      const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+      await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123' },
+        { config: resolveOptions.config, metadata: { slug: 'home' }, debug: true }
+      );
+
+      expect(resolveExperience).toHaveBeenCalledWith(mockPayload, resolveOptions.config, {
+        metadata: { slug: 'home' },
+        debug: true,
+      });
     });
 
     it('returns resolved PortableRenderPlan on success', async () => {

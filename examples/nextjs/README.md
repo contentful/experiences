@@ -6,7 +6,8 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
-- **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. `isPreview` on the render context also flips, so `MissingComponent` renders a visible red box.
+- **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
+- **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) after the tree.
 - **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Styling via `useDesignValues()` and `toCss()`**: components read their own design (spacing, color, typography, layout) from the hook; design is never injected as props. `Section`, `Heading`, `Text`, `Button`, `Image`, and `RichText` all follow this pattern.
@@ -68,12 +69,12 @@ The route wires this through `fetchExperience`'s client options — both tokens 
 
 ## The route
 
-One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, viewport seeding, and per-page metadata are all wired up as `searchParams` + header reads.
+One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, debug mode, viewport seeding, and per-page metadata are all wired up as `searchParams` + header reads.
 
-| Try it locally                                            | Source                                         | Config                                                     |
-| --------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
-| `http://localhost:3000/landing`                           | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx) |
-| `http://localhost:3000/landing?preview=true&locale=en-US` | same route                                     | same config                                                |
+| Try it locally                                          | Source                                         | Config                                                     |
+| ------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `http://localhost:3000/landing`                         | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx) |
+| `http://localhost:3000/landing?debug=true&locale=en-US` | same route                                     | same config                                                |
 
 The route in one glance:
 
@@ -87,7 +88,8 @@ const experience = await fetchExperience(
   },
   {
     config: experienceConfig,
-    context: { isPreview: previewMode, metadata: { slug, locale } },
+    metadata: { slug, locale },
+    debug,
   }
 );
 return (
@@ -95,7 +97,8 @@ return (
     experience={experience}
     config={experienceConfig}
     initialViewportId={initialViewportId}
-    context={{ isPreview: previewMode, metadata: { slug, locale } }}
+    metadata={{ slug, locale }}
+    debug={debug}
   />
 );
 ```
@@ -219,17 +222,19 @@ const experience = await fetchExperience(
 Resolvers run in parallel across nodes. Viewport resolution stays at render
 time, so client-side viewport changes never re-trigger `resolveData`.
 
-#### Optional `context`
+#### Optional `metadata` + `debug`
 
-The `context` option (on `resolveOptions`, the third arg) passes per-render context into every component's `resolveData` hook (and to components via `useExperience()`).
-Default is `{ isPreview: false, metadata: {} }`, which is fine for production. Add
-fields when:
+Two top-level `resolveOptions` (the third arg) tune resolve + render. Both are
+optional and default off; production usually needs neither.
 
-- **Preview mode**: `{ isPreview: true }`. `MissingComponent` renders a visible
-  red box, and your own components can branch on it too. Configure both tokens
-  on `clientOptions` and flip `preview: true` to hit the preview API.
-- **Per-page metadata**: `{ metadata: { slug, locale } }`, available to every
-  `resolveData` for URL building, locale-aware lookups, and so on.
+- **Per-page metadata**: `metadata: { slug, locale }` is passed into every
+  component's `resolveData` hook (as `ctx.experience.metadata`) and readable at
+  render time via `useExperience().metadata` — for URL building, locale-aware
+  lookups, and so on.
+- **Debug mode**: `debug: true` turns on verbose SDK logging, flips
+  `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>`. It's
+  independent of `preview` (which selects the delivery vs. preview token + host);
+  configure both tokens on `clientOptions` and flip `preview: true` for that.
 
 ```ts
 const experience = await fetchExperience(
@@ -241,7 +246,8 @@ const experience = await fetchExperience(
   },
   {
     config: experienceConfig,
-    context: { isPreview: previewMode, metadata: { slug, locale } },
+    metadata: { slug, locale },
+    debug,
   }
 );
 ```
