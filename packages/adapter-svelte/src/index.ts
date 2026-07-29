@@ -103,7 +103,9 @@ export {
 export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
+  DELIVERY_HOST,
   NotFoundError,
+  PREVIEW_HOST,
   createClient,
   fetchExperience,
 } from '@contentful/experiences-client';

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { createClient } from './create-client.js';
+import { DELIVERY_HOST, PREVIEW_HOST } from './hosts.js';
 
 vi.mock('@contentful/experience-delivery', () => ({
   ContentfulViewDeliveryClient: vi.fn().mockImplementation((options) => ({ _options: options })),
@@ -52,5 +53,23 @@ describe('createClient', () => {
 
     expect(client).toBeDefined();
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledOnce();
+  });
+
+  it('accepts PREVIEW_HOST as host and forwards it as baseUrl', () => {
+    createClient({ accessToken: 'preview-token', host: PREVIEW_HOST });
+
+    expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+      token: 'preview-token',
+      baseUrl: 'https://preview.xdn.contentful.com',
+    });
+  });
+
+  it('accepts DELIVERY_HOST as host and forwards it as baseUrl', () => {
+    createClient({ accessToken: 'delivery-token', host: DELIVERY_HOST });
+
+    expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+      token: 'delivery-token',
+      baseUrl: 'https://xdn.contentful.com',
+    });
   });
 });
