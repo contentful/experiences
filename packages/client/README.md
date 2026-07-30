@@ -77,14 +77,37 @@ Functional constructor over `ContentfulViewDeliveryClient` matching the SDK's op
 `createClient` is a one-time setup primitive — it builds a single client bound to a single token and does not participate in the per-request `preview` toggle. If you need runtime-dynamic swaps between delivery and preview, use `fetchExperience`'s inline-credentials path (`{ accessToken, previewToken, preview }`) instead of pre-building a client via `createClient` and passing `{ client }`.
 
 ```ts
-import { createClient } from '@contentful/experiences-react';
+import { createClient, PREVIEW_HOST } from '@contentful/experiences-react';
 
-const client = createClient({
+// Delivery (default)
+const client = createClient({ accessToken: process.env.CDA_TOKEN! });
+
+// Preview — use PREVIEW_HOST + a CPA token
+const previewClient = createClient({
+  accessToken: process.env.PREVIEW_TOKEN!,
+  host: PREVIEW_HOST,
+});
+
+// Custom base URL (staging, proxy, per-region)
+const customClient = createClient({
   accessToken: process.env.CDA_TOKEN!,
-  host: 'https://preview-staging.example.com', // optional custom base URL
+  host: 'https://preview-staging.example.com',
   // headers, timeoutInSeconds, maxRetries, fetch, logging pass through
 });
 ```
+
+#### `DELIVERY_HOST` / `PREVIEW_HOST`
+
+Named constants for the canonical XDA delivery and preview URLs. Use them so you don't have to hardcode the URL strings in your app.
+
+```ts
+import { DELIVERY_HOST, PREVIEW_HOST } from '@contentful/experiences-react';
+
+DELIVERY_HOST; // 'https://xdn.contentful.com'
+PREVIEW_HOST; // 'https://preview.xdn.contentful.com'
+```
+
+`createClient` is the fixed-mode path — one client, one token, one host. If you need to flip between delivery and preview per request (e.g. an `isPreview` URL param), use `fetchExperience`'s inline-credentials form with `preview: boolean` instead of pre-building a client here. See ["Preview mode"](#preview-mode) above.
 
 ### `NotFoundError`
 

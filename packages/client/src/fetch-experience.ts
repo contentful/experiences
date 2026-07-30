@@ -7,8 +7,7 @@ import type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
-
-const PREVIEW_HOST = 'https://preview.xdn.contentful.com';
+import { PREVIEW_HOST } from './hosts.js';
 
 export type ExperienceOptions = {
   spaceId: string;
