@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-client",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Delivery client + fetchExperience for Contentful Experiences",
   "license": "MIT",
   "type": "module",

@@ -1,3 +1,13 @@
+## 0.5.6 (2026-07-30)
+
+### 🚀 Features
+
+- export host constants [AIS-232] ([#97](https://github.com/contentful/experiences/pull/97), [#93](https://github.com/contentful/experiences/issues/93))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.1.6
+
 ## 0.5.5 (2026-07-24)
 
 ### 🧱 Updated Dependencies
