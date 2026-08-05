@@ -1,33 +1,55 @@
-import { notFound } from 'next/navigation';
-import {
-  NotFoundError,
-  ServerExperienceRenderer,
-  fetchExperience,
-} from '@contentful/experiences-react';
+import { headers } from 'next/headers';
+import { ServerExperienceRenderer, fetchExperience } from '@contentful/experiences-react';
 
+import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { experienceConfig } from '@/lib/experience-config';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function ExperiencePage({ params }: PageProps) {
+export default async function ExperiencePage({ params, searchParams }: PageProps) {
   const { slug: experienceId } = await params;
+  const sp = (await searchParams) ?? {};
 
-  try {
-    const experience = await fetchExperience(
-      {
-        spaceId: process.env.SPACE_ID ?? '',
-        environmentId: process.env.ENVIRONMENT_ID ?? 'master',
-        experienceId,
-      },
-      { accessToken: process.env.CDA_TOKEN! },
-      { config: experienceConfig }
-    );
+  const previewMode = sp.preview === 'true' || sp.preview === '1';
+  const debug = sp.debug === 'true' || sp.debug === '1';
+  const locale = typeof sp.locale === 'string' ? sp.locale : 'en-US';
 
-    return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
-  } catch (err) {
-    if (err instanceof NotFoundError) notFound();
-    throw err;
-  }
+  const userAgent = (await headers()).get('user-agent') ?? '';
+  const initialViewportId = detectViewportFromUserAgent(userAgent);
+
+  const experience = await fetchExperience(
+    {
+      spaceId: process.env.SPACE_ID ?? '',
+      environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+      experienceId,
+      locale,
+    },
+    {
+      accessToken: process.env.CDA_TOKEN!,
+      previewToken: process.env.CPA_TOKEN,
+      preview: previewMode,
+    },
+    {
+      config: experienceConfig,
+      metadata: { slug: experienceId, locale },
+      debug,
+      // Pre-resolve design against the UA-detected viewport so SSR paints
+      // correct design values on first paint (same seed the renderer uses).
+      // `resolveToken` is read from `config` — no need to re-supply it here.
+      initialViewportId,
+    }
+  );
+
+  return (
+    <ServerExperienceRenderer
+      experience={experience}
+      config={experienceConfig}
+      initialViewportId={initialViewportId}
+      metadata={{ slug: experienceId, locale }}
+      debug={debug}
+    />
+  );
 }
