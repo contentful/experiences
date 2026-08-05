@@ -468,7 +468,7 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
 });
 
 describe('ServerExperienceRenderer — resolveToken', () => {
-  it('passes DesignToken envelopes through the resolver before render', async () => {
+  it('passes DesignToken values through the resolver before render', async () => {
     const cfg: Config = {
       components: { 'contentful-button': ButtonFixture },
       resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
@@ -493,7 +493,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(container.innerHTML).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design bag when the resolver returns undefined', async () => {
+  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = {
       components: { 'contentful-button': CapturingComponent },
@@ -522,7 +522,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     warn.mockRestore();
   });
 
-  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+  it('leaves token values untouched when no resolver is supplied (backward-compatible)', async () => {
     const cfg: Config = { components: { 'contentful-button': ButtonFixture } };
     const plan = await resolveExperience(
       {
@@ -540,8 +540,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
-    // Svelte stringifies the envelope object into "[object Object]" on the
-    // attribute — the point is that the raw envelope reaches the component
+    // Svelte stringifies the token object into "[object Object]" on the
+    // attribute — the point is that the raw token value reaches the component
     // unchanged, so the customer can inspect it or resolve it themselves.
     expect(container.innerHTML).toContain('data-bg="[object Object]"');
   });
@@ -567,8 +567,10 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
     // Templates don't carry design props in the current XDA payload shape;
-    // seed one on the resolved plan so we exercise the template path.
+    // seed one on the resolved plan so we exercise the template path. Clear the
+    // (empty) pre-resolved map so the adapter recomputes from this seeded design.
     plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    delete plan!.template!.props.designResolved;
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: tplConfig },
     });
@@ -609,7 +611,7 @@ describe('ServerExperienceRenderer — design values are not injected as props',
 });
 
 describe('ServerExperienceRenderer — getDesignValues()', () => {
-  it('returns the resolved design bag for the current node', async () => {
+  it('returns the resolved design values for the current node', async () => {
     const cfg: Config = {
       components: { capture: CapturingComponent },
       resolveToken: (ref) => (ref.value === 'brand/primary' ? '#4f39f6' : undefined),
@@ -656,6 +658,50 @@ describe('ServerExperienceRenderer — getDesignValues()', () => {
       props: { experience: plan, config: cfg, initialViewportId: 'mobile' },
     });
     expect(captureSink[0]!.designValues).toEqual({ cfPadding: '12px' });
+  });
+});
+
+describe('ServerExperienceRenderer — server pre-resolved design values', () => {
+  const probePayload: ExperiencePayload = {
+    viewports: VIEWPORTS,
+    nodes: [
+      componentNode('contentful-container', {
+        id: 'p',
+        designProperties: { cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }) },
+      }),
+    ],
+  };
+
+  it('consumes designResolved as-is when the active viewport equals the fallback', async () => {
+    const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
+    // Tamper the precomputed values with a sentinel the cascade could never produce.
+    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config, initialViewportId: 'mobile' },
+    });
+    expect(container.innerHTML).toContain('data-padding="SENTINEL"');
+  });
+
+  it('recomputes from raw design properties when the active viewport differs from the fallback', async () => {
+    const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
+    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    // Active viewport (desktop, idx 0) ≠ fallback (mobile, idx 2) → recompute.
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config, initialViewportId: 'desktop' },
+    });
+    expect(container.innerHTML).toContain('data-padding="40px"');
+    expect(container.innerHTML).not.toContain('SENTINEL');
+  });
+
+  it('recomputes when the active viewport differs from the default fallback (viewport[0])', async () => {
+    const plan = await resolveExperience(probePayload, config);
+    // No fallback configured → pre-resolved against viewport[0] (desktop, idx 0).
+    expect(plan.fallbackViewportIndex).toBe(0);
+    // Active viewport is mobile (idx 2) ≠ fallback (idx 0) → recompute to 12px.
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config, initialViewportId: 'mobile' },
+    });
+    expect(container.innerHTML).toContain('data-padding="12px"');
   });
 });
 

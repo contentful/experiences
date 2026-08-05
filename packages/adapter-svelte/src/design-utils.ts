@@ -1,4 +1,31 @@
-import { isCssProperty, toCssKey } from '@contentful/experiences-design';
+import type { DesignPropValue, ResolveToken, ViewportDef } from '@contentful/experiences-sdk-core';
+import {
+  applyTokenResolver,
+  isCssProperty,
+  resolveDesignProperties,
+  toCssKey,
+} from '@contentful/experiences-design';
+
+/**
+ * Choose the resolved design values for a node. When the server pre-resolved
+ * design (`designResolved` present) and the active viewport matches the
+ * fallback the server used, the precomputed values are correct as-is — use them
+ * and skip the cascade. Otherwise (no pre-resolution, or the client has moved
+ * to a different viewport) recompute from the raw design properties.
+ */
+export function selectResolvedDesign(
+  props: { design: Record<string, DesignPropValue>; designResolved?: Record<string, unknown> },
+  viewports: ViewportDef[],
+  activeViewportIndex: number,
+  fallbackViewportIndex: number | undefined,
+  resolveToken: ResolveToken | undefined
+): { props: Record<string, unknown>; unresolved: string[] } {
+  if (props.designResolved !== undefined && activeViewportIndex === fallbackViewportIndex) {
+    return { props: props.designResolved, unresolved: [] };
+  }
+  const resolvedDesign = resolveDesignProperties(props.design, viewports, activeViewportIndex);
+  return applyTokenResolver(resolvedDesign, resolveToken);
+}
 
 export interface ToCssOptions {
   /** Keys to skip, matched against the original record key. */

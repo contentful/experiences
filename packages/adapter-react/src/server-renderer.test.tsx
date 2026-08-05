@@ -516,7 +516,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTem
       componentTypeId: 'button',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
-      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
+      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw design property, NOT scalar
       resolved: undefined,
     });
   });
@@ -591,7 +591,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     );
   };
 
-  it('passes DesignToken envelopes through the resolver before render', async () => {
+  it('passes DesignToken values through the resolver before render', async () => {
     const cfg: Config = {
       components: { button: Button },
       resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
@@ -614,7 +614,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(html).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design bag when the resolver returns undefined', async () => {
+  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let captured: Record<string, unknown> = {};
     const Probe = () => {
@@ -646,7 +646,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     warn.mockRestore();
   });
 
-  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+  it('leaves token values untouched when no resolver is supplied (backward-compatible)', async () => {
     const cfg: Config = { components: { button: Button } };
     const plan = await resolveExperience(
       {
@@ -662,8 +662,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       cfg
     );
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    // React stringifies the object envelope into "[object Object]" — the key
-    // point is that the raw envelope reaches the component, unchanged.
+    // React stringifies the token object into "[object Object]" — the key
+    // point is that the raw token value reaches the component, unchanged.
     expect(html).toContain('data-bg="[object Object]"');
   });
 
@@ -693,8 +693,10 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(tplPayload, cfg);
     // Templates don't carry design props in the current XDA payload shape;
-    // seed one on the resolved plan so we exercise the template path.
+    // seed one on the resolved plan so we exercise the template path. Clear the
+    // (empty) pre-resolved map so the adapter recomputes from this seeded design.
     plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    delete plan!.template!.props.designResolved;
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-bg="#111827"');
   });
@@ -760,7 +762,7 @@ describe('ServerExperienceRenderer — design values are not injected as props',
 });
 
 describe('ServerExperienceRenderer — useDesignValues()', () => {
-  it('returns the resolved design bag for the current node', async () => {
+  it('returns the resolved design values for the current node', async () => {
     let captured: Record<string, unknown> = {};
     const Probe = () => {
       captured = useDesignValues();
@@ -789,7 +791,7 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     expect(captured).toEqual({ cfBackgroundColor: '#4f39f6', cfPadding: '24px' });
   });
 
-  it('accepts a type argument that types the returned bag (useState-style)', async () => {
+  it('accepts a type argument that types the returned values (useState-style)', async () => {
     interface MyDesign {
       cfBackgroundColor?: string;
       cfPadding?: string;
@@ -879,6 +881,56 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     };
     renderToStaticMarkup(<Probe />);
     expect(captured).toEqual({});
+  });
+});
+
+describe('ServerExperienceRenderer — server pre-resolved design values', () => {
+  const Probe = () => {
+    const design = useDesignValues();
+    return <div data-padding={design.cfPadding as string} />;
+  };
+  const probeCfg: Config = { components: { probe: Probe } };
+
+  const probePayload: ExperiencePayload = {
+    viewports: VIEWPORTS,
+    nodes: [
+      componentNode('probe', {
+        id: 'p',
+        designProperties: { cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }) },
+      }),
+    ],
+  };
+
+  it('consumes designResolved as-is when the active viewport equals the fallback', async () => {
+    const plan = await resolveExperience(probePayload, probeCfg, { initialViewportId: 'mobile' });
+    // Tamper the precomputed values with a sentinel the cascade could never produce.
+    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="mobile" />
+    );
+    expect(html).toContain('data-padding="SENTINEL"');
+  });
+
+  it('recomputes from raw design properties when the active viewport differs from the fallback', async () => {
+    const plan = await resolveExperience(probePayload, probeCfg, { initialViewportId: 'mobile' });
+    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    // Active viewport (desktop, idx 0) ≠ fallback (mobile, idx 2) → recompute.
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="desktop" />
+    );
+    expect(html).toContain('data-padding="40px"');
+    expect(html).not.toContain('SENTINEL');
+  });
+
+  it('recomputes when the active viewport differs from the default fallback (viewport[0])', async () => {
+    const plan = await resolveExperience(probePayload, probeCfg);
+    // No fallback configured → pre-resolved against viewport[0] (desktop, idx 0).
+    expect(plan.fallbackViewportIndex).toBe(0);
+    // Active viewport is mobile (idx 2) ≠ fallback (idx 0) → recompute to 12px.
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="mobile" />
+    );
+    expect(html).toContain('data-padding="12px"');
   });
 });
 

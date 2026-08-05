@@ -21,9 +21,9 @@ export type { ResolveContext, ResolveToken };
  * cascade, branching by `componentTypeId` in a generic wrapper, keying
  * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
- * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
- * resolved values are what `useDesignValues()` returns.
+ * Design properties stay in their **raw discriminated form** here (the same
+ * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
+ * token-resolved values are what `useDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentTypeId: string;
@@ -147,8 +147,8 @@ export interface Config {
   components: Components;
   templates?: Templates;
   /**
-   * Resolves `DesignToken` envelopes to runtime values before they reach a
-   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * Resolves `DesignToken` values to runtime values before they reach a
+   * component. If omitted, they pass through unchanged. See `ResolveToken`
    * in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;

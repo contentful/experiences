@@ -7,7 +7,7 @@
  *    a PortableRenderNode with `registration.componentTypeId` extracted
  *    from `componentType.sys.urn` (last slash-segment).
  *  - Split content + design properties onto `node.props.{content,design}`.
- *    Design-prop envelopes (DesignToken / ManualDesignValue / ValuesByViewport)
+ *    Design properties (DesignToken / ManualDesignValue / ValuesByViewport)
  *    are preserved on the IR; the design package unwraps them at render time.
  *  - Template-variant nodes are skipped with a console.warn — out of v1 scope.
  *  - For every component whose registration declares `resolveData`, run the
@@ -15,9 +15,13 @@
  *    to `node.props.resolved`.
  *  - Unknown component-type-id is a render-time concern (handled by the
  *    framework adapter via `renderUnknown`); the IR still emits the node.
+ *  - Pre-resolve design server-side against a fallback viewport (the
+ *    configured `initialViewportId` / `config.fallbackViewportId`, else
+ *    viewport[0]) onto an additive `props.designResolved`, so SSR paints
+ *    correct design values on first render. Raw `props.design` is preserved.
  */
 
-import { createDebugLogger } from './debug-logger';
+import { createDebugLogger, type DebugLogger } from './debug-logger';
 import type {
   ComponentTypeNode,
   DesignPropValue,
@@ -28,7 +32,10 @@ import type {
   PortableRenderPlan,
   PortableTemplate,
   ResolveContext,
+  ResolveToken,
+  ViewportDef,
 } from './types';
+import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from './viewport';
 
 /**
  * Structural type the resolver walker depends on. Matches the React /
@@ -44,6 +51,24 @@ import type {
 export interface ResolverConfig {
   components: Record<string, unknown>;
   templates?: Record<string, unknown>;
+  /**
+   * Resolves `DesignToken` design properties to runtime values. Mirrors the
+   * adapter `Config.resolveToken` (the adapters pass their `Config` here), so
+   * server and client agree without the caller re-supplying it. Consulted
+   * during server-side design pre-resolution so the shipped
+   * `props.designResolved` values are fully resolved; the adapters still
+   * resolve tokens at render time.
+   */
+  resolveToken?: ResolveToken;
+  /**
+   * Default fallback viewport for server-side design pre-resolution. Design
+   * properties are always pre-resolved during resolve and shipped on
+   * `props.designResolved`, so SSR emits correct design values on first paint.
+   * When set (and not overridden by `initialViewportId`), pre-resolution
+   * cascades against this viewport; when unset, it defaults to viewport[0], the
+   * first viewport in the payload's list.
+   */
+  fallbackViewportId?: string;
 }
 
 function getResolver(
@@ -73,6 +98,17 @@ export interface ResolveExperienceOptions {
    * resolver context as `ctx.experience.debug`. Defaults to `false`.
    */
   debug?: boolean;
+  /**
+   * Per-request override for the server-side design pre-resolution fallback
+   * viewport. Wins over `config.fallbackViewportId` — pass a value derived at
+   * request time (e.g. a User-Agent-detected viewport) so pre-resolution
+   * targets the device's expected viewport. When neither this nor
+   * `config.fallbackViewportId` is set, pre-resolution defaults to viewport[0].
+   * The id is resolved to an index via `getViewportIndex`, falling back to
+   * viewport[0] when unknown. The raw `props.design` properties are always
+   * preserved so the client re-resolves on viewport change.
+   */
+  initialViewportId?: string;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -153,6 +189,62 @@ function buildNode(
     nodeRefs.push(built);
   }
   return built;
+}
+
+/**
+ * Cascade one node's design properties to the fallback viewport and resolve any
+ * design tokens, mirroring what the adapters do at render time. Returns the flat
+ * map of resolved design values plus the ids of any tokens `resolveToken` left
+ * unresolved (dropped from the map). The raw `design` properties are left
+ * untouched by the caller.
+ */
+function preResolveDesignProperties(
+  design: Record<string, DesignPropValue>,
+  viewports: ViewportDef[],
+  fallbackViewportIndex: number,
+  resolveToken: ResolveToken | undefined
+): { props: Record<string, unknown>; unresolved: string[] } {
+  const cascaded = resolveDesignProperties(design, viewports, fallbackViewportIndex);
+  return applyTokenResolver(cascaded, resolveToken);
+}
+
+/**
+ * Warn (once per label) when `resolveToken` left tokens unresolved during
+ * pre-resolution, so the dropped keys are diagnosable server-side — the adapters
+ * consume the pre-resolved map as-is and no longer see the raw tokens to warn.
+ */
+function warnUnresolvedTokens(label: string, unresolved: string[], log: DebugLogger): void {
+  if (!unresolved.length || typeof console === 'undefined') return;
+  console.warn(
+    `[@contentful/experiences] resolveToken returned undefined for token id(s) on "${label}": ${unresolved.join(', ')}. designResolved (getDesignValues()) will omit those keys.`
+  );
+  log.log(`unresolved token id(s) on "${label}": ${unresolved.join(', ')}`);
+}
+
+/**
+ * Depth-first walk that pre-resolves design for a node and all of its slot
+ * children, writing the additive `props.designResolved` map on each.
+ */
+function preResolveNodeTree(
+  node: PortableRenderNode,
+  viewports: ViewportDef[],
+  fallbackViewportIndex: number,
+  resolveToken: ResolveToken | undefined,
+  log: DebugLogger
+): void {
+  const { props, unresolved } = preResolveDesignProperties(
+    node.props.design,
+    viewports,
+    fallbackViewportIndex,
+    resolveToken
+  );
+  node.props.designResolved = props;
+  warnUnresolvedTokens(node.registration.componentTypeId, unresolved, log);
+  for (const children of Object.values(node.slots)) {
+    for (const child of children) {
+      preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log);
+    }
+  }
 }
 
 /**
@@ -247,9 +339,36 @@ export async function resolveExperience(
     await log.time(`${tasks.length} resolveData hook(s)`, () => Promise.all(tasks));
   }
 
+  // Server-side design pre-resolution. Always runs: design properties are
+  // cascaded against a fallback viewport and stored additively on
+  // `props.designResolved` (token-resolved via `config.resolveToken`), so SSR
+  // emits correct design values on first paint. The fallback viewport is the
+  // per-request `initialViewportId` override, else the static
+  // `config.fallbackViewportId` default; when neither is set (or the id is
+  // unknown) `getViewportIndex` falls back to viewport[0], the first viewport in
+  // the list. The raw design properties stay put; the client re-resolves on
+  // viewport change.
+  const fallbackViewportId = options.initialViewportId ?? config.fallbackViewportId;
+  const fallbackViewportIndex = getViewportIndex(payload.viewports, fallbackViewportId);
+  for (const node of nodes) {
+    preResolveNodeTree(node, payload.viewports, fallbackViewportIndex, config.resolveToken, log);
+  }
+  if (template) {
+    const { props, unresolved } = preResolveDesignProperties(
+      template.props.design,
+      payload.viewports,
+      fallbackViewportIndex,
+      config.resolveToken
+    );
+    template.props.designResolved = props;
+    warnUnresolvedTokens(`template:${template.templateId}`, unresolved, log);
+  }
+  log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
+
   return {
     viewports: payload.viewports,
     nodes,
     ...(template ? { template } : {}),
+    fallbackViewportIndex,
   };
 }

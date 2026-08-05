@@ -18,9 +18,9 @@ export type { ResolveContext, ResolveToken };
  * analytics on `nodeId`, rendering a raw-payload panel in preview, or
  * rendering non-`children` slots through the exported `<NodesRenderer />`.
  *
- * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
- * resolved values are what `getDesignValues()` returns.
+ * Design properties stay in their **raw discriminated form** here (the same
+ * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
+ * token-resolved values are what `getDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentTypeId: string;
@@ -56,6 +56,14 @@ export interface ContentfulTemplate {
 export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
   activeViewportIndex: number;
+  /**
+   * Viewport index the server pre-resolved design properties against, mirrored
+   * from `PortableRenderPlan.fallbackViewportIndex` (defaults to viewport[0]
+   * when no fallback viewport is configured). Renderers consume the precomputed
+   * `props.designResolved` values when `activeViewportIndex` equals this, and
+   * recompute the cascade otherwise.
+   */
+  fallbackViewportIndex?: number;
 }
 
 /**
@@ -117,8 +125,8 @@ export interface Config {
   components: Components;
   templates?: Templates;
   /**
-   * Resolves `DesignToken` envelopes to runtime values before they reach a
-   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * Resolves `DesignToken` values to runtime values before they reach a
+   * component. If omitted, they pass through unchanged. See `ResolveToken`
    * in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;

@@ -7,6 +7,7 @@
 import { Fragment, createElement, type ReactNode } from 'react';
 
 import type {
+  DesignPropValue,
   PortableRenderNode,
   PortableTemplate,
   ViewportDef,
@@ -29,6 +30,27 @@ import {
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 
+/**
+ * Choose the resolved design values for a node. When the server pre-resolved
+ * design (`designResolved` present) and the active viewport matches the
+ * fallback the server used, the precomputed values are correct as-is — use them
+ * and skip the cascade. Otherwise (no pre-resolution, or the client has moved
+ * to a different viewport) recompute from the raw design properties.
+ */
+function selectResolvedDesign(
+  props: { design: Record<string, DesignPropValue>; designResolved?: Record<string, unknown> },
+  viewports: ViewportDef[],
+  activeViewportIndex: number,
+  fallbackViewportIndex: number | undefined,
+  resolveToken: Config['resolveToken']
+): { props: Record<string, unknown>; unresolved: string[] } {
+  if (props.designResolved !== undefined && activeViewportIndex === fallbackViewportIndex) {
+    return { props: props.designResolved, unresolved: [] };
+  }
+  const resolvedDesign = resolveDesignProperties(props.design, viewports, activeViewportIndex);
+  return applyTokenResolver(resolvedDesign, resolveToken);
+}
+
 // Internal renderers take `viewports` + `activeViewportIndex`, not the whole
 // RenderContext object — the context is published once via ExperienceProvider,
 // and re-threading it as an element prop makes React's RSC serializer back-patch
@@ -38,6 +60,8 @@ export interface NodesRendererProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
+  /** Viewport index the server pre-resolved design against, if any. */
+  fallbackViewportIndex?: number;
   renderUnknown: RenderUnknown;
 }
 
@@ -46,6 +70,7 @@ export function NodesRenderer({
   config,
   viewports,
   activeViewportIndex,
+  fallbackViewportIndex,
   renderUnknown,
 }: NodesRendererProps): ReactNode {
   if (!nodes.length) return null;
@@ -58,6 +83,7 @@ export function NodesRenderer({
           config={config}
           viewports={viewports}
           activeViewportIndex={activeViewportIndex}
+          fallbackViewportIndex={fallbackViewportIndex}
           renderUnknown={renderUnknown}
         />
       ))}
@@ -70,6 +96,7 @@ interface NodeRendererProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
+  fallbackViewportIndex?: number;
   renderUnknown: RenderUnknown;
 }
 
@@ -78,6 +105,7 @@ function NodeRenderer({
   config,
   viewports,
   activeViewportIndex,
+  fallbackViewportIndex,
   renderUnknown,
 }: NodeRendererProps): ReactNode {
   const { componentTypeId } = node.registration;
@@ -96,16 +124,20 @@ function NodeRenderer({
         config={config}
         viewports={viewports}
         activeViewportIndex={activeViewportIndex}
+        fallbackViewportIndex={fallbackViewportIndex}
         renderUnknown={renderUnknown}
       />
     );
   }
 
-  // Cascade design to the active viewport, then resolve DesignToken envelopes.
+  // Prefer the server pre-resolved design values when the active viewport
+  // matches the fallback; otherwise cascade + resolve design tokens here.
   // Published on context for useDesignValues() — never spread onto props.
-  const resolvedDesign = resolveDesignProperties(node.props.design, viewports, activeViewportIndex);
-  const { props: tokenResolvedDesign, unresolved } = applyTokenResolver(
-    resolvedDesign,
+  const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
+    node.props,
+    viewports,
+    activeViewportIndex,
+    fallbackViewportIndex,
     config.resolveToken
   );
   if (unresolved.length && typeof console !== 'undefined') {
@@ -144,6 +176,8 @@ export interface WrapWithTemplateProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
+  /** Viewport index the server pre-resolved design against, if any. */
+  fallbackViewportIndex?: number;
   children: ReactNode;
 }
 
@@ -156,6 +190,7 @@ export function WrapWithTemplate({
   config,
   viewports,
   activeViewportIndex,
+  fallbackViewportIndex,
   children,
 }: WrapWithTemplateProps): ReactNode {
   if (!template) return <Fragment>{children}</Fragment>;
@@ -170,14 +205,11 @@ export function WrapWithTemplate({
   }
   const templateConfig = normalizeTemplateRegistration(entry);
 
-  const resolvedDesign = resolveDesignProperties(
-    template.props.design,
+  const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
+    template.props,
     viewports,
-    activeViewportIndex
-  );
-
-  const { props: tokenResolvedDesign, unresolved } = applyTokenResolver(
-    resolvedDesign,
+    activeViewportIndex,
+    fallbackViewportIndex,
     config.resolveToken
   );
   if (unresolved.length && typeof console !== 'undefined') {

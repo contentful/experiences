@@ -54,6 +54,7 @@
     viewports: experience?.viewports ?? [],
     activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
     activeViewportIndex: 0,
+    fallbackViewportIndex: experience?.fallbackViewportIndex,
   });
 
   setExperience(liveContext);
@@ -64,6 +65,7 @@
     liveContext.viewports = experience.viewports;
     liveContext.activeViewport = experience.viewports[idx] ?? FALLBACK_VIEWPORT;
     liveContext.activeViewportIndex = idx;
+    liveContext.fallbackViewportIndex = experience.fallbackViewportIndex;
     liveContext.debug = debug;
     liveContext.metadata = { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) };
   });

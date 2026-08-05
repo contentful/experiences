@@ -29,6 +29,10 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
         config: experienceConfig,
         metadata,
         debug,
+        // Pre-resolve design against the UA-detected viewport so SSR paints
+        // correct design values on first paint (same seed the renderer uses).
+        // `resolveToken` is read from `config` — no need to re-supply it here.
+        initialViewportId,
       }
     );
 

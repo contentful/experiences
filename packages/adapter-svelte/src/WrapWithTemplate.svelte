@@ -9,9 +9,9 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableTemplate } from '@contentful/experiences-sdk-core';
-  import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
   import { setContentfulTemplate, setResolvedDesign } from './context.js';
+  import { selectResolvedDesign } from './design-utils.js';
   import {
     normalizeTemplateRegistration,
     type ContentfulTemplate,
@@ -44,12 +44,13 @@
 
   const tokenResolvedDesign = $derived.by(() => {
     if (!template) return {};
-    const resolvedDesign = resolveDesignProperties(
-      template.props.design,
+    const { props, unresolved } = selectResolvedDesign(
+      template.props,
       experience.viewports,
-      experience.activeViewportIndex
+      experience.activeViewportIndex,
+      experience.fallbackViewportIndex,
+      config.resolveToken
     );
-    const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
     if (unresolved.length && typeof console !== 'undefined') {
       console.warn(
         `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on template "${template.templateId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
