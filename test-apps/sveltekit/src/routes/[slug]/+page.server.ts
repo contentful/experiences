@@ -12,6 +12,7 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
     url.searchParams.get('preview') === 'true' || url.searchParams.get('preview') === '1';
   const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
   const initialViewportId = detectViewportFromUserAgent(request.headers.get('user-agent') ?? '');
+  const metadata = { slug: params.slug };
 
   try {
     const experience = await fetchExperience(
@@ -26,12 +27,12 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       },
       {
         config: experienceConfig,
-        metadata: { slug: params.slug },
+        metadata,
         debug,
       }
     );
 
-    return { experience, previewMode, debug, slug: params.slug, initialViewportId };
+    return { experience, previewMode, debug, metadata, initialViewportId };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Experience not found');
     throw err;

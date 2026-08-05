@@ -10,6 +10,6 @@
   experience={data.experience}
   config={experienceConfig}
   initialViewportId={data.initialViewportId}
-  metadata={{ slug: data.slug }}
+  metadata={data.metadata}
   debug={data.debug}
 />
