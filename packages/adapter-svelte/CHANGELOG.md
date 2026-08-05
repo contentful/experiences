@@ -1,3 +1,37 @@
+## 0.4.0 (2026-08-05)
+
+### 🚀 Features
+
+- ⚠️  replace isPreview with top-level debug mode [AIS-243] ([#98](https://github.com/contentful/experiences/pull/98))
+
+### ⚠️  Breaking Changes
+
+- replace isPreview with top-level debug mode [AIS-243]  ([#98](https://github.com/contentful/experiences/pull/98))
+  `isPreview` is removed from the render context and the nested
+  `context` option is gone. Pass `metadata` and `debug` as top-level options on
+  `fetchExperience`/`resolveExperience` and as props on the renderers.
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+  * refactor: derive metadata once in sveltekit apps
+  Extract a single `metadata` object in the loaders and thread it through
+  both fetchExperience and the renderer, instead of duplicating the
+  `{ slug }` literal in +page.svelte. Addresses PR review feedback.
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+  * refactor: mount DebugExperience above the tree and aggregate resolveData timing
+  Move the auto-mounted <DebugExperience> panel above the rendered tree in
+  both React and Svelte renderers (client + server) so the debug dump is
+  visible without scrolling past the experience. Update the doc comments
+  and README to match.
+  Replace per-node resolveData timing lines with a single aggregate span
+  over the whole fan-out — keeps the timing signal without emitting a log
+  line per node, which gets noisy on large trees.
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.2.0
+- Updated design to 0.6.0
+- Updated core to 0.6.0
+
 ## 0.3.8 (2026-08-04)
 
 ### 🧱 Updated Dependencies
