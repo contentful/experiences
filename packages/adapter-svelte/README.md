@@ -35,7 +35,7 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 ServerExperienceRenderer; // SSR-safe; active viewport seeded from initialViewportId
 ClientExperienceRenderer; // Subscribes to window.matchMedia via runes
 MissingComponent; // Default fallback for unregistered component types
-NodesRenderer; // Exposed so you can render non-`children` slots manually
+NodesRenderer; // Exposed so you can render non-`children` slots manually (see Slot children)
 useActiveViewport; // Rune-backed reactive object; you'll rarely need it directly
 ```
 
@@ -123,6 +123,37 @@ export const experienceConfig: Config = { components, resolveToken };
 </script>
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
+
+### Slot children
+
+A component's default slot children arrive as an **array of Snippets** (`Snippet[]`), one per child — not a single wrapping Snippet. For the common "just render them" case, iterate the array with `{#each}` and `{@render}`; to wrap, reorder, or drop children individually, do it inside that loop.
+
+```svelte
+<!-- Section.svelte -->
+<script lang="ts">
+  import type { Snippet } from 'svelte';
+
+  let { children }: { children?: Snippet[] } = $props();
+</script>
+
+<!-- Common case — render them all: -->
+<div>
+  {#each children ?? [] as child}
+    {@render child()}
+  {/each}
+</div>
+
+<!-- Or take control of each child: -->
+<!--
+<div>
+  {#each children ?? [] as child, i}
+    <div class="cell">{@render child()}</div>
+  {/each}
+</div>
+-->
+```
+
+The default slot is injected as the `children` prop. Any **additional named slots** are not auto-injected — reach them from the raw payload via `getContentfulComponent().slots` (a `Record<string, PortableRenderNode[]>`) and render them yourself with `NodesRenderer`.
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 

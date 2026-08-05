@@ -87,18 +87,22 @@ function NodeRenderer({
   }
   const componentConfig = normalizeComponentRegistration(entry);
 
-  // Pre-render slot subtrees so components receive ReactNodes by slot name.
-  const slotProps: Record<string, ReactNode> = {};
+  // Pre-render each slot's children as an *array* of ReactNodes (one keyed
+  // element per child), not a single wrapping node. A component can drop the
+  // array straight into JSX for the common "just render them" case (React
+  // renders keyed arrays), or map/filter/wrap the children individually.
+  const slotProps: Record<string, ReactNode[]> = {};
   for (const [slotName, children] of Object.entries(node.slots)) {
-    slotProps[slotName] = (
-      <NodesRenderer
-        nodes={children}
+    slotProps[slotName] = children.map((child, index) => (
+      <NodeRenderer
+        key={child.nodeId ?? index}
+        node={child}
         config={config}
         viewports={viewports}
         activeViewportIndex={activeViewportIndex}
         renderUnknown={renderUnknown}
       />
-    );
+    ));
   }
 
   // Cascade design to the active viewport, then resolve DesignToken envelopes.

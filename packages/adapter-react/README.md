@@ -134,6 +134,31 @@ const experience = await fetchExperience(
 return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 ```
 
+### Slot children
+
+A component's slot children arrive as an **array of pre-rendered nodes** (`ReactNode[]`), keyed by the renderer — not a single wrapping node. Drop the array straight into JSX for the common "just render them" case (React renders keyed arrays), or `map` / `filter` over it to wrap, reorder, or drop children individually.
+
+```tsx
+// components/Section.tsx
+import type { ReactNode } from 'react';
+
+export function Section({ children }: { children?: ReactNode[] }) {
+  // Common case — render them all:
+  return <div>{children}</div>;
+
+  // Or take control of each child:
+  // return (
+  //   <div>
+  //     {children?.map((child, i) => (
+  //       <div className="cell" key={i}>{child}</div>
+  //     ))}
+  //   </div>
+  // );
+}
+```
+
+The default slot is named `children`. Any **additional named slots** are merged into props under their slot name too, each as its own `ReactNode[]` — so a component with a `header` slot just declares `header?: ReactNode[]` and renders it the same way.
+
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
