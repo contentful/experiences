@@ -11,16 +11,11 @@ const ALIGN: Record<Align, CSSProperties['alignItems']> = {
   stretch: 'stretch',
 };
 
-/**
- * Flex/grid layout primitive. Design keys arrive as ordinary props — the SDK
- * pre-resolves them server-side (cascade to viewport + token resolution) and
- * auto-fills them alongside content, so this reads them directly off props
- * instead of calling `useDesignValues()`. Token-valued keys arrive already
- * resolved to CSS.
- */
+// Flex/grid layout primitive. Design keys arrive as auto-filled props, already
+// server-resolved (cascade + token resolution), so token-valued keys are CSS.
 export interface SectionProps {
   children?: ReactNode;
-  // Design props (auto-filled, already resolved):
+  // Design props:
   direction?: 'row' | 'column';
   reverse?: boolean;
   ratio?: string;

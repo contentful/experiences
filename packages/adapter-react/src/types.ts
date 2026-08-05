@@ -57,10 +57,10 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * receives the merged props (design + content + resolveData + slots): resolved
- * design values auto-fill matching props (below content/resolveData so explicit
- * values win) and are also readable via `useDesignValues()`. Runtime context
- * and raw payload come from `useExperience()` / `useContentfulComponent()`.
+ * receives the merged props (design + content + resolveData + slots); resolved
+ * design values auto-fill matching props and are also readable via
+ * `useDesignValues()`. Runtime context and raw payload come from
+ * `useExperience()` / `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**

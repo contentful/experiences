@@ -1,12 +1,10 @@
 /**
  * Maps Contentful component/template ids to the app's components, and wires
  * `resolveToken`. Registry keys match the last URN segment of each node's
- * `componentType` / `template`. Components read design via `useDesignValues()`.
+ * `componentType` / `template`.
  *
- * `card` is registered via `defineComponent({ resolveData, component })` to
- * demonstrate async enrichment (a stand-in for a catalog fetch) plus
- * metadata-aware URL rewriting. `resolveData` hooks run in parallel across
- * nodes, so slow resolvers don't block their peers.
+ * `card` uses `defineComponent({ resolveData, component })` to demonstrate async
+ * enrichment (a stand-in catalog fetch) plus metadata-aware URL rewriting.
  */
 
 import {

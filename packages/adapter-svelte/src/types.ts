@@ -57,11 +57,9 @@ export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
   activeViewportIndex: number;
   /**
-   * Viewport index the server pre-resolved design properties against, mirrored
-   * from `PortableRenderPlan.fallbackViewportIndex` (defaults to viewport[0]
-   * when no fallback viewport is configured). Renderers consume the precomputed
-   * `props.design` values when `activeViewportIndex` equals this, and recompute
-   * the cascade from `props.designRaw` otherwise.
+   * Viewport index the server pre-resolved design against (from
+   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
+   * as-is when `activeViewportIndex` matches, and recompute otherwise.
    */
   fallbackViewportIndex?: number;
 }
@@ -69,9 +67,8 @@ export interface RenderContext extends ExperienceContext {
 /**
  * Customer-supplied configuration for a single component type. The `component`
  * receives the merged props (design + content + resolveData + `children`
- * Snippet): resolved design values auto-fill matching props (below
- * content/resolveData so explicit values win) and are also readable via
- * `getDesignValues()`. Runtime context and raw payload come from
+ * Snippet); resolved design values auto-fill matching props and are also
+ * readable via `getDesignValues()`. Runtime context and raw payload come from
  * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {

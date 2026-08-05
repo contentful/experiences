@@ -2,19 +2,15 @@
 
 import type { CSSProperties } from 'react';
 
-/**
- * Compact card: image + title + teaser + CTA. Content properties come from
- * a `Card from Promotion` DataAssembly binding. Design values
- * (`backgroundColor`, `color`) arrive as ordinary props, auto-filled by the
- * SDK after server-side resolution — no `useDesignValues()` call.
- */
+// Compact card: image + title + teaser + CTA. Design values arrive as
+// auto-filled props (server-resolved) — no useDesignValues() call.
 export interface CardProps {
   title?: string;
   teaser?: string;
   ctaLabel?: string;
   ctaUrl?: string;
   image?: string;
-  // Design props (auto-filled, already resolved):
+  // Design props:
   backgroundColor?: string;
   color?: string;
 }

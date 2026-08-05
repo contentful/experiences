@@ -6,13 +6,8 @@ import {
   toCssKey,
 } from '@contentful/experiences-design';
 
-/**
- * Choose the resolved design values for a node. When the active viewport matches
- * the fallback the server pre-resolved `props.design` against, those values are
- * correct as-is — use them and skip the cascade. Otherwise (no fallback known,
- * or the client has moved to a different viewport) recompute from the raw
- * per-viewport `props.designRaw` properties.
- */
+// Use the server-resolved `props.design` when the active viewport matches the
+// fallback; otherwise recompute the cascade from raw `props.designRaw`.
 export function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],

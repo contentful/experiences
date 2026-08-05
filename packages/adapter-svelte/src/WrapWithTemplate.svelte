@@ -62,9 +62,7 @@
   // A getter (not a snapshot) so getDesignValues() stays reactive.
   setResolvedDesign(() => tokenResolvedDesign);
 
-  // Same precedence as component nodes: defaults < design < content <
-  // resolveData. Resolved design values auto-fill matching props, below
-  // content/resolveData so explicit values win.
+  // Same precedence as component nodes.
   const composed = $derived.by(() => {
     if (!template || !templateConfig) return null;
     return {

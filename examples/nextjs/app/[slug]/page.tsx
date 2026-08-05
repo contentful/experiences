@@ -36,9 +36,8 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       config: experienceConfig,
       metadata: { slug: experienceId, locale },
       debug,
-      // Pre-resolve design against the UA-detected viewport so SSR paints
-      // correct design values on first paint (same seed the renderer uses).
-      // `resolveToken` is read from `config` — no need to re-supply it here.
+      // Pre-resolve design against the UA-detected viewport (same seed the
+      // renderer uses) so SSR paints correct design on first render.
       initialViewportId,
     }
   );

@@ -2,14 +2,10 @@
 
 import type { CSSProperties } from 'react';
 
-/**
- * `radius` arrives as an ordinary prop, auto-filled by the SDK after
- * server-side resolution — no `useDesignValues()` call.
- */
 export interface ImageProps {
   src?: string;
   alt?: string | null;
-  // Design props (auto-filled, already resolved):
+  // Design props (auto-filled, server-resolved):
   radius?: string;
 }
 

@@ -184,14 +184,10 @@ export interface PortableRegistration {
  * customer-supplied `resolveData` resolver and merged into the final props
  * after content + design but before slot props.
  *
- * `props.design` is the server pre-resolution of the design properties against
- * the plan's fallback viewport (see `PortableRenderPlan.fallbackViewportIndex`)
- * — a flat, viewport-cascaded, token-resolved map. `resolveExperience` always
- * populates it — against the configured fallback viewport, or viewport[0] when
- * none is configured. The raw per-viewport discriminated form is preserved on
- * `props.designRaw` so the client can re-resolve on viewport change. Adapters
- * consume `props.design` as-is when the active viewport equals the fallback,
- * and recompute from `props.designRaw` otherwise.
+ * `props.design` is the server pre-resolution of design against the plan's
+ * fallback viewport; the raw per-viewport form stays on `props.designRaw` so
+ * the client can re-resolve when the active viewport differs. See the fields
+ * below.
  */
 export interface PortableRenderNode {
   /**
@@ -203,20 +199,10 @@ export interface PortableRenderNode {
   registration: PortableRegistration;
   props: {
     content: Record<string, unknown>;
-    /**
-     * Viewport-cascaded and token-resolved design values computed server-side
-     * against the fallback viewport (viewport[0] when none is configured).
-     * Always populated by `resolveExperience`. This is the resolved, flat map
-     * — the raw per-viewport form lives on `designRaw`.
-     */
+    /** Flat, viewport-cascaded, token-resolved design values (server-side). */
     design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
-    /**
-     * Raw per-viewport design properties in their discriminated value shape,
-     * as they arrived from the payload. Preserved so adapters can re-resolve
-     * the cascade on the client when the active viewport differs from the
-     * fallback the server resolved `design` against.
-     */
+    /** Raw per-viewport design, for client re-resolution on viewport change. */
     designRaw: Record<string, DesignPropValue>;
   };
   slots: Record<string, PortableRenderNode[]>;
@@ -236,16 +222,10 @@ export interface PortableTemplate {
   templateId: string;
   props: {
     content: Record<string, unknown>;
-    /**
-     * Server pre-resolved design values against the fallback viewport. Same
-     * always-on semantics as `PortableRenderNode.props.design`.
-     */
+    /** Same as `PortableRenderNode.props.design`. */
     design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
-    /**
-     * Raw per-viewport design properties, preserved for client re-resolution.
-     * Same semantics as `PortableRenderNode.props.designRaw`.
-     */
+    /** Same as `PortableRenderNode.props.designRaw`. */
     designRaw: Record<string, DesignPropValue>;
   };
 }
@@ -264,11 +244,9 @@ export interface PortableRenderPlan {
   nodes: PortableRenderNode[];
   template?: PortableTemplate;
   /**
-   * The viewport index the server pre-resolved design properties against.
-   * Defaults to viewport[0] when no fallback viewport is configured. Adapters
-   * compare their active viewport index against this: when equal, they consume
-   * the `props.design` values as-is for a correct first paint; otherwise
-   * they recompute the cascade from `props.designRaw` on the client.
+   * Viewport index the server pre-resolved design against (viewport[0] by
+   * default). Adapters use `props.design` as-is when their active viewport
+   * matches this, and recompute from `props.designRaw` otherwise.
    */
   fallbackViewportIndex: number;
 }

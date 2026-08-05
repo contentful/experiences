@@ -2,14 +2,10 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
-/**
- * Design values (`fontSize`, `align`) arrive as ordinary props, auto-filled by
- * the SDK after server-side resolution — no `useDesignValues()` call.
- */
 export interface TextProps {
   text?: string | null;
   children?: ReactNode;
-  // Design props (auto-filled, already resolved):
+  // Design props (auto-filled, server-resolved):
   fontSize?: string;
   align?: CSSProperties['textAlign'];
 }

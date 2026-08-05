@@ -1,32 +1,12 @@
 /*
- * Viewport math + design-property resolution for the Experiences SDK.
+ * Viewport math + design-property resolution. Lives in core (not design) so the
+ * resolve pipeline can pre-resolve design props server-side; the design package
+ * re-exports these, so its public API is unchanged.
  *
- * These helpers live in core (not the design package) because the resolve
- * pipeline can optionally pre-resolve design props server-side against a
- * fallback viewport — see `resolveExperience`'s `initialViewportId` option.
- * The design package re-exports them, so `@contentful/experiences-design`
- * consumers see an unchanged public API.
- *
- * ## Cascade model
- *
- * Viewport order in the payload encodes cascade direction:
- *  - desktop-first: viewports descend by screen width (`*`, `<992px`, `<576px`)
- *  - mobile-first:  viewports ascend by screen width (`*`, `>576px`, `>992px`)
- *
- * "Active viewport" = the last-matching media query in the ordered list.
- * `getValueForViewport` walks backwards from the active viewport toward
- * viewport[0], returning the first defined value — emulating CSS cascade
- * behavior at runtime.
- *
- * ## DesignPropValue unwrapping
- *
- * v1 design properties arrive as a discriminated union:
- *  - ManualDesignValue → unwrap to its scalar `value`
- *  - DesignToken       → pass the value through unchanged so it can be
- *                        resolved by `applyTokenResolver` (or a customer
- *                        component) against a `resolveToken` map
- *  - ValuesByViewport  → cascade-lookup the inner ManualDesignValue/DesignToken
- *                        at the active viewport, then unwrap as above
+ * Viewport order encodes cascade direction (desktop-first descends by width,
+ * mobile-first ascends). The "active viewport" is the last-matching media query;
+ * `getValueForViewport` walks backwards from it to viewport[0] and returns the
+ * first defined value, matching CSS cascade behavior.
  */
 
 import type {
@@ -38,21 +18,14 @@ import type {
   ViewportDef,
 } from './types';
 
-/**
- * Resolve a viewport ID to its index in the ordered viewports list. Returns 0
- * (the wildcard viewport) when the id is unknown or undefined.
- */
+/** Viewport id → index. Returns 0 (the wildcard viewport) when unknown. */
 export function getViewportIndex(viewports: ViewportDef[], viewportId?: string): number {
   if (!viewportId) return 0;
   const index = viewports.findIndex((v) => v.id === viewportId);
   return index === -1 ? 0 : index;
 }
 
-/**
- * Unwrap a non-viewport-keyed design property into a value the customer
- * component can consume directly. ManualDesignValue → its scalar; DesignToken →
- * the value passes through (resolved later by `applyTokenResolver`).
- */
+// ManualDesignValue → its scalar; DesignToken → passed through (resolved later).
 function unwrapInner(
   inner: ManualDesignValue | DesignToken | undefined
 ): string | number | boolean | DesignToken | undefined {
@@ -61,10 +34,7 @@ function unwrapInner(
   return inner;
 }
 
-/**
- * Cascade-lookup for a `ValuesByViewport` property. Walks backwards from
- * `activeViewportIndex` toward viewport[0], returning the first defined value.
- */
+// Cascade-lookup: walk back from activeViewportIndex to viewport[0], first defined wins.
 function resolveValuesByViewport(
   valuesByViewport: ValuesByViewport,
   viewports: ViewportDef[],
@@ -79,14 +49,7 @@ function resolveValuesByViewport(
   return undefined;
 }
 
-/**
- * Resolve a single design property to its render-time value:
- *  - ManualDesignValue → its scalar
- *  - DesignToken       → the value passes through (resolved later)
- *  - ValuesByViewport  → cascade-lookup against the active viewport, then
- *                        unwrap the inner Manual/Token as above
- *  - undefined         → returns undefined
- */
+/** Resolve one design property to its render-time value (cascade + unwrap). */
 export function getValueForViewport(
   prop: DesignPropValue | undefined,
   viewports: ViewportDef[],
@@ -98,10 +61,7 @@ export function getValueForViewport(
   return unwrapInner(resolveValuesByViewport(prop, viewports, activeViewportIndex));
 }
 
-/**
- * Resolve every design property on a node into a flat record keyed by
- * property name. Customer components receive these values as plain props.
- */
+/** Resolve every design property on a node into a flat record keyed by name. */
 export function resolveDesignProperties(
   designProperties: Record<string, DesignPropValue> | undefined,
   viewports: ViewportDef[],
@@ -119,15 +79,10 @@ export function resolveDesignProperties(
 let warnedMissingResolver = false;
 
 /**
- * Resolves `DesignToken` values in a viewport-resolved design record via
- * `resolveToken`; scalars pass through, and with no resolver the record is
- * returned unchanged. Keys that resolve to `undefined` are dropped and their
- * token ids collected in `unresolved` for a single grouped warning.
- *
- * When no `resolveToken` is configured but the record contains `DesignToken`
- * values, warns once — those keys reach components as raw token objects
- * (e.g. rendering as `[object Object]`), which is almost always a missing-
- * config mistake rather than intent.
+ * Resolve `DesignToken` values via `resolveToken`; scalars pass through. Keys
+ * that resolve to `undefined` are dropped and their token ids collected in
+ * `unresolved` for a grouped warning. With no resolver but tokens present,
+ * warns once (those keys would reach components as raw token objects).
  */
 export function applyTokenResolver(
   props: Record<string, string | number | boolean | DesignToken>,

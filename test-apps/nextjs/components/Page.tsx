@@ -1,16 +1,11 @@
 import type { CSSProperties, ReactNode } from 'react';
 
-/**
- * Page-level template: wraps all top-level nodes in the outer page chrome.
- * Design values arrive as ordinary props (auto-filled by the SDK after
- * server-side resolution). This is a server component, so its prop log lands
- * in the server terminal — handy for confirming resolution happens on the
- * server before hydration.
- */
+// Page-level template. A server component, so its prop log lands in the server
+// terminal — confirming design resolves server-side before hydration.
 export interface PageProps {
   title?: string;
   children?: ReactNode;
-  // Design props (auto-filled, already resolved):
+  // Design props (auto-filled, server-resolved):
   backgroundColor?: string;
   color?: string;
 }

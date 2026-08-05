@@ -41,10 +41,6 @@
   };
   setContentfulComponent(contentful);
 
-  // Prefer the server pre-resolved design values when the active viewport
-  // matches the fallback; otherwise cascade + resolve tokens here. Auto-filled
-  // onto matching props (below content/resolveData) and published on context
-  // for getDesignValues().
   const tokenResolvedDesign = $derived.by(() => {
     const { props, unresolved } = selectResolvedDesign(
       node.props,
@@ -63,10 +59,7 @@
 
   setResolvedDesign(() => tokenResolvedDesign);
 
-  // Merge precedence (last wins): defaults < design < content < resolveData
-  // < children. Resolved design values auto-fill matching props (by their raw
-  // design key, e.g. `cfColor`), below content/resolveData so explicit values
-  // always win. Same values remain available via getDesignValues().
+  // Merge precedence (last wins): defaults < design < content < resolveData < children.
   const composed = $derived.by(() => {
     if (!componentConfig) return null;
     return {

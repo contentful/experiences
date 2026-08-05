@@ -56,12 +56,9 @@ export type ResolveOptions = {
    */
   debug?: boolean;
   /**
-   * Per-request override for server-side design pre-resolution. When set (or
-   * when `config.fallbackViewportId` is), design props are cascaded against
-   * this fallback viewport during resolve and shipped on `props.design`, so
-   * SSR emits correct design values on first paint. Pass the same id you
-   * seed the renderer's `initialViewportId` with (e.g. a User-Agent-derived
-   * viewport). `resolveToken` is read from `config` — no need to re-supply it.
+   * Per-request fallback viewport for server-side design pre-resolution. Pass
+   * the same id you seed the renderer's `initialViewportId` with (e.g. a
+   * User-Agent-derived viewport) so SSR paints correct design on first render.
    */
   initialViewportId?: string;
 };

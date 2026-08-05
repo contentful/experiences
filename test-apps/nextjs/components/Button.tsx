@@ -2,15 +2,12 @@
 
 import type { CSSProperties } from 'react';
 
-/**
- * Design values (`target`, `backgroundColor`, `color`) arrive as ordinary
- * props, auto-filled by the SDK after server-side resolution — no
- * `useDesignValues()` call. `label`/`url` come from content + `resolveData`.
- */
+// Design values arrive as ordinary props, auto-filled by the SDK after
+// server-side resolution — no useDesignValues() call.
 export interface ButtonProps {
   label?: string;
   url?: string | null;
-  // Design props (auto-filled, already resolved):
+  // Design props:
   target?: string;
   backgroundColor?: string;
   color?: string;

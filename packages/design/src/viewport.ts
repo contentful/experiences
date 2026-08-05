@@ -1,12 +1,7 @@
 /*
- * Viewport → CSS media-query translation, plus re-exports of the cascade and
- * token-resolution helpers that now live in core.
- *
- * The cascade math (`getViewportIndex`, `getValueForViewport`,
- * `resolveDesignProperties`) and `applyTokenResolver` moved into
- * `@contentful/experiences-sdk-core` so the resolve pipeline can optionally
- * pre-resolve design props server-side. They are re-exported here so the
- * `@contentful/experiences-design` public API is unchanged.
+ * Viewport → CSS media-query translation. The cascade + token-resolution
+ * helpers now live in core (so the resolve pipeline can pre-resolve design
+ * server-side) and are re-exported here to keep this package's API unchanged.
  */
 
 import type { ViewportDef } from '@contentful/experiences-sdk-core';

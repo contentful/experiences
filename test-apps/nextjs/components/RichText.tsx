@@ -15,17 +15,12 @@ interface RichTextNode {
   content?: RichTextNode[];
 }
 
-/**
- * Design values (`fontSize`, `align`) arrive as ordinary props, auto-filled by
- * the SDK after server-side resolution — no `useDesignValues()` call.
- *
- * XDA wraps the document as `{ __typename, document }`; inner can be null.
- */
+// XDA wraps the document as `{ __typename, document }`; inner can be null.
 export interface RichTextProps {
   document?: {
     document?: RichTextNode | null;
   } | null;
-  // Design props (auto-filled, already resolved):
+  // Design props (auto-filled, server-resolved):
   fontSize?: string;
   align?: CSSProperties['textAlign'];
 }

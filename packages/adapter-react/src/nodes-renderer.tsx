@@ -1,8 +1,7 @@
 /*
- * Recursive renderer over PortableRenderNodes. Customer components receive the
- * merged props (defaults + design + content + resolveData + slots): resolved
- * design values auto-fill matching props (below content/resolveData so explicit
- * values win) and are also available via `useDesignValues()`.
+ * Recursive renderer over PortableRenderNodes. Resolved design values auto-fill
+ * matching props (below content/resolveData) and are also available via
+ * `useDesignValues()`.
  */
 
 import { Fragment, createElement, type ReactNode } from 'react';
@@ -31,13 +30,8 @@ import {
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 
-/**
- * Choose the resolved design values for a node. When the active viewport matches
- * the fallback the server pre-resolved `props.design` against, those values are
- * correct as-is — use them and skip the cascade. Otherwise (no fallback known,
- * or the client has moved to a different viewport) recompute from the raw
- * per-viewport `props.designRaw` properties.
- */
+// Use the server-resolved `props.design` when the active viewport matches the
+// fallback; otherwise recompute the cascade from raw `props.designRaw`.
 function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],
@@ -131,9 +125,6 @@ function NodeRenderer({
     );
   }
 
-  // Prefer the server pre-resolved design values when the active viewport
-  // matches the fallback; otherwise cascade + resolve design tokens here.
-  // Auto-filled into props below and published on context for useDesignValues().
   const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
     node.props,
     viewports,
@@ -155,11 +146,7 @@ function NodeRenderer({
     resolved: node.props.resolved,
   };
 
-  // Merge precedence (last wins): defaults < design < content < resolveData
-  // < slots. Resolved design values auto-fill matching props (by their raw
-  // design key, e.g. `cfColor`), but sit below content/resolveData so explicit
-  // values always override design. The same values remain available via
-  // useDesignValues() for components that read design explicitly.
+  // Merge precedence (last wins): defaults < design < content < resolveData < slots.
   const composed = {
     ...componentConfig.defaults,
     ...tokenResolvedDesign,
@@ -231,8 +218,7 @@ export function WrapWithTemplate({
     resolved: template.props.resolved,
   };
 
-  // Same precedence as component nodes: defaults < design < content <
-  // resolveData < children.
+  // Same precedence as component nodes, ending in `children`.
   const composed = {
     ...templateConfig.defaults,
     ...tokenResolvedDesign,

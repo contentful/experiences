@@ -2,20 +2,15 @@
 
 import type { CSSProperties } from 'react';
 
-/**
- * Composed hero: title + optional body + CTA + hero image. All content
- * properties come from a `Hero from Promotion` DataAssembly binding — this
- * component just lays them out. Design values (`backgroundColor`, `color`)
- * arrive as ordinary props, auto-filled by the SDK after server-side
- * resolution — no `useDesignValues()` call.
- */
+// Composed hero: title + optional body + CTA + hero image. Design values
+// arrive as auto-filled props (server-resolved) — no useDesignValues() call.
 export interface HeroPlainProps {
   title?: string;
   body?: unknown;
   ctaLabel?: string;
   ctaUrl?: string;
   image?: string;
-  // Design props (auto-filled, already resolved):
+  // Design props:
   backgroundColor?: string;
   color?: string;
 }
