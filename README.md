@@ -255,7 +255,7 @@ Button: defineComponent<ButtonProps>({
 
 - **Logs** the fetch (host, ids), the raw payload, the resolution steps, and per-node `resolveData` timings under the `[experiences:debug]` prefix.
 - **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentTypeId` (silent `null` when debug is off).
-- **Auto-mounts `<DebugExperience>`** after the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
+- **Auto-mounts `<DebugExperience>`** above the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
 
 Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It's independent of `preview` (which selects the delivery vs. preview token and host); debug is purely a render/observability concern.
 
@@ -519,7 +519,7 @@ SSR-friendly renderer. No reactive subscriptions; the active viewport is resolve
 | `config`            | `Config`                                      | yes      | n/a                | Same registry passed to `resolveExperience`. Looked up at render time for dispatch.                                                          |
 | `initialViewportId` | `string`                                      | no       | First viewport id  | Seeds the active viewport. Typically derived from User-Agent server-side.                                                                    |
 | `metadata`          | `Record<string, unknown>`                     | no       | `{}`               | Per-render metadata merged onto the render-time `experience` context. Read via `useExperience().metadata`.                                   |
-| `debug`             | `boolean`                                     | no       | `false`            | Observability switch. Shows the missing-component box, and auto-mounts `<DebugExperience>` after the tree. Read via `useExperience().debug`. |
+| `debug`             | `boolean`                                     | no       | `false`            | Observability switch. Shows the missing-component box, and auto-mounts `<DebugExperience>` above the tree. Read via `useExperience().debug`. |
 | `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent` | Fallback for unregistered component types. Default `MissingComponent`: visible box when `debug` is on, silent null otherwise.                |
 
 ### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)

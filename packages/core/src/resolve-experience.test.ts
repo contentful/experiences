@@ -466,8 +466,9 @@ describe('resolveExperience — debug logging', () => {
       const lines = spy.mock.calls.map((c) => String(c[0]));
       expect(lines.some((l) => l.includes('resolveExperience called with payload'))).toBe(true);
       expect(lines.some((l) => l.includes('declare resolveData'))).toBe(true);
-      expect(lines.some((l) => l.includes('⏱ resolveData hero#h'))).toBe(true);
-      expect(lines.some((l) => l.includes('all resolveData hooks settled'))).toBe(true);
+      // One aggregate timing line for the whole fan-out, not one per resolver.
+      expect(lines.some((l) => l.includes('⏱ 1 resolveData hook(s)'))).toBe(true);
+      expect(lines.filter((l) => l.includes('⏱')).length).toBe(1);
     } finally {
       spy.mockRestore();
     }

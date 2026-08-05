@@ -217,15 +217,10 @@ export async function resolveExperience(
       design: node.props.design,
       experience,
     };
-    const label = `resolveData ${node.registration.componentTypeId}${
-      node.nodeId ? `#${node.nodeId}` : ''
-    }`;
     tasks.push(
-      log
-        .time(label, () => Promise.resolve(resolver(ctx)))
-        .then((resolved) => {
-          node.props.resolved = resolved;
-        })
+      Promise.resolve(resolver(ctx)).then((resolved) => {
+        node.props.resolved = resolved;
+      })
     );
   }
 
@@ -239,21 +234,17 @@ export async function resolveExperience(
       };
       const tpl = template;
       tasks.push(
-        log
-          .time(`resolveData template:${template.templateId}`, () =>
-            Promise.resolve(tplResolver(ctx))
-          )
-          .then((resolved) => {
-            tpl.props.resolved = resolved;
-          })
+        Promise.resolve(tplResolver(ctx)).then((resolved) => {
+          tpl.props.resolved = resolved;
+        })
       );
     }
   }
 
+  // Time the fan-out as a whole rather than per-resolver — one aggregate line
+  // keeps the timing signal without a line per node (which gets noisy fast).
   if (tasks.length > 0) {
-    log.log(`running ${tasks.length} resolveData hook(s) in parallel`);
-    await Promise.all(tasks);
-    log.log('all resolveData hooks settled');
+    await log.time(`${tasks.length} resolveData hook(s)`, () => Promise.all(tasks));
   }
 
   return {

@@ -4,7 +4,7 @@
  * — node tree, registrations, resolved props, viewports.
  *
  * Two ways to use it:
- *  - Auto-mounted by the renderers when `debug` is on (after the tree).
+ *  - Auto-mounted by the renderers when `debug` is on (above the tree).
  *  - Mounted manually anywhere: `<DebugExperience experience={plan} />`.
  *
  * v1 is just the JSON dump wrapped in a native <details> so it collapses

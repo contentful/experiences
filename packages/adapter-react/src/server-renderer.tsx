@@ -82,6 +82,7 @@ export function ServerExperienceRenderer({
 
   return (
     <ExperienceProvider value={renderContext}>
+      {debug ? <DebugExperience experience={experience} /> : null}
       <WrapWithTemplate
         template={experience.template}
         config={config}
@@ -96,7 +97,6 @@ export function ServerExperienceRenderer({
           renderUnknown={renderUnknown}
         />
       </WrapWithTemplate>
-      {debug ? <DebugExperience experience={experience} /> : null}
     </ExperienceProvider>
   );
 }

@@ -70,6 +70,9 @@
 </script>
 
 {#if experience}
+  {#if debug}
+    <DebugExperience {experience} />
+  {/if}
   <WrapWithTemplate template={experience.template} {config} experience={liveContext}>
     {#snippet children()}
       <NodesRenderer
@@ -80,7 +83,4 @@
       />
     {/snippet}
   </WrapWithTemplate>
-  {#if debug}
-    <DebugExperience {experience} />
-  {/if}
 {/if}
