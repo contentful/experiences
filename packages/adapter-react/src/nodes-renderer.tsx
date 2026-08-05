@@ -1,7 +1,8 @@
 /*
  * Recursive renderer over PortableRenderNodes. Customer components receive the
- * merged prop bag (defaults + content + resolveData + slots); design values
- * are read via `useDesignValues()`, not injected as props.
+ * merged props (defaults + design + content + resolveData + slots): resolved
+ * design values auto-fill matching props (below content/resolveData so explicit
+ * values win) and are also available via `useDesignValues()`.
  */
 
 import { Fragment, createElement, type ReactNode } from 'react';
@@ -132,7 +133,7 @@ function NodeRenderer({
 
   // Prefer the server pre-resolved design values when the active viewport
   // matches the fallback; otherwise cascade + resolve design tokens here.
-  // Published on context for useDesignValues() — never spread onto props.
+  // Auto-filled into props below and published on context for useDesignValues().
   const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
     node.props,
     viewports,
@@ -154,9 +155,14 @@ function NodeRenderer({
     resolved: node.props.resolved,
   };
 
-  // Merge precedence (last wins): defaults < content < resolveData < slots.
+  // Merge precedence (last wins): defaults < design < content < resolveData
+  // < slots. Resolved design values auto-fill matching props (by their raw
+  // design key, e.g. `cfColor`), but sit below content/resolveData so explicit
+  // values always override design. The same values remain available via
+  // useDesignValues() for components that read design explicitly.
   const composed = {
     ...componentConfig.defaults,
+    ...tokenResolvedDesign,
     ...node.props.content,
     ...node.props.resolved,
     ...slotProps,
@@ -225,8 +231,11 @@ export function WrapWithTemplate({
     resolved: template.props.resolved,
   };
 
+  // Same precedence as component nodes: defaults < design < content <
+  // resolveData < children.
   const composed = {
     ...templateConfig.defaults,
+    ...tokenResolvedDesign,
     ...template.props.content,
     ...template.props.resolved,
     children,

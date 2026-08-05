@@ -702,8 +702,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
   });
 });
 
-describe('ServerExperienceRenderer — design values are not injected as props', () => {
-  it('does NOT spread resolved design values onto component props', async () => {
+describe('ServerExperienceRenderer — design values auto-fill props', () => {
+  it('spreads resolved design values onto component props by their raw key', async () => {
     let received: Record<string, unknown> = {};
     const Probe = (props: Record<string, unknown>) => {
       received = props;
@@ -724,13 +724,38 @@ describe('ServerExperienceRenderer — design values are not injected as props',
       cfg
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    // Content still flows as a prop; design does not.
+    // Content flows as a prop, and design auto-fills props under its raw key.
     expect(received).toHaveProperty('label', 'keep me');
-    expect(received).not.toHaveProperty('cfBackgroundColor');
-    expect(received).not.toHaveProperty('cfPadding');
+    expect(received).toHaveProperty('cfBackgroundColor', '#f00');
+    expect(received).toHaveProperty('cfPadding', '10px');
   });
 
-  it('does NOT spread resolved design values onto template props', async () => {
+  it('lets content override design on a key collision (content wins)', async () => {
+    let received: Record<string, unknown> = {};
+    const Probe = (props: Record<string, unknown>) => {
+      received = props;
+      return null;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('probe', {
+            id: 'p',
+            // Same key in both channels: content must win.
+            contentProperties: { cfPadding: 'from-content' },
+            designProperties: { cfPadding: m('from-design') },
+          }),
+        ],
+      },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(received).toHaveProperty('cfPadding', 'from-content');
+  });
+
+  it('spreads resolved design values onto template props too', async () => {
     let received: Record<string, unknown> = {};
     const Tpl = (props: Record<string, unknown>) => {
       received = props;
@@ -755,9 +780,12 @@ describe('ServerExperienceRenderer — design values are not injected as props',
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
     const plan = await resolveExperience(tplPayload, cfg);
+    // Seed template design post-resolve; clear the (empty) pre-resolved map so
+    // the adapter recomputes from it.
     plan!.template!.props.design = { cfBackground: m('#111827') };
+    delete plan!.template!.props.designResolved;
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(received).not.toHaveProperty('cfBackground');
+    expect(received).toHaveProperty('cfBackground', '#111827');
   });
 });
 

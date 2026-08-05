@@ -578,8 +578,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
   });
 });
 
-describe('ServerExperienceRenderer — design values are not injected as props', () => {
-  it('does NOT spread resolved design values onto component props', async () => {
+describe('ServerExperienceRenderer — design values auto-fill props', () => {
+  it('spreads resolved design values onto component props by their raw key', async () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
@@ -597,16 +597,39 @@ describe('ServerExperienceRenderer — design values are not injected as props',
     render(ServerExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
-    const keys = Object.keys(captureSink[0]!.props);
-    // Content still flows as a prop; design does not.
-    expect(keys).toContain('label');
-    expect(keys).not.toContain('cfBackgroundColor');
-    expect(keys).not.toContain('cfPadding');
+    // Content flows as a prop, and design auto-fills props under its raw key.
+    expect(captureSink[0]!.props).toMatchObject({
+      label: 'keep me',
+      cfBackgroundColor: '#f00',
+      cfPadding: '10px',
+    });
     // The values are still readable through getDesignValues().
     expect(captureSink[0]!.designValues).toEqual({
       cfBackgroundColor: '#f00',
       cfPadding: '10px',
     });
+  });
+
+  it('lets content override design on a key collision (content wins)', async () => {
+    const cfg: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('capture', {
+            id: 'p',
+            // Same key in both channels: content must win.
+            contentProperties: { cfPadding: 'from-content' },
+            designProperties: { cfPadding: m('from-design') },
+          }),
+        ],
+      },
+      cfg
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    expect(captureSink[0]!.props).toMatchObject({ cfPadding: 'from-content' });
   });
 });
 
