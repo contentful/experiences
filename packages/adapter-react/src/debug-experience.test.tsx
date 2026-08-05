@@ -10,7 +10,7 @@ const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [] };
 function node(componentTypeId: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
     registration: { componentTypeId },
-    props: { content, design: {} },
+    props: { content, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -42,7 +42,7 @@ describe('DebugExperience', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [],
-      template: { templateId: 'page', props: { content: {}, design: {} } },
+      template: { templateId: 'page', props: { content: {}, design: {}, designRaw: {} } },
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('template: page');
   });

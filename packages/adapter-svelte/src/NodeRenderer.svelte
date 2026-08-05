@@ -35,7 +35,7 @@
     componentTypeId: node.registration.componentTypeId,
     nodeId: node.nodeId,
     content: node.props.content,
-    design: node.props.design,
+    design: node.props.designRaw,
     resolved: node.props.resolved,
     slots: node.slots,
   };

@@ -97,7 +97,7 @@ describe('resolveExperience — IR construction', () => {
     };
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.nodes[0]!.props.content).toEqual({ label: 'Go' });
-    expect(plan.nodes[0]!.props.design).toEqual({
+    expect(plan.nodes[0]!.props.designRaw).toEqual({
       cfPadding: {
         type: 'ValuesByViewport',
         values: {
@@ -477,8 +477,8 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const plan = await resolveExperience(designPayload(), emptyConfig);
     // No fallback configured → default to viewport[0] (desktop, index 0).
     expect(plan.fallbackViewportIndex).toBe(0);
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfPadding: '40px' });
-    expect(plan.nodes[0]!.slots.children![0]!.props.designResolved).toEqual({
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
+    expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
       cfFontSize: '32px',
     });
   });
@@ -487,7 +487,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const config: ResolverConfig = { components: {}, fallbackViewportId: 'mobile' };
     const plan = await resolveExperience(designPayload(), config);
     expect(plan.fallbackViewportIndex).toBe(2);
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfPadding: '8px' });
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '8px' });
   });
 
   it('lets initialViewportId override config.fallbackViewportId', async () => {
@@ -496,7 +496,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
       initialViewportId: 'desktop',
     });
     expect(plan.fallbackViewportIndex).toBe(0);
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfPadding: '40px' });
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
   });
 
   it('records the fallback viewport index for the given id', async () => {
@@ -513,13 +513,13 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     expect(plan.fallbackViewportIndex).toBe(0);
   });
 
-  it('cascades design against the fallback viewport into designResolved', async () => {
+  it('cascades design against the fallback viewport into props.design', async () => {
     const plan = await resolveExperience(designPayload(), emptyConfig, {
       initialViewportId: 'mobile',
     });
     // Mobile is the active fallback → mobile-specific values win the cascade.
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfPadding: '8px' });
-    expect(plan.nodes[0]!.slots.children![0]!.props.designResolved).toEqual({
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '8px' });
+    expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
       cfFontSize: '20px',
     });
   });
@@ -528,30 +528,30 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const plan = await resolveExperience(designPayload(), emptyConfig, {
       initialViewportId: 'desktop',
     });
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfPadding: '40px' });
-    expect(plan.nodes[0]!.slots.children![0]!.props.designResolved).toEqual({
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
+    expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
       cfFontSize: '32px',
     });
   });
 
-  it('always preserves the raw design properties alongside designResolved', async () => {
+  it('always preserves the raw design properties on props.designRaw', async () => {
     const plan = await resolveExperience(designPayload(), emptyConfig, {
       initialViewportId: 'mobile',
     });
-    expect(plan.nodes[0]!.props.design.cfPadding).toEqual({
+    expect(plan.nodes[0]!.props.designRaw.cfPadding).toEqual({
       type: 'ValuesByViewport',
       values: {
         desktop: { type: 'ManualDesignValue', value: '40px' },
         mobile: { type: 'ManualDesignValue', value: '8px' },
       },
     });
-    expect(plan.nodes[0]!.props.design.cfColor).toEqual({
+    expect(plan.nodes[0]!.props.designRaw.cfColor).toEqual({
       type: 'DesignToken',
       value: 'color.brand',
     });
   });
 
-  it('reads resolveToken from config so token properties ship resolved in designResolved', async () => {
+  it('reads resolveToken from config so token properties ship resolved in design', async () => {
     const config: ResolverConfig = {
       components: {},
       resolveToken: (ref) => (ref.value === 'color.brand' ? '#ff0000' : undefined),
@@ -559,7 +559,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const plan = await resolveExperience(designPayload(), config, {
       initialViewportId: 'desktop',
     });
-    expect(plan.nodes[0]!.props.designResolved).toMatchObject({ cfColor: '#ff0000' });
+    expect(plan.nodes[0]!.props.design).toMatchObject({ cfColor: '#ff0000' });
   });
 
   it('omits token keys the resolver leaves undefined, without touching the raw property', async () => {
@@ -570,8 +570,8 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const plan = await resolveExperience(designPayload(), config, {
       initialViewportId: 'desktop',
     });
-    expect(plan.nodes[0]!.props.designResolved).not.toHaveProperty('cfColor');
-    expect(plan.nodes[0]!.props.design.cfColor).toEqual({
+    expect(plan.nodes[0]!.props.design).not.toHaveProperty('cfColor');
+    expect(plan.nodes[0]!.props.designRaw.cfColor).toEqual({
       type: 'DesignToken',
       value: 'color.brand',
     });
@@ -607,7 +607,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
       initialViewportId: 'mobile',
     });
     // XDA doesn't emit template design yet, so it resolves to empty — but present.
-    expect(plan.template!.props.designResolved).toEqual({});
+    expect(plan.template!.props.design).toEqual({});
   });
 });
 

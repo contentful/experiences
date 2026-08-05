@@ -197,13 +197,13 @@ describe('ServerExperienceRenderer', () => {
         {
           nodeId: 'root',
           registration: { componentTypeId: 'contentful-container' },
-          props: { content: {}, design: {} },
+          props: { content: {}, design: {}, designRaw: {} },
           slots: {
             children: [
               {
                 nodeId: 'ghost',
                 registration: { componentTypeId: 'NotRegistered' },
-                props: { content: {}, design: {} },
+                props: { content: {}, design: {}, designRaw: {} },
                 slots: {},
               },
             ],
@@ -566,13 +566,13 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
-    // Templates don't carry design props in the current XDA payload shape;
-    // seed one on the resolved plan so we exercise the template path. Clear the
-    // (empty) pre-resolved map so the adapter recomputes from this seeded design.
-    plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
-    delete plan!.template!.props.designResolved;
+    // Templates don't carry design props in the current XDA payload shape; seed
+    // a raw token on the resolved plan so we exercise the template path. Render
+    // at a non-fallback viewport (mobile ≠ fallback index 0) so the adapter
+    // recomputes from the seeded raw design and runs resolveToken.
+    plan!.template!.props.designRaw = { cfBackground: dt('brand/canvas') };
     const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config: tplConfig },
+      props: { experience: plan, config: tplConfig, initialViewportId: 'mobile' },
     });
     expect(container.innerHTML).toContain('data-bg="#111827"');
   });
@@ -695,10 +695,10 @@ describe('ServerExperienceRenderer — server pre-resolved design values', () =>
     ],
   };
 
-  it('consumes designResolved as-is when the active viewport equals the fallback', async () => {
+  it('consumes props.design as-is when the active viewport equals the fallback', async () => {
     const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
     // Tamper the precomputed values with a sentinel the cascade could never produce.
-    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config, initialViewportId: 'mobile' },
     });
@@ -707,7 +707,7 @@ describe('ServerExperienceRenderer — server pre-resolved design values', () =>
 
   it('recomputes from raw design properties when the active viewport differs from the fallback', async () => {
     const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
-    plan.nodes[0]!.props.designResolved = { cfPadding: 'SENTINEL' };
+    plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
     // Active viewport (desktop, idx 0) ≠ fallback (mobile, idx 2) → recompute.
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config, initialViewportId: 'desktop' },

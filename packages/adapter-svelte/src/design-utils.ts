@@ -7,23 +7,23 @@ import {
 } from '@contentful/experiences-design';
 
 /**
- * Choose the resolved design values for a node. When the server pre-resolved
- * design (`designResolved` present) and the active viewport matches the
- * fallback the server used, the precomputed values are correct as-is — use them
- * and skip the cascade. Otherwise (no pre-resolution, or the client has moved
- * to a different viewport) recompute from the raw design properties.
+ * Choose the resolved design values for a node. When the active viewport matches
+ * the fallback the server pre-resolved `props.design` against, those values are
+ * correct as-is — use them and skip the cascade. Otherwise (no fallback known,
+ * or the client has moved to a different viewport) recompute from the raw
+ * per-viewport `props.designRaw` properties.
  */
 export function selectResolvedDesign(
-  props: { design: Record<string, DesignPropValue>; designResolved?: Record<string, unknown> },
+  props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],
   activeViewportIndex: number,
   fallbackViewportIndex: number | undefined,
   resolveToken: ResolveToken | undefined
 ): { props: Record<string, unknown>; unresolved: string[] } {
-  if (props.designResolved !== undefined && activeViewportIndex === fallbackViewportIndex) {
-    return { props: props.designResolved, unresolved: [] };
+  if (activeViewportIndex === fallbackViewportIndex) {
+    return { props: props.design, unresolved: [] };
   }
-  const resolvedDesign = resolveDesignProperties(props.design, viewports, activeViewportIndex);
+  const resolvedDesign = resolveDesignProperties(props.designRaw, viewports, activeViewportIndex);
   return applyTokenResolver(resolvedDesign, resolveToken);
 }
 

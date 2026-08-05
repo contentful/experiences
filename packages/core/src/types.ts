@@ -184,14 +184,14 @@ export interface PortableRegistration {
  * customer-supplied `resolveData` resolver and merged into the final props
  * after content + design but before slot props.
  *
- * `props.designResolved` is an additive server pre-resolution of the design
- * properties against the plan's fallback viewport (see
- * `PortableRenderPlan.fallbackViewportIndex`). `resolveExperience` always
+ * `props.design` is the server pre-resolution of the design properties against
+ * the plan's fallback viewport (see `PortableRenderPlan.fallbackViewportIndex`)
+ * — a flat, viewport-cascaded, token-resolved map. `resolveExperience` always
  * populates it — against the configured fallback viewport, or viewport[0] when
- * none is configured. The raw `props.design` properties are always preserved —
- * the client must still re-resolve on viewport change. Adapters consume these
- * resolved values only when the active viewport equals the fallback, and
- * recompute otherwise.
+ * none is configured. The raw per-viewport discriminated form is preserved on
+ * `props.designRaw` so the client can re-resolve on viewport change. Adapters
+ * consume `props.design` as-is when the active viewport equals the fallback,
+ * and recompute from `props.designRaw` otherwise.
  */
 export interface PortableRenderNode {
   /**
@@ -203,15 +203,21 @@ export interface PortableRenderNode {
   registration: PortableRegistration;
   props: {
     content: Record<string, unknown>;
-    design: Record<string, DesignPropValue>;
+    /**
+     * Viewport-cascaded and token-resolved design values computed server-side
+     * against the fallback viewport (viewport[0] when none is configured).
+     * Always populated by `resolveExperience`. This is the resolved, flat map
+     * — the raw per-viewport form lives on `designRaw`.
+     */
+    design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
     /**
-     * Additive, viewport-cascaded and token-resolved design values computed
-     * server-side against the fallback viewport (viewport[0] when none is
-     * configured). Always populated by `resolveExperience`. Additive to — never
-     * a replacement for — the raw `design` properties above.
+     * Raw per-viewport design properties in their discriminated value shape,
+     * as they arrived from the payload. Preserved so adapters can re-resolve
+     * the cascade on the client when the active viewport differs from the
+     * fallback the server resolved `design` against.
      */
-    designResolved?: Record<string, unknown>;
+    designRaw: Record<string, DesignPropValue>;
   };
   slots: Record<string, PortableRenderNode[]>;
 }
@@ -230,13 +236,17 @@ export interface PortableTemplate {
   templateId: string;
   props: {
     content: Record<string, unknown>;
-    design: Record<string, DesignPropValue>;
-    resolved?: Record<string, unknown>;
     /**
      * Server pre-resolved design values against the fallback viewport. Same
-     * always-on semantics as `PortableRenderNode.props.designResolved`.
+     * always-on semantics as `PortableRenderNode.props.design`.
      */
-    designResolved?: Record<string, unknown>;
+    design: Record<string, unknown>;
+    resolved?: Record<string, unknown>;
+    /**
+     * Raw per-viewport design properties, preserved for client re-resolution.
+     * Same semantics as `PortableRenderNode.props.designRaw`.
+     */
+    designRaw: Record<string, DesignPropValue>;
   };
 }
 
@@ -257,8 +267,8 @@ export interface PortableRenderPlan {
    * The viewport index the server pre-resolved design properties against.
    * Defaults to viewport[0] when no fallback viewport is configured. Adapters
    * compare their active viewport index against this: when equal, they consume
-   * the `props.designResolved` values as-is for a correct first paint; otherwise
-   * they recompute the cascade on the client.
+   * the `props.design` values as-is for a correct first paint; otherwise
+   * they recompute the cascade from `props.designRaw` on the client.
    */
   fallbackViewportIndex: number;
 }

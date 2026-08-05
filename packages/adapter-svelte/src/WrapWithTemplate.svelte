@@ -34,7 +34,7 @@
     setContentfulTemplate({
       templateId: template.templateId,
       content: template.props.content,
-      design: template.props.design,
+      design: template.props.designRaw,
       resolved: template.props.resolved,
     } satisfies ContentfulTemplate);
   }

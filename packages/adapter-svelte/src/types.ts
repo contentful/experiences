@@ -60,8 +60,8 @@ export interface RenderContext extends ExperienceContext {
    * Viewport index the server pre-resolved design properties against, mirrored
    * from `PortableRenderPlan.fallbackViewportIndex` (defaults to viewport[0]
    * when no fallback viewport is configured). Renderers consume the precomputed
-   * `props.designResolved` values when `activeViewportIndex` equals this, and
-   * recompute the cascade otherwise.
+   * `props.design` values when `activeViewportIndex` equals this, and recompute
+   * the cascade from `props.designRaw` otherwise.
    */
   fallbackViewportIndex?: number;
 }

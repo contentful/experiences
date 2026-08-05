@@ -10,7 +10,7 @@ const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewpo
 function node(componentTypeId: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
     registration: { componentTypeId },
-    props: { content, design: {} },
+    props: { content, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -47,7 +47,7 @@ describe('DebugExperience.svelte', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [],
-      template: { templateId: 'page', props: { content: {}, design: {} } },
+      template: { templateId: 'page', props: { content: {}, design: {}, designRaw: {} } },
       fallbackViewportIndex: 0,
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
