@@ -17,6 +17,7 @@
  *    framework adapter via `renderUnknown`); the IR still emits the node.
  */
 
+import { createDebugLogger } from './debug-logger';
 import type {
   ComponentTypeNode,
   DesignPropValue,
@@ -61,14 +62,21 @@ function getResolver(
 
 export interface ResolveExperienceOptions {
   /**
-   * Per-render runtime context exposed to every resolver as `ctx.experience`.
-   * Defaults to `{ isPreview: false, metadata: {} }`.
+   * Arbitrary per-render metadata exposed to every resolver as
+   * `ctx.experience.metadata`. Flattened to a top-level option (was nested
+   * under `experience`). Defaults to `{}`.
    */
-  experience?: Partial<ExperienceContext>;
+  metadata?: Record<string, unknown>;
+  /**
+   * Observability switch. When on, `resolveExperience` logs the resolution
+   * steps and per-node `resolveData` fan-out timings. Threads through to the
+   * resolver context as `ctx.experience.debug`. Defaults to `false`.
+   */
+  debug?: boolean;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
-  isPreview: false,
+  debug: false,
   metadata: {},
   viewports: [],
 };
@@ -162,6 +170,9 @@ export async function resolveExperience(
   config: ResolverConfig,
   options: ResolveExperienceOptions = {}
 ): Promise<PortableRenderPlan> {
+  const log = createDebugLogger(options.debug, 'core');
+  log.lazy('resolveExperience called with payload', () => payload);
+
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
   const nodeRefs: PortableRenderNode[] = [];
@@ -170,6 +181,7 @@ export async function resolveExperience(
     const built = buildNode(node, config, nodeRefs);
     if (built !== null) nodes.push(built);
   }
+  log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
   // Build the page-level template stub if the payload carries one. XDA
   // payloads don't yet emit template-level content/design properties, so
@@ -184,14 +196,13 @@ export async function resolveExperience(
   }
 
   // Pass 2: run resolveData hooks for components AND the template in parallel.
-  // `viewports` is always sourced from the payload — caller-supplied
-  // options.experience.viewports is ignored (the list is fact, not opinion).
+  // `viewports` is always sourced from the payload — the viewport list is fact,
+  // not opinion, so it can't be overridden by the caller.
   const experience: ExperienceContext = {
-    ...DEFAULT_EXPERIENCE,
-    ...options.experience,
+    debug: options.debug ?? DEFAULT_EXPERIENCE.debug,
     metadata: {
       ...DEFAULT_EXPERIENCE.metadata,
-      ...(options.experience?.metadata ?? {}),
+      ...(options.metadata ?? {}),
     },
     viewports: payload.viewports,
   };
@@ -230,7 +241,11 @@ export async function resolveExperience(
     }
   }
 
-  if (tasks.length > 0) await Promise.all(tasks);
+  // Time the fan-out as a whole rather than per-resolver — one aggregate line
+  // keeps the timing signal without a line per node (which gets noisy fast).
+  if (tasks.length > 0) {
+    await log.time(`${tasks.length} resolveData hook(s)`, () => Promise.all(tasks));
+  }
 
   return {
     viewports: payload.viewports,

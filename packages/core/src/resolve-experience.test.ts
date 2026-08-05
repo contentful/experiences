@@ -340,10 +340,11 @@ describe('resolveExperience — resolveData hooks', () => {
       },
     };
     await resolveExperience(payload, config, {
-      experience: { isPreview: true, metadata: { locale: 'en-US' } },
+      debug: true,
+      metadata: { locale: 'en-US' },
     });
     expect(captured).toEqual({
-      isPreview: true,
+      debug: true,
       metadata: { locale: 'en-US' },
       viewports: VIEWPORTS,
     });
@@ -403,15 +404,16 @@ describe('resolveExperience — templates', () => {
       templates: {
         hi: {
           resolveData: ({ experience }) => ({
-            heading: experience.isPreview ? 'PREVIEW' : 'LIVE',
+            heading: experience.debug ? 'DEBUG' : 'LIVE',
           }),
         },
       },
     };
     const plan = await resolveExperience(payload, config, {
-      experience: { isPreview: true, metadata: {} },
+      debug: true,
+      metadata: {},
     });
-    expect(plan.template!.props.resolved).toEqual({ heading: 'PREVIEW' });
+    expect(plan.template!.props.resolved).toEqual({ heading: 'DEBUG' });
   });
 
   it('still emits the template stub when no template config is registered', async () => {
@@ -431,5 +433,44 @@ describe('resolveExperience — templates', () => {
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.template?.templateId).toBe('not-registered');
     expect(plan.template?.props.resolved).toBeUndefined();
+  });
+});
+
+describe('resolveExperience — debug logging', () => {
+  it('stays silent on the happy path when debug is off', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('hero', { id: 'h' })],
+      };
+      await resolveExperience(payload, emptyConfig);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('logs the payload, node counts, and resolveData timings when debug is on', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('hero', { id: 'h' })],
+      };
+      const config: ResolverConfig = {
+        components: { hero: { resolveData: () => ({ ok: true }) } },
+      };
+      await resolveExperience(payload, config, { debug: true });
+
+      const lines = spy.mock.calls.map((c) => String(c[0]));
+      expect(lines.some((l) => l.includes('resolveExperience called with payload'))).toBe(true);
+      expect(lines.some((l) => l.includes('declare resolveData'))).toBe(true);
+      // One aggregate timing line for the whole fan-out, not one per resolver.
+      expect(lines.some((l) => l.includes('⏱ 1 resolveData hook(s)'))).toBe(true);
+      expect(lines.filter((l) => l.includes('⏱')).length).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

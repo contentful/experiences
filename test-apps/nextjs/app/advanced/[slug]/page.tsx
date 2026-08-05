@@ -18,10 +18,12 @@ interface PageProps {
  * Advanced version of the [slug] route. Demonstrates three SDK features the
  * minimal three-line page in `app/[slug]/page.tsx` doesn't reach for:
  *
- *  1. **Preview mode + per-page metadata** via the `context` arg of
- *     `fetchExperience`. `?preview=true` flips `MissingComponent` from
- *     "silent null" to "visible red box"; metadata flows into every
- *     `resolveData` hook.
+ *  1. **Debug mode + per-page metadata** via the top-level `metadata` and
+ *     `debug` args of `fetchExperience`. `?debug=true` flips
+ *     `MissingComponent` from "silent null" to "visible red box", turns on
+ *     verbose SDK logging, and auto-mounts `<DebugExperience>`; metadata flows
+ *     into every `resolveData` hook. Preview host-switching stays independent
+ *     via `?preview=true`.
  *  2. **User-Agent → viewport seeding** via `initialViewportId` so SSR
  *     renders at the device's expected viewport (avoids hydration drift on
  *     the client renderer's first paint).
@@ -36,6 +38,7 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
   const sp = (await searchParams) ?? {};
 
   const previewMode = sp.preview === 'true' || sp.preview === '1';
+  const debug = sp.debug === 'true' || sp.debug === '1';
   const locale = typeof sp.locale === 'string' ? sp.locale : 'en-US';
 
   const userAgent = (await headers()).get('user-agent') ?? '';
@@ -56,10 +59,8 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
       },
       {
         config: advancedExperienceConfig,
-        context: {
-          isPreview: previewMode,
-          metadata: { slug: experienceId, locale },
-        },
+        metadata: { slug: experienceId, locale },
+        debug,
       }
     );
 
@@ -68,7 +69,8 @@ export default async function AdvancedExperiencePage({ params, searchParams }: P
         experience={experience}
         config={advancedExperienceConfig}
         initialViewportId={initialViewportId}
-        context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+        metadata={{ slug: experienceId, locale }}
+        debug={debug}
       />
     );
   } catch (err) {

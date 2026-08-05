@@ -8,9 +8,17 @@
  * The *active* viewport is render-time only and lives on the framework
  * adapter's RenderContext — exposing it here would mean async resolvers
  * re-fire on every viewport change, which would be a footgun.
+ *
+ * `debug` is the single observability switch. When on it: emits verbose logs
+ * from `resolveExperience` and `fetchExperience`; renders the visible
+ * missing-component box (see the adapters' `MissingComponent`); and turns the
+ * default `renderUnknown` fallback into the richer debug component. It replaced
+ * the old `isPreview` render flag — a single boolean that threads through both
+ * fetch and render so a customer can't enable one half and be confused by the
+ * other.
  */
 export interface ExperienceContext {
-  isPreview: boolean;
+  debug: boolean;
   metadata: Record<string, unknown>;
   viewports: ViewportDef[];
 }

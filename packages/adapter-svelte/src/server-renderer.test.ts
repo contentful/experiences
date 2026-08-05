@@ -186,7 +186,7 @@ describe('ServerExperienceRenderer', () => {
     expect(ctx.activeViewport).toBe(VIEWPORTS[2]);
   });
 
-  it('renders missing-component fallback in preview mode', () => {
+  it('renders missing-component fallback in debug mode', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const justContainer: Config = {
       components: { 'contentful-container': ContainerFixture },
@@ -212,14 +212,14 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const { container: previewContainer } = render(ServerExperienceRenderer, {
+    const { container: debugContainer } = render(ServerExperienceRenderer, {
       props: {
         experience: planWithMissing,
         config: justContainer,
-        context: { isPreview: true },
+        debug: true,
       },
     });
-    expect(previewContainer.innerHTML).toContain('data-experiences-missing="NotRegistered"');
+    expect(debugContainer.innerHTML).toContain('data-experiences-missing="NotRegistered"');
 
     const { container: prodContainer } = render(ServerExperienceRenderer, {
       props: { experience: planWithMissing, config: justContainer },
@@ -227,6 +227,37 @@ describe('ServerExperienceRenderer', () => {
     expect(prodContainer.innerHTML).not.toContain('data-experiences-missing');
 
     warn.mockRestore();
+  });
+
+  it('auto-mounts DebugExperience only when debug is on', async () => {
+    const captureConfig: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
+      captureConfig
+    );
+
+    const { container: off } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: captureConfig },
+    });
+    expect(off.innerHTML).not.toContain('data-experiences-debug');
+
+    const { container: on } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: captureConfig, debug: true },
+    });
+    expect(on.innerHTML).toContain('data-experiences-debug');
+    expect(on.innerHTML).toContain('Experience debug');
+  });
+
+  it('threads top-level metadata into getExperience()', async () => {
+    const captureConfig: Config = { components: { capture: CapturingComponent } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
+      captureConfig
+    );
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: captureConfig, metadata: { slug: 'home' } },
+    });
+    expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home' });
   });
 
   it('merges defaults beneath content (content wins)', async () => {

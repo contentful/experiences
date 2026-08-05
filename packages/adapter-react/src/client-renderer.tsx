@@ -15,6 +15,7 @@ import type {
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
+import { DebugExperience } from './debug-experience';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
 import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
@@ -22,7 +23,7 @@ import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
-  isPreview: false,
+  debug: false,
   metadata: {},
   viewports: [],
 };
@@ -39,7 +40,17 @@ export interface ClientExperienceRendererProps {
   config: Config;
   /** Initial viewport seed; should match what the server-rendered output used. */
   initialViewportId?: string;
-  context?: Partial<ExperienceContext>;
+  /**
+   * Arbitrary per-render metadata, readable by descendants via
+   * `useExperience()` and by resolvers via `ctx.experience.metadata`.
+   */
+  metadata?: Record<string, unknown>;
+  /**
+   * Observability switch. When on: renders the visible missing-component box,
+   * turns the default `renderUnknown` fallback into the debug component, and
+   * auto-mounts `<DebugExperience>` after the tree.
+   */
+  debug?: boolean;
   renderUnknown?: RenderUnknown;
 }
 
@@ -47,7 +58,8 @@ export function ClientExperienceRenderer({
   experience,
   config,
   initialViewportId,
-  context,
+  metadata,
+  debug = false,
   renderUnknown = MissingComponent,
 }: ClientExperienceRendererProps): ReactNode {
   if (!experience) return null;
@@ -59,8 +71,8 @@ export function ClientExperienceRenderer({
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
-    ...context,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
+    debug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
     viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
@@ -68,6 +80,7 @@ export function ClientExperienceRenderer({
 
   return (
     <ExperienceProvider value={renderContext}>
+      {debug ? <DebugExperience experience={experience} /> : null}
       <WrapWithTemplate
         template={experience.template}
         config={config}

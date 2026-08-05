@@ -14,6 +14,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const sp = (await searchParams) ?? {};
 
   const previewMode = sp.preview === 'true' || sp.preview === '1';
+  const debug = sp.debug === 'true' || sp.debug === '1';
   const locale = typeof sp.locale === 'string' ? sp.locale : 'en-US';
 
   const userAgent = (await headers()).get('user-agent') ?? '';
@@ -33,10 +34,8 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
     },
     {
       config: experienceConfig,
-      context: {
-        isPreview: previewMode,
-        metadata: { slug: experienceId, locale },
-      },
+      metadata: { slug: experienceId, locale },
+      debug,
     }
   );
 
@@ -45,7 +44,8 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       experience={experience}
       config={experienceConfig}
       initialViewportId={initialViewportId}
-      context={{ isPreview: previewMode, metadata: { slug: experienceId, locale } }}
+      metadata={{ slug: experienceId, locale }}
+      debug={debug}
     />
   );
 }

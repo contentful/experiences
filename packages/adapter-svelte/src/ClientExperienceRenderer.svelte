@@ -11,6 +11,7 @@
 <script lang="ts">
   import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
 
+  import DebugExperience from './DebugExperience.svelte';
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
   import WrapWithTemplate from './WrapWithTemplate.svelte';
@@ -20,7 +21,7 @@
   import { useActiveViewport } from './use-active-viewport.svelte.js';
 
   const DEFAULT_CONTEXT: ExperienceContext = {
-    isPreview: false,
+    debug: false,
     metadata: {},
     viewports: [],
   };
@@ -36,7 +37,8 @@
     experience,
     config,
     initialViewportId,
-    context,
+    metadata,
+    debug = false,
     renderUnknown = MissingComponent,
   }: ClientExperienceRendererProps = $props();
 
@@ -47,8 +49,8 @@
   // reactive across viewport changes. The fields update in an $effect below.
   const liveContext = $state<RenderContext>({
     ...DEFAULT_CONTEXT,
-    ...context,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) },
+    debug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
     viewports: experience?.viewports ?? [],
     activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
     activeViewportIndex: 0,
@@ -62,12 +64,15 @@
     liveContext.viewports = experience.viewports;
     liveContext.activeViewport = experience.viewports[idx] ?? FALLBACK_VIEWPORT;
     liveContext.activeViewportIndex = idx;
-    liveContext.isPreview = context?.isPreview ?? false;
-    liveContext.metadata = { ...DEFAULT_CONTEXT.metadata, ...(context?.metadata ?? {}) };
+    liveContext.debug = debug;
+    liveContext.metadata = { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) };
   });
 </script>
 
 {#if experience}
+  {#if debug}
+    <DebugExperience {experience} />
+  {/if}
   <WrapWithTemplate template={experience.template} {config} experience={liveContext}>
     {#snippet children()}
       <NodesRenderer
