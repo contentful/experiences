@@ -88,7 +88,7 @@ export async function fetchExperience(
   log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
 
   // Response from the experience delivery client is structurally compatible with ExperiencePayload (superset)
-  const payload = (await client.view.getExperience(spaceId, environmentId, experienceId, {
+  const payload = (await client.experience.get(spaceId, environmentId, experienceId, {
     locale,
   })) as unknown as ExperiencePayload;
 
