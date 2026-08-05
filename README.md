@@ -108,7 +108,7 @@ A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextj
 
 ## Styling components
 
-Design values are resolved **on the server** — inside `fetchExperience` / `resolveExperience` — and auto-filled onto your component's props alongside content. Each design property lands on a prop of the same key: a design property named `backgroundColor` arrives as a prop named `backgroundColor`, already cascaded to the active viewport and with any [design tokens](#design-tokens) resolved. Your component is a plain function of its props and styles itself directly from them:
+Design values are resolved on the server, inside `fetchExperience` / `resolveExperience`, and auto-filled onto your component's props alongside content. Each design property lands on a prop of the same key, so a design property named `backgroundColor` arrives as a prop named `backgroundColor`, already cascaded to the active viewport and with any [design tokens](#design-tokens) resolved. The component reads its props and styles itself from them:
 
 ```tsx
 // components/Heading.tsx
@@ -130,11 +130,11 @@ export function Heading({ text, as = 'h2', fontSize, fontWeight }: HeadingProps)
 }
 ```
 
-Because resolution happens server-side, the first SSR paint is already correctly styled — there's no flash of unstyled or mis-styled content waiting on the client to compute the viewport. Both real CSS-shaped values (`fontSize`, `backgroundColor`) and author-defined semantic values (`variant`, `as`, `ratio`) arrive the same way; read the semantic ones by name and pass the CSS-shaped ones into your `style`.
+Since resolution happens on the server, the first SSR paint is already styled correctly, with no flash of unstyled content while the client works out the viewport. Both real CSS-shaped values (`fontSize`, `backgroundColor`) and author-defined semantic values (`variant`, `as`, `ratio`) arrive the same way. Read the semantic ones by name and pass the CSS-shaped ones into your `style`.
 
 ### Reading design with the hook (optional)
 
-Props cover the common case. The `useDesignValues()` hook reads the **same** resolved design record from context, for the cases where props aren't the right fit — a deeply nested presentational child that isn't itself a registered component, or code that needs design outside the render path (a `useEffect`, an imperative measurement):
+Props cover the common case. The `useDesignValues()` hook reads the same resolved design record from context, for the cases where props aren't the right fit: a deeply nested presentational child that isn't itself a registered component, or code that needs design outside the render path (a `useEffect`, an imperative measurement):
 
 ```tsx
 'use client';
@@ -156,11 +156,11 @@ export function Heading({ text }: { text?: string }) {
 ```
 
 - `useDesignValues<T>()` takes an optional type argument for editor ergonomics. It's an assertion rather than a runtime check, so treat keys as possibly `undefined`.
-- It returns the same values that auto-fill props, and returns `{}` outside a renderer, so components degrade gracefully in isolation. It's **not required** — a component can style entirely from props and never call it.
-- `toCss(design, { include, exclude })` converts a design record to a `CSSProperties` object, keeping only keys that map to a real CSS property and dropping semantic ones. It accepts optional key filters. Handy with the hook; with props you typically just spread the CSS-shaped keys yourself.
+- It returns the same values that auto-fill props, and returns `{}` outside a renderer, so components degrade gracefully in isolation. It's not required: a component can style entirely from props and never call it.
+- `toCss(design, { include, exclude })` converts a design record to a `CSSProperties` object, keeping only keys that map to a real CSS property and dropping semantic ones. It accepts optional key filters. It's handy with the hook; with props you usually just spread the CSS-shaped keys yourself.
 - If `toCss` doesn't recognize a value, the property whitelist is extensible. See [`packages/design`](./packages/design).
 
-The Svelte adapter works the same way — design auto-fills props, and `getDesignValues()` is the optional hook — covered in [Svelte / SvelteKit](#svelte--sveltekit).
+The Svelte adapter works the same way: design auto-fills props, and `getDesignValues()` is the optional hook. See [Svelte / SvelteKit](#svelte--sveltekit).
 
 ## Design tokens
 
@@ -654,9 +654,9 @@ The component receives a flat set of props composed in this order:
 4. `resolveData()` output, your transform's return value
 5. slot props, each named slot becomes a pre-rendered React subtree
 
-So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`. Design sits below content and `resolveData`, so an explicit editorial or resolver value always wins over design on a key collision.
+So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`. Design sits below content and `resolveData`, so an explicit editorial or resolver value always wins over design when keys collide.
 
-The same resolved design values are also published on context, so they remain readable via `useDesignValues()` for components that prefer the hook. Runtime context and the raw (pre-resolution) payload are read through `useExperience()` and `useContentfulComponent()`, which are never injected as props.
+The same resolved design values are also published on context, so components that prefer the hook can still read them via `useDesignValues()`. Runtime context and the raw (pre-resolution) payload come through `useExperience()` and `useContentfulComponent()`, which are never injected as props.
 
 ---
 

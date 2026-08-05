@@ -2,16 +2,16 @@
 
 A Next.js 15 App Router app demonstrating `@contentful/experiences-react` rendering an Experience payload fetched from XDA.
 
-This app shows the **recommended** integration: design values are resolved on the server and arrive as ordinary component props. No hook, no client-side design plumbing required. The hook (`useDesignValues()`) is still available for the cases that need it — see [Reading design on the client](#reading-design-on-the-client-optional).
+This app shows the integration we recommend. Design values get resolved on the server and arrive as ordinary component props, so there's no hook to call and no client-side design plumbing to wire up. If you do need the `useDesignValues()` hook, it's still there; see [Reading design on the client](#reading-design-on-the-client-optional).
 
 ## What it shows
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, **pre-resolves each node's design against the target viewport**, and runs any component-declared `resolveData` hooks in parallel.
-- **Design values as props (recommended)**: resolved design (spacing, color, typography, layout) is auto-filled onto each component's props alongside content. Components are plain functions of their props — they don't call any SDK hook to get styled. Every component `console.log`s its resolved props so you can watch this happen.
-- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`. Because design is resolved server-side, the first paint is already correctly styled — no flash of unstyled/mis-styled content on hydration.
+- **Design values as props (recommended)**: resolved design (spacing, color, typography, layout) is auto-filled onto each component's props alongside content, so a component styles itself from props without calling any SDK hook. Every component `console.log`s its resolved props, so you can see what it received.
+- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`. Design is resolved on the server, so the first paint is already styled correctly and there's no flash of unstyled content on hydration.
 - **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
-- **User-Agent → viewport seeding** so SSR resolves design against the device's expected viewport (avoids hydration drift on the client renderer's first paint).
+- **User-Agent → viewport seeding** so SSR resolves design against the device's expected viewport, which keeps the client renderer's first paint from drifting on hydration.
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
 - **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
@@ -137,14 +137,14 @@ test-apps/nextjs/
 
 ## How server-side design resolution works
 
-Design in Contentful is stored **per viewport** and often as **token references** (`{ type: 'DesignToken', value: 'color.primary' }`) rather than literal CSS. Before a component can style itself, that raw shape has to be turned into a flat map of concrete values. The SDK does this **on the server, inside `fetchExperience` / `resolveExperience`**, so your components never see the raw form.
+Contentful stores design **per viewport**, and often as **token references** (`{ type: 'DesignToken', value: 'color.primary' }`) rather than literal CSS. Before a component can style itself, that raw shape has to become a flat map of concrete values. The SDK handles this on the server, inside `fetchExperience` / `resolveExperience`, so your components never see the raw form.
 
 For each node, resolution does two things:
 
-1. **Cascade to a viewport.** Per-viewport design values collapse to a single flat map for the *target* viewport (see [Which viewport?](#which-viewport) below).
-2. **Resolve tokens.** Every `DesignToken` is passed through your `resolveToken` (from `config`) and replaced with the returned value. Tokens your resolver doesn't recognize are dropped, and the server logs a warning naming the component id.
+1. **Cascade to a viewport.** Per-viewport design values collapse to a single flat map for the target viewport (see [Which viewport?](#which-viewport) below).
+2. **Resolve tokens.** Every `DesignToken` goes through your `resolveToken` (from `config`) and is replaced with whatever it returns. Tokens the resolver doesn't recognize are dropped, and the server logs a warning naming the component.
 
-The resolved map is then **auto-filled onto the component's props by key** — a design property named `backgroundColor` becomes a prop named `backgroundColor`. Your component is a plain function of its props:
+The resolved map is then auto-filled onto the component's props by key: a design property named `backgroundColor` becomes a prop named `backgroundColor`. The component just reads its props:
 
 ```tsx
 // components/Button.tsx — design values arrive as ordinary props
@@ -183,16 +183,16 @@ Those `64px` / `#0f172a` values are the *result* of the cascade + token resoluti
 2. `config.fallbackViewportId` — a static default, if you set one.
 3. `viewports[0]` — the first viewport in the payload, when neither of the above is set or the id is unknown.
 
-Seeding `initialViewportId` from the request means SSR resolves against the device's expected viewport, so the very first paint matches — no re-styling flash after hydration. Pass the *same* id to `<ServerExperienceRenderer initialViewportId={…}>` (this app does) so the renderer agrees with what the server resolved.
+Seeding `initialViewportId` from the request means SSR resolves against the device's expected viewport, so the first paint matches and nothing re-styles after hydration. Pass the same id to `<ServerExperienceRenderer initialViewportId={…}>` (this app does) so the renderer agrees with what the server resolved.
 
 ## Integration pattern
 
 The app separates **two layers**:
 
-1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) are plain React components. They receive their **content** props (`text`, `label`, `src`) and their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. They import nothing SDK-shaped — they're just functions of their props, so they're trivial to unit-test and render in isolation.
-2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentTypeId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `templateId`s under `templates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
+1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) are plain React components. They get their **content** props (`text`, `label`, `src`) and their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Since they import nothing SDK-shaped and are just functions of their props, they're easy to unit-test and render in isolation.
+2. **The experience config** (`lib/experience-config.tsx`) is the integration layer. It maps each `componentTypeId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `templateId`s under `templates`, and wires `resolveToken`, all composed into the single `experienceConfig` object the renderer takes.
 
-Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface, while the components stay SDK-agnostic.
+The point of the split: everything SDK-shaped (registration, defaults, async resolvers, token resolution) lives in one file you can scan to see the whole integration, while the components stay SDK-agnostic.
 
 ```tsx
 // components/Heading.tsx: content + resolved design, both as props
@@ -254,14 +254,14 @@ Design sits **below** content and `resolveData`, so an explicit editorial value 
 }
 ```
 
-reaches your `Button` as `{ label: 'Click me', url: 'https://example.com/go', target: '_self' }` (after its `resolveData` runs) — content and design merged into one flat props object.
+reaches your `Button` as `{ label: 'Click me', url: 'https://example.com/go', target: '_self' }` (after its `resolveData` runs), with content and design merged into one flat props object.
 
 ### Reading design on the client (optional)
 
-Auto-filled props cover the common case. The `useDesignValues()` hook is still available for the cases where props aren't enough:
+Auto-filled props cover the common case. Reach for the `useDesignValues()` hook when props aren't enough:
 
 - A **deeply nested presentational child** that isn't itself a registered component but needs the enclosing node's design.
-- Code that wants to **read design outside the props flow** — e.g. a `useEffect`, an imperative measurement, or a helper that isn't in the render path.
+- Code that reads design **outside the props flow**, such as a `useEffect`, an imperative measurement, or a helper that isn't in the render path.
 
 ```tsx
 'use client';
@@ -273,9 +273,9 @@ function Badge() {
 }
 ```
 
-The hook returns the **same resolved values** that auto-fill props (cascaded + token-resolved), and returns `{}` when called outside a renderer, so components degrade gracefully in isolation. It's **not required** — this app's components deliberately use props only, and none of them call it.
+The hook returns the same resolved values that auto-fill props (cascaded and token-resolved), and returns `{}` when called outside a renderer, so components still degrade gracefully in isolation. It's not required: this app's components use props only, and none of them call it.
 
-> Need the *raw*, pre-resolution design (per-viewport, token references intact)? That's exposed via `ContentfulComponent.design` / `useContentfulComponent()` — the escape hatch for building your own cascade. Almost no app needs this.
+> Need the raw, pre-resolution design (per-viewport, token references intact)? That's on `ContentfulComponent.design` / `useContentfulComponent()`, the escape hatch for building your own cascade. Almost no app needs it.
 
 ### `resolveData`: sync or async transforms
 
