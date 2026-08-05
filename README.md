@@ -338,12 +338,12 @@ function Fallback({ componentTypeId, nodeId }: MissingComponentProps) {
 
 `@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one for one: the same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineTemplate`. Three differences, all mechanical:
 
-| Concern              | React                                          | Svelte                                                                                                  |
-| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Register a component | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
-| Read design (optional hook) | `useDesignValues()`                     | `getDesignValues()` (read inside a `$derived`)                                                          |
-| Runtime context      | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
-| Slots                | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
+| Concern                     | React                                          | Svelte                                                                                                  |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Register a component        | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
+| Read design (optional hook) | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)                                                          |
+| Runtime context             | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
+| Slots                       | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
 
 ### 1. Register your components
 
@@ -571,20 +571,20 @@ Client-side renderer with reactive viewport tracking via `window.matchMedia`. Us
 
 Identity helper that narrows `resolveData` and `component` parameter types to your declared `Props`. A registry entry can also be a **bare component** (`Button` instead of `{ component: Button }`) when it needs no `defaults` or `resolveData`.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                           |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence props. Merged in before content / resolveData / slots.                                                                                                              |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`. |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence props. Merged in before content / resolveData / slots.                                                                                                                                                         |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`.                                            |
 | `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged props (content + resolved design + `resolveData`). Design is also readable via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
 
 ### `defineTemplate<Props>(config)`
 
 Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so a template renders the page-level layout around them.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                 |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                         |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the template's `props`.                    |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                        |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                                                |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the template's `props`.                                                           |
 | `component`   | `ComponentType<Props & { children?: ReactNode }>`                    | yes      | n/a     | Receives the merged props (content + resolved design + `resolveData`) plus `children`. Design is also readable via the same hooks. |
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`

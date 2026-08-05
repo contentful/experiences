@@ -162,7 +162,13 @@ export interface ButtonProps {
 export function Button({ label, url, target = '_self', backgroundColor, color }: ButtonProps) {
   console.log('[Button] resolved props →', { label, url, target, backgroundColor, color });
   const style = { background: backgroundColor ?? '#4f39f6', color: color ?? '#fff' /* … */ };
-  return url ? <a href={url} target={target} style={style}>{label}</a> : <button style={style}>{label}</button>;
+  return url ? (
+    <a href={url} target={target} style={style}>
+      {label}
+    </a>
+  ) : (
+    <button style={style}>{label}</button>
+  );
 }
 ```
 
@@ -173,7 +179,7 @@ Load `/landing` and watch the console: each component logs its resolved props, e
 [HeroPlain] resolved props → { backgroundColor: '#0f172a', color: '#f8fafc', title: '…', … }
 ```
 
-Those `64px` / `#0f172a` values are the *result* of the cascade + token resolution — the payload stored `size.*` / `color.*` token ids, not literals. The client components log to the **browser console**; the `Page` template is a server component, so its log lands in the **server terminal**.
+Those `64px` / `#0f172a` values are the _result_ of the cascade + token resolution — the payload stored `size.*` / `color.*` token ids, not literals. The client components log to the **browser console**; the `Page` template is a server component, so its log lands in the **server terminal**.
 
 ### Which viewport?
 
