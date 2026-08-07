@@ -1,3 +1,15 @@
+## 0.7.2 (2026-08-07)
+
+### 🚀 Features
+
+- server-side design pre-resolution against a fallback viewport [AIS-386] ([#119](https://github.com/contentful/experiences/pull/119))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.3.1
+- Updated design to 0.7.1
+- Updated core to 0.7.1
+
 ## 0.7.1 (2026-08-07)
 
 ### 🚀 Features
