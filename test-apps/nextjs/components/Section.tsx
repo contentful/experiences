@@ -14,7 +14,10 @@ const ALIGN: Record<Align, CSSProperties['alignItems']> = {
 // Flex/grid layout primitive. Design keys arrive as auto-filled props, already
 // server-resolved (cascade + token resolution), so token-valued keys are CSS.
 export interface SectionProps {
-  children?: ReactNode;
+  // Slot children arrive as an array of pre-rendered nodes — drop it straight
+  // into JSX to render them all (React renders arrays), or map/filter/wrap the
+  // children individually.
+  children?: ReactNode[];
   // Design props:
   direction?: 'row' | 'column';
   reverse?: boolean;

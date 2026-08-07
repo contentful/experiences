@@ -19,6 +19,7 @@ import HeadingFixture from './test-fixtures/HeadingFixture.svelte';
 import ItemFixture from './test-fixtures/ItemFixture.svelte';
 import PrecedenceFixture from './test-fixtures/PrecedenceFixture.svelte';
 import ExperienceTemplateFixture from './test-fixtures/ExperienceTemplateFixture.svelte';
+import WrappingContainerFixture from './test-fixtures/WrappingContainerFixture.svelte';
 import { captureSink } from './test-fixtures/capture-sink.js';
 import { toCss } from './design-utils.js';
 
@@ -190,6 +191,7 @@ describe('ServerExperienceRenderer', () => {
     };
     const planWithMissing = {
       viewports: VIEWPORTS,
+      fallbackViewportIndex: 0,
       nodes: [
         {
           nodeId: 'root',
@@ -296,6 +298,7 @@ describe('ServerExperienceRenderer', () => {
     };
     const planWithResolved = {
       viewports: VIEWPORTS,
+      fallbackViewportIndex: 0,
       nodes: [
         {
           nodeId: 'r',
@@ -303,6 +306,7 @@ describe('ServerExperienceRenderer', () => {
           props: {
             content: { value: 'fromContent' },
             design: {},
+            designRaw: {},
             resolved: { value: 'fromResolveData' },
           },
           slots: {},
@@ -368,6 +372,74 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).not.toContain('data-experience-template');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
     warn.mockRestore();
+  });
+});
+
+describe('ServerExperienceRenderer — slot children as an array', () => {
+  const childrenPayload = (): ExperiencePayload => ({
+    viewports: VIEWPORTS,
+    nodes: [
+      componentNode('contentful-container', {
+        id: 'c',
+        slots: {
+          children: [
+            componentNode('contentful-heading', {
+              id: 'a',
+              contentProperties: { text: 'one' },
+            }),
+            componentNode('contentful-heading', {
+              id: 'b',
+              contentProperties: { text: 'two' },
+            }),
+            componentNode('contentful-heading', {
+              id: 'd',
+              contentProperties: { text: 'three' },
+            }),
+          ],
+        },
+      }),
+    ],
+  });
+
+  it('passes slot children as a Snippet[] a component can wrap individually', async () => {
+    const cfg: Config = {
+      components: {
+        'contentful-container': WrappingContainerFixture,
+        'contentful-heading': HeadingFixture,
+      },
+    };
+    const plan = await resolveExperience(childrenPayload(), cfg);
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+
+    // The component received a real array of the right length.
+    expect(captureSink[0]!.props.childrenIsArray).toBe(true);
+    expect(captureSink[0]!.props.childCount).toBe(3);
+
+    // Each child got its own wrapper — proves per-child rendering control.
+    const wrappers = container.querySelectorAll('.wrap');
+    expect(wrappers.length).toBe(3);
+    expect(container.querySelector('[data-index="0"]')).not.toBeNull();
+    expect(container.querySelector('[data-index="2"]')).not.toBeNull();
+    expect(container.textContent).toContain('one');
+    expect(container.textContent).toContain('three');
+  });
+
+  it('renders an empty container when the slot has no children', async () => {
+    const cfg: Config = {
+      components: { 'contentful-container': WrappingContainerFixture },
+    };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('contentful-container', { id: 'c' })] },
+      cfg
+    );
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    expect(captureSink[0]!.props.childCount).toBe(0);
+    expect(container.querySelectorAll('.wrap').length).toBe(0);
+    expect(container.querySelector('[data-container]')).not.toBeNull();
   });
 });
 

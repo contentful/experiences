@@ -12,7 +12,10 @@ const ALIGN: Record<Align, CSSProperties['alignItems']> = {
 };
 
 export interface SectionProps {
-  children?: ReactNode;
+  // Slot children arrive as an array of pre-rendered nodes — drop it straight
+  // into JSX to render them all (React renders arrays), or map/filter/wrap the
+  // children individually.
+  children?: ReactNode[];
   // Design props (auto-filled, already server-resolved):
   direction?: 'row' | 'column';
   reverse?: boolean;

@@ -23,7 +23,7 @@
     config: Config;
     experience: RenderContext;
     renderUnknown: RenderUnknown;
-    children: Snippet;
+    children: Snippet[];
   }
 
   let { node, config, experience, renderUnknown, children }: NodeRendererProps = $props();

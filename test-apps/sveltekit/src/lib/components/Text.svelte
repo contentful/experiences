@@ -3,7 +3,9 @@
 
   export interface TextProps {
     value?: string;
-    children?: Snippet;
+    // Slot children arrive as an array of Snippets — one per child node — so a
+    // component can render them all or map/filter/wrap them individually.
+    children?: Snippet[];
   }
 </script>
 
@@ -13,5 +15,5 @@
 
 <p style="font-size: 16px; line-height: 1.5; color: #4b5563; margin: 0;">
   {value}
-  {#if children}{@render children()}{/if}
+  {#each children ?? [] as child}{@render child()}{/each}
 </p>

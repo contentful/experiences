@@ -5,7 +5,9 @@
 
   export interface HeaderProps {
     text?: string;
-    children?: Snippet;
+    // Slot children arrive as an array of Snippets — one per child node — so a
+    // component can render them all or map/filter/wrap them individually.
+    children?: Snippet[];
   }
 
   const VARIANT_DEFAULTS: Record<HeaderVariant, { fontSize: string; fontWeight: number; lineHeight: string }> = {
@@ -42,10 +44,12 @@
   });
 </script>
 
+{#snippet inner()}{text}{#each children ?? [] as child}{@render child()}{/each}{/snippet}
+
 {#if variant === 'h1'}
-  <h1 {style}>{text}{#if children}{@render children()}{/if}</h1>
+  <h1 {style}>{@render inner()}</h1>
 {:else if variant === 'h2'}
-  <h2 {style}>{text}{#if children}{@render children()}{/if}</h2>
+  <h2 {style}>{@render inner()}</h2>
 {:else}
-  <h3 {style}>{text}{#if children}{@render children()}{/if}</h3>
+  <h3 {style}>{@render inner()}</h3>
 {/if}
