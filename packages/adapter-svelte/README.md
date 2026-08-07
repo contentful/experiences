@@ -20,7 +20,7 @@ The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the re
 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
-defineTemplate<Props>(config); // Same shape, for page-level template wrappers
+defineExperienceTemplate<Props>(config); // Same shape, for page-level Experience Template wrappers
 ```
 
 ### Resolver
@@ -46,7 +46,7 @@ getDesignValues<T>(); // Optional helper: the same resolved design record that a
 toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
 getExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
-getContentfulTemplate(); // Same, for the page-level template
+getContentfulExperienceTemplate(); // Same, for the page-level Experience Template
 type ToCssOptions;
 ```
 
@@ -56,12 +56,12 @@ Resolved design values (viewport-cascaded + token-resolved server-side) are **au
 
 ```ts
 // From core
-type Config, Components, Templates, Registration, TemplateRegistration,
-type ComponentConfig, TemplateConfig,
-type ContentfulComponent, ContentfulTemplate,
+type Config, Components, ExperienceTemplates, Registration, ExperienceTemplateRegistration,
+type ComponentConfig, ExperienceTemplateConfig,
+type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
-type ExperiencePayload, ExperienceNode, ComponentTypeNode, TemplateNode,
-type PortableRenderPlan, PortableRenderNode, PortableTemplate,
+type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
+type PortableRenderPlan, PortableRenderNode, PortableExperienceTemplate,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions

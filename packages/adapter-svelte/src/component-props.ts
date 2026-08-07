@@ -38,7 +38,7 @@ export interface ServerExperienceRendererProps {
 export type ClientExperienceRendererProps = ServerExperienceRendererProps;
 
 export interface MissingComponentProps {
-  componentTypeId: string;
+  componentId: string;
   /** Optional — only present when the payload supplied an id for this node. */
   nodeId?: string;
 }

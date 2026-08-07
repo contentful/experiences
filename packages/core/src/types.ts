@@ -12,10 +12,9 @@
  * `debug` is the single observability switch. When on it: emits verbose logs
  * from `resolveExperience` and `fetchExperience`; renders the visible
  * missing-component box (see the adapters' `MissingComponent`); and turns the
- * default `renderUnknown` fallback into the richer debug component. It replaced
- * the old `isPreview` render flag — a single boolean that threads through both
- * fetch and render so a customer can't enable one half and be confused by the
- * other.
+ * default `renderUnknown` fallback into the richer debug component. One boolean
+ * threads through both fetch and render, so a customer can't enable one half
+ * and be confused by the other.
  */
 export interface ExperienceContext {
   debug: boolean;
@@ -71,38 +70,46 @@ export interface ValuesByViewport {
 }
 
 /**
- * Resource-link reference to a registered Component Type. The `urn` carries
- * the type id; the build-plan extracts the id by taking the segment after
+ * Resource-link reference to a registered Component. The `urn` carries
+ * the component id; the build-plan extracts the id by taking the segment after
  * the last slash.
+ *
+ * Mirrors `ComponentLink` from `@contentful/experience-delivery`.
  */
-export interface ComponentTypeRef {
+export interface ComponentRef {
   sys: {
     type: 'ResourceLink';
-    linkType: 'Contentful:ComponentType';
+    linkType: 'Contentful:Component';
     urn: string;
   };
 }
 
 /**
- * Resource-link reference to a Template. Templates are out of v1 scope and
- * are skipped at plan-build time with a diagnostic.
+ * Resource-link reference to an Experience Template. Experience Templates
+ * are out of v1 scope as *nodes* and are skipped at plan-build time with a
+ * diagnostic; the page-level reference on `sys` is honored.
+ *
+ * Mirrors `ExperienceTemplateLink` from `@contentful/experience-delivery`.
  */
-export interface TemplateRef {
+export interface ExperienceTemplateRef {
   sys: {
     type: 'ResourceLink';
-    linkType: 'Contentful:Template';
+    linkType: 'Contentful:ExperienceTemplate';
     urn: string;
   };
 }
 
 /**
- * One node from `GetExperienceViewResponse.nodes` (or any `slots[name]`).
- * Discriminated by which of `componentType` / `template` is present.
+ * One node from `HydratedExperienceView.nodes` (or any `slots[name]`).
+ * Discriminated by which of `component` / `experienceTemplate` is present.
+ *
+ * Mirrors `RenamedHydratedTreeNode` from `@contentful/experience-delivery`.
  */
-export type ExperienceNode = ComponentTypeNode | TemplateNode;
+export type ExperienceNode = ComponentNode | ExperienceTemplateNode;
 
-export interface ComponentTypeNode {
-  componentType: ComponentTypeRef;
+/** Mirrors `RenamedComponentTreeNode` from `@contentful/experience-delivery`. */
+export interface ComponentNode {
+  component: ComponentRef;
   id?: string;
   contentProperties?: Record<string, unknown>;
   designProperties?: Record<string, DesignPropValue>;
@@ -110,8 +117,9 @@ export interface ComponentTypeNode {
   contentBindings?: string;
 }
 
-export interface TemplateNode {
-  template: TemplateRef;
+/** Mirrors `RenamedTemplateTreeNode` from `@contentful/experience-delivery`. */
+export interface ExperienceTemplateNode {
+  experienceTemplate: ExperienceTemplateRef;
   id?: string;
   contentProperties?: Record<string, unknown>;
   designProperties?: Record<string, DesignPropValue>;
@@ -123,23 +131,33 @@ export interface TemplateNode {
  * Top-level `sys` block on an Experience payload. The bits the SDK actually
  * reads are typed; everything else is left loose because the upstream
  * type carries dozens of editor/audit fields the renderer doesn't care about.
+ *
+ * Mirrors the parts of `RenamedDeliveryExperienceSys` the renderer reads.
  */
 export interface ExperienceSys {
   /**
-   * Optional page-level template reference. When present, the renderer wraps
+   * Page-level Experience Template reference. When present, the renderer wraps
    * the experience nodes with the matching template registered in the
    * customer's Config. When absent, nodes render at the top level.
+   *
+   * Optional here while the delivery type declares it required — a required
+   * field satisfies an optional one, and keeping it optional lets
+   * `resolveExperience` accept hand-authored payloads for Experiences that
+   * carry no template.
    */
-  template?: TemplateRef;
+  experienceTemplate?: ExperienceTemplateRef;
   [key: string]: unknown;
 }
 
 /**
  * Top-level Experience payload as returned by the Experience Delivery API
- * (`GetExperienceViewResponse` from `@contentful/experience-delivery`).
+ * (`HydratedExperienceView` from `@contentful/experience-delivery`).
  *
  * Structurally compatible with the upstream type — no normalization step
- * required when consuming a delivery-client response.
+ * required when consuming a delivery-client response. The delivery API returns
+ * this shape when the request carries the
+ * `x-contentful-enable-alpha-feature: new-exo-entity-types` header, which
+ * `@contentful/experiences-client` sends on every request.
  */
 export interface ExperiencePayload {
   viewports: ViewportDef[];
@@ -164,11 +182,11 @@ export interface ResolveContext {
 /**
  * Registration metadata for a single instance — the SDK's interpreted
  * pointer to the customer's component implementation. Today carries only
- * the resolved component-type id; capabilities (state requirements,
+ * the resolved component id; capabilities (state requirements,
  * supported events, lifecycle hints, fallback ids) land here when needed.
  */
 export interface PortableRegistration {
-  componentTypeId: string;
+  componentId: string;
 }
 
 /**
@@ -209,17 +227,18 @@ export interface PortableRenderNode {
 }
 
 /**
- * Interpreted page-level template — the optional wrapper around the
- * experience tree. `templateId` is extracted from
- * `payload.sys.template.sys.urn` (last slash-segment).
+ * Interpreted page-level Experience Template — the optional wrapper around the
+ * experience tree. `experienceTemplateId` is extracted from
+ * `payload.sys.experienceTemplate.sys.urn` (last slash-segment).
  *
- * Templates carry the same prop-resolution shape as components: content +
- * design properties plus an optional `resolved` map from a `resolveData` hook.
- * v1 payloads from XDA don't carry template-level content/design properties
- * yet, but the IR makes room for them so the API doesn't need to break later.
+ * Experience Templates carry the same prop-resolution shape as components:
+ * content + design properties plus an optional `resolved` map from a
+ * `resolveData` hook. v1 payloads from XDA don't carry template-level
+ * content/design properties yet, but the IR makes room for them so the API
+ * doesn't need to break later.
  */
-export interface PortableTemplate {
-  templateId: string;
+export interface PortableExperienceTemplate {
+  experienceTemplateId: string;
   props: {
     content: Record<string, unknown>;
     /** Same as `PortableRenderNode.props.design`. */
@@ -235,14 +254,14 @@ export interface PortableTemplate {
  *
  * Top-level is `nodes: PortableRenderNode[]` (array, not single root) to
  * match the actual XDA payload shape. Renderers iterate top-level nodes
- * and recurse into `node.slots`. When `template` is present, the renderer
- * wraps the nodes with the matching template config; otherwise nodes
- * render at the top level.
+ * and recurse into `node.slots`. When `experienceTemplate` is present, the
+ * renderer wraps the nodes with the matching Experience Template config;
+ * otherwise nodes render at the top level.
  */
 export interface PortableRenderPlan {
   viewports: ViewportDef[];
   nodes: PortableRenderNode[];
-  template?: PortableTemplate;
+  experienceTemplate?: PortableExperienceTemplate;
   /**
    * Viewport index the server pre-resolved design against (viewport[0] by
    * default). Adapters use `props.design` as-is when their active viewport

@@ -19,7 +19,9 @@
   const nodeCount = $derived(experience.nodes.length);
   const summary = $derived(
     `Experience debug — ${nodeCount} top-level node${nodeCount === 1 ? '' : 's'}${
-      experience.template ? `, template: ${experience.template.templateId}` : ''
+      experience.experienceTemplate
+        ? `, experience template: ${experience.experienceTemplate.experienceTemplateId}`
+        : ''
     }`
   );
 

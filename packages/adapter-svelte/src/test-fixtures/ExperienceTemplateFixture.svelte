@@ -13,6 +13,6 @@
   const design = $derived(getDesignValues());
 </script>
 
-<main data-template="page" data-title={title} data-bg={design.cfBackground as string}>
+<main data-experience-template="page" data-title={title} data-bg={design.cfBackground as string}>
   {@render children()}
 </main>

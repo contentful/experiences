@@ -1,6 +1,6 @@
 import type { DataAssemblyFixture } from './types.js';
 
-// Each DataAssembly is a small transform from an Entry to a ComponentType's
+// Each DataAssembly is a small transform from an Entry to a Component's
 // contentProperties. GraphQL is the resolver source; the query field naming
 // matches how Contentful's content graph auto-generates types (Promotion,
 // promotion.name, etc.).
@@ -8,7 +8,7 @@ import type { DataAssemblyFixture } from './types.js';
 const heroAssembly: DataAssemblyFixture = {
   tempId: 'assembly:hero',
   name: 'Hero from Promotion',
-  description: 'Maps a promotion entry into the hero-plain ComponentType',
+  description: 'Maps a promotion entry into the hero-plain Component',
   // dataType MUST mirror hero-plain's contentProperties.
   dataType: [
     { id: 'title', name: 'Title', type: 'String', required: true },
@@ -51,7 +51,7 @@ const heroAssembly: DataAssemblyFixture = {
 const cardAssembly: DataAssemblyFixture = {
   tempId: 'assembly:card',
   name: 'Card from Promotion',
-  description: 'Maps a promotion entry into the card ComponentType',
+  description: 'Maps a promotion entry into the card Component',
   // dataType MUST mirror card's contentProperties.
   dataType: [
     { id: 'title', name: 'Title', type: 'String', required: true },
@@ -96,15 +96,14 @@ const cardAssembly: DataAssemblyFixture = {
 
 export const dataAssemblies: DataAssemblyFixture[] = [heroAssembly, cardAssembly];
 
-// Which ComponentType each DataAssembly binds to. When publishing an Experience
-// that uses a DA on a ComponentType node, that ComponentType MUST list the DA
-// in its `dataAssemblies` array or publish fails with
-// `DataAssemblyMembershipViolation`. This mapping lets the bootstrap update the
-// ComponentType after the DA is created.
-export const dataAssemblyComponentTypeLinks: Array<{
+// Which Component each DataAssembly binds to. When publishing an Experience
+// that uses a DA on a Component node, that Component MUST list the DA in its
+// `dataAssemblies` array or publish fails with `DataAssemblyMembershipViolation`.
+// This mapping lets the bootstrap update the Component after the DA is created.
+export const dataAssemblyComponentLinks: Array<{
   dataAssemblyTempId: string;
-  componentTypeId: string;
+  componentId: string;
 }> = [
-  { dataAssemblyTempId: 'assembly:hero', componentTypeId: 'hero-plain' },
-  { dataAssemblyTempId: 'assembly:card', componentTypeId: 'card' },
+  { dataAssemblyTempId: 'assembly:hero', componentId: 'hero-plain' },
+  { dataAssemblyTempId: 'assembly:card', componentId: 'card' },
 ];

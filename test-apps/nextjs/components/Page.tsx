@@ -10,6 +10,7 @@ export interface PageProps {
   color?: string;
 }
 
+/** Page-level Experience Template: wraps all top-level nodes in the outer page chrome. */
 export function Page(props: PageProps) {
   console.log('[Page] resolved props →', { ...props, children: '<omitted>' });
 

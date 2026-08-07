@@ -8,23 +8,23 @@ import { Fragment, createElement, type ReactNode } from 'react';
 
 import type {
   DesignPropValue,
+  PortableExperienceTemplate,
   PortableRenderNode,
-  PortableTemplate,
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
 import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
 import {
   ContentfulComponentProvider,
-  ContentfulTemplateProvider,
+  ContentfulExperienceTemplateProvider,
   ResolvedDesignProvider,
 } from './context';
 import type { MissingComponentProps } from './missing-component';
 import {
   normalizeComponentRegistration,
-  normalizeTemplateRegistration,
+  normalizeExperienceTemplateRegistration,
   type ContentfulComponent,
-  type ContentfulTemplate,
+  type ContentfulExperienceTemplate,
   type Config,
 } from './types';
 
@@ -103,10 +103,10 @@ function NodeRenderer({
   fallbackViewportIndex,
   renderUnknown,
 }: NodeRendererProps): ReactNode {
-  const { componentTypeId } = node.registration;
-  const entry = config.components[componentTypeId];
+  const { componentId } = node.registration;
+  const entry = config.components[componentId];
   if (!entry) {
-    return createElement(renderUnknown, { componentTypeId, nodeId: node.nodeId });
+    return createElement(renderUnknown, { componentId, nodeId: node.nodeId });
   }
   const componentConfig = normalizeComponentRegistration(entry);
 
@@ -134,12 +134,12 @@ function NodeRenderer({
   );
   if (unresolved.length && typeof console !== 'undefined') {
     console.warn(
-      `[@contentful/experiences-react] resolveToken returned undefined for token id(s) on "${componentTypeId}": ${unresolved.join(', ')}. useDesignValues() will omit those keys.`
+      `[@contentful/experiences-react] resolveToken returned undefined for token id(s) on "${componentId}": ${unresolved.join(', ')}. useDesignValues() will omit those keys.`
     );
   }
 
   const contentful: ContentfulComponent = {
-    componentTypeId,
+    componentId,
     nodeId: node.nodeId,
     content: node.props.content,
     design: node.props.designRaw,
@@ -164,8 +164,8 @@ function NodeRenderer({
   );
 }
 
-export interface WrapWithTemplateProps {
-  template: PortableTemplate | undefined;
+export interface WrapWithExperienceTemplateProps {
+  experienceTemplate: PortableExperienceTemplate | undefined;
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
@@ -175,31 +175,32 @@ export interface WrapWithTemplateProps {
 }
 
 /**
- * Wraps the rendered nodes with the page-level template. If the template is
- * referenced but unregistered, warns once and renders children unwrapped.
+ * Wraps the rendered nodes with the page-level Experience Template. If the
+ * template is referenced but unregistered, warns once and renders children
+ * unwrapped.
  */
-export function WrapWithTemplate({
-  template,
+export function WrapWithExperienceTemplate({
+  experienceTemplate,
   config,
   viewports,
   activeViewportIndex,
   fallbackViewportIndex,
   children,
-}: WrapWithTemplateProps): ReactNode {
-  if (!template) return <Fragment>{children}</Fragment>;
-  const entry = config.templates?.[template.templateId];
+}: WrapWithExperienceTemplateProps): ReactNode {
+  if (!experienceTemplate) return <Fragment>{children}</Fragment>;
+  const entry = config.experienceTemplates?.[experienceTemplate.experienceTemplateId];
   if (!entry) {
     if (typeof console !== 'undefined') {
       console.warn(
-        `[@contentful/experiences-react] No template registered for id "${template.templateId}". Rendering nodes without the template wrapper.`
+        `[@contentful/experiences-react] No experience template registered for id "${experienceTemplate.experienceTemplateId}". Rendering nodes without the experience template wrapper.`
       );
     }
     return <Fragment>{children}</Fragment>;
   }
-  const templateConfig = normalizeTemplateRegistration(entry);
+  const experienceTemplateConfig = normalizeExperienceTemplateRegistration(entry);
 
   const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
-    template.props,
+    experienceTemplate.props,
     viewports,
     activeViewportIndex,
     fallbackViewportIndex,
@@ -207,31 +208,31 @@ export function WrapWithTemplate({
   );
   if (unresolved.length && typeof console !== 'undefined') {
     console.warn(
-      `[@contentful/experiences-react] resolveToken returned undefined for token id(s) on template "${template.templateId}": ${unresolved.join(', ')}. useDesignValues() will omit those keys.`
+      `[@contentful/experiences-react] resolveToken returned undefined for token id(s) on experience template "${experienceTemplate.experienceTemplateId}": ${unresolved.join(', ')}. useDesignValues() will omit those keys.`
     );
   }
 
-  const contentful: ContentfulTemplate = {
-    templateId: template.templateId,
-    content: template.props.content,
-    design: template.props.designRaw,
-    resolved: template.props.resolved,
+  const contentful: ContentfulExperienceTemplate = {
+    experienceTemplateId: experienceTemplate.experienceTemplateId,
+    content: experienceTemplate.props.content,
+    design: experienceTemplate.props.designRaw,
+    resolved: experienceTemplate.props.resolved,
   };
 
   // Same precedence as component nodes, ending in `children`.
   const composed = {
-    ...templateConfig.defaults,
+    ...experienceTemplateConfig.defaults,
     ...tokenResolvedDesign,
-    ...template.props.content,
-    ...template.props.resolved,
+    ...experienceTemplate.props.content,
+    ...experienceTemplate.props.resolved,
     children,
   };
 
   return (
-    <ContentfulTemplateProvider value={contentful}>
+    <ContentfulExperienceTemplateProvider value={contentful}>
       <ResolvedDesignProvider value={tokenResolvedDesign}>
-        {createElement(templateConfig.component, composed)}
+        {createElement(experienceTemplateConfig.component, composed)}
       </ResolvedDesignProvider>
-    </ContentfulTemplateProvider>
+    </ContentfulExperienceTemplateProvider>
   );
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import type {
-  ComponentTypeNode,
+  ComponentNode,
   ExperiencePayload,
-  TemplateNode,
+  ExperienceTemplateNode,
 } from '@contentful/experiences-sdk-core';
 
 import { resolveExperience, type ResolverConfig } from './resolve-experience';
@@ -14,16 +14,13 @@ const VIEWPORTS = [
   { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
 ];
 
-function componentNode(
-  typeId: string,
-  rest: Omit<ComponentTypeNode, 'componentType'> = {}
-): ComponentTypeNode {
+function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
-    componentType: {
+    component: {
       sys: {
         type: 'ResourceLink',
-        linkType: 'Contentful:ComponentType',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/${typeId}`,
+        linkType: 'Contentful:Component',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
       },
     },
     ...rest,
@@ -59,20 +56,20 @@ describe('resolveExperience — IR construction', () => {
 
     expect(plan.nodes).toHaveLength(1);
     expect(plan.nodes[0]!.nodeId).toBe('page');
-    expect(plan.nodes[0]!.registration.componentTypeId).toBe('contentful-container');
+    expect(plan.nodes[0]!.registration.componentId).toBe('contentful-container');
     expect(plan.nodes[0]!.slots.children).toHaveLength(1);
     expect(plan.nodes[0]!.slots.children![0]!.nodeId).toBe('heading');
     expect(plan.nodes[0]!.slots.children![0]!.props.content.text).toBe('Hello');
     expect(plan.viewports).toBe(VIEWPORTS);
   });
 
-  it('extracts componentTypeId from componentType.sys.urn', async () => {
+  it('extracts componentId from component.sys.urn', async () => {
     const payload: ExperiencePayload = {
       viewports: VIEWPORTS,
       nodes: [componentNode('contentful-button', { id: 'b' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
-    expect(plan.nodes[0]!.registration.componentTypeId).toBe('contentful-button');
+    expect(plan.nodes[0]!.registration.componentId).toBe('contentful-button');
   });
 
   it('preserves discriminated design-prop values on the IR', async () => {
@@ -142,7 +139,7 @@ describe('resolveExperience — IR construction', () => {
     };
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.nodes).toHaveLength(1);
-    expect(plan.nodes[0]!.registration.componentTypeId).toBe('not-registered');
+    expect(plan.nodes[0]!.registration.componentId).toBe('not-registered');
   });
 
   it('throws when a slot value is not an array', async () => {
@@ -159,19 +156,19 @@ describe('resolveExperience — IR construction', () => {
 
   it('skips Template-variant nodes with a warning', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const template: TemplateNode = {
-      template: {
+    const experienceTemplate: ExperienceTemplateNode = {
+      experienceTemplate: {
         sys: {
           type: 'ResourceLink',
-          linkType: 'Contentful:Template',
-          urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/some-template',
+          linkType: 'Contentful:ExperienceTemplate',
+          urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/some-experienceTemplate',
         },
       },
       id: 'tpl',
     };
     const payload: ExperiencePayload = {
       viewports: VIEWPORTS,
-      nodes: [template, componentNode('contentful-heading', { id: 'after' })],
+      nodes: [experienceTemplate, componentNode('contentful-heading', { id: 'after' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.nodes.map((n) => n.nodeId)).toEqual(['after']);
@@ -351,27 +348,27 @@ describe('resolveExperience — resolveData hooks', () => {
   });
 });
 
-describe('resolveExperience — templates', () => {
-  const templateUrn = (id: string) =>
-    `crn:contentful:::experience:spaces/$self/environments/$self/templates/${id}`;
+describe('resolveExperience — experienceTemplates', () => {
+  const experienceTemplateUrn = (id: string) =>
+    `crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/${id}`;
 
-  it('emits no template on the plan when the payload has none', async () => {
+  it('emits no experienceTemplate on the plan when the payload has none', async () => {
     const payload: ExperiencePayload = {
       viewports: VIEWPORTS,
       nodes: [componentNode('hero', { id: 'h' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
-    expect(plan.template).toBeUndefined();
+    expect(plan.experienceTemplate).toBeUndefined();
   });
 
-  it('extracts templateId from payload.sys.template.sys.urn', async () => {
+  it('extracts experienceTemplateId from payload.sys.experienceTemplate.sys.urn', async () => {
     const payload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: templateUrn('hi'),
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: experienceTemplateUrn('hi'),
           },
         },
       },
@@ -379,20 +376,20 @@ describe('resolveExperience — templates', () => {
       nodes: [componentNode('hero', { id: 'h' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
-    expect(plan.template).toBeDefined();
-    expect(plan.template!.templateId).toBe('hi');
-    expect(plan.template!.props.content).toEqual({});
-    expect(plan.template!.props.design).toEqual({});
+    expect(plan.experienceTemplate).toBeDefined();
+    expect(plan.experienceTemplate!.experienceTemplateId).toBe('hi');
+    expect(plan.experienceTemplate!.props.content).toEqual({});
+    expect(plan.experienceTemplate!.props.design).toEqual({});
   });
 
-  it("runs a template's resolveData and stores the result on template.props.resolved", async () => {
+  it("runs a experienceTemplate's resolveData and stores the result on experienceTemplate.props.resolved", async () => {
     const payload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: templateUrn('hi'),
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: experienceTemplateUrn('hi'),
           },
         },
       },
@@ -401,7 +398,7 @@ describe('resolveExperience — templates', () => {
     };
     const config: ResolverConfig = {
       components: {},
-      templates: {
+      experienceTemplates: {
         hi: {
           resolveData: ({ experience }) => ({
             heading: experience.debug ? 'DEBUG' : 'LIVE',
@@ -413,17 +410,17 @@ describe('resolveExperience — templates', () => {
       debug: true,
       metadata: {},
     });
-    expect(plan.template!.props.resolved).toEqual({ heading: 'DEBUG' });
+    expect(plan.experienceTemplate!.props.resolved).toEqual({ heading: 'DEBUG' });
   });
 
-  it('still emits the template stub when no template config is registered', async () => {
+  it('still emits the experienceTemplate stub when no experienceTemplate config is registered', async () => {
     const payload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: templateUrn('not-registered'),
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: experienceTemplateUrn('not-registered'),
           },
         },
       },
@@ -431,8 +428,8 @@ describe('resolveExperience — templates', () => {
       nodes: [componentNode('hero', { id: 'h' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
-    expect(plan.template?.templateId).toBe('not-registered');
-    expect(plan.template?.props.resolved).toBeUndefined();
+    expect(plan.experienceTemplate?.experienceTemplateId).toBe('not-registered');
+    expect(plan.experienceTemplate?.props.resolved).toBeUndefined();
   });
 });
 
@@ -589,14 +586,14 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     }
   });
 
-  it('pre-resolves the template design properties too', async () => {
+  it('pre-resolves the experienceTemplate design properties too', async () => {
     const payload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/tpl',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/tpl',
           },
         },
       },
@@ -606,8 +603,9 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const plan = await resolveExperience(payload, emptyConfig, {
       initialViewportId: 'mobile',
     });
-    // XDA doesn't emit template design yet, so it resolves to empty — but present.
-    expect(plan.template!.props.design).toEqual({});
+    // XDA doesn't emit experienceTemplate design yet, so it resolves to empty —
+    // but present.
+    expect(plan.experienceTemplate!.props.design).toEqual({});
   });
 });
 

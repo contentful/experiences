@@ -76,10 +76,10 @@ Customers who want to manage the delivery client themselves have two paths: `cre
 `resolveExperience` (called internally by `fetchExperience`) is the **resolve step**:
 
 1. Walks the XDA payload's `nodes[]` recursively.
-2. Extracts `componentTypeId` from each node's `componentType.sys.urn` (last slash-segment).
+2. Extracts `componentId` from each node's `component.sys.urn` (last slash-segment).
 3. Splits `contentProperties` and `designProperties` into `node.props.{content,design}`.
 4. Captures `slots` as nested `PortableRenderNode[]` arrays (no flat index).
-5. Picks up the page-level `payload.sys.template` if present.
+5. Picks up the page-level `payload.sys.experienceTemplate` if present.
 6. Runs every customer-declared `resolveData` hook in parallel; results land on `node.props.resolved`.
 7. Returns a `PortableRenderPlan`.
 
@@ -90,8 +90,8 @@ The React adapter then:
 1. Computes the active viewport (server: from `initialViewportId`; client: from `useActiveViewport` + `matchMedia`).
 2. Builds a `RenderContext` with `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`.
 3. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
-4. For each node: looks up the customer's component config by `node.registration.componentTypeId`, resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), and publishes that record on context for `useDesignValues()` / `getDesignValues()`. Design is **not** merged into the component's props — the merged prop bag is `defaults < content < resolveData < slots`. A component styles itself by calling the design hook and (optionally) `toCss`.
-5. If `plan.template` is set and registered, wraps the whole thing with the template's render fn.
+4. For each node: looks up the customer's component config by `node.registration.componentId`, resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), and publishes that record on context for `useDesignValues()` / `getDesignValues()`. Design is **not** merged into the component's props — the merged prop bag is `defaults < content < resolveData < slots`. A component styles itself by calling the design hook and (optionally) `toCss`.
+5. If `plan.experienceTemplate` is set and registered, wraps the whole thing with the Experience Template's render fn.
 
 ---
 
@@ -99,7 +99,7 @@ The React adapter then:
 
 ### Why three positional args on `fetchExperience` instead of one options object?
 
-Earlier the SDK had a single flat options object with an `accessToken | client` discriminated union mixed in. As `fetchExperience` picked up more responsibilities (fetch + resolve, preview mode, per-render context) the object was already ~7 fields and had two more inbound (personalization params, digital-property identifiers from the channels RFC). Rather than let one bag balloon to a dozen fields with three different concerns, the signature is split into three grouped args:
+`fetchExperience` carries three concerns at once — fetch, resolve, and per-render context — and has more inbound (personalization params, digital-property identifiers from the channels RFC). A single flat options object would mix all three into one bag of a dozen-plus fields, so the signature is split into three grouped args:
 
 1. `experienceOptions` — **which** experience (`spaceId`, `environmentId`, `experienceId`, `locale`). Digital-property identifiers widen this type when the channels RFC lands.
 2. `clientOptions` — **how** to fetch. Discriminated union: `{ accessToken, host? }` OR `{ client }`. Kept intentionally as one arg (not split further) so users can move between inline creds and a pre-made client with only that arg changing.
@@ -111,6 +111,19 @@ Each grouping evolves without touching the others.
 
 Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — those are Contentful platform concerns that can add non-prod endpoints (staging, EU-region, per-account) which a boolean can't express. (2) A raw base URL passes cleanly to `ContentfulViewDeliveryClient.Options.baseUrl` — no translation layer. Callers write `host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com'` at the call site; the SDK just passes through.
 
+### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
+
+The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), with the page-level reference at `sys.experienceTemplate`. A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional, and is sent in two places:
+
+- `createClient` sets it as a **client default**, so a customer who builds a client and calls `client.experience.get(...)` directly is covered.
+- `fetchExperience` sends it as a **per-request** header, so a caller-supplied `{ client }` — which never went through `createClient` — is covered too.
+
+A caller-supplied `headers` entry for the same key wins over `createClient`'s default, deliberately, so a caller can pin a different alpha-feature set.
+
+Why this matters for types: the delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because it can't know which header the caller sent. Sending the header is what makes `fetch-experience.ts`'s narrowing to `HydratedExperienceView` sound rather than a guess. The constants (`ALPHA_FEATURE_HEADER`, `NEW_EXO_ENTITY_TYPES`, `NEW_EXO_ENTITY_TYPES_HEADERS`) live in `packages/client/src/alpha-feature.ts` and are re-exported from both adapters for customers driving the raw client themselves.
+
+If the API ever serves these shapes without the header, deleting `alpha-feature.ts` and its two call sites is the whole cleanup.
+
 ### Why `createClient` in addition to the raw `ContentfulViewDeliveryClient` constructor?
 
 `createClient` is a value-added passthrough that maps the SDK's option names (`accessToken`, `host`) onto the underlying client's names (`token`, `baseUrl`). Everything else flows through unchanged. It exists so the "inline creds" and "bring your own client" paths of `fetchExperience` share exactly the same field names — users can move between them mechanically instead of relearning vocabulary.
@@ -119,18 +132,18 @@ Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — thos
 
 ### Why an empty-nodes payload is NOT a "not found"
 
-`fetchExperience` used to return `null` when the payload had `nodes: []`. That conflated two states the CMS considers distinct:
+Returning `null` for a payload with `nodes: []` would conflate two states the CMS considers distinct:
 
 - **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
 - **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
 
-The empty-nodes payload now flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience`'s return type narrowed from `PortableRenderPlan | null` to `PortableRenderPlan`.
+So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience` returns `PortableRenderPlan`, never `null`.
 
 For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch without adding `@contentful/experience-delivery` as a direct dep — preserving the invariant that customers install only the framework adapter.
 
 ### Why a single `resolveExperience` entry instead of `buildPlan` + `resolveExperience`?
 
-Earlier the SDK had two functions. The customer page needed three lines of imports + four function calls + two passes of `componentMap`. We collapsed to one. The sync vs async distinction (tree-walking is synchronous; `resolveData` hooks are async) is implementation detail customers don't care about.
+Two functions would cost the customer page three lines of imports, four function calls, and two passes of `componentMap`. One entry point avoids that. The sync vs async distinction (tree-walking is synchronous; `resolveData` hooks are async) is implementation detail customers don't care about.
 
 ### Why is `ctx.design` raw envelopes inside `resolveData`, not viewport-resolved scalars?
 
@@ -165,21 +178,21 @@ Each `defineComponent<Props>(...)` is parameterized over the design-system compo
 
 Two reasons. (1) `packages/core` must stay zero-dep and runtime-neutral — pulling the delivery client into core would break that invariant for all current and future adapters. (2) The delivery client is large (~3,000 generated files); centralizing it in one internal package (`packages/client`) means adapters that don't need it (e.g. a future server-only adapter) won't pull it in transitively. Customers who want to manage the client themselves can import `ContentfulViewDeliveryClient` directly from the adapter and call `resolveExperience` with their own payload.
 
-### Why two separate registries (`components` and `templates`) instead of one?
+### Why two separate registries (`components` and `experienceTemplates`) instead of one?
 
-Components and templates have **structurally different render fns**. Templates always receive `children: ReactNode` (the rendered experience tree). Components don't. Putting them in one map would force a discriminator field on every entry (`{ kind: 'component' | 'template' }`) — more boilerplate for customers and weaker types. Two registries keeps each entry's type narrow.
+Components and Experience Templates have **structurally different render fns**. Experience Templates always receive `children: ReactNode` (the rendered experience tree). Components don't. Putting them in one map would force a discriminator field on every entry (`{ kind: 'component' | 'experienceTemplate' }`) — more boilerplate for customers and weaker types. Two registries keeps each entry's type narrow.
 
-### Why is `nodeId` optional on the IR but `componentTypeId` required (under `registration`)?
+### Why is `nodeId` optional on the IR but `componentId` required (under `registration`)?
 
-The payload's `id` field is optional from XDA. Without one, the SDK never invents an id (see "no auto-generated node IDs" above). But every node MUST resolve to a component-type — the payload always provides `componentType.sys.urn`. Treating `componentTypeId` as a required field on `registration` lets the renderer dispatch reliably.
+The payload's `id` field is optional from XDA. Without one, the SDK never invents an id (see "no auto-generated node IDs" above). But every node MUST resolve to a component-type — the payload always provides `component.sys.urn`. Treating `componentId` as a required field on `registration` lets the renderer dispatch reliably.
 
-The `registration` object exists as a seam for future capabilities/metadata Tyler's RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ componentTypeId }`; later it grows additively without breaking the IR.
+The `registration` object exists as a seam for future capabilities/metadata Tyler's RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ componentId }`; later it grows additively without breaking the IR.
 
-### Why do `Components` and `Templates` use `<any>` internally?
+### Why do `Components` and `ExperienceTemplates` use `<any>` internally?
 
 ```ts
 export type Components = Record<string, ComponentConfig<any>>;
-export type Templates = Record<string, TemplateConfig<any>>;
+export type ExperienceTemplates = Record<string, ExperienceTemplateConfig<any>>;
 ```
 
 Per-entry prop narrowing happens at `defineComponent<Props>(...)` call time, not at registry-lookup time. The renderer dispatches by string key — at that point, the per-component prop type has been erased anyway. Using `any` here is intentional: it's the only way to compose differently-typed entries into one record without forcing customers to wrap entries in a discriminated union.
@@ -206,6 +219,10 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 - **`design` may not depend on `core` for runtime; it imports types only.** This keeps `design` a pure-utility package usable in isolation.
 - **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`.
 - **The customer-facing adapter (`adapter-react`) is the ONLY package that re-exports everything**. Internal packages don't re-export from each other.
+
+**Consequence for `core`'s payload types.** Because `core` stays zero-dep, its payload-facing types (`ExperienceNode`, `ComponentNode`, `ExperienceTemplateNode`, `ComponentRef`, `ExperienceTemplateRef`, `ExperienceSys`, `ExperiencePayload`) are **hand-mirrored** from `@contentful/experience-delivery` rather than imported from it. Each carries a doc comment naming its upstream counterpart (`RenamedComponentTreeNode`, `ComponentLink`, `RenamedDeliveryExperienceSys`, …). They're deliberately structural supersets — a few upstream-required fields are optional here so `resolveExperience` also accepts hand-authored payloads — which is why `fetch-experience.ts` can assert a delivery response straight to `ExperiencePayload` with no normalization step.
+
+**When the delivery SDK regenerates, re-check that mirror.** `packages/core/src/types.ts` is the only place it lives; `client:typecheck` is what catches a drift, because that assertion stops compiling if the shapes diverge.
 
 ### File naming
 
@@ -241,12 +258,12 @@ If `experience.viewports` is empty, `experience.viewports[0]` is `undefined`. Bo
 
 Next.js 15 pins `@types/react@19`. Our root devDep is also `@types/react@19`. Mixing versions across the workspace (e.g. one package with `^18`) caused `LayoutProps` constraint failures in the example app. **All packages should align on the same React types version.** Currently 19.
 
-### Template URN extraction shares logic with components
+### Experience Template URN extraction shares logic with components
 
-Both ComponentType and Template URNs use the same path shape:
+Both Component and Experience Template URNs use the same path shape:
 
 ```
-crn:contentful:::experience:spaces/$self/environments/$self/{componentTypes|templates}/<id>
+crn:contentful:::experience:spaces/$self/environments/$self/{components|experienceTemplates}/<id>
 ```
 
 `extractIdFromUrn(urn)` takes the last slash-segment for both. If Contentful changes the URN format upstream, fix it in **one place** in `core/src/resolve-experience.ts`.
@@ -287,7 +304,7 @@ This repo is the **implementation**. Strategy / RFC / inter-team discussion live
 
 - **Operator's local notes** at `~/ChaseOS/projects/active/experiences/` (Chase's machine):
   - `meeting-prep-tyler-1on1.md` — open architectural questions to discuss with Tyler Collins. Read this before any major decision.
-  - `research-charles-rfc.md` — Charles Hudson's Experiences SDK Suite RFC (PROD/6438486129)
+  - `research-charles-rfc.md` — Charles Hudson's Experiences SDK Suite RFC
   - `research-tyler-domain-model.md` — Tyler's Component Domain Model RFC
   - `research-tyler-repo-model.md` — Tyler's Workspace + Package Composition RFC
   - `research-pr72-and-delivery-client.md` — Thomas Kellermeier's PR #72 + the official `@contentful/experience-delivery` client
@@ -298,7 +315,7 @@ This repo is the **implementation**. Strategy / RFC / inter-team discussion live
   - `experiences.md` — project hub with the broader story
 
 - **Confluence** (Contentful org):
-  - PROD/6438486129 — Charles' Experiences SDK Suite RFC
+  - Charles' Experiences SDK Suite RFC
   - Tyler's two component-model docs (linked from his pages)
 
 - **#exo-sdks** Slack channel — weekly engineering syncs run by Manuel Spagnolo
@@ -319,7 +336,7 @@ Customer-supplied resolver for `DesignToken` envelopes. Today the SDK passes `De
 
 ### Capabilities on `node.registration`
 
-Tyler's RFC describes `registration: { capabilities: { state, slots, events, lifecycle, rendering } }`. Today we only have `{ componentTypeId }`. The seam exists; the fields are additive when capabilities ship.
+Tyler's RFC describes `registration: { capabilities: { state, slots, events, lifecycle, rendering } }`. Today we only have `{ componentId }`. The seam exists; the fields are additive when capabilities ship.
 
 ### Composite component types
 
@@ -343,11 +360,11 @@ Tyler's RFC describes `defineComponent({ props: { resolve, mergePolicy: { preced
 
 ### `useExperience()` hook split
 
-`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — `debug`, `metadata`, `viewports`, `activeViewport`, `activeViewportIndex` — as one object. The AIS-243 debug-mode work raised whether that single hook should split into narrower reads (e.g. `useViewport()`, `useMetadata()`, `useDebug()`) so a component that only needs the active viewport doesn't re-render on unrelated context changes.
+`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — `debug`, `metadata`, `viewports`, `activeViewport`, `activeViewportIndex` — as one object. An open question is whether that single hook should split into narrower reads (e.g. `useViewport()`, `useMetadata()`, `useDebug()`) so a component that only needs the active viewport doesn't re-render on unrelated context changes.
 
-Investigation (consumer sweep, AIS-243): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. `useActiveViewport` is a separate hook already; it feeds the renderer, not components. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — but also no internal forcing function. Reactivity today: React republishes the whole context object on viewport change (so any `useExperience()` consumer re-renders); Svelte's `getExperience()` returns a `$state` mirror whose fields update in place, so fine-grained reactivity already works there via `$derived`. The asymmetry means a split would mostly benefit React.
+Investigation (consumer sweep): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. `useActiveViewport` is a separate hook already; it feeds the renderer, not components. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — but also no internal forcing function. Reactivity today: React republishes the whole context object on viewport change (so any `useExperience()` consumer re-renders); Svelte's `getExperience()` returns a `$state` mirror whose fields update in place, so fine-grained reactivity already works there via `$derived`. The asymmetry means a split would mostly benefit React.
 
-Deferred: not reshaped in AIS-243 (kept the single hook to avoid a second breaking change in the same alpha). Revisit as its own ticket if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
+Deferred: the single hook stands for now. Revisit if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
 
 ---
 
@@ -392,7 +409,7 @@ The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everyt
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
 4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
 5. Re-export everything from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
-6. Add adapter-specific renderer + `defineComponent` / `defineTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
+6. Add adapter-specific renderer + `defineComponent` / `defineExperienceTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
 7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
 
 ### Add a new internal package (e.g. `tokens`)

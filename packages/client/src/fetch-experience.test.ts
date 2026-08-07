@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { fetchExperience } from './fetch-experience.js';
+import { NEW_EXO_ENTITY_TYPES_HEADERS } from './alpha-feature.js';
 
-const { mockGetExperience, mockPayload, mockPlan } = vi.hoisted(() => {
+const { mockGet, mockPayload, mockPlan } = vi.hoisted(() => {
   const mockPayload = {
     sys: { id: 'exp-1' },
     viewports: [{ id: 'default', query: '*' }],
@@ -15,9 +16,9 @@ const { mockGetExperience, mockPayload, mockPlan } = vi.hoisted(() => {
     nodes: [],
   };
 
-  const mockGetExperience = vi.fn().mockResolvedValue(mockPayload);
+  const mockGet = vi.fn().mockResolvedValue(mockPayload);
 
-  return { mockGetExperience, mockPayload, mockPlan };
+  return { mockGet, mockPayload, mockPlan };
 });
 
 vi.mock('@contentful/experiences-sdk-core', () => ({
@@ -32,8 +33,8 @@ vi.mock('@contentful/experiences-sdk-core', () => ({
 
 vi.mock('@contentful/experience-delivery', () => ({
   ContentfulViewDeliveryClient: vi.fn().mockImplementation(() => ({
-    view: {
-      getExperience: mockGetExperience,
+    experience: {
+      get: mockGet,
     },
   })),
 }));
@@ -51,17 +52,16 @@ const resolveOptions = {
 describe('fetchExperience', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetExperience.mockResolvedValue(mockPayload);
+    mockGet.mockResolvedValue(mockPayload);
   });
 
   describe('inline credentials', () => {
     it('constructs client without baseUrl when host is not provided', async () => {
       await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'token-123',
-        baseUrl: undefined,
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'token-123', baseUrl: undefined })
+      );
     });
 
     it('constructs client with provided host', async () => {
@@ -71,22 +71,28 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'token-123',
-        baseUrl: 'https://preview.xdn.contentful.com',
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'token-123',
+          baseUrl: 'https://preview.xdn.contentful.com',
+        })
+      );
     });
 
-    it('calls getExperience with spaceId, environmentId, experienceId, locale', async () => {
+    it('calls experience.get with spaceId, environmentId, experienceId, locale', async () => {
       await fetchExperience(
         { ...experienceOptions, locale: 'en-US' },
         { accessToken: 'token-123' },
         resolveOptions
       );
 
-      expect(mockGetExperience).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
-        locale: 'en-US',
-      });
+      expect(mockGet).toHaveBeenCalledWith(
+        'space-1',
+        'master',
+        'exp-1',
+        { locale: 'en-US' },
+        { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
+      );
     });
   });
 
@@ -98,9 +104,13 @@ describe('fetchExperience', () => {
       await fetchExperience(experienceOptions, { client }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-      expect(mockGetExperience).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
-        locale: undefined,
-      });
+      expect(mockGet).toHaveBeenCalledWith(
+        'space-1',
+        'master',
+        'exp-1',
+        { locale: undefined },
+        { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
+      );
     });
 
     it('ignores the preview flag when a pre-made client is provided', async () => {
@@ -116,6 +126,20 @@ describe('fetchExperience', () => {
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
     });
+
+    it('still sends the alpha-feature header when the client comes from the caller', async () => {
+      const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
+
+      await fetchExperience(experienceOptions, { client }, resolveOptions);
+
+      expect(mockGet).toHaveBeenCalledWith(
+        'space-1',
+        'master',
+        'exp-1',
+        { locale: undefined },
+        { headers: { 'x-contentful-enable-alpha-feature': 'new-exo-entity-types' } }
+      );
+    });
   });
 
   describe('preview toggle', () => {
@@ -126,10 +150,9 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'delivery-token',
-        baseUrl: undefined,
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'delivery-token', baseUrl: undefined })
+      );
     });
 
     it('uses accessToken and default host when preview is explicitly false', async () => {
@@ -143,10 +166,9 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'delivery-token',
-        baseUrl: undefined,
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'delivery-token', baseUrl: undefined })
+      );
     });
 
     it('uses previewToken and the preview host when preview is true', async () => {
@@ -160,10 +182,12 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'preview-token',
-        baseUrl: 'https://preview.xdn.contentful.com',
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'preview-token',
+          baseUrl: 'https://preview.xdn.contentful.com',
+        })
+      );
     });
 
     it('throws when preview is true but previewToken is missing', async () => {
@@ -190,10 +214,12 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'preview-token',
-        baseUrl: 'https://preview-staging.example.com',
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'preview-token',
+          baseUrl: 'https://preview-staging.example.com',
+        })
+      );
     });
 
     it('uses an explicit custom host with the delivery token when preview is unset', async () => {
@@ -206,17 +232,19 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
-        token: 'delivery-token',
-        baseUrl: 'https://delivery-staging.example.com',
-      });
+      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'delivery-token',
+          baseUrl: 'https://delivery-staging.example.com',
+        })
+      );
     });
   });
 
   describe('return value', () => {
     it('passes empty-nodes payloads through to the resolver', async () => {
       const emptyPayload = { ...mockPayload, nodes: [] };
-      mockGetExperience.mockResolvedValue(emptyPayload);
+      mockGet.mockResolvedValue(emptyPayload);
       const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
       const result = await fetchExperience(
@@ -260,7 +288,7 @@ describe('fetchExperience', () => {
 
     it('propagates NotFoundError from the delivery client to the caller', async () => {
       class MockNotFoundError extends Error {}
-      mockGetExperience.mockRejectedValue(new MockNotFoundError('experience not found'));
+      mockGet.mockRejectedValue(new MockNotFoundError('experience not found'));
 
       await expect(
         fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions)

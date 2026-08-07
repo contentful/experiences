@@ -18,7 +18,7 @@ import type {
 import { DebugExperience } from './debug-experience';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
-import { NodesRenderer, WrapWithTemplate, type RenderUnknown } from './nodes-renderer';
+import { NodesRenderer, WrapWithExperienceTemplate, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
 
@@ -81,8 +81,8 @@ export function ClientExperienceRenderer({
   return (
     <ExperienceProvider value={renderContext}>
       {debug ? <DebugExperience experience={experience} /> : null}
-      <WrapWithTemplate
-        template={experience.template}
+      <WrapWithExperienceTemplate
+        experienceTemplate={experience.experienceTemplate}
         config={config}
         viewports={experience.viewports}
         activeViewportIndex={activeViewportIndex}
@@ -96,7 +96,7 @@ export function ClientExperienceRenderer({
           fallbackViewportIndex={experience.fallbackViewportIndex}
           renderUnknown={renderUnknown}
         />
-      </WrapWithTemplate>
+      </WrapWithExperienceTemplate>
     </ExperienceProvider>
   );
 }

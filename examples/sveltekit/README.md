@@ -66,10 +66,10 @@ examples/sveltekit/
 │       ├── components/       # plain design-system components; no SDK imports
 │       │   ├── Button.svelte
 │       │   ├── Header.svelte
-│       │   ├── Page.svelte   # used as the page-level template
+│       │   ├── Page.svelte   # used as the page-level Experience Template
 │       │   └── Text.svelte
 │       ├── detect-viewport.ts
-│       └── experience-config.ts    # integration layer (maps components + templates into experienceConfig)
+│       └── experience-config.ts    # integration layer (maps components + experience templates into experienceConfig)
 ├── svelte.config.js
 ├── vite.config.ts
 └── tsconfig.json

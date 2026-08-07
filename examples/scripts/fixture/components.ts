@@ -1,4 +1,4 @@
-import type { ComponentTypeFixture } from './types.js';
+import type { ComponentFixture } from './types.js';
 
 // Shared allowed-resource lists. The token strings must match the design-token
 // table in the example app (examples/nextjs/lib/design-tokens.ts).
@@ -34,7 +34,7 @@ const sizeProp = (id: string, name: string, description = '') => ({
 // space's schemas. The example app's design-system components read these design
 // values via useDesignValues() and (mostly) render them through toCss().
 
-const Section: ComponentTypeFixture = {
+const Section: ComponentFixture = {
   id: 'Section',
   name: 'Section',
   description: 'Layout primitive — flex/grid row or column of children',
@@ -61,7 +61,7 @@ const Section: ComponentTypeFixture = {
   slots: [{ id: 'children', name: 'Children' }],
 };
 
-const Heading: ComponentTypeFixture = {
+const Heading: ComponentFixture = {
   id: 'Heading',
   name: 'Heading',
   description: 'Semantic HTML heading (h1–h6)',
@@ -90,7 +90,7 @@ const Heading: ComponentTypeFixture = {
   ],
 };
 
-const RichText: ComponentTypeFixture = {
+const RichText: ComponentFixture = {
   id: 'RichText',
   name: 'Rich text',
   description: 'Minimal rich-text renderer',
@@ -107,7 +107,7 @@ const RichText: ComponentTypeFixture = {
   ],
 };
 
-const Text: ComponentTypeFixture = {
+const Text: ComponentFixture = {
   id: 'Text',
   name: 'Text',
   description: 'Plain-text span',
@@ -124,7 +124,7 @@ const Text: ComponentTypeFixture = {
   ],
 };
 
-const Button: ComponentTypeFixture = {
+const Button: ComponentFixture = {
   id: 'Button',
   name: 'Button',
   description: 'Link styled as a button (label + url)',
@@ -144,7 +144,7 @@ const Button: ComponentTypeFixture = {
   ],
 };
 
-const Image: ComponentTypeFixture = {
+const Image: ComponentFixture = {
   id: 'Image',
   name: 'Image',
   description: 'Image (src + alt)',
@@ -155,12 +155,12 @@ const Image: ComponentTypeFixture = {
   designProperties: [],
 };
 
-// --- Composed ComponentTypes -------------------------------------------------
+// --- Composed Components -------------------------------------------------
 // These aren't primitives — they're editor-authored vocabulary the customer
 // maps entry fields ONTO via DataAssembly. Their contentProperties are what the
 // hero-assembly / card-assembly declare in their `return` blocks.
 
-const heroPlain: ComponentTypeFixture = {
+const heroPlain: ComponentFixture = {
   id: 'hero-plain',
   name: 'Hero: plain',
   description: 'Full-width hero — title + body + CTA + image, sourced from a promotion entry',
@@ -174,7 +174,7 @@ const heroPlain: ComponentTypeFixture = {
   designProperties: [colorProp('backgroundColor', 'Background color'), colorProp('color', 'Color')],
 };
 
-const card: ComponentTypeFixture = {
+const card: ComponentFixture = {
   id: 'card',
   name: 'Card',
   description: 'Compact card — image + title + teaser + CTA, sourced from a promotion entry',
@@ -188,7 +188,7 @@ const card: ComponentTypeFixture = {
   designProperties: [colorProp('backgroundColor', 'Background color'), colorProp('color', 'Color')],
 };
 
-export const componentTypes: ComponentTypeFixture[] = [
+export const components: ComponentFixture[] = [
   Section,
   Heading,
   RichText,

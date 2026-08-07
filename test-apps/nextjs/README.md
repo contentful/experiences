@@ -128,7 +128,7 @@ test-apps/nextjs/
 │   ├── Button.tsx
 │   ├── Card.tsx                         # image + title + teaser + CTA (async resolveData)
 │   ├── HeroPlain.tsx
-│   └── Page.tsx                         # used as the page-level template
+│   └── Page.tsx                         # used as the page-level Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
     ├── detect-viewport.ts               # User-Agent to viewport id
@@ -196,7 +196,7 @@ Seeding `initialViewportId` from the request means SSR resolves against the devi
 The app separates **two layers**:
 
 1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) are plain React components. They get their **content** props (`text`, `label`, `src`) and their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Since they import nothing SDK-shaped and are just functions of their props, they're easy to unit-test and render in isolation.
-2. **The experience config** (`lib/experience-config.tsx`) is the integration layer. It maps each `componentTypeId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `templateId`s under `templates`, and wires `resolveToken`, all composed into the single `experienceConfig` object the renderer takes.
+2. **The experience config** (`lib/experience-config.tsx`) is the integration layer. It maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`, all composed into the single `experienceConfig` object the renderer takes.
 
 The point of the split: everything SDK-shaped (registration, defaults, async resolvers, token resolution) lives in one file you can scan to see the whole integration, while the components stay SDK-agnostic.
 
@@ -233,11 +233,11 @@ const components = {
   // ... other component types (bare or config) ...
 };
 
-const templates = { page: Page };
+const experienceTemplates = { page: Page };
 
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };
 ```
 
 ### Merge precedence
@@ -254,7 +254,7 @@ Design sits **below** content and `resolveData`, so an explicit editorial value 
 
 ```json
 {
-  "componentType": { "sys": { "urn": ".../componentTypes/Button" } },
+  "component": { "sys": { "urn": ".../components/Button" } },
   "contentProperties": { "label": "Click me", "url": "example.com/go" },
   "designProperties": { "target": { "type": "ManualDesignValue", "value": "_self" } }
 }
@@ -348,30 +348,31 @@ Pair with `<ServerExperienceRenderer initialViewportId={...}>` (User-Agent
 parsed on the server) so SSR resolves and renders against the device's expected
 viewport. Otherwise resolution defaults to `viewports[0]`.
 
-### `defineTemplate`: page-level wrappers
+### `defineExperienceTemplate`: page-level wrappers
 
-When a payload carries `sys.template`, the SDK looks up a matching id under
-`Config.templates` and wraps the rendered nodes with the template's component.
-Templates use the same `defaults` / `resolveData` shape as components and
-receive resolved design as props the same way; the only structural difference
-is that the component always receives a fixed `children: ReactNode` (the
-rendered experience) alongside its declared props.
+When a payload carries `sys.experienceTemplate`, the SDK looks up a matching id
+under `Config.experienceTemplates` and wraps the rendered nodes with the
+Experience Template's component. Experience Templates use the same `defaults` /
+`resolveData` shape as components and receive resolved design as props the same
+way; the only structural difference is that the component always receives a
+fixed `children: ReactNode` (the rendered experience) alongside its declared
+props.
 
 ```tsx
-import { defineTemplate } from '@contentful/experiences-react';
+import { defineExperienceTemplate } from '@contentful/experiences-react';
 import { Page } from './Page';
 
-const templates = {
-  // bare component, or defineTemplate({...}) for defaults / resolveData
-  page: defineTemplate<PageProps>({
+const experienceTemplates = {
+  // bare component, or defineExperienceTemplate({...}) for defaults / resolveData
+  page: defineExperienceTemplate<PageProps>({
     defaults: { title: 'Welcome' },
     component: Page, // Page receives { title, children }
   }),
 };
 
-export const experienceConfig: Config = { components, templates };
+export const experienceConfig: Config = { components, experienceTemplates };
 ```
 
-If the payload references a template id that isn't registered, the renderer
+If the payload references an experience-template id that isn't registered, the renderer
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.

@@ -7,14 +7,14 @@
 
 import { createDebugLogger, type DebugLogger } from './debug-logger';
 import type {
-  ComponentTypeNode,
+  ComponentNode,
   DesignPropValue,
   ExperienceContext,
   ExperienceNode,
   ExperiencePayload,
+  PortableExperienceTemplate,
   PortableRenderNode,
   PortableRenderPlan,
-  PortableTemplate,
   ResolveContext,
   ResolveToken,
   ViewportDef,
@@ -34,7 +34,7 @@ import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from '.
  */
 export interface ResolverConfig {
   components: Record<string, unknown>;
-  templates?: Record<string, unknown>;
+  experienceTemplates?: Record<string, unknown>;
   /**
    * Resolves `DesignToken` design properties to runtime values. Mirrors the
    * adapter `Config.resolveToken`, so server and client agree without the
@@ -65,8 +65,7 @@ function getResolver(
 export interface ResolveExperienceOptions {
   /**
    * Arbitrary per-render metadata exposed to every resolver as
-   * `ctx.experience.metadata`. Flattened to a top-level option (was nested
-   * under `experience`). Defaults to `{}`.
+   * `ctx.experience.metadata`. Defaults to `{}`.
    */
   metadata?: Record<string, unknown>;
   /**
@@ -90,15 +89,15 @@ const DEFAULT_EXPERIENCE: ExperienceContext = {
   viewports: [],
 };
 
-function isComponentTypeNode(node: ExperienceNode): node is ComponentTypeNode {
-  return 'componentType' in node;
+function isComponentNode(node: ExperienceNode): node is ComponentNode {
+  return 'component' in node;
 }
 
 /**
- * Extract the flat id (componentType or template) from its `ResourceLink`
- * URN. Real URN shapes:
- *   crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/<id>
- *   crn:contentful:::experience:spaces/$self/environments/$self/templates/<id>
+ * Extract the flat id (component or experienceTemplate) from its
+ * `ResourceLink` URN. Real URN shapes:
+ *   crn:contentful:::experience:spaces/$self/environments/$self/components/<id>
+ *   crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/<id>
  *
  * The id is the final path segment. We split on `/` and take the last
  * non-empty piece so this also tolerates trailing slashes or alternative
@@ -120,23 +119,23 @@ function buildNode(
   config: ResolverConfig,
   nodeRefs: PortableRenderNode[]
 ): PortableRenderNode | null {
-  if (!isComponentTypeNode(node)) {
+  if (!isComponentNode(node)) {
     if (typeof console !== 'undefined') {
       console.warn(
-        '[@contentful/experiences-sdk-core] Skipping Template-variant node — Templates are not supported in v1.'
+        '[@contentful/experiences-sdk-core] Skipping Experience-Template-variant node — Experience Templates are not supported as nodes in v1.'
       );
     }
     return null;
   }
 
-  const componentTypeId = extractIdFromUrn(node.componentType.sys.urn);
+  const componentId = extractIdFromUrn(node.component.sys.urn);
 
   const slots: Record<string, PortableRenderNode[]> = {};
   if (node.slots) {
     for (const [slotName, children] of Object.entries(node.slots)) {
       if (!Array.isArray(children)) {
         throw new TypeError(
-          `Slot "${slotName}" on component "${componentTypeId}" must be an array of nodes.`
+          `Slot "${slotName}" on component "${componentId}" must be an array of nodes.`
         );
       }
       const built: PortableRenderNode[] = [];
@@ -150,7 +149,7 @@ function buildNode(
   }
 
   const built: PortableRenderNode = {
-    registration: { componentTypeId },
+    registration: { componentId },
     props: {
       content: { ...(node.contentProperties ?? {}) },
       // Resolved flat values are written by the pre-resolution pass below.
@@ -160,7 +159,7 @@ function buildNode(
     slots,
   };
   if (node.id) built.nodeId = node.id;
-  if (getResolver(config.components[componentTypeId])) {
+  if (getResolver(config.components[componentId])) {
     nodeRefs.push(built);
   }
   return built;
@@ -202,7 +201,7 @@ function preResolveNodeTree(
     resolveToken
   );
   node.props.design = props;
-  warnUnresolvedTokens(node.registration.componentTypeId, unresolved, log);
+  warnUnresolvedTokens(node.registration.componentId, unresolved, log);
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
       preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log);
@@ -238,14 +237,14 @@ export async function resolveExperience(
   }
   log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
-  // Build the page-level template stub if the payload carries one. XDA
-  // payloads don't yet emit template-level content/design properties, so
+  // Build the page-level Experience Template stub if the payload carries one.
+  // XDA payloads don't yet emit template-level content/design properties, so
   // the IR carries empty bags.
-  const templateUrn = payload.sys?.template?.sys.urn;
-  let template: PortableTemplate | undefined;
-  if (typeof templateUrn === 'string' && templateUrn.length > 0) {
-    template = {
-      templateId: extractIdFromUrn(templateUrn),
+  const experienceTemplateUrn = payload.sys?.experienceTemplate?.sys.urn;
+  let experienceTemplate: PortableExperienceTemplate | undefined;
+  if (typeof experienceTemplateUrn === 'string' && experienceTemplateUrn.length > 0) {
+    experienceTemplate = {
+      experienceTemplateId: extractIdFromUrn(experienceTemplateUrn),
       props: { content: {}, design: {}, designRaw: {} },
     };
   }
@@ -265,7 +264,7 @@ export async function resolveExperience(
   const tasks: Array<Promise<void>> = [];
 
   for (const node of nodeRefs) {
-    const resolver = getResolver(config.components[node.registration.componentTypeId]);
+    const resolver = getResolver(config.components[node.registration.componentId]);
     if (!resolver) continue;
     const ctx: ResolveContext = {
       content: node.props.content,
@@ -279,15 +278,17 @@ export async function resolveExperience(
     );
   }
 
-  if (template) {
-    const tplResolver = getResolver(config.templates?.[template.templateId]);
+  if (experienceTemplate) {
+    const tplResolver = getResolver(
+      config.experienceTemplates?.[experienceTemplate.experienceTemplateId]
+    );
     if (tplResolver) {
       const ctx: ResolveContext = {
-        content: template.props.content,
-        design: template.props.designRaw,
+        content: experienceTemplate.props.content,
+        design: experienceTemplate.props.designRaw,
         experience,
       };
-      const tpl = template;
+      const tpl = experienceTemplate;
       tasks.push(
         Promise.resolve(tplResolver(ctx)).then((resolved) => {
           tpl.props.resolved = resolved;
@@ -310,22 +311,26 @@ export async function resolveExperience(
   for (const node of nodes) {
     preResolveNodeTree(node, payload.viewports, fallbackViewportIndex, config.resolveToken, log);
   }
-  if (template) {
+  if (experienceTemplate) {
     const { props, unresolved } = preResolveDesignProperties(
-      template.props.designRaw,
+      experienceTemplate.props.designRaw,
       payload.viewports,
       fallbackViewportIndex,
       config.resolveToken
     );
-    template.props.design = props;
-    warnUnresolvedTokens(`template:${template.templateId}`, unresolved, log);
+    experienceTemplate.props.design = props;
+    warnUnresolvedTokens(
+      `experienceTemplate:${experienceTemplate.experienceTemplateId}`,
+      unresolved,
+      log
+    );
   }
   log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
 
   return {
     viewports: payload.viewports,
     nodes,
-    ...(template ? { template } : {}),
+    ...(experienceTemplate ? { experienceTemplate } : {}),
     fallbackViewportIndex,
   };
 }
