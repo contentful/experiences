@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "contentful-management": "^12.10.0"
+    "contentful-management": "^12.14.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

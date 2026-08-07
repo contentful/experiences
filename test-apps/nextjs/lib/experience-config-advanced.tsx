@@ -7,7 +7,7 @@ import {
   defineComponent,
   type Components,
   type Config,
-  type Templates,
+  type ExperienceTemplates,
 } from '@contentful/experiences-react';
 
 import { Button, type ButtonProps } from '@/components/Button';
@@ -47,8 +47,8 @@ const components: Components = {
   }),
 };
 
-const templates: Templates = {
+const experienceTemplates: ExperienceTemplates = {
   page: { component: Page, defaults: { title: 'Featured (advanced)' } },
 };
 
-export const advancedExperienceConfig: Config = { components, templates };
+export const advancedExperienceConfig: Config = { components, experienceTemplates };

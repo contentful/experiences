@@ -1,4 +1,4 @@
-// Design tokens are the abstract names ComponentTypes reference in
+// Design tokens are the abstract names Components reference in
 // `allowedResources`. Their runtime CSS values are resolved by the example
 // app's own `resolveToken` (see examples/nextjs/lib/design-tokens.ts) — the
 // server just tracks that these ids exist and what DTCG type they belong to.
@@ -18,8 +18,8 @@ export type DesignTokenFixture = {
 };
 
 // Every token referenced anywhere in the fixture (allowedResources +
-// experience.designProperties). If you add a token to a ComponentType or
-// Experience node, add it here too or the CMA will reject the ComponentType.
+// experience.designProperties). If you add a token to a Component or
+// Experience node, add it here too or the CMA will reject the Component.
 export const designTokens: DesignTokenFixture[] = [
   // Colors
   { id: 'color.primary', type: 'DTCG.Color' },

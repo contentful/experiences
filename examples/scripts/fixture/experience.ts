@@ -11,8 +11,8 @@ const atDefault = (value: DesignValue) => ({ _: value });
 
 const heroNode: ExperienceNode = {
   id: 'node:hero',
-  nodeType: 'InlineFragment',
-  componentTypeId: 'hero-plain',
+  nodeType: 'InlineExperienceFragment',
+  componentId: 'hero-plain',
   designProperties: {
     backgroundColor: atDefault(tokenValue('color.primary')),
     color: atDefault(tokenValue('color.primaryText')),
@@ -27,8 +27,8 @@ const heroNode: ExperienceNode = {
 
 const cardOnNode: ExperienceNode = {
   id: 'node:card-on',
-  nodeType: 'InlineFragment',
-  componentTypeId: 'card',
+  nodeType: 'InlineExperienceFragment',
+  componentId: 'card',
   designProperties: {
     backgroundColor: atDefault(tokenValue('color.white')),
     color: atDefault(tokenValue('color.text')),
@@ -43,8 +43,8 @@ const cardOnNode: ExperienceNode = {
 
 const cardGuideNode: ExperienceNode = {
   id: 'node:card-guide',
-  nodeType: 'InlineFragment',
-  componentTypeId: 'card',
+  nodeType: 'InlineExperienceFragment',
+  componentId: 'card',
   designProperties: {
     backgroundColor: atDefault(tokenValue('color.white')),
     color: atDefault(tokenValue('color.text')),
@@ -59,8 +59,8 @@ const cardGuideNode: ExperienceNode = {
 
 const cardsContainerNode: ExperienceNode = {
   id: 'node:cards',
-  nodeType: 'InlineFragment',
-  componentTypeId: 'Section',
+  nodeType: 'InlineExperienceFragment',
+  componentId: 'Section',
   designProperties: {
     direction: atDefault(manualValue('row')),
     columns: atDefault(manualValue('2')),
@@ -79,7 +79,7 @@ export const experience: ExperienceFixture = {
   name: 'Landing (demo)',
   description:
     'Minimal ExO demo — 1 hero + 2 cards, all bound via DataAssembly to promotion entries',
-  templateId: 'page',
+  experienceTemplateId: 'page',
   viewports: [{ id: '_', query: '*', displayName: 'Default', previewSize: '1024px' }],
   slots: {
     content: [heroNode, cardsContainerNode],

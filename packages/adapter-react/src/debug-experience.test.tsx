@@ -7,9 +7,9 @@ import { DebugExperience } from './debug-experience';
 
 const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [] };
 
-function node(componentTypeId: string, content: Record<string, unknown> = {}): PortableRenderNode {
+function node(componentId: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
-    registration: { componentTypeId },
+    registration: { componentId },
     props: { content, design: {} },
     slots: {},
   };
@@ -38,13 +38,15 @@ describe('DebugExperience', () => {
     );
   });
 
-  it('names the template in the summary when present', () => {
+  it('names the experienceTemplate in the summary when present', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [],
-      template: { templateId: 'page', props: { content: {}, design: {} } },
+      experienceTemplate: { experienceTemplateId: 'page', props: { content: {}, design: {} } },
     };
-    expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('template: page');
+    expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
+      'experience template: page'
+    );
   });
 
   it('dumps the plan as pretty JSON', () => {
@@ -53,7 +55,7 @@ describe('DebugExperience', () => {
       nodes: [node('button', { label: 'Go' })],
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
-    expect(html).toContain('componentTypeId');
+    expect(html).toContain('componentId');
     expect(html).toContain('button');
     expect(html).toContain('Go');
   });
