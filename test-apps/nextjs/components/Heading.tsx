@@ -8,7 +8,8 @@ export type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
 export interface HeadingProps {
   text?: string;
-  children?: ReactNode;
+  /** Slot children, one pre-rendered node per child. */
+  children?: ReactNode[];
 }
 
 interface HeadingDesign {

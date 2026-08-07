@@ -427,6 +427,114 @@ describe('ServerExperienceRenderer', () => {
   });
 });
 
+describe('ServerExperienceRenderer — slot children as an array', () => {
+  it('passes slot children as an array a component can map/wrap individually', async () => {
+    let received: unknown = null;
+    const Container = ({ children }: { children?: ReactNode[] }) => {
+      received = children;
+      // Wrap each child individually — the whole point of exposing the array.
+      return (
+        <div data-container>
+          {children?.map((child, i) => (
+            <div className="wrap" data-index={i} key={i}>
+              {child}
+            </div>
+          ))}
+        </div>
+      );
+    };
+    const Item = ({ text }: { text?: string }) => <span>{text}</span>;
+    const cfg: Config = { components: { container: Container, item: Item } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('container', {
+            id: 'c',
+            slots: {
+              children: [
+                componentNode('item', { id: 'a', contentProperties: { text: 'one' } }),
+                componentNode('item', { id: 'b', contentProperties: { text: 'two' } }),
+                componentNode('item', { id: 'd', contentProperties: { text: 'three' } }),
+              ],
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(Array.isArray(received)).toBe(true);
+    expect((received as ReactNode[]).length).toBe(3);
+    // Each child got its own wrapper div — proves per-child control.
+    expect(html).toContain('data-index="0"');
+    expect(html).toContain('data-index="1"');
+    expect(html).toContain('data-index="2"');
+    expect(html).toContain('<span>one</span>');
+    expect(html).toContain('<span>three</span>');
+  });
+
+  it('renders the array directly in the common "just render them" case', async () => {
+    // React renders keyed arrays, so dropping `children` straight into JSX
+    // without a wrapper stays ergonomic.
+    const Container = ({ children }: { children?: ReactNode[] }) => <div>{children}</div>;
+    const Item = ({ text }: { text?: string }) => <span>{text}</span>;
+    const cfg: Config = { components: { container: Container, item: Item } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('container', {
+            id: 'c',
+            slots: {
+              children: [
+                componentNode('item', { id: 'a', contentProperties: { text: 'one' } }),
+                componentNode('item', { id: 'b', contentProperties: { text: 'two' } }),
+              ],
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toBe('<div><span>one</span><span>two</span></div>');
+  });
+
+  it('lets a component filter the children array', async () => {
+    // Drop every other child — proves the array is a real, filterable array of
+    // pre-rendered nodes, not an opaque blob.
+    const Container = ({ children }: { children?: ReactNode[] }) => (
+      <div>{children?.filter((_, i) => i % 2 === 0)}</div>
+    );
+    const Item = ({ text }: { text?: string }) => <span>{text}</span>;
+    const cfg: Config = { components: { container: Container, item: Item } };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('container', {
+            id: 'c',
+            slots: {
+              children: [
+                componentNode('item', { id: 'a', contentProperties: { text: 'keep' } }),
+                componentNode('item', { id: 'b', contentProperties: { text: 'drop' } }),
+                componentNode('item', { id: 'd', contentProperties: { text: 'keep2' } }),
+              ],
+            },
+          }),
+        ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toContain('keep');
+    expect(html).toContain('keep2');
+    expect(html).not.toContain('drop');
+  });
+});
+
 describe('ServerExperienceRenderer — bare-component registrations', () => {
   it('accepts a bare function component as a registry entry', async () => {
     const Bare = ({ text }: { text?: string }) => <p data-from="bare">{text}</p>;
