@@ -10,11 +10,13 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 
-import type { ContentfulComponent, ContentfulTemplate, RenderContext } from './types';
+import type { ContentfulComponent, ContentfulExperienceTemplate, RenderContext } from './types';
 
 const ExperienceContext = createContext<RenderContext | null>(null);
 const ContentfulComponentContext = createContext<ContentfulComponent | null>(null);
-const ContentfulTemplateContext = createContext<ContentfulTemplate | null>(null);
+const ContentfulExperienceTemplateContext = createContext<ContentfulExperienceTemplate | null>(
+  null
+);
 // Plain data only (never the Config or its functions) so it crosses RSC cleanly.
 const ResolvedDesignContext = createContext<Record<string, unknown> | null>(null);
 
@@ -46,17 +48,17 @@ export function ContentfulComponentProvider({
   );
 }
 
-export function ContentfulTemplateProvider({
+export function ContentfulExperienceTemplateProvider({
   value,
   children,
 }: {
-  value: ContentfulTemplate;
+  value: ContentfulExperienceTemplate;
   children: ReactNode;
 }): ReactNode {
   return (
-    <ContentfulTemplateContext.Provider value={value}>
+    <ContentfulExperienceTemplateContext.Provider value={value}>
       {children}
-    </ContentfulTemplateContext.Provider>
+    </ContentfulExperienceTemplateContext.Provider>
   );
 }
 
@@ -95,18 +97,18 @@ export function useContentfulComponent(): ContentfulComponent | null {
 }
 
 /**
- * Read the raw Contentful payload for the page-level template, if one is in
- * scope. Returns `null` outside a template's render tree.
+ * Read the raw Contentful payload for the page-level Experience Template, if
+ * one is in scope. Returns `null` outside an Experience Template's render tree.
  */
-export function useContentfulTemplate(): ContentfulTemplate | null {
-  return useContext(ContentfulTemplateContext);
+export function useContentfulExperienceTemplate(): ContentfulExperienceTemplate | null {
+  return useContext(ContentfulExperienceTemplateContext);
 }
 
 /**
  * Read the design values the renderer already resolved for the enclosing
- * node or template — viewport-cascaded and token-resolved, the same bag that
- * feeds the component's props. Returns `null` outside a rendered node/
- * template, which `useDesignValues` treats as "nothing to read."
+ * node or experience template — viewport-cascaded and token-resolved, the same
+ * bag that feeds the component's props. Returns `null` outside a rendered
+ * node / experience template, which `useDesignValues` treats as "nothing to read."
  */
 export function useResolvedDesign(): Record<string, unknown> | null {
   return useContext(ResolvedDesignContext);

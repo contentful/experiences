@@ -5,14 +5,14 @@ import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type {
-  ComponentTypeNode,
+  ComponentNode,
   ExperiencePayload,
   ManualDesignValue,
   ValuesByViewport,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { useContentfulComponent, useContentfulTemplate, useExperience } from './context';
+import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
 import { toCss } from './design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
@@ -33,16 +33,13 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
 
 const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
-function componentNode(
-  typeId: string,
-  rest: Omit<ComponentTypeNode, 'componentType'> = {}
-): ComponentTypeNode {
+function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
-    componentType: {
+    component: {
       sys: {
         type: 'ResourceLink',
-        linkType: 'Contentful:ComponentType',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/${typeId}`,
+        linkType: 'Contentful:Component',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
       },
     },
     ...rest,
@@ -242,13 +239,13 @@ describe('ServerExperienceRenderer', () => {
       nodes: [
         {
           nodeId: 'root',
-          registration: { componentTypeId: 'contentful-container' },
+          registration: { componentId: 'contentful-container' },
           props: { content: {}, design: {} },
           slots: {
             children: [
               {
                 nodeId: 'ghost',
-                registration: { componentTypeId: 'NotRegistered' },
+                registration: { componentId: 'NotRegistered' },
                 props: { content: {}, design: {} },
                 slots: {},
               },
@@ -358,7 +355,7 @@ describe('ServerExperienceRenderer', () => {
       nodes: [
         {
           nodeId: 'r',
-          registration: { componentTypeId: 'item' },
+          registration: { componentId: 'item' },
           props: {
             content: { value: 'fromContent' },
             design: {},
@@ -374,24 +371,24 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('data-value="fromResolveData"');
   });
 
-  it('wraps rendered nodes with the registered template', async () => {
+  it('wraps rendered nodes with the registered experienceTemplate', async () => {
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const Template = ({ title, children }: { title?: string; children?: ReactNode }) => (
-      <main data-template="page" data-title={title}>
+      <main data-experienceTemplate="page" data-title={title}>
         {children}
       </main>
     );
     const cfg: Config = {
       components: { item: Item },
-      templates: { page: { component: Template, defaults: { title: 'Default Title' } } },
+      experienceTemplates: { page: { component: Template, defaults: { title: 'Default Title' } } },
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -400,22 +397,22 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(tplPayload, cfg);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toContain('data-template="page"');
+    expect(html).toContain('data-experienceTemplate="page"');
     expect(html).toContain('data-title="Default Title"');
     expect(html).toContain('<span>inside</span>');
   });
 
-  it('renders nodes unwrapped + warns when the template is not registered', async () => {
+  it('renders nodes unwrapped + warns when the experienceTemplate is not registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const cfg: Config = { components: { item: Item } };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/missing-template',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/missing-experienceTemplate',
           },
         },
       },
@@ -425,7 +422,7 @@ describe('ServerExperienceRenderer', () => {
     const plan = await resolveExperience(tplPayload, cfg);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toBe('<span>unwrapped</span>');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
     warn.mockRestore();
   });
 });
@@ -445,17 +442,17 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     expect(html).toBe('<p data-from="bare">hi</p>');
   });
 
-  it('accepts a bare component for a template', async () => {
+  it('accepts a bare component for a experienceTemplate', async () => {
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const Tpl = ({ children }: { children?: ReactNode }) => <main data-tpl>{children}</main>;
-    const cfg: Config = { components: { item: Item }, templates: { page: Tpl } };
+    const cfg: Config = { components: { item: Item }, experienceTemplates: { page: Tpl } };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -489,7 +486,7 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
   });
 });
 
-describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTemplate', () => {
+describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExperienceTemplate', () => {
   it('exposes the raw Contentful payload via useContentfulComponent()', async () => {
     let captured: Record<string, unknown> | null = null;
     const Capture = () => {
@@ -513,7 +510,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTem
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     expect(captured).toEqual({
-      componentTypeId: 'button',
+      componentId: 'button',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
       design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw envelope, NOT scalar
@@ -541,25 +538,25 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTem
     expect((captured as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
   });
 
-  it('exposes templateId/content/design/resolved via useContentfulTemplate()', async () => {
+  it('exposes experienceTemplateId/content/design/resolved via useContentfulExperienceTemplate()', async () => {
     let captured: Record<string, unknown> | null = null;
     const CaptureTpl = ({ children }: { children?: ReactNode }) => {
-      captured = useContentfulTemplate() as unknown as Record<string, unknown>;
+      captured = useContentfulExperienceTemplate() as unknown as Record<string, unknown>;
       return <main>{children}</main>;
     };
     const Item = () => null;
     const cfg: Config = {
       components: { item: Item },
-      templates: { page: { component: CaptureTpl, defaults: { title: 'Default' } } },
+      experienceTemplates: { page: { component: CaptureTpl, defaults: { title: 'Default' } } },
     };
     const plan = await resolveExperience(
       {
         sys: {
-          template: {
+          experienceTemplate: {
             sys: {
               type: 'ResourceLink',
-              linkType: 'Contentful:Template',
-              urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+              linkType: 'Contentful:ExperienceTemplate',
+              urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
             },
           },
         },
@@ -571,7 +568,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulTem
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     expect(captured).toEqual({
-      templateId: 'page',
+      experienceTemplateId: 'page',
       content: {},
       design: {},
       resolved: undefined,
@@ -667,7 +664,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(html).toContain('data-bg="[object Object]"');
   });
 
-  it('runs on page-level template design props too', async () => {
+  it('runs on page-level experienceTemplate design props too', async () => {
     const Tpl = ({ children }: { children?: ReactNode }) => {
       const design = useDesignValues();
       return <main data-bg={design.cfBackground as string}>{children}</main>;
@@ -675,16 +672,16 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const cfg: Config = {
       components: { item: Item },
-      templates: { page: Tpl },
+      experienceTemplates: { page: Tpl },
       resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -693,8 +690,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(tplPayload, cfg);
     // Templates don't carry design props in the current XDA payload shape;
-    // seed one on the resolved plan so we exercise the template path.
-    plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    // seed one on the resolved plan so we exercise the experienceTemplate path.
+    plan!.experienceTemplate!.props.design = { cfBackground: dt('brand/canvas') };
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-bg="#111827"');
   });
@@ -728,7 +725,7 @@ describe('ServerExperienceRenderer — design values are not injected as props',
     expect(received).not.toHaveProperty('cfPadding');
   });
 
-  it('does NOT spread resolved design values onto template props', async () => {
+  it('does NOT spread resolved design values onto experienceTemplate props', async () => {
     let received: Record<string, unknown> = {};
     const Tpl = (props: Record<string, unknown>) => {
       received = props;
@@ -737,15 +734,15 @@ describe('ServerExperienceRenderer — design values are not injected as props',
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const cfg: Config = {
       components: { item: Item },
-      templates: { page: Tpl },
+      experienceTemplates: { page: Tpl },
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -753,7 +750,7 @@ describe('ServerExperienceRenderer — design values are not injected as props',
       nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    plan!.template!.props.design = { cfBackground: m('#111827') };
+    plan!.experienceTemplate!.props.design = { cfBackground: m('#111827') };
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(received).not.toHaveProperty('cfBackground');
   });
@@ -841,7 +838,7 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
   });
 
   it('returns {} when there is no design in scope', async () => {
-    // Put the probe in a template that carries no design and wraps a node
+    // Put the probe in a experienceTemplate that carries no design and wraps a node
     // with no design either, so the hook has nothing to resolve.
     let captured: Record<string, unknown> | null = null;
     const Probe = ({ children }: { children?: ReactNode }) => {
@@ -851,15 +848,15 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     const Item = () => null;
     const cfg: Config = {
       components: { item: Item },
-      templates: { page: Probe },
+      experienceTemplates: { page: Probe },
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },

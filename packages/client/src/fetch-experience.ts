@@ -1,10 +1,14 @@
-import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import type {
+  ContentfulViewDelivery,
+  ContentfulViewDeliveryClient,
+} from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type {
   ExperiencePayload,
   PortableRenderPlan,
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
+import { NEW_EXO_ENTITY_TYPES_HEADERS } from './alpha-feature.js';
 import { createClient } from './create-client.js';
 import { PREVIEW_HOST } from './hosts.js';
 
@@ -87,10 +91,21 @@ export async function fetchExperience(
 
   log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
 
-  // Response from the experience delivery client is structurally compatible with ExperiencePayload (superset)
-  const payload = (await client.experience.get(spaceId, environmentId, experienceId, {
-    locale,
-  })) as unknown as ExperiencePayload;
+  // The alpha-feature header goes on the request as well as on clients built by
+  // `createClient`, so a caller-supplied `{ client }` also gets the renamed ExO
+  // entity shapes rather than the legacy `componentType` / `template` links.
+  const response = await client.experience.get(
+    spaceId,
+    environmentId,
+    experienceId,
+    { locale },
+    { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
+  );
+
+  // `GetExperienceResponse` is the union of the legacy `HydratedView` and the
+  // renamed `HydratedExperienceView`; the header above pins the response to the
+  // latter, which is a structural superset of `ExperiencePayload`.
+  const payload = response as ContentfulViewDelivery.HydratedExperienceView as ExperiencePayload;
 
   log.lazy('received raw payload', () => payload);
 
