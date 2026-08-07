@@ -1,3 +1,9 @@
+## 0.5.1 (2026-08-07)
+
+### 🚀 Features
+
+- expose slot children as an array instead of a single wrapping node ([#122](https://github.com/contentful/experiences/pull/122))
+
 ## 0.5.0 (2026-08-07)
 
 ### 🩹 Fixes
