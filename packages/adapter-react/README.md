@@ -50,7 +50,7 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 ### Styling + runtime context (hooks)
 
 ```ts
-useDesignValues<T>(); // Resolved design values for the current node (viewport-cascaded + token-resolved)
+useDesignValues<T>(); // Optional hook: the same resolved design record that auto-fills props
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
@@ -58,7 +58,7 @@ useContentfulExperienceTemplate(); // Same, for the page-level Experience Templa
 type ToCssOptions;
 ```
 
-Design is **not** injected as props; components read it via `useDesignValues()`. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling straight from props is the recommended path; `useDesignValues()` exposes the same record for cases props don't cover. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -84,14 +84,19 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 ## Quick reference
 
 ```tsx
-// components/Button.tsx: reads content props; reads design via the hook
+// components/Button.tsx: content + resolved design both arrive as props
 'use client';
-import { toCss, useDesignValues } from '@contentful/experiences-react';
 
-export function Button({ label, url }: { label?: string; url?: string }) {
-  const design = useDesignValues();
+interface ButtonProps {
+  label?: string;
+  url?: string;
+  backgroundColor?: string; // resolved design, auto-filled
+  color?: string;
+}
+
+export function Button({ label, url, backgroundColor, color }: ButtonProps) {
   return (
-    <a href={url} style={toCss(design)}>
+    <a href={url} style={{ background: backgroundColor, color }}>
       {label}
     </a>
   );

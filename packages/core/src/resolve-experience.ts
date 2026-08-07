@@ -1,24 +1,11 @@
 /*
- * Single async entry that turns an XDA Experience payload into a
- * runtime-neutral PortableRenderPlan ready to render.
- *
- * v1 behavior:
- *  - Walk the payload's nodes recursively. Each Component node becomes
- *    a PortableRenderNode with `registration.componentId` extracted
- *    from `component.sys.urn` (last slash-segment).
- *  - Split content + design properties onto `node.props.{content,design}`.
- *    Design-prop envelopes (DesignToken / ManualDesignValue / ValuesByViewport)
- *    are preserved on the IR; the design package unwraps them at render time.
- *  - Experience-Template-variant nodes are skipped with a console.warn — out
- *    of v1 scope.
- *  - For every component whose registration declares `resolveData`, run the
- *    resolver (sync or async) in parallel with peers, and attach the result
- *    to `node.props.resolved`.
- *  - Unknown component id is a render-time concern (handled by the
- *    framework adapter via `renderUnknown`); the IR still emits the node.
+ * Turns an XDA Experience payload into a runtime-neutral PortableRenderPlan.
+ * Walks nodes recursively, splits content + design props, runs any registered
+ * `resolveData` hooks in parallel, and pre-resolves design against a fallback
+ * viewport (see `resolveExperience` below).
  */
 
-import { createDebugLogger } from './debug-logger';
+import { createDebugLogger, type DebugLogger } from './debug-logger';
 import type {
   ComponentNode,
   DesignPropValue,
@@ -29,7 +16,10 @@ import type {
   PortableRenderNode,
   PortableRenderPlan,
   ResolveContext,
+  ResolveToken,
+  ViewportDef,
 } from './types';
+import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from './viewport';
 
 /**
  * Structural type the resolver walker depends on. Matches the React /
@@ -45,6 +35,17 @@ import type {
 export interface ResolverConfig {
   components: Record<string, unknown>;
   experienceTemplates?: Record<string, unknown>;
+  /**
+   * Resolves `DesignToken` design properties to runtime values. Mirrors the
+   * adapter `Config.resolveToken`, so server and client agree without the
+   * caller re-supplying it. Used during server-side pre-resolution.
+   */
+  resolveToken?: ResolveToken;
+  /**
+   * Default fallback viewport for server-side design pre-resolution. When unset
+   * (and not overridden by `initialViewportId`), defaults to viewport[0].
+   */
+  fallbackViewportId?: string;
 }
 
 function getResolver(
@@ -73,6 +74,13 @@ export interface ResolveExperienceOptions {
    * resolver context as `ctx.experience.debug`. Defaults to `false`.
    */
   debug?: boolean;
+  /**
+   * Per-request override for the design pre-resolution fallback viewport. Wins
+   * over `config.fallbackViewportId` — pass a request-time value (e.g. a
+   * User-Agent-detected viewport) so SSR targets the device's expected
+   * viewport. Defaults to viewport[0] when unset or unknown.
+   */
+  initialViewportId?: string;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -144,7 +152,9 @@ function buildNode(
     registration: { componentId },
     props: {
       content: { ...(node.contentProperties ?? {}) },
-      design: { ...(node.designProperties ?? {}) } as Record<string, DesignPropValue>,
+      // Resolved flat values are written by the pre-resolution pass below.
+      design: {},
+      designRaw: { ...(node.designProperties ?? {}) } as Record<string, DesignPropValue>,
     },
     slots,
   };
@@ -153,6 +163,50 @@ function buildNode(
     nodeRefs.push(built);
   }
   return built;
+}
+
+// Cascade a node's raw design to the fallback viewport and resolve tokens.
+// Returns the flat resolved map plus any token ids left unresolved (dropped).
+function preResolveDesignProperties(
+  design: Record<string, DesignPropValue>,
+  viewports: ViewportDef[],
+  fallbackViewportIndex: number,
+  resolveToken: ResolveToken | undefined
+): { props: Record<string, unknown>; unresolved: string[] } {
+  const cascaded = resolveDesignProperties(design, viewports, fallbackViewportIndex);
+  return applyTokenResolver(cascaded, resolveToken);
+}
+
+// Warn when resolveToken left tokens unresolved, so dropped keys are diagnosable.
+function warnUnresolvedTokens(label: string, unresolved: string[], log: DebugLogger): void {
+  if (!unresolved.length || typeof console === 'undefined') return;
+  console.warn(
+    `[@contentful/experiences] resolveToken returned undefined for token id(s) on "${label}": ${unresolved.join(', ')}. Resolved design (getDesignValues()) will omit those keys.`
+  );
+  log.log(`unresolved token id(s) on "${label}": ${unresolved.join(', ')}`);
+}
+
+// Depth-first pre-resolve for a node and its slot children.
+function preResolveNodeTree(
+  node: PortableRenderNode,
+  viewports: ViewportDef[],
+  fallbackViewportIndex: number,
+  resolveToken: ResolveToken | undefined,
+  log: DebugLogger
+): void {
+  const { props, unresolved } = preResolveDesignProperties(
+    node.props.designRaw,
+    viewports,
+    fallbackViewportIndex,
+    resolveToken
+  );
+  node.props.design = props;
+  warnUnresolvedTokens(node.registration.componentId, unresolved, log);
+  for (const children of Object.values(node.slots)) {
+    for (const child of children) {
+      preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log);
+    }
+  }
 }
 
 /**
@@ -191,7 +245,7 @@ export async function resolveExperience(
   if (typeof experienceTemplateUrn === 'string' && experienceTemplateUrn.length > 0) {
     experienceTemplate = {
       experienceTemplateId: extractIdFromUrn(experienceTemplateUrn),
-      props: { content: {}, design: {} },
+      props: { content: {}, design: {}, designRaw: {} },
     };
   }
 
@@ -214,7 +268,7 @@ export async function resolveExperience(
     if (!resolver) continue;
     const ctx: ResolveContext = {
       content: node.props.content,
-      design: node.props.design,
+      design: node.props.designRaw,
       experience,
     };
     tasks.push(
@@ -231,7 +285,7 @@ export async function resolveExperience(
     if (tplResolver) {
       const ctx: ResolveContext = {
         content: experienceTemplate.props.content,
-        design: experienceTemplate.props.design,
+        design: experienceTemplate.props.designRaw,
         experience,
       };
       const tpl = experienceTemplate;
@@ -249,9 +303,34 @@ export async function resolveExperience(
     await log.time(`${tasks.length} resolveData hook(s)`, () => Promise.all(tasks));
   }
 
+  // Pre-resolve design against the fallback viewport so SSR paints correct
+  // values on first render. Fallback is initialViewportId, else
+  // config.fallbackViewportId, else viewport[0].
+  const fallbackViewportId = options.initialViewportId ?? config.fallbackViewportId;
+  const fallbackViewportIndex = getViewportIndex(payload.viewports, fallbackViewportId);
+  for (const node of nodes) {
+    preResolveNodeTree(node, payload.viewports, fallbackViewportIndex, config.resolveToken, log);
+  }
+  if (experienceTemplate) {
+    const { props, unresolved } = preResolveDesignProperties(
+      experienceTemplate.props.designRaw,
+      payload.viewports,
+      fallbackViewportIndex,
+      config.resolveToken
+    );
+    experienceTemplate.props.design = props;
+    warnUnresolvedTokens(
+      `experienceTemplate:${experienceTemplate.experienceTemplateId}`,
+      unresolved,
+      log
+    );
+  }
+  log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
+
   return {
     viewports: payload.viewports,
     nodes,
     ...(experienceTemplate ? { experienceTemplate } : {}),
+    fallbackViewportIndex,
   };
 }

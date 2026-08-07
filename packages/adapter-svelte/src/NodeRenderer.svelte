@@ -7,9 +7,9 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
-  import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
   import { setContentfulComponent, setResolvedDesign } from './context.js';
+  import { selectResolvedDesign } from './design-utils.js';
   import type { RenderUnknown } from './component-props.js';
   import {
     normalizeComponentRegistration,
@@ -35,21 +35,20 @@
     componentId: node.registration.componentId,
     nodeId: node.nodeId,
     content: node.props.content,
-    design: node.props.design,
+    design: node.props.designRaw,
     resolved: node.props.resolved,
     slots: node.slots,
   };
   setContentfulComponent(contentful);
 
-  // Cascade design + resolve tokens; published on context for getDesignValues(),
-  // never merged into props.
   const tokenResolvedDesign = $derived.by(() => {
-    const resolvedDesign = resolveDesignProperties(
-      node.props.design,
+    const { props, unresolved } = selectResolvedDesign(
+      node.props,
       experience.viewports,
-      experience.activeViewportIndex
+      experience.activeViewportIndex,
+      experience.fallbackViewportIndex,
+      config.resolveToken
     );
-    const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
     if (unresolved.length && typeof console !== 'undefined') {
       console.warn(
         `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on "${node.registration.componentId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
@@ -60,10 +59,12 @@
 
   setResolvedDesign(() => tokenResolvedDesign);
 
+  // Merge precedence (last wins): defaults < design < content < resolveData < children.
   const composed = $derived.by(() => {
     if (!componentConfig) return null;
     return {
       ...componentConfig.defaults,
+      ...tokenResolvedDesign,
       ...node.props.content,
       ...node.props.resolved,
       children,

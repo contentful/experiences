@@ -9,9 +9,9 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableExperienceTemplate } from '@contentful/experiences-sdk-core';
-  import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
 
   import { setContentfulExperienceTemplate, setResolvedDesign } from './context.js';
+  import { selectResolvedDesign } from './design-utils.js';
   import {
     normalizeExperienceTemplateRegistration,
     type ContentfulExperienceTemplate,
@@ -34,7 +34,7 @@
     setContentfulExperienceTemplate({
       experienceTemplateId: experienceTemplate.experienceTemplateId,
       content: experienceTemplate.props.content,
-      design: experienceTemplate.props.design,
+      design: experienceTemplate.props.designRaw,
       resolved: experienceTemplate.props.resolved,
     } satisfies ContentfulExperienceTemplate);
   }
@@ -44,12 +44,13 @@
 
   const tokenResolvedDesign = $derived.by(() => {
     if (!experienceTemplate) return {};
-    const resolvedDesign = resolveDesignProperties(
-      experienceTemplate.props.design,
+    const { props, unresolved } = selectResolvedDesign(
+      experienceTemplate.props,
       experience.viewports,
-      experience.activeViewportIndex
+      experience.activeViewportIndex,
+      experience.fallbackViewportIndex,
+      config.resolveToken
     );
-    const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
     if (unresolved.length && typeof console !== 'undefined') {
       console.warn(
         `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on experience template "${experienceTemplate.experienceTemplateId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
@@ -58,13 +59,15 @@
     return props;
   });
 
-  // A getter (not a snapshot) so getDesignValues() stays reactive; not merged into props.
+  // A getter (not a snapshot) so getDesignValues() stays reactive.
   setResolvedDesign(() => tokenResolvedDesign);
 
+  // Same precedence as component nodes.
   const composed = $derived.by(() => {
     if (!experienceTemplate || !experienceTemplateConfig) return null;
     return {
       ...experienceTemplateConfig.defaults,
+      ...tokenResolvedDesign,
       ...experienceTemplate.props.content,
       ...experienceTemplate.props.resolved,
     };

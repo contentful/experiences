@@ -5,12 +5,12 @@ import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experie
 
 import DebugExperience from './DebugExperience.svelte';
 
-const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [] };
+const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
 
 function node(componentId: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
     registration: { componentId },
-    props: { content, design: {} },
+    props: { content, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -34,7 +34,11 @@ describe('DebugExperience.svelte', () => {
     const { container: zero } = render(DebugExperience, { props: { experience: emptyPlan } });
     expect(zero.innerHTML).toContain('Experience debug — 0 top-level nodes');
 
-    const one: PortableRenderPlan = { viewports: [], nodes: [node('button')] };
+    const one: PortableRenderPlan = {
+      viewports: [],
+      nodes: [node('button')],
+      fallbackViewportIndex: 0,
+    };
     const { container } = render(DebugExperience, { props: { experience: one } });
     expect(container.innerHTML).toContain('Experience debug — 1 top-level node');
   });
@@ -43,7 +47,11 @@ describe('DebugExperience.svelte', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [],
-      experienceTemplate: { experienceTemplateId: 'page', props: { content: {}, design: {} } },
+      experienceTemplate: {
+        experienceTemplateId: 'page',
+        props: { content: {}, design: {}, designRaw: {} },
+      },
+      fallbackViewportIndex: 0,
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('experience template: page');
@@ -53,6 +61,7 @@ describe('DebugExperience.svelte', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
+      fallbackViewportIndex: 0,
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('componentId');
@@ -63,7 +72,7 @@ describe('DebugExperience.svelte', () => {
   it('degrades a circular reference to a placeholder instead of throwing', () => {
     const n = node('button');
     n.props.resolved = { self: n.props };
-    const plan: PortableRenderPlan = { viewports: [], nodes: [n] };
+    const plan: PortableRenderPlan = { viewports: [], nodes: [n], fallbackViewportIndex: 0 };
 
     expect(() => render(DebugExperience, { props: { experience: plan } })).not.toThrow();
     const { container } = render(DebugExperience, { props: { experience: plan } });

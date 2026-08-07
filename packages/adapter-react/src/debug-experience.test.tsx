@@ -5,12 +5,12 @@ import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experie
 
 import { DebugExperience } from './debug-experience';
 
-const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [] };
+const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
 
 function node(componentId: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
     registration: { componentId },
-    props: { content, design: {} },
+    props: { content, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -32,7 +32,11 @@ describe('DebugExperience', () => {
     const zero = renderToStaticMarkup(<DebugExperience experience={emptyPlan} />);
     expect(zero).toContain('Experience debug — 0 top-level nodes');
 
-    const one: PortableRenderPlan = { viewports: [], nodes: [node('button')] };
+    const one: PortableRenderPlan = {
+      viewports: [],
+      nodes: [node('button')],
+      fallbackViewportIndex: 0,
+    };
     expect(renderToStaticMarkup(<DebugExperience experience={one} />)).toContain(
       'Experience debug — 1 top-level node'
     );
@@ -42,7 +46,11 @@ describe('DebugExperience', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [],
-      experienceTemplate: { experienceTemplateId: 'page', props: { content: {}, design: {} } },
+      experienceTemplate: {
+        experienceTemplateId: 'page',
+        props: { content: {}, design: {}, designRaw: {} },
+      },
+      fallbackViewportIndex: 0,
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
       'experience template: page'
@@ -53,6 +61,7 @@ describe('DebugExperience', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
+      fallbackViewportIndex: 0,
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
     expect(html).toContain('componentId');
@@ -64,7 +73,7 @@ describe('DebugExperience', () => {
     const n = node('button');
     // A customer's resolveData could stash a self-referential object on props.
     n.props.resolved = { self: n.props };
-    const plan: PortableRenderPlan = { viewports: [], nodes: [n] };
+    const plan: PortableRenderPlan = { viewports: [], nodes: [n], fallbackViewportIndex: 0 };
 
     expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('[Circular]');

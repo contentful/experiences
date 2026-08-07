@@ -2,9 +2,7 @@
 
 import { Fragment, type CSSProperties, type ReactNode } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
-
-// Minimal rich-text renderer (paragraphs + bold/italic) so the example stays
+// Minimal rich-text renderer (paragraphs + bold/italic) so the app stays
 // dependency-free; a real app would use @contentful/rich-text-react-renderer.
 
 interface Mark {
@@ -22,6 +20,9 @@ export interface RichTextProps {
   document?: {
     document?: RichTextNode | null;
   } | null;
+  // Design props (auto-filled, server-resolved):
+  fontSize?: string;
+  align?: CSSProperties['textAlign'];
 }
 
 function renderNode(node: RichTextNode, key: number): ReactNode {
@@ -47,16 +48,18 @@ function renderNode(node: RichTextNode, key: number): ReactNode {
   }
 }
 
-export function RichText({ document }: RichTextProps) {
-  const design = useDesignValues();
+export function RichText(props: RichTextProps) {
+  console.log('[RichText] resolved props →', props);
+
+  const { document, fontSize, align } = props;
   const doc = document?.document;
   if (!doc) return null;
 
   const style: CSSProperties = {
     color: '#4b5563',
     lineHeight: 1.6,
-    fontSize: (design.fontSize as string) ?? undefined,
-    textAlign: (design.align as CSSProperties['textAlign']) ?? undefined,
+    fontSize: fontSize ?? undefined,
+    textAlign: align ?? undefined,
   };
 
   return <div style={style}>{renderNode(doc, 0)}</div>;

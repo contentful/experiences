@@ -2,16 +2,19 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
-
 export interface TextProps {
   text?: string | null;
   /** Slot children, one pre-rendered node per child. */
   children?: ReactNode[];
+  // Design props (auto-filled, server-resolved):
+  fontSize?: string;
+  align?: CSSProperties['textAlign'];
 }
 
-export function Text({ text, children }: TextProps) {
-  const design = useDesignValues();
+export function Text(props: TextProps) {
+  console.log('[Text] resolved props →', props);
+
+  const { text, children, fontSize, align } = props;
   // Check `.length`, not truthiness — an empty slot is `[]`, which is truthy.
   if (!text && !children?.length) return null;
 
@@ -19,8 +22,8 @@ export function Text({ text, children }: TextProps) {
     margin: 0,
     color: '#4b5563',
     lineHeight: 1.5,
-    fontSize: (design.fontSize as string) ?? '16px',
-    textAlign: (design.align as CSSProperties['textAlign']) ?? undefined,
+    fontSize: fontSize ?? '16px',
+    textAlign: align ?? undefined,
   };
 
   return (

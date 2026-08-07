@@ -21,9 +21,9 @@ export type { ResolveContext, ResolveToken };
  * cascade, branching by `componentId` in a generic wrapper, keying
  * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
- * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
- * resolved values are what `useDesignValues()` returns.
+ * Design properties stay in their **raw discriminated form** here (the same
+ * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
+ * token-resolved values are what `useDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentId: string;
@@ -58,9 +58,10 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component. The `component`
- * receives the merged prop bag (content + resolveData + slots). Design values
- * are not injected — a component reads them via `useDesignValues()`. Runtime
- * context and raw payload come from `useExperience()` / `useContentfulComponent()`.
+ * receives the merged props (design + content + resolveData + slots); resolved
+ * design values auto-fill matching props and are also readable via
+ * `useDesignValues()`. Runtime context and raw payload come from
+ * `useExperience()` / `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
@@ -150,8 +151,8 @@ export interface Config {
   components: Components;
   experienceTemplates?: ExperienceTemplates;
   /**
-   * Resolves `DesignToken` envelopes to runtime values before they reach a
-   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * Resolves `DesignToken` values to runtime values before they reach a
+   * component. If omitted, they pass through unchanged. See `ResolveToken`
    * in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;

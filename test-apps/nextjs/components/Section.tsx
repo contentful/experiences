@@ -2,15 +2,6 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
-
-export interface SectionProps {
-  // Slot children arrive as an array of pre-rendered nodes — drop it straight
-  // into JSX to render them all (React renders arrays), or map/filter/wrap the
-  // children individually.
-  children?: ReactNode[];
-}
-
 type Align = 'start' | 'center' | 'end' | 'stretch';
 
 const ALIGN: Record<Align, CSSProperties['alignItems']> = {
@@ -20,18 +11,42 @@ const ALIGN: Record<Align, CSSProperties['alignItems']> = {
   stretch: 'stretch',
 };
 
-/**
- * Flex/grid layout primitive. Reads its semantic design keys (`direction`,
- * `ratio`, …) by name off `useDesignValues()`; token-valued keys arrive
- * already resolved to CSS by `resolveToken`.
- */
-export function Section({ children }: SectionProps) {
-  const design = useDesignValues();
+// Flex/grid layout primitive. Design keys arrive as auto-filled props, already
+// server-resolved (cascade + token resolution), so token-valued keys are CSS.
+export interface SectionProps {
+  // Slot children arrive as an array of pre-rendered nodes — drop it straight
+  // into JSX to render them all (React renders arrays), or map/filter/wrap the
+  // children individually.
+  children?: ReactNode[];
+  // Design props:
+  direction?: 'row' | 'column';
+  reverse?: boolean;
+  ratio?: string;
+  itemAlign?: Align;
+  gap?: string;
+  verticalSpacing?: string;
+  horizontalSpacing?: string;
+  backgroundColor?: string;
+  color?: string;
+  radius?: string;
+}
 
-  const direction = (design.direction as 'row' | 'column') ?? 'column';
-  const reverse = design.reverse === true;
-  const ratio = design.ratio as string | undefined;
-  const itemAlign = (design.itemAlign as Align | undefined) ?? 'stretch';
+export function Section(props: SectionProps) {
+  console.log('[Section] resolved props →', props);
+
+  const {
+    children,
+    direction = 'column',
+    reverse = false,
+    ratio,
+    itemAlign = 'stretch',
+    gap,
+    verticalSpacing,
+    horizontalSpacing,
+    backgroundColor,
+    color,
+    radius,
+  } = props;
 
   const flexDirection =
     `${direction}${reverse ? '-reverse' : ''}` as CSSProperties['flexDirection'];
@@ -40,12 +55,12 @@ export function Section({ children }: SectionProps) {
     display: 'flex',
     flexDirection,
     alignItems: ALIGN[itemAlign],
-    gap: (design.gap as string) ?? undefined,
-    paddingBlock: (design.verticalSpacing as string) ?? undefined,
-    paddingInline: (design.horizontalSpacing as string) ?? undefined,
-    backgroundColor: (design.backgroundColor as string) ?? undefined,
-    color: (design.color as string) ?? undefined,
-    borderRadius: (design.radius as string) ?? undefined,
+    gap: gap ?? undefined,
+    paddingBlock: verticalSpacing ?? undefined,
+    paddingInline: horizontalSpacing ?? undefined,
+    backgroundColor: backgroundColor ?? undefined,
+    color: color ?? undefined,
+    borderRadius: radius ?? undefined,
   };
 
   // A colon ratio ("1:2:1") lays children out in grid tracks; else flex.

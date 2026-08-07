@@ -88,12 +88,14 @@ export function ServerExperienceRenderer({
         config={config}
         viewports={experience.viewports}
         activeViewportIndex={activeViewportIndex}
+        fallbackViewportIndex={experience.fallbackViewportIndex}
       >
         <NodesRenderer
           nodes={experience.nodes}
           config={config}
           viewports={experience.viewports}
           activeViewportIndex={activeViewportIndex}
+          fallbackViewportIndex={experience.fallbackViewportIndex}
           renderUnknown={renderUnknown}
         />
       </WrapWithExperienceTemplate>

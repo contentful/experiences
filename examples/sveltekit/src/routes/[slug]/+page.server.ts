@@ -30,6 +30,9 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
         config: experienceConfig,
         metadata,
         debug,
+        // Pre-resolve design against the UA-detected viewport (same seed the
+        // renderer uses) so SSR paints correct design on first render.
+        initialViewportId,
       }
     );
 

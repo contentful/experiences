@@ -13,7 +13,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 
 That's the only SDK package you install. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
-Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same design-token plus `useDesignValues`/`getDesignValues` styling model. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
+Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, with the `useDesignValues`/`getDesignValues` hook available for the cases that need it. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
 
 ## Contents
 
@@ -76,7 +76,7 @@ const resolveToken: ResolveToken = (token) => `var(--${token.value.replaceAll('.
 export const experienceConfig: Config = { components, experienceTemplates, resolveToken };
 ```
 
-Components are registered by id and receive only their **content** props. They read design (spacing, color, typography, layout) themselves through the `useDesignValues()` hook, covered in [Styling components](#styling-components) below.
+Components are registered by id and receive their **content** props together with their **resolved design** props (spacing, color, typography, layout) — the SDK resolves design server-side and auto-fills it onto the same props object. Styling straight from props is the recommended path; the `useDesignValues()` hook remains available for cases props don't cover. Both are covered in [Styling components](#styling-components) below.
 
 ### 2. Fetch + resolve + render (server-side)
 
@@ -108,14 +108,35 @@ A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextj
 
 ## Styling components
 
-Design values are **not** injected as props. A component reads them itself through the `useDesignValues()` hook, the one place design comes from.
-
-The hook returns a flat record of every resolved design value for the current node. That includes real CSS-shaped values like `fontSize` and `backgroundColor`, plus author-defined semantic styling like `variant`, `as`, and `ratio`.
-
-`toCss()` turns that record into a ready-to-spread `CSSProperties` object, keeping only the keys that map to a real CSS property and dropping the semantic ones:
+Design values are resolved on the server, inside `fetchExperience` / `resolveExperience`, and auto-filled onto your component's props alongside content. Each design property lands on a prop of the same key, so a design property named `backgroundColor` arrives as a prop named `backgroundColor`, already cascaded to the active viewport and with any [design tokens](#design-tokens) resolved. The component reads its props and styles itself from them:
 
 ```tsx
 // components/Heading.tsx
+'use client';
+import type { CSSProperties } from 'react';
+
+interface HeadingProps {
+  text?: string;
+  // Resolved design values, auto-filled as props:
+  as?: 'h1' | 'h2' | 'h3'; // semantic key
+  fontSize?: string;
+  fontWeight?: string;
+}
+
+export function Heading({ text, as = 'h2', fontSize, fontWeight }: HeadingProps) {
+  const Tag = as; // semantic key, read by name
+  const style: CSSProperties = { fontSize, fontWeight };
+  return <Tag style={style}>{text}</Tag>;
+}
+```
+
+Since resolution happens on the server, the first SSR paint is already styled correctly, with no flash of unstyled content while the client works out the viewport. Both real CSS-shaped values (`fontSize`, `backgroundColor`) and author-defined semantic values (`variant`, `as`, `ratio`) arrive the same way. Read the semantic ones by name and pass the CSS-shaped ones into your `style`.
+
+### Reading design with the hook (optional)
+
+Props cover the common case. The `useDesignValues()` hook reads the same resolved design record from context, for the cases where props aren't the right fit: a deeply nested presentational child that isn't itself a registered component, or code that needs design outside the render path (a `useEffect`, an imperative measurement):
+
+```tsx
 'use client';
 import { toCss, useDesignValues } from '@contentful/experiences-react';
 
@@ -135,10 +156,11 @@ export function Heading({ text }: { text?: string }) {
 ```
 
 - `useDesignValues<T>()` takes an optional type argument for editor ergonomics. It's an assertion rather than a runtime check, so treat keys as possibly `undefined`.
-- `toCss(design, { include, exclude })` accepts optional key filters. Read semantic keys like `as` and `variant` by name.
+- It returns the same values that auto-fill props, and returns `{}` outside a renderer, so components degrade gracefully in isolation. It's not required: a component can style entirely from props and never call it.
+- `toCss(design, { include, exclude })` converts a design record to a `CSSProperties` object, keeping only keys that map to a real CSS property and dropping semantic ones. It accepts optional key filters. It's handy with the hook; with props you usually just spread the CSS-shaped keys yourself.
 - If `toCss` doesn't recognize a value, the property whitelist is extensible. See [`packages/design`](./packages/design).
 
-The Svelte adapter works the same way with `getDesignValues()`, covered in [Svelte / SvelteKit](#svelte--sveltekit).
+The Svelte adapter works the same way: design auto-fills props, and `getDesignValues()` is the optional hook. See [Svelte / SvelteKit](#svelte--sveltekit).
 
 ## Design tokens
 
@@ -163,7 +185,7 @@ resolveToken: (token) => designTokens[token.value];
 resolveToken: (token) => token.value.split('.').reduce((o, k) => o?.[k], tw.theme);
 ```
 
-Returning `undefined` means "not resolvable": the SDK drops that key so the component's own default takes over, and `useDesignValues()` won't include it. With no `resolveToken` configured, tokens pass through unresolved and the SDK warns once in development.
+Returning `undefined` means "not resolvable": the SDK drops that key so the component's own default takes over, and it won't appear in the auto-filled props (nor in `useDesignValues()`). With no `resolveToken` configured, tokens pass through unresolved and the SDK warns once in development, naming the component whose token it couldn't resolve.
 
 ---
 
@@ -316,12 +338,12 @@ function Fallback({ componentId, nodeId }: MissingComponentProps) {
 
 `@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one for one: the same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineExperienceTemplate`. Three differences, all mechanical:
 
-| Concern              | React                                          | Svelte                                                                                                  |
-| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Register a component | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
-| Read design          | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)                                                          |
-| Runtime context      | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
-| Slots                | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
+| Concern                     | React                                          | Svelte                                                                                                  |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Register a component        | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
+| Read design (optional hook) | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)                                                          |
+| Runtime context             | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
+| Slots                       | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
 
 ### 1. Register your components
 
@@ -347,16 +369,35 @@ const resolveToken: ResolveToken = (token) => designTokens[token.value];
 export const experienceConfig: Config = { components, resolveToken };
 ```
 
-### 2. Style a component with `getDesignValues()`
+### 2. Style a component from props
+
+Resolved design auto-fills props here too, so a component styles itself straight from `$props()`:
 
 ```svelte
 <!-- components/Heading.svelte -->
+<script lang="ts">
+  export interface HeadingProps {
+    text?: string;
+    as?: 'h1' | 'h2' | 'h3'; // resolved design, auto-filled as props
+    fontSize?: string;
+    fontWeight?: string;
+  }
+
+  let { text, as = 'h2', fontSize, fontWeight }: HeadingProps = $props();
+</script>
+
+<svelte:element this={as} style="font-size: {fontSize}; font-weight: {fontWeight};">{text}</svelte:element>
+```
+
+The `getDesignValues()` hook is available for the same optional cases as React — read it inside a `$derived` so it stays reactive across viewport changes:
+
+```svelte
+<!-- optional: read the same resolved record via the hook -->
 <script lang="ts">
   import { getDesignValues, toCss } from '@contentful/experiences-svelte';
 
   let { text }: { text?: string } = $props();
 
-  // Read inside a $derived so it stays reactive across viewport changes.
   const design = $derived(getDesignValues<{ as?: 'h1' | 'h2' | 'h3' }>());
   const tag = $derived(design.as ?? 'h2');
   const style = $derived(toCss(design)); // keeps CSS-shaped keys, drops `as`
@@ -566,21 +607,21 @@ Client-side renderer with reactive viewport tracking via `window.matchMedia`. Us
 
 Identity helper that narrows `resolveData` and `component` parameter types to your declared `Props`. A registry entry can also be a **bare component** (`Button` instead of `{ component: Button }`) when it needs no `defaults` or `resolveData`.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                           |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence props. Merged in before content / resolveData / slots.                                                                                                              |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`. |
-| `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged **content** props. Reads design via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Lowest-precedence props. Merged in before content / resolveData / slots.                                                                                                                                                         |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`.                                            |
+| `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged props (content + resolved design + `resolveData`). Design is also readable via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
 
 ### `defineExperienceTemplate<Props>(config)`
 
 Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so an experience template renders the page-level layout around them.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                 |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                         |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the experience template's `props`.         |
-| `component`   | `ComponentType<Props & { children?: ReactNode }>`                    | yes      | n/a     | Receives the merged content props plus `children`. Reads context/design via the same hooks. |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                        |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                                                |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the experience template's `props`.                                                |
+| `component`   | `ComponentType<Props & { children?: ReactNode }>`                    | yes      | n/a     | Receives the merged props (content + resolved design + `resolveData`) plus `children`. Design is also readable via the same hooks. |
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`
 
@@ -644,19 +685,20 @@ Experience Templates see `ContentfulExperienceTemplate`, the same shape but with
 The component receives a flat set of props composed in this order:
 
 1. `defaults`, fallback values from `defineComponent`
-2. `contentProperties`, editorial values from the payload
-3. `resolveData()` output, your transform's return value
-4. slot props, each named slot becomes a pre-rendered React subtree
+2. resolved `design`, viewport-cascaded and token-resolved, keyed by the raw design-property name
+3. `contentProperties`, editorial values from the payload
+4. `resolveData()` output, your transform's return value
+5. slot props, each named slot becomes a pre-rendered React subtree
 
-So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`.
+So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your component receives `text: 'Hello'`. Design sits below content and `resolveData`, so an explicit editorial or resolver value always wins over design when keys collide.
 
-Design values are deliberately left out of these props. They're published on context and read via `useDesignValues()`, so the SDK never spreads `cf`-prefixed or unknown keys onto your component. Runtime context and the raw payload are read the same way, through `useExperience()` and `useContentfulComponent()`, not injected.
+The same resolved design values are also published on context, so components that prefer the hook can still read them via `useDesignValues()`. Runtime context and the raw (pre-resolution) payload come through `useExperience()` and `useContentfulComponent()`, which are never injected as props.
 
 ---
 
 ## Design system stays portable
 
-The integration boundary is the registry, not the components. Your `Button` is plain React with its own `ButtonProps`: no SDK-shaped props, no injected design. A component that only renders content stays fully SDK-agnostic and works in Storybook, in unit tests, and in unrelated apps. One that styles itself imports only the `useDesignValues()` hook, which returns `{}` outside a renderer so it degrades gracefully.
+The integration boundary is the registry, not the components. Your `Button` is plain React with its own `ButtonProps` — content and resolved design values are just props on that interface, so the component imports nothing SDK-shaped and works in Storybook, in unit tests, and in unrelated apps. Rendering it anywhere is a matter of passing props. A component that prefers the hook imports only `useDesignValues()`, which returns `{}` outside a renderer so it still degrades gracefully.
 
 ```tsx
 // components/Button.tsx: plain React, zero SDK coupling

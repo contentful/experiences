@@ -40,7 +40,7 @@ export interface ViewportDef {
 /**
  * Discriminated design-property value as it arrives from XDA. v1 accepts:
  *  - ManualDesignValue: an explicit scalar (no viewport involved).
- *  - ValuesByViewport: a viewport-keyed bag where each entry is itself a
+ *  - ValuesByViewport: a viewport-keyed map where each entry is itself a
  *                      ManualDesignValue or DesignToken.
  *  - DesignToken: a token reference, passed through to customer components
  *                 as-is for v1. Resolution lands in the future tokens package.
@@ -58,7 +58,7 @@ export interface DesignToken {
 }
 
 /**
- * Turns a `DesignToken` envelope into a runtime value. `ref.value` is the
+ * Turns a `DesignToken` into a runtime value. `ref.value` is the
  * customer-defined token id; returning `undefined` means "not resolvable" and
  * the adapter drops the key (with a warning). Sync only — it runs at render time.
  */
@@ -169,7 +169,7 @@ export interface ExperiencePayload {
 
 /**
  * Per-node context handed to a component's `resolveData` resolver. Carries
- * the raw content + design props from the payload (design envelopes are NOT
+ * the raw content + design props from the payload (design properties are NOT
  * pre-resolved against a viewport — viewport resolution stays a render-time
  * concern so client viewport changes don't re-trigger async resolvers).
  */
@@ -193,14 +193,19 @@ export interface PortableRegistration {
  * The IR — one node per component instance. The seam that lets non-React
  * adapters (Angular, SwiftUI, Compose) consume the same interpretation.
  *
- * Design props preserve the discriminated envelope as they arrived. Adapters
+ * Design props preserve the discriminated value shape as they arrived. Adapters
  * unwrap to plain scalars at render time, given an active viewport.
- * (DesignToken envelopes pass through unwrapped — customer components decide
+ * (DesignToken values pass through unwrapped — customer components decide
  * how to resolve them in v1.)
  *
  * `props.resolved` is populated by `resolveExperience` from any
- * customer-supplied `resolveData` resolver and merged into the final prop bag
+ * customer-supplied `resolveData` resolver and merged into the final props
  * after content + design but before slot props.
+ *
+ * `props.design` is the server pre-resolution of design against the plan's
+ * fallback viewport; the raw per-viewport form stays on `props.designRaw` so
+ * the client can re-resolve when the active viewport differs. See the fields
+ * below.
  */
 export interface PortableRenderNode {
   /**
@@ -212,8 +217,11 @@ export interface PortableRenderNode {
   registration: PortableRegistration;
   props: {
     content: Record<string, unknown>;
-    design: Record<string, DesignPropValue>;
+    /** Flat, viewport-cascaded, token-resolved design values (server-side). */
+    design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
+    /** Raw per-viewport design, for client re-resolution on viewport change. */
+    designRaw: Record<string, DesignPropValue>;
   };
   slots: Record<string, PortableRenderNode[]>;
 }
@@ -224,7 +232,7 @@ export interface PortableRenderNode {
  * `payload.sys.experienceTemplate.sys.urn` (last slash-segment).
  *
  * Experience Templates carry the same prop-resolution shape as components:
- * content + design envelopes plus an optional `resolved` bag from a
+ * content + design properties plus an optional `resolved` map from a
  * `resolveData` hook. v1 payloads from XDA don't carry template-level
  * content/design properties yet, but the IR makes room for them so the API
  * doesn't need to break later.
@@ -233,8 +241,11 @@ export interface PortableExperienceTemplate {
   experienceTemplateId: string;
   props: {
     content: Record<string, unknown>;
-    design: Record<string, DesignPropValue>;
+    /** Same as `PortableRenderNode.props.design`. */
+    design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
+    /** Same as `PortableRenderNode.props.designRaw`. */
+    designRaw: Record<string, DesignPropValue>;
   };
 }
 
@@ -251,4 +262,10 @@ export interface PortableRenderPlan {
   viewports: ViewportDef[];
   nodes: PortableRenderNode[];
   experienceTemplate?: PortableExperienceTemplate;
+  /**
+   * Viewport index the server pre-resolved design against (viewport[0] by
+   * default). Adapters use `props.design` as-is when their active viewport
+   * matches this, and recompute from `props.designRaw` otherwise.
+   */
+  fallbackViewportIndex: number;
 }

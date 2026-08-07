@@ -18,9 +18,9 @@ export type { ResolveContext, ResolveToken };
  * analytics on `nodeId`, rendering a raw-payload panel in preview, or
  * rendering non-`children` slots through the exported `<NodesRenderer />`.
  *
- * Design properties stay in their **raw envelope form** here (the same shape
- * `ctx.design` carries inside `resolveData`). The viewport-cascaded, token-
- * resolved values are what `getDesignValues()` returns.
+ * Design properties stay in their **raw discriminated form** here (the same
+ * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
+ * token-resolved values are what `getDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentId: string;
@@ -57,13 +57,20 @@ export interface ContentfulExperienceTemplate {
 export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
   activeViewportIndex: number;
+  /**
+   * Viewport index the server pre-resolved design against (from
+   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
+   * as-is when `activeViewportIndex` matches, and recompute otherwise. Always a
+   * number — the plan field is required, so the match is a real comparison.
+   */
+  fallbackViewportIndex: number;
 }
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * receives the merged prop bag (content + resolveData + `children` Snippet).
- * Design values are not injected — a component reads them via
- * `getDesignValues()`. Runtime context and raw payload come from
+ * receives the merged props (design + content + resolveData + `children`
+ * Snippet); resolved design values auto-fill matching props and are also
+ * readable via `getDesignValues()`. Runtime context and raw payload come from
  * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
@@ -118,8 +125,8 @@ export interface Config {
   components: Components;
   experienceTemplates?: ExperienceTemplates;
   /**
-   * Resolves `DesignToken` envelopes to runtime values before they reach a
-   * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
+   * Resolves `DesignToken` values to runtime values before they reach a
+   * component. If omitted, they pass through unchanged. See `ResolveToken`
    * in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;

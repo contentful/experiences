@@ -2,16 +2,21 @@
 
 import type { CSSProperties } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
-
+// Design values arrive as ordinary props, auto-filled by the SDK after
+// server-side resolution — no useDesignValues() call.
 export interface ButtonProps {
   label?: string;
   url?: string | null;
+  // Design props:
+  target?: string;
+  backgroundColor?: string;
+  color?: string;
 }
 
-export function Button({ label, url }: ButtonProps) {
-  const design = useDesignValues();
-  const target = (design.target as string | undefined) ?? '_self';
+export function Button(props: ButtonProps) {
+  console.log('[Button] resolved props →', props);
+
+  const { label, url, target = '_self', backgroundColor, color } = props;
 
   const style: CSSProperties = {
     display: 'inline-flex',
@@ -19,8 +24,8 @@ export function Button({ label, url }: ButtonProps) {
     gap: 6,
     padding: '12px 18px',
     borderRadius: 8,
-    background: (design.backgroundColor as string) ?? '#4f39f6',
-    color: (design.color as string) ?? '#ffffff',
+    background: backgroundColor ?? '#4f39f6',
+    color: color ?? '#ffffff',
     fontWeight: 500,
     border: 'none',
     textDecoration: 'none',
