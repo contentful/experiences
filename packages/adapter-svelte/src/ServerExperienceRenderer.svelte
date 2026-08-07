@@ -51,7 +51,7 @@
       viewports,
       activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
       activeViewportIndex: idx,
-      fallbackViewportIndex: experience?.fallbackViewportIndex,
+      fallbackViewportIndex: experience?.fallbackViewportIndex ?? 0,
     };
   }
 

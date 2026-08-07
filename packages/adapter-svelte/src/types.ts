@@ -60,9 +60,10 @@ export interface RenderContext extends ExperienceContext {
   /**
    * Viewport index the server pre-resolved design against (from
    * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
-   * as-is when `activeViewportIndex` matches, and recompute otherwise.
+   * as-is when `activeViewportIndex` matches, and recompute otherwise. Always a
+   * number — the plan field is required, so the match is a real comparison.
    */
-  fallbackViewportIndex?: number;
+  fallbackViewportIndex: number;
 }
 
 /**

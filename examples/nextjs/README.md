@@ -10,7 +10,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
 - **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
-- **Styling via `useDesignValues()` and `toCss()`**: components read their own design (spacing, color, typography, layout) from the hook; design is never injected as props. `Section`, `Heading`, `Text`, `Button`, `Image`, and `RichText` all follow this pattern.
+- **Two ways to consume design** (spacing, color, typography, layout), both fed by the same resolved values: `Section` declares the design keys it uses as **named props** and destructures them; `Heading`, `Text`, `Button`, `Image`, and `RichText` read the whole record with **`useDesignValues()`** and pipe it through `toCss()`. Prefer named props when you know the keys — a component that collects leftovers with `...rest` and forwards them to a DOM element will emit camelCase design keys as invalid HTML attributes.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
 - **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
 
@@ -115,8 +115,8 @@ examples/nextjs/
 │   ├── layout.tsx                       # root layout
 │   ├── page.tsx                         # index; links to the demo experience
 │   └── [slug]/page.tsx                  # fetch + render + 404, preview, UA seeding, metadata
-├── components/                          # design-system components; read design via useDesignValues()
-│   ├── Section.tsx                      # flex/grid layout primitive
+├── components/                          # design-system components
+│   ├── Section.tsx                      # flex/grid layout primitive; design as named props
 │   ├── Heading.tsx
 │   ├── Text.tsx
 │   ├── RichText.tsx                     # minimal rich-text renderer
@@ -133,7 +133,7 @@ examples/nextjs/
 
 The example separates **two layers**:
 
-1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) and read design themselves via `useDesignValues()`. They import nothing SDK-shaped beyond that hook, and it returns `{}` outside a renderer, so they degrade gracefully.
+1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus the resolved design values. `Section` names the design keys it consumes in its own props interface; the rest read them as a record via `useDesignValues()`, which imports nothing else SDK-shaped and returns `{}` outside a renderer, so they degrade gracefully.
 2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
 
 Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface.
@@ -147,6 +147,21 @@ export function Heading({ text }: { text?: string }) {
   const design = useDesignValues<{ as?: 'h1' | 'h2' | 'h3' }>();
   const Tag = design.as ?? 'h2'; // semantic key, read by name
   return <Tag style={toCss(design)}>{text}</Tag>; // toCss keeps CSS-shaped keys
+}
+```
+
+```tsx
+// components/Section.tsx: design keys declared as props, no SDK import at all
+'use client';
+
+export function Section({ direction = 'column', gap, backgroundColor, children }: SectionProps) {
+  // Destructure the keys you use. Don't gather `...rest` and spread it onto a
+  // DOM element — design keys are camelCase prop names, not HTML attributes.
+  return (
+    <div style={{ display: 'flex', flexDirection: direction, gap, backgroundColor }}>
+      {children}
+    </div>
+  );
 }
 ```
 
@@ -177,11 +192,12 @@ export const experienceConfig: Config = { components, experienceTemplates, resol
 The component receives a flat set of props composed of (last-wins):
 
 1. `defaults` (componentConfig.defaults, fallback values)
-2. `contentProperties` (editorial values from the payload)
-3. `resolveData()` (return value of componentConfig.resolveData, see below)
-4. slot props (each named slot becomes a pre-rendered React subtree)
+2. resolved design values (cascaded to the active viewport, run through `resolveToken`)
+3. `contentProperties` (editorial values from the payload)
+4. `resolveData()` (return value of componentConfig.resolveData, see below)
+5. slot props (each named slot becomes a pre-rendered React subtree)
 
-Design values are **not** included here; they're read via `useDesignValues()`. So a payload like:
+So a payload like:
 
 ```json
 {
@@ -191,7 +207,7 @@ Design values are **not** included here; they're read via `useDesignValues()`. S
 }
 ```
 
-reaches your `Button` as `{ label: 'Click me', url: 'https://example.com/go' }` (after its `resolveData` runs), while `useDesignValues()` returns `{ target: '_self' }`.
+reaches your `Button` as `{ target: '_self', label: 'Click me', url: 'https://example.com/go' }` (after its `resolveData` runs). The same `{ target: '_self' }` is also what `useDesignValues()` returns, so either style sees identical values — declare `target` as a prop, or read it off the hook.
 
 ### `resolveData`: sync or async transforms
 

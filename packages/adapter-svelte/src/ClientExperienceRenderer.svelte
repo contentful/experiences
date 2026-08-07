@@ -54,7 +54,7 @@
     viewports: experience?.viewports ?? [],
     activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
     activeViewportIndex: 0,
-    fallbackViewportIndex: experience?.fallbackViewportIndex,
+    fallbackViewportIndex: experience?.fallbackViewportIndex ?? 0,
   });
 
   setExperience(liveContext);

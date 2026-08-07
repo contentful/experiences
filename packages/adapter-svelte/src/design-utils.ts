@@ -12,7 +12,7 @@ export function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],
   activeViewportIndex: number,
-  fallbackViewportIndex: number | undefined,
+  fallbackViewportIndex: number,
   resolveToken: ResolveToken | undefined
 ): { props: Record<string, unknown>; unresolved: string[] } {
   if (activeViewportIndex === fallbackViewportIndex) {

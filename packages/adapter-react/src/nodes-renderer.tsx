@@ -36,7 +36,7 @@ function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],
   activeViewportIndex: number,
-  fallbackViewportIndex: number | undefined,
+  fallbackViewportIndex: number,
   resolveToken: Config['resolveToken']
 ): { props: Record<string, unknown>; unresolved: string[] } {
   if (activeViewportIndex === fallbackViewportIndex) {
@@ -55,8 +55,8 @@ export interface NodesRendererProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
-  /** Viewport index the server pre-resolved design against, if any. */
-  fallbackViewportIndex?: number;
+  /** Viewport index the server pre-resolved design against. */
+  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
 }
 
@@ -91,7 +91,7 @@ interface NodeRendererProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
-  fallbackViewportIndex?: number;
+  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
 }
 
@@ -169,8 +169,8 @@ export interface WrapWithExperienceTemplateProps {
   config: Config;
   viewports: ViewportDef[];
   activeViewportIndex: number;
-  /** Viewport index the server pre-resolved design against, if any. */
-  fallbackViewportIndex?: number;
+  /** Viewport index the server pre-resolved design against. */
+  fallbackViewportIndex: number;
   children: ReactNode;
 }
 
