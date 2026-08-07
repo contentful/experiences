@@ -28,11 +28,11 @@
 
   let { node, config, experience, renderUnknown, children }: NodeRendererProps = $props();
 
-  const entry = $derived(config.components[node.registration.componentTypeId]);
+  const entry = $derived(config.components[node.registration.componentId]);
   const componentConfig = $derived(entry ? normalizeComponentRegistration(entry) : null);
 
   const contentful: ContentfulComponent = {
-    componentTypeId: node.registration.componentTypeId,
+    componentId: node.registration.componentId,
     nodeId: node.nodeId,
     content: node.props.content,
     design: node.props.design,
@@ -52,7 +52,7 @@
     const { props, unresolved } = applyTokenResolver(resolvedDesign, config.resolveToken);
     if (unresolved.length && typeof console !== 'undefined') {
       console.warn(
-        `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on "${node.registration.componentTypeId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
+        `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on "${node.registration.componentId}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
       );
     }
     return props;
@@ -77,7 +77,7 @@
 {:else}
   {@const Unknown = renderUnknown}
   <Unknown
-    componentTypeId={node.registration.componentTypeId}
+    componentId={node.registration.componentId}
     nodeId={node.nodeId}
   />
 {/if}

@@ -33,7 +33,9 @@ export function DebugExperience({
 }: DebugExperienceProps): ReactNode {
   const nodeCount = experience.nodes.length;
   const summary = `Experience debug — ${nodeCount} top-level node${nodeCount === 1 ? '' : 's'}${
-    experience.template ? `, template: ${experience.template.templateId}` : ''
+    experience.experienceTemplate
+      ? `, experience template: ${experience.experienceTemplate.experienceTemplateId}`
+      : ''
   }`;
 
   return (

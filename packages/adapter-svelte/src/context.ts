@@ -18,11 +18,13 @@
 
 import { getContext, setContext } from 'svelte';
 
-import type { ContentfulComponent, ContentfulTemplate, RenderContext } from './types.js';
+import type { ContentfulComponent, ContentfulExperienceTemplate, RenderContext } from './types.js';
 
 const EXPERIENCE_KEY = Symbol('@contentful/experiences-svelte::experience');
 const COMPONENT_KEY = Symbol('@contentful/experiences-svelte::contentful-component');
-const TEMPLATE_KEY = Symbol('@contentful/experiences-svelte::contentful-template');
+const EXPERIENCE_TEMPLATE_KEY = Symbol(
+  '@contentful/experiences-svelte::contentful-experience-template'
+);
 const RESOLVED_DESIGN_KEY = Symbol('@contentful/experiences-svelte::resolved-design');
 
 export function setExperience(ctx: RenderContext): void {
@@ -33,12 +35,12 @@ export function setContentfulComponent(node: ContentfulComponent): void {
   setContext(COMPONENT_KEY, node);
 }
 
-export function setContentfulTemplate(tpl: ContentfulTemplate): void {
-  setContext(TEMPLATE_KEY, tpl);
+export function setContentfulExperienceTemplate(tpl: ContentfulExperienceTemplate): void {
+  setContext(EXPERIENCE_TEMPLATE_KEY, tpl);
 }
 
 /**
- * Publish the resolved design values for the enclosing node/template. Takes a
+ * Publish the resolved design values for the enclosing node or experience template. Takes a
  * getter (not a snapshot) so callers reading it inside a `$derived` stay
  * reactive across viewport changes.
  */
@@ -60,13 +62,14 @@ export function getContentfulComponent(): ContentfulComponent | undefined {
   return getContext<ContentfulComponent | undefined>(COMPONENT_KEY);
 }
 
-export function getContentfulTemplate(): ContentfulTemplate | undefined {
-  return getContext<ContentfulTemplate | undefined>(TEMPLATE_KEY);
+export function getContentfulExperienceTemplate(): ContentfulExperienceTemplate | undefined {
+  return getContext<ContentfulExperienceTemplate | undefined>(EXPERIENCE_TEMPLATE_KEY);
 }
 
 /**
  * Read the design values the renderer resolved for the enclosing node or
- * template. Returns `undefined` outside a rendered node/template, which
+ * experience template. Returns `undefined` outside a rendered node or
+ * experience template, which
  * `getDesignValues` treats as "nothing to read."
  */
 export function getResolvedDesign(): Record<string, unknown> | undefined {

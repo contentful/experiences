@@ -18,7 +18,7 @@ export type { ResolveContext, ResolveToken };
  * The full Contentful-side payload for a single component instance, exposed
  * via `useContentfulComponent()` to any descendant of a rendered Experience
  * node. Useful for custom design-property resolution outside the SDK's
- * cascade, branching by `componentTypeId` in a generic wrapper, keying
+ * cascade, branching by `componentId` in a generic wrapper, keying
  * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
  * Design properties stay in their **raw envelope form** here (the same shape
@@ -26,7 +26,7 @@ export type { ResolveContext, ResolveToken };
  * resolved values are what `useDesignValues()` returns.
  */
 export interface ContentfulComponent {
-  componentTypeId: string;
+  componentId: string;
   nodeId?: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
@@ -34,11 +34,12 @@ export interface ContentfulComponent {
 }
 
 /**
- * Same shape as `ContentfulComponent`, but for the page-level template.
- * Exposed via `useContentfulTemplate()` inside a template's component tree.
+ * Same shape as `ContentfulComponent`, but for the page-level Experience
+ * Template. Exposed via `useContentfulExperienceTemplate()` inside an
+ * Experience Template's component tree.
  */
-export interface ContentfulTemplate {
-  templateId: string;
+export interface ContentfulExperienceTemplate {
+  experienceTemplateId: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
@@ -56,7 +57,7 @@ export interface RenderContext extends ExperienceContext {
 }
 
 /**
- * Customer-supplied configuration for a single component type. The `component`
+ * Customer-supplied configuration for a single component. The `component`
  * receives the merged prop bag (content + resolveData + slots). Design values
  * are not injected — a component reads them via `useDesignValues()`. Runtime
  * context and raw payload come from `useExperience()` / `useContentfulComponent()`.
@@ -93,21 +94,22 @@ export type Registration<Props extends object = Record<string, unknown>> =
   | ComponentConfig<Props>;
 
 /**
- * Customer-supplied configuration for a page-level template. The template's
- * component receives the rendered Experience nodes as `children`.
+ * Customer-supplied configuration for a page-level Experience Template. The
+ * template's component receives the rendered Experience nodes as `children`.
  */
-export interface TemplateConfig<Props extends object = Record<string, unknown>> {
+export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   component: ComponentType<Props & { children?: ReactNode }>;
 }
 
 /**
- * Registry value for templates. Same dual-shape as component registrations.
+ * Registry value for Experience Templates. Same dual-shape as component
+ * registrations.
  */
-export type TemplateRegistration<Props extends object = Record<string, unknown>> =
+export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
   | ComponentType<Props & { children?: ReactNode }>
-  | TemplateConfig<Props>;
+  | ExperienceTemplateConfig<Props>;
 
 /**
  * Identity helper — returns the config as-is, but narrows the `resolveData`
@@ -120,32 +122,33 @@ export function defineComponent<Props extends object = Record<string, unknown>>(
 }
 
 /**
- * Identity helper — returns the template config as-is, with `Props` narrowing.
+ * Identity helper — returns the Experience Template config as-is, with `Props`
+ * narrowing.
  */
-export function defineTemplate<Props extends object = Record<string, unknown>>(
-  config: TemplateConfig<Props>
-): TemplateConfig<Props> {
+export function defineExperienceTemplate<Props extends object = Record<string, unknown>>(
+  config: ExperienceTemplateConfig<Props>
+): ExperienceTemplateConfig<Props> {
   return config;
 }
 
 /**
- * Component registry — keyed by `componentTypeId` (last slash-segment of
- * `componentType.sys.urn`). Per-entry prop narrowing happens at
+ * Component registry — keyed by `componentId` (last slash-segment of
+ * `component.sys.urn`). Per-entry prop narrowing happens at
  * `defineComponent<Props>` or at the bare-component's own type.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at the registration author's call site.
 export type Components = Record<string, Registration<any>>;
 
 /**
- * Template registry — keyed by `templateId` (last slash-segment of
- * `payload.sys.template.sys.urn`).
+ * Experience Template registry — keyed by `experienceTemplateId` (last
+ * slash-segment of `payload.sys.experienceTemplate.sys.urn`).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at the registration author's call site.
-export type Templates = Record<string, TemplateRegistration<any>>;
+export type ExperienceTemplates = Record<string, ExperienceTemplateRegistration<any>>;
 
 export interface Config {
   components: Components;
-  templates?: Templates;
+  experienceTemplates?: ExperienceTemplates;
   /**
    * Resolves `DesignToken` envelopes to runtime values before they reach a
    * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
@@ -172,11 +175,11 @@ export function normalizeComponentRegistration<P extends object>(
   return { component: reg as ComponentType<P> };
 }
 
-export function normalizeTemplateRegistration<P extends object>(
-  reg: TemplateRegistration<P>
-): TemplateConfig<P> {
+export function normalizeExperienceTemplateRegistration<P extends object>(
+  reg: ExperienceTemplateRegistration<P>
+): ExperienceTemplateConfig<P> {
   if (typeof reg === 'object' && reg !== null && !('$$typeof' in reg) && 'component' in reg) {
-    return reg as TemplateConfig<P>;
+    return reg as ExperienceTemplateConfig<P>;
   }
   return { component: reg as ComponentType<P & { children?: ReactNode }> };
 }

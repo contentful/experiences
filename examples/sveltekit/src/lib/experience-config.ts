@@ -1,11 +1,16 @@
 /**
- * Maps Contentful component/template ids to the app's Svelte components,
+ * Maps Contentful component / experience-template ids to the app's Svelte components,
  * and wires `resolveToken`. Registry keys match the last URN segment of
- * each node's `componentType` / `template`. Components read design via
+ * each node's `component` / `experienceTemplate`. Components read design via
  * `getDesignValues()`.
  */
 
-import type { Components, Config, ResolveToken, Templates } from '@contentful/experiences-svelte';
+import type {
+  Components,
+  Config,
+  ResolveToken,
+  ExperienceTemplates,
+} from '@contentful/experiences-svelte';
 
 import Button from './components/Button.svelte';
 import Card from './components/Card.svelte';
@@ -29,7 +34,7 @@ const components: Components = {
   card: Card,
 };
 
-const templates: Templates = {
+const experienceTemplates: ExperienceTemplates = {
   page: Page,
 };
 
@@ -38,4 +43,4 @@ const templates: Templates = {
 // undefined drops the key.
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };

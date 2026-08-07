@@ -18,7 +18,7 @@ This is the **only SDK package you install**. It re-exports everything you need 
 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
-defineTemplate<Props>(config); // Same shape, for page-level template wrappers
+defineExperienceTemplate<Props>(config); // Same shape, for page-level Experience Template wrappers
 ```
 
 ### Fetching
@@ -54,7 +54,7 @@ useDesignValues<T>(); // Resolved design values for the current node (viewport-c
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
-useContentfulTemplate(); // Same, for the page-level template
+useContentfulExperienceTemplate(); // Same, for the page-level Experience Template
 type ToCssOptions;
 ```
 
@@ -64,12 +64,12 @@ Design is **not** injected as props; components read it via `useDesignValues()`.
 
 ```ts
 // From core
-type Config, Components, Templates, Registration, TemplateRegistration,
-type ComponentConfig, TemplateConfig,
-type ContentfulComponent, ContentfulTemplate,
+type Config, Components, ExperienceTemplates, Registration, ExperienceTemplateRegistration,
+type ComponentConfig, ExperienceTemplateConfig,
+type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
-type ExperiencePayload, ExperienceNode, ComponentTypeNode, TemplateNode,
-type PortableRenderPlan, PortableRenderNode, PortableTemplate,
+type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
+type PortableRenderPlan, PortableRenderNode, PortableExperienceTemplate,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions

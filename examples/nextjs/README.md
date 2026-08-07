@@ -122,7 +122,7 @@ examples/nextjs/
 │   ├── RichText.tsx                     # minimal rich-text renderer
 │   ├── Image.tsx
 │   ├── Button.tsx
-│   └── Page.tsx                         # used as the page-level template
+│   └── Page.tsx                         # used as the page-level Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
     ├── detect-viewport.ts               # User-Agent to viewport id
@@ -134,7 +134,7 @@ examples/nextjs/
 The example separates **two layers**:
 
 1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) and read design themselves via `useDesignValues()`. They import nothing SDK-shaped beyond that hook, and it returns `{}` outside a renderer, so they degrade gracefully.
-2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentTypeId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `templateId`s under `templates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
+2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
 
 Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface.
 
@@ -165,11 +165,11 @@ const components = {
   // ... other component types (bare or config) ...
 };
 
-const templates = { page: Page };
+const experienceTemplates = { page: Page };
 
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };
 ```
 
 ### Merge precedence
@@ -185,7 +185,7 @@ Design values are **not** included here; they're read via `useDesignValues()`. S
 
 ```json
 {
-  "componentType": { "sys": { "urn": ".../componentTypes/Button" } },
+  "component": { "sys": { "urn": ".../components/Button" } },
   "contentProperties": { "label": "Click me", "url": "example.com/go" },
   "designProperties": { "target": { "type": "ManualDesignValue", "value": "_self" } }
 }
@@ -256,29 +256,30 @@ Pair with `<ServerExperienceRenderer initialViewportId={...}>` (User-Agent
 parsed on the server) when you want SSR output to match the device's expected
 viewport. Otherwise the renderer defaults to `viewports[0]`.
 
-### `defineTemplate`: page-level wrappers
+### `defineExperienceTemplate`: page-level wrappers
 
-When a payload carries `sys.template`, the SDK looks up a matching id under
-`Config.templates` and wraps the rendered nodes with the template's component.
-Templates use the same `defaults` / `resolveData` shape as components; the
+When a payload carries `sys.experienceTemplate`, the SDK looks up a matching id
+under `Config.experienceTemplates` and wraps the rendered nodes with the
+Experience Template's component. Experience Templates use the same `defaults` /
+`resolveData` shape as components; the
 only structural difference is that the component always receives a fixed
 `children: ReactNode` (the rendered experience) alongside its declared props.
 
 ```tsx
-import { defineTemplate } from '@contentful/experiences-react';
+import { defineExperienceTemplate } from '@contentful/experiences-react';
 import { Page } from './Page';
 
-const templates = {
-  // bare component, or defineTemplate({...}) for defaults / resolveData
-  page: defineTemplate<PageProps>({
+const experienceTemplates = {
+  // bare component, or defineExperienceTemplate({...}) for defaults / resolveData
+  page: defineExperienceTemplate<PageProps>({
     defaults: { title: 'Welcome' },
     component: Page, // Page receives { title, children }
   }),
 };
 
-export const experienceConfig: Config = { components, templates };
+export const experienceConfig: Config = { components, experienceTemplates };
 ```
 
-If the payload references a template id that isn't registered, the renderer
+If the payload references an experience-template id that isn't registered, the renderer
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.

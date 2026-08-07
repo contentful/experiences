@@ -1,14 +1,14 @@
 /**
- * Maps Contentful component/template ids to the app's components, and wires
+ * Maps Contentful component / experience-template ids to the app's components, and wires
  * `resolveToken`. Registry keys match the last URN segment of each node's
- * `componentType` / `template`. Components read design via `useDesignValues()`.
+ * `component` / `experienceTemplate`. Components read design via `useDesignValues()`.
  */
 
 import {
   type Components,
   type Config,
   type ResolveToken,
-  type Templates,
+  type ExperienceTemplates,
 } from '@contentful/experiences-react';
 
 import { Button } from '@/components/Button';
@@ -29,7 +29,7 @@ const components: Components = {
   Image,
 };
 
-const templates: Templates = {
+const experienceTemplates: ExperienceTemplates = {
   page: Page,
 };
 
@@ -39,4 +39,4 @@ const templates: Templates = {
 // e.g. `(token) => `var(--${token.value.replaceAll('.', '-')})``.
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };

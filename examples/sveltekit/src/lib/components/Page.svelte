@@ -1,5 +1,5 @@
 <!--
-  Page-level template. Receives the rendered experience nodes via the
+  Page-level Experience Template. Receives the rendered experience nodes via the
   `children` Snippet and wraps them with the page chrome.
 -->
 <script lang="ts" module>

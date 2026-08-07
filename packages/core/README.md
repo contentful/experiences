@@ -6,7 +6,7 @@ Runtime-neutral primitives shared across all framework adapters.
 
 ## What lives here
 
-- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableTemplate`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken` / `ValuesByViewport`), `ViewportDef`, `ExperienceContext`, `ResolveContext`.
+- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableExperienceTemplate`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken` / `ValuesByViewport`), `ViewportDef`, `ExperienceContext`, `ResolveContext`.
 - **`resolveExperience(payload, config, opts)`** — single async entry that walks an XDA payload, classifies content vs. design properties, captures slots, runs any component-declared `resolveData` hooks in parallel, and emits a runtime-neutral `PortableRenderPlan` ready for any framework adapter to render.
 
 ## Why a separate package?

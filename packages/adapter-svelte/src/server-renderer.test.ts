@@ -2,7 +2,7 @@ import { render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
-  ComponentTypeNode,
+  ComponentNode,
   ExperiencePayload,
   ManualDesignValue,
   ValuesByViewport,
@@ -18,7 +18,7 @@ import ContainerFixture from './test-fixtures/ContainerFixture.svelte';
 import HeadingFixture from './test-fixtures/HeadingFixture.svelte';
 import ItemFixture from './test-fixtures/ItemFixture.svelte';
 import PrecedenceFixture from './test-fixtures/PrecedenceFixture.svelte';
-import TemplateFixture from './test-fixtures/TemplateFixture.svelte';
+import ExperienceTemplateFixture from './test-fixtures/ExperienceTemplateFixture.svelte';
 import WrappingContainerFixture from './test-fixtures/WrappingContainerFixture.svelte';
 import { captureSink } from './test-fixtures/capture-sink.js';
 import { toCss } from './design-utils.js';
@@ -38,16 +38,13 @@ const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
 
 const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
-function componentNode(
-  typeId: string,
-  rest: Omit<ComponentTypeNode, 'componentType'> = {}
-): ComponentTypeNode {
+function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
-    componentType: {
+    component: {
       sys: {
         type: 'ResourceLink',
-        linkType: 'Contentful:ComponentType',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/${typeId}`,
+        linkType: 'Contentful:Component',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
       },
     },
     ...rest,
@@ -197,13 +194,13 @@ describe('ServerExperienceRenderer', () => {
       nodes: [
         {
           nodeId: 'root',
-          registration: { componentTypeId: 'contentful-container' },
+          registration: { componentId: 'contentful-container' },
           props: { content: {}, design: {} },
           slots: {
             children: [
               {
                 nodeId: 'ghost',
-                registration: { componentTypeId: 'NotRegistered' },
+                registration: { componentId: 'NotRegistered' },
                 props: { content: {}, design: {} },
                 slots: {},
               },
@@ -303,7 +300,7 @@ describe('ServerExperienceRenderer', () => {
       nodes: [
         {
           nodeId: 'r',
-          registration: { componentTypeId: 'item' },
+          registration: { componentId: 'item' },
           props: {
             content: { value: 'fromContent' },
             design: {},
@@ -319,20 +316,20 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).toContain('data-value="fromResolveData"');
   });
 
-  it('wraps rendered nodes with the registered template', async () => {
+  it('wraps rendered nodes with the registered experienceTemplate', async () => {
     const tplConfig: Config = {
       components: { item: PrecedenceFixture },
-      templates: {
-        page: { component: TemplateFixture, defaults: { title: 'Default Title' } },
+      experienceTemplates: {
+        page: { component: ExperienceTemplateFixture, defaults: { title: 'Default Title' } },
       },
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -343,21 +340,21 @@ describe('ServerExperienceRenderer', () => {
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: tplConfig },
     });
-    expect(container.innerHTML).toContain('data-template="page"');
+    expect(container.innerHTML).toContain('data-experience-template="page"');
     expect(container.innerHTML).toContain('data-title="Default Title"');
     expect(container.innerHTML).toContain('inside');
   });
 
-  it('renders nodes unwrapped + warns when the template is not registered', async () => {
+  it('renders nodes unwrapped + warns when the experienceTemplate is not registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = { components: { item: PrecedenceFixture } };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/missing-template',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/missing-experienceTemplate',
           },
         },
       },
@@ -369,8 +366,8 @@ describe('ServerExperienceRenderer', () => {
       props: { experience: plan, config: cfg },
     });
     expect(container.innerHTML).toContain('data-value="unwrapped"');
-    expect(container.innerHTML).not.toContain('data-template');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-template'));
+    expect(container.innerHTML).not.toContain('data-experience-template');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
     warn.mockRestore();
   });
 });
@@ -507,7 +504,7 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
 
     const contentful = captureSink[0]!.contentful;
     expect(contentful).toMatchObject({
-      componentTypeId: 'capture',
+      componentId: 'capture',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
       design: { cfPadding: vbv({ desktop: m('40px') }) },
@@ -591,7 +588,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     warn.mockRestore();
   });
 
-  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+  it('leaves envelopes untouched when no resolver is supplied', async () => {
     const cfg: Config = { components: { 'contentful-button': ButtonFixture } };
     const plan = await resolveExperience(
       {
@@ -615,19 +612,19 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(container.innerHTML).toContain('data-bg="[object Object]"');
   });
 
-  it('runs on page-level template design props too', async () => {
+  it('runs on page-level experienceTemplate design props too', async () => {
     const tplConfig: Config = {
       components: { item: PrecedenceFixture },
-      templates: { page: TemplateFixture },
+      experienceTemplates: { page: ExperienceTemplateFixture },
       resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
     };
     const tplPayload: ExperiencePayload = {
       sys: {
-        template: {
+        experienceTemplate: {
           sys: {
             type: 'ResourceLink',
-            linkType: 'Contentful:Template',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/templates/page',
+            linkType: 'Contentful:ExperienceTemplate',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
           },
         },
       },
@@ -636,8 +633,8 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
     // Templates don't carry design props in the current XDA payload shape;
-    // seed one on the resolved plan so we exercise the template path.
-    plan!.template!.props.design = { cfBackground: dt('brand/canvas') };
+    // seed one on the resolved plan so we exercise the experienceTemplate path.
+    plan!.experienceTemplate!.props.design = { cfBackground: dt('brand/canvas') };
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: tplConfig },
     });

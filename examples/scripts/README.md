@@ -28,17 +28,17 @@ The script prints the resulting experienceId at the end — paste it into the ex
 
 The demo is a minimal `landing` Experience — one hero + two cards — that exercises the ExO composition pattern end-to-end. It provisions:
 
-| Step | Resource type | Count | Notes                                                                                   |
-| ---- | ------------- | ----- | --------------------------------------------------------------------------------------- |
-| 1    | ContentType   | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                              |
-| 2    | Asset         | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space |
-| 3    | Entry         | 3     | 3 `promotion` entries (hero + 2 cards)                                                  |
-| 4    | DesignToken   | 15    | color/size/fontSize/fontWeight tokens referenced by ComponentTypes                      |
-| 5    | ComponentType | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card        |
-| 6    | Template      | 1     | `page` (passthrough)                                                                    |
-| 7    | DataAssembly  | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to CT props)            |
-| 8    | (linkage)     | 2     | Append DA links to hero-plain and card ComponentTypes, republish                        |
-| 9    | Experience    | 1     | `landing` — hero + Section(card, card)                                                  |
+| Step | Resource type      | Count | Notes                                                                                   |
+| ---- | ------------------ | ----- | --------------------------------------------------------------------------------------- |
+| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                              |
+| 2    | Asset              | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space |
+| 3    | Entry              | 3     | 3 `promotion` entries (hero + 2 cards)                                                  |
+| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by Components                          |
+| 5    | Component          | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card        |
+| 6    | ExperienceTemplate | 1     | `page` (passthrough)                                                                    |
+| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)     |
+| 8    | (linkage)          | 2     | Append DA links to hero-plain and card Components, republish                            |
+| 9    | Experience         | 1     | `landing` — hero + Section(card, card)                                                  |
 
 Each step is idempotent: if a resource with the fixture's id already exists, that step is skipped. Re-running against a half-seeded env picks up where a previous run left off.
 
@@ -48,5 +48,5 @@ The concrete data the script provisions lives in [`fixture/`](./fixture) — one
 
 ### Known limitations
 
-- **CMA is pinned to `12.6.0-dev.4`** — this is a dev build that exposes the ExO plain client (component types, templates, data assemblies, experiences). Newer stable versions of `contentful-management` don't ship these APIs yet.
+- **The ExO plain client methods used here (`component`, `experienceTemplate`, `dataAssembly`, `experience`) are marked `@internal` / experimental** in `contentful-management` and are subject to breaking changes without notice.
 - **`/design_tokens` is called via raw `fetch()`** — the CMA dev build's plain client doesn't cover that endpoint yet. Customers setting up Experience Orchestration are encouraged to use the [Design System Import CLI tool](https://github.com/contentful/experience-design-system-sdk-public)
