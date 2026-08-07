@@ -18,12 +18,11 @@ export function createClient(options: CreateClientOptions): ContentfulViewDelive
     ...rest,
     token: accessToken,
     baseUrl: host,
-    // Opts every request made through this client into the post-SPA-4822 ExO
-    // entity shapes (`component` / `experienceTemplate` links). Set as a client
-    // default so direct `client.experience.get(...)` calls get the new shape
-    // too, not just `fetchExperience`. A caller-supplied `headers` entry for
-    // the same key wins — deliberately, so a caller can pin a different
-    // alpha-feature set if they need to.
+    // Selects the ExO entity shapes this SDK reads (`component` /
+    // `experienceTemplate` links). Set as a client default so direct
+    // `client.experience.get(...)` calls get them too, not just
+    // `fetchExperience`. A caller-supplied `headers` entry for the same key
+    // wins, so a caller can pin a different alpha-feature set if they need to.
     headers: { [ALPHA_FEATURE_HEADER]: NEW_EXO_ENTITY_TYPES, ...headers },
   });
 }

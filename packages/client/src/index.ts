@@ -9,9 +9,8 @@ export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundE
 export { createClient } from './create-client.js';
 export type { CreateClientOptions } from './create-client.js';
 // Exported so customers who drive `ContentfulViewDeliveryClient` themselves and
-// call `resolveExperience` on the raw payload can opt into the same renamed ExO
-// entity shapes this SDK expects. `createClient` / `fetchExperience` send it
-// for you.
+// call `resolveExperience` on the raw payload can select the same ExO entity
+// shapes this SDK expects. `createClient` / `fetchExperience` send it for you.
 export {
   ALPHA_FEATURE_HEADER,
   NEW_EXO_ENTITY_TYPES,

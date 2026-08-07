@@ -499,19 +499,19 @@ const client = createClient({
 });
 ```
 
-Clients built by `createClient` also send `x-contentful-enable-alpha-feature: new-exo-entity-types` on every request — see [Entity names and the alpha-feature header](#entity-names-and-the-alpha-feature-header).
+Clients built by `createClient` also send the alpha-feature header on every request — see [The alpha-feature header](#the-alpha-feature-header).
 
-### Entity names and the alpha-feature header
+### The alpha-feature header
 
-Two Contentful entities were renamed: **Component Type → Component** and **Template → Experience Template**. The delivery payload changed with them — nodes now link `component` (`Contentful:Component`) instead of `componentType`, and the page-level reference moved from `sys.template` to `sys.experienceTemplate`.
-
-This SDK reads **only** the new shape. The delivery API still serves the old shape by default and returns the new one when a request carries:
+The Experience Delivery API gates the entity shapes this SDK reads behind a header:
 
 ```
 x-contentful-enable-alpha-feature: new-exo-entity-types
 ```
 
-You normally don't send it yourself — `fetchExperience` sends it per request, and `createClient` sets it as a client default (so a client you build and call directly is covered too). You only need it when you drive the raw `ContentfulViewDeliveryClient` yourself and pass the payload to `resolveExperience`:
+A payload fetched without it has a different shape that the SDK will not resolve. You normally don't send it yourself: `fetchExperience` sends it per request, and `createClient` sets it as a client default, so a client you build and call directly is covered too.
+
+You only send it yourself when you drive the raw `ContentfulViewDeliveryClient` and pass the payload to `resolveExperience`:
 
 ```ts
 import {
@@ -527,30 +527,13 @@ const payload = await client.experience.get(
   environmentId,
   experienceId,
   { locale },
-  { headers: NEW_EXO_ENTITY_TYPES_HEADERS } // ← without this you get the legacy shape
+  { headers: NEW_EXO_ENTITY_TYPES_HEADERS } // ← required
 );
 
 const plan = await resolveExperience(payload, experienceConfig);
 ```
 
-`ALPHA_FEATURE_HEADER` and `NEW_EXO_ENTITY_TYPES` are exported separately if you'd rather build the bag yourself. The header is temporary: it disappears once the new shape becomes the API default, and dropping it will be a no-op change on your side.
-
-If your registry keys or payload fixtures still use the old vocabulary, the rename is mechanical:
-
-| Before                         | After                               |
-| ------------------------------ | ----------------------------------- |
-| `node.componentType`           | `node.component`                    |
-| `Contentful:ComponentType`     | `Contentful:Component`              |
-| `sys.template`                 | `sys.experienceTemplate`            |
-| `Contentful:Template`          | `Contentful:ExperienceTemplate`     |
-| `registration.componentTypeId` | `registration.componentId`          |
-| `plan.template`                | `plan.experienceTemplate`           |
-| `Config.templates`             | `Config.experienceTemplates`        |
-| `defineTemplate`               | `defineExperienceTemplate`          |
-| `useContentfulTemplate()`      | `useContentfulExperienceTemplate()` |
-| `getContentfulTemplate()`      | `getContentfulExperienceTemplate()` |
-| `PortableTemplate`             | `PortableExperienceTemplate`        |
-| `templateId`                   | `experienceTemplateId`              |
+`ALPHA_FEATURE_HEADER` and `NEW_EXO_ENTITY_TYPES` are exported separately if you'd rather build the bag yourself.
 
 ### `resolveExperience(payload, config, opts?)`
 

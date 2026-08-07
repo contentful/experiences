@@ -12,10 +12,9 @@
  * `debug` is the single observability switch. When on it: emits verbose logs
  * from `resolveExperience` and `fetchExperience`; renders the visible
  * missing-component box (see the adapters' `MissingComponent`); and turns the
- * default `renderUnknown` fallback into the richer debug component. It replaced
- * the old `isPreview` render flag — a single boolean that threads through both
- * fetch and render so a customer can't enable one half and be confused by the
- * other.
+ * default `renderUnknown` fallback into the richer debug component. One boolean
+ * threads through both fetch and render, so a customer can't enable one half
+ * and be confused by the other.
  */
 export interface ExperienceContext {
   debug: boolean;
@@ -75,9 +74,7 @@ export interface ValuesByViewport {
  * the component id; the build-plan extracts the id by taking the segment after
  * the last slash.
  *
- * Mirrors `ComponentLink` from `@contentful/experience-delivery` — the
- * post-SPA-4822 entity shape. The entity formerly known as "Component Type"
- * (`Contentful:ComponentType`) is now simply "Component".
+ * Mirrors `ComponentLink` from `@contentful/experience-delivery`.
  */
 export interface ComponentRef {
   sys: {
@@ -92,9 +89,7 @@ export interface ComponentRef {
  * are out of v1 scope as *nodes* and are skipped at plan-build time with a
  * diagnostic; the page-level reference on `sys` is honored.
  *
- * Mirrors `ExperienceTemplateLink` from `@contentful/experience-delivery` —
- * the post-SPA-4822 entity shape. The entity formerly known as "Template"
- * (`Contentful:Template`) is now "Experience Template".
+ * Mirrors `ExperienceTemplateLink` from `@contentful/experience-delivery`.
  */
 export interface ExperienceTemplateRef {
   sys: {
@@ -145,8 +140,8 @@ export interface ExperienceSys {
    * the experience nodes with the matching template registered in the
    * customer's Config. When absent, nodes render at the top level.
    *
-   * Optional here even though the delivery type declares it required — a
-   * required field satisfies an optional one, and keeping it optional lets
+   * Optional here while the delivery type declares it required — a required
+   * field satisfies an optional one, and keeping it optional lets
    * `resolveExperience` accept hand-authored payloads for Experiences that
    * carry no template.
    */
@@ -159,8 +154,8 @@ export interface ExperienceSys {
  * (`HydratedExperienceView` from `@contentful/experience-delivery`).
  *
  * Structurally compatible with the upstream type — no normalization step
- * required when consuming a delivery-client response. Note that the delivery
- * API only returns this shape when the request carries the
+ * required when consuming a delivery-client response. The delivery API returns
+ * this shape when the request carries the
  * `x-contentful-enable-alpha-feature: new-exo-entity-types` header, which
  * `@contentful/experiences-client` sends on every request.
  */

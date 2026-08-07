@@ -64,8 +64,7 @@ function getResolver(
 export interface ResolveExperienceOptions {
   /**
    * Arbitrary per-render metadata exposed to every resolver as
-   * `ctx.experience.metadata`. Flattened to a top-level option (was nested
-   * under `experience`). Defaults to `{}`.
+   * `ctx.experience.metadata`. Defaults to `{}`.
    */
   metadata?: Record<string, unknown>;
   /**

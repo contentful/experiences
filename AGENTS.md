@@ -99,7 +99,7 @@ The React adapter then:
 
 ### Why three positional args on `fetchExperience` instead of one options object?
 
-Earlier the SDK had a single flat options object with an `accessToken | client` discriminated union mixed in. As `fetchExperience` picked up more responsibilities (fetch + resolve, preview mode, per-render context) the object was already ~7 fields and had two more inbound (personalization params, digital-property identifiers from the channels RFC). Rather than let one bag balloon to a dozen fields with three different concerns, the signature is split into three grouped args:
+`fetchExperience` carries three concerns at once — fetch, resolve, and per-render context — and has more inbound (personalization params, digital-property identifiers from the channels RFC). A single flat options object would mix all three into one bag of a dozen-plus fields, so the signature is split into three grouped args:
 
 1. `experienceOptions` — **which** experience (`spaceId`, `environmentId`, `experienceId`, `locale`). Digital-property identifiers widen this type when the channels RFC lands.
 2. `clientOptions` — **how** to fetch. Discriminated union: `{ accessToken, host? }` OR `{ client }`. Kept intentionally as one arg (not split further) so users can move between inline creds and a pre-made client with only that arg changing.
@@ -113,18 +113,16 @@ Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — thos
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
-The Experience Delivery API serves **two entity shapes from the same endpoints** during the PROD-2918 rename. The legacy shape links nodes with `componentType` (`Contentful:ComponentType`) and `template` (`Contentful:Template`); the renamed shape uses `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), and moves the page-level reference from `sys.template` to `sys.experienceTemplate`. The renamed shape is opt-in via that header — see the [How to Migrate guide](https://contentful.atlassian.net/wiki/spaces/PROD/pages/6847856719/How+to+Migrate).
+The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), with the page-level reference at `sys.experienceTemplate`. A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional, and is sent in two places:
 
-This SDK understands **only the renamed shape** (no legacy fallback, no normalization layer, per the "breaking changes preferred" call on PROD-2918). That makes the header load-bearing, not optional, so it's sent in two places:
-
-- `createClient` sets it as a **client default**, so a customer who builds a client and calls `client.experience.get(...)` directly also gets the renamed shape.
+- `createClient` sets it as a **client default**, so a customer who builds a client and calls `client.experience.get(...)` directly is covered.
 - `fetchExperience` sends it as a **per-request** header, so a caller-supplied `{ client }` — which never went through `createClient` — is covered too.
 
 A caller-supplied `headers` entry for the same key wins over `createClient`'s default, deliberately, so a caller can pin a different alpha-feature set.
 
-Why this matters for types: the delivery client's `GetExperienceResponse` is the union `HydratedView | HydratedExperienceView` — it can't know which header the caller sent. Sending the header is what makes `fetch-experience.ts`'s narrowing to `HydratedExperienceView` sound rather than a guess. The constants (`ALPHA_FEATURE_HEADER`, `NEW_EXO_ENTITY_TYPES`, `NEW_EXO_ENTITY_TYPES_HEADERS`) live in `packages/client/src/alpha-feature.ts` and are re-exported from both adapters for customers driving the raw client themselves.
+Why this matters for types: the delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because it can't know which header the caller sent. Sending the header is what makes `fetch-experience.ts`'s narrowing to `HydratedExperienceView` sound rather than a guess. The constants (`ALPHA_FEATURE_HEADER`, `NEW_EXO_ENTITY_TYPES`, `NEW_EXO_ENTITY_TYPES_HEADERS`) live in `packages/client/src/alpha-feature.ts` and are re-exported from both adapters for customers driving the raw client themselves.
 
-**This header goes away** once the legacy shapes are removed server-side (PROD-3209) and the renamed shape becomes the default. Deleting `alpha-feature.ts` and its two call sites is the whole cleanup.
+If the API ever serves these shapes without the header, deleting `alpha-feature.ts` and its two call sites is the whole cleanup.
 
 ### Why `createClient` in addition to the raw `ContentfulViewDeliveryClient` constructor?
 
@@ -134,18 +132,18 @@ Why this matters for types: the delivery client's `GetExperienceResponse` is the
 
 ### Why an empty-nodes payload is NOT a "not found"
 
-`fetchExperience` used to return `null` when the payload had `nodes: []`. That conflated two states the CMS considers distinct:
+Returning `null` for a payload with `nodes: []` would conflate two states the CMS considers distinct:
 
 - **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
 - **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
 
-The empty-nodes payload now flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience`'s return type narrowed from `PortableRenderPlan | null` to `PortableRenderPlan`.
+So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience` returns `PortableRenderPlan`, never `null`.
 
 For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch without adding `@contentful/experience-delivery` as a direct dep — preserving the invariant that customers install only the framework adapter.
 
 ### Why a single `resolveExperience` entry instead of `buildPlan` + `resolveExperience`?
 
-Earlier the SDK had two functions. The customer page needed three lines of imports + four function calls + two passes of `componentMap`. We collapsed to one. The sync vs async distinction (tree-walking is synchronous; `resolveData` hooks are async) is implementation detail customers don't care about.
+Two functions would cost the customer page three lines of imports, four function calls, and two passes of `componentMap`. One entry point avoids that. The sync vs async distinction (tree-walking is synchronous; `resolveData` hooks are async) is implementation detail customers don't care about.
 
 ### Why is `ctx.design` raw envelopes inside `resolveData`, not viewport-resolved scalars?
 
@@ -306,7 +304,7 @@ This repo is the **implementation**. Strategy / RFC / inter-team discussion live
 
 - **Operator's local notes** at `~/ChaseOS/projects/active/experiences/` (Chase's machine):
   - `meeting-prep-tyler-1on1.md` — open architectural questions to discuss with Tyler Collins. Read this before any major decision.
-  - `research-charles-rfc.md` — Charles Hudson's Experiences SDK Suite RFC (PROD/6438486129)
+  - `research-charles-rfc.md` — Charles Hudson's Experiences SDK Suite RFC
   - `research-tyler-domain-model.md` — Tyler's Component Domain Model RFC
   - `research-tyler-repo-model.md` — Tyler's Workspace + Package Composition RFC
   - `research-pr72-and-delivery-client.md` — Thomas Kellermeier's PR #72 + the official `@contentful/experience-delivery` client
@@ -317,7 +315,7 @@ This repo is the **implementation**. Strategy / RFC / inter-team discussion live
   - `experiences.md` — project hub with the broader story
 
 - **Confluence** (Contentful org):
-  - PROD/6438486129 — Charles' Experiences SDK Suite RFC
+  - Charles' Experiences SDK Suite RFC
   - Tyler's two component-model docs (linked from his pages)
 
 - **#exo-sdks** Slack channel — weekly engineering syncs run by Manuel Spagnolo
@@ -362,11 +360,11 @@ Tyler's RFC describes `defineComponent({ props: { resolve, mergePolicy: { preced
 
 ### `useExperience()` hook split
 
-`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — `debug`, `metadata`, `viewports`, `activeViewport`, `activeViewportIndex` — as one object. The AIS-243 debug-mode work raised whether that single hook should split into narrower reads (e.g. `useViewport()`, `useMetadata()`, `useDebug()`) so a component that only needs the active viewport doesn't re-render on unrelated context changes.
+`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — `debug`, `metadata`, `viewports`, `activeViewport`, `activeViewportIndex` — as one object. An open question is whether that single hook should split into narrower reads (e.g. `useViewport()`, `useMetadata()`, `useDebug()`) so a component that only needs the active viewport doesn't re-render on unrelated context changes.
 
-Investigation (consumer sweep, AIS-243): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. `useActiveViewport` is a separate hook already; it feeds the renderer, not components. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — but also no internal forcing function. Reactivity today: React republishes the whole context object on viewport change (so any `useExperience()` consumer re-renders); Svelte's `getExperience()` returns a `$state` mirror whose fields update in place, so fine-grained reactivity already works there via `$derived`. The asymmetry means a split would mostly benefit React.
+Investigation (consumer sweep): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. `useActiveViewport` is a separate hook already; it feeds the renderer, not components. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — but also no internal forcing function. Reactivity today: React republishes the whole context object on viewport change (so any `useExperience()` consumer re-renders); Svelte's `getExperience()` returns a `$state` mirror whose fields update in place, so fine-grained reactivity already works there via `$derived`. The asymmetry means a split would mostly benefit React.
 
-Deferred: not reshaped in AIS-243 (kept the single hook to avoid a second breaking change in the same alpha). Revisit as its own ticket if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
+Deferred: the single hook stands for now. Revisit if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
 
 ---
 

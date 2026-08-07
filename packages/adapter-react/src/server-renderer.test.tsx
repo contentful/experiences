@@ -643,7 +643,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     warn.mockRestore();
   });
 
-  it('leaves envelopes untouched when no resolver is supplied (backward-compatible)', async () => {
+  it('leaves envelopes untouched when no resolver is supplied', async () => {
     const cfg: Config = { components: { button: Button } };
     const plan = await resolveExperience(
       {

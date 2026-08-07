@@ -48,8 +48,7 @@ export type ResolveOptions = {
   /**
    * Arbitrary per-render metadata exposed to every resolver as
    * `ctx.experience.metadata` and readable at render time via the framework
-   * adapter's `useExperience()` / `getExperience()`. Flattened to a top-level
-   * option (previously nested under `context.metadata`).
+   * adapter's `useExperience()` / `getExperience()`.
    */
   metadata?: Record<string, unknown>;
   /**
@@ -92,8 +91,8 @@ export async function fetchExperience(
   log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
 
   // The alpha-feature header goes on the request as well as on clients built by
-  // `createClient`, so a caller-supplied `{ client }` also gets the renamed ExO
-  // entity shapes rather than the legacy `componentType` / `template` links.
+  // `createClient`, so a caller-supplied `{ client }` also gets the ExO entity
+  // shapes this SDK reads.
   const response = await client.experience.get(
     spaceId,
     environmentId,
@@ -102,9 +101,9 @@ export async function fetchExperience(
     { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
   );
 
-  // `GetExperienceResponse` is the union of the legacy `HydratedView` and the
-  // renamed `HydratedExperienceView`; the header above pins the response to the
-  // latter, which is a structural superset of `ExperiencePayload`.
+  // `GetExperienceResponse` is a union of the shapes the endpoint can return;
+  // the header above pins it to `HydratedExperienceView`, which is a structural
+  // superset of `ExperiencePayload`.
   const payload = response as ContentfulViewDelivery.HydratedExperienceView as ExperiencePayload;
 
   log.lazy('received raw payload', () => payload);

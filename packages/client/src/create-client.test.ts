@@ -78,7 +78,7 @@ describe('createClient', () => {
     });
   });
 
-  it('opts the client into the renamed ExO entity types by default', () => {
+  it('selects the ExO entity types this SDK reads by default', () => {
     createClient({ accessToken: 'token-123' });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
