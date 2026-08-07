@@ -6,12 +6,14 @@ import { useDesignValues } from '@contentful/experiences-react';
 
 export interface TextProps {
   text?: string | null;
-  children?: ReactNode;
+  /** Slot children, one pre-rendered node per child. */
+  children?: ReactNode[];
 }
 
 export function Text({ text, children }: TextProps) {
   const design = useDesignValues();
-  if (!text && !children) return null;
+  // Check `.length`, not truthiness — an empty slot is `[]`, which is truthy.
+  if (!text && !children?.length) return null;
 
   const style: CSSProperties = {
     margin: 0,

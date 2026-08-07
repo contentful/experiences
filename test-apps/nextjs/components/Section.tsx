@@ -5,7 +5,10 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useDesignValues } from '@contentful/experiences-react';
 
 export interface SectionProps {
-  children?: ReactNode;
+  // Slot children arrive as an array of pre-rendered nodes — drop it straight
+  // into JSX to render them all (React renders arrays), or map/filter/wrap the
+  // children individually.
+  children?: ReactNode[];
 }
 
 type Align = 'start' | 'center' | 'end' | 'stretch';

@@ -11,7 +11,9 @@
     text?: string;
     url?: string;
     type?: ButtonType;
-    children?: Snippet;
+    // Slot children arrive as an array of Snippets — one per child node — so a
+    // component can render them all or map/filter/wrap them individually.
+    children?: Snippet[];
   }
 
   const PALETTE: Record<ButtonType, { background: string; color: string; border: string }> = {
@@ -40,14 +42,10 @@
   );
 </script>
 
+{#snippet inner()}{text}{#each children ?? [] as child}{@render child()}{/each}{/snippet}
+
 {#if url}
-  <a href={url} {style} rel="noopener noreferrer">
-    {text}
-    {#if children}{@render children()}{/if}
-  </a>
+  <a href={url} {style} rel="noopener noreferrer">{@render inner()}</a>
 {:else}
-  <button type="button" {style}>
-    {text}
-    {#if children}{@render children()}{/if}
-  </button>
+  <button type="button" {style}>{@render inner()}</button>
 {/if}
