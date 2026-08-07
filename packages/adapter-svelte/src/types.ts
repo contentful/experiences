@@ -14,7 +14,7 @@ export type { ResolveContext, ResolveToken };
  * The full Contentful-side payload for a single component instance, exposed
  * via `getContentfulComponent()` to any descendant of a rendered Experience
  * node. Useful for custom design-property resolution outside the SDK's
- * cascade, branching by `componentTypeId` in a generic wrapper, keying
+ * cascade, branching by `componentId` in a generic wrapper, keying
  * analytics on `nodeId`, rendering a raw-payload panel in preview, or
  * rendering non-`children` slots through the exported `<NodesRenderer />`.
  *
@@ -23,7 +23,7 @@ export type { ResolveContext, ResolveToken };
  * resolved values are what `getDesignValues()` returns.
  */
 export interface ContentfulComponent {
-  componentTypeId: string;
+  componentId: string;
   nodeId?: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
@@ -38,11 +38,12 @@ export interface ContentfulComponent {
 }
 
 /**
- * Same shape as `ContentfulComponent`, but for the page-level template.
- * Exposed via `getContentfulTemplate()` inside a template's component tree.
+ * Same shape as `ContentfulComponent`, but for the page-level Experience
+ * Template.
+ * Exposed via `getContentfulExperienceTemplate()` inside an Experience Template's component tree.
  */
-export interface ContentfulTemplate {
-  templateId: string;
+export interface ContentfulExperienceTemplate {
+  experienceTemplateId: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
@@ -85,20 +86,20 @@ export type Registration<Props extends object = Record<string, unknown>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Component<any> | ComponentConfig<Props>;
 
-export interface TemplateConfig<Props extends object = Record<string, unknown>> {
+export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component: Component<any>;
 }
 
-export type TemplateRegistration<Props extends object = Record<string, unknown>> =
+export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Component<any> | TemplateConfig<Props>;
+  Component<any> | ExperienceTemplateConfig<Props>;
 
-export function defineTemplate<Props extends object = Record<string, unknown>>(
-  config: TemplateConfig<Props>
-): TemplateConfig<Props> {
+export function defineExperienceTemplate<Props extends object = Record<string, unknown>>(
+  config: ExperienceTemplateConfig<Props>
+): ExperienceTemplateConfig<Props> {
   return config;
 }
 
@@ -111,11 +112,11 @@ export function defineComponent<Props extends object = Record<string, unknown>>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Components = Record<string, Registration<any>>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Templates = Record<string, TemplateRegistration<any>>;
+export type ExperienceTemplates = Record<string, ExperienceTemplateRegistration<any>>;
 
 export interface Config {
   components: Components;
-  templates?: Templates;
+  experienceTemplates?: ExperienceTemplates;
   /**
    * Resolves `DesignToken` envelopes to runtime values before they reach a
    * component. If omitted, envelopes pass through unchanged. See `ResolveToken`
@@ -140,12 +141,12 @@ export function normalizeComponentRegistration<P extends object>(
   return reg;
 }
 
-export function normalizeTemplateRegistration<P extends object>(
-  reg: TemplateRegistration<P>
-): TemplateConfig<P> {
+export function normalizeExperienceTemplateRegistration<P extends object>(
+  reg: ExperienceTemplateRegistration<P>
+): ExperienceTemplateConfig<P> {
   if (typeof reg === 'function') {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { component: reg as Component<any> } as TemplateConfig<P>;
+    return { component: reg as Component<any> } as ExperienceTemplateConfig<P>;
   }
   return reg;
 }

@@ -5,7 +5,7 @@ export interface PageProps {
   children?: ReactNode;
 }
 
-/** Page-level template: wraps all top-level nodes in the outer page chrome. */
+/** Page-level Experience Template: wraps all top-level nodes in the outer page chrome. */
 export function Page({ children }: PageProps) {
   const wrapper: CSSProperties = {
     maxWidth: 1024,

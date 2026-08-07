@@ -70,9 +70,9 @@ export type EntryFixture = {
 export type AssetRef = { $assetTempId: TempId };
 export const assetRef = (tempId: TempId): AssetRef => ({ $assetTempId: tempId });
 
-// --- ComponentTypes -----------------------------------------------------------
+// --- Components -----------------------------------------------------------
 
-export type ComponentTypeFixture = {
+export type ComponentFixture = {
   id: string;
   name: string;
   description?: string;
@@ -99,23 +99,24 @@ export type DesignPropertyDef = {
 
 export type SlotDef = { id: string; name: string; description?: string };
 
-// --- Templates ----------------------------------------------------------------
+// --- Experience Templates -------------------------------------------------
 
-export type TemplateFixture = {
+export type ExperienceTemplateFixture = {
   id: string;
   name: string;
   description?: string;
   contentProperties?: ContentPropertyDef[];
   designProperties?: DesignPropertyDef[];
-  // Slot declarations — Experiences using this template put their top-level
-  // nodes into a slot with a matching id. `slots: [{ id: 'content' }]` on the
-  // template + a `componentTree` node with `{ nodeType: 'Slot', slotId: 'content' }`
-  // is the mechanism that says "render the Experience's `content` slot here."
+  // Slot declarations — Experiences using this Experience Template put their
+  // top-level nodes into a slot with a matching id. `slots: [{ id: 'content' }]`
+  // on the Experience Template + a `componentTree` node with
+  // `{ nodeType: 'Slot', slotId: 'content' }` is the mechanism that says
+  // "render the Experience's `content` slot here."
   slots?: SlotDef[];
-  componentTree?: TemplateTreeNode[];
+  componentTree?: ExperienceTemplateTreeNode[];
 };
 
-export type TemplateTreeNode = {
+export type ExperienceTemplateTreeNode = {
   id: string;
   nodeType: 'Slot';
   slotId: string;
@@ -127,7 +128,7 @@ export type TemplateTreeNode = {
 //   1. parameters — inputs (entries or values) the assembly is invoked with.
 //   2. resolvers — how to fetch data from those parameters (GraphQL against
 //      the space's content graph, or nested DataAssembly).
-//   3. return — how to map resolver output onto the target ComponentType's
+//   3. return — how to map resolver output onto the target Component's
 //      contentProperties by id.
 //
 // For the minimal demo we only use the GraphQL resolver flavor and one
@@ -137,7 +138,7 @@ export type DataAssemblyFixture = {
   tempId: TempId;
   name: string;
   description?: string;
-  // dataType MUST mirror the ComponentType's contentProperties this assembly targets.
+  // dataType MUST mirror the Component's contentProperties this assembly targets.
   dataType: ContentPropertyDef[];
   parameters: Record<
     string,
@@ -155,7 +156,7 @@ export type DataAssemblyFixture = {
       parameters: Record<string, string>; // e.g. { id: '$parameters/promo' }
     }
   >;
-  // Map from ComponentType contentProperty id -> resolver output path.
+  // Map from Component contentProperty id -> resolver output path.
   return: Record<string, { $from: string }>;
 };
 
@@ -165,18 +166,18 @@ export type ExperienceFixture = {
   id: string;
   name: string;
   description?: string;
-  templateId: string;
+  experienceTemplateId: string;
   viewports: Array<{ id: string; query: string; displayName: string; previewSize: string }>;
   slots: { content: ExperienceNode[] };
 };
 
-export type ExperienceNode = InlineFragmentNode | ContainerNode;
+export type ExperienceNode = InlineExperienceFragmentNode | ContainerNode;
 
-// An InlineFragment node has its content sourced from a DataAssembly binding.
-export type InlineFragmentNode = {
+// An InlineExperienceFragment node has its content sourced from a DataAssembly binding.
+export type InlineExperienceFragmentNode = {
   id: string;
-  nodeType: 'InlineFragment';
-  componentTypeId: string;
+  nodeType: 'InlineExperienceFragment';
+  componentId: string;
   designProperties?: Record<string, ViewportValue>;
   contentBindings: {
     dataAssemblyTempId: TempId;
@@ -188,8 +189,8 @@ export type InlineFragmentNode = {
 // A Container node has inline contentProperties + designProperties and children in slots.
 export type ContainerNode = {
   id: string;
-  nodeType: 'InlineFragment';
-  componentTypeId: string;
+  nodeType: 'InlineExperienceFragment';
+  componentId: string;
   contentProperties?: Record<string, ViewportValue>;
   designProperties?: Record<string, ViewportValue>;
   slots?: Record<string, ExperienceNode[]>;

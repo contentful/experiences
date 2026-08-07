@@ -4,15 +4,15 @@
  * Reads SPACE_ID / ENVIRONMENT_ID / CMA_TOKEN from env (dotenv-friendly — expects
  * an .env in the CWD). Provisions the fixture in order:
  *
- *   1. ContentTypes           (create + publish)
- *   2. Assets                 (upload + processForAllLocales + publish)
- *   3. Entries                (create + publish, with tempId asset refs resolved)
- *   4. Design tokens          (PUT via raw HTTP — plain client doesn't cover this yet)
- *   5. ComponentTypes         (create + publish, referencing tokens by id)
- *   6. Template               (create + publish)
- *   7. DataAssemblies         (create + publish, with cross-fixture ids resolved)
- *   8. Link DAs to CTs        (append DA links to composed CTs, republish CTs)
- *   9. Experience             (create + publish, with dataAssembly + entry refs resolved)
+ *   1. ContentTypes             (create + publish)
+ *   2. Assets                   (upload + processForAllLocales + publish)
+ *   3. Entries                  (create + publish, with tempId asset refs resolved)
+ *   4. Design tokens            (PUT via raw HTTP — plain client doesn't cover this yet)
+ *   5. Components               (create + publish, referencing tokens by id)
+ *   6. Experience Template      (create + publish)
+ *   7. DataAssemblies           (create + publish, with cross-fixture ids resolved)
+ *   8. Link DAs to Components   (append DA links to composed Components, republish them)
+ *   9. Experience               (create + publish, with dataAssembly + entry refs resolved)
  *
  * Idempotent per resource: if a resource with the fixture's id already exists,
  * skip it. Re-running against a half-seeded env picks up where a previous run
@@ -36,16 +36,16 @@ import {
   assets,
   entries,
   designTokens,
-  componentTypes,
-  templates,
+  components,
+  experienceTemplates,
   dataAssemblies,
-  dataAssemblyComponentTypeLinks,
+  dataAssemblyComponentLinks,
   experience,
   type AssetFixture,
   type EntryFixture,
   type ContentTypeFixture,
-  type ComponentTypeFixture,
-  type TemplateFixture,
+  type ComponentFixture,
+  type ExperienceTemplateFixture,
   type DataAssemblyFixture,
   type DesignTokenFixture,
   type ExperienceFixture,
@@ -122,10 +122,10 @@ const stableId = (tempId: TempId) => `demo-${tempId.replace(/[^a-zA-Z0-9]/g, '-'
 
 // --- URN builders ------------------------------------------------------------
 
-const componentTypeUrn = (id: string) =>
-  `crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/${id}`;
-const templateUrn = (id: string) =>
-  `crn:contentful:::experience:spaces/$self/environments/$self/templates/${id}`;
+const componentUrn = (id: string) =>
+  `crn:contentful:::experience:spaces/$self/environments/$self/components/${id}`;
+const experienceTemplateUrn = (id: string) =>
+  `crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/${id}`;
 const dataAssemblyUrn = (id: string) =>
   `crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/${id}`;
 const entryUrn = (id: string) =>
@@ -293,18 +293,18 @@ async function seedDesignToken(fixture: DesignTokenFixture) {
   log(`  ✓ DesignToken "${fixture.id}" (${fixture.type})`);
 }
 
-async function seedComponentType(fixture: ComponentTypeFixture) {
-  const componentTypeId = fixture.id;
+async function seedComponent(fixture: ComponentFixture) {
+  const componentId = fixture.id;
   try {
-    await cma.componentType.get({ componentTypeId });
-    log(`  ✓ ComponentType "${fixture.id}" already exists — skipping`);
+    await cma.component.get({ componentId });
+    log(`  ✓ Component "${fixture.id}" already exists — skipping`);
     return;
   } catch (err) {
     if (!isNotFound(err)) throw err;
   }
 
-  const created = await cma.componentType.upsert({ componentTypeId }, {
-    sys: { id: componentTypeId, type: 'ComponentType' },
+  const created = await cma.component.upsert({ componentId }, {
+    sys: { id: componentId, type: 'Component' },
     name: fixture.name,
     description: fixture.description ?? '',
     viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
@@ -319,18 +319,18 @@ async function seedComponentType(fixture: ComponentTypeFixture) {
       validations: [],
     })),
   } as never);
-  await cma.componentType.publish({
-    componentTypeId,
+  await cma.component.publish({
+    componentId,
     version: created.sys.version,
   });
-  log(`  ✓ ComponentType "${fixture.id}" created + published`);
+  log(`  ✓ Component "${fixture.id}" created + published`);
 }
 
-async function seedTemplate(fixture: TemplateFixture) {
-  const templateId = fixture.id;
-  let existing: Awaited<ReturnType<typeof cma.template.get>> | null = null;
+async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
+  const experienceTemplateId = fixture.id;
+  let existing: Awaited<ReturnType<typeof cma.experienceTemplate.get>> | null = null;
   try {
-    existing = await cma.template.get({ templateId });
+    existing = await cma.experienceTemplate.get({ experienceTemplateId });
   } catch (err) {
     if (!isNotFound(err)) throw err;
   }
@@ -342,7 +342,7 @@ async function seedTemplate(fixture: TemplateFixture) {
   }));
   const desiredTree = fixture.componentTree ?? [];
 
-  const templateBody = {
+  const experienceTemplateBody = {
     name: fixture.name,
     description: fixture.description ?? '',
     viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
@@ -353,8 +353,9 @@ async function seedTemplate(fixture: TemplateFixture) {
     designProperties: fixture.designProperties ?? [],
     slots: desiredSlots,
     componentTree: desiredTree,
-    // Composed (not Coded) — a Coded template requires an empty componentTree.
-    // The `page` template has a Slot node in its tree, so it must be composed.
+    // Composed (not Coded) — a Coded Experience Template requires an empty
+    // componentTree. The `page` Experience Template has a Slot node in its
+    // tree, so it must be composed.
     metadata: {
       tags: [],
       annotations: {
@@ -372,12 +373,15 @@ async function seedTemplate(fixture: TemplateFixture) {
   };
 
   if (!existing) {
-    const created = await cma.template.upsert({ templateId }, {
-      sys: { id: templateId, type: 'Template' },
-      ...templateBody,
+    const created = await cma.experienceTemplate.upsert({ experienceTemplateId }, {
+      sys: { id: experienceTemplateId, type: 'ExperienceTemplate' },
+      ...experienceTemplateBody,
     } as never);
-    await cma.template.publish({ templateId, version: created.sys.version });
-    log(`  ✓ Template "${fixture.id}" created + published`);
+    await cma.experienceTemplate.publish({
+      experienceTemplateId,
+      version: created.sys.version,
+    });
+    log(`  ✓ Experience Template "${fixture.id}" created + published`);
     return;
   }
 
@@ -405,17 +409,20 @@ async function seedTemplate(fixture: TemplateFixture) {
       JSON.stringify(currentSlotIds) === JSON.stringify(desiredSlotIds) &&
       currentImpl === desiredImpl
     ) {
-      log(`  ✓ Template "${fixture.id}" already exists — skipping`);
+      log(`  ✓ Experience Template "${fixture.id}" already exists — skipping`);
       return;
     }
   }
 
-  const updated = await cma.template.upsert({ templateId }, {
-    sys: { id: templateId, type: 'Template', version: existing.sys.version },
-    ...templateBody,
+  const updated = await cma.experienceTemplate.upsert({ experienceTemplateId }, {
+    sys: { id: experienceTemplateId, type: 'ExperienceTemplate', version: existing.sys.version },
+    ...experienceTemplateBody,
   } as never);
-  await cma.template.publish({ templateId, version: updated.sys.version });
-  log(`  ✓ Template "${fixture.id}" updated + published`);
+  await cma.experienceTemplate.publish({
+    experienceTemplateId,
+    version: updated.sys.version,
+  });
+  log(`  ✓ Experience Template "${fixture.id}" updated + published`);
 }
 
 async function seedDataAssembly(fixture: DataAssemblyFixture) {
@@ -468,27 +475,27 @@ async function seedDataAssembly(fixture: DataAssemblyFixture) {
   log(`  ✓ DataAssembly "${fixture.name}" → ${created.sys.id}`);
 }
 
-// After DAs are created, ComponentTypes that host DA-bound nodes need those
-// DAs listed on their `dataAssemblies` field, or Experience publish fails
-// with `DataAssemblyMembershipViolation`.
-async function linkDataAssembliesToComponentTypes() {
-  // Group DA links by target ComponentType so we do one update per CT.
-  const byComponentType = new Map<string, string[]>();
-  for (const link of dataAssemblyComponentTypeLinks) {
+// After DAs are created, Components that host DA-bound nodes need those DAs
+// listed on their `dataAssemblies` field, or Experience publish fails with
+// `DataAssemblyMembershipViolation`.
+async function linkDataAssembliesToComponents() {
+  // Group DA links by target Component so we do one update per Component.
+  const byComponent = new Map<string, string[]>();
+  for (const link of dataAssemblyComponentLinks) {
     const daId = resolveId(link.dataAssemblyTempId);
-    const arr = byComponentType.get(link.componentTypeId) ?? [];
+    const arr = byComponent.get(link.componentId) ?? [];
     arr.push(daId);
-    byComponentType.set(link.componentTypeId, arr);
+    byComponent.set(link.componentId, arr);
   }
 
-  for (const [componentTypeId, daIds] of byComponentType) {
-    const current = await cma.componentType.get({ componentTypeId });
+  for (const [componentId, daIds] of byComponent) {
+    const current = await cma.component.get({ componentId });
     const existingLinks = new Set(
       (current.dataAssemblies ?? []).map((l) => l.sys.urn.split('/').pop()!)
     );
     const missing = daIds.filter((id) => !existingLinks.has(id));
     if (missing.length === 0) {
-      log(`  ✓ ComponentType "${componentTypeId}" already links all DAs — skipping`);
+      log(`  ✓ Component "${componentId}" already links all DAs — skipping`);
       continue;
     }
 
@@ -502,8 +509,8 @@ async function linkDataAssembliesToComponentTypes() {
         },
       })),
     ];
-    const updated = await cma.componentType.upsert({ componentTypeId }, {
-      sys: { id: componentTypeId, type: 'ComponentType', version: current.sys.version },
+    const updated = await cma.component.upsert({ componentId }, {
+      sys: { id: componentId, type: 'Component', version: current.sys.version },
       name: current.name,
       description: current.description,
       viewports: current.viewports,
@@ -512,11 +519,11 @@ async function linkDataAssembliesToComponentTypes() {
       slots: current.slots,
       dataAssemblies: newLinks,
     } as never);
-    await cma.componentType.publish({
-      componentTypeId,
+    await cma.component.publish({
+      componentId,
       version: updated.sys.version,
     });
-    log(`  ✓ ComponentType "${componentTypeId}" linked to ${missing.length} DA(s)`);
+    log(`  ✓ Component "${componentId}" linked to ${missing.length} DA(s)`);
   }
 }
 
@@ -525,11 +532,11 @@ function resolveNode(node: ExperienceNode): unknown {
   const out: Record<string, unknown> = {
     id: node.id,
     nodeType: node.nodeType,
-    componentType: {
+    component: {
       sys: {
         type: 'ResourceLink',
-        linkType: 'Contentful:ComponentType',
-        urn: componentTypeUrn(node.componentTypeId),
+        linkType: 'Contentful:Component',
+        urn: componentUrn(node.componentId),
       },
     },
   };
@@ -585,15 +592,16 @@ async function seedExperience(fixture: ExperienceFixture) {
     slots[slotName] = children.map(resolveNode);
   }
 
-  // Always upsert so we pick up template/DA changes from earlier steps in the
-  // run — the CMA rejects Experience publish with `DefiningEntityIsChanged` if
-  // any referenced entity has moved on since the Experience's last version.
-  // `template` is immutable after creation, so include it only on create.
-  const templateLink = {
+  // Always upsert so we pick up experienceTemplate/DA changes from earlier
+  // steps in the run — the CMA rejects Experience publish with
+  // `DefiningEntityIsChanged` if any referenced entity has moved on since the
+  // Experience's last version. `experienceTemplate` is immutable after
+  // creation, so include it only on create.
+  const experienceTemplateLink = {
     sys: {
       type: 'ResourceLink' as const,
-      linkType: 'Contentful:Template' as const,
-      urn: templateUrn(fixture.templateId),
+      linkType: 'Contentful:ExperienceTemplate' as const,
+      urn: experienceTemplateUrn(fixture.experienceTemplateId),
     },
   };
   const commonBody = {
@@ -613,7 +621,7 @@ async function seedExperience(fixture: ExperienceFixture) {
         }
       : {
           sys: { id: experienceId, type: 'Experience' },
-          template: templateLink,
+          experienceTemplate: experienceTemplateLink,
           ...commonBody,
         }) as never
   );
@@ -652,17 +660,17 @@ async function main() {
   step('Step 4/9 — Design tokens');
   for (const t of designTokens) await seedDesignToken(t);
 
-  step('Step 5/9 — ComponentTypes');
-  for (const ct of componentTypes) await seedComponentType(ct);
+  step('Step 5/9 — Components');
+  for (const c of components) await seedComponent(c);
 
-  step('Step 6/9 — Template');
-  for (const t of templates) await seedTemplate(t);
+  step('Step 6/9 — Experience Template');
+  for (const t of experienceTemplates) await seedExperienceTemplate(t);
 
   step('Step 7/9 — DataAssemblies');
   for (const da of dataAssemblies) await seedDataAssembly(da);
 
-  step('Step 8/9 — Link DataAssemblies to composed ComponentTypes');
-  await linkDataAssembliesToComponentTypes();
+  step('Step 8/9 — Link DataAssemblies to composed Components');
+  await linkDataAssembliesToComponents();
 
   step('Step 9/9 — Experience');
   const experienceId = await seedExperience(experience);

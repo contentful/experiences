@@ -36,7 +36,7 @@ Both adapters share the same public-API shape: the same `Config`, the same `fetc
 
 Three steps: register your components, fetch and resolve, render. The minimal page is one `fetchExperience` call whose result goes straight into one `<ServerExperienceRenderer>`.
 
-### 1. Register your components and (optional) templates
+### 1. Register your components and (optional) experience templates
 
 ```tsx
 // lib/experience-config.tsx
@@ -45,7 +45,7 @@ import {
   type Components,
   type Config,
   type ResolveToken,
-  type Templates,
+  type ExperienceTemplates,
 } from '@contentful/experiences-react';
 
 import { Button } from './components/Button';
@@ -53,8 +53,8 @@ import { Heading, type HeadingProps } from './components/Heading';
 import { Page } from './components/Page';
 
 const components: Components = {
-  // Keys match the segment after the last slash in `componentType.sys.urn`.
-  // Example URN: crn:contentful:::experience:spaces/$self/environments/$self/componentTypes/Button
+  // Keys match the segment after the last slash in `component.sys.urn`.
+  // Example URN: crn:contentful:::experience:spaces/$self/environments/$self/components/Button
   //
   // Register a bare component for the common case…
   Button,
@@ -65,15 +65,15 @@ const components: Components = {
   }),
 };
 
-const templates: Templates = {
-  // Optional. Keys match `payload.sys.template.sys.urn` last-segment.
+const experienceTemplates: ExperienceTemplates = {
+  // Optional. Keys match `payload.sys.experienceTemplate.sys.urn` last-segment.
   page: Page,
 };
 
 // Optional. Resolves opaque design-token ids to their underlying values (see "Design tokens").
 const resolveToken: ResolveToken = (token) => `var(--${token.value.replaceAll('.', '-')})`;
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };
 ```
 
 Components are registered by id and receive only their **content** props. They read design (spacing, color, typography, layout) themselves through the `useDesignValues()` hook, covered in [Styling components](#styling-components) below.
@@ -254,7 +254,7 @@ Button: defineComponent<ButtonProps>({
 `debug: true` is the single observability switch, threaded end-to-end from `fetchExperience` through resolve and render. Turning it on:
 
 - **Logs** the fetch (host, ids), the raw payload, the resolution steps, and per-node `resolveData` timings under the `[experiences:debug]` prefix.
-- **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentTypeId` (silent `null` when debug is off).
+- **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentId` (silent `null` when debug is off).
 - **Auto-mounts `<DebugExperience>`** above the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
 
 Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It's independent of `preview` (which selects the delivery vs. preview token and host); debug is purely a render/observability concern.
@@ -293,10 +293,10 @@ When the payload references a component type that isn't in your `Config`, the re
 ```tsx
 import type { MissingComponentProps } from '@contentful/experiences-react';
 
-function Fallback({ componentTypeId, nodeId }: MissingComponentProps) {
+function Fallback({ componentId, nodeId }: MissingComponentProps) {
   return (
-    <div data-unregistered={componentTypeId}>
-      Unregistered component “{componentTypeId}”{nodeId ? ` (#${nodeId})` : ''}.
+    <div data-unregistered={componentId}>
+      Unregistered component “{componentId}”{nodeId ? ` (#${nodeId})` : ''}.
     </div>
   );
 }
@@ -308,13 +308,13 @@ function Fallback({ componentTypeId, nodeId }: MissingComponentProps) {
 />;
 ```
 
-`renderUnknown` receives `{ componentTypeId, nodeId? }`. It renders unconditionally (your override, not the SDK, decides whether to gate on `debug` via `useExperience().debug`). The Svelte adapter takes the same prop with a Svelte component.
+`renderUnknown` receives `{ componentId, nodeId? }`. It renders unconditionally (your override, not the SDK, decides whether to gate on `debug` via `useExperience().debug`). The Svelte adapter takes the same prop with a Svelte component.
 
 ---
 
 ## Svelte / SvelteKit
 
-`@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one for one: the same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineTemplate`. Three differences, all mechanical:
+`@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one for one: the same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineExperienceTemplate`. Three differences, all mechanical:
 
 | Concern              | React                                          | Svelte                                                                                                  |
 | -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -408,7 +408,7 @@ Runnable apps for both frameworks live in [`examples/`](./examples). They regist
 | [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks           |
 | [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts` |
 
-Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, ComponentTypes, template, DataAssemblies, and the Experience itself.
+Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
 
 ```sh
 npm install --ignore-scripts
@@ -499,15 +499,51 @@ const client = createClient({
 });
 ```
 
+Clients built by `createClient` also send the alpha-feature header on every request — see [The alpha-feature header](#the-alpha-feature-header).
+
+### The alpha-feature header
+
+The Experience Delivery API gates the entity shapes this SDK reads behind a header:
+
+```
+x-contentful-enable-alpha-feature: new-exo-entity-types
+```
+
+A payload fetched without it has a different shape that the SDK will not resolve. You normally don't send it yourself: `fetchExperience` sends it per request, and `createClient` sets it as a client default, so a client you build and call directly is covered too.
+
+You only send it yourself when you drive the raw `ContentfulViewDeliveryClient` and pass the payload to `resolveExperience`:
+
+```ts
+import {
+  ContentfulViewDeliveryClient,
+  NEW_EXO_ENTITY_TYPES_HEADERS,
+  resolveExperience,
+} from '@contentful/experiences-react';
+
+const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
+
+const payload = await client.experience.get(
+  spaceId,
+  environmentId,
+  experienceId,
+  { locale },
+  { headers: NEW_EXO_ENTITY_TYPES_HEADERS } // ← required
+);
+
+const plan = await resolveExperience(payload, experienceConfig);
+```
+
+`ALPHA_FEATURE_HEADER` and `NEW_EXO_ENTITY_TYPES` are exported separately if you'd rather build the bag yourself.
+
 ### `resolveExperience(payload, config, opts?)`
 
 Async. Walks the payload, classifies properties, runs every component's `resolveData` in parallel, and returns a `PortableRenderPlan` ready to hand to a renderer.
 
-| Param     | Type                                                                             | Required | Default | Description                                                                                                                                                                                                                      |
-| --------- | -------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)     | yes      | n/a     | The Experience payload to resolve.                                                                                                                                                                                               |
-| `config`  | `Config`, `{ components, templates? }` from `defineComponent` / `defineTemplate` | yes      | n/a     | Your component + template registry.                                                                                                                                                                                              |
-| `opts`    | `{ metadata?: Record<string, unknown>; debug?: boolean }`                        | no       | `{}`    | `metadata` (default `{}`) is exposed to every `resolveData` as `ctx.experience.metadata`. `debug` (default `false`) logs the resolution steps and per-node `resolveData` timings, and threads through as `ctx.experience.debug`. |
+| Param     | Type                                                                                                 | Required | Default | Description                                                                                                                                                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)                         | yes      | n/a     | The Experience payload to resolve.                                                                                                                                                                                               |
+| `config`  | `Config`, `{ components, experienceTemplates? }` from `defineComponent` / `defineExperienceTemplate` | yes      | n/a     | Your component + experience-template registry.                                                                                                                                                                                   |
+| `opts`    | `{ metadata?: Record<string, unknown>; debug?: boolean }`                                            | no       | `{}`    | `metadata` (default `{}`) is exposed to every `resolveData` as `ctx.experience.metadata`. `debug` (default `false`) logs the resolution steps and per-node `resolveData` timings, and threads through as `ctx.experience.debug`. |
 
 ### `<ServerExperienceRenderer />`
 
@@ -536,14 +572,14 @@ Identity helper that narrows `resolveData` and `component` parameter types to yo
 | `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Sync or async transform. Runs once per page during `resolveExperience` (before render); does not re-run on viewport changes. Receives `{ content, design (unresolved), experience }`. |
 | `component`   | `ComponentType<Props>`                                               | yes      | n/a     | The React component. Receives the merged **content** props. Reads design via `useDesignValues()`; runtime context and raw payload via `useExperience()` / `useContentfulComponent()`. |
 
-### `defineTemplate<Props>(config)`
+### `defineExperienceTemplate<Props>(config)`
 
-Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so a template renders the page-level layout around them.
+Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so an experience template renders the page-level layout around them.
 
 | Field         | Type                                                                 | Required | Default | Description                                                                                 |
 | ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
 | `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                         |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the template's `props`.                    |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the experience template's `props`.         |
 | `component`   | `ComponentType<Props & { children?: ReactNode }>`                    | yes      | n/a     | Receives the merged content props plus `children`. Reads context/design via the same hooks. |
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`
@@ -552,9 +588,9 @@ Same shape as `defineComponent`. The `component` also receives a fixed `children
 
 `ToCssOptions`: `{ include?: string[]; exclude?: string[] }`, key filters applied against the original record keys.
 
-### `useExperience()` / `useContentfulComponent()` / `useContentfulTemplate()`
+### `useExperience()` / `useContentfulComponent()` / `useContentfulExperienceTemplate()`
 
-Read the runtime context and raw Contentful payload from inside a component. Call them at the top of your component body; nothing is injected as props. `useExperience()` returns the `RenderContext` (below). `useContentfulComponent()` and `useContentfulTemplate()` return the raw payload (below) or `null` outside a node/template.
+Read the runtime context and raw Contentful payload from inside a component. Call them at the top of your component body; nothing is injected as props. `useExperience()` returns the `RenderContext` (below). `useContentfulComponent()` and `useContentfulExperienceTemplate()` return the raw payload (below) or `null` outside a node / experience template.
 
 ### `useActiveViewport(viewports, initialViewportId?)`
 
@@ -562,7 +598,7 @@ React hook used internally by `ClientExperienceRenderer`. You'll rarely need it 
 
 ### `MissingComponent`
 
-Default `renderUnknown` fallback. Visible box naming the unregistered `componentTypeId` when `useExperience().debug === true`, silent null otherwise (a `console.warn` fires in both cases). Override per-render via the `renderUnknown` prop on either renderer — see [Custom fallback for unregistered components](#custom-fallback-for-unregistered-components-renderunknown).
+Default `renderUnknown` fallback. Visible box naming the unregistered `componentId` when `useExperience().debug === true`, silent null otherwise (a `console.warn` fires in both cases). Override per-render via the `renderUnknown` prop on either renderer — see [Custom fallback for unregistered components](#custom-fallback-for-unregistered-components-renderunknown).
 
 ### `<DebugExperience experience={plan} defaultOpen? />`
 
@@ -582,26 +618,26 @@ Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experie
 
 ### `useContentfulComponent()`: the raw payload
 
-`useContentfulComponent()` returns the unprocessed Contentful-side input for the enclosing node: unresolved design values, the originating `componentTypeId`, the `nodeId` if the editor supplied one, and the `resolveData` output. (`useContentfulTemplate()` is the template equivalent.)
+`useContentfulComponent()` returns the unprocessed Contentful-side input for the enclosing node: unresolved design values, the originating `componentId`, the `nodeId` if the editor supplied one, and the `resolveData` output. (`useContentfulExperienceTemplate()` is the experience-template equivalent.)
 
 Use it for:
 
 - **Custom design resolution** outside the SDK's default cascade, such as emitting CSS variables or multi-brand theming.
-- **Branching by `componentTypeId`** in a generic wrapper component.
+- **Branching by `componentId`** in a generic wrapper component.
 - **Analytics / instrumentation** keyed off `nodeId`.
 - **Debug overlays** when `useExperience().debug` is on (a `<details>` with the raw payload) — or reach for the built-in [`<DebugExperience>`](#debugexperience-experienceplan-defaultopen-).
 
 Components see `ContentfulComponent`:
 
-| Field             | Type                                   | Description                                                                                 |
-| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `componentTypeId` | `string`                               | The id from `componentType.sys.urn`'s last slash-segment.                                   |
-| `nodeId`          | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
-| `content`         | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
-| `design`          | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                |
-| `resolved`        | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
+| Field         | Type                                   | Description                                                                                 |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `componentId` | `string`                               | The id from `component.sys.urn`'s last slash-segment.                                       |
+| `nodeId`      | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
+| `content`     | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
+| `design`      | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                |
+| `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
 
-Templates see `ContentfulTemplate`, the same shape but with `templateId` instead of `componentTypeId` (and no `nodeId`).
+Experience Templates see `ContentfulExperienceTemplate`, the same shape but with `experienceTemplateId` instead of `componentId` (and no `nodeId`).
 
 ### Merge precedence (last wins)
 

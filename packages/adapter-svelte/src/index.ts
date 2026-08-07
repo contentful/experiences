@@ -27,7 +27,11 @@ export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
 // ─── Runtime context helpers ─────────────────────────────────────────────
-export { getExperience, getContentfulComponent, getContentfulTemplate } from './context.js';
+export {
+  getExperience,
+  getContentfulComponent,
+  getContentfulExperienceTemplate,
+} from './context.js';
 export { getDesignValues } from './get-design-values.js';
 export { toCss } from './design-utils.js';
 export type { ToCssOptions } from './design-utils.js';
@@ -46,22 +50,22 @@ export type {
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
   defineComponent,
-  defineTemplate,
+  defineExperienceTemplate,
   normalizeComponentRegistration,
-  normalizeTemplateRegistration,
+  normalizeExperienceTemplateRegistration,
 } from './types.js';
 export type {
   ComponentConfig,
   Components,
   Config,
   ContentfulComponent,
-  ContentfulTemplate,
+  ContentfulExperienceTemplate,
+  ExperienceTemplateConfig,
+  ExperienceTemplateRegistration,
+  ExperienceTemplates,
   Registration,
   RenderContext,
   ResolveToken,
-  TemplateConfig,
-  TemplateRegistration,
-  Templates,
 } from './types.js';
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
@@ -70,22 +74,22 @@ export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/exper
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
 export type {
-  ComponentTypeNode,
-  ComponentTypeRef,
+  ComponentNode,
+  ComponentRef,
   DesignPropValue,
   DesignToken,
   ExperienceContext,
   ExperienceNode,
   ExperiencePayload,
   ExperienceSys,
+  ExperienceTemplateNode,
+  ExperienceTemplateRef,
   ManualDesignValue,
+  PortableExperienceTemplate,
   PortableRegistration,
   PortableRenderNode,
   PortableRenderPlan,
-  PortableTemplate,
   ResolveContext,
-  TemplateNode,
-  TemplateRef,
   ValuesByViewport,
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
@@ -103,9 +107,12 @@ export {
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {
+  ALPHA_FEATURE_HEADER,
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
+  NEW_EXO_ENTITY_TYPES,
+  NEW_EXO_ENTITY_TYPES_HEADERS,
   NotFoundError,
   PREVIEW_HOST,
   createClient,

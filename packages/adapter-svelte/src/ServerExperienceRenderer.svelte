@@ -14,7 +14,7 @@
   import DebugExperience from './DebugExperience.svelte';
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
-  import WrapWithTemplate from './WrapWithTemplate.svelte';
+  import WrapWithExperienceTemplate from './WrapWithExperienceTemplate.svelte';
   import type { ServerExperienceRendererProps } from './component-props.js';
   import { setExperience } from './context.js';
   import type { RenderContext } from './types.js';
@@ -62,7 +62,7 @@
   {#if debug}
     <DebugExperience {experience} />
   {/if}
-  <WrapWithTemplate template={experience.template} {config} experience={renderContext}>
+  <WrapWithExperienceTemplate experienceTemplate={experience.experienceTemplate} {config} experience={renderContext}>
     {#snippet children()}
       <NodesRenderer
         nodes={experience.nodes}
@@ -71,5 +71,5 @@
         {renderUnknown}
       />
     {/snippet}
-  </WrapWithTemplate>
+  </WrapWithExperienceTemplate>
 {/if}

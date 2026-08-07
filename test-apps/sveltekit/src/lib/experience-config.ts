@@ -1,5 +1,5 @@
 /**
- * Maps Contentful component/template ids to the app's components, and wires
+ * Maps Contentful component / experience-template ids to the app's components, and wires
  * `resolveToken`. Components read design via `getDesignValues()`.
  */
 
@@ -8,7 +8,7 @@ import {
   type Components,
   type Config,
   type ResolveToken,
-  type Templates,
+  type ExperienceTemplates,
 } from '@contentful/experiences-svelte';
 
 import Button from './components/Button.svelte';
@@ -25,7 +25,7 @@ const components: Components = {
   }),
 };
 
-const templates: Templates = {
+const experienceTemplates: ExperienceTemplates = {
   hi: { component: Page, defaults: { title: 'Welcome' } },
   hero: { component: Page, defaults: { title: 'Featured' } },
 };
@@ -41,4 +41,4 @@ const brandTokens: Record<string, string> = {
 
 const resolveToken: ResolveToken = (token) => brandTokens[token.value];
 
-export const experienceConfig: Config = { components, templates, resolveToken };
+export const experienceConfig: Config = { components, experienceTemplates, resolveToken };
