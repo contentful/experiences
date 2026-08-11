@@ -1,3 +1,13 @@
+## 0.3.3 (2026-08-11)
+
+### 🩹 Fixes
+
+- **deps:** update dependency @contentful/experience-delivery to v1.0.0-dev.7 ([#130](https://github.com/contentful/experiences/pull/130))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.7.3
+
 ## 0.3.2 (2026-08-10)
 
 ### 🧱 Updated Dependencies

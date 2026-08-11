@@ -1,3 +1,7 @@
+## 0.7.3 (2026-08-11)
+
+This was a version bump only for core to align it with other projects, there were no code changes.
+
 ## 0.7.2 (2026-08-10)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
