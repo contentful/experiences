@@ -8,7 +8,6 @@ import type {
   PortableRenderPlan,
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
-import { NEW_EXO_ENTITY_TYPES_HEADERS } from './alpha-feature.js';
 import { createClient } from './create-client.js';
 import { PREVIEW_HOST } from './hosts.js';
 
@@ -96,20 +95,17 @@ export async function fetchExperience(
 
   log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
 
-  // The alpha-feature header goes on the request as well as on clients built by
-  // `createClient`, so a caller-supplied `{ client }` also gets the ExO entity
-  // shapes this SDK reads.
-  const response = await client.experience.get(
-    spaceId,
-    environmentId,
-    experienceId,
-    { locale },
-    { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
-  );
+  const response = await client.experience.get(spaceId, environmentId, experienceId, { locale });
 
-  // `GetExperienceResponse` is a union of the shapes the endpoint can return;
-  // the header above pins it to `HydratedExperienceView`, which is a structural
-  // superset of `ExperiencePayload`.
+  // The delivery API gates the ExO entity shapes this SDK reads (`component` /
+  // `experienceTemplate` links) behind an alpha-feature header. Since
+  // `@contentful/experience-delivery@1.0.0-dev.7` the client sends it on every
+  // request itself, so a caller-supplied `{ client }` is covered too and we no
+  // longer set it here.
+  //
+  // The client still types `GetExperienceResponse` as a union of every shape the
+  // endpoint can return, so the narrowing stays manual. `HydratedExperienceView`
+  // is a structural superset of `ExperiencePayload`.
   const payload = response as ContentfulViewDelivery.HydratedExperienceView as ExperiencePayload;
 
   log.lazy('received raw payload', () => payload);

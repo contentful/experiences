@@ -157,7 +157,7 @@ export interface ExperienceSys {
  * required when consuming a delivery-client response. The delivery API returns
  * this shape when the request carries the
  * `x-contentful-enable-alpha-feature: new-exo-entity-types` header, which
- * `@contentful/experiences-client` sends on every request.
+ * `@contentful/experience-delivery` sends on every request.
  */
 export interface ExperiencePayload {
   viewports: ViewportDef[];

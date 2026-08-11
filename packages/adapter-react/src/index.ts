@@ -100,12 +100,9 @@ export {
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {
-  ALPHA_FEATURE_HEADER,
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
-  NEW_EXO_ENTITY_TYPES,
-  NEW_EXO_ENTITY_TYPES_HEADERS,
   NotFoundError,
   PREVIEW_HOST,
   createClient,

@@ -113,16 +113,13 @@ Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — thos
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
-The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), with the page-level reference at `sys.experienceTemplate`. A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional, and is sent in two places:
+The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), with the page-level reference at `sys.experienceTemplate`. A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
 
-- `createClient` sets it as a **client default**, so a customer who builds a client and calls `client.experience.get(...)` directly is covered.
-- `fetchExperience` sends it as a **per-request** header, so a caller-supplied `{ client }` — which never went through `createClient` — is covered too.
+**We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` sets no headers at all. Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
 
-A caller-supplied `headers` entry for the same key wins over `createClient`'s default, deliberately, so a caller can pin a different alpha-feature set.
+One sharp edge in the generated merge order: `mergeHeaders(authHeaders, this._options.headers, <per-request default>, requestOptions.headers)`, later wins. The per-request default lands **after** client-level `headers`, so a `createClient({ headers: { 'x-contentful-enable-alpha-feature': … } })` entry is silently clobbered. Only `requestOptions.headers` (or `requestOptions.xContentfulEnableAlphaFeature`) can override it. Do not document client-level `headers` as an override path for this key.
 
-Why this matters for types: the delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because it can't know which header the caller sent. Sending the header is what makes `fetch-experience.ts`'s narrowing to `HydratedExperienceView` sound rather than a guess. The constants (`ALPHA_FEATURE_HEADER`, `NEW_EXO_ENTITY_TYPES`, `NEW_EXO_ENTITY_TYPES_HEADERS`) live in `packages/client/src/alpha-feature.ts` and are re-exported from both adapters for customers driving the raw client themselves.
-
-If the API ever serves these shapes without the header, deleting `alpha-feature.ts` and its two call sites is the whole cleanup.
+Why this still matters for types: the delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because the generator can't know which header was sent. dev.7 did not collapse that union, so `fetch-experience.ts` still narrows to `HydratedExperienceView` by hand — the cast is sound because the header is now guaranteed, not because we set it.
 
 ### Why `createClient` in addition to the raw `ContentfulViewDeliveryClient` constructor?
 
