@@ -1,3 +1,9 @@
+## 0.7.4 (2026-08-11)
+
+### 🚀 Features
+
+- stop sending the alpha-feature header manually ([#131](https://github.com/contentful/experiences/pull/131))
+
 ## 0.7.3 (2026-08-11)
 
 This was a version bump only for core to align it with other projects, there were no code changes.

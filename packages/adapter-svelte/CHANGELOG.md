@@ -1,3 +1,15 @@
+## 0.5.5 (2026-08-11)
+
+### 🚀 Features
+
+- stop sending the alpha-feature header manually ([#131](https://github.com/contentful/experiences/pull/131))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.3.4
+- Updated design to 0.7.4
+- Updated core to 0.7.4
+
 ## 0.5.4 (2026-08-11)
 
 ### 🧱 Updated Dependencies

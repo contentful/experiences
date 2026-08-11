@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-client",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Delivery client + fetchExperience for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "@contentful/experience-delivery": "1.0.0-dev.7",
-    "@contentful/experiences-sdk-core": "0.7.3"
+    "@contentful/experiences-sdk-core": "0.7.4"
   }
 }
