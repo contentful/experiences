@@ -540,7 +540,7 @@ const client = createClient({
 });
 ```
 
-Clients built by `createClient` also send the alpha-feature header on every request — see [The alpha-feature header](#the-alpha-feature-header).
+Every delivery request carries an alpha-feature header — see [The alpha-feature header](#the-alpha-feature-header).
 
 ### The alpha-feature header
 
@@ -550,31 +550,31 @@ The Experience Delivery API gates the entity shapes this SDK reads behind a head
 x-contentful-enable-alpha-feature: new-exo-entity-types
 ```
 
-A payload fetched without it has a different shape that the SDK will not resolve. You normally don't send it yourself: `fetchExperience` sends it per request, and `createClient` sets it as a client default, so a client you build and call directly is covered too.
+A payload fetched without it has a different shape that the SDK will not resolve. **You never send it yourself.** `@contentful/experience-delivery` sets it on every request as of `1.0.0-dev.7`, so every path is covered: `fetchExperience`, a client from `createClient`, and a raw `ContentfulViewDeliveryClient` you construct and call directly.
 
-You only send it yourself when you drive the raw `ContentfulViewDeliveryClient` and pass the payload to `resolveExperience`:
+That means driving the raw client and resolving the payload yourself needs no header plumbing:
 
 ```ts
-import {
-  ContentfulViewDeliveryClient,
-  NEW_EXO_ENTITY_TYPES_HEADERS,
-  resolveExperience,
-} from '@contentful/experiences-react';
+import { ContentfulViewDeliveryClient, resolveExperience } from '@contentful/experiences-react';
 
 const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
 
-const payload = await client.experience.get(
-  spaceId,
-  environmentId,
-  experienceId,
-  { locale },
-  { headers: NEW_EXO_ENTITY_TYPES_HEADERS } // ← required
-);
+const payload = await client.experience.get(spaceId, environmentId, experienceId, { locale });
 
 const plan = await resolveExperience(payload, experienceConfig);
 ```
 
-`ALPHA_FEATURE_HEADER` and `NEW_EXO_ENTITY_TYPES` are exported separately if you'd rather build the bag yourself.
+To send a different alpha-feature set, pass it in the **per-request** `headers` — the delivery client re-applies its own default after client-level `headers`, so a `createClient({ headers })` entry for this key does not take effect:
+
+```ts
+await client.experience.get(
+  spaceId,
+  environmentId,
+  experienceId,
+  { locale },
+  { headers: { 'x-contentful-enable-alpha-feature': 'some-other-set' } }
+);
+```
 
 ### `resolveExperience(payload, config, opts?)`
 

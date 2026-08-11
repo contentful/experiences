@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { fetchExperience } from './fetch-experience.js';
-import { NEW_EXO_ENTITY_TYPES_HEADERS } from './alpha-feature.js';
 
 const { mockGet, mockPayload, mockPlan } = vi.hoisted(() => {
   const mockPayload = {
@@ -86,13 +85,7 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(mockGet).toHaveBeenCalledWith(
-        'space-1',
-        'master',
-        'exp-1',
-        { locale: 'en-US' },
-        { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
-      );
+      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: 'en-US' });
     });
   });
 
@@ -104,41 +97,27 @@ describe('fetchExperience', () => {
       await fetchExperience(experienceOptions, { client }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-      expect(mockGet).toHaveBeenCalledWith(
-        'space-1',
-        'master',
-        'exp-1',
-        { locale: undefined },
-        { headers: NEW_EXO_ENTITY_TYPES_HEADERS }
-      );
+      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: undefined });
     });
 
     it('ignores the preview flag when a pre-made client is provided', async () => {
       const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
       vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
-      await fetchExperience(
-        experienceOptions,
-        // @ts-expect-error — mixing `client` with `preview` is not a valid public shape; verify runtime tolerates it.
-        { client, preview: true },
-        resolveOptions
-      );
+      await fetchExperience(experienceOptions, { client, preview: true }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
     });
 
-    it('still sends the alpha-feature header when the client comes from the caller', async () => {
+    // The alpha-feature header that selects the ExO entity shapes this SDK reads
+    // is sent by the delivery client itself as of 1.0.0-dev.7, so a
+    // caller-supplied client is covered without us passing request options.
+    it('sends no request options of its own', async () => {
       const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
 
       await fetchExperience(experienceOptions, { client }, resolveOptions);
 
-      expect(mockGet).toHaveBeenCalledWith(
-        'space-1',
-        'master',
-        'exp-1',
-        { locale: undefined },
-        { headers: { 'x-contentful-enable-alpha-feature': 'new-exo-entity-types' } }
-      );
+      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: undefined });
     });
   });
 
