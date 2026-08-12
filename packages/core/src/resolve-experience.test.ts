@@ -245,6 +245,139 @@ describe('resolveExperience — IR construction', () => {
   });
 });
 
+/*
+ * `ExperienceNode` is a closed union, so these shapes are unreachable through
+ * the typed API — but payloads are untrusted JSON at runtime, and a node kind
+ * newer than the SDK arrives looking exactly like this. Dropping one node must
+ * not fail the whole experience, and must not be silent.
+ */
+describe('resolveExperience — unidentifiable nodes', () => {
+  const emptyConfig: ResolverConfig = { components: {} };
+  const unknownNode = (rest: Record<string, unknown> = {}) =>
+    ({
+      pattern: {
+        sys: {
+          type: 'ResourceLink',
+          linkType: 'Contentful:Pattern',
+          urn: 'crn:contentful:::experience:spaces/$self/environments/$self/patterns/carousel',
+        },
+      },
+      ...rest,
+    }) as unknown as ComponentNode;
+
+  it('drops a node with neither ref and keeps its siblings', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('contentful-heading', { id: 'before' }),
+          unknownNode({ id: 'mystery' }),
+          componentNode('contentful-button', { id: 'after' }),
+        ],
+      };
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes.map((n) => n.nodeId)).toEqual(['before', 'after']);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('"mystery"');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('names the node, its keys, and the descendant count it discarded', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [
+          unknownNode({
+            id: 'mystery',
+            slots: {
+              content: [
+                componentNode('contentful-container', {
+                  slots: { children: [componentNode('contentful-button')] },
+                }),
+              ],
+            },
+          }),
+        ],
+      };
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes).toEqual([]);
+
+      const message = String(warn.mock.calls[0]![0]);
+      expect(message).toContain('"mystery"');
+      expect(message).toContain('pattern');
+      // The node itself plus the two components under it: 2 descendants.
+      expect(message).toContain('2 descendant node(s)');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('treats a ref with no urn as unidentifiable rather than throwing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [
+          { component: {} } as unknown as ComponentNode,
+          componentNode('contentful-button', { id: 'after' }),
+        ],
+      };
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes.map((n) => n.nodeId)).toEqual(['after']);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('drops an unidentifiable node nested in a slot without dropping the parent', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [
+          experienceTemplateNode('page', {
+            id: 'tpl',
+            slots: {
+              content: [
+                unknownNode({ id: 'mystery' }),
+                componentNode('contentful-button', { id: 'btn' }),
+              ],
+            },
+          }),
+        ],
+      };
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes[0]!.nodeId).toBe('tpl');
+      expect(plan.nodes[0]!.slots.content!.map((n) => n.nodeId)).toEqual(['btn']);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reports the drop through the debug logger too', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [unknownNode({ id: 'mystery' })],
+      };
+      await resolveExperience(payload, emptyConfig, { debug: true });
+      const lines = log.mock.calls.map((c) => String(c[0]));
+      expect(lines.some((l) => l.includes('Skipping unidentifiable node "mystery"'))).toBe(true);
+    } finally {
+      warn.mockRestore();
+      log.mockRestore();
+    }
+  });
+});
+
 describe('resolveExperience — resolveData hooks', () => {
   const heroPayload: ExperiencePayload = {
     viewports: VIEWPORTS,

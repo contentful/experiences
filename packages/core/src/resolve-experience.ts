@@ -115,26 +115,114 @@ function extractIdFromUrn(urn: string): string {
 }
 
 /**
+ * Read the ResourceLink a node points at. Which key is present is the only
+ * difference between the two node variants: `experienceTemplate` means the
+ * implementation lives in the customer's `experienceTemplates` registry,
+ * `component` in `components`. Both carry ids in the same URN shape, the same
+ * prop bags, and the same slots — so everything downstream is kind-agnostic.
+ *
+ * `ExperienceNode` is a closed union, so a typed caller cannot produce anything
+ * else. Payloads, however, are untrusted JSON at runtime, and the realistic way
+ * a third shape arrives is a node kind *newer than this SDK*. Returns `null`
+ * for anything unidentifiable rather than letting the ref access throw — see
+ * `buildNode`.
+ */
+function readNodeRef(
+  node: ExperienceNode
+): { kind: PortableRegistration['kind']; urn: string } | null {
+  const isExperienceTemplate = 'experienceTemplate' in node;
+  const ref = isExperienceTemplate
+    ? node.experienceTemplate
+    : 'component' in node
+      ? node.component
+      : undefined;
+  // Cast because the runtime value may violate the declared type: a node can
+  // carry `component: {}`, which satisfies `'component' in node` but has no urn.
+  const urn = (ref as { sys?: { urn?: unknown } } | undefined)?.sys?.urn;
+  if (typeof urn !== 'string' || urn.length === 0) return null;
+  return { kind: isExperienceTemplate ? 'experienceTemplate' : 'component', urn };
+}
+
+/** Total node count in a payload subtree, the node itself included. */
+function countPayloadNodes(node: ExperienceNode): number {
+  const slots = (node as { slots?: Record<string, unknown> }).slots;
+  let total = 1;
+  if (slots && typeof slots === 'object') {
+    for (const children of Object.values(slots)) {
+      if (!Array.isArray(children)) continue;
+      for (const child of children) total += countPayloadNodes(child as ExperienceNode);
+    }
+  }
+  return total;
+}
+
+/**
+ * The one case where a node is dropped. AIS-413 was the opposite failure —
+ * a node kind the SDK recognized and could have rendered, skipped behind a
+ * vague warning, taking its whole subtree with it — so the bar here is that
+ * nothing vanishes without a diagnostic naming what was lost.
+ *
+ * Dropping beats throwing: a `resolveExperience` rejection fails the entire
+ * experience, so one unrecognized node in a sidebar would take down every page
+ * containing it, for a payload the customer does not control and cannot fix.
+ */
+function warnUnrenderableNode(node: ExperienceNode, log: DebugLogger): void {
+  const id = (node as { id?: unknown }).id;
+  const label = typeof id === 'string' ? ` "${id}"` : '';
+  const keys = Object.keys(node);
+  const descendants = countPayloadNodes(node) - 1;
+  const message =
+    `Skipping unidentifiable node${label}: expected a \`component\` or \`experienceTemplate\` ` +
+    `ResourceLink carrying a urn, got keys [${keys.join(', ')}]. Dropping it and ${descendants} ` +
+    `descendant node(s). A payload node kind this SDK does not know is usually a version skew — ` +
+    `upgrading @contentful/experiences-sdk-core may be all that is needed.`;
+  if (typeof console !== 'undefined') {
+    console.warn(`[@contentful/experiences] ${message}`);
+  }
+  log.log(message);
+}
+
+/**
+ * Walk a sibling list into IR nodes, dropping any node `buildNode` cannot
+ * identify. Used for both the top-level list and every slot.
+ */
+function buildNodes(
+  nodes: ExperienceNode[],
+  config: ResolverConfig,
+  nodeRefs: PortableRenderNode[],
+  log: DebugLogger
+): PortableRenderNode[] {
+  const built: PortableRenderNode[] = [];
+  for (const node of nodes) {
+    const one = buildNode(node, config, nodeRefs, log);
+    if (one !== null) built.push(one);
+  }
+  return built;
+}
+
+/**
  * Recursively turn a payload node into an IR node. The collected `nodeRefs`
  * array is for the resolver pass — every built node with a registered
  * resolver gets a reference appended so we can run them in parallel without
  * walking the tree twice.
+ *
+ * Returns `null` only for a node whose ResourceLink cannot be read, which
+ * `warnUnrenderableNode` has already reported. Callers go through `buildNodes`.
  */
 function buildNode(
   node: ExperienceNode,
   config: ResolverConfig,
-  nodeRefs: PortableRenderNode[]
-): PortableRenderNode {
-  // Which key is present is the only difference between the two node
-  // variants: `experienceTemplate` means the implementation lives in the
-  // customer's `experienceTemplates` registry, `component` in `components`.
-  // Both carry ids in the same URN shape, the same prop bags, and the same
-  // slots — so everything below is kind-agnostic.
-  const isExperienceTemplate = 'experienceTemplate' in node;
-  const ref = isExperienceTemplate ? node.experienceTemplate : node.component;
+  nodeRefs: PortableRenderNode[],
+  log: DebugLogger
+): PortableRenderNode | null {
+  const ref = readNodeRef(node);
+  if (ref === null) {
+    warnUnrenderableNode(node, log);
+    return null;
+  }
   const registration: PortableRegistration = {
-    kind: isExperienceTemplate ? 'experienceTemplate' : 'component',
-    id: extractIdFromUrn(ref.sys.urn),
+    kind: ref.kind,
+    id: extractIdFromUrn(ref.urn),
   };
 
   const slots: Record<string, PortableRenderNode[]> = {};
@@ -145,7 +233,7 @@ function buildNode(
           `Slot "${slotName}" on ${registration.kind} "${registration.id}" must be an array of nodes.`
         );
       }
-      slots[slotName] = children.map((child) => buildNode(child, config, nodeRefs));
+      slots[slotName] = buildNodes(children, config, nodeRefs, log);
     }
   }
 
@@ -231,9 +319,7 @@ export async function resolveExperience(
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
   const nodeRefs: PortableRenderNode[] = [];
-  const nodes: PortableRenderNode[] = payload.nodes.map((node) =>
-    buildNode(node, config, nodeRefs)
-  );
+  const nodes: PortableRenderNode[] = buildNodes(payload.nodes, config, nodeRefs, log);
   log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
   // Pass 2: run every node's resolveData hook in parallel.
