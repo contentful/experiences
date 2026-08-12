@@ -617,10 +617,10 @@ Identity helper that narrows `resolveData` and `component` parameter types to yo
 
 Same shape as `defineComponent`. A coded Experience Template is an ordinary node in the experience — the only difference is which registry its id resolves against (`experienceTemplates` rather than `components`). Its slots arrive as named props like any component's, so a template with a `content` slot receives a `content: ReactNode[]` prop and renders the page layout around it.
 
-| Field         | Type                                                                 | Required | Default | Description                                                                                                                        |
-| ------------- | -------------------------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                                                |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per page against the template node's `props`.                                                       |
+| Field         | Type                                                                 | Required | Default | Description                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                                                              |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per page against the template node's `props`.                                                                      |
 | `component`   | `ComponentType<Props>`                                               | yes      | n/a     | Same as components: the merged props (content + resolved design + `resolveData` + named slot props). Design is also readable via the same hooks. |
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`

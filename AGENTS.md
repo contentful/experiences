@@ -182,7 +182,7 @@ Two reasons. (1) `packages/core` must stay zero-dep and runtime-neutral — pull
 
 They are **separate id namespaces in the payload**. A node links either a `Contentful:Component` or a `Contentful:ExperienceTemplate`, and nothing stops the two entity types from sharing an id — so a single flat map could collide, with no way to tell which entry a node meant. The payload already says which namespace applies (`node.component` vs `node.experienceTemplate`, carried into the IR as `registration.kind`), so the renderer picks the registry from the node rather than guessing.
 
-Note that the *render fns* are not structurally different — a coded Experience Template is an ordinary node whose slots arrive as named props, exactly like a component's. The split is about id resolution, not about templates being special.
+Note that the _render fns_ are not structurally different — a coded Experience Template is an ordinary node whose slots arrive as named props, exactly like a component's. The split is about id resolution, not about templates being special.
 
 ### Why is `nodeId` optional on the IR but `registration` required?
 
@@ -381,10 +381,10 @@ npx nx run-many -t test --projects=adapter-react # one package
 
 `adapter-svelte` runs **two** Vitest projects, and its `test` target runs both:
 
-| Config                  | Env    | Files              | Svelte output |
-| ----------------------- | ------ | ------------------ | ------------- |
-| `vitest.config.ts`      | jsdom  | `*.test.ts`        | client        |
-| `vitest.ssr.config.ts`  | node   | `*.ssr.test.ts`    | server        |
+| Config                 | Env   | Files           | Svelte output |
+| ---------------------- | ----- | --------------- | ------------- |
+| `vitest.config.ts`     | jsdom | `*.test.ts`     | client        |
+| `vitest.ssr.config.ts` | node  | `*.ssr.test.ts` | server        |
 
 The split exists because the two Svelte builds are not interchangeable — most
 notably, a compiled snippet receives its arguments as getters on the client but

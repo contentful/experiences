@@ -456,7 +456,9 @@ describe('ServerExperienceRenderer', () => {
     // so nothing may wrap them.
     const cfg: Config = {
       components: { item: Item },
-      experienceTemplates: { hero: ({ content }: { content?: ReactNode[] }) => <main>{content}</main> },
+      experienceTemplates: {
+        hero: ({ content }: { content?: ReactNode[] }) => <main>{content}</main>,
+      },
     };
     const plan = await resolveExperience(
       {

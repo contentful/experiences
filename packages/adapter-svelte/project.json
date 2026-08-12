@@ -3,19 +3,12 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "packages/adapter-svelte/src",
   "projectType": "library",
-  "tags": [
-    "scope:adapter",
-    "runtime:svelte"
-  ],
+  "tags": ["scope:adapter", "runtime:svelte"],
   "targets": {
     "build": {
       "cache": true,
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "{projectRoot}/dist"
-      ],
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/adapter-svelte",
@@ -24,9 +17,7 @@
     },
     "test": {
       "cache": true,
-      "dependsOn": [
-        "^build"
-      ],
+      "dependsOn": ["^build"],
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/adapter-svelte",
