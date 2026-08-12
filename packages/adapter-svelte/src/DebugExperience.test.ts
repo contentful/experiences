@@ -7,10 +7,18 @@ import DebugExperience from './DebugExperience.svelte';
 
 const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
 
-function node(componentId: string, content: Record<string, unknown> = {}): PortableRenderNode {
+function node(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
-    registration: { componentId },
+    registration: { kind: 'component', id },
     props: { content, design: {}, designRaw: {} },
+    slots: {},
+  };
+}
+
+function templateNode(id: string): PortableRenderNode {
+  return {
+    registration: { kind: 'experienceTemplate', id },
+    props: { content: {}, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -43,18 +51,25 @@ describe('DebugExperience.svelte', () => {
     expect(container.innerHTML).toContain('Experience debug — 1 top-level node');
   });
 
-  it('names the experienceTemplate in the summary when present', () => {
+  it('names experienceTemplate nodes in the summary', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
-      nodes: [],
-      experienceTemplate: {
-        experienceTemplateId: 'page',
-        props: { content: {}, design: {}, designRaw: {} },
-      },
+      nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('experience template: page');
+  });
+
+  it('omits the experience-template summary for a composite experience', () => {
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [node('button'), node('text')],
+      fallbackViewportIndex: 0,
+    };
+    const { container } = render(DebugExperience, { props: { experience: plan } });
+    expect(container.innerHTML).toContain('Experience debug — 2 top-level nodes');
+    expect(container.innerHTML).not.toContain('experience template');
   });
 
   it('dumps the plan as pretty JSON', () => {
@@ -64,7 +79,7 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
-    expect(container.innerHTML).toContain('componentId');
+    expect(container.innerHTML).toContain('registration');
     expect(container.innerHTML).toContain('button');
     expect(container.innerHTML).toContain('Go');
   });

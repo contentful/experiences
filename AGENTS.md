@@ -76,12 +76,13 @@ Customers who want to manage the delivery client themselves have two paths: `cre
 `resolveExperience` (called internally by `fetchExperience`) is the **resolve step**:
 
 1. Walks the XDA payload's `nodes[]` recursively.
-2. Extracts `componentId` from each node's `component.sys.urn` (last slash-segment).
+2. Extracts each node's id from whichever ref it carries — `component.sys.urn` or `experienceTemplate.sys.urn` (last slash-segment) — and records which one in `node.registration.kind`.
 3. Splits `contentProperties` and `designProperties` into `node.props.{content,design}`.
 4. Captures `slots` as nested `PortableRenderNode[]` arrays (no flat index).
-5. Picks up the page-level `payload.sys.experienceTemplate` if present.
-6. Runs every customer-declared `resolveData` hook in parallel; results land on `node.props.resolved`.
-7. Returns a `PortableRenderPlan`.
+5. Runs every customer-declared `resolveData` hook in parallel; results land on `node.props.resolved`.
+6. Returns a `PortableRenderPlan`.
+
+`payload.sys.experienceTemplate` is **never read**. It is `required` on every Experience — a composite one names its template there too — so it carries no coded-vs-composite signal. The node list is the signal: a coded Experience Template shows up as a node whose ref is `experienceTemplate`, a composite one as plain `component` nodes.
 
 The plan is **runtime-neutral** — no React, no DOM, no platform assumptions. Every framework adapter consumes the same plan.
 
@@ -90,8 +91,10 @@ The React adapter then:
 1. Computes the active viewport (server: from `initialViewportId`; client: from `useActiveViewport` + `matchMedia`).
 2. Builds a `RenderContext` with `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`.
 3. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
-4. For each node: looks up the customer's component config by `node.registration.componentId`, resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), and publishes that record on context for `useDesignValues()` / `getDesignValues()`. Design is **not** merged into the component's props — the merged prop bag is `defaults < content < resolveData < slots`. A component styles itself by calling the design hook and (optionally) `toCss`.
-5. If `plan.experienceTemplate` is set and registered, wraps the whole thing with the Experience Template's render fn.
+4. For each node: looks up the customer's config by `node.registration.id`, against `config.experienceTemplates` when `registration.kind === 'experienceTemplate'` and `config.components` otherwise. Resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), publishes that record on context for `useDesignValues()` / `getDesignValues()`, and merges it into the prop bag: `defaults < design < content < resolveData < slots`. A component can style itself straight from props, or read the design hook and (optionally) `toCss`.
+5. Injects one prop per slot the node carries, named after the slot and holding an array (`ReactNode[]` / `Snippet[]`) — `children` is just the conventional name for the default slot, not a special case. Both node kinds get this identically.
+
+An unregistered id degrades rather than blanking the page: a **component** node renders `renderUnknown` (the missing-component box), a **template** node warns and renders its slot children unwrapped.
 
 ---
 
@@ -113,7 +116,7 @@ Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — thos
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
-The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`), with the page-level reference at `sys.experienceTemplate`. A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
+The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`). A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
 
 **We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` sets no headers at all. Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
 
@@ -177,13 +180,15 @@ Two reasons. (1) `packages/core` must stay zero-dep and runtime-neutral — pull
 
 ### Why two separate registries (`components` and `experienceTemplates`) instead of one?
 
-Components and Experience Templates have **structurally different render fns**. Experience Templates always receive `children: ReactNode` (the rendered experience tree). Components don't. Putting them in one map would force a discriminator field on every entry (`{ kind: 'component' | 'experienceTemplate' }`) — more boilerplate for customers and weaker types. Two registries keeps each entry's type narrow.
+They are **separate id namespaces in the payload**. A node links either a `Contentful:Component` or a `Contentful:ExperienceTemplate`, and nothing stops the two entity types from sharing an id — so a single flat map could collide, with no way to tell which entry a node meant. The payload already says which namespace applies (`node.component` vs `node.experienceTemplate`, carried into the IR as `registration.kind`), so the renderer picks the registry from the node rather than guessing.
 
-### Why is `nodeId` optional on the IR but `componentId` required (under `registration`)?
+Note that the *render fns* are not structurally different — a coded Experience Template is an ordinary node whose slots arrive as named props, exactly like a component's. The split is about id resolution, not about templates being special.
 
-The payload's `id` field is optional from XDA. Without one, the SDK never invents an id (see "no auto-generated node IDs" above). But every node MUST resolve to a component-type — the payload always provides `component.sys.urn`. Treating `componentId` as a required field on `registration` lets the renderer dispatch reliably.
+### Why is `nodeId` optional on the IR but `registration` required?
 
-The `registration` object exists as a seam for future capabilities/metadata Tyler's RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ componentId }`; later it grows additively without breaking the IR.
+The payload's `id` field is optional from XDA. Without one, the SDK never invents an id (see "no auto-generated node IDs" above). But every node MUST resolve to a registered type — the payload always provides one of `component.sys.urn` / `experienceTemplate.sys.urn`. Treating `registration` as required lets the renderer dispatch reliably.
+
+The `registration` object exists as a seam for future capabilities/metadata Tyler's RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ kind, id }`; later it grows additively without breaking the IR.
 
 ### Why do `Components` and `ExperienceTemplates` use `<any>` internally?
 
@@ -373,6 +378,18 @@ Deferred: the single hook stands for now. Revisit if React re-render churn shows
 npm test                                         # all packages
 npx nx run-many -t test --projects=adapter-react # one package
 ```
+
+`adapter-svelte` runs **two** Vitest projects, and its `test` target runs both:
+
+| Config                  | Env    | Files              | Svelte output |
+| ----------------------- | ------ | ------------------ | ------------- |
+| `vitest.config.ts`      | jsdom  | `*.test.ts`        | client        |
+| `vitest.ssr.config.ts`  | node   | `*.ssr.test.ts`    | server        |
+
+The split exists because the two Svelte builds are not interchangeable — most
+notably, a compiled snippet receives its arguments as getters on the client but
+by value on the server, and `NodesRenderer` constructs one snippet call by hand.
+Anything touching snippets or slot rendering needs coverage in **both**.
 
 ### Build everything from scratch
 

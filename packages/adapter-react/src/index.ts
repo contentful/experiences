@@ -78,7 +78,6 @@ export type {
   ExperienceTemplateNode,
   ExperienceTemplateRef,
   ManualDesignValue,
-  PortableExperienceTemplate,
   PortableRegistration,
   PortableRenderNode,
   PortableRenderPlan,

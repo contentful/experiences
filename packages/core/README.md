@@ -6,8 +6,8 @@ Runtime-neutral primitives shared across all framework adapters.
 
 ## What lives here
 
-- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableExperienceTemplate`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken` / `ValuesByViewport`), `ViewportDef`, `ExperienceContext`, `ResolveContext`.
-- **`resolveExperience(payload, config, opts)`** — single async entry that walks an XDA payload, classifies content vs. design properties, captures slots, runs any component-declared `resolveData` hooks in parallel, and emits a runtime-neutral `PortableRenderPlan` ready for any framework adapter to render.
+- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableRegistration`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken` / `ValuesByViewport`), `ViewportDef`, `ExperienceContext`, `ResolveContext`.
+- **`resolveExperience(payload, config, opts)`** — single async entry that walks an XDA payload, classifies content vs. design properties, captures slots, runs any component-declared `resolveData` hooks in parallel, and emits a runtime-neutral `PortableRenderPlan` ready for any framework adapter to render. Every node in the payload becomes a `PortableRenderNode`; `registration.kind` records whether the adapter should resolve its id against `config.components` or `config.experienceTemplates`. A coded Experience Template is an ordinary node — `payload.sys.experienceTemplate` is never read.
 
 ## Why a separate package?
 

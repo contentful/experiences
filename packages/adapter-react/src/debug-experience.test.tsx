@@ -7,10 +7,18 @@ import { DebugExperience } from './debug-experience';
 
 const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
 
-function node(componentId: string, content: Record<string, unknown> = {}): PortableRenderNode {
+function node(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
-    registration: { componentId },
+    registration: { kind: 'component', id },
     props: { content, design: {}, designRaw: {} },
+    slots: {},
+  };
+}
+
+function templateNode(id: string): PortableRenderNode {
+  return {
+    registration: { kind: 'experienceTemplate', id },
+    props: { content: {}, design: {}, designRaw: {} },
     slots: {},
   };
 }
@@ -42,19 +50,26 @@ describe('DebugExperience', () => {
     );
   });
 
-  it('names the experienceTemplate in the summary when present', () => {
+  it('names experienceTemplate nodes in the summary', () => {
     const plan: PortableRenderPlan = {
       viewports: [],
-      nodes: [],
-      experienceTemplate: {
-        experienceTemplateId: 'page',
-        props: { content: {}, design: {}, designRaw: {} },
-      },
+      nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
       'experience template: page'
     );
+  });
+
+  it('omits the experience-template summary for a composite experience', () => {
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [node('button'), node('text')],
+      fallbackViewportIndex: 0,
+    };
+    const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
+    expect(html).toContain('Experience debug — 2 top-level nodes');
+    expect(html).not.toContain('experience template');
   });
 
   it('dumps the plan as pretty JSON', () => {
@@ -64,7 +79,7 @@ describe('DebugExperience', () => {
       fallbackViewportIndex: 0,
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
-    expect(html).toContain('componentId');
+    expect(html).toContain('registration');
     expect(html).toContain('button');
     expect(html).toContain('Go');
   });

@@ -4,17 +4,19 @@ import type { CSSProperties, ReactNode } from 'react';
 // terminal — confirming design resolves server-side before hydration.
 export interface PageProps {
   title?: string;
-  children?: ReactNode;
+  // The template's `content` slot arrives as a same-named prop, exactly like a
+  // component's slots — there is no `children` special case.
+  content?: ReactNode[];
   // Design props (auto-filled, server-resolved):
   backgroundColor?: string;
   color?: string;
 }
 
-/** Page-level Experience Template: wraps all top-level nodes in the outer page chrome. */
+/** Coded Experience Template: an ordinary node that wraps its slot children in the page chrome. */
 export function Page(props: PageProps) {
-  console.log('[Page] resolved props →', { ...props, children: '<omitted>' });
+  console.log('[Page] resolved props →', { ...props, content: '<omitted>' });
 
-  const { children, backgroundColor, color } = props;
+  const { content, backgroundColor, color } = props;
 
   const wrapper: CSSProperties = {
     maxWidth: 1024,
@@ -26,5 +28,5 @@ export function Page(props: PageProps) {
     backgroundColor,
     color,
   };
-  return <main style={wrapper}>{children}</main>;
+  return <main style={wrapper}>{content}</main>;
 }

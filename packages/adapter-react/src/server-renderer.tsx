@@ -15,7 +15,7 @@ import { getViewportIndex } from '@contentful/experiences-design';
 import { DebugExperience } from './debug-experience';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
-import { NodesRenderer, WrapWithExperienceTemplate, type RenderUnknown } from './nodes-renderer';
+import { NodesRenderer, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
@@ -83,22 +83,14 @@ export function ServerExperienceRenderer({
   return (
     <ExperienceProvider value={renderContext}>
       {debug ? <DebugExperience experience={experience} /> : null}
-      <WrapWithExperienceTemplate
-        experienceTemplate={experience.experienceTemplate}
+      <NodesRenderer
+        nodes={experience.nodes}
         config={config}
         viewports={experience.viewports}
         activeViewportIndex={activeViewportIndex}
         fallbackViewportIndex={experience.fallbackViewportIndex}
-      >
-        <NodesRenderer
-          nodes={experience.nodes}
-          config={config}
-          viewports={experience.viewports}
-          activeViewportIndex={activeViewportIndex}
-          fallbackViewportIndex={experience.fallbackViewportIndex}
-          renderUnknown={renderUnknown}
-        />
-      </WrapWithExperienceTemplate>
+        renderUnknown={renderUnknown}
+      />
     </ExperienceProvider>
   );
 }

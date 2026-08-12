@@ -85,9 +85,9 @@ export interface ComponentRef {
 }
 
 /**
- * Resource-link reference to an Experience Template. Experience Templates
- * are out of v1 scope as *nodes* and are skipped at plan-build time with a
- * diagnostic; the page-level reference on `sys` is honored.
+ * Resource-link reference to an Experience Template. The `urn` carries the
+ * template id, extracted the same way as a component id (segment after the
+ * last slash).
  *
  * Mirrors `ExperienceTemplateLink` from `@contentful/experience-delivery`.
  */
@@ -136,14 +136,13 @@ export interface ExperienceTemplateNode {
  */
 export interface ExperienceSys {
   /**
-   * Page-level Experience Template reference. When present, the renderer wraps
-   * the experience nodes with the matching template registered in the
-   * customer's Config. When absent, nodes render at the top level.
-   *
-   * Optional here while the delivery type declares it required — a required
-   * field satisfies an optional one, and keeping it optional lets
-   * `resolveExperience` accept hand-authored payloads for Experiences that
-   * carry no template.
+   * Editorial link to the Experience Template this Experience was authored
+   * from. The renderer does NOT read this — it is present on every Experience
+   * (both coded and composite templates), so it carries no signal about
+   * whether a template should wrap anything. Rendering is driven entirely by
+   * `nodes`: an `ExperienceTemplateNode` there means "render this coded
+   * template"; its absence means the template was composite and the nodes are
+   * plain components. Typed here only so payloads round-trip.
    */
   experienceTemplate?: ExperienceTemplateRef;
   [key: string]: unknown;
@@ -181,17 +180,25 @@ export interface ResolveContext {
 
 /**
  * Registration metadata for a single instance — the SDK's interpreted
- * pointer to the customer's component implementation. Today carries only
- * the resolved component id; capabilities (state requirements,
- * supported events, lifecycle hints, fallback ids) land here when needed.
+ * pointer to the customer's implementation. Carries the resolved id plus the
+ * registry that id belongs to; capabilities (state requirements, supported
+ * events, lifecycle hints, fallback ids) land here when needed.
+ *
+ * `kind` tells the adapter which registry to look `id` up in:
+ * `'component'` → `Config.components`, `'experienceTemplate'` →
+ * `Config.experienceTemplates`. Everything else about a node is identical
+ * across the two kinds — a coded Experience Template is just a node whose
+ * implementation lives in the other registry.
  */
 export interface PortableRegistration {
-  componentId: string;
+  kind: 'component' | 'experienceTemplate';
+  id: string;
 }
 
 /**
- * The IR — one node per component instance. The seam that lets non-React
- * adapters (Angular, SwiftUI, Compose) consume the same interpretation.
+ * The IR — one node per component or Experience Template instance. The seam
+ * that lets non-React adapters (Angular, SwiftUI, Compose) consume the same
+ * interpretation.
  *
  * Design props preserve the discriminated value shape as they arrived. Adapters
  * unwrap to plain scalars at render time, given an active viewport.
@@ -223,45 +230,27 @@ export interface PortableRenderNode {
     /** Raw per-viewport design, for client re-resolution on viewport change. */
     designRaw: Record<string, DesignPropValue>;
   };
+  /**
+   * Slot children keyed by slot name, pre-built in payload order. Adapters
+   * pass each entry to the customer's implementation as a prop of the same
+   * name — a slot named `content` becomes a `content` prop. `children` is not
+   * special; it is simply the conventional default slot name.
+   */
   slots: Record<string, PortableRenderNode[]>;
-}
-
-/**
- * Interpreted page-level Experience Template — the optional wrapper around the
- * experience tree. `experienceTemplateId` is extracted from
- * `payload.sys.experienceTemplate.sys.urn` (last slash-segment).
- *
- * Experience Templates carry the same prop-resolution shape as components:
- * content + design properties plus an optional `resolved` map from a
- * `resolveData` hook. v1 payloads from XDA don't carry template-level
- * content/design properties yet, but the IR makes room for them so the API
- * doesn't need to break later.
- */
-export interface PortableExperienceTemplate {
-  experienceTemplateId: string;
-  props: {
-    content: Record<string, unknown>;
-    /** Same as `PortableRenderNode.props.design`. */
-    design: Record<string, unknown>;
-    resolved?: Record<string, unknown>;
-    /** Same as `PortableRenderNode.props.designRaw`. */
-    designRaw: Record<string, DesignPropValue>;
-  };
 }
 
 /**
  * The interpreted experience tree.
  *
  * Top-level is `nodes: PortableRenderNode[]` (array, not single root) to
- * match the actual XDA payload shape. Renderers iterate top-level nodes
- * and recurse into `node.slots`. When `experienceTemplate` is present, the
- * renderer wraps the nodes with the matching Experience Template config;
- * otherwise nodes render at the top level.
+ * match the actual XDA payload shape. Renderers iterate top-level nodes and
+ * recurse into `node.slots`. A coded Experience Template shows up as a
+ * top-level node with `registration.kind === 'experienceTemplate'`, so there
+ * is no plan-level template concept — see `PortableRegistration`.
  */
 export interface PortableRenderPlan {
   viewports: ViewportDef[];
   nodes: PortableRenderNode[];
-  experienceTemplate?: PortableExperienceTemplate;
   /**
    * Viewport index the server pre-resolved design against (viewport[0] by
    * default). Adapters use `props.design` as-is when their active viewport

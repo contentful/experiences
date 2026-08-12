@@ -19,7 +19,8 @@ export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.
 export { default as MissingComponent } from './MissingComponent.svelte';
 export { default as DebugExperience } from './DebugExperience.svelte';
 
-// Exposed so advanced customers can render non-`children` slots manually:
+// Every slot already arrives as a same-named `Snippet[]` prop; this is exposed so
+// advanced customers can render a slot's raw nodes themselves instead:
 // e.g. `<NodesRenderer nodes={contentful.slots.header as PortableRenderNode[]} ... />`.
 export { default as NodesRenderer } from './NodesRenderer.svelte';
 
@@ -85,7 +86,6 @@ export type {
   ExperienceTemplateNode,
   ExperienceTemplateRef,
   ManualDesignValue,
-  PortableExperienceTemplate,
   PortableRegistration,
   PortableRenderNode,
   PortableRenderPlan,

@@ -66,7 +66,7 @@ const components: Components = {
 };
 
 const experienceTemplates: ExperienceTemplates = {
-  // Optional. Keys match `payload.sys.experienceTemplate.sys.urn` last-segment.
+  // Optional. Keys match the last slash-segment of an `experienceTemplate` node's urn.
   page: Page,
 };
 
@@ -615,13 +615,13 @@ Identity helper that narrows `resolveData` and `component` parameter types to yo
 
 ### `defineExperienceTemplate<Props>(config)`
 
-Same shape as `defineComponent`. The `component` also receives a fixed `children: ReactNode` (the rendered experience nodes), so an experience template renders the page-level layout around them.
+Same shape as `defineComponent`. A coded Experience Template is an ordinary node in the experience — the only difference is which registry its id resolves against (`experienceTemplates` rather than `components`). Its slots arrive as named props like any component's, so a template with a `content` slot receives a `content: ReactNode[]` prop and renders the page layout around it.
 
 | Field         | Type                                                                 | Required | Default | Description                                                                                                                        |
 | ------------- | -------------------------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `defaults`    | `Partial<Props>`                                                     | no       | `{}`    | Same as components.                                                                                                                |
-| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per render against the experience template's `props`.                                                |
-| `component`   | `ComponentType<Props & { children?: ReactNode }>`                    | yes      | n/a     | Receives the merged props (content + resolved design + `resolveData`) plus `children`. Design is also readable via the same hooks. |
+| `resolveData` | `(ctx: ResolveContext) => Partial<Props> \| Promise<Partial<Props>>` | no       | n/a     | Same as components. Runs once per page against the template node's `props`.                                                       |
+| `component`   | `ComponentType<Props>`                                               | yes      | n/a     | Same as components: the merged props (content + resolved design + `resolveData` + named slot props). Design is also readable via the same hooks. |
 
 ### `useDesignValues<T>()` / `toCss(design, options?)`
 
@@ -678,7 +678,7 @@ Components see `ContentfulComponent`:
 | `design`      | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                |
 | `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
 
-Experience Templates see `ContentfulExperienceTemplate`, the same shape but with `experienceTemplateId` instead of `componentId` (and no `nodeId`).
+Experience Templates see `ContentfulExperienceTemplate`, the same shape but with `experienceTemplateId` instead of `componentId` — a coded Experience Template is an ordinary node, so it carries a `nodeId` too.
 
 ### Merge precedence (last wins)
 

@@ -88,17 +88,18 @@ export function useExperience(): RenderContext {
 }
 
 /**
- * Read the raw Contentful payload for the nearest enclosing Experience node.
- * Returns `null` outside any rendered node (e.g. from a template's chrome
- * that wraps the nodes but isn't itself a node).
+ * Read the raw Contentful payload for the nearest enclosing *component* node.
+ * Returns `null` outside any rendered component node — including inside a coded
+ * Experience Template, which publishes `useContentfulExperienceTemplate()`
+ * instead.
  */
 export function useContentfulComponent(): ContentfulComponent | null {
   return useContext(ContentfulComponentContext);
 }
 
 /**
- * Read the raw Contentful payload for the page-level Experience Template, if
- * one is in scope. Returns `null` outside an Experience Template's render tree.
+ * Read the raw Contentful payload for the nearest enclosing Experience Template
+ * node. Returns `null` outside an Experience Template's render tree.
  */
 export function useContentfulExperienceTemplate(): ContentfulExperienceTemplate | null {
   return useContext(ContentfulExperienceTemplateContext);

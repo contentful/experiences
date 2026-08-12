@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 
 import type {
   DesignPropValue,
@@ -34,12 +34,13 @@ export interface ContentfulComponent {
 }
 
 /**
- * Same shape as `ContentfulComponent`, but for the page-level Experience
- * Template. Exposed via `useContentfulExperienceTemplate()` inside an
- * Experience Template's component tree.
+ * Same shape as `ContentfulComponent`, but for an Experience Template node.
+ * Exposed via `useContentfulExperienceTemplate()` inside an Experience
+ * Template's component tree.
  */
 export interface ContentfulExperienceTemplate {
   experienceTemplateId: string;
+  nodeId?: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
@@ -95,13 +96,16 @@ export type Registration<Props extends object = Record<string, unknown>> =
   | ComponentConfig<Props>;
 
 /**
- * Customer-supplied configuration for a page-level Experience Template. The
- * template's component receives the rendered Experience nodes as `children`.
+ * Customer-supplied configuration for a coded Experience Template. Identical in
+ * shape and behavior to `ComponentConfig` — an Experience Template is just a
+ * node whose implementation lives in the `experienceTemplates` registry. Its
+ * slots arrive as named props (a `content` slot becomes a `content` prop), so
+ * there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
-  component: ComponentType<Props & { children?: ReactNode }>;
+  component: ComponentType<Props>;
 }
 
 /**
@@ -109,7 +113,7 @@ export interface ExperienceTemplateConfig<Props extends object = Record<string, 
  * registrations.
  */
 export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
-  | ComponentType<Props & { children?: ReactNode }>
+  | ComponentType<Props>
   | ExperienceTemplateConfig<Props>;
 
 /**
@@ -142,7 +146,9 @@ export type Components = Record<string, Registration<any>>;
 
 /**
  * Experience Template registry — keyed by `experienceTemplateId` (last
- * slash-segment of `payload.sys.experienceTemplate.sys.urn`).
+ * slash-segment of an Experience Template node's own
+ * `experienceTemplate.sys.urn`). Not read from `payload.sys`; templates are
+ * ordinary nodes.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- per-entry narrowing happens at the registration author's call site.
 export type ExperienceTemplates = Record<string, ExperienceTemplateRegistration<any>>;
@@ -182,5 +188,5 @@ export function normalizeExperienceTemplateRegistration<P extends object>(
   if (typeof reg === 'object' && reg !== null && !('$$typeof' in reg) && 'component' in reg) {
     return reg as ExperienceTemplateConfig<P>;
   }
-  return { component: reg as ComponentType<P & { children?: ReactNode }> };
+  return { component: reg as ComponentType<P> };
 }

@@ -40,7 +40,7 @@ examples/sveltekit/
 │       ├── components/       # plain design-system components; no SDK imports
 │       │   ├── Button.svelte
 │       │   ├── Header.svelte
-│       │   ├── Page.svelte   # used as the page-level Experience Template
+│       │   ├── Page.svelte   # registered as a coded Experience Template
 │       │   └── Text.svelte
 │       ├── detect-viewport.ts
 │       └── experience-config.ts    # integration layer (maps components + experience templates into experienceConfig)
@@ -57,4 +57,4 @@ Identical to the Next.js example:
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
 3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` and pass the result to `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
 
-The only Svelte-specific difference is slots: the default `children` slot is passed as a `children` Snippet prop (render it with `{@render children()}`), and any additional named slots are reachable via `getContentfulComponent().slots` and rendered through the exported `<NodesRenderer />`. Compare to the React adapter, where each slot becomes its own named React-node prop. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.
+The only Svelte-specific difference is slots: each slot becomes a prop named after the slot holding a `Snippet[]` (render each with `{@render child()}`), where the React adapter hands you a `ReactNode[]` instead. `children` is just the conventional name for the default slot, not a special case. A slot's raw nodes are also still reachable via `getContentfulComponent().slots` and renderable through the exported `<NodesRenderer />`. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.

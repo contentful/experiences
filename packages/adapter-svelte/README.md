@@ -20,7 +20,7 @@ The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the re
 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
-defineExperienceTemplate<Props>(config); // Same shape, for page-level Experience Template wrappers
+defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Template configs
 ```
 
 ### Resolver
@@ -35,7 +35,7 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 ServerExperienceRenderer; // SSR-safe; active viewport seeded from initialViewportId
 ClientExperienceRenderer; // Subscribes to window.matchMedia via runes
 MissingComponent; // Default fallback for unregistered component types
-NodesRenderer; // Exposed so you can render non-`children` slots manually (see Slot children)
+NodesRenderer; // Exposed so you can re-render a slot's raw nodes yourself (see Slot children)
 useActiveViewport; // Rune-backed reactive object; you'll rarely need it directly
 ```
 
@@ -46,7 +46,7 @@ getDesignValues<T>(); // Optional helper: the same resolved design record that a
 toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
 getExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
-getContentfulExperienceTemplate(); // Same, for the page-level Experience Template
+getContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
 
@@ -61,7 +61,7 @@ type ComponentConfig, ExperienceTemplateConfig,
 type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
-type PortableRenderPlan, PortableRenderNode, PortableExperienceTemplate,
+type PortableRenderPlan, PortableRenderNode, PortableRegistration,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
@@ -129,7 +129,7 @@ export const experienceConfig: Config = { components, resolveToken };
 
 ### Slot children
 
-A component's default slot children arrive as an **array of Snippets** (`Snippet[]`), one per child — not a single wrapping Snippet. For the common "just render them" case, iterate the array with `{#each}` and `{@render}`; to wrap, reorder, or drop children individually, do it inside that loop.
+Every slot arrives as a prop named after the slot, holding an **array of Snippets** (`Snippet[]`), one per child — not a single wrapping Snippet. For the common "just render them" case, iterate the array with `{#each}` and `{@render}`; to wrap, reorder, or drop children individually, do it inside that loop.
 
 ```svelte
 <!-- Section.svelte -->
@@ -156,7 +156,9 @@ A component's default slot children arrive as an **array of Snippets** (`Snippet
 -->
 ```
 
-The default slot is injected as the `children` prop. Any **additional named slots** are not auto-injected — reach them from the raw payload via `getContentfulComponent().slots` (a `Record<string, PortableRenderNode[]>`) and render them yourself with `NodesRenderer`.
+`children` is not special — it is simply the conventional name for the default slot. **Every** slot in the payload becomes a same-named `Snippet[]` prop, so a component with a `header` slot just declares `header?: Snippet[]` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` prop.
+
+If you'd rather render a slot's raw nodes yourself, they are still on the payload at `getContentfulComponent().slots` (a `Record<string, PortableRenderNode[]>`) — hand them to `NodesRenderer`.
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
