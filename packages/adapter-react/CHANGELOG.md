@@ -1,3 +1,15 @@
+## 0.7.6 (2026-08-12)
+
+### 🩹 Fixes
+
+- **core,adapters:** render Experience Templates as ordinary nodes [AIS-413] ([#133](https://github.com/contentful/experiences/pull/133))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.3.5
+- Updated design to 0.7.5
+- Updated core to 0.7.5
+
 ## 0.7.5 (2026-08-11)
 
 ### 🚀 Features
