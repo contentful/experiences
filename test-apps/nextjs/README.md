@@ -128,7 +128,7 @@ test-apps/nextjs/
 │   ├── Button.tsx
 │   ├── Card.tsx                         # image + title + teaser + CTA (async resolveData)
 │   ├── HeroPlain.tsx
-│   └── Page.tsx                         # used as the page-level Experience Template
+│   └── Page.tsx                         # registered as a coded Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
     ├── detect-viewport.ts               # User-Agent to viewport id
@@ -348,15 +348,19 @@ Pair with `<ServerExperienceRenderer initialViewportId={...}>` (User-Agent
 parsed on the server) so SSR resolves and renders against the device's expected
 viewport. Otherwise resolution defaults to `viewports[0]`.
 
-### `defineExperienceTemplate`: page-level wrappers
+### `defineExperienceTemplate`: coded Experience Templates
 
-When a payload carries `sys.experienceTemplate`, the SDK looks up a matching id
-under `Config.experienceTemplates` and wraps the rendered nodes with the
-Experience Template's component. Experience Templates use the same `defaults` /
-`resolveData` shape as components and receive resolved design as props the same
-way; the only structural difference is that the component always receives a
-fixed `children: ReactNode` (the rendered experience) alongside its declared
-props.
+A coded Experience Template is an **ordinary node** in the experience — one whose
+ref is `experienceTemplate` rather than `component`, so the SDK resolves its id
+against `Config.experienceTemplates` instead of `Config.components`. Everything
+else is identical: the same `defaults` / `resolveData` shape, resolved design as
+props, and slots arriving as props named after the slot. A template with a
+`content` slot receives a `content: ReactNode[]` prop and renders the page layout
+around it.
+
+A composite experience has no template node — its nodes are plain components and
+nothing wraps them. `payload.sys.experienceTemplate` is never read; it is present
+in both cases, so the node list is what distinguishes them.
 
 ```tsx
 import { defineExperienceTemplate } from '@contentful/experiences-react';
@@ -366,7 +370,7 @@ const experienceTemplates = {
   // bare component, or defineExperienceTemplate({...}) for defaults / resolveData
   page: defineExperienceTemplate<PageProps>({
     defaults: { title: 'Welcome' },
-    component: Page, // Page receives { title, children }
+    component: Page, // Page receives { title, content } — `content` is its slot
   }),
 };
 

@@ -17,10 +17,17 @@
   let { experience, defaultOpen = false }: DebugExperienceProps = $props();
 
   const nodeCount = $derived(experience.nodes.length);
+  // Coded Experience Templates are ordinary top-level nodes, so name them from
+  // the node list — a composite Experience simply has none to report.
+  const templateIds = $derived(
+    experience.nodes
+      .filter((node) => node.registration.kind === 'experienceTemplate')
+      .map((node) => node.registration.id)
+  );
   const summary = $derived(
     `Experience debug — ${nodeCount} top-level node${nodeCount === 1 ? '' : 's'}${
-      experience.experienceTemplate
-        ? `, experience template: ${experience.experienceTemplate.experienceTemplateId}`
+      templateIds.length
+        ? `, experience template${templateIds.length === 1 ? '' : 's'}: ${templateIds.join(', ')}`
         : ''
     }`
   );

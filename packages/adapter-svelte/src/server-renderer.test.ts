@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ComponentNode,
   ExperiencePayload,
+  ExperienceTemplateNode,
   ManualDesignValue,
+  PortableRenderPlan,
   ValuesByViewport,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
@@ -48,6 +50,43 @@ function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = 
       },
     },
     ...rest,
+  };
+}
+
+/**
+ * A coded Experience Template is an ordinary top-level node — the only
+ * difference from `componentNode` is which registry its id resolves against.
+ */
+function experienceTemplateNode(
+  typeId: string,
+  rest: Omit<ExperienceTemplateNode, 'experienceTemplate'> = {}
+): ExperienceTemplateNode {
+  return {
+    experienceTemplate: {
+      sys: {
+        type: 'ResourceLink',
+        linkType: 'Contentful:ExperienceTemplate',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/${typeId}`,
+      },
+    },
+    ...rest,
+  };
+}
+
+/**
+ * `sys.experienceTemplate` rides along on every Experience — coded and
+ * composite alike — so it must never influence rendering. Tests attach it to
+ * prove it is ignored.
+ */
+function sysWithExperienceTemplate(typeId: string): ExperiencePayload['sys'] {
+  return {
+    experienceTemplate: {
+      sys: {
+        type: 'ResourceLink',
+        linkType: 'Contentful:ExperienceTemplate',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/${typeId}`,
+      },
+    },
   };
 }
 
@@ -189,19 +228,19 @@ describe('ServerExperienceRenderer', () => {
     const justContainer: Config = {
       components: { 'contentful-container': ContainerFixture },
     };
-    const planWithMissing = {
+    const planWithMissing: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
       nodes: [
         {
           nodeId: 'root',
-          registration: { componentId: 'contentful-container' },
+          registration: { kind: 'component', id: 'contentful-container' },
           props: { content: {}, design: {}, designRaw: {} },
           slots: {
             children: [
               {
                 nodeId: 'ghost',
-                registration: { componentId: 'NotRegistered' },
+                registration: { kind: 'component', id: 'NotRegistered' },
                 props: { content: {}, design: {}, designRaw: {} },
                 slots: {},
               },
@@ -296,13 +335,13 @@ describe('ServerExperienceRenderer', () => {
         },
       },
     };
-    const planWithResolved = {
+    const planWithResolved: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
       nodes: [
         {
           nodeId: 'r',
-          registration: { componentId: 'item' },
+          registration: { kind: 'component', id: 'item' },
           props: {
             content: { value: 'fromContent' },
             design: {},
@@ -319,25 +358,26 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).toContain('data-value="fromResolveData"');
   });
 
-  it('wraps rendered nodes with the registered experienceTemplate', async () => {
+  it('renders an experienceTemplate node from the experienceTemplates registry', async () => {
     const tplConfig: Config = {
       components: { item: PrecedenceFixture },
       experienceTemplates: {
         page: { component: ExperienceTemplateFixture, defaults: { title: 'Default Title' } },
       },
     };
+    // The payload's `content` slot must arrive as a named `content` Snippet[]
+    // prop — the fixture renders it, so the child only appears if that holds.
     const tplPayload: ExperiencePayload = {
-      sys: {
-        experienceTemplate: {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:ExperienceTemplate',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
-          },
-        },
-      },
+      sys: sysWithExperienceTemplate('page'),
       viewports: VIEWPORTS,
-      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
+      nodes: [
+        experienceTemplateNode('page', {
+          id: 'tpl',
+          slots: {
+            content: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
+          },
+        }),
+      ],
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
     const { container } = render(ServerExperienceRenderer, {
@@ -348,26 +388,56 @@ describe('ServerExperienceRenderer', () => {
     expect(container.innerHTML).toContain('inside');
   });
 
-  it('renders nodes unwrapped + warns when the experienceTemplate is not registered', async () => {
+  it('renders a composite experience unwrapped — sys.experienceTemplate is ignored', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // `hero` is registered as a template, but the nodes are plain components,
+    // so nothing may wrap them.
+    const cfg: Config = {
+      components: { item: PrecedenceFixture },
+      experienceTemplates: { hero: ExperienceTemplateFixture },
+    };
+    const plan = await resolveExperience(
+      {
+        sys: sysWithExperienceTemplate('hero'),
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('item', { id: 'a', contentProperties: { value: 'one' } }),
+          componentNode('item', { id: 'b', contentProperties: { value: 'two' } }),
+        ],
+      },
+      cfg
+    );
+    const { container } = render(ServerExperienceRenderer, {
+      props: { experience: plan, config: cfg },
+    });
+    expect(container.innerHTML).toContain('data-value="one"');
+    expect(container.innerHTML).toContain('data-value="two"');
+    expect(container.innerHTML).not.toContain('data-experience-template');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('renders slot children unwrapped + warns when the experienceTemplate is not registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = { components: { item: PrecedenceFixture } };
     const tplPayload: ExperiencePayload = {
-      sys: {
-        experienceTemplate: {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:ExperienceTemplate',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/missing-experienceTemplate',
-          },
-        },
-      },
       viewports: VIEWPORTS,
-      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } })],
+      nodes: [
+        experienceTemplateNode('missing-experienceTemplate', {
+          id: 'tpl',
+          slots: {
+            content: [
+              componentNode('item', { id: 'i', contentProperties: { value: 'unwrapped' } }),
+            ],
+          },
+        }),
+      ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
+    // The subtree survives — an unregistered template must not blank the page.
     expect(container.innerHTML).toContain('data-value="unwrapped"');
     expect(container.innerHTML).not.toContain('data-experience-template');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
@@ -480,8 +550,9 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     expect(keys).toContain('text');
     expect(keys).not.toContain('experience');
     expect(keys).not.toContain('contentful');
-    // Children is always injected as a Snippet by the renderer.
-    expect(keys).toContain('children');
+    // Slot props exist only for slots the payload actually carries — `children`
+    // is just a slot name, so a node without slots gets no `children` prop.
+    expect(keys).not.toContain('children');
   });
 });
 
@@ -615,32 +686,28 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(container.innerHTML).toContain('data-bg="[object Object]"');
   });
 
-  it('runs on page-level experienceTemplate design props too', async () => {
+  it('runs on an experienceTemplate node design props too', async () => {
     const tplConfig: Config = {
       components: { item: PrecedenceFixture },
       experienceTemplates: { page: ExperienceTemplateFixture },
       resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
     };
     const tplPayload: ExperiencePayload = {
-      sys: {
-        experienceTemplate: {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:ExperienceTemplate',
-            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/page',
-          },
-        },
-      },
+      sys: sysWithExperienceTemplate('page'),
       viewports: VIEWPORTS,
-      nodes: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
+      nodes: [
+        experienceTemplateNode('page', {
+          id: 'tpl',
+          designProperties: { cfBackground: dt('brand/canvas') },
+          slots: {
+            content: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
+          },
+        }),
+      ],
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
-    // Experience Templates don't carry design props in the current XDA payload
-    // shape; seed a raw token on the resolved plan so we exercise the
-    // experienceTemplate path. Render at a non-fallback viewport (mobile ≠
-    // fallback index 0) so the adapter recomputes from the seeded raw design
-    // and runs resolveToken.
-    plan!.experienceTemplate!.props.designRaw = { cfBackground: dt('brand/canvas') };
+    // Render at a non-fallback viewport (mobile ≠ fallback index 0) so the
+    // adapter recomputes from the raw design and runs resolveToken itself.
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: tplConfig, initialViewportId: 'mobile' },
     });

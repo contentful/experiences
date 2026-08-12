@@ -3,16 +3,21 @@
 
   import { getDesignValues } from '../get-design-values.js';
 
+  // A coded Experience Template's slots arrive as named `Snippet[]` props, so
+  // the payload's `content` slot lands on a `content` prop — no `children`
+  // special case.
   let {
     title,
-    children,
+    content,
   }: {
     title?: string;
-    children: Snippet;
+    content?: Snippet[];
   } = $props();
   const design = $derived(getDesignValues());
 </script>
 
 <main data-experience-template="page" data-title={title} data-bg={design.cfBackground as string}>
-  {@render children()}
+  {#each content ?? [] as childSnippet, index (index)}
+    {@render childSnippet()}
+  {/each}
 </main>

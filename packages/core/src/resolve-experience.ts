@@ -7,12 +7,11 @@
 
 import { createDebugLogger, type DebugLogger } from './debug-logger';
 import type {
-  ComponentNode,
   DesignPropValue,
   ExperienceContext,
   ExperienceNode,
   ExperiencePayload,
-  PortableExperienceTemplate,
+  PortableRegistration,
   PortableRenderNode,
   PortableRenderPlan,
   ResolveContext,
@@ -89,8 +88,15 @@ const DEFAULT_EXPERIENCE: ExperienceContext = {
   viewports: [],
 };
 
-function isComponentNode(node: ExperienceNode): node is ComponentNode {
-  return 'component' in node;
+/**
+ * Registry lookup for a built node. A node's `kind` decides which half of the
+ * customer Config owns its implementation — components and Experience
+ * Templates are otherwise interchangeable at every other step.
+ */
+function lookupEntry(config: ResolverConfig, registration: PortableRegistration): unknown {
+  return registration.kind === 'experienceTemplate'
+    ? config.experienceTemplates?.[registration.id]
+    : config.components[registration.id];
 }
 
 /**
@@ -109,47 +115,130 @@ function extractIdFromUrn(urn: string): string {
 }
 
 /**
+ * Read the ResourceLink a node points at. Which key is present is the only
+ * difference between the two node variants: `experienceTemplate` means the
+ * implementation lives in the customer's `experienceTemplates` registry,
+ * `component` in `components`. Both carry ids in the same URN shape, the same
+ * prop bags, and the same slots — so everything downstream is kind-agnostic.
+ *
+ * `ExperienceNode` is a closed union, so a typed caller cannot produce anything
+ * else. Payloads, however, are untrusted JSON at runtime, and the realistic way
+ * a third shape arrives is a node kind *newer than this SDK*. Returns `null`
+ * for anything unidentifiable rather than letting the ref access throw — see
+ * `buildNode`.
+ */
+function readNodeRef(
+  node: ExperienceNode
+): { kind: PortableRegistration['kind']; urn: string } | null {
+  const isExperienceTemplate = 'experienceTemplate' in node;
+  const ref = isExperienceTemplate
+    ? node.experienceTemplate
+    : 'component' in node
+      ? node.component
+      : undefined;
+  // Cast because the runtime value may violate the declared type: a node can
+  // carry `component: {}`, which satisfies `'component' in node` but has no urn.
+  const urn = (ref as { sys?: { urn?: unknown } } | undefined)?.sys?.urn;
+  if (typeof urn !== 'string' || urn.length === 0) return null;
+  return { kind: isExperienceTemplate ? 'experienceTemplate' : 'component', urn };
+}
+
+/** Total node count in a payload subtree, the node itself included. */
+function countPayloadNodes(node: ExperienceNode): number {
+  const slots = (node as { slots?: Record<string, unknown> }).slots;
+  let total = 1;
+  if (slots && typeof slots === 'object') {
+    for (const children of Object.values(slots)) {
+      if (!Array.isArray(children)) continue;
+      for (const child of children) total += countPayloadNodes(child as ExperienceNode);
+    }
+  }
+  return total;
+}
+
+/**
+ * The one case where a node is dropped. AIS-413 was the opposite failure —
+ * a node kind the SDK recognized and could have rendered, skipped behind a
+ * vague warning, taking its whole subtree with it — so the bar here is that
+ * nothing vanishes without a diagnostic naming what was lost.
+ *
+ * Dropping beats throwing: a `resolveExperience` rejection fails the entire
+ * experience, so one unrecognized node in a sidebar would take down every page
+ * containing it, for a payload the customer does not control and cannot fix.
+ */
+function warnUnrenderableNode(node: ExperienceNode, log: DebugLogger): void {
+  const id = (node as { id?: unknown }).id;
+  const label = typeof id === 'string' ? ` "${id}"` : '';
+  const keys = Object.keys(node);
+  const descendants = countPayloadNodes(node) - 1;
+  const message =
+    `Skipping unidentifiable node${label}: expected a \`component\` or \`experienceTemplate\` ` +
+    `ResourceLink carrying a urn, got keys [${keys.join(', ')}]. Dropping it and ${descendants} ` +
+    `descendant node(s). A payload node kind this SDK does not know is usually a version skew — ` +
+    `upgrading @contentful/experiences-sdk-core may be all that is needed.`;
+  if (typeof console !== 'undefined') {
+    console.warn(`[@contentful/experiences] ${message}`);
+  }
+  log.log(message);
+}
+
+/**
+ * Walk a sibling list into IR nodes, dropping any node `buildNode` cannot
+ * identify. Used for both the top-level list and every slot.
+ */
+function buildNodes(
+  nodes: ExperienceNode[],
+  config: ResolverConfig,
+  nodeRefs: PortableRenderNode[],
+  log: DebugLogger
+): PortableRenderNode[] {
+  const built: PortableRenderNode[] = [];
+  for (const node of nodes) {
+    const one = buildNode(node, config, nodeRefs, log);
+    if (one !== null) built.push(one);
+  }
+  return built;
+}
+
+/**
  * Recursively turn a payload node into an IR node. The collected `nodeRefs`
  * array is for the resolver pass — every built node with a registered
  * resolver gets a reference appended so we can run them in parallel without
  * walking the tree twice.
+ *
+ * Returns `null` only for a node whose ResourceLink cannot be read, which
+ * `warnUnrenderableNode` has already reported. Callers go through `buildNodes`.
  */
 function buildNode(
   node: ExperienceNode,
   config: ResolverConfig,
-  nodeRefs: PortableRenderNode[]
+  nodeRefs: PortableRenderNode[],
+  log: DebugLogger
 ): PortableRenderNode | null {
-  if (!isComponentNode(node)) {
-    if (typeof console !== 'undefined') {
-      console.warn(
-        '[@contentful/experiences-sdk-core] Skipping Experience-Template-variant node — Experience Templates are not supported as nodes in v1.'
-      );
-    }
+  const ref = readNodeRef(node);
+  if (ref === null) {
+    warnUnrenderableNode(node, log);
     return null;
   }
-
-  const componentId = extractIdFromUrn(node.component.sys.urn);
+  const registration: PortableRegistration = {
+    kind: ref.kind,
+    id: extractIdFromUrn(ref.urn),
+  };
 
   const slots: Record<string, PortableRenderNode[]> = {};
   if (node.slots) {
     for (const [slotName, children] of Object.entries(node.slots)) {
       if (!Array.isArray(children)) {
         throw new TypeError(
-          `Slot "${slotName}" on component "${componentId}" must be an array of nodes.`
+          `Slot "${slotName}" on ${registration.kind} "${registration.id}" must be an array of nodes.`
         );
       }
-      const built: PortableRenderNode[] = [];
-      for (const child of children) {
-        const childNode = buildNode(child, config, nodeRefs);
-        if (childNode === null) continue;
-        built.push(childNode);
-      }
-      slots[slotName] = built;
+      slots[slotName] = buildNodes(children, config, nodeRefs, log);
     }
   }
 
   const built: PortableRenderNode = {
-    registration: { componentId },
+    registration,
     props: {
       content: { ...(node.contentProperties ?? {}) },
       // Resolved flat values are written by the pre-resolution pass below.
@@ -159,7 +248,7 @@ function buildNode(
     slots,
   };
   if (node.id) built.nodeId = node.id;
-  if (getResolver(config.components[componentId])) {
+  if (getResolver(lookupEntry(config, registration))) {
     nodeRefs.push(built);
   }
   return built;
@@ -201,7 +290,7 @@ function preResolveNodeTree(
     resolveToken
   );
   node.props.design = props;
-  warnUnresolvedTokens(node.registration.componentId, unresolved, log);
+  warnUnresolvedTokens(`${node.registration.kind}:${node.registration.id}`, unresolved, log);
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
       preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log);
@@ -230,26 +319,10 @@ export async function resolveExperience(
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
   const nodeRefs: PortableRenderNode[] = [];
-  const nodes: PortableRenderNode[] = [];
-  for (const node of payload.nodes) {
-    const built = buildNode(node, config, nodeRefs);
-    if (built !== null) nodes.push(built);
-  }
+  const nodes: PortableRenderNode[] = buildNodes(payload.nodes, config, nodeRefs, log);
   log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
-  // Build the page-level Experience Template stub if the payload carries one.
-  // XDA payloads don't yet emit template-level content/design properties, so
-  // the IR carries empty bags.
-  const experienceTemplateUrn = payload.sys?.experienceTemplate?.sys.urn;
-  let experienceTemplate: PortableExperienceTemplate | undefined;
-  if (typeof experienceTemplateUrn === 'string' && experienceTemplateUrn.length > 0) {
-    experienceTemplate = {
-      experienceTemplateId: extractIdFromUrn(experienceTemplateUrn),
-      props: { content: {}, design: {}, designRaw: {} },
-    };
-  }
-
-  // Pass 2: run resolveData hooks for components AND the template in parallel.
+  // Pass 2: run every node's resolveData hook in parallel.
   // `viewports` is always sourced from the payload — the viewport list is fact,
   // not opinion, so it can't be overridden by the caller.
   const experience: ExperienceContext = {
@@ -264,7 +337,7 @@ export async function resolveExperience(
   const tasks: Array<Promise<void>> = [];
 
   for (const node of nodeRefs) {
-    const resolver = getResolver(config.components[node.registration.componentId]);
+    const resolver = getResolver(lookupEntry(config, node.registration));
     if (!resolver) continue;
     const ctx: ResolveContext = {
       content: node.props.content,
@@ -276,25 +349,6 @@ export async function resolveExperience(
         node.props.resolved = resolved;
       })
     );
-  }
-
-  if (experienceTemplate) {
-    const tplResolver = getResolver(
-      config.experienceTemplates?.[experienceTemplate.experienceTemplateId]
-    );
-    if (tplResolver) {
-      const ctx: ResolveContext = {
-        content: experienceTemplate.props.content,
-        design: experienceTemplate.props.designRaw,
-        experience,
-      };
-      const tpl = experienceTemplate;
-      tasks.push(
-        Promise.resolve(tplResolver(ctx)).then((resolved) => {
-          tpl.props.resolved = resolved;
-        })
-      );
-    }
   }
 
   // Time the fan-out as a whole rather than per-resolver — one aggregate line
@@ -311,26 +365,11 @@ export async function resolveExperience(
   for (const node of nodes) {
     preResolveNodeTree(node, payload.viewports, fallbackViewportIndex, config.resolveToken, log);
   }
-  if (experienceTemplate) {
-    const { props, unresolved } = preResolveDesignProperties(
-      experienceTemplate.props.designRaw,
-      payload.viewports,
-      fallbackViewportIndex,
-      config.resolveToken
-    );
-    experienceTemplate.props.design = props;
-    warnUnresolvedTokens(
-      `experienceTemplate:${experienceTemplate.experienceTemplateId}`,
-      unresolved,
-      log
-    );
-  }
   log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
 
   return {
     viewports: payload.viewports,
     nodes,
-    ...(experienceTemplate ? { experienceTemplate } : {}),
     fallbackViewportIndex,
   };
 }

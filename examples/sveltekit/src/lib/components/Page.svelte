@@ -1,18 +1,19 @@
 <!--
-  Page-level Experience Template. Receives the rendered experience nodes via the
-  `children` Snippet and wraps them with the page chrome.
+  Coded Experience Template — an ordinary node in the experience. Its slots
+  arrive as named `Snippet[]` props, so the payload's `content` slot lands on a
+  `content` prop; there is no `children` special case.
 -->
 <script lang="ts" module>
   import type { Snippet } from 'svelte';
 
   export interface PageProps {
     title?: string;
-    children: Snippet;
+    content?: Snippet[];
   }
 </script>
 
 <script lang="ts">
-  let { title, children }: PageProps = $props();
+  let { title, content }: PageProps = $props();
 </script>
 
 <main style="display: flex; flex-direction: column; gap: 16px;">
@@ -23,5 +24,7 @@
       {title}
     </p>
   {/if}
-  {@render children()}
+  {#each content ?? [] as childSnippet, index (index)}
+    {@render childSnippet()}
+  {/each}
 </main>

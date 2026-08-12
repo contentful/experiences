@@ -18,7 +18,7 @@ This is the **only SDK package you install**. It re-exports everything you need 
 
 ```ts
 defineComponent<Props>(config); // Type-narrowing identity for component-type configs
-defineExperienceTemplate<Props>(config); // Same shape, for page-level Experience Template wrappers
+defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Template configs
 ```
 
 ### Fetching
@@ -54,7 +54,7 @@ useDesignValues<T>(); // Optional hook: the same resolved design record that aut
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
-useContentfulExperienceTemplate(); // Same, for the page-level Experience Template
+useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
 
@@ -69,7 +69,7 @@ type ComponentConfig, ExperienceTemplateConfig,
 type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
-type PortableRenderPlan, PortableRenderNode, PortableExperienceTemplate,
+type PortableRenderPlan, PortableRenderNode, PortableRegistration,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
@@ -141,7 +141,7 @@ return <ServerExperienceRenderer experience={experience} config={experienceConfi
 
 ### Slot children
 
-A component's slot children arrive as an **array of pre-rendered nodes** (`ReactNode[]`), keyed by the renderer — not a single wrapping node. Drop the array straight into JSX for the common "just render them" case (React renders keyed arrays), or `map` / `filter` over it to wrap, reorder, or drop children individually.
+Every slot arrives as a prop named after the slot, holding an **array of pre-rendered nodes** (`ReactNode[]`) keyed by the renderer — not a single wrapping node. Drop the array straight into JSX for the common "just render them" case (React renders keyed arrays), or `map` / `filter` over it to wrap, reorder, or drop children individually.
 
 ```tsx
 // components/Section.tsx
@@ -162,7 +162,7 @@ export function Section({ children }: { children?: ReactNode[] }) {
 }
 ```
 
-The default slot is named `children`. Any **additional named slots** are merged into props under their slot name too, each as its own `ReactNode[]` — so a component with a `header` slot just declares `header?: ReactNode[]` and renders it the same way.
+`children` is not special — it is simply the conventional name for the default slot. **Every** slot is merged into props under its own name, each as its own `ReactNode[]`, so a component with a `header` slot just declares `header?: ReactNode[]` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` prop.
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 

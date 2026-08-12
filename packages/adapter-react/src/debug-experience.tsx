@@ -32,9 +32,14 @@ export function DebugExperience({
   defaultOpen = false,
 }: DebugExperienceProps): ReactNode {
   const nodeCount = experience.nodes.length;
+  // Coded Experience Templates are ordinary top-level nodes, so name them from
+  // the node list — a composite Experience simply has none to report.
+  const templateIds = experience.nodes
+    .filter((node) => node.registration.kind === 'experienceTemplate')
+    .map((node) => node.registration.id);
   const summary = `Experience debug — ${nodeCount} top-level node${nodeCount === 1 ? '' : 's'}${
-    experience.experienceTemplate
-      ? `, experience template: ${experience.experienceTemplate.experienceTemplateId}`
+    templateIds.length
+      ? `, experience template${templateIds.length === 1 ? '' : 's'}: ${templateIds.join(', ')}`
       : ''
   }`;
 

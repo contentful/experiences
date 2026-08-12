@@ -16,7 +16,7 @@ export type { ResolveContext, ResolveToken };
  * node. Useful for custom design-property resolution outside the SDK's
  * cascade, branching by `componentId` in a generic wrapper, keying
  * analytics on `nodeId`, rendering a raw-payload panel in preview, or
- * rendering non-`children` slots through the exported `<NodesRenderer />`.
+ * re-rendering a slot's nodes yourself through the exported `<NodesRenderer />`.
  *
  * Design properties stay in their **raw discriminated form** here (the same
  * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
@@ -29,21 +29,22 @@ export interface ContentfulComponent {
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
   /**
-   * Raw per-slot node arrays from the payload. The default slot named
-   * `children` is rendered automatically and passed as a Snippet prop;
-   * additional slots (if any) are reachable here and can be rendered with
-   * `<NodesRenderer nodes={...} />`.
+   * Raw per-slot node arrays from the payload. Every slot is also rendered
+   * automatically and passed as a same-named `Snippet[]` prop (`children` is
+   * not special); these raw nodes are here for callers that want to render a
+   * slot themselves with `<NodesRenderer nodes={...} />`.
    */
   slots: Record<string, unknown>;
 }
 
 /**
- * Same shape as `ContentfulComponent`, but for the page-level Experience
- * Template.
- * Exposed via `getContentfulExperienceTemplate()` inside an Experience Template's component tree.
+ * Same shape as `ContentfulComponent`, but for an Experience Template node.
+ * Exposed via `getContentfulExperienceTemplate()` inside an Experience
+ * Template's component tree.
  */
 export interface ContentfulExperienceTemplate {
   experienceTemplateId: string;
+  nodeId?: string;
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
@@ -68,8 +69,8 @@ export interface RenderContext extends ExperienceContext {
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
- * receives the merged props (design + content + resolveData + `children`
- * Snippet); resolved design values auto-fill matching props and are also
+ * receives the merged props (design + content + resolveData + one `Snippet[]`
+ * prop per slot); resolved design values auto-fill matching props and are also
  * readable via `getDesignValues()`. Runtime context and raw payload come from
  * `getExperience()` / `getContentfulComponent()`.
  */
@@ -93,6 +94,13 @@ export type Registration<Props extends object = Record<string, unknown>> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Component<any> | ComponentConfig<Props>;
 
+/**
+ * Customer-supplied configuration for a coded Experience Template. Identical in
+ * shape and behavior to `ComponentConfig` — an Experience Template is just a
+ * node whose implementation lives in the `experienceTemplates` registry. Its
+ * slots arrive as named `Snippet[]` props (a `content` slot becomes a `content`
+ * prop), so there is no `children` special case.
+ */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
@@ -116,8 +124,19 @@ export function defineComponent<Props extends object = Record<string, unknown>>(
   return config;
 }
 
+/**
+ * Component registry — keyed by `componentId` (last slash-segment of
+ * `component.sys.urn`).
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Components = Record<string, Registration<any>>;
+
+/**
+ * Experience Template registry — keyed by `experienceTemplateId` (last
+ * slash-segment of an Experience Template node's own
+ * `experienceTemplate.sys.urn`). Not read from `payload.sys`; templates are
+ * ordinary nodes.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ExperienceTemplates = Record<string, ExperienceTemplateRegistration<any>>;
 
