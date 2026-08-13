@@ -1,0 +1,56 @@
+{
+  "name": "@contentful/experiences-angular",
+  "version": "0.0.0",
+  "description": "Angular adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/contentful/experiences.git",
+    "directory": "packages/adapter-angular"
+  },
+  "scripts": {
+    "build": "ngc -p tsconfig.lib.json && publint",
+    "test": "vitest run && vitest run -c vitest.ssr.config.ts"
+  },
+  "dependencies": {
+    "@contentful/experiences-client": "0.3.5",
+    "@contentful/experiences-design": "0.7.5",
+    "@contentful/experiences-sdk-core": "0.7.5"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "devDependencies": {
+    "@angular/common": "20.3.28",
+    "@angular/compiler": "20.3.28",
+    "@angular/compiler-cli": "20.3.28",
+    "@angular/core": "20.3.28",
+    "@angular/platform-browser": "20.3.28",
+    "@angular/platform-server": "20.3.28",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jsdom": "^29.1.1",
+    "publint": "^0.3.23",
+    "rxjs": "^7.8.2",
+    "zone.js": "~0.15.1"
+  }
+}
