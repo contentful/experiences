@@ -12,13 +12,13 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
+  import { selectResolvedDesign } from '@contentful/experiences-design';
 
   import {
     setContentfulComponent,
     setContentfulExperienceTemplate,
     setResolvedDesign,
   } from './context.js';
-  import { selectResolvedDesign } from './design-utils.js';
   import type { RenderUnknown } from './component-props.js';
   import {
     normalizeComponentRegistration,

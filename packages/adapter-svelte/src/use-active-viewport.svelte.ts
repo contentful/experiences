@@ -12,36 +12,10 @@
  */
 
 import type { ViewportDef } from '@contentful/experiences-sdk-core';
-import { getViewportIndex, toCssMediaQuery } from '@contentful/experiences-design';
+import { createMediaQueryMatchers, getViewportIndex } from '@contentful/experiences-design';
 
 export interface UseActiveViewportResult {
   readonly activeViewportIndex: number;
-}
-
-interface MediaQueryMatcher {
-  index: number;
-  signal: MediaQueryList;
-}
-
-function createMediaQueryMatchers(viewports: ViewportDef[]): [MediaQueryMatcher[], boolean[]] {
-  const mediaQueryMatches: boolean[] = new Array(viewports.length).fill(false);
-  // The first viewport is the wildcard "*" and always matches.
-  mediaQueryMatches[0] = true;
-
-  const mediaQueryMatchers: MediaQueryMatcher[] = [];
-  if (typeof window === 'undefined') {
-    return [mediaQueryMatchers, mediaQueryMatches];
-  }
-  for (let index = 0; index < viewports.length; index++) {
-    const viewport = viewports[index];
-    if (!viewport) continue;
-    const cssQuery = toCssMediaQuery(viewport);
-    if (!cssQuery) continue;
-    const matcher = window.matchMedia(cssQuery);
-    mediaQueryMatches[index] = matcher.matches;
-    mediaQueryMatchers.push({ index, signal: matcher });
-  }
-  return [mediaQueryMatchers, mediaQueryMatches];
 }
 
 /**

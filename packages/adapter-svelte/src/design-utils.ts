@@ -1,26 +1,4 @@
-import type { DesignPropValue, ResolveToken, ViewportDef } from '@contentful/experiences-sdk-core';
-import {
-  applyTokenResolver,
-  isCssProperty,
-  resolveDesignProperties,
-  toCssKey,
-} from '@contentful/experiences-design';
-
-// Use the server-resolved `props.design` when the active viewport matches the
-// fallback; otherwise recompute the cascade from raw `props.designRaw`.
-export function selectResolvedDesign(
-  props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
-  viewports: ViewportDef[],
-  activeViewportIndex: number,
-  fallbackViewportIndex: number,
-  resolveToken: ResolveToken | undefined
-): { props: Record<string, unknown>; unresolved: string[] } {
-  if (activeViewportIndex === fallbackViewportIndex) {
-    return { props: props.design, unresolved: [] };
-  }
-  const resolvedDesign = resolveDesignProperties(props.designRaw, viewports, activeViewportIndex);
-  return applyTokenResolver(resolvedDesign, resolveToken);
-}
+import { isCssProperty, toCssKey } from '@contentful/experiences-design';
 
 export interface ToCssOptions {
   /** Keys to skip, matched against the original record key. */

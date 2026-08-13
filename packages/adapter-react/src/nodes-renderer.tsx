@@ -6,12 +6,8 @@
 
 import { Fragment, createElement, type ReactNode } from 'react';
 
-import type {
-  DesignPropValue,
-  PortableRenderNode,
-  ViewportDef,
-} from '@contentful/experiences-sdk-core';
-import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-design';
+import type { PortableRenderNode, ViewportDef } from '@contentful/experiences-sdk-core';
+import { selectResolvedDesign } from '@contentful/experiences-design';
 
 import {
   ContentfulComponentProvider,
@@ -28,22 +24,6 @@ import {
 } from './types';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
-
-// Use the server-resolved `props.design` when the active viewport matches the
-// fallback; otherwise recompute the cascade from raw `props.designRaw`.
-function selectResolvedDesign(
-  props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
-  viewports: ViewportDef[],
-  activeViewportIndex: number,
-  fallbackViewportIndex: number,
-  resolveToken: Config['resolveToken']
-): { props: Record<string, unknown>; unresolved: string[] } {
-  if (activeViewportIndex === fallbackViewportIndex) {
-    return { props: props.design, unresolved: [] };
-  }
-  const resolvedDesign = resolveDesignProperties(props.designRaw, viewports, activeViewportIndex);
-  return applyTokenResolver(resolvedDesign, resolveToken);
-}
 
 // Internal renderers take `viewports` + `activeViewportIndex`, not the whole
 // RenderContext object — the context is published once via ExperienceProvider,
