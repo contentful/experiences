@@ -134,6 +134,29 @@ describe('server rendering (no DOM)', () => {
     expect(html.indexOf('<div')).toBeLessThan(html.indexOf('Get started'));
   });
 
+  /*
+   * Dispatch is anchor-only, so the server response must not contain a wrapper
+   * element either — the pre-hydration paint has to lay out the same tree the
+   * hydrated one does, or the first frame reflows once Angular boots.
+   */
+  it('emits no adapter elements in the server response', async () => {
+    const html = await renderToHtml({
+      viewports: VIEWPORTS,
+      nodes: [
+        componentNode('contentful-container', {
+          id: 'c',
+          slots: { children: [button('Get started')] },
+        }),
+      ],
+    });
+
+    for (const selector of ['cf-nodes', 'cf-node', 'cf-component-node', 'cf-node-host']) {
+      expect(html).not.toContain(`<${selector}`);
+    }
+    // Pairs with the absence assertions above, which pass on an empty string.
+    expect(html).toContain('Get started');
+  });
+
   it("renders a coded experience template's named content slot", async () => {
     const html = await renderToHtml({
       viewports: VIEWPORTS,

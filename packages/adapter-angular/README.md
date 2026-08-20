@@ -33,19 +33,21 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 
 ### Renderers
 
-Every renderer is a standalone component; add it to your own component's `imports`.
+Every renderer is standalone; add it to your own component's `imports`.
 
 ```ts
 ServerExperienceRenderer; // <cf-server-experience>  SSR-safe; active viewport seeded from initialViewportId
 ClientExperienceRenderer; // <cf-experience>         Subscribes to window.matchMedia
 MissingComponent; // <cf-missing-component>  Default fallback for unregistered component types
-NodesRenderer; // <cf-nodes>              Renders a slot's raw nodes (see Slot children)
-NodeRenderer; // <cf-node>               Renders one node; the dispatcher NodesRenderer loops over
+NodesRenderer; // *cfNodes                Renders a slot's raw nodes (see Slot children)
+NodeRenderer; // *cfNode                 Renders one node; NodesRenderer loops over it
 DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderers when debug is set
 injectActiveViewport; // Signal-backed viewport index; you'll rarely need it directly
 ```
 
-Each is also exported under its Angular-suffixed class name (`ServerExperienceRendererComponent`, and so on), and `ExperienceRenderer` is an alias for `ClientExperienceRenderer`.
+`NodesRenderer` and `NodeRenderer` are **structural directives**, not components, so they add no element of their own — see [Slot children](#slot-children).
+
+Each is also exported under its Angular-suffixed class name (`ServerExperienceRendererComponent`, `NodesRendererDirective`, and so on), and `ExperienceRenderer` is an alias for `ClientExperienceRenderer`.
 
 ### Styling + runtime context (helpers)
 
@@ -182,7 +184,7 @@ export class PageComponent {
 
 ### Slot children
 
-Every slot arrives as an input named after the slot, holding an **array of nodes** (`PortableRenderNode[]`, aliased `SlotNodes`) — not renderable children. Hand the array to `<cf-nodes>` to render it; to wrap, reorder, or drop children individually, loop the array yourself and render each with `<cf-node>`.
+Every slot arrives as an input named after the slot, holding an **array of nodes** (`PortableRenderNode[]`, aliased `SlotNodes`) — not renderable children. Hand the array to `*cfNodes` to render it; to wrap, reorder, or drop children individually, loop the array yourself and render each with `*cfNode`.
 
 ```ts
 // section.component.ts
@@ -193,11 +195,11 @@ import { NodesRenderer, type SlotNodes } from '@contentful/experiences-angular';
   selector: 'app-section',
   imports: [NodesRenderer],
   // Common case — render them all:
-  template: `<div><cf-nodes [nodes]="nodes()" /></div>`,
+  template: `<div><ng-container *cfNodes="nodes()"></ng-container></div>`,
   // Or take control of each child, with NodeRenderer in imports instead:
   //   <div>
   //     @for (child of nodes() ?? []; track $index) {
-  //       <div class="cell"><cf-node [node]="child" /></div>
+  //       <div class="cell"><ng-container *cfNode="child"></ng-container></div>
   //     }
   //   </div>
 })
@@ -211,6 +213,8 @@ export class SectionComponent {
 ```
 
 Slot children stay **lazy**: a component that never renders a slot input never instantiates those subtrees.
+
+Both are **structural directives**, so the adapter puts no element of its own between you and your children: they render as direct children of the element you wrapped them in, exactly as in React and Svelte. `display: grid` with `gap` on the `<div>` above lays out **the slot children**; `> .card`, `:nth-child(2)`, `:first-child`, and the `+`/`~` combinators all work. (Each directive leaves a comment anchor, as Svelte does — comments are not elements, so they affect neither layout nor any of those selectors.)
 
 `children` is not special — it is simply the conventional name for the default slot. **Every** slot in the payload becomes a same-named `SlotNodes` input, so a component with a `header` slot just declares `header` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` input.
 
@@ -227,9 +231,9 @@ Everything below is a deliberate divergence from React and Svelte, forced by an 
 | Runtime accessors           | `useExperience()`, `useDesignValues()`  | `getExperience()`, `getDesignValues()` | `injectExperience()`, `injectDesignValues()`                                     | Angular's DI idiom. Must be called from an injection context.                                                                                                             |
 | Accessor return type        | plain value (re-renders)                | plain value (read in `$derived`)       | `Signal<T>` — call it to read                                                    | Signals are Angular's reactive primitive.                                                                                                                                 |
 | Renderer usage              | `<ServerExperienceRenderer …/>`         | `<ServerExperienceRenderer …/>`        | `<cf-server-experience …/>` after adding `ServerExperienceRenderer` to `imports` | Angular components are referenced by selector, imported by class.                                                                                                         |
-| Slot children               | `children: ReactNode` — render directly | `Snippet[]` — `{@render child()}`      | `PortableRenderNode[]` — render with `<cf-nodes>`                                | Angular has no lazy named-slot primitive; `projectableNodes` is positional and eager.                                                                                     |
+| Slot children               | `children: ReactNode` — render directly | `Snippet[]` — `{@render child()}`      | `PortableRenderNode[]` — render with `*cfNodes`                                  | Angular has no lazy named-slot primitive; `projectableNodes` is positional and eager.                                                                                     |
 | `NodesRenderer`             | not exported                            | exported (escape hatch)                | exported and **load-bearing**                                                    | It is the only way to render a slot.                                                                                                                                      |
-| Undeclared merged keys      | passed through as props                 | passed through as props                | **dropped**                                                                      | `setInput` on an undeclared input warns in dev mode. Filtered via `reflectComponentType`. Still readable through `injectDesignValues()`.                                  |
+| Undeclared merged keys      | passed through as props                 | passed through as props                | **dropped**                                                                      | Binding an input a component does not declare is an error, so the merged record is filtered via `reflectComponentType`. Still readable through `injectDesignValues()`.    |
 | Reading dropped keys        | n/a                                     | n/a                                    | `injectDesignValues()`                                                           | The full resolved design record is always available regardless of declared inputs.                                                                                        |
 | Component inputs            | props                                   | `$props()`                             | `@Input()` setter → `signal`                                                     | Signal `input()` is AOT-only; a JIT consumer reports zero declared inputs, which would break `reflectComponentType` filtering.                                            |
 | Input naming                | any                                     | any                                    | setter takes the payload key; the readable signal needs a distinct name          | A class cannot declare a field and an accessor under one name, and under `useDefineForClassFields: false` the field initializer would assign straight through the setter. |
@@ -237,6 +241,8 @@ Everything below is a deliberate divergence from React and Svelte, forced by an 
 | Missing-component warning   | effect                                  | effect                                 | `ngOnInit`                                                                       | So the diagnostic also fires during server rendering.                                                                                                                     |
 | Prop-shape types            | inferred                                | separate `*.ts` per component          | not needed                                                                       | Angular components are `.ts`, so `tsc --noEmit` already resolves them.                                                                                                    |
 | Style helper output         | `CSSProperties`                         | plain record                           | plain record for `[ngStyle]`                                                     | Scalar-only, same as Svelte.                                                                                                                                              |
+
+**Not** a divergence: the DOM around slot children. React renders them through a fragment, Svelte through no element, and Angular through structural directives — no adapter element in any of the three. Dispatch deliberately does not use components, because an Angular component always has a host element and no configuration removes it; `display: contents` would hide such a wrapper from layout but not from `> .card`, `:nth-child(n)`, or the sibling combinators.
 
 For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 

@@ -446,18 +446,18 @@ Everything else applies identically: advanced setup (preview, viewport seeding, 
 
 `@contentful/experiences-angular` is the Angular adapter (peer range `^20 || ^21 || ^22`). Same `Config`, same `fetchExperience`, same `defineComponent`/`defineExperienceTemplate`, same design tokens. The differences follow from Angular having no prop spread and no lazy renderable-children primitive:
 
-| Concern                         | React                                          | Angular                                                                                            |
-| ------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Register a component            | `component:` takes a React component           | `component:` takes a standalone component class (`Type<unknown>`)                                  |
-| Read design (optional accessor) | `useDesignValues()`                            | `injectDesignValues()` — returns a `Signal`, read it inside a `computed()`                         |
-| Runtime context                 | `useExperience()` / `useContentfulComponent()` | `injectExperience()` / `injectContentfulComponent()`                                               |
-| Renderers                       | `<ServerExperienceRenderer />`                 | `<cf-server-experience>` / `<cf-experience>`                                                       |
-| Slots                           | each slot is a named React-node prop           | each slot is an `@Input()` holding `PortableRenderNode[]`, rendered with the exported `<cf-nodes>` |
+| Concern                         | React                                          | Angular                                                                                          |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Register a component            | `component:` takes a React component           | `component:` takes a standalone component class (`Type<unknown>`)                                |
+| Read design (optional accessor) | `useDesignValues()`                            | `injectDesignValues()` — returns a `Signal`, read it inside a `computed()`                       |
+| Runtime context                 | `useExperience()` / `useContentfulComponent()` | `injectExperience()` / `injectContentfulComponent()`                                             |
+| Renderers                       | `<ServerExperienceRenderer />`                 | `<cf-server-experience>` / `<cf-experience>`                                                     |
+| Slots                           | each slot is a named React-node prop           | each slot is an `@Input()` holding `PortableRenderNode[]`, rendered with the exported `*cfNodes` |
 
 Two Angular-only consequences worth knowing up front:
 
-- **Only declared inputs are set.** The adapter filters merged props to the target component's declared inputs (`setInput` on an undeclared input warns in dev mode). Keys a component doesn't declare are dropped rather than passed — they stay reachable through `injectDesignValues()`.
-- **`<cf-nodes>` is load-bearing, not an escape hatch.** It is how you render a slot, because `projectableNodes` is positional and eager, which would break slot laziness.
+- **Only declared inputs are set.** The adapter filters merged props to the target component's declared inputs, because binding an input a component doesn't declare is an error. Keys a component doesn't declare are dropped rather than passed — they stay reachable through `injectDesignValues()`.
+- **`*cfNodes` is load-bearing, not an escape hatch.** It is how you render a slot, because `projectableNodes` is positional and eager, which would break slot laziness. It is a structural directive, so it adds no element between your markup and the slot children.
 
 ### 1. Register your components
 

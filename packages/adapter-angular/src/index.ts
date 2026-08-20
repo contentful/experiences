@@ -11,9 +11,10 @@
  * `ExperienceRenderer` is an alias for `ClientExperienceRenderer`; SSR
  * consumers explicitly import `ServerExperienceRenderer`.
  *
- * Names carry Angular's `Component` suffix, matching the framework's own
- * convention; the un-suffixed aliases exist so the three adapters read the same
- * in customer code. See the README's parity table for the full mapping.
+ * Names carry Angular's `Component` or `Directive` suffix, matching the
+ * framework's own convention; the un-suffixed aliases exist so the three
+ * adapters read the same in customer code. See the README's parity table for the
+ * full mapping.
  */
 
 // ─── Renderers ─────────────────────────────────────────────────────────────
@@ -29,12 +30,16 @@ export { DebugExperienceComponent as DebugExperience } from './debug-experience.
 
 // Load-bearing in this adapter, not an escape hatch: Angular has no lazy
 // renderable-child primitive for arbitrary named slots, so each slot arrives as
-// a same-named `PortableRenderNode[]` input and a component renders it with
-// `<cf-nodes [nodes]="children" />`.
-export { NodesRendererComponent } from './nodes-renderer.component.js';
-export { NodesRendererComponent as NodesRenderer } from './nodes-renderer.component.js';
-export { NodeRendererComponent } from './node-renderer.component.js';
-export { NodeRendererComponent as NodeRenderer } from './node-renderer.component.js';
+// a same-named `PortableRenderNode[]` input and the receiving component renders
+// it with `<ng-container *cfNodes="children()"></ng-container>`.
+//
+// Structural directives rather than components, so the adapter contributes no
+// elements of its own — slot children become direct children of whatever element
+// the customer wrapped them in, exactly as in React and Svelte.
+export { NodesRendererDirective } from './node-renderer.directive.js';
+export { NodesRendererDirective as NodesRenderer } from './node-renderer.directive.js';
+export { NodeRendererDirective } from './node-renderer.directive.js';
+export { NodeRendererDirective as NodeRenderer } from './node-renderer.directive.js';
 
 export { injectActiveViewport } from './inject-active-viewport.js';
 export type { InjectActiveViewportResult } from './inject-active-viewport.js';

@@ -28,20 +28,24 @@ import { DebugExperienceComponent } from './debug-experience.component.js';
 import { DEFAULT_CONTEXT, EMPTY_CONFIG, FALLBACK_VIEWPORT } from './experience-defaults.js';
 import { ExperienceScope } from './experience-scope.js';
 import { MissingComponentComponent } from './missing-component.component.js';
-import { NodesRendererComponent } from './nodes-renderer.component.js';
+import { NodesRendererDirective } from './node-renderer.directive.js';
 import type { Config, RenderContext } from './types.js';
 
 @Component({
   selector: 'cf-server-experience',
-  imports: [DebugExperienceComponent, NodesRendererComponent],
+  imports: [DebugExperienceComponent, NodesRendererDirective],
   providers: [ExperienceScope],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // The `<cf-server-experience>` host element itself stays a real element — it is
+  // the customer's mount point, and they may well style it. Only the plumbing
+  // *inside* it is anchor-only: `*cfNodes` puts the top-level nodes here as
+  // siblings of a comment, so nothing the adapter owns wraps them.
   template: `
     @if (experienceValue(); as experience) {
       @if (debugValue()) {
         <cf-debug-experience [experience]="experience" />
       }
-      <cf-nodes [nodes]="experience.nodes" />
+      <ng-container *cfNodes="experience.nodes"></ng-container>
     }
   `,
 })

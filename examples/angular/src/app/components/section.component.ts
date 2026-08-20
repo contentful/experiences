@@ -1,7 +1,7 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
 import {
-  NodesRendererComponent,
+  NodesRenderer,
   injectDesignValues,
   type PortableRenderNode,
 } from '@contentful/experiences-angular';
@@ -18,16 +18,20 @@ interface SectionDesign {
 
 /**
  * Structural container. The payload's `children` slot lands on a `children`
- * input as `PortableRenderNode[]`; `<cf-nodes>` renders it. Nothing is
+ * input as `PortableRenderNode[]`; `*cfNodes` renders it. Nothing is
  * instantiated until that binding is evaluated, so unrendered slots stay free.
+ *
+ * `*cfNodes` is a structural directive, so the children land as direct children
+ * of the `<div>`: the grid tracks and `gap` below apply to them, not to a
+ * wrapper.
  */
 @Component({
   selector: 'app-section',
-  imports: [NgStyle, NodesRendererComponent],
+  imports: [NgStyle, NodesRenderer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div [ngStyle]="style()">
-      <cf-nodes [nodes]="childrenValue()" />
+      <ng-container *cfNodes="childrenValue()"></ng-container>
     </div>
   `,
 })

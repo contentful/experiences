@@ -10,7 +10,7 @@ An Angular 20 + `@angular/ssr` app demonstrating `@contentful/experiences-angula
 - **Styling via `injectDesignValues()` and `toCss()`**: components read their own design inside a `computed()`; design is never injected as props.
 - **Design tokens**: `app/lib/experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
 - **Component registration**: bare Angular component classes for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`. `card` uses the latter — an async enrichment fetch that prefixes its title with `Featured: `, plus a metadata-aware rewrite of relative CTA URLs into `/{locale}/{slug}{path}`.
-- **Slot rendering**: `SectionComponent` and `PageComponent` take their slot as an input holding `PortableRenderNode[]` and render it with the exported `<cf-nodes>`.
+- **Slot rendering**: `SectionComponent` and `PageComponent` take their slot as an input holding `PortableRenderNode[]` and render it with the exported `*cfNodes`.
 - **Zoneless change detection** — `polyfills: []`, no `zone.js`, `provideZonelessChangeDetection()` on both the browser and server configs.
 
 ## Run it
@@ -100,7 +100,7 @@ examples/angular/
 │       │   ├── image.component.ts
 │       │   ├── page.component.ts     # registered as a coded Experience Template
 │       │   ├── rich-text.component.ts
-│       │   ├── section.component.ts  # renders its `children` slot via <cf-nodes>
+│       │   ├── section.component.ts  # renders its `children` slot via *cfNodes
 │       │   └── text.component.ts
 │       └── lib/
 │           ├── design-tokens.ts            # token id → CSS value map, consumed by resolveToken
@@ -125,9 +125,9 @@ Identical in shape to the Next.js and SvelteKit examples:
 
 **Data loading is done in Express, not in an Angular resolver.** A route resolver looks like the analogue of SvelteKit's `+page.server.ts`, but resolvers also run in the browser during client-side navigation — which would put the CDA/CPA tokens in the client bundle. So [`src/server.ts`](./src/server.ts) fetches the plan and hands it to the app as the `requestContext` argument of `AngularNodeAppEngine.handle()`; [`app/experience-store.ts`](./src/app/experience-store.ts) reads it back through `inject(REQUEST_CONTEXT)` and relays it to the browser via `TransferState` so hydration sees the same plan. `PortableRenderPlan` is plain JSON — the component classes live in `experienceConfig`, never in the plan — so it transfers cleanly.
 
-**Slots are arrays plus a renderer.** Each slot arrives as an input named after the slot holding `PortableRenderNode[]`, and you render it with the exported `<cf-nodes [nodes]="…" />` — see `section.component.ts` (`children`) and `page.component.ts` (`content`). React hands you a `ReactNode[]` and Svelte a `Snippet[]`; Angular has no lazy renderable-children primitive that supports arbitrary named slots, so the nodes stay raw and `<cf-nodes>` is load-bearing rather than an escape hatch. Laziness is preserved either way: a slot you never bind never instantiates.
+**Slots are arrays plus a renderer.** Each slot arrives as an input named after the slot holding `PortableRenderNode[]`, and you render it with the exported `*cfNodes` — see `section.component.ts` (`children`) and `page.component.ts` (`content`). React hands you a `ReactNode[]` and Svelte a `Snippet[]`; Angular has no lazy renderable-children primitive that supports arbitrary named slots, so the nodes stay raw and `*cfNodes` is load-bearing rather than an escape hatch. Laziness is preserved either way: a slot you never bind never instantiates. Being a structural directive, it adds no element of its own: the children land as direct children of `section.component.ts`'s grid `<div>`, so `gap` and the grid tracks apply to them.
 
-**Only declared inputs are set.** The adapter filters the merged props to the target component's declared inputs, because `setInput` on an undeclared input logs a dev-mode warning. Keys a component doesn't declare are dropped rather than passed — they are still reachable through `injectDesignValues()`. `hero-plain.component.ts` declares `@Input() body` it never renders, purely so the filter passes it through.
+**Only declared inputs are set.** The adapter filters the merged props to the target component's declared inputs, because binding an input a component doesn't declare is an error. Keys a component doesn't declare are dropped rather than passed — they are still reachable through `injectDesignValues()`. `hero-plain.component.ts` declares `@Input() body` it never renders, purely so the filter passes it through.
 
 **Dynamic elements are enumerated.** Svelte's `Heading.svelte` picks its tag with `<svelte:element this={tag}>`; Angular has no equivalent, so `heading.component.ts` clamps `design.as` to a known tuple and switches over the six heading tags.
 

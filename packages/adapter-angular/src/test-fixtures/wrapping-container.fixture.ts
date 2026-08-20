@@ -3,8 +3,8 @@
  *
  * Wraps each slot child in its own element to prove the slot arrives as an
  * addressable, per-child collection rather than one opaque blob — a customer can
- * interleave markup between children. `<cf-node>` (singular) is what makes that
- * possible; `<cf-nodes>` is just the loop over it.
+ * interleave markup between children. `*cfNode` (singular) is what makes that
+ * possible; `*cfNodes` is just the loop over it.
  *
  * No `designValues` on the capture, matching the Svelte twin.
  */
@@ -14,16 +14,16 @@ import { Component, Input, type OnInit, signal } from '@angular/core';
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import { injectContentfulComponent, injectExperience } from '../context.js';
-import { NodeRendererComponent } from '../node-renderer.component.js';
+import { NodeRendererDirective } from '../node-renderer.directive.js';
 import { captureSink } from './capture-sink.js';
 
 @Component({
   selector: 'cf-wrapping-container-fixture',
-  imports: [NodeRendererComponent],
+  imports: [NodeRendererDirective],
   template: `<div data-container>
     @for (child of childNodes() ?? []; track $index) {
       <div class="wrap" [attr.data-index]="$index">
-        <cf-node [node]="child" />
+        <ng-container *cfNode="child"></ng-container>
       </div>
     }
   </div>`,

@@ -37,7 +37,7 @@ export type { ResolveContext, ResolveToken };
  * node. Useful for custom design-property resolution outside the SDK's
  * cascade, branching by `componentId` in a generic wrapper, keying
  * analytics on `nodeId`, rendering a raw-payload panel in preview, or
- * re-rendering a slot's nodes yourself through the exported `<cf-nodes>`.
+ * re-rendering a slot's nodes yourself through the exported `*cfNodes`.
  *
  * Design properties stay in their **raw discriminated form** here (the same
  * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,

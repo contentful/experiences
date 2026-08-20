@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input, signal } from '@angular/core';
-import { NodesRendererComponent, type PortableRenderNode } from '@contentful/experiences-angular';
+import { NodesRenderer, type PortableRenderNode } from '@contentful/experiences-angular';
 
 /**
  * Coded Experience Template — an ordinary node in the experience. Its slots
@@ -8,7 +8,7 @@ import { NodesRendererComponent, type PortableRenderNode } from '@contentful/exp
  */
 @Component({
   selector: 'app-page',
-  imports: [NodesRendererComponent],
+  imports: [NodesRenderer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main style="display: flex; flex-direction: column; gap: 16px;">
@@ -19,7 +19,7 @@ import { NodesRendererComponent, type PortableRenderNode } from '@contentful/exp
           {{ titleValue() }}
         </p>
       }
-      <cf-nodes [nodes]="contentValue()" />
+      <ng-container *cfNodes="contentValue()"></ng-container>
     </main>
   `,
 })

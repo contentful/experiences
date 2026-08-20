@@ -13,17 +13,17 @@ import { Component, Input, signal } from '@angular/core';
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import { injectDesignValues } from '../inject-design-values.js';
-import { NodesRendererComponent } from '../nodes-renderer.component.js';
+import { NodesRendererDirective } from '../node-renderer.directive.js';
 
 @Component({
   selector: 'cf-experience-template-fixture',
-  imports: [NodesRendererComponent],
+  imports: [NodesRendererDirective],
   template: `<main
     data-experience-template="page"
     [attr.data-title]="titleValue()"
     [attr.data-bg]="design().cfBackground"
   >
-    <cf-nodes [nodes]="contentNodes()" />
+    <ng-container *cfNodes="contentNodes()"></ng-container>
   </main>`,
 })
 export class ExperienceTemplateFixture {
