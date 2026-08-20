@@ -9,11 +9,12 @@ Install the adapter for your framework:
 ```sh
 npm install @contentful/experiences-react     # React / Next.js
 npm install @contentful/experiences-svelte    # Svelte / SvelteKit
+npm install @contentful/experiences-angular   # Angular
 ```
 
 That's the only SDK package you install. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
 
-Both adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, with the `useDesignValues`/`getDesignValues` hook available for the cases that need it. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) section shows the same three steps in Svelte, with the differences called out inline, and runnable apps for both live in [`examples/`](#examples).
+All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, with the `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor available for the cases that need it. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
 ## Contents
 
@@ -22,6 +23,7 @@ Both adapters share the same public-API shape: the same `Config`, the same `fetc
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
 - [Svelte / SvelteKit](#svelte--sveltekit)
+- [Angular](#angular)
 - [Examples](#examples)
 - [API reference](#api-reference)
 - [Design system stays portable](#design-system-stays-portable)
@@ -440,14 +442,124 @@ Everything else applies identically: advanced setup (preview, viewport seeding, 
 
 ---
 
+## Angular
+
+`@contentful/experiences-angular` is the Angular adapter (peer range `^20 || ^21 || ^22`). Same `Config`, same `fetchExperience`, same `defineComponent`/`defineExperienceTemplate`, same design tokens. The differences follow from Angular having no prop spread and no lazy renderable-children primitive:
+
+| Concern                         | React                                          | Angular                                                                                          |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Register a component            | `component:` takes a React component           | `component:` takes a standalone component class (`Type<unknown>`)                                |
+| Read design (optional accessor) | `useDesignValues()`                            | `injectDesignValues()` — returns a `Signal`, read it inside a `computed()`                       |
+| Runtime context                 | `useExperience()` / `useContentfulComponent()` | `injectExperience()` / `injectContentfulComponent()`                                             |
+| Renderers                       | `<ServerExperienceRenderer />`                 | `<cf-server-experience>` / `<cf-experience>`                                                     |
+| Slots                           | each slot is a named React-node prop           | each slot is an `@Input()` holding `PortableRenderNode[]`, rendered with the exported `*cfNodes` |
+
+Two Angular-only consequences worth knowing up front:
+
+- **Only declared inputs are set.** The adapter filters merged props to the target component's declared inputs, because binding an input a component doesn't declare is an error. Keys a component doesn't declare are dropped rather than passed — they stay reachable through `injectDesignValues()`.
+- **`*cfNodes` is load-bearing, not an escape hatch.** It is how you render a slot, because `projectableNodes` is positional and eager, which would break slot laziness. It is a structural directive, so it adds no element between your markup and the slot children.
+
+### 1. Register your components
+
+```ts
+// lib/experience-config.ts
+import {
+  defineComponent,
+  type Components,
+  type Config,
+  type ResolveToken,
+} from '@contentful/experiences-angular';
+
+import { ButtonComponent } from './components/button.component';
+import { HeadingComponent, type HeadingProps } from './components/heading.component';
+
+const components: Components = {
+  Button: ButtonComponent, // bare class…
+  Heading: defineComponent<HeadingProps>({
+    defaults: { text: 'Untitled' },
+    component: HeadingComponent,
+  }),
+};
+
+const resolveToken: ResolveToken = (token) => designTokens[token.value];
+
+export const experienceConfig: Config = { components, resolveToken };
+```
+
+### 2. Style a component
+
+Resolved design auto-fills declared inputs here too. For anything not declared as an input — or when you want the whole record — `injectDesignValues()` returns a `Signal`, so read it inside a `computed()`:
+
+```ts
+// components/heading.component.ts
+import { NgStyle } from '@angular/common';
+import { Component, Input, computed, signal } from '@angular/core';
+import { injectDesignValues, toCss } from '@contentful/experiences-angular';
+
+@Component({
+  selector: 'app-heading',
+  imports: [NgStyle],
+  template: `<h2 [ngStyle]="style()">{{ textValue() }}</h2>`,
+})
+export class HeadingComponent {
+  protected readonly textValue = signal<string | undefined>(undefined);
+
+  // Setter takes the API name; the signal takes a distinct `…Value` name.
+  @Input() set text(value: string | undefined) {
+    this.textValue.set(value);
+  }
+
+  private readonly design = injectDesignValues<{ fontSize?: string; fontWeight?: string }>();
+  protected readonly style = computed(() => toCss(this.design()));
+}
+```
+
+Signal inputs (`input()`) are AOT-only, so the adapter's own components and these examples use decorator `@Input()` with a setter bridging into a signal. Your app is free to use `input()` if it always builds AOT.
+
+### 3. Fetch + render (`@angular/ssr`)
+
+Fetch on the server — in an Express handler rather than an Angular route resolver, since resolvers also run in the browser during client-side navigation and would ship your CDA token to the client:
+
+```ts
+// server.ts
+import { fetchExperience } from '@contentful/experiences-angular';
+import { experienceConfig } from './app/lib/experience-config';
+
+const experience = await fetchExperience(
+  { spaceId, environmentId: 'master', experienceId: slug },
+  { accessToken: CDA_TOKEN },
+  { config: experienceConfig }
+);
+
+// Hand it to the app as the requestContext argument of AngularNodeAppEngine.handle().
+const response = await angularApp.handle(req, { experience });
+```
+
+```ts
+// pages/experience-page.component.ts
+@Component({
+  imports: [ServerExperienceRendererComponent],
+  template: `<cf-server-experience [experience]="experience" [config]="config" />`,
+})
+export class ExperiencePageComponent {
+  protected readonly experience = inject(ExperienceStore).data?.experience ?? null;
+  protected readonly config = experienceConfig;
+}
+```
+
+`PortableRenderPlan` is plain JSON — component classes live in `experienceConfig`, never in the plan — so relaying it to the browser through `TransferState` for hydration works without special handling. See [`examples/angular`](./examples/angular) for the full wiring and [`packages/adapter-angular/README.md`](./packages/adapter-angular/README.md) for the complete API surface and parity table.
+
+---
+
 ## Examples
 
-Runnable apps for both frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs.
+Runnable apps for all three frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs.
 
-| Example                                      | Stack                   | Shows                                                                                  |
-| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router) | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks           |
-| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5  | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts` |
+| Example                                      | Stack                       | Shows                                                                                          |
+| -------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router)     | Preview mode, UA→viewport, async `resolveData`, design tokens, styling hooks                   |
+| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5      | 1:1 parity with the Next.js app; hydration-safe viewport seeding via `+page.server.ts`         |
+| [`examples/angular`](./examples/angular)     | Angular 20 + `@angular/ssr` | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay |
 
 Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
 
@@ -721,15 +833,16 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 This is an Nx monorepo. You install only the framework adapter; the rest is workspace-internal.
 
-| Folder                                                 | npm name                           | Scope                                                                                              |
-| ------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                     | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                 | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                 | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/adapter-react`](./packages/adapter-react)   | `@contentful/experiences-react`    | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte) | `@contentful/experiences-svelte`   | **Public.** Svelte 5 renderer with the same public API shape.                                      |
+| Folder                                                   | npm name                           | Scope                                                                                              |
+| -------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`.                                      |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`    | **Public.** React renderer + re-exports of everything else.                                        |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`   | **Public.** Svelte 5 renderer with the same public API shape.                                      |
+| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`  | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
 
-Future framework adapters slot in under the same pattern (`packages/adapter-vue`, `packages/adapter-angular`, and so on) and consume the same internal core and design packages.
+Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages.
 
 ```sh
 npm install --ignore-scripts        # husky prepare can fail in fresh clones; safe to skip

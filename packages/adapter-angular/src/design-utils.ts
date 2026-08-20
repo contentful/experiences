@@ -1,3 +1,10 @@
+/*
+ * Port of adapter-svelte/src/design-utils.ts. Deliberately not hoisted into
+ * `@contentful/experiences-design`: the React variant returns `CSSProperties`
+ * and keeps any non-null value, while this one is scalar-only and returns a
+ * plain record. The plain record is what Angular's `[ngStyle]` wants.
+ */
+
 import { isCssProperty, toCssKey } from '@contentful/experiences-design';
 
 export interface ToCssOptions {
@@ -10,10 +17,16 @@ export interface ToCssOptions {
 /**
  * Convert a design record into a plain style object, keeping only keys that
  * normalize to a known CSS property. Non-CSS keys (`variant`, `as`, …) and
- * non-scalar values are dropped; read those off the `getDesignValues()`
+ * non-scalar values are dropped; read those off the `injectDesignValues()`
  * record directly.
  *
  *   toCss({ fontSize: '20px', variant: 'h1' }) //=> { fontSize: '20px' }
+ *
+ * The camelCase keys it emits are what `[ngStyle]` accepts:
+ *
+ *   readonly design = injectDesignValues();
+ *   protected readonly style = computed(() => toCss(this.design()));
+ *   // template: <div [ngStyle]="style()">
  */
 export function toCss(
   design: object,

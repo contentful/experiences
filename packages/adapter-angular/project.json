@@ -1,0 +1,38 @@
+{
+  "name": "adapter-angular",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/adapter-angular/src",
+  "projectType": "library",
+  "tags": ["scope:adapter", "runtime:angular"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-angular",
+        "command": "ngc -p tsconfig.lib.json && publint"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-angular",
+        "command": "vitest run && vitest run -c vitest.ssr.config.ts"
+      }
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": ["^typecheck"],
+      "inputs": ["default", "^production", { "externalDependencies": ["typescript"] }],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-angular",
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    }
+  }
+}

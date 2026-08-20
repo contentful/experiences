@@ -1,0 +1,36 @@
+/*
+ * Build config. `ngc` (from @angular/compiler-cli) emits partial-Ivy output —
+ * `compilationMode: "partial"` leaves component/directive metadata as
+ * `ɵɵngDeclare*` calls that the consumer's Angular linker finishes compiling.
+ *
+ * The linker is forward-compatible only, so this package is deliberately built
+ * with the *lowest* Angular compiler in its peer range (20.x) to stay
+ * consumable on 20, 21 and 22.
+ *
+ * We use `ngc` rather than `ng-packagr` because ng-packagr owns the emitted
+ * `dist/package.json` and rejects a source `package.json` that declares
+ * `main`/`types`/`exports` — but this workspace publishes every package from
+ * the project root, and the release job restores `dist` from cache without
+ * rebuilding after the version bump. Publishing from `dist` would therefore
+ * ship a stale version.
+ */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "types": []
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/test-fixtures/**/*"],
+  "angularCompilerOptions": {
+    "compilationMode": "partial",
+    "strictTemplates": true,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true
+  }
+}

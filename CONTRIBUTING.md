@@ -64,7 +64,7 @@ npx nx show project adapter-react     # see a project's available targets
 
 ### Running an example app
 
-The `examples/` directory has a Next.js and a SvelteKit app that render live XDA payloads — the fastest way to see a change end to end.
+The `examples/` directory has a Next.js, a SvelteKit, and an Angular app that render live XDA payloads — the fastest way to see a change end to end.
 
 ```sh
 cd examples/nextjs
@@ -72,7 +72,7 @@ cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
 npm run dev                  # http://localhost:3000/<experience-id>
 ```
 
-The SvelteKit example under `examples/sveltekit` mirrors it 1:1.
+`examples/sveltekit` and `examples/angular` mirror it, registering the same components against the same payload. Each has its own README for the framework-specific setup.
 
 ## 🏗️ Repository layout
 
@@ -82,10 +82,12 @@ packages/
 ├── design/          # @contentful/experiences-design — pure viewport + design-value math
 ├── client/          # @contentful/experiences-client — delivery client + fetchExperience
 ├── adapter-react/   # @contentful/experiences-react  — React renderer (customer-facing)
-└── adapter-svelte/  # @contentful/experiences-svelte — Svelte renderer (customer-facing)
+├── adapter-svelte/  # @contentful/experiences-svelte — Svelte renderer (customer-facing)
+└── adapter-angular/ # @contentful/experiences-angular — Angular renderer (customer-facing)
 examples/
 ├── nextjs/          # Next.js 15 example app
-└── sveltekit/       # SvelteKit 2 example app
+├── sveltekit/       # SvelteKit 2 example app
+└── angular/         # Angular 20 + @angular/ssr example app
 ```
 
 Package boundaries matter — see the "Conventions" section of [`AGENTS.md`](./AGENTS.md) before moving code between packages. In short: `core` stays free of framework and delivery-client dependencies, and only `client` may import `@contentful/experience-delivery`.

@@ -34,10 +34,12 @@ experiences/
 │   ├── design/               # @contentful/experiences-design (internal)
 │   ├── client/               # @contentful/experiences-client (internal)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
-│   └── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
+│   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
+│   └── adapter-angular/      # @contentful/experiences-angular (customer-facing)
 ├── examples/                # Customer-facing example apps
 │   ├── nextjs/               # Next.js 15 example (external developers run this)
-│   └── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
+│   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
+│   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
 └── test-apps/               # Internal testing
     ├── nextjs/               # Next.js scratchpad
     └── sveltekit/            # SvelteKit scratchpad
@@ -47,17 +49,18 @@ experiences/
 
 ### Package roles
 
-| Folder                    | npm name                           | Audience                                                                                       |
-| ------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/core`           | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
-| `packages/design`         | `@contentful/experiences-design`   | **Internal.** Pure viewport math.                                                              |
-| `packages/client`         | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
-| `packages/adapter-react`  | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything.                                |
-| `packages/adapter-svelte` | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
+| Folder                     | npm name                           | Audience                                                                                       |
+| -------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `packages/core`            | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
+| `packages/design`          | `@contentful/experiences-design`   | **Internal.** Pure viewport math.                                                              |
+| `packages/client`          | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
+| `packages/adapter-react`   | `@contentful/experiences-react`    | **Customer-facing.** React renderer + re-exports of everything.                                |
+| `packages/adapter-svelte`  | `@contentful/experiences-svelte`   | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
+| `packages/adapter-angular` | `@contentful/experiences-angular`  | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.    |
 
 **Customers install only the framework adapter for their stack.** The internal packages are workspace dependencies of the adapter — they get installed transitively, but customers never reach into them.
 
-Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-angular`, `packages/adapter-swiftui`, `packages/adapter-compose`.
+Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 
 ---
 
@@ -391,6 +394,14 @@ notably, a compiled snippet receives its arguments as getters on the client but
 by value on the server, and `NodesRenderer` constructs one snippet call by hand.
 Anything touching snippets or slot rendering needs coverage in **both**.
 
+`adapter-angular` uses the same two-config split — `vitest.config.ts` (jsdom) and
+`vitest.ssr.config.ts` (node, `*.ssr.test.ts`, currently
+`nodes-renderer.ssr.test.ts`) — for the same reason: the SSR path bootstraps
+through `@angular/platform-server`, which behaves differently enough from the
+jsdom path to need its own environment. Note that `test.projects` in a single
+config would be the tidier form, but that needs Vitest 3.2+ and the workspace is
+pinned to 1.6.
+
 ### Build everything from scratch
 
 ```sh
@@ -416,15 +427,15 @@ The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everyt
 
 ### Add a new framework adapter
 
-`packages/adapter-svelte` is the canonical example of "framework that isn't React" — copy from there for non-React frameworks (different build tool, peer dep, etc.); copy from `packages/adapter-react` for "framework like React" (JSX-ish + tsup).
+`packages/adapter-svelte` and `packages/adapter-angular` are the canonical examples of "framework that isn't React" — copy from either for non-React frameworks (different build tool, peer dep, etc.); copy from `packages/adapter-react` for "framework like React" (JSX-ish + tsup). `adapter-angular` is the closest template for a framework whose compiler owns the build: its `build` target is `ngc -p tsconfig.lib.json && publint`, with no bundler config at all.
 
 1. `mkdir packages/adapter-vue && cd packages/adapter-vue`
-2. Copy structure from `packages/adapter-react` (or `adapter-svelte`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish), `vitest.config.ts`
+2. Copy structure from `packages/adapter-react` (or `adapter-svelte` / `adapter-angular`) — `package.json`, `project.json`, `tsconfig*.json`, build config (`tsup.config.ts` for React-ish; `svelte.config.js` + `svelte-package` script for Svelte-ish; `tsconfig.lib.json` + `ngc` for Angular-ish), `vitest.config.ts`
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
 4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
 5. Re-export everything from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
-6. Add adapter-specific renderer + `defineComponent` / `defineExperienceTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`. Vue would use `component: Component`, etc.
-7. Add to `transpilePackages` in any example app (React) or to Vite's workspace allowlist (Svelte)
+6. Add adapter-specific renderer + `defineComponent` / `defineExperienceTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`; Angular uses `component: Type<unknown>`. Vue would use `component: Component`, etc.
+7. Teach the example app's bundler to transpile the workspace packages — `transpilePackages` (React/Next), Vite's `ssr.noExternal` allowlist (Svelte). Angular needs nothing here: `@angular/build:application` inlines workspace dependencies on both the browser and server builds.
 
 ### Add a new internal package (e.g. `tokens`)
 
