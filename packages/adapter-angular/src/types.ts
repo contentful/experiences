@@ -115,8 +115,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
  *   card:   defineComponent<CardProps>({ component: CardComponent, resolveData: ... }),
  */
 export type Registration<Props extends object = Record<string, unknown>> =
-  | Type<unknown>
-  | ComponentConfig<Props>;
+  Type<unknown> | ComponentConfig<Props>;
 
 /**
  * Customer-supplied configuration for a coded Experience Template. Identical in
@@ -132,8 +131,7 @@ export interface ExperienceTemplateConfig<Props extends object = Record<string, 
 }
 
 export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
-  | Type<unknown>
-  | ExperienceTemplateConfig<Props>;
+  Type<unknown> | ExperienceTemplateConfig<Props>;
 
 export function defineExperienceTemplate<Props extends object = Record<string, unknown>>(
   config: ExperienceTemplateConfig<Props>
