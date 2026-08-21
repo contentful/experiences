@@ -56,8 +56,7 @@ function safeStringify(value: unknown): string {
       </summary>
       <pre
         style="margin: 0; padding: 0.75rem; overflow: auto; max-height: 32rem; white-space: pre-wrap; word-break: break-word;"
-        >{{ json() }}</pre
-      >
+        >{{ json() }}</pre>
     </details>
   `,
 })
