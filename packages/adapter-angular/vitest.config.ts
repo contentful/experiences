@@ -12,9 +12,11 @@
  * JIT builds a component def's `inputs` map from decorator metadata and never
  * scans class-field initializers, so under JIT an `input()` field is invisible to
  * both `reflectComponentType()` and `setInput()` (NG0303). See the note in
- * src/types.ts. AOT-compiling the suite would mean @analogjs/vite-plugin-angular,
- * which needs `@angular/build` — vite 7 + esbuild 0.28 + a `vitest: ^3` peer,
- * against this workspace's vite 5 / vitest 1.6.
+ * src/types.ts. AOT-compiling the suite would mean @analogjs/vite-plugin-angular
+ * plus `@angular/build`. Both packages' vite/vitest peers are satisfied by this
+ * workspace's vite 6 / vitest 3.2 (no longer version-blocked as of the Vite 6 /
+ * Vitest 3 bump) — switching is a deliberate harness change, not a dependency
+ * wall.
  *
  * AOT-only concerns — `strictTemplates`, partial-Ivy emit — are covered by the
  * `build` target, which runs `ngc`.
