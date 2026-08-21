@@ -1,3 +1,11 @@
+## 0.5.8 (2026-08-21)
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.3.7
+- Updated design to 0.7.7
+- Updated core to 0.7.7
+
 ## 0.5.7 (2026-08-20)
 
 ### 🚀 Features
