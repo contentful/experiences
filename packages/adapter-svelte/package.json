@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-svelte",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Svelte adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -35,9 +35,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.3.7",
-    "@contentful/experiences-sdk-core": "0.7.7",
-    "@contentful/experiences-design": "0.7.7"
+    "@contentful/experiences-client": "0.3.8",
+    "@contentful/experiences-sdk-core": "0.7.8",
+    "@contentful/experiences-design": "0.7.8"
   },
   "peerDependencies": {
     "svelte": "^5.55.7"
