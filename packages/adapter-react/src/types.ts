@@ -102,6 +102,10 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   component: ComponentType<Props>;

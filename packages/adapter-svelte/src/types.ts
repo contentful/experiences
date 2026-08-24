@@ -75,6 +75,10 @@ export interface RenderContext extends ExperienceContext {
  * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Svelte's Component type uses internal generics that don't narrow ergonomically here.
@@ -102,6 +106,10 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * prop), so there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

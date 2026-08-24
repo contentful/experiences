@@ -806,6 +806,8 @@ So if `content.text === 'Hello'` and `defaults.text === 'Default'`, your compone
 
 The same resolved design values are also published on context, so components that prefer the hook can still read them via `useDesignValues()`. Runtime context and the raw (pre-resolution) payload come through `useExperience()` and `useContentfulComponent()`, which are never injected as props.
 
+Any same-named key coming from `contentProperties` (from XDA) takes precedence over a `defaults` value defined in `defineComponent` / `defineExperienceTemplate`. Only a field genuinely absent from `contentProperties` falls through to the `defaults` defined in `defineComponent` / `defineExperienceTemplate`.
+
 ---
 
 ## Design system stays portable
