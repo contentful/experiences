@@ -76,7 +76,7 @@ export interface RenderContext extends ExperienceContext {
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
-   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
    */
   defaults?: Partial<Props>;
@@ -107,7 +107,7 @@ export type Registration<Props extends object = Record<string, unknown>> =
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
   /**
-   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
    */
   defaults?: Partial<Props>;
