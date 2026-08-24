@@ -62,8 +62,6 @@
   "release": {
     "projects": ["packages/*"],
     "projectsRelationship": "independent",
-    "releaseTagPattern": "{projectName}@{version}",
-    "releaseTagPatternStrictPreid": true,
     "version": {
       "conventionalCommits": true,
       "updateDependents": "auto",
@@ -84,6 +82,10 @@
       "tag": true,
       "commitMessage": "chore(release): publish {version} [skip ci]",
       "tagMessage": "Release {version}"
+    },
+    "releaseTag": {
+      "pattern": "{projectName}@{version}",
+      "strictPreid": true
     }
   },
   "analytics": false
