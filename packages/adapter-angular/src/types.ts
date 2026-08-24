@@ -100,6 +100,10 @@ export interface RenderContext extends ExperienceContext {
  * `Registration` and the README's parity table.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   component: Type<unknown>;
@@ -125,6 +129,10 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * a `content` input), so there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   component: Type<unknown>;

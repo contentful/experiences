@@ -66,7 +66,7 @@ export interface RenderContext extends ExperienceContext {
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
   /**
-   * Lowest-precedence prop bag. Merged in before content / resolveData /
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
    */
   defaults?: Partial<Props>;
@@ -77,7 +77,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
    */
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   /**
-   * The React component to render. Receives the merged prop bag as its props.
+   * The React component to render. Receives the merged props.
    */
   component: ComponentType<Props>;
 }
@@ -102,6 +102,10 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /**
+   * Lowest-precedence defaults object. Merged in before content / resolveData /
+   * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
+   */
   defaults?: Partial<Props>;
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   component: ComponentType<Props>;

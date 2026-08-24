@@ -388,6 +388,31 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('data-priority="low"');
   });
 
+  it('treats an explicitly-empty content value as set (beats a non-empty default)', async () => {
+    const Item = ({ label }: { label: string }) => <span data-label={label} />;
+    const itemConfig: Config = {
+      components: {
+        item: { component: Item, defaults: { label: 'fromDefault' } },
+      },
+    };
+    const plan = await resolveExperience(
+      {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('item', {
+            id: 'i',
+            contentProperties: { label: '' },
+          }),
+        ],
+      },
+      itemConfig
+    );
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={itemConfig} />
+    );
+    expect(html).toContain('data-label=""');
+  });
+
   it('respects merge precedence: defaults < content < resolved < slots', () => {
     const Item = ({ value }: { value: string }) => <span data-value={value} />;
     const cfg: Config = {

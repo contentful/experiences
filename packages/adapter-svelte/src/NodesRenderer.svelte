@@ -1,6 +1,6 @@
 <!--
  * Recursive renderer over PortableRenderNodes. Customer components receive
- * the merged content / design / resolveData prop bag plus one prop per slot,
+ * the merged content / design / resolveData props plus one prop per slot,
  * each an ARRAY of Snippets — one zero-arg Snippet per pre-rendered child
  * node. A slot named `content` arrives as `content?: Snippet[]`; the
  * conventional default slot arrives as `children?: Snippet[]`. A component
@@ -59,9 +59,9 @@
   }
 
   // Build one Snippet[] per slot so every slot becomes a named prop. Snippets
-  // themselves are compile-time entities, but the *prop bag* is plain runtime
-  // data — so an unbounded set of payload-driven slot names is fine as long as
-  // each snippet comes from `toChildSnippet`.
+  // themselves are compile-time entities, but the merged props object is
+  // plain runtime data — so an unbounded set of payload-driven slot names is
+  // fine as long as each snippet comes from `toChildSnippet`.
   function toSlotSnippets(node: PortableRenderNode): Record<string, Snippet[]> {
     const slotSnippets: Record<string, Snippet[]> = {};
     for (const [slotName, children] of Object.entries(node.slots)) {

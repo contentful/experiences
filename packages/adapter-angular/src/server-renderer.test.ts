@@ -319,6 +319,22 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('data-priority="low"');
   });
 
+  it('treats an explicitly-empty content value as set (beats a non-empty default)', async () => {
+    const itemConfig: Config = {
+      components: { item: { defaults: { variant: 'fromDefault' }, component: ItemFixture } },
+    };
+    const itemPayload: ExperiencePayload = {
+      viewports: VIEWPORTS,
+      nodes: [componentNode('item', { id: 'i', contentProperties: { variant: '' } })],
+    };
+
+    const { html } = render(await resolveExperience(itemPayload, itemConfig), {
+      config: itemConfig,
+    });
+
+    expect(html).toContain('data-variant=""');
+  });
+
   it('respects merge precedence: defaults < content < resolved', () => {
     const precedenceConfig: Config = {
       components: { item: { defaults: { value: 'fromDefault' }, component: PrecedenceFixture } },

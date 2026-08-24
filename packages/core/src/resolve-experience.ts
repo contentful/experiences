@@ -119,7 +119,7 @@ function extractIdFromUrn(urn: string): string {
  * difference between the two node variants: `experienceTemplate` means the
  * implementation lives in the customer's `experienceTemplates` registry,
  * `component` in `components`. Both carry ids in the same URN shape, the same
- * prop bags, and the same slots — so everything downstream is kind-agnostic.
+ * props shape, and the same slots — so everything downstream is kind-agnostic.
  *
  * `ExperienceNode` is a closed union, so a typed caller cannot produce anything
  * else. Payloads, however, are untrusted JSON at runtime, and the realistic way
