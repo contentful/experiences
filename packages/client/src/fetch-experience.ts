@@ -1,7 +1,5 @@
-import type {
-  ContentfulViewDelivery,
-  ContentfulViewDeliveryClient,
-} from '@contentful/experience-delivery';
+import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type {
   ExperiencePayload,
@@ -9,6 +7,7 @@ import type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
+import { ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
 
 export type ExperienceOptions = {
@@ -95,7 +94,26 @@ export async function fetchExperience(
 
   log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
 
-  const response = await client.experience.get(spaceId, environmentId, experienceId, { locale });
+  let response: ContentfulViewDelivery.GetExperienceResponse;
+  try {
+    response = await client.experience.get(spaceId, environmentId, experienceId, { locale });
+  } catch (err) {
+    // `NotFoundError` is a distinguishable, expected outcome (draft/unpublished/
+    // wrong id) — callers already route it to their framework's 404 idiom, so
+    // it passes through as-is. Everything else (network failure, bad/expired
+    // token, a 5xx) is unexpected and gets wrapped in an actionable error
+    // instead of leaking whatever shape the delivery client happened to throw.
+    if (err instanceof ContentfulViewDelivery.NotFoundError) {
+      throw err;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new ExperienceFetchError(
+      `Failed to fetch Experience "${experienceId}" (space "${spaceId}", environment ` +
+        `"${environmentId}"): ${reason}. Check network connectivity, the access token, and ` +
+        `that the space/environment/experience ids are correct.`,
+      { spaceId, environmentId, experienceId, cause: err }
+    );
+  }
 
   // The delivery API gates the ExO entity shapes this SDK reads (`component` /
   // `experienceTemplate` links) behind an alpha-feature header. Since

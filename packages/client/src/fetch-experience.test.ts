@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import {
+  ContentfulViewDeliveryClient,
+  ContentfulViewDelivery,
+} from '@contentful/experience-delivery';
+import { ExperienceFetchError } from './errors.js';
 import { fetchExperience } from './fetch-experience.js';
 
 const { mockGet, mockPayload, mockPlan } = vi.hoisted(() => {
@@ -30,13 +34,19 @@ vi.mock('@contentful/experiences-sdk-core', () => ({
   })),
 }));
 
-vi.mock('@contentful/experience-delivery', () => ({
-  ContentfulViewDeliveryClient: vi.fn().mockImplementation(() => ({
-    experience: {
-      get: mockGet,
-    },
-  })),
-}));
+vi.mock('@contentful/experience-delivery', () => {
+  class NotFoundError extends Error {}
+  return {
+    ContentfulViewDeliveryClient: vi.fn().mockImplementation(() => ({
+      experience: {
+        get: mockGet,
+      },
+    })),
+    // Real package exposes `NotFoundError` under the `ContentfulViewDelivery`
+    // namespace export, not top-level — mirror that shape here.
+    ContentfulViewDelivery: { NotFoundError },
+  };
+});
 
 const experienceOptions = {
   spaceId: 'space-1',
@@ -265,13 +275,42 @@ describe('fetchExperience', () => {
       expect(result).toEqual(mockPlan);
     });
 
-    it('propagates NotFoundError from the delivery client to the caller', async () => {
-      class MockNotFoundError extends Error {}
-      mockGet.mockRejectedValue(new MockNotFoundError('experience not found'));
+    it('propagates NotFoundError from the delivery client to the caller undisturbed', async () => {
+      // Uses the mocked module's own `ContentfulViewDelivery.NotFoundError`
+      // (imported above from '@contentful/experience-delivery', which
+      // `vi.mock` redirects to the same class) — not a local look-alike — so
+      // the `instanceof` check in `fetch-experience.ts` is exercised against
+      // the real reference it checks against, not a class that merely has
+      // the same name.
+      const notFound = new ContentfulViewDelivery.NotFoundError('experience not found');
+      mockGet.mockRejectedValue(notFound);
 
-      await expect(
-        fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions)
-      ).rejects.toThrow('experience not found');
+      const rejection: unknown = await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123' },
+        resolveOptions
+      ).catch((e) => e);
+
+      expect(rejection).toBe(notFound);
+    });
+
+    it('wraps a non-NotFoundError fetch failure in ExperienceFetchError', async () => {
+      const networkError = new Error('fetch failed: ECONNRESET');
+      mockGet.mockRejectedValue(networkError);
+
+      const rejection: unknown = await fetchExperience(
+        experienceOptions,
+        { accessToken: 'token-123' },
+        resolveOptions
+      ).catch((e) => e);
+
+      expect(rejection).toBeInstanceOf(ExperienceFetchError);
+      const error = rejection as ExperienceFetchError;
+      expect(error.cause).toBe(networkError);
+      expect(error.spaceId).toBe('space-1');
+      expect(error.environmentId).toBe('master');
+      expect(error.experienceId).toBe('exp-1');
+      expect(error.message).toContain('ECONNRESET');
     });
   });
 });
