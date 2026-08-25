@@ -76,38 +76,26 @@ export function resolveDesignProperties(
   return out;
 }
 
-let warnedMissingResolver = false;
-
 /**
- * Resolve `DesignToken` values via `resolveToken`; scalars pass through. Keys
- * that resolve to `undefined` are dropped and their token ids collected in
- * `unresolved` for a grouped warning. With no resolver but tokens present,
- * warns once (those keys would reach components as raw token objects).
+ * Resolve `DesignToken` values via `resolveToken`; scalars pass through.
+ * Keys that don't resolve — no `resolveToken` configured, or the resolver
+ * returns `undefined` for that particular token — pass through as the raw
+ * `DesignToken` and their id is collected in `unresolved` for the caller to
+ * warn/diagnose (see `warnUnresolvedTokens` in `resolve-experience.ts`, which
+ * already dedupes per `resolveExperience()` call, so this function carries
+ * no warn-once state of its own).
  */
 export function applyTokenResolver(
   props: Record<string, string | number | boolean | DesignToken>,
   resolveToken?: ResolveToken
 ): { props: Record<string, unknown>; unresolved: string[] } {
-  if (!resolveToken) {
-    if (!warnedMissingResolver && typeof console !== 'undefined') {
-      const tokenKeys = Object.entries(props)
-        .filter(([, v]) => typeof v === 'object' && v !== null && v.type === 'DesignToken')
-        .map(([k]) => k);
-      if (tokenKeys.length) {
-        warnedMissingResolver = true;
-        console.warn(
-          `[@contentful/experiences] Design tokens are present but no \`resolveToken\` is configured on the Config; token-valued design props (${tokenKeys.join(', ')}) reach components unresolved. Add \`resolveToken\` to your Config to map token ids to values.`
-        );
-      }
-    }
-    return { props, unresolved: [] };
-  }
   const out: Record<string, unknown> = {};
   const unresolved: string[] = [];
   for (const [key, value] of Object.entries(props)) {
     if (typeof value === 'object' && value !== null && value.type === 'DesignToken') {
-      const resolved = resolveToken(value);
+      const resolved = resolveToken?.(value);
       if (resolved === undefined) {
+        out[key] = value;
         unresolved.push(value.value);
         continue;
       }
