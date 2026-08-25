@@ -11,7 +11,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
+  import { diagnosticContext, type PortableRenderNode } from '@contentful/experiences-sdk-core';
   import { selectResolvedDesign } from '@contentful/experiences-design';
 
   import {
@@ -19,7 +19,7 @@
     setContentfulExperienceTemplate,
     setResolvedDesign,
   } from './context.js';
-  import type { RenderUnknown } from './component-props.js';
+  import type { DiagnosticReporter, RenderError, RenderUnknown } from './component-props.js';
   import {
     normalizeComponentRegistration,
     normalizeExperienceTemplateRegistration,
@@ -34,6 +34,8 @@
     config: Config;
     experience: RenderContext;
     renderUnknown: RenderUnknown;
+    renderError: RenderError;
+    onDiagnostic: DiagnosticReporter;
     /**
      * Pre-rendered slot children keyed by slot name — one zero-arg Snippet per
      * child node. Spread onto the customer component as named props, so a slot
@@ -42,7 +44,15 @@
     slotSnippets: Record<string, Snippet[]>;
   }
 
-  let { node, config, experience, renderUnknown, slotSnippets }: NodeRendererProps = $props();
+  let {
+    node,
+    config,
+    experience,
+    renderUnknown,
+    renderError,
+    onDiagnostic,
+    slotSnippets,
+  }: NodeRendererProps = $props();
 
   const { kind, id } = node.registration;
   const isExperienceTemplate = kind === 'experienceTemplate';
@@ -113,23 +123,70 @@
   // unwrapped — the content survives, the diagnostic names what's missing.
   const orphanedSnippets = $derived.by(() => {
     if (componentConfig || !isExperienceTemplate) return null;
+    const message = `No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`;
     if (typeof console !== 'undefined') {
-      console.warn(
-        `[@contentful/experiences-svelte] No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`
-      );
+      console.warn(`[@contentful/experiences-svelte] ${message}`);
     }
+    onDiagnostic({
+      severity: 'warning',
+      code: 'experience-template-not-registered',
+      message,
+      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
+    });
     return Object.values(slotSnippets).flat();
   });
+
+  // `MissingComponent` (the default `renderUnknown`) does its own
+  // console.warn via an `$effect`; a custom override may not, so the
+  // diagnostic is recorded here regardless of which fallback ends up
+  // rendering.
+  function reportMissingComponent(): true {
+    const message = `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`;
+    onDiagnostic({
+      severity: 'warning',
+      code: 'component-not-registered',
+      message,
+      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
+    });
+    return true;
+  }
+
+  // Reported from `<svelte:boundary onerror={...}>` when the customer's
+  // component throws during render. See the README's error-handling section
+  // for the SSR/CSR asymmetry: `<svelte:boundary>` only catches client-side —
+  // a throw during SvelteKit's server render still fails the whole render.
+  function reportRenderError(error: unknown): void {
+    const reason = error instanceof Error ? error.message : String(error);
+    const message =
+      `Component "${id}" (${kind}${node.nodeId ? `, node "${node.nodeId}"` : ''}) threw while ` +
+      `rendering: ${reason}. Rendering the error fallback instead of crashing the surrounding tree.`;
+    if (typeof console !== 'undefined') {
+      console.warn(`[@contentful/experiences-svelte] ${message}`);
+    }
+    onDiagnostic({
+      severity: 'error',
+      code: 'component-render-error',
+      message,
+      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
+    });
+  }
 </script>
 
 {#if componentConfig && composed}
   {@const Cmp = componentConfig.component}
-  <Cmp {...composed} />
+  {@const ErrorFallback = renderError}
+  <svelte:boundary onerror={(error) => reportRenderError(error)}>
+    <Cmp {...composed} />
+    {#snippet failed()}
+      <ErrorFallback componentId={id} nodeId={node.nodeId} />
+    {/snippet}
+  </svelte:boundary>
 {:else if orphanedSnippets}
   {#each orphanedSnippets as childSnippet, index (index)}
     {@render childSnippet()}
   {/each}
 {:else}
+  {@const _reported = reportMissingComponent()}
   {@const Unknown = renderUnknown}
   <Unknown
     componentId={id}

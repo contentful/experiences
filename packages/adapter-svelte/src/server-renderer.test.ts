@@ -660,7 +660,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(container.innerHTML).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
+  it('warns and passes the raw token through the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = {
       components: { 'contentful-button': CapturingComponent },
@@ -683,7 +683,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       props: { experience: plan, config: cfg },
     });
 
-    expect(captureSink[0]!.designValues).not.toHaveProperty('cfBackgroundColor');
+    expect(captureSink[0]!.designValues.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
     warn.mockRestore();

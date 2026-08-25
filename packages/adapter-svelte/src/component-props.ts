@@ -13,7 +13,7 @@
 
 import type { Component } from 'svelte';
 
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import type { Config } from './types.js';
 
@@ -33,6 +33,8 @@ export interface ServerExperienceRendererProps {
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;
+  /** Override the fallback rendered when a registered component throws. */
+  renderError?: RenderError;
 }
 
 export type ClientExperienceRendererProps = ServerExperienceRendererProps;
@@ -45,9 +47,35 @@ export interface MissingComponentProps {
 
 export type RenderUnknown = Component<MissingComponentProps>;
 
+export interface ComponentErrorProps {
+  componentId: string;
+  /** Optional — only present when the payload supplied an id for this node. */
+  nodeId?: string;
+  /** The caught error's message, when available. */
+  message?: string;
+}
+
+export type RenderError = Component<ComponentErrorProps>;
+
+/**
+ * Reports one render-time diagnostic (unregistered id, a component that
+ * threw). `ServerExperienceRenderer` passes a closure that pushes onto a
+ * plain array (Svelte SSR is synchronous top-down, so the array is fully
+ * populated by the time `<DebugExperience>` reads it). `ClientExperienceRenderer`
+ * passes a closure that mutates a `$state` array instead, so `<DebugExperience>`
+ * re-renders reactively when a later interaction throws.
+ */
+export type DiagnosticReporter = (diagnostic: ExperienceDiagnostic) => void;
+
 export interface DebugExperienceProps {
   /** The resolved plan to inspect (what a renderer receives as `experience`). */
   experience: PortableRenderPlan;
   /** Start expanded. Defaults to collapsed to stay out of the way. */
   defaultOpen?: boolean;
+  /**
+   * Resolve-time + render-time diagnostics for this render, merged by the
+   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`).
+   * Defaults to `[]` for a manually-mounted `<DebugExperience>`.
+   */
+  errors?: ExperienceDiagnostic[];
 }

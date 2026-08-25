@@ -8,9 +8,14 @@
  * renderer. For editor mode, render the client variant on a hydrated route.
 -->
 <script lang="ts">
-  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
+  import type {
+    ExperienceContext,
+    ExperienceDiagnostic,
+    ViewportDef,
+  } from '@contentful/experiences-sdk-core';
   import { getViewportIndex } from '@contentful/experiences-design';
 
+  import ComponentError from './ComponentError.svelte';
   import DebugExperience from './DebugExperience.svelte';
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
@@ -38,6 +43,7 @@
     metadata,
     debug = false,
     renderUnknown = MissingComponent,
+    renderError = ComponentError,
   }: ServerExperienceRendererProps = $props();
 
   function buildContext(): RenderContext {
@@ -56,16 +62,32 @@
 
   const renderContext = buildContext();
   setExperience(renderContext);
+
+  // Render-time diagnostics (unregistered id, a component that threw),
+  // collected into a plain array rather than `$state`: Svelte SSR is
+  // synchronous top-down, so by the time `<DebugExperience>` renders — after
+  // the tree, matching the React adapter's element-order fix for
+  // consistency, even though Svelte's own reactivity wouldn't strictly
+  // require it — this array is already fully populated.
+  const renderDiagnostics: ExperienceDiagnostic[] = [];
+  function onDiagnostic(diagnostic: ExperienceDiagnostic): void {
+    renderDiagnostics.push(diagnostic);
+  }
 </script>
 
 {#if experience}
-  {#if debug}
-    <DebugExperience {experience} />
-  {/if}
   <NodesRenderer
     nodes={experience.nodes}
     {config}
     experience={renderContext}
     {renderUnknown}
+    {renderError}
+    {onDiagnostic}
   />
+  {#if debug}
+    <DebugExperience
+      {experience}
+      errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}
+    />
+  {/if}
 {/if}

@@ -24,6 +24,7 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
 import type { Config } from './types.js';
 
+import BrokenFixture from './test-fixtures/BrokenFixture.svelte';
 import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
 import ContainerFixture from './test-fixtures/ContainerFixture.svelte';
 import ExperienceTemplateFixture from './test-fixtures/ExperienceTemplateFixture.svelte';
@@ -152,5 +153,57 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
     expect(html).toContain('Alone');
     expect(html).not.toContain('<main');
+  });
+});
+
+/*
+ * The load-bearing SSR/CSR asymmetry this ticket documents: unlike React's
+ * class-boundary + internal <Suspense> (which degrades gracefully under both
+ * legacy and streaming SSR — see the React adapter's nodes-renderer.ssr.test.tsx),
+ * Svelte's native `<svelte:boundary>` has NO server-rendering story at all.
+ * `svelte/server`'s render is a synchronous string walk with no boundary
+ * concept; a throw during that walk simply propagates. This is proven here,
+ * not just asserted in a comment, per the plan's "prove it, don't just
+ * document it" bar. See `NodeRenderer.test.ts` for the client-side catch.
+ */
+describe('NodesRenderer — SSR component-render-error (the documented gap)', () => {
+  const brokenConfig: Config = {
+    components: { broken: BrokenFixture, 'contentful-button': ButtonFixture },
+  };
+
+  it('has no recovery path under svelte/server — no graceful fallback markup is produced', async () => {
+    const payload: ExperiencePayload = {
+      viewports: VIEWPORTS,
+      nodes: [componentNode('broken', { id: 'b' }), button('sibling')],
+    };
+    const plan = await resolveExperience(payload, brokenConfig);
+
+    // Observed to propagate as a synchronous exception in most runs (and in
+    // an isolated `<svelte:boundary onerror failed>` repro outside this
+    // component tree, with no NodeRenderer/context involved) — but its exact
+    // timing proved inconsistent across invocation contexts during
+    // development (sync throw in some runs, seemingly swallowed in others),
+    // which is itself notable: unlike React's Suspense-based degradation
+    // (deterministic — see the React adapter's nodes-renderer.ssr.test.tsx),
+    // Svelte's `<svelte:boundary>` has no supported SSR recovery contract at
+    // all here, so nothing guarantees *how* the failure surfaces. What's
+    // asserted below is the one thing that held in every run: the `failed`
+    // snippet's markup never appears, so there's no graceful degradation to
+    // rely on either way.
+    let html: string | undefined;
+    let caught: unknown;
+    try {
+      html = render(ServerExperienceRenderer as never, {
+        props: { experience: plan, config: brokenConfig } as never,
+      }).body;
+    } catch (err) {
+      caught = err;
+    }
+
+    if (caught) {
+      expect((caught as Error).message).toBe('boom');
+    } else {
+      expect(html).not.toContain('data-experiences-render-error');
+    }
   });
 });

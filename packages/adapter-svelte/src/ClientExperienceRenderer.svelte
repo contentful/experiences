@@ -9,8 +9,13 @@
  * same seed.
 -->
 <script lang="ts">
-  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
+  import type {
+    ExperienceContext,
+    ExperienceDiagnostic,
+    ViewportDef,
+  } from '@contentful/experiences-sdk-core';
 
+  import ComponentError from './ComponentError.svelte';
   import DebugExperience from './DebugExperience.svelte';
   import MissingComponent from './MissingComponent.svelte';
   import NodesRenderer from './NodesRenderer.svelte';
@@ -39,7 +44,18 @@
     metadata,
     debug = false,
     renderUnknown = MissingComponent,
+    renderError = ComponentError,
   }: ClientExperienceRendererProps = $props();
+
+  // Render-time diagnostics, `$state`-backed so a component that throws well
+  // after first paint (a later re-render, an event handler) still makes
+  // `<DebugExperience>` re-render with the new diagnostic — a mutated plain
+  // array wouldn't be reactive here the way it's fine to be for the
+  // synchronous, single-pass server renderer.
+  const renderDiagnostics = $state<ExperienceDiagnostic[]>([]);
+  function onDiagnostic(diagnostic: ExperienceDiagnostic): void {
+    renderDiagnostics.push(diagnostic);
+  }
 
   const viewports = $derived(experience?.viewports ?? []);
   const tracker = useActiveViewport(viewports, initialViewportId);
@@ -71,13 +87,18 @@
 </script>
 
 {#if experience}
-  {#if debug}
-    <DebugExperience {experience} />
-  {/if}
   <NodesRenderer
     nodes={experience.nodes}
     {config}
     experience={liveContext}
     {renderUnknown}
+    {renderError}
+    {onDiagnostic}
   />
+  {#if debug}
+    <DebugExperience
+      {experience}
+      errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}
+    />
+  {/if}
 {/if}
