@@ -455,7 +455,10 @@ export async function resolveExperience(
               severity: 'error',
               code: 'resolve-data-failed',
               message,
-              context: diagnosticContext({ nodeId: node.nodeId, componentId: node.registration.id }),
+              context: diagnosticContext({
+                nodeId: node.nodeId,
+                componentId: node.registration.id,
+              }),
             });
           }
         )
