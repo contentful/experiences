@@ -22,6 +22,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
+- [Error handling & troubleshooting](#error-handling--troubleshooting)
 - [Svelte / SvelteKit](#svelte--sveltekit)
 - [Angular](#angular)
 - [Examples](#examples)
@@ -333,6 +334,104 @@ function Fallback({ componentId, nodeId }: MissingComponentProps) {
 ```
 
 `renderUnknown` receives `{ componentId, nodeId? }`. It renders unconditionally (your override, not the SDK, decides whether to gate on `debug` via `useExperience().debug`). The Svelte adapter takes the same prop with a Svelte component.
+
+---
+
+## Error handling & troubleshooting
+
+Every non-happy-path — a malformed payload, a throwing `resolveData`, an unresolved design token, an unregistered id, and (the big one) **a registered component that throws while rendering** — degrades instead of crashing the page, and is reported as a structured diagnostic you can inspect.
+
+### Two kinds of diagnostic
+
+|                  | When it's knowable                                       | Where it lives                                                                        | Codes                                                                                                   |
+| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Resolve-time** | Inside `resolveExperience()`, before any renderer mounts | `plan.diagnostics` (`ExperienceDiagnostic[]`, always present, `[]` on the happy path) | `malformed-payload`, `malformed-slot`, `unidentifiable-node`, `resolve-data-failed`, `token-unresolved` |
+| **Render-time**  | Per-framework, per-render                                | Merged into `<DebugExperience>`'s `errors` prop by the renderer                       | `component-not-registered`, `experience-template-not-registered`, `component-render-error`              |
+
+```ts
+export interface ExperienceDiagnostic {
+  severity: 'warning' | 'error';
+  code: string; // e.g. 'malformed-payload', 'component-render-error' — free-form, not a maintained union
+  message: string; // actionable — names the node/component id and what to fix
+  context?: Record<string, string>; // whatever's relevant, e.g. { nodeId } or { componentId, slotName }
+}
+```
+
+Deliberately plain data, not an `Error` subclass, so it survives `<DebugExperience>`'s JSON dump and crosses the RSC/SSR boundary as ordinary JSON.
+
+### Per-failure-mode behavior
+
+| Failure                                                                        | Behavior                                                                                                       | Override point             |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Malformed top-level payload (`nodes`/`viewports` not an array)                 | Warn, treat as `[]`, don't throw                                                                               | —                          |
+| Malformed slot shape (a hand-built `PortableRenderPlan` with a non-array slot) | Warn, treat that slot as `[]`                                                                                  | —                          |
+| A payload node with no readable `component`/`experienceTemplate` ref           | Warn, drop that node + its subtree, siblings unaffected                                                        | —                          |
+| `resolveData` throws synchronously or rejects                                  | Warn, node renders without `props.resolved`, other nodes' resolvers are unaffected                             | —                          |
+| A design token has no `resolveToken` mapping                                   | Warn, the **raw `DesignToken`** reaches the component (pass-through, not drop)                                 | `resolveToken` on `Config` |
+| Component id not in `Config.components`                                        | Renders `MissingComponent` (visible box in debug, silent otherwise)                                            | `renderUnknown`            |
+| Experience Template id not in `Config.experienceTemplates`                     | Warn, renders the template's slot children unwrapped (content survives)                                        | —                          |
+| **A registered component throws while rendering**                              | Isolated per-node; siblings render normally. Renders `ComponentError` (visible box in debug, silent otherwise) | `renderError`              |
+
+`resolveData` fix note: a resolver that throws _synchronously_ is caught too, not just one that rejects — the SDK defers the call (`Promise.resolve().then(() => resolver(ctx))`) specifically so a sync throw becomes an ordinary rejection instead of escaping before any handler can see it.
+
+Design tokens: the ticket-level contract is "warn + pass through," not "warn + drop" — a component that can render _something_ from a raw `{ type: 'DesignToken', value: '…' }` (e.g. treating the id as a fallback string) gets the chance to; a dropped key never would have.
+
+### `renderError` — custom fallback for a component that throws
+
+Sibling of `renderUnknown`, same shape, different failure mode:
+
+```tsx
+import type { ComponentErrorProps } from '@contentful/experiences-react';
+
+function Fallback({ componentId, nodeId, message }: ComponentErrorProps) {
+  return (
+    <div data-render-error={componentId}>
+      “{componentId}”{nodeId ? ` (#${nodeId})` : ''} failed to render{message ? `: ${message}` : ''}
+      .
+    </div>
+  );
+}
+
+<ServerExperienceRenderer
+  experience={experience}
+  config={experienceConfig}
+  renderError={Fallback}
+/>;
+```
+
+The Svelte and Angular adapters take the same prop with their own component shape (`ComponentErrorProps` / `cf-component-error`'s inputs are `componentId`, `nodeId?`, `message?`).
+
+### `<DebugExperience>` and errors
+
+When there's anything to report, `<DebugExperience>` renders a plain list of diagnostics (severity, code, message) above the JSON dump — so errors are visible in the debug surface, not console-only. This is deliberately unstyled for now; the visual treatment (auto-expand, counts, grouping) is tracked separately in [AIS-407](https://contentful.atlassian.net/browse/AIS-407), the design review for this and `MissingComponent`.
+
+Pass `errors` explicitly if you're mounting `<DebugExperience>` yourself instead of relying on the renderer's auto-mount:
+
+```tsx
+<DebugExperience experience={plan} errors={[...plan.diagnostics, ...myRenderTimeDiagnostics]} />
+```
+
+### The SSR/CSR asymmetry — read this before relying on `renderError` server-side
+
+**`component-render-error` is fundamentally different from every other diagnostic**: it can only be discovered by actually trying to render the component, and each framework's server renderer has its own (verified empirically, not assumed) story for what happens when that render throws.
+
+| Framework   | SSR behavior                                                                                                                                                                                                                                                                                                                                                                                                     | CSR behavior                                                                                          | Diagnostic recorded during SSR?                                                                                                                                                                            |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **React**   | Degrades gracefully — the per-node boundary wraps its content in an internal `<Suspense>`, so both the legacy `renderToString`/`renderToStaticMarkup` APIs _and_ the modern streaming renderer (what Next.js's App Router actually uses) emit the `renderError` fallback instead of crashing. Legacy output is permanent (no hydration, no retry); streaming output defers the real attempt to client hydration. | Catches via the standard class-boundary mechanism (`getDerivedStateFromError` + `componentDidCatch`). | **No.** `componentDidCatch` — where reporting happens — never runs server-side in React, under either renderer. The diagnostic only appears once the client executes (hydration, or a client-only render). |
+| **Svelte**  | **No recovery at all.** `<svelte:boundary>` does not run its error-catching machinery under `svelte/server` — a throw during the server walk propagates and fails the _entire_ render. Confirmed with an isolated repro, not just inferred from docs.                                                                                                                                                            | Catches normally — `<svelte:boundary onerror failed>` works as documented.                            | No — SSR doesn't reach the catching code at all.                                                                                                                                                           |
+| **Angular** | **Catches identically to CSR.** There is no separate server renderer — `@angular/platform-server` runs the exact same `viewContainerRef.createComponent(...)` call that CSR does, wrapped in the same try/catch. This is the one adapter where SSR and CSR error handling are provably the same code path.                                                                                                       | Same code path as SSR.                                                                                | **Yes**, for a creation-time throw (constructor, template evaluation, `ngOnInit`) — the only kind Angular can hit synchronously during `createComponent`.                                                  |
+
+**Practical implications:**
+
+- If you render `<ServerExperienceRenderer>` through Next.js's App Router, Remix's streaming renderer, or any Suspense-aware pipeline, a throwing component degrades gracefully server-side (React) — but don't expect `plan`-adjacent SSR-time diagnostics for it; check `<DebugExperience>` again after hydration.
+- If you render Svelte through SvelteKit's SSR, a throwing component **fails the whole page** server-side today. There is no workaround at the adapter level — this is `<svelte:boundary>`'s own limitation, not a bug in this SDK. Test your registered components' happy _and_ unhappy paths before shipping; don't rely on the SSR pass to catch a bad component for you.
+- Angular customers get the strongest guarantee here: a component that throws during creation is isolated identically whether you're server- or client-rendering.
+- **None of the three frameworks catch a throw during a _later_ re-render** (a prop change, a later change-detection cycle) with full parity — see the next section.
+
+### Known gap: a throw after successful initial render
+
+- **React / Svelte**: the class boundary / `<svelte:boundary>` catches this the same way it catches a creation-time throw — no special handling needed, this is standard framework behavior.
+- **Angular**: **not caught**. `NodeRenderEngine` only wraps the initial `createComponent` call; a throw during a later change-detection cycle (an `ngDoCheck`, a `computed` re-evaluating after an input change) propagates like any other uncaught Angular error. A per-node `ErrorHandler` provider — the natural-looking fix, since providers already flow per-node in this adapter — was tried and **empirically does not get consulted** for this case (verified with an isolated repro): Angular's zoneless change-detection error handling doesn't walk the affected view's element-injector tree the way DI resolution for a newly-created component does. Documented here as a known gap rather than shipped as a partial, misleading fix.
 
 ---
 

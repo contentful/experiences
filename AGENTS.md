@@ -371,6 +371,14 @@ Investigation (consumer sweep): the only **SDK-internal** consumer of the contex
 
 Deferred: the single hook stands for now. Revisit if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
 
+### Svelte: no SSR recovery for `component-render-error`
+
+`<svelte:boundary onerror failed>` does not run its catching machinery under `svelte/server` — verified with an isolated repro (a bare boundary + a synchronously-throwing child, no adapter code involved) before trusting it, because this is easy to get backwards. A throw during SvelteKit's server render propagates and fails the _entire_ page render; the boundary only catches client-side. React and Angular don't share this gap (React's per-node boundary wraps its content in an internal `<Suspense>`, which Fizz _does_ honor for a thrown Error during streaming SSR, and even the legacy `renderToString`/`renderToStaticMarkup` APIs turned out to honor it too — undocumented React behavior, also verified empirically; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](./README.md#error-handling--troubleshooting) section for the full per-framework table. No fix exists at the adapter level — this is upstream Svelte behavior. Revisit if/when Svelte ships SSR-aware error boundaries.
+
+### Angular: `component-render-error` isolation covers creation-time only
+
+`NodeRenderEngine.createView` wraps `viewContainerRef.createComponent(...)` in try/catch, which catches a throw from a component's constructor, template evaluation, or `ngOnInit` — everything Angular runs synchronously during creation. It does NOT catch a throw during a _later_ change-detection cycle (an input change, a `computed` that starts throwing after the fact). A per-node `ErrorHandler` provider in the unit's injector looked like the natural fix, since providers already flow per-node in this adapter, but was verified NOT to work: Angular's zoneless change-detection error path doesn't resolve `ErrorHandler` by walking the affected view's element-injector tree, so a per-node override is invisible to it (isolated repro: a component whose value getter starts throwing on a later `detectChanges()`, with a custom `ErrorHandler` provided in its creation injector — never invoked). Documented as a gap rather than shipped as a partial fix. Revisit if Angular's error-handling internals change, or if someone finds the right injection point (candidate: hooking `ApplicationRef`'s zone-level error handling instead of DI).
+
 ---
 
 ## Common tasks
