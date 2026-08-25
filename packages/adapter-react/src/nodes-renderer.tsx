@@ -6,9 +6,16 @@
 
 import { Fragment, createElement, type ReactNode } from 'react';
 
-import type { PortableRenderNode, ViewportDef } from '@contentful/experiences-sdk-core';
+import {
+  diagnosticContext,
+  type ExperienceDiagnostic,
+  type PortableRenderNode,
+  type ViewportDef,
+} from '@contentful/experiences-sdk-core';
 import { selectResolvedDesign } from '@contentful/experiences-design';
 
+import { ComponentErrorBoundary } from './component-error-boundary';
+import type { ComponentErrorProps } from './component-error';
 import {
   ContentfulComponentProvider,
   ContentfulExperienceTemplateProvider,
@@ -24,6 +31,17 @@ import {
 } from './types';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
+export type RenderError = (props: ComponentErrorProps) => ReactNode;
+
+/**
+ * Reports one render-time diagnostic (unregistered id, a component that
+ * threw). `ServerExperienceRenderer` passes a closure that pushes onto a
+ * plain array (SSR is synchronous top-down, so the array is fully populated
+ * by the time `<DebugExperience>` reads it — see the element-order note
+ * there). `ClientExperienceRenderer` passes a `setState` updater instead, so
+ * `<DebugExperience>` re-renders reactively when a later interaction throws.
+ */
+export type DiagnosticReporter = (diagnostic: ExperienceDiagnostic) => void;
 
 // Internal renderers take `viewports` + `activeViewportIndex`, not the whole
 // RenderContext object — the context is published once via ExperienceProvider,
@@ -37,6 +55,8 @@ export interface NodesRendererProps {
   /** Viewport index the server pre-resolved design against. */
   fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
+  renderError: RenderError;
+  onDiagnostic: DiagnosticReporter;
 }
 
 export function NodesRenderer({
@@ -46,6 +66,8 @@ export function NodesRenderer({
   activeViewportIndex,
   fallbackViewportIndex,
   renderUnknown,
+  renderError,
+  onDiagnostic,
 }: NodesRendererProps): ReactNode {
   if (!nodes.length) return null;
   return (
@@ -59,6 +81,8 @@ export function NodesRenderer({
           activeViewportIndex={activeViewportIndex}
           fallbackViewportIndex={fallbackViewportIndex}
           renderUnknown={renderUnknown}
+          renderError={renderError}
+          onDiagnostic={onDiagnostic}
         />
       ))}
     </Fragment>
@@ -72,6 +96,8 @@ interface NodeRendererProps {
   activeViewportIndex: number;
   fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
+  renderError: RenderError;
+  onDiagnostic: DiagnosticReporter;
 }
 
 function NodeRenderer({
@@ -81,6 +107,8 @@ function NodeRenderer({
   activeViewportIndex,
   fallbackViewportIndex,
   renderUnknown,
+  renderError,
+  onDiagnostic,
 }: NodeRendererProps): ReactNode {
   const { kind, id } = node.registration;
   const isExperienceTemplate = kind === 'experienceTemplate';
@@ -95,6 +123,26 @@ function NodeRenderer({
   // special case, just the conventional default slot name.
   const slotProps: Record<string, ReactNode[]> = {};
   for (const [slotName, children] of Object.entries(node.slots)) {
+    // Defensive: `node.slots[x]` is typed as an array, but a hand-built
+    // PortableRenderPlan (a supported path — customers can construct one
+    // directly instead of going through `resolveExperience`) is not
+    // type-checked at runtime. Warn + drop rather than letting `.map` throw.
+    if (!Array.isArray(children)) {
+      const message =
+        `Slot "${slotName}" on ${kind} "${id}"${node.nodeId ? ` (node "${node.nodeId}")` : ''} ` +
+        `is not an array of nodes; rendering it as empty instead of throwing.`;
+      if (typeof console !== 'undefined') {
+        console.warn(`[@contentful/experiences-react] ${message}`);
+      }
+      onDiagnostic({
+        severity: 'warning',
+        code: 'malformed-slot',
+        message,
+        context: diagnosticContext({ nodeId: node.nodeId, componentId: id, slotName }),
+      });
+      slotProps[slotName] = [];
+      continue;
+    }
     slotProps[slotName] = children.map((child, index) => (
       <NodeRenderer
         key={child.nodeId ?? index}
@@ -104,6 +152,8 @@ function NodeRenderer({
         activeViewportIndex={activeViewportIndex}
         fallbackViewportIndex={fallbackViewportIndex}
         renderUnknown={renderUnknown}
+        renderError={renderError}
+        onDiagnostic={onDiagnostic}
       />
     ));
   }
@@ -114,13 +164,27 @@ function NodeRenderer({
     // it for the missing-component box, so warn and render its slot children
     // unwrapped — the content survives, the diagnostic names what's missing.
     if (isExperienceTemplate) {
+      const message = `No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`;
       if (typeof console !== 'undefined') {
-        console.warn(
-          `[@contentful/experiences-react] No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`
-        );
+        console.warn(`[@contentful/experiences-react] ${message}`);
       }
+      onDiagnostic({
+        severity: 'warning',
+        code: 'experience-template-not-registered',
+        message,
+        context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
+      });
       return <Fragment>{Object.values(slotProps).flat()}</Fragment>;
     }
+    // `MissingComponent` (the default `renderUnknown`) does its own
+    // console.warn; a custom override may not, so the diagnostic is recorded
+    // here regardless of which fallback ends up rendering.
+    onDiagnostic({
+      severity: 'warning',
+      code: 'component-not-registered',
+      message: `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`,
+      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
+    });
     return createElement(renderUnknown, { componentId: id, nodeId: node.nodeId });
   }
   const registrationConfig = isExperienceTemplate
@@ -151,7 +215,14 @@ function NodeRenderer({
 
   const element = (
     <ResolvedDesignProvider value={tokenResolvedDesign}>
-      {createElement(registrationConfig.component, composed)}
+      <ComponentErrorBoundary
+        fallback={createElement(renderError, { componentId: id, nodeId: node.nodeId })}
+        componentId={id}
+        kind={kind}
+        nodeId={node.nodeId}
+      >
+        {createElement(registrationConfig.component, composed)}
+      </ComponentErrorBoundary>
     </ResolvedDesignProvider>
   );
 
@@ -179,3 +250,7 @@ function NodeRenderer({
   };
   return <ContentfulComponentProvider value={contentful}>{element}</ContentfulComponentProvider>;
 }
+
+// `ComponentErrorBoundary` lives in its own `'use client'` file — see
+// component-error-boundary.tsx for why (it's a class component, which
+// Next.js's RSC bundler rejects from a directive-free file).

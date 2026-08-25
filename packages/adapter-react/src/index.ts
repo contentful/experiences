@@ -26,13 +26,16 @@ export type { ServerExperienceRendererProps } from './server-renderer';
 export { MissingComponent } from './missing-component';
 export type { MissingComponentProps } from './missing-component';
 
+export { ComponentError } from './component-error';
+export type { ComponentErrorProps } from './component-error';
+
 export { DebugExperience } from './debug-experience';
 export type { DebugExperienceProps } from './debug-experience';
 
 export { useActiveViewport } from './use-active-viewport';
 export type { UseActiveViewportResult } from './use-active-viewport';
 
-export type { RenderUnknown } from './nodes-renderer';
+export type { DiagnosticReporter, RenderError, RenderUnknown } from './nodes-renderer';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulExperienceTemplate } from './context';
@@ -72,6 +75,7 @@ export type {
   DesignPropValue,
   DesignToken,
   ExperienceContext,
+  ExperienceDiagnostic,
   ExperienceNode,
   ExperiencePayload,
   ExperienceSys,
@@ -102,6 +106,7 @@ export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
+  ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
   createClient,

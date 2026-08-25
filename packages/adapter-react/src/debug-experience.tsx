@@ -18,18 +18,25 @@
 
 import type { ReactNode } from 'react';
 
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 export interface DebugExperienceProps {
   /** The resolved plan to inspect (what a renderer receives as `experience`). */
   experience: PortableRenderPlan;
   /** Start expanded. Defaults to collapsed to stay out of the way. */
   defaultOpen?: boolean;
+  /**
+   * Resolve-time + render-time diagnostics for this render, merged by the
+   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`).
+   * Defaults to `[]` for a manually-mounted `<DebugExperience>`.
+   */
+  errors?: ExperienceDiagnostic[];
 }
 
 export function DebugExperience({
   experience,
   defaultOpen = false,
+  errors = [],
 }: DebugExperienceProps): ReactNode {
   const nodeCount = experience.nodes.length;
   // Coded Experience Templates are ordinary top-level nodes, so name them from
@@ -43,9 +50,14 @@ export function DebugExperience({
       : ''
   }`;
 
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  const open = defaultOpen || errors.length > 0;
+
   return (
     <details
-      open={defaultOpen}
+      open={open}
       data-experiences-debug
       style={{
         margin: '1rem 0',
@@ -68,6 +80,7 @@ export function DebugExperience({
       >
         {summary}
       </summary>
+      {errors.length > 0 ? <DiagnosticList errors={errors} /> : null}
       <pre
         style={{
           margin: 0,
@@ -81,6 +94,20 @@ export function DebugExperience({
         {safeStringify(experience)}
       </pre>
     </details>
+  );
+}
+
+// Deliberately unstyled — visual treatment (grouping, color, counts) is
+// AIS-407's job. This just needs to make the data visible, not console-only.
+function DiagnosticList({ errors }: { errors: ExperienceDiagnostic[] }): ReactNode {
+  return (
+    <ul data-experiences-debug-errors>
+      {errors.map((diagnostic, index) => (
+        <li key={index} data-experiences-debug-error-code={diagnostic.code}>
+          {diagnostic.severity} · {diagnostic.code}: {diagnostic.message}
+        </li>
+      ))}
+    </ul>
   );
 }
 
