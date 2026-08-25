@@ -6,6 +6,7 @@
  */
 
 import { createDebugLogger, type DebugLogger } from './debug-logger';
+import { diagnosticContext, type ExperienceDiagnostic } from './errors';
 import type {
   DesignPropValue,
   ExperienceContext,
@@ -143,6 +144,32 @@ function readNodeRef(
   return { kind: isExperienceTemplate ? 'experienceTemplate' : 'component', urn };
 }
 
+/**
+ * Guards a top-level payload field that must be an array. A malformed or
+ * partial payload (bad JSON, a hand-authored payload with the wrong shape)
+ * should degrade to an empty experience rather than throwing and failing the
+ * whole render — same "dropping beats throwing" rationale as
+ * `warnUnrenderableNode` below, just one level up the tree.
+ */
+function ensureArray<T>(
+  value: unknown,
+  field: string,
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[]
+): T[] {
+  if (Array.isArray(value)) return value as T[];
+  const message =
+    `Experience payload's "${field}" is not an array (got ${value === null ? 'null' : typeof value}); ` +
+    `treating it as empty instead of throwing. This usually means a malformed or partial payload — ` +
+    `check what produced it.`;
+  if (typeof console !== 'undefined') {
+    console.warn(`[@contentful/experiences] ${message}`);
+  }
+  log.log(message);
+  diagnostics.push({ severity: 'error', code: 'malformed-payload', message });
+  return [];
+}
+
 /** Total node count in a payload subtree, the node itself included. */
 function countPayloadNodes(node: ExperienceNode): number {
   const slots = (node as { slots?: Record<string, unknown> }).slots;
@@ -166,7 +193,11 @@ function countPayloadNodes(node: ExperienceNode): number {
  * experience, so one unrecognized node in a sidebar would take down every page
  * containing it, for a payload the customer does not control and cannot fix.
  */
-function warnUnrenderableNode(node: ExperienceNode, log: DebugLogger): void {
+function warnUnrenderableNode(
+  node: ExperienceNode,
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[]
+): void {
   const id = (node as { id?: unknown }).id;
   const label = typeof id === 'string' ? ` "${id}"` : '';
   const keys = Object.keys(node);
@@ -180,6 +211,12 @@ function warnUnrenderableNode(node: ExperienceNode, log: DebugLogger): void {
     console.warn(`[@contentful/experiences] ${message}`);
   }
   log.log(message);
+  diagnostics.push({
+    severity: 'warning',
+    code: 'unidentifiable-node',
+    message,
+    context: diagnosticContext({ nodeId: typeof id === 'string' ? id : undefined }),
+  });
 }
 
 /**
@@ -190,11 +227,12 @@ function buildNodes(
   nodes: ExperienceNode[],
   config: ResolverConfig,
   nodeRefs: PortableRenderNode[],
-  log: DebugLogger
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[]
 ): PortableRenderNode[] {
   const built: PortableRenderNode[] = [];
   for (const node of nodes) {
-    const one = buildNode(node, config, nodeRefs, log);
+    const one = buildNode(node, config, nodeRefs, log, diagnostics);
     if (one !== null) built.push(one);
   }
   return built;
@@ -213,27 +251,44 @@ function buildNode(
   node: ExperienceNode,
   config: ResolverConfig,
   nodeRefs: PortableRenderNode[],
-  log: DebugLogger
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[]
 ): PortableRenderNode | null {
   const ref = readNodeRef(node);
   if (ref === null) {
-    warnUnrenderableNode(node, log);
+    warnUnrenderableNode(node, log, diagnostics);
     return null;
   }
   const registration: PortableRegistration = {
     kind: ref.kind,
     id: extractIdFromUrn(ref.urn),
   };
+  const nodeId = typeof node.id === 'string' ? node.id : undefined;
 
   const slots: Record<string, PortableRenderNode[]> = {};
   if (node.slots) {
     for (const [slotName, children] of Object.entries(node.slots)) {
       if (!Array.isArray(children)) {
-        throw new TypeError(
-          `Slot "${slotName}" on ${registration.kind} "${registration.id}" must be an array of nodes.`
-        );
+        const message =
+          `Slot "${slotName}" on ${registration.kind} "${registration.id}"` +
+          `${nodeId ? ` (node "${nodeId}")` : ''} is not an array of nodes (got ` +
+          `${children === null ? 'null' : typeof children}); treating it as empty instead of ` +
+          `failing the whole experience. A hand-built payload with the wrong slot shape is the ` +
+          `usual cause.`;
+        if (typeof console !== 'undefined') {
+          console.warn(`[@contentful/experiences] ${message}`);
+        }
+        log.log(message);
+        diagnostics.push({
+          severity: 'warning',
+          code: 'malformed-slot',
+          message,
+          context: diagnosticContext({ nodeId, componentId: registration.id, slotName }),
+        });
+        slots[slotName] = [];
+        continue;
       }
-      slots[slotName] = buildNodes(children, config, nodeRefs, log);
+      slots[slotName] = buildNodes(children, config, nodeRefs, log, diagnostics);
     }
   }
 
@@ -266,13 +321,29 @@ function preResolveDesignProperties(
   return applyTokenResolver(cascaded, resolveToken);
 }
 
-// Warn when resolveToken left tokens unresolved, so dropped keys are diagnosable.
-function warnUnresolvedTokens(label: string, unresolved: string[], log: DebugLogger): void {
-  if (!unresolved.length || typeof console === 'undefined') return;
-  console.warn(
-    `[@contentful/experiences] resolveToken returned undefined for token id(s) on "${label}": ${unresolved.join(', ')}. Resolved design (getDesignValues()) will omit those keys.`
-  );
+// Warn when resolveToken left tokens unresolved, so pass-through keys are diagnosable.
+function warnUnresolvedTokens(
+  label: string,
+  unresolved: string[],
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[],
+  nodeId: string | undefined,
+  componentId: string
+): void {
+  if (!unresolved.length) return;
+  const message = `resolveToken returned undefined for token id(s) on "${label}": ${unresolved.join(', ')}. Resolved design (getDesignValues()) will carry the raw, unresolved DesignToken for those keys.`;
+  if (typeof console !== 'undefined') {
+    console.warn(`[@contentful/experiences] ${message}`);
+  }
   log.log(`unresolved token id(s) on "${label}": ${unresolved.join(', ')}`);
+  for (const tokenId of unresolved) {
+    diagnostics.push({
+      severity: 'warning',
+      code: 'token-unresolved',
+      message: `Design token "${tokenId}" on ${label} has no \`resolveToken\` mapping; the raw token reaches the component unresolved.`,
+      context: diagnosticContext({ nodeId, componentId }),
+    });
+  }
 }
 
 // Depth-first pre-resolve for a node and its slot children.
@@ -281,7 +352,8 @@ function preResolveNodeTree(
   viewports: ViewportDef[],
   fallbackViewportIndex: number,
   resolveToken: ResolveToken | undefined,
-  log: DebugLogger
+  log: DebugLogger,
+  diagnostics: ExperienceDiagnostic[]
 ): void {
   const { props, unresolved } = preResolveDesignProperties(
     node.props.designRaw,
@@ -290,10 +362,17 @@ function preResolveNodeTree(
     resolveToken
   );
   node.props.design = props;
-  warnUnresolvedTokens(`${node.registration.kind}:${node.registration.id}`, unresolved, log);
+  warnUnresolvedTokens(
+    `${node.registration.kind}:${node.registration.id}`,
+    unresolved,
+    log,
+    diagnostics,
+    node.nodeId,
+    node.registration.id
+  );
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
-      preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log);
+      preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log, diagnostics);
     }
   }
 }
@@ -316,10 +395,14 @@ export async function resolveExperience(
   const log = createDebugLogger(options.debug, 'core');
   log.lazy('resolveExperience called with payload', () => payload);
 
+  const diagnostics: ExperienceDiagnostic[] = [];
+  const payloadNodes = ensureArray<ExperienceNode>(payload.nodes, 'nodes', log, diagnostics);
+  const viewports = ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics);
+
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
   const nodeRefs: PortableRenderNode[] = [];
-  const nodes: PortableRenderNode[] = buildNodes(payload.nodes, config, nodeRefs, log);
+  const nodes: PortableRenderNode[] = buildNodes(payloadNodes, config, nodeRefs, log, diagnostics);
   log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
   // Pass 2: run every node's resolveData hook in parallel.
@@ -331,7 +414,7 @@ export async function resolveExperience(
       ...DEFAULT_EXPERIENCE.metadata,
       ...(options.metadata ?? {}),
     },
-    viewports: payload.viewports,
+    viewports,
   };
 
   const tasks: Array<Promise<void>> = [];
@@ -345,9 +428,37 @@ export async function resolveExperience(
       experience,
     };
     tasks.push(
-      Promise.resolve(resolver(ctx)).then((resolved) => {
-        node.props.resolved = resolved;
-      })
+      // Deferred via `.then(() => resolver(ctx))` rather than
+      // `Promise.resolve(resolver(ctx))`: the latter calls `resolver(ctx)`
+      // eagerly as an argument, so a resolver that throws *synchronously*
+      // escapes immediately instead of becoming a rejection. The `onFailure`
+      // handler below never rethrows, so one broken resolver can't fail the
+      // `Promise.all` for every other node.
+      Promise.resolve()
+        .then(() => resolver(ctx))
+        .then(
+          (resolved) => {
+            node.props.resolved = resolved;
+          },
+          (err: unknown) => {
+            const label = `${node.registration.kind}:${node.registration.id}`;
+            const reason = err instanceof Error ? err.message : String(err);
+            const message =
+              `resolveData for ${label}${node.nodeId ? ` (node "${node.nodeId}")` : ''} threw or ` +
+              `rejected: ${reason}. Rendering the node without resolved data instead of failing ` +
+              `the whole experience.`;
+            if (typeof console !== 'undefined') {
+              console.warn(`[@contentful/experiences] ${message}`);
+            }
+            log.log(message);
+            diagnostics.push({
+              severity: 'error',
+              code: 'resolve-data-failed',
+              message,
+              context: diagnosticContext({ nodeId: node.nodeId, componentId: node.registration.id }),
+            });
+          }
+        )
     );
   }
 
@@ -361,15 +472,23 @@ export async function resolveExperience(
   // values on first render. Fallback is initialViewportId, else
   // config.fallbackViewportId, else viewport[0].
   const fallbackViewportId = options.initialViewportId ?? config.fallbackViewportId;
-  const fallbackViewportIndex = getViewportIndex(payload.viewports, fallbackViewportId);
+  const fallbackViewportIndex = getViewportIndex(viewports, fallbackViewportId);
   for (const node of nodes) {
-    preResolveNodeTree(node, payload.viewports, fallbackViewportIndex, config.resolveToken, log);
+    preResolveNodeTree(
+      node,
+      viewports,
+      fallbackViewportIndex,
+      config.resolveToken,
+      log,
+      diagnostics
+    );
   }
   log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
 
   return {
-    viewports: payload.viewports,
+    viewports,
     nodes,
     fallbackViewportIndex,
+    diagnostics,
   };
 }
