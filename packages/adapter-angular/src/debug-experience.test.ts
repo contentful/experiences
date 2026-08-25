@@ -13,7 +13,11 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
-import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type {
+  ExperienceDiagnostic,
+  PortableRenderNode,
+  PortableRenderPlan,
+} from '@contentful/experiences-sdk-core';
 
 import { DebugExperienceComponent } from './debug-experience.component.js';
 
@@ -38,15 +42,20 @@ function experienceTemplateNode(id: string): PortableRenderNode {
 }
 
 function plan(nodes: PortableRenderNode[]): PortableRenderPlan {
-  return { viewports: VIEWPORTS, fallbackViewportIndex: 0, nodes };
+  return { viewports: VIEWPORTS, fallbackViewportIndex: 0, nodes, diagnostics: [] };
 }
 
 interface DebugResult {
   details: HTMLDetailsElement | null;
   text: string;
+  html: string;
 }
 
-function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): DebugResult {
+function renderDebug(
+  experience: PortableRenderPlan,
+  defaultOpen?: boolean,
+  errors?: ExperienceDiagnostic[]
+): DebugResult {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
 
@@ -55,6 +64,9 @@ function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): Deb
   if (defaultOpen !== undefined) {
     fixture.componentRef.setInput('defaultOpen', defaultOpen);
   }
+  if (errors !== undefined) {
+    fixture.componentRef.setInput('errors', errors);
+  }
   fixture.detectChanges();
 
   const host = fixture.nativeElement as HTMLElement;
@@ -62,6 +74,7 @@ function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): Deb
   return {
     details: host.querySelector<HTMLDetailsElement>('details[data-experiences-debug]'),
     text: host.textContent ?? '',
+    html: host.innerHTML,
   };
 }
 
@@ -114,5 +127,41 @@ describe('DebugExperience', () => {
 
     expect(() => renderDebug(plan([node]))).not.toThrow();
     expect(renderDebug(plan([node])).text).toContain('[Circular]');
+  });
+});
+
+describe('DebugExperience — errors input', () => {
+  const warning: ExperienceDiagnostic = {
+    severity: 'warning',
+    code: 'component-not-registered',
+    message: 'No component registered for id "hero".',
+    context: { componentId: 'hero' },
+  };
+  const error: ExperienceDiagnostic = {
+    severity: 'error',
+    code: 'component-render-error',
+    message: 'Component "card" threw while rendering: boom.',
+    context: { componentId: 'card' },
+  };
+
+  it('stays collapsed and renders no error list when errors is empty or omitted', () => {
+    const { details, html } = renderDebug(plan([]));
+    expect(details!.open).toBe(false);
+    expect(html).not.toContain('data-experiences-debug-errors');
+  });
+
+  it('auto-expands even without defaultOpen when there are errors', () => {
+    const { details } = renderDebug(plan([]), undefined, [warning]);
+    expect(details!.open).toBe(true);
+  });
+
+  it('renders a diagnostic list above the JSON dump', () => {
+    const { html } = renderDebug(plan([]), undefined, [warning, error]);
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('data-experiences-debug-error-code="component-not-registered"');
+    expect(html).toContain('data-experiences-debug-error-code="component-render-error"');
+    expect(html).toContain('No component registered for id "hero".');
+    expect(html).toContain('Component "card" threw while rendering: boom.');
+    expect(html.indexOf('data-experiences-debug-errors')).toBeLessThan(html.indexOf('<pre'));
   });
 });

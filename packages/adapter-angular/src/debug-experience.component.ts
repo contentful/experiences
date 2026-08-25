@@ -9,7 +9,7 @@
 
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
 
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 /**
  * `JSON.stringify` with the sharp edges filed off: render plans can carry
@@ -45,7 +45,7 @@ function safeStringify(value: unknown): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <details
-      [open]="defaultOpenValue()"
+      [open]="open()"
       data-experiences-debug
       style="margin: 1rem 0; border: 1px solid #6b7280; border-radius: 6px; background: #0b1021; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; overflow: hidden;"
     >
@@ -54,6 +54,17 @@ function safeStringify(value: unknown): string {
       >
         {{ summary() }}
       </summary>
+      <!-- Deliberately unstyled — visual treatment is AIS-407's job. This
+           just needs to make the data visible, not console-only. -->
+      @if (errorsValue().length > 0) {
+        <ul data-experiences-debug-errors>
+          @for (diagnostic of errorsValue(); track $index) {
+            <li [attr.data-experiences-debug-error-code]="diagnostic.code">
+              {{ diagnostic.severity }} · {{ diagnostic.code }}: {{ diagnostic.message }}
+            </li>
+          }
+        </ul>
+      }
       <pre
         style="margin: 0; padding: 0.75rem; overflow: auto; max-height: 32rem; white-space: pre-wrap; word-break: break-word;"
         >{{ json() }}</pre>
@@ -63,6 +74,7 @@ function safeStringify(value: unknown): string {
 export class DebugExperienceComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
   protected readonly defaultOpenValue = signal(false);
+  protected readonly errorsValue = signal<ExperienceDiagnostic[]>([]);
 
   @Input({ required: true }) set experience(value: PortableRenderPlan) {
     this.experienceValue.set(value);
@@ -71,6 +83,18 @@ export class DebugExperienceComponent {
   @Input() set defaultOpen(value: boolean) {
     this.defaultOpenValue.set(value);
   }
+
+  /** Resolve-time + render-time diagnostics, merged by the caller. */
+  @Input() set errors(value: ExperienceDiagnostic[] | undefined) {
+    this.errorsValue.set(value ?? []);
+  }
+
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  protected readonly open = computed(
+    () => this.defaultOpenValue() || this.errorsValue().length > 0
+  );
 
   protected readonly summary = computed(() => {
     const experience = this.experienceValue();

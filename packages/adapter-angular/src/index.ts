@@ -25,6 +25,8 @@ export { ServerExperienceRendererComponent } from './server-experience-renderer.
 export { ServerExperienceRendererComponent as ServerExperienceRenderer } from './server-experience-renderer.component.js';
 export { MissingComponentComponent } from './missing-component.component.js';
 export { MissingComponentComponent as MissingComponent } from './missing-component.component.js';
+export { ComponentErrorComponent } from './component-error.component.js';
+export { ComponentErrorComponent as ComponentError } from './component-error.component.js';
 export { DebugExperienceComponent } from './debug-experience.component.js';
 export { DebugExperienceComponent as DebugExperience } from './debug-experience.component.js';
 
@@ -72,6 +74,7 @@ export type {
   ExperienceTemplates,
   Registration,
   RenderContext,
+  RenderError,
   RenderUnknown,
   ResolveToken,
   SlotNodes,
@@ -88,6 +91,7 @@ export type {
   DesignPropValue,
   DesignToken,
   ExperienceContext,
+  ExperienceDiagnostic,
   ExperienceNode,
   ExperiencePayload,
   ExperienceSys,
@@ -118,6 +122,7 @@ export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
+  ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
   createClient,

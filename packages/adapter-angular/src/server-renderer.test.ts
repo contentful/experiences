@@ -241,6 +241,7 @@ describe('ServerExperienceRenderer', () => {
     const planWithMissing: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'root',
@@ -343,6 +344,7 @@ describe('ServerExperienceRenderer', () => {
     const planWithResolved: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'r',
@@ -592,7 +594,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(html).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
+  it('warns and passes the raw token through the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = {
       components: { 'contentful-button': CapturingComponent },
@@ -610,7 +612,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
 
     render(await resolveExperience(tokenPayload, cfg), { config: cfg });
 
-    expect(captureSink[0]!.designValues).not.toHaveProperty('cfBackgroundColor');
+    expect(captureSink[0]!.designValues.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
 

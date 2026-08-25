@@ -211,5 +211,12 @@ export function normalizeExperienceTemplateRegistration<P extends object>(
  */
 export type RenderUnknown = Type<unknown>;
 
+/**
+ * Renders the fallback for a registered component that threw. Receives
+ * `componentId`, `nodeId`, and `message` inputs; anything it does not
+ * declare is dropped, same as any other rendered component.
+ */
+export type RenderError = Type<unknown>;
+
 /** Convenience alias — the slot input shape customer components declare. */
 export type SlotNodes = PortableRenderNode[];
