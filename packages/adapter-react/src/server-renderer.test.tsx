@@ -520,10 +520,14 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={cfg} debug />
+    );
     // The subtree survives — an unregistered template must not blank the page.
-    expect(html).toBe('<span>unwrapped</span>');
+    expect(html).toContain('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('No experience template registered for id &quot;missing-experienceTemplate&quot;');
     warn.mockRestore();
   });
 });

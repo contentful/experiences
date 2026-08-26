@@ -462,12 +462,16 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(tplPayload, cfg);
     const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config: cfg },
+      props: { experience: plan, config: cfg, debug: true },
     });
     // The subtree survives — an unregistered template must not blank the page.
     expect(container.innerHTML).toContain('data-value="unwrapped"');
     expect(container.innerHTML).not.toContain('data-experience-template');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(container.innerHTML).toContain('data-experiences-debug-errors');
+    expect(container.innerHTML).toContain(
+      'No experience template registered for id "missing-experienceTemplate"'
+    );
     warn.mockRestore();
   });
 });

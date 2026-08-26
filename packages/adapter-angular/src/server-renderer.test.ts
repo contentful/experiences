@@ -436,11 +436,16 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const { html } = render(await resolveExperience(orphanPayload, cfg), { config: cfg });
+    const { html } = render(await resolveExperience(orphanPayload, cfg), {
+      config: cfg,
+      debug: true,
+    });
 
     expect(html).toContain('data-value="unwrapped"');
     expect(html).not.toContain('data-experience-template');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('No experience template registered for id "missing-experienceTemplate"');
 
     warn.mockRestore();
   });
