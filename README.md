@@ -339,25 +339,16 @@ function Fallback({ componentId, nodeId }: MissingComponentProps) {
 
 ## Error handling & troubleshooting
 
-Every non-happy-path — a malformed payload, a throwing `resolveData`, an unresolved design token, an unregistered id, and (the big one) **a registered component that throws while rendering** — degrades instead of crashing the page, and is reported as a structured diagnostic you can inspect.
+Every non-happy-path — a malformed payload, a throwing `resolveData`, an unresolved design token, an unregistered id, and (the big one) **a registered component that throws while rendering** — degrades instead of crashing the page, and is reported as a plain `Error` you can inspect.
 
 ### Two kinds of diagnostic
 
-|                  | When it's knowable                                       | Where it lives                                                                        | Codes                                                                                                   |
-| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Resolve-time** | Inside `resolveExperience()`, before any renderer mounts | `plan.diagnostics` (`ExperienceDiagnostic[]`, always present, `[]` on the happy path) | `malformed-payload`, `malformed-slot`, `unidentifiable-node`, `resolve-data-failed`, `token-unresolved` |
-| **Render-time**  | Per-framework, per-render                                | Merged into `<DebugExperience>`'s `errors` prop by the renderer                       | `component-not-registered`, `experience-template-not-registered`, `component-render-error`              |
+|                  | When it's knowable                                       | Where it lives                                                                | Failure modes                                                                                            |
+| ---------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Resolve-time** | Inside `resolveExperience()`, before any renderer mounts | `plan.diagnostics` (`Error[]`, always present, `[]` on the happy path)         | malformed payload, malformed slot, unidentifiable node, `resolveData` failure, unresolved design token   |
+| **Render-time**  | Per-framework, per-render                                | Merged into `<DebugExperience>`'s `errors` prop by the renderer               | unregistered component, unregistered experience template, a component that threw while rendering        |
 
-```ts
-export interface ExperienceDiagnostic {
-  severity: 'warning' | 'error';
-  code: string; // e.g. 'malformed-payload', 'component-render-error' — free-form, not a maintained union
-  message: string; // actionable — names the node/component id and what to fix
-  context?: Record<string, string>; // whatever's relevant, e.g. { nodeId } or { componentId, slotName }
-}
-```
-
-Deliberately plain data, not an `Error` subclass, so it survives `<DebugExperience>`'s JSON dump and crosses the RSC/SSR boundary as ordinary JSON.
+Each diagnostic is a plain `new Error(message)` — the message names the node/component/slot involved, so there's no separate structured field to inspect. The two failure modes that wrap a real caught exception (a component that throws while rendering, a `resolveData` that throws or rejects) set `.cause` to the original error, so the real stack trace stays reachable (`console.error(err)`, or `err.cause.stack`).
 
 ### Per-failure-mode behavior
 
@@ -366,11 +357,11 @@ Deliberately plain data, not an `Error` subclass, so it survives `<DebugExperien
 | Malformed top-level payload (`nodes`/`viewports` not an array)                 | Warn, treat as `[]`, don't throw                                                                               | —                          |
 | Malformed slot shape (a hand-built `PortableRenderPlan` with a non-array slot) | Warn, treat that slot as `[]`                                                                                  | —                          |
 | A payload node with no readable `component`/`experienceTemplate` ref           | Warn, drop that node + its subtree, siblings unaffected                                                        | —                          |
-| `resolveData` throws synchronously or rejects                                  | Warn, node renders without `props.resolved`, other nodes' resolvers are unaffected                             | —                          |
+| `resolveData` throws synchronously or rejects                                  | Warn, node renders without `props.resolved`, other nodes' resolvers are unaffected — diagnostic's `.cause` is the original error | —                          |
 | A design token has no `resolveToken` mapping                                   | Warn, the **raw `DesignToken`** reaches the component (pass-through, not drop)                                 | `resolveToken` on `Config` |
 | Component id not in `Config.components`                                        | Renders `MissingComponent` (visible box in debug, silent otherwise)                                            | `renderUnknown`            |
 | Experience Template id not in `Config.experienceTemplates`                     | Warn, renders the template's slot children unwrapped (content survives)                                        | —                          |
-| **A registered component throws while rendering**                              | Isolated per-node; siblings render normally. Renders `ComponentError` (visible box in debug, silent otherwise) | `renderError`              |
+| **A registered component throws while rendering**                              | Isolated per-node; siblings render normally. Renders `ComponentError` (visible box in debug, silent otherwise) — diagnostic's `.cause` is the original error | `renderError`              |
 
 `resolveData` fix note: a resolver that throws _synchronously_ is caught too, not just one that rejects — the SDK defers the call (`Promise.resolve().then(() => resolver(ctx))`) specifically so a sync throw becomes an ordinary rejection instead of escaping before any handler can see it.
 
@@ -403,7 +394,7 @@ The Svelte and Angular adapters take the same prop with their own component shap
 
 ### `<DebugExperience>` and errors
 
-When there's anything to report, `<DebugExperience>` renders a plain list of diagnostics (severity, code, message) above the JSON dump — so errors are visible in the debug surface, not console-only. This is deliberately unstyled for now; the visual treatment (auto-expand, counts, grouping) is tracked separately in [AIS-407](https://contentful.atlassian.net/browse/AIS-407), the design review for this and `MissingComponent`.
+When there's anything to report, `<DebugExperience>` renders a plain list of each diagnostic's `message` above the JSON dump — so errors are visible in the debug surface, not console-only. This is deliberately unstyled for now; the visual treatment (auto-expand, counts, grouping) is tracked separately in [AIS-407](https://contentful.atlassian.net/browse/AIS-407), the design review for this and `MissingComponent`.
 
 Pass `errors` explicitly if you're mounting `<DebugExperience>` yourself instead of relying on the renderer's auto-mount:
 
