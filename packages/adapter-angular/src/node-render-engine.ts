@@ -461,7 +461,12 @@ export class NodeRenderEngine {
         unit.resolutionFailed = true;
         const index = unit.ref ? this.viewContainerRef.indexOf(unit.ref.hostView) : -1;
         if (unit.ref) this.detach(unit);
-        this.mountErrorFallback(unit, node, error, index >= 0 ? index : this.viewContainerRef.length);
+        this.mountErrorFallback(
+          unit,
+          node,
+          error,
+          index >= 0 ? index : this.viewContainerRef.length
+        );
         live.push(unit);
         return;
       }

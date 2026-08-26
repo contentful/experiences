@@ -527,7 +527,9 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
     expect(html).toContain('data-experiences-debug-errors');
-    expect(html).toContain('No experience template registered for id &quot;missing-experienceTemplate&quot;');
+    expect(html).toContain(
+      'No experience template registered for id &quot;missing-experienceTemplate&quot;'
+    );
     warn.mockRestore();
   });
 });

@@ -234,7 +234,9 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
         <ServerExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
-      expect(html).toContain('No experience template registered for id &quot;missing-template&quot;');
+      expect(html).toContain(
+        'No experience template registered for id &quot;missing-template&quot;'
+      );
     } finally {
       warn.mockRestore();
     }

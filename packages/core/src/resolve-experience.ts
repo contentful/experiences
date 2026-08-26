@@ -192,11 +192,7 @@ function countPayloadNodes(node: ExperienceNode): number {
  * experience, so one unrecognized node in a sidebar would take down every page
  * containing it, for a payload the customer does not control and cannot fix.
  */
-function warnUnrenderableNode(
-  node: ExperienceNode,
-  log: DebugLogger,
-  diagnostics: Error[]
-): void {
+function warnUnrenderableNode(node: ExperienceNode, log: DebugLogger, diagnostics: Error[]): void {
   const id = (node as { id?: unknown }).id;
   const label = typeof id === 'string' ? ` "${id}"` : '';
   const keys = Object.keys(node);
@@ -348,7 +344,12 @@ function preResolveNodeTree(
     resolveToken
   );
   node.props.design = props;
-  warnUnresolvedTokens(`${node.registration.kind}:${node.registration.id}`, unresolved, log, diagnostics);
+  warnUnresolvedTokens(
+    `${node.registration.kind}:${node.registration.id}`,
+    unresolved,
+    log,
+    diagnostics
+  );
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
       preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log, diagnostics);
