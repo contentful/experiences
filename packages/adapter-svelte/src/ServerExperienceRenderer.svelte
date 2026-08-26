@@ -8,11 +8,7 @@
  * renderer. For editor mode, render the client variant on a hydrated route.
 -->
 <script lang="ts">
-  import type {
-    ExperienceContext,
-    ExperienceDiagnostic,
-    ViewportDef,
-  } from '@contentful/experiences-sdk-core';
+  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
   import { getViewportIndex } from '@contentful/experiences-design';
 
   import ComponentError from './ComponentError.svelte';
@@ -69,9 +65,9 @@
   // the tree, matching the React adapter's element-order fix for
   // consistency, even though Svelte's own reactivity wouldn't strictly
   // require it — this array is already fully populated.
-  const renderDiagnostics: ExperienceDiagnostic[] = [];
-  function onDiagnostic(diagnostic: ExperienceDiagnostic): void {
-    renderDiagnostics.push(diagnostic);
+  const renderDiagnostics: Error[] = [];
+  function onDiagnostic(error: Error): void {
+    renderDiagnostics.push(error);
   }
 </script>
 

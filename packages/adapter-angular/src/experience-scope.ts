@@ -20,8 +20,6 @@
 
 import { Injectable, type Signal, type Type, computed, signal } from '@angular/core';
 
-import type { ExperienceDiagnostic } from '@contentful/experiences-sdk-core';
-
 import type { Config, RenderContext } from './types.js';
 
 @Injectable()
@@ -40,7 +38,7 @@ export class ExperienceScope {
    * element-order trick or a `$state` mirror for this — nothing here depends
    * on template order.
    */
-  private readonly diagnosticsSignal = signal<ExperienceDiagnostic[]>([]);
+  private readonly diagnosticsSignal = signal<Error[]>([]);
 
   readonly experience: Signal<RenderContext> = computed(() => {
     const read = this.experienceSource();
@@ -82,7 +80,7 @@ export class ExperienceScope {
     return read();
   });
 
-  readonly diagnostics: Signal<ExperienceDiagnostic[]> = this.diagnosticsSignal.asReadonly();
+  readonly diagnostics: Signal<Error[]> = this.diagnosticsSignal.asReadonly();
 
   connectExperience(read: () => RenderContext): void {
     this.experienceSource.set(read);
@@ -100,7 +98,7 @@ export class ExperienceScope {
     this.renderErrorSource.set(read);
   }
 
-  reportDiagnostic(diagnostic: ExperienceDiagnostic): void {
-    this.diagnosticsSignal.update((prev) => [...prev, diagnostic]);
+  reportDiagnostic(error: Error): void {
+    this.diagnosticsSignal.update((prev) => [...prev, error]);
   }
 }

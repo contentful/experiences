@@ -18,7 +18,7 @@
 
 import type { ReactNode } from 'react';
 
-import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 export interface DebugExperienceProps {
   /** The resolved plan to inspect (what a renderer receives as `experience`). */
@@ -27,10 +27,13 @@ export interface DebugExperienceProps {
   defaultOpen?: boolean;
   /**
    * Resolve-time + render-time diagnostics for this render, merged by the
-   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`).
+   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`). Plain
+   * `Error`s — the two cases that wrap a real caught exception
+   * (`component-render-error`, `resolve-data-failed`) set `.cause` to the
+   * original error, inspectable via `console.error` or `error.cause.stack`.
    * Defaults to `[]` for a manually-mounted `<DebugExperience>`.
    */
-  errors?: ExperienceDiagnostic[];
+  errors?: Error[];
 }
 
 export function DebugExperience({
@@ -99,13 +102,11 @@ export function DebugExperience({
 
 // Deliberately unstyled — visual treatment (grouping, color, counts) is
 // AIS-407's job. This just needs to make the data visible, not console-only.
-function DiagnosticList({ errors }: { errors: ExperienceDiagnostic[] }): ReactNode {
+function DiagnosticList({ errors }: { errors: Error[] }): ReactNode {
   return (
     <ul data-experiences-debug-errors>
-      {errors.map((diagnostic, index) => (
-        <li key={index} data-experiences-debug-error-code={diagnostic.code}>
-          {diagnostic.severity} · {diagnostic.code}: {diagnostic.message}
-        </li>
+      {errors.map((error, index) => (
+        <li key={index}>{error.message}</li>
       ))}
     </ul>
   );
@@ -134,6 +135,11 @@ function safeStringify(value: unknown): string {
       2
     );
   } catch (err) {
-    return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+    // `err` isn't guaranteed to be an Error — a getter deep in customer data
+    // (a resolveData result, resolved design values) can `throw null` or
+    // `throw 'reason'` during JSON.stringify's replacer walk, and this
+    // fallback's whole job is to never throw itself.
+    const reason = err instanceof Error ? err.message : String(err);
+    return `[DebugExperience: could not serialize plan — ${reason}]`;
   }
 }

@@ -1,5 +1,3 @@
-import type { ExperienceDiagnostic } from './errors';
-
 /**
  * Per-render runtime context attached to every customer component as the
  * `experience` prop, and passed to every `resolveData` hook as `ctx.experience`.
@@ -262,9 +260,12 @@ export interface PortableRenderPlan {
   /**
    * Resolve-time diagnostics collected while building this plan — malformed
    * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an
-   * unresolved design token. Render-time diagnostics (unregistered id,
+   * unresolved design token. Plain `Error`s: the message names the node/
+   * component involved, and `resolve-data-failed`'s entry sets `.cause` to
+   * the original thrown/rejected error so the real stack trace stays
+   * reachable. Render-time diagnostics (unregistered id,
    * component-render-error) are NOT here — each adapter collects those per
    * render and merges both lists for `<DebugExperience>`.
    */
-  diagnostics: ExperienceDiagnostic[];
+  diagnostics: Error[];
 }

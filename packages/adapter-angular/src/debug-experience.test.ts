@@ -13,11 +13,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
-import type {
-  ExperienceDiagnostic,
-  PortableRenderNode,
-  PortableRenderPlan,
-} from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { DebugExperienceComponent } from './debug-experience.component.js';
 
@@ -54,7 +50,7 @@ interface DebugResult {
 function renderDebug(
   experience: PortableRenderPlan,
   defaultOpen?: boolean,
-  errors?: ExperienceDiagnostic[]
+  errors?: Error[]
 ): DebugResult {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
@@ -128,21 +124,29 @@ describe('DebugExperience', () => {
     expect(() => renderDebug(plan([node]))).not.toThrow();
     expect(renderDebug(plan([node])).text).toContain('[Circular]');
   });
+
+  it('degrades a non-Error throw during serialization to a placeholder instead of crashing', () => {
+    const node = componentNode('button', { label: 'Go' });
+    // A customer's resolveData (or resolved design value) could stash a
+    // getter that throws a non-Error — a bare `throw null`/`throw 'reason'`
+    // rather than `throw new Error(...)`. JSON.stringify's replacer walk
+    // invokes it, and the safety net's job is to never throw itself either.
+    node.props.resolved = {};
+    Object.defineProperty(node.props.resolved, 'poison', {
+      enumerable: true,
+      get(): never {
+        throw null;
+      },
+    });
+
+    expect(() => renderDebug(plan([node]))).not.toThrow();
+    expect(renderDebug(plan([node])).text).toContain('could not serialize plan');
+  });
 });
 
 describe('DebugExperience — errors input', () => {
-  const warning: ExperienceDiagnostic = {
-    severity: 'warning',
-    code: 'component-not-registered',
-    message: 'No component registered for id "hero".',
-    context: { componentId: 'hero' },
-  };
-  const error: ExperienceDiagnostic = {
-    severity: 'error',
-    code: 'component-render-error',
-    message: 'Component "card" threw while rendering: boom.',
-    context: { componentId: 'card' },
-  };
+  const warning = new Error('No component registered for id "hero".');
+  const error = new Error('Component "card" threw while rendering: boom.');
 
   it('stays collapsed and renders no error list when errors is empty or omitted', () => {
     const { details, html } = renderDebug(plan([]));
@@ -158,8 +162,6 @@ describe('DebugExperience — errors input', () => {
   it('renders a diagnostic list above the JSON dump', () => {
     const { html } = renderDebug(plan([]), undefined, [warning, error]);
     expect(html).toContain('data-experiences-debug-errors');
-    expect(html).toContain('data-experiences-debug-error-code="component-not-registered"');
-    expect(html).toContain('data-experiences-debug-error-code="component-render-error"');
     expect(html).toContain('No component registered for id "hero".');
     expect(html).toContain('Component "card" threw while rendering: boom.');
     expect(html.indexOf('data-experiences-debug-errors')).toBeLessThan(html.indexOf('<pre'));

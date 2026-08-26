@@ -11,7 +11,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import { diagnosticContext, type PortableRenderNode } from '@contentful/experiences-sdk-core';
+  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
   import { selectResolvedDesign } from '@contentful/experiences-design';
 
   import {
@@ -56,6 +56,20 @@
 
   const { kind, id } = node.registration;
   const isExperienceTemplate = kind === 'experienceTemplate';
+
+  // Any reactive re-run of this component's `$derived`/`{@const}` blocks
+  // (e.g. an ancestor's viewport change) would otherwise re-report the same
+  // diagnostic every time — matches Angular's `lastDiagnostics` guard in
+  // NodeRenderEngine and React's equivalent in NodeRenderer. `reported` is a
+  // plain (non-reactive) binding, stable for this component instance's
+  // lifetime — mutating it doesn't itself trigger reactivity, it's purely a
+  // guard for calls this component makes.
+  const reported = new Set<string>();
+  function reportOnce(error: Error): void {
+    if (reported.has(error.message)) return;
+    reported.add(error.message);
+    onDiagnostic(error);
+  }
 
   const entry = $derived(
     isExperienceTemplate ? config.experienceTemplates?.[id] : config.components[id]
@@ -127,12 +141,7 @@
     if (typeof console !== 'undefined') {
       console.warn(`[@contentful/experiences-svelte] ${message}`);
     }
-    onDiagnostic({
-      severity: 'warning',
-      code: 'experience-template-not-registered',
-      message,
-      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-    });
+    reportOnce(new Error(message));
     return Object.values(slotSnippets).flat();
   });
 
@@ -142,12 +151,7 @@
   // rendering.
   function reportMissingComponent(): true {
     const message = `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`;
-    onDiagnostic({
-      severity: 'warning',
-      code: 'component-not-registered',
-      message,
-      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-    });
+    reportOnce(new Error(message));
     return true;
   }
 
@@ -163,12 +167,7 @@
     if (typeof console !== 'undefined') {
       console.warn(`[@contentful/experiences-svelte] ${message}`);
     }
-    onDiagnostic({
-      severity: 'error',
-      code: 'component-render-error',
-      message,
-      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-    });
+    onDiagnostic(new Error(message, { cause: error instanceof Error ? error : undefined }));
   }
 </script>
 

@@ -11,7 +11,6 @@ import { useCallback, useState, type ReactNode } from 'react';
 
 import type {
   ExperienceContext,
-  ExperienceDiagnostic,
   PortableRenderPlan,
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
@@ -68,14 +67,32 @@ export function ClientExperienceRenderer({
   renderUnknown = MissingComponent,
   renderError = ComponentError,
 }: ClientExperienceRendererProps): ReactNode {
-  const [renderDiagnostics, setRenderDiagnostics] = useState<ExperienceDiagnostic[]>([]);
+  const [renderDiagnostics, setRenderDiagnostics] = useState<Error[]>([]);
   // A `setState` updater rather than the SSR renderer's plain-array push: this
   // tree stays mounted and interactive, so a component that throws well after
   // first paint (a later re-render, an event handler) must still make
   // `<DebugExperience>` re-render with the new diagnostic — a mutated array
   // wouldn't trigger that.
-  const onDiagnostic = useCallback((diagnostic: ExperienceDiagnostic) => {
-    setRenderDiagnostics((prev) => [...prev, diagnostic]);
+  //
+  // `queueMicrotask` defers the actual `setState` call: most of these
+  // diagnostics (component-not-registered, malformed-slot,
+  // experience-template-not-registered) are reported synchronously from
+  // *inside* NodeRenderer's own render body, i.e. while React is mid-render
+  // of a descendant — calling this component's setState right there is
+  // exactly React's "Cannot update a component while rendering a different
+  // component" anti-pattern. Escaping to a microtask (same "break the
+  // synchronous call chain" rationale as core's resolveData deferral)
+  // schedules the update for after the current render/commit fully unwinds.
+  // `component-render-error`, reported from `componentDidCatch`, is already
+  // commit-phase-safe — deferring it too is harmless and keeps one code path.
+  // This is client-only (NodeRenderer's own onDiagnostic call is unchanged
+  // and stays synchronous — see nodes-renderer.tsx for why SSR needs that):
+  // `ServerExperienceRenderer` threads a plain synchronous array-push
+  // closure instead of this setState-backed one, so SSR is unaffected.
+  const onDiagnostic = useCallback((error: Error) => {
+    queueMicrotask(() => {
+      setRenderDiagnostics((prev) => [...prev, error]);
+    });
   }, []);
 
   const { activeViewportIndex } = useActiveViewport(experience?.viewports ?? [], initialViewportId);

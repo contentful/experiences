@@ -4,14 +4,9 @@
  * `useDesignValues()`.
  */
 
-import { Fragment, createElement, type ReactNode } from 'react';
+import { Fragment, createElement, useRef, type ReactNode } from 'react';
 
-import {
-  diagnosticContext,
-  type ExperienceDiagnostic,
-  type PortableRenderNode,
-  type ViewportDef,
-} from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode, ViewportDef } from '@contentful/experiences-sdk-core';
 import { selectResolvedDesign } from '@contentful/experiences-design';
 
 import { ComponentErrorBoundary } from './component-error-boundary';
@@ -41,7 +36,7 @@ export type RenderError = (props: ComponentErrorProps) => ReactNode;
  * there). `ClientExperienceRenderer` passes a `setState` updater instead, so
  * `<DebugExperience>` re-renders reactively when a later interaction throws.
  */
-export type DiagnosticReporter = (diagnostic: ExperienceDiagnostic) => void;
+export type DiagnosticReporter = (error: Error) => void;
 
 // Internal renderers take `viewports` + `activeViewportIndex`, not the whole
 // RenderContext object — the context is published once via ExperienceProvider,
@@ -113,6 +108,27 @@ function NodeRenderer({
   const { kind, id } = node.registration;
   const isExperienceTemplate = kind === 'experienceTemplate';
 
+  // Any ancestor re-render (e.g. a viewport change from useActiveViewport,
+  // or an unrelated parent state update) re-executes this whole function, so
+  // an unregistered id/malformed slot would otherwise re-report the same
+  // diagnostic every time — matches Angular's `lastDiagnostics` guard in
+  // NodeRenderEngine. Dedup by content, not just by call site, since a node
+  // with several malformed slots reports one diagnostic per slot.
+  //
+  // Calling `onDiagnostic` directly here (rather than via an effect) is
+  // deliberate: this component is shared between SSR and CSR, and
+  // `useEffect` never runs during `renderToStaticMarkup`/streaming SSR — an
+  // effect-deferred report would silently vanish on the server. The
+  // client-only "don't setState while a different component is rendering"
+  // concern is handled where `onDiagnostic` is actually implemented
+  // (see client-renderer.tsx), not here.
+  const reported = useRef<Set<string>>(new Set());
+  function reportOnce(error: Error): void {
+    if (reported.current.has(error.message)) return;
+    reported.current.add(error.message);
+    onDiagnostic(error);
+  }
+
   // Pre-render each slot's children as an *array* of ReactNodes (one keyed
   // element per child), not a single wrapping node. A component can drop the
   // array straight into JSX for the common "just render them" case (React
@@ -134,12 +150,7 @@ function NodeRenderer({
       if (typeof console !== 'undefined') {
         console.warn(`[@contentful/experiences-react] ${message}`);
       }
-      onDiagnostic({
-        severity: 'warning',
-        code: 'malformed-slot',
-        message,
-        context: diagnosticContext({ nodeId: node.nodeId, componentId: id, slotName }),
-      });
+      reportOnce(new Error(message));
       slotProps[slotName] = [];
       continue;
     }
@@ -168,23 +179,17 @@ function NodeRenderer({
       if (typeof console !== 'undefined') {
         console.warn(`[@contentful/experiences-react] ${message}`);
       }
-      onDiagnostic({
-        severity: 'warning',
-        code: 'experience-template-not-registered',
-        message,
-        context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-      });
+      reportOnce(new Error(message));
       return <Fragment>{Object.values(slotProps).flat()}</Fragment>;
     }
     // `MissingComponent` (the default `renderUnknown`) does its own
     // console.warn; a custom override may not, so the diagnostic is recorded
     // here regardless of which fallback ends up rendering.
-    onDiagnostic({
-      severity: 'warning',
-      code: 'component-not-registered',
-      message: `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`,
-      context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-    });
+    reportOnce(
+      new Error(
+        `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`
+      )
+    );
     return createElement(renderUnknown, { componentId: id, nodeId: node.nodeId });
   }
   const registrationConfig = isExperienceTemplate

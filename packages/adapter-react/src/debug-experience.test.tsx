@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type {
-  ExperienceDiagnostic,
-  PortableRenderNode,
-  PortableRenderPlan,
-} from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { DebugExperience } from './debug-experience';
 
@@ -111,21 +107,36 @@ describe('DebugExperience', () => {
     expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('[Circular]');
   });
+
+  it('degrades a non-Error throw during serialization to a placeholder instead of crashing', () => {
+    const n = node('button');
+    // A customer's resolveData (or resolved design value) could stash a
+    // getter that throws a non-Error — a bare `throw null`/`throw 'reason'`
+    // rather than `throw new Error(...)`. JSON.stringify's replacer walk
+    // invokes it, and the safety net's job is to never throw itself either.
+    Object.defineProperty(n.props.resolved ?? (n.props.resolved = {}), 'poison', {
+      enumerable: true,
+      get(): never {
+        throw null;
+      },
+    });
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [n],
+      fallbackViewportIndex: 0,
+      diagnostics: [],
+    };
+
+    expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
+    expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
+      'could not serialize plan'
+    );
+  });
 });
 
 describe('DebugExperience — errors prop', () => {
-  const warning: ExperienceDiagnostic = {
-    severity: 'warning',
-    code: 'component-not-registered',
-    message: 'No component registered for id "hero".',
-    context: { componentId: 'hero' },
-  };
-  const error: ExperienceDiagnostic = {
-    severity: 'error',
-    code: 'component-render-error',
-    message: 'Component "card" threw while rendering: boom.',
-    context: { componentId: 'card' },
-  };
+  const warning = new Error('No component registered for id "hero".');
+  const error = new Error('Component "card" threw while rendering: boom.');
 
   it('stays collapsed and renders no error list when errors is empty or omitted', () => {
     const html = renderToStaticMarkup(<DebugExperience experience={emptyPlan} />);
@@ -145,8 +156,6 @@ describe('DebugExperience — errors prop', () => {
       <DebugExperience experience={emptyPlan} errors={[warning, error]} />
     );
     expect(html).toContain('data-experiences-debug-errors');
-    expect(html).toContain('data-experiences-debug-error-code="component-not-registered"');
-    expect(html).toContain('data-experiences-debug-error-code="component-render-error"');
     expect(html).toContain('No component registered for id &quot;hero&quot;.');
     expect(html).toContain('Component &quot;card&quot; threw while rendering: boom.');
     // The error list appears before the JSON dump's <pre> tag.

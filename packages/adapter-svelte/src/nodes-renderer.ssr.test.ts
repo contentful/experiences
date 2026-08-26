@@ -190,6 +190,20 @@ describe('NodesRenderer — SSR component-render-error (the documented gap)', ()
     // asserted below is the one thing that held in every run: the `failed`
     // snippet's markup never appears, so there's no graceful degradation to
     // rely on either way.
+    //
+    // Re-investigated for AIS-364 (the ticket this whole error-handling pass
+    // is for): two candidate code-level fixes (a manual per-node `render()`
+    // call spliced in via `{@html}`, and a speculative "probe render" before
+    // the real one) were prototyped and rejected — the first permanently
+    // breaks hydration for that node (no hydration markers survive a manual
+    // `render()` call), the second silently double-invokes every customer
+    // component's construction/lifecycle on every request. Confirmed still
+    // nondeterministic as of Svelte 5.56 (`svelte` version pinned in this
+    // package's package.json) — there is no correctness-preserving fix
+    // available at this adapter's level today. See the README's
+    // "Mitigating this in SvelteKit" note (the SSR/CSR asymmetry section)
+    // for the `handleError`-hook-based mitigation shipped instead. Don't
+    // re-litigate this without a new Svelte-side primitive to build on.
     let html: string | undefined;
     let caught: unknown;
     try {

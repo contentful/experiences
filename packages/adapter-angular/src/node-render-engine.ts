@@ -47,11 +47,7 @@ import {
 } from '@angular/core';
 
 import { selectResolvedDesign } from '@contentful/experiences-design';
-import {
-  diagnosticContext,
-  type ExperienceDiagnostic,
-  type PortableRenderNode,
-} from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import { ExperienceScope } from './experience-scope.js';
 import { ComponentScope, DesignScope, ExperienceTemplateScope } from './node-scopes.js';
@@ -81,12 +77,12 @@ type Resolution =
       readonly component: Type<unknown>;
       readonly props: Record<string, unknown>;
       readonly bindable: readonly string[];
-      readonly diagnostics: readonly ExperienceDiagnostic[];
+      readonly diagnostics: readonly Error[];
     }
   | {
       readonly mode: 'orphaned';
       readonly nodes: readonly PortableRenderNode[];
-      readonly diagnostics: readonly ExperienceDiagnostic[];
+      readonly diagnostics: readonly Error[];
     };
 
 /**
@@ -103,10 +99,10 @@ type Resolution =
  */
 function toSlotInputs(node: PortableRenderNode): {
   slots: Record<string, PortableRenderNode[]>;
-  diagnostics: ExperienceDiagnostic[];
+  diagnostics: Error[];
 } {
   const slots: Record<string, PortableRenderNode[]> = {};
-  const diagnostics: ExperienceDiagnostic[] = [];
+  const diagnostics: Error[] = [];
   for (const [slotName, children] of Object.entries(node.slots)) {
     if (!Array.isArray(children)) {
       const { kind, id } = node.registration;
@@ -121,12 +117,7 @@ function toSlotInputs(node: PortableRenderNode): {
       if (typeof console !== 'undefined') {
         console.warn(`[@contentful/experiences-angular] ${message}`);
       }
-      diagnostics.push({
-        severity: 'warning',
-        code: 'malformed-slot',
-        message,
-        context: diagnosticContext({ nodeId: node.nodeId, componentId: id, slotName }),
-      });
+      diagnostics.push(new Error(message));
       slots[slotName] = [];
       continue;
     }
@@ -276,15 +267,7 @@ function resolveNode(
     return {
       mode: 'orphaned',
       nodes: Object.values(slots).flat(),
-      diagnostics: [
-        ...diagnostics,
-        {
-          severity: 'warning',
-          code: 'experience-template-not-registered',
-          message,
-          context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-        },
-      ],
+      diagnostics: [...diagnostics, new Error(message)],
     };
   }
 
@@ -300,12 +283,9 @@ function resolveNode(
     bindable: declaredOnly(renderUnknown, ['componentId', 'nodeId']),
     diagnostics: [
       ...diagnostics,
-      {
-        severity: 'warning',
-        code: 'component-not-registered',
-        message: `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`,
-        context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-      },
+      new Error(
+        `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`
+      ),
     ],
   };
 }
@@ -335,7 +315,19 @@ interface Unit {
    */
   attemptedComponentType: Type<unknown> | null;
   /** Reference to the last `resolution.diagnostics` array this unit reported. */
-  lastDiagnostics: readonly ExperienceDiagnostic[] | null;
+  lastDiagnostics: readonly Error[] | null;
+  /**
+   * Set once `collect()` catches a throw from reading `unit.resolution()`
+   * itself (as opposed to a creation-time throw from `createComponent`).
+   * Same "don't retry the same failing thing every sync" rationale as
+   * `attemptedComponentType`, but tracked separately: while this stays
+   * `true`, `resolution()` is still throwing on every read (Angular's
+   * `computed()` caches and rethrows a computation error until its
+   * dependencies change again), so there's no `resolution.component` to
+   * compare against — `collect()` would otherwise detach and recreate the
+   * same error fallback on every single sync.
+   */
+  resolutionFailed: boolean;
 }
 
 /**
@@ -445,7 +437,44 @@ export class NodeRenderEngine {
         this.units.set(key, unit);
       }
 
-      const resolution = unit.resolution();
+      // `resolveNode`/`resolveDesign` are expected to degrade rather than
+      // throw (malformed slots, unresolved tokens — see resolve-experience.ts
+      // for the equivalent core-level guarding), but nothing stops a future
+      // change there, or a customer-supplied `resolveToken` throwing, from
+      // taking that guarantee away. This is a *recomputation* on an existing
+      // unit — the same failure mode `createView`'s catch handles for brand
+      // new ones, just triggered by a later sync instead of first creation.
+      const wasResolutionFailing = unit.resolutionFailed;
+      let resolution: Resolution;
+      try {
+        resolution = unit.resolution();
+        unit.resolutionFailed = false;
+      } catch (error) {
+        if (wasResolutionFailing) {
+          // Still the same ongoing failure as last sync (Angular's
+          // `computed()` caches and rethrows until a dependency changes
+          // again) — the fallback is already mounted; don't tear it down
+          // and recreate it every sync.
+          live.push(unit);
+          return;
+        }
+        unit.resolutionFailed = true;
+        const index = unit.ref ? this.viewContainerRef.indexOf(unit.ref.hostView) : -1;
+        if (unit.ref) this.detach(unit);
+        this.mountErrorFallback(unit, node, error, index >= 0 ? index : this.viewContainerRef.length);
+        live.push(unit);
+        return;
+      }
+
+      if (wasResolutionFailing) {
+        // Recovered. `mountErrorFallback` only updates `componentType`, not
+        // `attemptedComponentType` — so the gating below, comparing against
+        // the customer's (pre-failure) class, would see "same resolution,
+        // already attempted" and leave the stale fallback mounted forever.
+        // Force it down so the normal creation path below runs clean.
+        this.detach(unit);
+        unit.attemptedComponentType = null;
+      }
 
       this.reportDiagnostics(unit, resolution);
 
@@ -506,17 +535,33 @@ export class NodeRenderEngine {
    * synchronous creation-time throw is caught here identically in SSR and
    * CSR.
    *
-   * What it does NOT cover is a throw during change detection *after*
-   * creation succeeded (a later input change, an `ngDoCheck`, a computed
-   * re-evaluating). A per-node `ErrorHandler` provider in `unit.injector` —
-   * the natural-looking fix, since providers already flow per-node here —
-   * was tried and empirically does NOT get consulted for that case: Angular
-   * zoneless change-detection error handling does not walk the affected
-   * view's element-injector tree the way DI resolution for a *created*
-   * component does, so a per-node override is invisible to it. Verified with
-   * an isolated repro (a component whose value getter starts throwing after
-   * first render, with a provided `ErrorHandler` in its creation injector)
-   * before deciding not to ship it — this is a documented gap, not an
+   * A *later* throw — one that happens after creation succeeded, on a
+   * subsequent sync rather than this one — is a different case, covered by
+   * `collect()`'s own try/catch around `unit.resolution()`, not here. That
+   * split matters: `resolution.bindable`'s `inputBinding` getters (built by
+   * `bindings()` below) also call `unit.resolution()`, and it's tempting to
+   * wrap *those* instead — but `resolution`'s only tracked dependencies
+   * (`unit.node`, `experienceScope.config()`) are exclusively mutated from
+   * inside `collect()` (`unit.node.set(...)`, and `checkConfig()`'s call into
+   * `sync()`/`collect()`), so any throw from a genuine dependency change
+   * always reaches `collect()`'s own read first — by the time Angular's CD
+   * independently re-invokes a binding getter for that unit, the computed's
+   * error is already cached and `collect()` has already handled it (or, pre-
+   * fix, already crashed). A `bindings()`-level catch would be unreachable
+   * dead code; verified by tracing the actual signal wiring, not assumed.
+   *
+   * What no fix here reaches: a throw inside the *customer* component's own
+   * internals on a later change-detection pass (its own template expression,
+   * computed, or lifecycle hook unrelated to our bindings) — that never
+   * touches adapter code at all. A per-node `ErrorHandler` provider in
+   * `unit.injector` — the natural-looking fix for that case, since providers
+   * already flow per-node here — was tried and empirically does NOT get
+   * consulted for it: `ApplicationRef.tick()` resolves `ErrorHandler` once,
+   * from the *root* injector, at construction — it never re-resolves it from
+   * whichever component's injector actually threw, so a per-node override in
+   * a child injector is structurally unreachable from that catch regardless
+   * of zoneless vs. zone-based change detection. Verified with an isolated
+   * repro before deciding not to ship it — this is a documented gap, not an
    * assumption. See the README's error-handling section.
    */
   private createView(
@@ -532,37 +577,52 @@ export class NodeRenderEngine {
         bindings: this.bindings(unit, resolution.bindable),
       });
     } catch (error) {
-      const { kind, id } = node.registration;
-      const reason = error instanceof Error ? error.message : String(error);
-      const message =
-        `Component "${id}" (${kind}${node.nodeId ? `, node "${node.nodeId}"` : ''}) threw ` +
-        `while rendering: ${reason}. Rendering the error fallback instead of crashing the ` +
-        `surrounding tree.`;
-      if (typeof console !== 'undefined') {
-        console.warn(`[@contentful/experiences-angular] ${message}`);
-      }
-      this.experienceScope.reportDiagnostic({
-        severity: 'error',
-        code: 'component-render-error',
-        message,
-        context: diagnosticContext({ nodeId: node.nodeId, componentId: id }),
-      });
-
-      const renderError = this.experienceScope.renderError();
-      const errorProps: Record<string, unknown> = {
-        componentId: id,
-        nodeId: node.nodeId,
-        message: reason,
-      };
-      unit.componentType = renderError;
-      unit.ref = this.viewContainerRef.createComponent(renderError, {
-        index: this.viewContainerRef.length,
-        injector: unit.injector,
-        bindings: declaredOnly(renderError, ['componentId', 'nodeId', 'message']).map((key) =>
-          inputBinding(key, () => errorProps[key])
-        ),
-      });
+      this.mountErrorFallback(unit, node, error, this.viewContainerRef.length);
     }
+  }
+
+  /**
+   * Shared by `createView`'s creation-time catch and
+   * `reportPostCreationFailure`'s later-pass catch: reports the diagnostic
+   * and mounts the customer's `renderError` override (or the built-in
+   * default) at `index`. The caller picks `index` — appending at the current
+   * end for a brand-new unit, or the unit's own prior position when
+   * replacing an already-mounted view — since this method has no way to
+   * know which situation it's in.
+   */
+  private mountErrorFallback(
+    unit: Unit,
+    node: PortableRenderNode,
+    error: unknown,
+    index: number
+  ): void {
+    const { kind, id } = node.registration;
+    const reason = error instanceof Error ? error.message : String(error);
+    const message =
+      `Component "${id}" (${kind}${node.nodeId ? `, node "${node.nodeId}"` : ''}) threw ` +
+      `while rendering: ${reason}. Rendering the error fallback instead of crashing the ` +
+      `surrounding tree.`;
+    if (typeof console !== 'undefined') {
+      console.warn(`[@contentful/experiences-angular] ${message}`);
+    }
+    this.experienceScope.reportDiagnostic(
+      new Error(message, { cause: error instanceof Error ? error : undefined })
+    );
+
+    const renderError = this.experienceScope.renderError();
+    const errorProps: Record<string, unknown> = {
+      componentId: id,
+      nodeId: node.nodeId,
+      message: reason,
+    };
+    unit.componentType = renderError;
+    unit.ref = this.viewContainerRef.createComponent(renderError, {
+      index,
+      injector: unit.injector,
+      bindings: declaredOnly(renderError, ['componentId', 'nodeId', 'message']).map((key) =>
+        inputBinding(key, () => errorProps[key])
+      ),
+    });
   }
 
   private createUnit(node: PortableRenderNode, parentInjector: Injector): Unit {
@@ -601,6 +661,7 @@ export class NodeRenderEngine {
       componentType: null,
       attemptedComponentType: null,
       lastDiagnostics: null,
+      resolutionFailed: false,
     };
   }
 

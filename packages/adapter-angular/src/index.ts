@@ -91,7 +91,6 @@ export type {
   DesignPropValue,
   DesignToken,
   ExperienceContext,
-  ExperienceDiagnostic,
   ExperienceNode,
   ExperiencePayload,
   ExperienceSys,

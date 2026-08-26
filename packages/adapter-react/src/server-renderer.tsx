@@ -7,7 +7,6 @@ import type { ReactNode } from 'react';
 
 import type {
   ExperienceContext,
-  ExperienceDiagnostic,
   PortableRenderPlan,
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
@@ -89,7 +88,7 @@ export function ServerExperienceRenderer({
   // collected into a plain array rather than React state: SSR is synchronous
   // top-down, so by the time `<DebugExperience>` renders — after the tree,
   // see the element-order note below — this array is already fully populated.
-  const renderDiagnostics: ExperienceDiagnostic[] = [];
+  const renderDiagnostics: Error[] = [];
 
   const tree = (
     <NodesRenderer

@@ -26,11 +26,7 @@
 
 import { Component, Suspense, createContext, type ReactNode } from 'react';
 
-import { diagnosticContext, type ExperienceDiagnostic } from '@contentful/experiences-sdk-core';
-
-export const DiagnosticReporterContext = createContext<
-  ((diagnostic: ExperienceDiagnostic) => void) | null
->(null);
+export const DiagnosticReporterContext = createContext<((error: Error) => void) | null>(null);
 
 interface ComponentErrorBoundaryProps {
   children: ReactNode;
@@ -111,12 +107,7 @@ export class ComponentErrorBoundary extends Component<
     if (typeof console !== 'undefined') {
       console.warn(`[@contentful/experiences-react] ${message}`);
     }
-    this.context?.({
-      severity: 'error',
-      code: 'component-render-error',
-      message,
-      context: diagnosticContext({ nodeId, componentId }),
-    });
+    this.context?.(new Error(message, { cause: error instanceof Error ? error : undefined }));
   }
 
   override render(): ReactNode {

@@ -6,7 +6,6 @@
  */
 
 import { createDebugLogger, type DebugLogger } from './debug-logger';
-import { diagnosticContext, type ExperienceDiagnostic } from './errors';
 import type {
   DesignPropValue,
   ExperienceContext,
@@ -155,7 +154,7 @@ function ensureArray<T>(
   value: unknown,
   field: string,
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[]
+  diagnostics: Error[]
 ): T[] {
   if (Array.isArray(value)) return value as T[];
   const message =
@@ -166,7 +165,7 @@ function ensureArray<T>(
     console.warn(`[@contentful/experiences] ${message}`);
   }
   log.log(message);
-  diagnostics.push({ severity: 'error', code: 'malformed-payload', message });
+  diagnostics.push(new Error(message));
   return [];
 }
 
@@ -196,7 +195,7 @@ function countPayloadNodes(node: ExperienceNode): number {
 function warnUnrenderableNode(
   node: ExperienceNode,
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[]
+  diagnostics: Error[]
 ): void {
   const id = (node as { id?: unknown }).id;
   const label = typeof id === 'string' ? ` "${id}"` : '';
@@ -211,12 +210,7 @@ function warnUnrenderableNode(
     console.warn(`[@contentful/experiences] ${message}`);
   }
   log.log(message);
-  diagnostics.push({
-    severity: 'warning',
-    code: 'unidentifiable-node',
-    message,
-    context: diagnosticContext({ nodeId: typeof id === 'string' ? id : undefined }),
-  });
+  diagnostics.push(new Error(message));
 }
 
 /**
@@ -228,7 +222,7 @@ function buildNodes(
   config: ResolverConfig,
   nodeRefs: PortableRenderNode[],
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[]
+  diagnostics: Error[]
 ): PortableRenderNode[] {
   const built: PortableRenderNode[] = [];
   for (const node of nodes) {
@@ -252,7 +246,7 @@ function buildNode(
   config: ResolverConfig,
   nodeRefs: PortableRenderNode[],
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[]
+  diagnostics: Error[]
 ): PortableRenderNode | null {
   const ref = readNodeRef(node);
   if (ref === null) {
@@ -279,12 +273,7 @@ function buildNode(
           console.warn(`[@contentful/experiences] ${message}`);
         }
         log.log(message);
-        diagnostics.push({
-          severity: 'warning',
-          code: 'malformed-slot',
-          message,
-          context: diagnosticContext({ nodeId, componentId: registration.id, slotName }),
-        });
+        diagnostics.push(new Error(message));
         slots[slotName] = [];
         continue;
       }
@@ -326,9 +315,7 @@ function warnUnresolvedTokens(
   label: string,
   unresolved: string[],
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[],
-  nodeId: string | undefined,
-  componentId: string
+  diagnostics: Error[]
 ): void {
   if (!unresolved.length) return;
   const message = `resolveToken returned undefined for token id(s) on "${label}": ${unresolved.join(', ')}. Resolved design (getDesignValues()) will carry the raw, unresolved DesignToken for those keys.`;
@@ -337,12 +324,11 @@ function warnUnresolvedTokens(
   }
   log.log(`unresolved token id(s) on "${label}": ${unresolved.join(', ')}`);
   for (const tokenId of unresolved) {
-    diagnostics.push({
-      severity: 'warning',
-      code: 'token-unresolved',
-      message: `Design token "${tokenId}" on ${label} has no \`resolveToken\` mapping; the raw token reaches the component unresolved.`,
-      context: diagnosticContext({ nodeId, componentId }),
-    });
+    diagnostics.push(
+      new Error(
+        `Design token "${tokenId}" on ${label} has no \`resolveToken\` mapping; the raw token reaches the component unresolved.`
+      )
+    );
   }
 }
 
@@ -353,7 +339,7 @@ function preResolveNodeTree(
   fallbackViewportIndex: number,
   resolveToken: ResolveToken | undefined,
   log: DebugLogger,
-  diagnostics: ExperienceDiagnostic[]
+  diagnostics: Error[]
 ): void {
   const { props, unresolved } = preResolveDesignProperties(
     node.props.designRaw,
@@ -362,14 +348,7 @@ function preResolveNodeTree(
     resolveToken
   );
   node.props.design = props;
-  warnUnresolvedTokens(
-    `${node.registration.kind}:${node.registration.id}`,
-    unresolved,
-    log,
-    diagnostics,
-    node.nodeId,
-    node.registration.id
-  );
+  warnUnresolvedTokens(`${node.registration.kind}:${node.registration.id}`, unresolved, log, diagnostics);
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
       preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log, diagnostics);
@@ -395,9 +374,34 @@ export async function resolveExperience(
   const log = createDebugLogger(options.debug, 'core');
   log.lazy('resolveExperience called with payload', () => payload);
 
-  const diagnostics: ExperienceDiagnostic[] = [];
-  const payloadNodes = ensureArray<ExperienceNode>(payload.nodes, 'nodes', log, diagnostics);
-  const viewports = ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics);
+  const diagnostics: Error[] = [];
+
+  // A payload that isn't an object at all (missing fetch result, a raw
+  // `null`/`undefined` handed in by a broken transform step) can't be
+  // guarded field-by-field via `ensureArray` below — that only guards once
+  // we're already inside a `payload.nodes` access. Guard the whole payload
+  // first so we degrade to an empty experience instead of throwing a raw
+  // TypeError, and report exactly one diagnostic rather than double-counting
+  // once we also run `nodes`/`viewports` through `ensureArray`.
+  const isPlainPayload = payload !== null && typeof payload === 'object';
+  if (!isPlainPayload) {
+    const message =
+      `Experience payload is ${payload === null ? 'null' : typeof payload}, not an object; ` +
+      `treating it as an empty experience (no nodes, no viewports) instead of throwing. This ` +
+      `usually means the fetch or transform pipeline handed resolveExperience a missing or ` +
+      `malformed payload — check what produced it.`;
+    if (typeof console !== 'undefined') {
+      console.warn(`[@contentful/experiences] ${message}`);
+    }
+    log.log(message);
+    diagnostics.push(new Error(message));
+  }
+  const payloadNodes = isPlainPayload
+    ? ensureArray<ExperienceNode>(payload.nodes, 'nodes', log, diagnostics)
+    : [];
+  const viewports = isPlainPayload
+    ? ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics)
+    : [];
 
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
@@ -451,15 +455,7 @@ export async function resolveExperience(
               console.warn(`[@contentful/experiences] ${message}`);
             }
             log.log(message);
-            diagnostics.push({
-              severity: 'error',
-              code: 'resolve-data-failed',
-              message,
-              context: diagnosticContext({
-                nodeId: node.nodeId,
-                componentId: node.registration.id,
-              }),
-            });
+            diagnostics.push(new Error(message, { cause: err instanceof Error ? err : undefined }));
           }
         )
     );

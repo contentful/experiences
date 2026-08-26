@@ -23,7 +23,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import { diagnosticContext, type PortableRenderNode } from '@contentful/experiences-sdk-core';
+  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
   import NodeRenderer from './NodeRenderer.svelte';
   import type { DiagnosticReporter, RenderError, RenderUnknown } from './component-props.js';
@@ -40,6 +40,18 @@
 
   let { nodes, config, experience, renderUnknown, renderError, onDiagnostic }: NodesRendererProps =
     $props();
+
+  // Same re-run-doesn't-mean-new-occurrence problem as NodeRenderer.svelte's
+  // `reportOnce` — `renderNode`'s `{@const}`s re-run per node on every
+  // reactive re-render of the `{#each}` block. One Set covers every node in
+  // this list since the diagnostic's own context (nodeId/slotName) already
+  // makes the signature unique per node+slot.
+  const reportedSlots = new Set<string>();
+  function reportSlotDiagnosticOnce(error: Error): void {
+    if (reportedSlots.has(error.message)) return;
+    reportedSlots.add(error.message);
+    onDiagnostic(error);
+  }
 
   // Curry the parameterized `renderNode` snippet into a zero-arg Snippet bound
   // to one node: forward the anchor (the renderer, under SSR) and supply the
@@ -84,12 +96,7 @@
         if (typeof console !== 'undefined') {
           console.warn(`[@contentful/experiences-svelte] ${message}`);
         }
-        onDiagnosticFn({
-          severity: 'warning',
-          code: 'malformed-slot',
-          message,
-          context: diagnosticContext({ nodeId: node.nodeId, componentId: id, slotName }),
-        });
+        onDiagnosticFn(new Error(message));
         slotSnippets[slotName] = [];
         continue;
       }
@@ -101,7 +108,7 @@
 
 {#snippet renderNode(nodeArg: NodeArg)}
   {@const node = unwrapNode(nodeArg)}
-  {@const slotSnippets = toSlotSnippets(node, onDiagnostic)}
+  {@const slotSnippets = toSlotSnippets(node, reportSlotDiagnosticOnce)}
   <NodeRenderer
     {node}
     {config}

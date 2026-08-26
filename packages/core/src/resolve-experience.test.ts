@@ -194,13 +194,11 @@ describe('resolveExperience — IR construction', () => {
       expect(plan.nodes[0]!.slots.children).toEqual([]);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]![0])).toContain('Slot "children"');
-      expect(plan.diagnostics).toEqual([
-        expect.objectContaining({
-          severity: 'warning',
-          code: 'malformed-slot',
-          context: { nodeId: 'page', componentId: 'contentful-container', slotName: 'children' },
-        }),
-      ]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('Slot "children"');
+      expect(plan.diagnostics[0]!.message).toContain('page');
+      expect(plan.diagnostics[0]!.message).toContain('contentful-container');
     } finally {
       warn.mockRestore();
     }
@@ -813,9 +811,10 @@ describe('resolveExperience — server-side design pre-resolution', () => {
         type: 'DesignToken',
         value: 'color.brand',
       });
-      expect(plan.diagnostics).toContainEqual(
-        expect.objectContaining({ severity: 'warning', code: 'token-unresolved' })
-      );
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('color.brand');
+      expect(plan.diagnostics[0]!.message).toContain('resolveToken');
     } finally {
       warn.mockRestore();
     }
@@ -961,9 +960,9 @@ describe('resolveExperience — diagnostics', () => {
       } as unknown as ExperiencePayload;
       const plan = await resolveExperience(payload, emptyConfig);
       expect(plan.nodes).toEqual([]);
-      expect(plan.diagnostics).toEqual([
-        expect.objectContaining({ severity: 'error', code: 'malformed-payload' }),
-      ]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('"nodes"');
       expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
@@ -980,14 +979,33 @@ describe('resolveExperience — diagnostics', () => {
       const plan = await resolveExperience(payload, emptyConfig);
       expect(plan.viewports).toEqual([]);
       expect(plan.fallbackViewportIndex).toBe(0);
-      expect(plan.diagnostics).toEqual([
-        expect.objectContaining({ severity: 'error', code: 'malformed-payload' }),
-      ]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('"viewports"');
       expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
     }
   });
+
+  it.each([null, undefined])(
+    'does not throw on a %s payload — degrades to an empty plan with a single diagnostic',
+    async (payload) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const plan = await resolveExperience(payload as unknown as ExperiencePayload, emptyConfig);
+        expect(plan.nodes).toEqual([]);
+        expect(plan.viewports).toEqual([]);
+        expect(plan.fallbackViewportIndex).toBe(0);
+        expect(plan.diagnostics).toHaveLength(1);
+        expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+        expect(plan.diagnostics[0]!.message).toContain('payload is');
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
 
   it('isolates a resolveData hook that throws synchronously — other nodes still resolve', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -1009,13 +1027,13 @@ describe('resolveExperience — diagnostics', () => {
       const plan = await resolveExperience(payload, config);
       expect(plan.nodes[0]!.props.resolved).toBeUndefined();
       expect(plan.nodes[1]!.props.resolved).toEqual({ ok: true });
-      expect(plan.diagnostics).toEqual([
-        expect.objectContaining({
-          severity: 'error',
-          code: 'resolve-data-failed',
-          context: { nodeId: 'b', componentId: 'broken' },
-        }),
-      ]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('component:broken');
+      expect(plan.diagnostics[0]!.message).toContain('node "b"');
+      expect(plan.diagnostics[0]!.message).toContain('boom');
+      expect(plan.diagnostics[0]!.cause).toBeInstanceOf(Error);
+      expect((plan.diagnostics[0]!.cause as Error).message).toBe('boom');
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]![0])).toContain('boom');
     } finally {
@@ -1039,13 +1057,13 @@ describe('resolveExperience — diagnostics', () => {
       const plan = await resolveExperience(payload, config);
       expect(plan.nodes[0]!.props.resolved).toBeUndefined();
       expect(plan.nodes[1]!.props.resolved).toEqual({ ok: true });
-      expect(plan.diagnostics).toEqual([
-        expect.objectContaining({
-          severity: 'error',
-          code: 'resolve-data-failed',
-          context: { nodeId: 'b', componentId: 'broken' },
-        }),
-      ]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('component:broken');
+      expect(plan.diagnostics[0]!.message).toContain('node "b"');
+      expect(plan.diagnostics[0]!.message).toContain('network down');
+      expect(plan.diagnostics[0]!.cause).toBeInstanceOf(Error);
+      expect((plan.diagnostics[0]!.cause as Error).message).toBe('network down');
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]![0])).toContain('network down');
     } finally {

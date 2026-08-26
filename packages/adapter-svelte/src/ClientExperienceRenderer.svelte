@@ -9,11 +9,7 @@
  * same seed.
 -->
 <script lang="ts">
-  import type {
-    ExperienceContext,
-    ExperienceDiagnostic,
-    ViewportDef,
-  } from '@contentful/experiences-sdk-core';
+  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
 
   import ComponentError from './ComponentError.svelte';
   import DebugExperience from './DebugExperience.svelte';
@@ -52,9 +48,23 @@
   // `<DebugExperience>` re-render with the new diagnostic — a mutated plain
   // array wouldn't be reactive here the way it's fine to be for the
   // synchronous, single-pass server renderer.
-  const renderDiagnostics = $state<ExperienceDiagnostic[]>([]);
-  function onDiagnostic(diagnostic: ExperienceDiagnostic): void {
-    renderDiagnostics.push(diagnostic);
+  //
+  // `queueMicrotask` defers the actual mutation: most of these diagnostics
+  // (component-not-registered, malformed-slot,
+  // experience-template-not-registered) are reported from NodeRenderer's
+  // `{@const}`/`$derived.by` blocks — i.e. from inside a template expression
+  // — and Svelte 5 forbids mutating `$state` there directly
+  // ("state_unsafe_mutation"). Escaping to a microtask (same "break the
+  // synchronous call chain" rationale as core's resolveData deferral)
+  // performs the mutation once that expression has finished evaluating.
+  // `component-render-error`, reported from `<svelte:boundary onerror>`
+  // (already outside any derived/template evaluation), is unaffected by the
+  // restriction but deferred too, to keep one code path.
+  const renderDiagnostics = $state<Error[]>([]);
+  function onDiagnostic(error: Error): void {
+    queueMicrotask(() => {
+      renderDiagnostics.push(error);
+    });
   }
 
   const viewports = $derived(experience?.viewports ?? []);

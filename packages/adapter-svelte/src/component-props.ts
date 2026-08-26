@@ -13,7 +13,7 @@
 
 import type { Component } from 'svelte';
 
-import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import type { Config } from './types.js';
 
@@ -65,7 +65,7 @@ export type RenderError = Component<ComponentErrorProps>;
  * passes a closure that mutates a `$state` array instead, so `<DebugExperience>`
  * re-renders reactively when a later interaction throws.
  */
-export type DiagnosticReporter = (diagnostic: ExperienceDiagnostic) => void;
+export type DiagnosticReporter = (error: Error) => void;
 
 export interface DebugExperienceProps {
   /** The resolved plan to inspect (what a renderer receives as `experience`). */
@@ -74,8 +74,11 @@ export interface DebugExperienceProps {
   defaultOpen?: boolean;
   /**
    * Resolve-time + render-time diagnostics for this render, merged by the
-   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`).
+   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`). Plain
+   * `Error`s — the two cases that wrap a real caught exception
+   * (`component-render-error`, `resolve-data-failed`) set `.cause` to the
+   * original error, inspectable via `console.error` or `error.cause.stack`.
    * Defaults to `[]` for a manually-mounted `<DebugExperience>`.
    */
-  errors?: ExperienceDiagnostic[];
+  errors?: Error[];
 }

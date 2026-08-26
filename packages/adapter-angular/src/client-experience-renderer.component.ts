@@ -21,7 +21,7 @@ import {
   signal,
 } from '@angular/core';
 
-import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { ComponentErrorComponent } from './component-error.component.js';
 import { DebugExperienceComponent } from './debug-experience.component.js';
@@ -123,7 +123,7 @@ export class ClientExperienceRendererComponent {
   private readonly scope = inject(ExperienceScope);
 
   /** Resolve-time + render-time diagnostics, merged for `<cf-debug-experience>`. */
-  protected readonly errors = computed<ExperienceDiagnostic[]>(() => [
+  protected readonly errors = computed<Error[]>(() => [
     ...(this.experienceValue()?.diagnostics ?? []),
     ...this.scope.diagnostics(),
   ]);

@@ -47,13 +47,28 @@ const Fine = () => <span data-fine>sibling</span>;
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
-function mount(element: React.ReactElement): void {
+// Render-time diagnostics (component-not-registered, malformed-slot,
+// experience-template-not-registered) reach ClientExperienceRenderer's state
+// via a `queueMicrotask`-deferred setState (see client-renderer.tsx) so the
+// update never lands mid-render of a different component. `mount` always
+// flushes that microtask before returning — not just for tests that assert
+// on the result, but so a test that doesn't care (e.g. one only checking the
+// fallback DOM) never leaves the update to fire later, unwrapped in any
+// test's `act()`, bleeding a warning into whichever test runs next.
+async function flushMicrotasks(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+async function mount(element: React.ReactElement): Promise<void> {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
     root!.render(element);
   });
+  await flushMicrotasks();
 }
 
 afterEach(() => {
@@ -76,7 +91,7 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
       const config: Config = { components: { broken: Broken, fine: Fine } };
       const plan = await resolveExperience(payload, config);
 
-      mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
+      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
 
       expect(container!.querySelector('[data-fine]')).not.toBeNull();
       expect(container!.querySelector('[data-experiences-render-error="broken"]')).not.toBeNull();
@@ -87,7 +102,8 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
       // React settles.
       const errorList = container!.querySelector('[data-experiences-debug-errors]');
       expect(errorList).not.toBeNull();
-      expect(errorList!.textContent).toContain('component-render-error');
+      expect(errorList!.textContent).toContain('Component "broken"');
+      expect(errorList!.textContent).toContain('boom');
     } finally {
       warn.mockRestore();
     }
@@ -103,7 +119,7 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
       const config: Config = { components: { broken: Broken } };
       const plan = await resolveExperience(payload, config);
 
-      mount(<ClientExperienceRenderer experience={plan} config={config} />);
+      await mount(<ClientExperienceRenderer experience={plan} config={config} />);
 
       expect(container!.querySelector('[data-experiences-render-error]')).toBeNull();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
@@ -124,8 +140,38 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
       <div data-custom-error={componentId} />
     );
 
-    mount(<ClientExperienceRenderer experience={plan} config={config} renderError={CustomError} />);
+    await mount(
+      <ClientExperienceRenderer experience={plan} config={config} renderError={CustomError} />
+    );
 
     expect(container!.querySelector('[data-custom-error="broken"]')).not.toBeNull();
+  });
+});
+
+describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-renders', () => {
+  it('reports a persistently-unregistered component only once, not once per re-render', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('missing', { id: 'm' })],
+      };
+      const config: Config = { components: {} };
+      const plan = await resolveExperience(payload, config);
+
+      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
+      // Force NodeRenderer to re-execute its function body without any real
+      // new occurrence — an ancestor re-render (a viewport change, an
+      // unrelated parent state update) does the same thing in production.
+      act(() => {
+        root!.render(<ClientExperienceRenderer experience={plan} config={config} debug />);
+      });
+      await flushMicrotasks();
+
+      expect(container!.querySelectorAll('[data-experiences-debug-errors] li')).toHaveLength(1);
+      expect(container!.textContent).toContain('No component registered for id "missing"');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

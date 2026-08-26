@@ -2,9 +2,9 @@
  * Thrown by `fetchExperience` for a fetch failure that is not "experience not
  * found" — network failure, an invalid/expired token, a 5xx from the
  * delivery API, etc. This failure mode is "surface clearly to the host app,"
- * unlike the `ExperienceDiagnostic`s `resolveExperience` collects for
- * resolve/render-time issues — there's no partial payload to render around a
- * fetch that never returned one, so a real thrown class is the right shape.
+ * unlike the diagnostics `resolveExperience` collects for resolve/render-time
+ * issues — there's no partial payload to render around a fetch that never
+ * returned one, so a real thrown class is the right shape.
  *
  * `NotFoundError` (the delivery client's class, re-exported from this
  * package) is the one exception: it passes through undisturbed so callers

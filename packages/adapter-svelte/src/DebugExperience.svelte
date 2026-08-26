@@ -57,7 +57,12 @@
         2
       );
     } catch (err) {
-      return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+      // `err` isn't guaranteed to be an Error — a getter deep in customer data
+      // (a resolveData result, resolved design values) can `throw null` or
+      // `throw 'reason'` during JSON.stringify's replacer walk, and this
+      // fallback's whole job is to never throw itself.
+      const reason = err instanceof Error ? err.message : String(err);
+      return `[DebugExperience: could not serialize plan — ${reason}]`;
     }
   }
 
@@ -78,10 +83,8 @@
     <!-- Deliberately unstyled — visual treatment is AIS-407's job. This just
          needs to make the data visible, not console-only. -->
     <ul data-experiences-debug-errors>
-      {#each errors as diagnostic, index (index)}
-        <li data-experiences-debug-error-code={diagnostic.code}>
-          {diagnostic.severity} · {diagnostic.code}: {diagnostic.message}
-        </li>
+      {#each errors as error, index (index)}
+        <li>{error.message}</li>
       {/each}
     </ul>
   {/if}

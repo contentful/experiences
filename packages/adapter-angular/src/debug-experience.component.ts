@@ -9,7 +9,7 @@
 
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
 
-import type { ExperienceDiagnostic, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 /**
  * `JSON.stringify` with the sharp edges filed off: render plans can carry
@@ -36,7 +36,12 @@ function safeStringify(value: unknown): string {
       2
     );
   } catch (err) {
-    return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+    // `err` isn't guaranteed to be an Error — a getter deep in customer data
+    // (a resolveData result, resolved design values) can `throw null` or
+    // `throw 'reason'` during JSON.stringify's replacer walk, and this
+    // fallback's whole job is to never throw itself.
+    const reason = err instanceof Error ? err.message : String(err);
+    return `[DebugExperience: could not serialize plan — ${reason}]`;
   }
 }
 
@@ -58,10 +63,8 @@ function safeStringify(value: unknown): string {
            just needs to make the data visible, not console-only. -->
       @if (errorsValue().length > 0) {
         <ul data-experiences-debug-errors>
-          @for (diagnostic of errorsValue(); track $index) {
-            <li [attr.data-experiences-debug-error-code]="diagnostic.code">
-              {{ diagnostic.severity }} · {{ diagnostic.code }}: {{ diagnostic.message }}
-            </li>
+          @for (error of errorsValue(); track $index) {
+            <li>{{ error.message }}</li>
           }
         </ul>
       }
@@ -74,7 +77,7 @@ function safeStringify(value: unknown): string {
 export class DebugExperienceComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
   protected readonly defaultOpenValue = signal(false);
-  protected readonly errorsValue = signal<ExperienceDiagnostic[]>([]);
+  protected readonly errorsValue = signal<Error[]>([]);
 
   @Input({ required: true }) set experience(value: PortableRenderPlan) {
     this.experienceValue.set(value);
@@ -85,7 +88,7 @@ export class DebugExperienceComponent {
   }
 
   /** Resolve-time + render-time diagnostics, merged by the caller. */
-  @Input() set errors(value: ExperienceDiagnostic[] | undefined) {
+  @Input() set errors(value: Error[] | undefined) {
     this.errorsValue.set(value ?? []);
   }
 
