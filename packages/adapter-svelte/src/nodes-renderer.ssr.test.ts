@@ -178,32 +178,16 @@ describe('NodesRenderer — SSR component-render-error (the documented gap)', ()
     };
     const plan = await resolveExperience(payload, brokenConfig);
 
-    // Observed to propagate as a synchronous exception in most runs (and in
-    // an isolated `<svelte:boundary onerror failed>` repro outside this
-    // component tree, with no NodeRenderer/context involved) — but its exact
-    // timing proved inconsistent across invocation contexts during
-    // development (sync throw in some runs, seemingly swallowed in others),
-    // which is itself notable: unlike React's Suspense-based degradation
-    // (deterministic — see the React adapter's nodes-renderer.ssr.test.tsx),
-    // Svelte's `<svelte:boundary>` has no supported SSR recovery contract at
-    // all here, so nothing guarantees *how* the failure surfaces. What's
-    // asserted below is the one thing that held in every run: the `failed`
-    // snippet's markup never appears, so there's no graceful degradation to
-    // rely on either way.
-    //
-    // Re-investigated for AIS-364 (the ticket this whole error-handling pass
-    // is for): two candidate code-level fixes (a manual per-node `render()`
-    // call spliced in via `{@html}`, and a speculative "probe render" before
-    // the real one) were prototyped and rejected — the first permanently
-    // breaks hydration for that node (no hydration markers survive a manual
-    // `render()` call), the second silently double-invokes every customer
-    // component's construction/lifecycle on every request. Confirmed still
-    // nondeterministic as of Svelte 5.56 (`svelte` version pinned in this
-    // package's package.json) — there is no correctness-preserving fix
-    // available at this adapter's level today. See the README's
-    // "Mitigating this in SvelteKit" note (the SSR/CSR asymmetry section)
-    // for the `handleError`-hook-based mitigation shipped instead. Don't
-    // re-litigate this without a new Svelte-side primitive to build on.
+    // Propagates as an exception in most runs, but the exact timing is
+    // inconsistent across invocation contexts (sync throw in some runs,
+    // seemingly swallowed in others) — unlike React's deterministic
+    // Suspense-based degradation, Svelte's `<svelte:boundary>` has no
+    // supported SSR recovery contract at all, so nothing guarantees *how*
+    // the failure surfaces. The one invariant that holds in every run: the
+    // `failed` snippet's markup never appears, so there's no graceful
+    // degradation to rely on either way. No adapter-level fix is possible —
+    // `svelte/server` has no per-node recovery primitive below its single
+    // top-level `render()` call — see the README's SvelteKit mitigation note.
     let html: string | undefined;
     let caught: unknown;
     try {

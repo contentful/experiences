@@ -80,8 +80,8 @@
     {summary}
   </summary>
   {#if errors.length > 0}
-    <!-- Deliberately unstyled — visual treatment is AIS-407's job. This just
-         needs to make the data visible, not console-only. -->
+    <!-- Deliberately unstyled for now — this just needs to make the data
+         visible, not console-only. Visual treatment can grow later. -->
     <ul data-experiences-debug-errors>
       {#each errors as error, index (index)}
         <li>{error.message}</li>

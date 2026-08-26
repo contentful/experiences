@@ -59,8 +59,8 @@ function safeStringify(value: unknown): string {
       >
         {{ summary() }}
       </summary>
-      <!-- Deliberately unstyled — visual treatment is AIS-407's job. This
-           just needs to make the data visible, not console-only. -->
+      <!-- Deliberately unstyled for now — this just needs to make the data
+           visible, not console-only. Visual treatment can grow later. -->
       @if (errorsValue().length > 0) {
         <ul data-experiences-debug-errors>
           @for (error of errorsValue(); track $index) {

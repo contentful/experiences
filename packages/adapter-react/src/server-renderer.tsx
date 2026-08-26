@@ -88,15 +88,11 @@ export function ServerExperienceRenderer({
   // collected into a plain array rather than React state: SSR is synchronous
   // top-down, so by the time `<DebugExperience>` renders — after the tree,
   // see the element-order note below — this array is already fully populated.
-  // Seeded with the resolve-time diagnostics rather than spreading them in
-  // later: `errors={renderDiagnostics}` below passes this array by
-  // *reference*, not a snapshot — a spread copy (`errors={[...(experience.
-  // diagnostics ?? []), ...renderDiagnostics]}`) would be computed right here,
-  // eagerly, as this function body runs — before React's reconciler has even
-  // started walking `tree` below, let alone reached the point where a
-  // descendant's `onDiagnostic` call pushes into it. Passing the live
-  // reference is what lets `<DebugExperience>` see pushes that happen after
-  // this line but before its own (later) render.
+  // Seeded with the resolve-time diagnostics up front rather than spreading
+  // them in later: `<DebugExperience>` below reads this array by reference
+  // (`errors={renderDiagnostics}`), not a spread copy — a copy would be built
+  // right here, before React ever renders `tree` and gets a chance to push
+  // into it.
   const renderDiagnostics: Error[] = [...(experience.diagnostics ?? [])];
 
   const tree = (

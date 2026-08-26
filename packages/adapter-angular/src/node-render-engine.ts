@@ -551,23 +551,19 @@ export class NodeRenderEngine {
    * `sync()`/`collect()`), so any throw from a genuine dependency change
    * always reaches `collect()`'s own read first — by the time Angular's CD
    * independently re-invokes a binding getter for that unit, the computed's
-   * error is already cached and `collect()` has already handled it (or, pre-
-   * fix, already crashed). A `bindings()`-level catch would be unreachable
-   * dead code; verified by tracing the actual signal wiring, not assumed.
+   * error is already cached and `collect()` has already handled it. A
+   * `bindings()`-level catch would be unreachable dead code.
    *
    * What no fix here reaches: a throw inside the *customer* component's own
    * internals on a later change-detection pass (its own template expression,
    * computed, or lifecycle hook unrelated to our bindings) — that never
    * touches adapter code at all. A per-node `ErrorHandler` provider in
-   * `unit.injector` — the natural-looking fix for that case, since providers
-   * already flow per-node here — was tried and empirically does NOT get
-   * consulted for it: `ApplicationRef.tick()` resolves `ErrorHandler` once,
-   * from the *root* injector, at construction — it never re-resolves it from
-   * whichever component's injector actually threw, so a per-node override in
-   * a child injector is structurally unreachable from that catch regardless
-   * of zoneless vs. zone-based change detection. Verified with an isolated
-   * repro before deciding not to ship it — this is a documented gap, not an
-   * assumption. See the README's error-handling section.
+   * `unit.injector` doesn't help here either: `ApplicationRef.tick()`
+   * resolves `ErrorHandler` once, from the *root* injector, at construction,
+   * and never re-resolves it from whichever component's injector actually
+   * threw — a per-node override in a child injector is structurally
+   * unreachable from that catch. Documented gap; see the README's
+   * error-handling section.
    */
   private createView(
     unit: Unit,

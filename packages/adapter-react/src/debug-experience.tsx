@@ -100,8 +100,8 @@ export function DebugExperience({
   );
 }
 
-// Deliberately unstyled — visual treatment (grouping, color, counts) is
-// AIS-407's job. This just needs to make the data visible, not console-only.
+// Deliberately unstyled for now — this just needs to make the data visible,
+// not console-only. Visual treatment (grouping, color, counts) can grow later.
 function DiagnosticList({ errors }: { errors: Error[] }): ReactNode {
   return (
     <ul data-experiences-debug-errors>
