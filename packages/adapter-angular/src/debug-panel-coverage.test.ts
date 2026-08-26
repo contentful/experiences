@@ -15,12 +15,11 @@
  * `render()`'s `detectChanges()` is synchronous, so no microtask flush is
  * needed either.
  *
- * The `token-unresolved` case below IS the SSR coverage for a resolve-time
- * diagnostic — `render()` mounts through `ServerExperienceRendererComponent`,
- * a real (zoneless, synchronous) render — no separate SSR-specific test file
- * needed the way Svelte needs one (see its `debug-panel-coverage.ssr.test.ts`);
- * Angular's own true-SSR proof (`renderApplication`) already exists in
- * `nodes-renderer.ssr.test.ts` for other codes.
+ * This file runs under jsdom (vitest.config.ts), same as the rest of this
+ * package's suite — `render()` mounts `ServerExperienceRendererComponent` via
+ * `TestBed`/`detectChanges()`, not a real server render. True, no-DOM SSR
+ * coverage of a resolve-time diagnostic (`token-unresolved`, via
+ * `renderApplication`) lives in `debug-panel-coverage.ssr.test.ts`.
  */
 import { describe, expect, it, vi } from 'vitest';
 
