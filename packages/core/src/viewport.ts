@@ -16,7 +16,7 @@ import type {
   ResolveToken,
   ValuesByViewport,
   ViewportDef,
-} from './types';
+} from './types.js';
 
 /** Viewport id → index. Returns 0 (the wildcard viewport) when unknown. */
 export function getViewportIndex(viewports: ViewportDef[], viewportId?: string): number {
