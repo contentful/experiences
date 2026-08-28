@@ -1307,6 +1307,27 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     expect(seen[0].fallbackViewportIndex).toBe(1);
   });
 
+  it('varies context per render by spreading the plan', async () => {
+    // The plan is the only channel for `metadata` / `debug`, so a per-render
+    // change means deriving a new plan. Spreading is shallow, which matters:
+    // `viewports` and `nodes` keep their identity, so nothing downstream that
+    // watches those references churns.
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { metadata: { slug: 'home' } });
+
+    const derived = {
+      ...plan,
+      debug: true,
+      metadata: { ...plan.metadata, viewer: 'anon' },
+    };
+    renderToStaticMarkup(<ServerExperienceRenderer experience={derived} config={config} />);
+
+    expect(seen[0].debug).toBe(true);
+    expect(seen[0].metadata).toEqual({ slug: 'home', viewer: 'anon' });
+    expect(derived.viewports).toBe(plan.viewports);
+    expect(derived.nodes).toBe(plan.nodes);
+  });
+
   it('still falls back to viewport[0] when neither the plan nor the prop names one', async () => {
     const { seen, config } = captureSetup();
     const plan = await resolveExperience(payload(), config);
