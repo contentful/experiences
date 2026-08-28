@@ -1,3 +1,9 @@
+## 0.7.11 (2026-08-28)
+
+### 🚀 Features
+
+- error handling and sensible fallbacks for non-happy-path rendering [AIS-364] ([#156](https://github.com/contentful/experiences/pull/156))
+
 ## 0.7.10 (2026-08-27)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
