@@ -9,5 +9,7 @@ export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundE
 export { createClient } from './create-client.js';
 export type { CreateClientOptions } from './create-client.js';
 export { fetchExperience } from './fetch-experience.js';
+export { readSourceMap, toExperiencePayload } from './to-experience-payload.js';
+export type { ExperienceResponse } from './to-experience-payload.js';
 export type { ExperienceOptions, ClientOptions, ResolveOptions } from './fetch-experience.js';
 export { DELIVERY_HOST, PREVIEW_HOST } from './hosts.js';
