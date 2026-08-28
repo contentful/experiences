@@ -5,8 +5,13 @@ import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
 
 /**
- * Renders the plan the Express layer already resolved. `<cf-server-experience>`
- * resolves the active viewport once from `initialViewportId` and never
+ * Renders the plan the Express layer already resolved.
+ *
+ * Only `config` is bound alongside the plan: `metadata`, `debug`, and the
+ * viewport the design was pre-resolved against all travel on the plan. `config`
+ * cannot — it holds component classes, which do not survive `TransferState`.
+ *
+ * `<cf-server-experience>` resolves the active viewport once and never
  * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)
  * if you want design values to follow live `matchMedia` changes on resize.
  */
@@ -16,13 +21,7 @@ import { experienceConfig } from '../lib/experience-config.js';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (experience; as plan) {
-      <cf-server-experience
-        [experience]="plan"
-        [config]="config"
-        [initialViewportId]="initialViewportId"
-        [metadata]="metadata"
-        [debug]="debug"
-      />
+      <cf-server-experience [experience]="plan" [config]="config" />
     } @else {
       <main
         style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;"
@@ -44,8 +43,5 @@ export class ExperiencePageComponent {
 
   protected readonly config = experienceConfig;
   protected readonly experience = this.data?.experience ?? null;
-  protected readonly initialViewportId = this.data?.initialViewportId;
-  protected readonly metadata = this.data?.metadata;
-  protected readonly debug = this.data?.debug ?? false;
   protected readonly slug = this.data?.slug ?? '';
 }

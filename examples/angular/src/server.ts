@@ -80,16 +80,19 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
         config: experienceConfig,
         metadata,
         debug,
-        // Pre-resolve design against the UA-detected viewport (the same seed the
-        // renderer uses) so SSR paints correct design on first render.
+        // Pre-resolve design against the UA-detected viewport so SSR paints
+        // correct design on first render.
         initialViewportId,
       }
     );
 
-    return { slug, experience, initialViewportId, debug, metadata, notFound: false };
+    // `metadata`, `debug`, and the viewport ride along on the plan, so none of
+    // them need to be relayed to the component separately.
+    return { slug, experience, notFound: false };
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return { slug, experience: null, initialViewportId, debug, metadata, notFound: true };
+      // No plan to carry anything, so `debug` comes along for the not-found view.
+      return { slug, experience: null, debug, notFound: true };
     }
     throw error;
   }

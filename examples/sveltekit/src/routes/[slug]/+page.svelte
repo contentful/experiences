@@ -6,10 +6,9 @@
   let { data } = $props();
 </script>
 
-<ServerExperienceRenderer
-  experience={data.experience}
-  config={experienceConfig}
-  initialViewportId={data.initialViewportId}
-  metadata={data.metadata}
-  debug={data.debug}
-/>
+<!--
+  Only `config` is passed alongside the plan: `metadata`, `debug`, and the
+  viewport the design was pre-resolved against all travel on the plan itself.
+  `config` cannot — it holds component references, which do not serialize.
+-->
+<ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
