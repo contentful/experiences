@@ -101,6 +101,16 @@ export function ServerExperienceRenderer({
   // right here, before React ever renders `tree` and gets a chance to push
   // into it.
   const renderDiagnostics: Error[] = [...(experience.diagnostics ?? [])];
+  // Dedup by message, the guard `NodeRenderer` used to hold in a `useRef`. It
+  // lives here so that module stays hook-free and therefore server-renderable.
+  // One pass on the server, so this mostly guards a node that reports the same
+  // message from several slots.
+  const seenDiagnostics = new Set(renderDiagnostics.map((error) => error.message));
+  const onDiagnostic = (error: Error): void => {
+    if (seenDiagnostics.has(error.message)) return;
+    seenDiagnostics.add(error.message);
+    renderDiagnostics.push(error);
+  };
 
   const tree = (
     <NodesRenderer
@@ -111,7 +121,7 @@ export function ServerExperienceRenderer({
       fallbackViewportIndex={experience.fallbackViewportIndex}
       renderUnknown={renderUnknown}
       renderError={renderError}
-      onDiagnostic={(diagnostic) => renderDiagnostics.push(diagnostic)}
+      onDiagnostic={onDiagnostic}
     />
   );
 

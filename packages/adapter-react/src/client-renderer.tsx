@@ -91,7 +91,14 @@ export function ClientExperienceRenderer({
   // closure instead of this setState-backed one, so SSR is unaffected.
   const onDiagnostic = useCallback((error: Error) => {
     queueMicrotask(() => {
-      setRenderDiagnostics((prev) => [...prev, error]);
+      // Dedup by message, the guard `NodeRenderer` used to hold in a `useRef`.
+      // It lives here so that module stays hook-free and therefore usable from
+      // a React Server Component. Returning `prev` unchanged also skips a
+      // pointless re-render, which matters more here than on the server: every
+      // ancestor re-render re-reports the same diagnostic.
+      setRenderDiagnostics((prev) =>
+        prev.some((seen) => seen.message === error.message) ? prev : [...prev, error]
+      );
     });
   }, []);
 
