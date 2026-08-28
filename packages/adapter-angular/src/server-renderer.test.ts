@@ -243,6 +243,7 @@ describe('ServerExperienceRenderer', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'root',
@@ -347,6 +348,7 @@ describe('ServerExperienceRenderer', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'r',
@@ -438,11 +440,16 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const { html } = render(await resolveExperience(orphanPayload, cfg), { config: cfg });
+    const { html } = render(await resolveExperience(orphanPayload, cfg), {
+      config: cfg,
+      debug: true,
+    });
 
     expect(html).toContain('data-value="unwrapped"');
     expect(html).not.toContain('data-experience-template');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('No experience template registered for id "missing-experienceTemplate"');
 
     warn.mockRestore();
   });
@@ -596,7 +603,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(html).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
+  it('warns and passes the raw token through the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = {
       components: { 'contentful-button': CapturingComponent },
@@ -614,7 +621,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
 
     render(await resolveExperience(tokenPayload, cfg), { config: cfg });
 
-    expect(captureSink[0]!.designValues).not.toHaveProperty('cfBackgroundColor');
+    expect(captureSink[0]!.designValues.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
 

@@ -36,7 +36,12 @@ function safeStringify(value: unknown): string {
       2
     );
   } catch (err) {
-    return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+    // `err` isn't guaranteed to be an Error — a getter deep in customer data
+    // (a resolveData result, resolved design values) can `throw null` or
+    // `throw 'reason'` during JSON.stringify's replacer walk, and this
+    // fallback's whole job is to never throw itself.
+    const reason = err instanceof Error ? err.message : String(err);
+    return `[DebugExperience: could not serialize plan — ${reason}]`;
   }
 }
 
@@ -45,7 +50,7 @@ function safeStringify(value: unknown): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <details
-      [open]="defaultOpenValue()"
+      [open]="open()"
       data-experiences-debug
       style="margin: 1rem 0; border: 1px solid #6b7280; border-radius: 6px; background: #0b1021; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; overflow: hidden;"
     >
@@ -54,6 +59,15 @@ function safeStringify(value: unknown): string {
       >
         {{ summary() }}
       </summary>
+      <!-- Deliberately unstyled for now — this just needs to make the data
+           visible, not console-only. Visual treatment can grow later. -->
+      @if (errorsValue().length > 0) {
+        <ul data-experiences-debug-errors>
+          @for (error of errorsValue(); track $index) {
+            <li>{{ error.message }}</li>
+          }
+        </ul>
+      }
       <pre
         style="margin: 0; padding: 0.75rem; overflow: auto; max-height: 32rem; white-space: pre-wrap; word-break: break-word;"
         >{{ json() }}</pre>
@@ -63,6 +77,7 @@ function safeStringify(value: unknown): string {
 export class DebugExperienceComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
   protected readonly defaultOpenValue = signal(false);
+  protected readonly errorsValue = signal<Error[]>([]);
 
   @Input({ required: true }) set experience(value: PortableRenderPlan) {
     this.experienceValue.set(value);
@@ -71,6 +86,18 @@ export class DebugExperienceComponent {
   @Input() set defaultOpen(value: boolean) {
     this.defaultOpenValue.set(value);
   }
+
+  /** Resolve-time + render-time diagnostics, merged by the caller. */
+  @Input() set errors(value: Error[] | undefined) {
+    this.errorsValue.set(value ?? []);
+  }
+
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  protected readonly open = computed(
+    () => this.defaultOpenValue() || this.errorsValue().length > 0
+  );
 
   protected readonly summary = computed(() => {
     const experience = this.experienceValue();

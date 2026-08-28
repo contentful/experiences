@@ -1,9 +1,15 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
+import { ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
-import { readSourceMap, toExperiencePayload } from './to-experience-payload.js';
+import {
+  readSourceMap,
+  toExperiencePayload,
+  type ExperienceResponse,
+} from './to-experience-payload.js';
 
 export type ExperienceOptions = {
   spaceId: string;
@@ -104,16 +110,37 @@ export async function fetchExperience(
     withSourceMap: Boolean(withSourceMap),
   });
 
-  // Both methods hit the same endpoint; only the POST accepts a body, and
-  // `extensions` (the source-map opt-in) lives there. Otherwise identical.
-  // The alpha-feature header is sent by the delivery client itself since
-  // 1.0.0-dev.7, so a caller-supplied `{ client }` is covered too.
-  const response = withSourceMap
-    ? await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
-        locale,
-        extensions: { sourceMap: {} },
-      })
-    : await client.experience.get(spaceId, environmentId, experienceId, { locale });
+  // Typed as the union of both operations' responses — they declare the same
+  // union, but which one runs depends on `withSourceMap` below.
+  let response: ExperienceResponse;
+  try {
+    // Both methods hit the same endpoint; only the POST accepts a body, and
+    // `extensions` (the source-map opt-in) lives there. Otherwise identical.
+    // The alpha-feature header is sent by the delivery client itself since
+    // 1.0.0-dev.7, so a caller-supplied `{ client }` is covered too.
+    response = withSourceMap
+      ? await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
+          locale,
+          extensions: { sourceMap: {} },
+        })
+      : await client.experience.get(spaceId, environmentId, experienceId, { locale });
+  } catch (err) {
+    // `NotFoundError` is a distinguishable, expected outcome (draft/unpublished/
+    // wrong id) — callers already route it to their framework's 404 idiom, so
+    // it passes through as-is. Everything else (network failure, bad/expired
+    // token, a 5xx) is unexpected and gets wrapped in an actionable error
+    // instead of leaking whatever shape the delivery client happened to throw.
+    if (err instanceof ContentfulViewDelivery.NotFoundError) {
+      throw err;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new ExperienceFetchError(
+      `Failed to fetch Experience "${experienceId}" (space "${spaceId}", environment ` +
+        `"${environmentId}"): ${reason}. Check network connectivity, the access token, and ` +
+        `that the space/environment/experience ids are correct.`,
+      { spaceId, environmentId, experienceId, cause: err }
+    );
+  }
 
   const payload = toExperiencePayload(response);
   const sourceMap = withSourceMap ? readSourceMap(response) : undefined;

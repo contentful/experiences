@@ -14,7 +14,12 @@
 <script lang="ts">
   import type { DebugExperienceProps } from './component-props.js';
 
-  let { experience, defaultOpen = false }: DebugExperienceProps = $props();
+  let { experience, defaultOpen = false, errors = [] }: DebugExperienceProps = $props();
+
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  const open = $derived(defaultOpen || errors.length > 0);
 
   const nodeCount = $derived(experience.nodes.length);
   // Coded Experience Templates are ordinary top-level nodes, so name them from
@@ -52,7 +57,12 @@
         2
       );
     } catch (err) {
-      return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+      // `err` isn't guaranteed to be an Error — a getter deep in customer data
+      // (a resolveData result, resolved design values) can `throw null` or
+      // `throw 'reason'` during JSON.stringify's replacer walk, and this
+      // fallback's whole job is to never throw itself.
+      const reason = err instanceof Error ? err.message : String(err);
+      return `[DebugExperience: could not serialize plan — ${reason}]`;
     }
   }
 
@@ -60,7 +70,7 @@
 </script>
 
 <details
-  open={defaultOpen}
+  {open}
   data-experiences-debug
   style="margin: 1rem 0; border: 1px solid #6b7280; border-radius: 6px; background: #0b1021; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; overflow: hidden;"
 >
@@ -69,6 +79,15 @@
   >
     {summary}
   </summary>
+  {#if errors.length > 0}
+    <!-- Deliberately unstyled for now — this just needs to make the data
+         visible, not console-only. Visual treatment can grow later. -->
+    <ul data-experiences-debug-errors>
+      {#each errors as error, index (index)}
+        <li>{error.message}</li>
+      {/each}
+    </ul>
+  {/if}
   <pre
     style="margin: 0; padding: 0.75rem; overflow: auto; max-height: 32rem; white-space: pre-wrap; word-break: break-word;">{json}</pre>
 </details>

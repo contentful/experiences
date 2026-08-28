@@ -23,6 +23,7 @@ import {
 
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
+import { ComponentErrorComponent } from './component-error.component.js';
 import { DebugExperienceComponent } from './debug-experience.component.js';
 import { DEFAULT_CONTEXT, EMPTY_CONFIG, FALLBACK_VIEWPORT } from './experience-defaults.js';
 import { ExperienceScope } from './experience-scope.js';
@@ -40,12 +41,15 @@ import type { Config, RenderContext } from './types.js';
   // customer's mount point, and they may well style it. Only the plumbing
   // *inside* it is anchor-only: `*cfNodes` puts the top-level nodes here as
   // siblings of a comment, so nothing the adapter owns wraps them.
+  //
+  // See the matching note in server-experience-renderer.component.ts on why
+  // the node tree renders before `<cf-debug-experience>`.
   template: `
     @if (experienceValue(); as experience) {
-      @if (resolvedDebug()) {
-        <cf-debug-experience [experience]="experience" />
-      }
       <ng-container *cfNodes="experience.nodes"></ng-container>
+      @if (resolvedDebug()) {
+        <cf-debug-experience [experience]="experience" [errors]="errors()" />
+      }
     }
   `,
 })
@@ -60,6 +64,7 @@ export class ClientExperienceRendererComponent {
   private readonly initialViewportIdValue = signal<string | undefined>(undefined);
   private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
   private readonly renderUnknownValue = signal<Type<unknown>>(MissingComponentComponent);
+  private readonly renderErrorValue = signal<Type<unknown>>(ComponentErrorComponent);
 
   /** A resolved render plan, or `null` while one is still being fetched. */
   @Input({ required: true }) set experience(value: PortableRenderPlan | null | undefined) {
@@ -96,6 +101,11 @@ export class ClientExperienceRendererComponent {
     this.renderUnknownValue.set(value ?? MissingComponentComponent);
   }
 
+  /** Replaces the default error box rendered when a registered component throws. */
+  @Input() set renderError(value: Type<unknown> | undefined) {
+    this.renderErrorValue.set(value ?? ComponentErrorComponent);
+  }
+
   // Getters, not values: this runs during construction, before Angular has bound
   // a single input. See injectActiveViewport's docblock.
   private readonly tracker = injectActiveViewport(
@@ -127,10 +137,18 @@ export class ClientExperienceRendererComponent {
     };
   });
 
+  private readonly scope = inject(ExperienceScope);
+
+  /** Resolve-time + render-time diagnostics, merged for `<cf-debug-experience>`. */
+  protected readonly errors = computed<Error[]>(() => [
+    ...(this.experienceValue()?.diagnostics ?? []),
+    ...this.scope.diagnostics(),
+  ]);
+
   constructor() {
-    const scope = inject(ExperienceScope);
-    scope.connectExperience(() => this.renderContext());
-    scope.connectConfig(() => this.configValue() ?? EMPTY_CONFIG);
-    scope.connectRenderUnknown(() => this.renderUnknownValue());
+    this.scope.connectExperience(() => this.renderContext());
+    this.scope.connectConfig(() => this.configValue() ?? EMPTY_CONFIG);
+    this.scope.connectRenderUnknown(() => this.renderUnknownValue());
+    this.scope.connectRenderError(() => this.renderErrorValue());
   }
 }

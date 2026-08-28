@@ -309,4 +309,20 @@ export interface PortableRenderPlan {
   debug: boolean;
   /** Present only when the fetch opted in via `withSourceMap`. */
   sourceMap?: ExperienceSourceMap;
+  /**
+   * Resolve-time diagnostics collected while building this plan — malformed
+   * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an
+   * unresolved design token. Plain `Error`s: the message names the node/
+   * component involved, and `resolve-data-failed`'s entry sets `.cause` to
+   * the original thrown/rejected error so the real stack trace stays
+   * reachable. Render-time diagnostics (unregistered id,
+   * component-render-error) are NOT here — each adapter collects those per
+   * render and merges both lists for `<DebugExperience>`.
+   *
+   * Note these are `Error` instances, so unlike the rest of the plan they do
+   * not survive a server/client serialization boundary intact — see the
+   * `metadata` note above. Adapters read them during the render that produced
+   * them.
+   */
+  diagnostics: Error[];
 }

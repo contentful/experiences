@@ -83,8 +83,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
  *   card:   defineComponent<CardProps>({ component: Card, resolveData: ... }),
  */
 export type Registration<Props extends object = Record<string, unknown>> =
-  | ComponentType<Props>
-  | ComponentConfig<Props>;
+  ComponentType<Props> | ComponentConfig<Props>;
 
 /**
  * Customer-supplied configuration for a coded Experience Template. Identical in
@@ -108,8 +107,7 @@ export interface ExperienceTemplateConfig<Props extends object = Record<string, 
  * registrations.
  */
 export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
-  | ComponentType<Props>
-  | ExperienceTemplateConfig<Props>;
+  ComponentType<Props> | ExperienceTemplateConfig<Props>;
 
 /**
  * Identity helper — returns the config as-is, but narrows the `resolveData`

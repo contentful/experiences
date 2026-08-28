@@ -11,6 +11,7 @@ const emptyPlan: PortableRenderPlan = {
   fallbackViewportIndex: 0,
   metadata: {},
   debug: false,
+  diagnostics: [],
 };
 
 function node(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
@@ -54,6 +55,7 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: one } });
     expect(container.innerHTML).toContain('Experience debug — 1 top-level node');
@@ -66,6 +68,7 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('experience template: page');
@@ -78,6 +81,7 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('Experience debug — 2 top-level nodes');
@@ -91,6 +95,7 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('registration');
@@ -107,10 +112,67 @@ describe('DebugExperience.svelte', () => {
       fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
+      diagnostics: [],
     };
 
     expect(() => render(DebugExperience, { props: { experience: plan } })).not.toThrow();
     const { container } = render(DebugExperience, { props: { experience: plan } });
     expect(container.innerHTML).toContain('[Circular]');
+  });
+
+  it('degrades a non-Error throw during serialization to a placeholder instead of crashing', () => {
+    const n = node('button');
+    // A customer's resolveData (or resolved design value) could stash a
+    // getter that throws a non-Error — a bare `throw null`/`throw 'reason'`
+    // rather than `throw new Error(...)`. JSON.stringify's replacer walk
+    // invokes it, and the safety net's job is to never throw itself either.
+    Object.defineProperty(n.props.resolved ?? (n.props.resolved = {}), 'poison', {
+      enumerable: true,
+      get(): never {
+        throw null;
+      },
+    });
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [n],
+      fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
+      diagnostics: [],
+    };
+
+    expect(() => render(DebugExperience, { props: { experience: plan } })).not.toThrow();
+    const { container } = render(DebugExperience, { props: { experience: plan } });
+    expect(container.innerHTML).toContain('could not serialize plan');
+  });
+});
+
+describe('DebugExperience.svelte — errors prop', () => {
+  const warning = new Error('No component registered for id "hero".');
+  const error = new Error('Component "card" threw while rendering: boom.');
+
+  it('stays collapsed and renders no error list when errors is empty or omitted', () => {
+    const { container } = render(DebugExperience, { props: { experience: emptyPlan } });
+    expect((container.querySelector('details') as HTMLDetailsElement).open).toBe(false);
+    expect(container.querySelector('[data-experiences-debug-errors]')).toBeNull();
+  });
+
+  it('auto-expands even without defaultOpen when there are errors', () => {
+    const { container } = render(DebugExperience, {
+      props: { experience: emptyPlan, errors: [warning] },
+    });
+    expect((container.querySelector('details') as HTMLDetailsElement).open).toBe(true);
+  });
+
+  it('renders a diagnostic list above the JSON dump', () => {
+    const { container } = render(DebugExperience, {
+      props: { experience: emptyPlan, errors: [warning, error] },
+    });
+    expect(container.querySelector('[data-experiences-debug-errors]')).not.toBeNull();
+    expect(container.innerHTML).toContain('No component registered for id "hero".');
+    expect(container.innerHTML).toContain('Component "card" threw while rendering: boom.');
+    expect(container.innerHTML.indexOf('data-experiences-debug-errors')).toBeLessThan(
+      container.innerHTML.indexOf('<pre')
+    );
   });
 });

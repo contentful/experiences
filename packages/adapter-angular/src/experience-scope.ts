@@ -27,6 +27,18 @@ export class ExperienceScope {
   private readonly experienceSource = signal<(() => RenderContext) | null>(null);
   private readonly configSource = signal<(() => Config) | null>(null);
   private readonly renderUnknownSource = signal<(() => Type<unknown>) | null>(null);
+  private readonly renderErrorSource = signal<(() => Type<unknown>) | null>(null);
+  /**
+   * Render-time diagnostics (unregistered id, a component that threw),
+   * reported by every `NodeRenderEngine` sharing this scope — there is one
+   * engine per `*cfNodes`/`*cfNode` directive instance, all connected to the
+   * same scope, so this is the one place their reports converge. Signal-backed
+   * rather than a plain array: `<cf-debug-experience>`'s `errors` input reads
+   * it reactively, so — unlike the React/Svelte adapters, which need an
+   * element-order trick or a `$state` mirror for this — nothing here depends
+   * on template order.
+   */
+  private readonly diagnosticsSignal = signal<Error[]>([]);
 
   readonly experience: Signal<RenderContext> = computed(() => {
     const read = this.experienceSource();
@@ -58,6 +70,18 @@ export class ExperienceScope {
     return read();
   });
 
+  readonly renderError: Signal<Type<unknown>> = computed(() => {
+    const read = this.renderErrorSource();
+    if (!read) {
+      throw new Error(
+        '[@contentful/experiences-angular] ExperienceScope was read before a renderer connected it.'
+      );
+    }
+    return read();
+  });
+
+  readonly diagnostics: Signal<Error[]> = this.diagnosticsSignal.asReadonly();
+
   connectExperience(read: () => RenderContext): void {
     this.experienceSource.set(read);
   }
@@ -68,5 +92,13 @@ export class ExperienceScope {
 
   connectRenderUnknown(read: () => Type<unknown>): void {
     this.renderUnknownSource.set(read);
+  }
+
+  connectRenderError(read: () => Type<unknown>): void {
+    this.renderErrorSource.set(read);
+  }
+
+  reportDiagnostic(error: Error): void {
+    this.diagnosticsSignal.update((prev) => [...prev, error]);
   }
 }

@@ -371,6 +371,18 @@ Investigation (consumer sweep): the only **SDK-internal** consumer of the contex
 
 Deferred: the single hook stands for now. Revisit if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
 
+### Svelte: no SSR recovery for `component-render-error`
+
+`<svelte:boundary onerror failed>` doesn't run its catching machinery under `svelte/server` — a throw during SvelteKit's server render propagates and fails the entire page; the boundary only catches client-side. React and Angular don't share this gap (React's per-node `<Suspense>` boundary degrades gracefully under streaming SSR too; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](./README.md#error-handling--troubleshooting) section for the full per-framework table.
+
+This is upstream Svelte behavior, not something fixable at the adapter level — `svelte/server` exposes no per-node recovery primitive below its single top-level `render()` call. The README's mitigation is a `handleError` hook, which turns the crash into a controlled response without giving per-node isolation. Revisit if Svelte ships SSR-aware error boundaries.
+
+### Angular: `component-render-error` isolation covers creation-time and adapter-driven resolution, not customer-internal later throws
+
+`NodeRenderEngine.createView` wraps `viewContainerRef.createComponent(...)` in try/catch, catching a throw from a component's constructor, template evaluation, or `ngOnInit`. `collect()` separately wraps its own `unit.resolution()` read, so a throw from `resolveNode`/`resolveDesign` recomputing on a later sync (a `resolveToken` that starts failing, say) also swaps that node to the error fallback, and recovers automatically once resolution succeeds again (tracked via `unit.resolutionFailed`, mirroring `attemptedComponentType`'s "don't retry the same failure every sync" pattern).
+
+Not caught: a throw inside the _customer_ component's own internals on a later change-detection pass (its own template expression, computed, or lifecycle hook) — that never touches adapter code, so nothing here catches it. A per-node `ErrorHandler` provider looks like the natural fix, since providers already flow per-node in this adapter, but doesn't work: `ApplicationRef.tick()` resolves `ErrorHandler` once, from the root injector, at construction, and never re-resolves it from whichever component's injector actually threw. This is a documented residual gap, not a partial fix. Revisit if Angular's error-handling internals change, or if there's a way to hook `ApplicationRef`'s zone-level error handling instead of DI.
+
 ---
 
 ## Common tasks

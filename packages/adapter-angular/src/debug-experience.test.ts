@@ -38,15 +38,27 @@ function experienceTemplateNode(id: string): PortableRenderNode {
 }
 
 function plan(nodes: PortableRenderNode[]): PortableRenderPlan {
-  return { viewports: VIEWPORTS, fallbackViewportIndex: 0, nodes, metadata: {}, debug: false };
+  return {
+    viewports: VIEWPORTS,
+    fallbackViewportIndex: 0,
+    nodes,
+    metadata: {},
+    debug: false,
+    diagnostics: [],
+  };
 }
 
 interface DebugResult {
   details: HTMLDetailsElement | null;
   text: string;
+  html: string;
 }
 
-function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): DebugResult {
+function renderDebug(
+  experience: PortableRenderPlan,
+  defaultOpen?: boolean,
+  errors?: Error[]
+): DebugResult {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
 
@@ -55,6 +67,9 @@ function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): Deb
   if (defaultOpen !== undefined) {
     fixture.componentRef.setInput('defaultOpen', defaultOpen);
   }
+  if (errors !== undefined) {
+    fixture.componentRef.setInput('errors', errors);
+  }
   fixture.detectChanges();
 
   const host = fixture.nativeElement as HTMLElement;
@@ -62,6 +77,7 @@ function renderDebug(experience: PortableRenderPlan, defaultOpen?: boolean): Deb
   return {
     details: host.querySelector<HTMLDetailsElement>('details[data-experiences-debug]'),
     text: host.textContent ?? '',
+    html: host.innerHTML,
   };
 }
 
@@ -114,5 +130,47 @@ describe('DebugExperience', () => {
 
     expect(() => renderDebug(plan([node]))).not.toThrow();
     expect(renderDebug(plan([node])).text).toContain('[Circular]');
+  });
+
+  it('degrades a non-Error throw during serialization to a placeholder instead of crashing', () => {
+    const node = componentNode('button', { label: 'Go' });
+    // A customer's resolveData (or resolved design value) could stash a
+    // getter that throws a non-Error — a bare `throw null`/`throw 'reason'`
+    // rather than `throw new Error(...)`. JSON.stringify's replacer walk
+    // invokes it, and the safety net's job is to never throw itself either.
+    node.props.resolved = {};
+    Object.defineProperty(node.props.resolved, 'poison', {
+      enumerable: true,
+      get(): never {
+        throw null;
+      },
+    });
+
+    expect(() => renderDebug(plan([node]))).not.toThrow();
+    expect(renderDebug(plan([node])).text).toContain('could not serialize plan');
+  });
+});
+
+describe('DebugExperience — errors input', () => {
+  const warning = new Error('No component registered for id "hero".');
+  const error = new Error('Component "card" threw while rendering: boom.');
+
+  it('stays collapsed and renders no error list when errors is empty or omitted', () => {
+    const { details, html } = renderDebug(plan([]));
+    expect(details!.open).toBe(false);
+    expect(html).not.toContain('data-experiences-debug-errors');
+  });
+
+  it('auto-expands even without defaultOpen when there are errors', () => {
+    const { details } = renderDebug(plan([]), undefined, [warning]);
+    expect(details!.open).toBe(true);
+  });
+
+  it('renders a diagnostic list above the JSON dump', () => {
+    const { html } = renderDebug(plan([]), undefined, [warning, error]);
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('No component registered for id "hero".');
+    expect(html).toContain('Component "card" threw while rendering: boom.');
+    expect(html.indexOf('data-experiences-debug-errors')).toBeLessThan(html.indexOf('<pre'));
   });
 });
