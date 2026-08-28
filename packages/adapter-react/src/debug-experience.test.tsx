@@ -5,7 +5,13 @@ import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experie
 
 import { DebugExperience } from './debug-experience';
 
-const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
+const emptyPlan: PortableRenderPlan = {
+  nodes: [],
+  viewports: [],
+  fallbackViewportIndex: 0,
+  metadata: {},
+  debug: false,
+};
 
 function node(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
@@ -44,6 +50,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
     };
     expect(renderToStaticMarkup(<DebugExperience experience={one} />)).toContain(
       'Experience debug — 1 top-level node'
@@ -55,6 +63,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
       'experience template: page'
@@ -66,6 +76,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button'), node('text')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
     expect(html).toContain('Experience debug — 2 top-level nodes');
@@ -77,6 +89,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
     expect(html).toContain('registration');
@@ -88,7 +102,13 @@ describe('DebugExperience', () => {
     const n = node('button');
     // A customer's resolveData could stash a self-referential object on props.
     n.props.resolved = { self: n.props };
-    const plan: PortableRenderPlan = { viewports: [], nodes: [n], fallbackViewportIndex: 0 };
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [n],
+      fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
+    };
 
     expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('[Circular]');

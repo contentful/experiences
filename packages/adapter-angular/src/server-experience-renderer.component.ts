@@ -42,7 +42,7 @@ import type { Config, RenderContext } from './types.js';
   // siblings of a comment, so nothing the adapter owns wraps them.
   template: `
     @if (experienceValue(); as experience) {
-      @if (debugValue()) {
+      @if (resolvedDebug()) {
         <cf-debug-experience [experience]="experience" />
       }
       <ng-container *cfNodes="experience.nodes"></ng-container>
@@ -51,7 +51,13 @@ import type { Config, RenderContext } from './types.js';
 })
 export class ServerExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
-  protected readonly debugValue = signal(false);
+  // `undefined` means "not bound" — distinct from an explicit `[debug]="false"`,
+  // which must be able to override a plan fetched with debug on.
+  private readonly debugValue = signal<boolean | undefined>(undefined);
+  /** The plan is the source of truth; the input overrides it. */
+  protected readonly resolvedDebug = computed(
+    () => this.debugValue() ?? this.experienceValue()?.debug ?? false
+  );
   private readonly configValue = signal<Config | null>(null);
   private readonly initialViewportIdValue = signal<string | undefined>(undefined);
   private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
@@ -68,19 +74,33 @@ export class ServerExperienceRendererComponent {
 
   /**
    * Viewport to render for, typically derived from the request's User-Agent.
-   * Falls back to the plan's fallback viewport when unset or unknown.
+   *
+   * Defaults to the viewport the plan was pre-resolved against
+   * (`fallbackViewportIndex`), so binding the same id on `fetchExperience` is
+   * enough — first paint then matches the pre-resolved design with no
+   * recompute. Bind this to render a different viewport than the design was
+   * resolved for.
    */
   @Input() set initialViewportId(value: string | undefined) {
     this.initialViewportIdValue.set(value);
   }
 
-  /** Arbitrary values passed through to descendants via `injectExperience()`. */
+  /**
+   * Per-render metadata override. The plan already carries whatever `metadata`
+   * the fetch ran with; this shallow-merges over it.
+   */
   @Input() set metadata(value: Record<string, unknown> | undefined) {
     this.metadataValue.set(value);
   }
 
-  /** Renders the resolved plan above the experience for inspection. */
-  @Input() set debug(value: boolean) {
+  /**
+   * Renders the resolved plan above the experience for inspection.
+   *
+   * Defaults to the `debug` the fetch ran with (carried on the plan). Bind it
+   * explicitly to override — `[debug]="false"` switches off a plan fetched with
+   * debug on.
+   */
+  @Input() set debug(value: boolean | undefined) {
     this.debugValue.set(value);
   }
 
@@ -96,13 +116,22 @@ export class ServerExperienceRendererComponent {
    */
   private readonly renderContext = computed<RenderContext>(() => {
     const experience = this.experienceValue();
-    const activeViewportIndex = experience
-      ? getViewportIndex(experience.viewports, this.initialViewportIdValue())
-      : 0;
+    const initialViewportId = this.initialViewportIdValue();
+    // No explicit seed means "whatever the plan was pre-resolved for" — keeps
+    // first paint aligned with `props.design` instead of recomputing.
+    const activeViewportIndex = !experience
+      ? 0
+      : initialViewportId === undefined
+        ? experience.fallbackViewportIndex
+        : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
-      debug: this.debugValue(),
-      metadata: { ...DEFAULT_CONTEXT.metadata, ...(this.metadataValue() ?? {}) },
+      debug: this.resolvedDebug(),
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(this.metadataValue() ?? {}),
+      },
       viewports: experience?.viewports ?? [],
       activeViewport: experience?.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT,
       activeViewportIndex,

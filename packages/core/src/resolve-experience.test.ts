@@ -585,7 +585,13 @@ describe('resolveExperience — experienceTemplates', () => {
   it('ignores sys.experienceTemplate entirely — it never reaches the plan', async () => {
     const plan = await resolveExperience(compositePayload(), emptyConfig);
     expect(plan).not.toHaveProperty('experienceTemplate');
-    expect(Object.keys(plan).sort()).toEqual(['fallbackViewportIndex', 'nodes', 'viewports']);
+    expect(Object.keys(plan).sort()).toEqual([
+      'debug',
+      'fallbackViewportIndex',
+      'metadata',
+      'nodes',
+      'viewports',
+    ]);
   });
 
   it("keeps a template node's own contentProperties and designProperties", async () => {
@@ -901,5 +907,79 @@ describe('resolveExperience — debug logging', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('resolveExperience — render context carried on the plan', () => {
+  const payload = (): ExperiencePayload => ({
+    viewports: VIEWPORTS,
+    nodes: [componentNode('button')],
+  });
+
+  it('carries metadata onto the plan so the renderer need not be passed it again', async () => {
+    const plan = await resolveExperience(payload(), emptyConfig, {
+      metadata: { slug: 'home', locale: 'en-US' },
+    });
+
+    expect(plan.metadata).toEqual({ slug: 'home', locale: 'en-US' });
+  });
+
+  it('defaults metadata to an empty object rather than undefined', async () => {
+    const plan = await resolveExperience(payload(), emptyConfig);
+
+    expect(plan.metadata).toEqual({});
+  });
+
+  it('carries debug onto the plan', async () => {
+    const on = await resolveExperience(payload(), emptyConfig, { debug: true });
+    const off = await resolveExperience(payload(), emptyConfig);
+
+    expect(on.debug).toBe(true);
+    expect(off.debug).toBe(false);
+  });
+
+  it('hands resolvers the same metadata object it puts on the plan', async () => {
+    // The whole point of carrying it: one source, so resolvers and components
+    // cannot disagree about what the page passed in.
+    let seen: Record<string, unknown> | undefined;
+    const config: ResolverConfig = {
+      components: {
+        button: {
+          resolveData: (ctx: { experience: { metadata: Record<string, unknown> } }) => {
+            seen = ctx.experience.metadata;
+            return {};
+          },
+        },
+      },
+    };
+
+    const plan = await resolveExperience(payload(), config, { metadata: { slug: 'home' } });
+
+    expect(seen).toBe(plan.metadata);
+  });
+
+  it('omits sourceMap entirely when none is supplied', async () => {
+    const plan = await resolveExperience(payload(), emptyConfig);
+
+    expect('sourceMap' in plan).toBe(false);
+  });
+
+  it('passes a supplied sourceMap through onto the plan untouched', async () => {
+    const sourceMap = {
+      version: 1,
+      variants: [],
+      spaces: ['space-id'],
+      environments: ['master'],
+      locales: ['en-US'],
+      entries: [{ entry: 'ref' }],
+      assets: [],
+      layers: [],
+      dataAssemblies: [],
+      nodes: { 'node-1': { field: 'title' } },
+    };
+
+    const plan = await resolveExperience(payload(), emptyConfig, { sourceMap });
+
+    expect(plan.sourceMap).toBe(sourceMap);
   });
 });

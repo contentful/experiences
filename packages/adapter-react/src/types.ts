@@ -2,10 +2,9 @@ import type { ComponentType } from 'react';
 
 import type {
   DesignPropValue,
-  ExperienceContext,
+  RenderContext,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 /**
@@ -47,15 +46,15 @@ export interface ContentfulExperienceTemplate {
 }
 
 /**
- * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — a render-time value that resolvers cannot see (they
- * run once before viewport resolution and are not re-triggered by viewport
- * changes). Exposed via `useExperience()` to any descendant of the renderer.
+ * Render-time experience context — `debug`, `metadata`, `viewports`, the active
+ * viewport, and the viewport the server pre-resolved design against.
+ *
+ * Re-exported from `@contentful/experiences-sdk-core` rather than declared here.
+ * It is plain data with no React dependency, and every adapter exposes the same
+ * shape through its own accessor idiom, so one declaration keeps the three
+ * adapters from drifting. Read it with `useExperience()`.
  */
-export interface RenderContext extends ExperienceContext {
-  activeViewport: ViewportDef;
-  activeViewportIndex: number;
-}
+export type { RenderContext };
 
 /**
  * Customer-supplied configuration for a single component. The `component`
@@ -92,7 +91,8 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
  *   card:   defineComponent<CardProps>({ component: Card, resolveData: ... }),
  */
 export type Registration<Props extends object = Record<string, unknown>> =
-  ComponentType<Props> | ComponentConfig<Props>;
+  | ComponentType<Props>
+  | ComponentConfig<Props>;
 
 /**
  * Customer-supplied configuration for a coded Experience Template. Identical in
@@ -116,7 +116,8 @@ export interface ExperienceTemplateConfig<Props extends object = Record<string, 
  * registrations.
  */
 export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
-  ComponentType<Props> | ExperienceTemplateConfig<Props>;
+  | ComponentType<Props>
+  | ExperienceTemplateConfig<Props>;
 
 /**
  * Identity helper — returns the config as-is, but narrows the `resolveData`

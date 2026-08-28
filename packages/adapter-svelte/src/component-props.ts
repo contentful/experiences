@@ -22,14 +22,17 @@ export interface ServerExperienceRendererProps {
   config: Config;
   initialViewportId?: string;
   /**
-   * Arbitrary per-render metadata, readable by descendants via
-   * `getExperience()` and by resolvers via `ctx.experience.metadata`.
+   * Per-render metadata override. The plan already carries whatever `metadata`
+   * the fetch ran with; this shallow-merges over it.
    */
   metadata?: Record<string, unknown>;
   /**
    * Observability switch. When on: renders the visible missing-component box,
    * turns the default `renderUnknown` fallback into the debug component, and
    * auto-mounts `<DebugExperience>` after the tree.
+   *
+   * Defaults to the `debug` the fetch ran with (carried on the plan). Set it
+   * explicitly to override.
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;

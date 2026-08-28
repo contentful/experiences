@@ -2,10 +2,9 @@ import type { Component } from 'svelte';
 
 import type {
   DesignPropValue,
-  ExperienceContext,
+  RenderContext,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 export type { ResolveContext, ResolveToken };
@@ -51,21 +50,15 @@ export interface ContentfulExperienceTemplate {
 }
 
 /**
- * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — a render-time value that resolvers cannot see.
- * Exposed via `getExperience()`.
+ * Render-time experience context — `debug`, `metadata`, `viewports`, the active
+ * viewport, and the viewport the server pre-resolved design against.
+ *
+ * Re-exported from `@contentful/experiences-sdk-core` rather than declared here.
+ * It is plain data with no React dependency, and every adapter exposes the same
+ * shape through its own accessor idiom, so one declaration keeps the three
+ * adapters from drifting. Read it with `getExperience()`.
  */
-export interface RenderContext extends ExperienceContext {
-  activeViewport: ViewportDef;
-  activeViewportIndex: number;
-  /**
-   * Viewport index the server pre-resolved design against (from
-   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
-   * as-is when `activeViewportIndex` matches, and recompute otherwise. Always a
-   * number — the plan field is required, so the match is a real comparison.
-   */
-  fallbackViewportIndex: number;
-}
+export type { RenderContext };
 
 /**
  * Customer-supplied configuration for a single component type. The `component`

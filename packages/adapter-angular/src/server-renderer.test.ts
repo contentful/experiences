@@ -241,6 +241,8 @@ describe('ServerExperienceRenderer', () => {
     const planWithMissing: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       nodes: [
         {
           nodeId: 'root',
@@ -343,6 +345,8 @@ describe('ServerExperienceRenderer', () => {
     const planWithResolved: PortableRenderPlan = {
       viewports: VIEWPORTS,
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       nodes: [
         {
           nodeId: 'r',
@@ -838,5 +842,64 @@ describe('toCss (Angular)', () => {
     expect(
       toCss({ backgroundColor: '#4f39f6', padding: '10px' }, { exclude: ['padding'] })
     ).toEqual({ backgroundColor: '#4f39f6' });
+  });
+});
+
+describe('ServerExperienceRenderer — render context carried on the plan', () => {
+  beforeEach(() => {
+    captureSink.splice(0);
+  });
+
+  const captureConfig: Config = { components: { capture: CapturingComponent } };
+
+  const buildPlan = (opts?: Parameters<typeof resolveExperience>[2]) =>
+    resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
+      captureConfig,
+      opts
+    );
+
+  it('reads metadata off the plan without it being bound on the renderer', async () => {
+    const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
+
+    render(plan, { config: captureConfig });
+
+    expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home', locale: 'en-US' });
+  });
+
+  it('reads debug off the plan without it being bound on the renderer', async () => {
+    const plan = await buildPlan({ debug: true });
+
+    render(plan, { config: captureConfig });
+
+    expect(captureSink[0]!.experience.debug).toBe(true);
+  });
+
+  it('shallow-merges the metadata input over the plan value', async () => {
+    const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
+
+    render(plan, { config: captureConfig, metadata: { locale: 'de-DE', extra: true } });
+
+    expect(captureSink[0]!.experience.metadata).toEqual({
+      slug: 'home',
+      locale: 'de-DE',
+      extra: true,
+    });
+  });
+
+  it('lets an explicit debug=false override a plan fetched with debug on', async () => {
+    const plan = await buildPlan({ debug: true });
+
+    render(plan, { config: captureConfig, debug: false });
+
+    expect(captureSink[0]!.experience.debug).toBe(false);
+  });
+
+  it('renders the debug panel from the plan alone', async () => {
+    const plan = await buildPlan({ debug: true });
+
+    const { html } = render(plan, { config: captureConfig });
+
+    expect(html).toContain('cf-debug-experience');
   });
 });

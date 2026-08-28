@@ -82,6 +82,7 @@ export type {
   ExperienceContext,
   ExperienceNode,
   ExperiencePayload,
+  ExperienceSourceMap,
   ExperienceSys,
   ExperienceTemplateNode,
   ExperienceTemplateRef,
@@ -114,10 +115,13 @@ export {
   PREVIEW_HOST,
   createClient,
   fetchExperience,
+  readSourceMap,
+  toExperiencePayload,
 } from '@contentful/experiences-client';
 export type {
   ClientOptions,
   CreateClientOptions,
   ExperienceOptions,
+  ExperienceResponse,
   ResolveOptions,
 } from '@contentful/experiences-client';

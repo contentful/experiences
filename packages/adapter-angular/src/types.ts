@@ -22,11 +22,10 @@ import type { Type } from '@angular/core';
 
 import type {
   DesignPropValue,
-  ExperienceContext,
   PortableRenderNode,
+  RenderContext,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 export type { ResolveContext, ResolveToken };
@@ -72,21 +71,15 @@ export interface ContentfulExperienceTemplate {
 }
 
 /**
- * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — a render-time value that resolvers cannot see.
- * Exposed via `injectExperience()`.
+ * Render-time experience context — `debug`, `metadata`, `viewports`, the active
+ * viewport, and the viewport the server pre-resolved design against.
+ *
+ * Re-exported from `@contentful/experiences-sdk-core` rather than declared here.
+ * It is plain data with no React dependency, and every adapter exposes the same
+ * shape through its own accessor idiom, so one declaration keeps the three
+ * adapters from drifting. Read it with `injectExperience()`.
  */
-export interface RenderContext extends ExperienceContext {
-  activeViewport: ViewportDef;
-  activeViewportIndex: number;
-  /**
-   * Viewport index the server pre-resolved design against (from
-   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
-   * as-is when `activeViewportIndex` matches, and recompute otherwise. Always a
-   * number — the plan field is required, so the match is a real comparison.
-   */
-  fallbackViewportIndex: number;
-}
+export type { RenderContext };
 
 /**
  * Customer-supplied configuration for a single component type. The `component`
@@ -119,7 +112,8 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
  *   card:   defineComponent<CardProps>({ component: CardComponent, resolveData: ... }),
  */
 export type Registration<Props extends object = Record<string, unknown>> =
-  Type<unknown> | ComponentConfig<Props>;
+  | Type<unknown>
+  | ComponentConfig<Props>;
 
 /**
  * Customer-supplied configuration for a coded Experience Template. Identical in
@@ -139,7 +133,8 @@ export interface ExperienceTemplateConfig<Props extends object = Record<string, 
 }
 
 export type ExperienceTemplateRegistration<Props extends object = Record<string, unknown>> =
-  Type<unknown> | ExperienceTemplateConfig<Props>;
+  | Type<unknown>
+  | ExperienceTemplateConfig<Props>;
 
 export function defineExperienceTemplate<Props extends object = Record<string, unknown>>(
   config: ExperienceTemplateConfig<Props>

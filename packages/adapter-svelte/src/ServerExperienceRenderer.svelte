@@ -36,17 +36,31 @@
     config,
     initialViewportId,
     metadata,
-    debug = false,
+    debug,
     renderUnknown = MissingComponent,
   }: ServerExperienceRendererProps = $props();
 
+  // The plan is the source of truth; props override. `??` rather than `||` so an
+  // explicit `debug={false}` can switch off a plan fetched with debug on.
+  const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
+
   function buildContext(): RenderContext {
     const viewports = experience?.viewports ?? [];
-    const idx = experience ? getViewportIndex(experience.viewports, initialViewportId) : 0;
+    // No explicit seed means "whatever the plan was pre-resolved for" — keeps
+    // first paint aligned with `props.design` instead of recomputing.
+    const idx = !experience
+      ? 0
+      : initialViewportId === undefined
+        ? experience.fallbackViewportIndex
+        : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
-      debug,
-      metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
+      debug: resolvedDebug,
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(metadata ?? {}),
+      },
       viewports,
       activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
       activeViewportIndex: idx,
@@ -59,7 +73,7 @@
 </script>
 
 {#if experience}
-  {#if debug}
+  {#if resolvedDebug}
     <DebugExperience {experience} />
   {/if}
   <NodesRenderer
