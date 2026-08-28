@@ -1252,7 +1252,6 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       />
     );
 
-    // `slug` survives from the plan, `locale` is overridden, `extra` is added.
     expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'de-DE', extra: true });
   });
 
@@ -1286,8 +1285,6 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   });
 
   it('seeds the active viewport from the plan when no initialViewportId is passed', async () => {
-    // The point of the default: pass the viewport once, to `fetchExperience`, and
-    // first paint lines up with the design the server already resolved.
     const { seen, config } = captureSetup();
     const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
 
@@ -1305,8 +1302,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />
     );
 
-    // Rendering a viewport the design was not pre-resolved for is legal — the
-    // renderer recomputes from `designRaw` — so the two indices now differ.
+    // Legal: the renderer recomputes design from `designRaw` for the new viewport.
     expect(seen[0].activeViewportIndex).toBe(2);
     expect(seen[0].fallbackViewportIndex).toBe(1);
   });

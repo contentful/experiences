@@ -1,12 +1,8 @@
 /**
- * Per-render runtime context. Read explicitly by customer components through
- * their adapter's accessor (`useExperience()` / `getExperience()` /
- * `injectExperience()`), and passed to every `resolveData` hook as
- * `ctx.experience`.
- *
- * It is NOT spread onto component props. Customer components receive only the
- * props they declare; coupling to the SDK is opt-in and visible at the call
- * site. See `PortableRenderNode.props` for what a component actually receives.
+ * Per-render runtime context. Read through the adapter's accessor
+ * (`useExperience()` / `getExperience()` / `injectExperience()`), and passed to
+ * every `resolveData` hook as `ctx.experience`. Never spread onto component
+ * props — components receive only the props they declare.
  *
  * `viewports` (the *list*) is here so customer resolvers can inspect what
  * viewports an Experience declares (e.g. "is there a mobile viewport?").
@@ -24,50 +20,26 @@
 export interface ExperienceContext {
   debug: boolean;
   /**
-   * Free-form, customer-owned pass-through for application data — request
-   * context, locale, feature flags, whatever the page needs its components to
-   * see. The SDK never writes a key here; it merges the caller's object over an
-   * empty default, so every key is the customer's.
+   * Free-form pass-through for application data. The SDK never writes a key
+   * here. Untyped on purpose — narrow at the read site.
    *
-   * Deliberately untyped. There is no first-class typed slot beside this one:
-   * a second customer-owned channel would duplicate this one with no way to
-   * explain which to reach for. Narrow at the read site if you want types
-   * (`useExperience().metadata as PageMeta`).
-   *
-   * Contents must be plain serializable data. The value rides on
-   * `PortableRenderPlan` and therefore crosses framework server/client
-   * boundaries (React Server Components in particular) — functions, class
-   * instances, and client handles will not survive the trip.
+   * Must be plain serializable data: it rides on `PortableRenderPlan`, which
+   * crosses server/client boundaries.
    */
   metadata: Record<string, unknown>;
   viewports: ViewportDef[];
 }
 
 /**
- * Render-time experience context: the core `ExperienceContext` plus the
- * viewport state that only exists once rendering starts.
+ * `ExperienceContext` plus the viewport state that only exists at render time.
  *
- * Declared here rather than per-adapter because it is plain data with no
- * framework dependency — every adapter exposes exactly this shape through its
- * own accessor idiom (`useExperience()` in React, `getExperience()` in Svelte,
- * `injectExperience()` in Angular) and re-exports the type unchanged. One
- * declaration means a field added here reaches all three adapters at once
- * instead of needing four hand-edits that nothing verifies.
- *
- * The active viewport is absent from `ExperienceContext` on purpose: resolvers
- * run once, before viewport resolution, and are not re-triggered by viewport
- * changes, so exposing it there would be a footgun.
+ * Declared here, not per-adapter: it is plain data, so every adapter re-exports
+ * this same type and a field added here reaches all three at once.
  */
 export interface RenderContext extends ExperienceContext {
   activeViewport: ViewportDef;
   activeViewportIndex: number;
-  /**
-   * Viewport index the server pre-resolved design against (from
-   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
-   * as-is when `activeViewportIndex` matches, and recompute from
-   * `props.designRaw` otherwise. Always a number — the plan field is required,
-   * so the match is a real comparison.
-   */
+  /** Mirrors `PortableRenderPlan.fallbackViewportIndex`. */
   fallbackViewportIndex: number;
 }
 
@@ -198,22 +170,12 @@ export interface ExperienceSys {
 }
 
 /**
- * Content source map for an Experience, as returned under
- * `extensions.sourceMap` when the request opts in.
+ * Content source map, returned under `extensions.sourceMap` when the request
+ * opts in. The SDK passes it through without interpreting it, so collections
+ * stay `unknown[]` — `core` takes no dependency on the delivery client. Narrow
+ * with `ContentfulViewDelivery.HydratedExperienceViewExtensionsSourceMap`.
  *
- * The SDK does not interpret this — it fetches it on request and passes it
- * through on the plan for inspector / Live Preview tooling to consume. So the
- * scalar fields are typed and the collections are left as `unknown[]`: mirroring
- * the delivery client's full nested shape would add a large surface to `core`
- * for a value nothing here reads, and `core` carries no dependency on the
- * delivery client.
- *
- * Narrow it with `ContentfulViewDelivery.HydratedExperienceViewExtensionsSourceMap`
- * (re-exported from `@contentful/experiences-client`, and from every adapter)
- * when you need the full shape.
- *
- * Mirrors `HydratedExperienceViewExtensionsSourceMap` from
- * `@contentful/experience-delivery`.
+ * Mirrors `HydratedExperienceViewExtensionsSourceMap`.
  */
 export interface ExperienceSourceMap {
   version: number;
@@ -338,26 +300,13 @@ export interface PortableRenderPlan {
    */
   fallbackViewportIndex: number;
   /**
-   * The `metadata` the resolve step ran with, carried forward so the renderer
-   * does not need it passed a second time.
-   *
-   * Before this existed, a page had to hand the same object to both
-   * `fetchExperience` and the renderer — resolvers read one copy, components
-   * read the other, and nothing kept them in sync. The plan is now the source
-   * of truth and the renderer's `metadata` prop is an override that merges over
-   * it. Always an object; `{}` when the caller passed none.
+   * The `metadata` the resolve step ran with, so the renderer does not need it
+   * passed again. The renderer's `metadata` prop merges over this. `{}` when
+   * the caller passed none.
    */
   metadata: Record<string, unknown>;
-  /**
-   * The `debug` flag the resolve step ran with, carried forward for the same
-   * reason as `metadata`. The renderer's `debug` prop overrides it when
-   * explicitly set; omit the prop and fetch-time `debug` drives rendering too.
-   */
+  /** The `debug` flag the resolve step ran with. The renderer's prop overrides it. */
   debug: boolean;
-  /**
-   * Content source map, present only when the fetch opted in via
-   * `withSourceMap`. Absent otherwise — it is large, so it is never fetched by
-   * default.
-   */
+  /** Present only when the fetch opted in via `withSourceMap`. */
   sourceMap?: ExperienceSourceMap;
 }

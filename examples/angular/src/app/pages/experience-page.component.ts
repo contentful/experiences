@@ -5,11 +5,8 @@ import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
 
 /**
- * Renders the plan the Express layer already resolved.
- *
- * Only `config` is bound alongside the plan: `metadata`, `debug`, and the
- * viewport the design was pre-resolved against all travel on the plan. `config`
- * cannot — it holds component classes, which do not survive `TransferState`.
+ * Renders the plan the Express layer already resolved. Only `config` is bound
+ * alongside it — component classes cannot survive `TransferState`.
  *
  * `<cf-server-experience>` resolves the active viewport once and never
  * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)

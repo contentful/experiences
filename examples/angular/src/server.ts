@@ -59,8 +59,7 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const debug = debugParam === 'true' || debugParam === '1';
   const locale = url.searchParams.get('locale') ?? 'en-US';
   const initialViewportId = detectViewportFromUserAgent(req.headers['user-agent'] ?? '');
-  // `metadata` is opaque to the SDK — it is handed back to `resolveData` hooks
-  // and to `injectExperience().metadata`. `card`'s hook reads both keys.
+  // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
   try {
@@ -80,18 +79,15 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
         config: experienceConfig,
         metadata,
         debug,
-        // Pre-resolve design against the UA-detected viewport so SSR paints
-        // correct design on first render.
         initialViewportId,
       }
     );
 
-    // `metadata`, `debug`, and the viewport ride along on the plan, so none of
-    // them need to be relayed to the component separately.
+    // metadata, debug, and the viewport ride along on the plan.
     return { slug, experience, notFound: false };
   } catch (error) {
     if (error instanceof NotFoundError) {
-      // No plan to carry anything, so `debug` comes along for the not-found view.
+      // No plan to carry `debug`, so relay it for the not-found view.
       return { slug, experience: null, debug, notFound: true };
     }
     throw error;

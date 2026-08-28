@@ -21,18 +21,12 @@ export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   initialViewportId?: string;
-  /**
-   * Per-render metadata override. The plan already carries whatever `metadata`
-   * the fetch ran with; this shallow-merges over it.
-   */
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**
    * Observability switch. When on: renders the visible missing-component box,
    * turns the default `renderUnknown` fallback into the debug component, and
-   * auto-mounts `<DebugExperience>` after the tree.
-   *
-   * Defaults to the `debug` the fetch ran with (carried on the plan). Set it
-   * explicitly to override.
+   * auto-mounts `<DebugExperience>` after the tree. Defaults to the plan's `debug`.
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;

@@ -40,27 +40,15 @@ export interface ClientExperienceRendererProps {
   config: Config;
   /**
    * Viewport to render for, typically derived from the request's User-Agent.
-   *
-   * Defaults to the viewport the plan was pre-resolved against
-   * (`fallbackViewportIndex`), so passing the same id to `fetchExperience` is
-   * enough — first paint then matches the pre-resolved design with no
-   * client-side recompute. Set this to render a different viewport than the one
-   * the design was resolved for.
+   * Defaults to the viewport the plan was pre-resolved against.
    */
   initialViewportId?: string;
-  /**
-   * Per-render metadata override. The plan already carries whatever `metadata`
-   * the fetch ran with, so passing this again is only needed to add or replace
-   * keys at render time — it shallow-merges over `experience.metadata`.
-   */
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**
    * Observability switch. When on: renders the visible missing-component box,
    * turns the default `renderUnknown` fallback into the debug component, and
-   * auto-mounts `<DebugExperience>` after the tree.
-   *
-   * Defaults to the `debug` the fetch ran with (carried on the plan). Set it
-   * explicitly to override.
+   * auto-mounts `<DebugExperience>` after the tree. Defaults to the plan's `debug`.
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;
@@ -75,11 +63,8 @@ export function ClientExperienceRenderer({
   renderUnknown = MissingComponent,
 }: ClientExperienceRendererProps): ReactNode {
   if (!experience) return null;
-  // Plan is the source of truth; props override. See the note in `server-renderer.tsx`.
   const resolvedDebug = debug ?? experience.debug;
-  // Seed from the plan's pre-resolved viewport when no explicit id is given, so
-  // first paint matches the server renderer byte-for-byte before matchMedia
-  // takes over. See `server-renderer.tsx`.
+  // Seed from the plan so first paint matches the server renderer.
   const seedViewportId =
     initialViewportId ?? experience.viewports[experience.fallbackViewportIndex]?.id;
   const { activeViewportIndex } = useActiveViewport(experience.viewports, seedViewportId);

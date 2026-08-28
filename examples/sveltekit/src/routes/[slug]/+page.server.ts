@@ -28,18 +28,13 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       },
       {
         config: experienceConfig,
-        // `metadata` is opaque to the SDK: it reaches `resolveData` hooks as
-        // `ctx.experience.metadata` and components as `getExperience().metadata`.
         metadata,
         debug,
-        // Pre-resolve design against the UA-detected viewport so SSR paints
-        // correct design on first render.
         initialViewportId,
       }
     );
 
-    // `metadata`, `debug`, and the viewport ride along on the plan, so the page
-    // does not have to hand them to the renderer a second time.
+    // metadata, debug, and the viewport ride along on the plan.
     return { experience, previewMode };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Experience not found');

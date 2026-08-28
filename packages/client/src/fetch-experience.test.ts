@@ -345,8 +345,7 @@ describe('fetchExperience — source map', () => {
   });
 
   it('forwards no source map when the flag is off, even if the response carries one', async () => {
-    // Guards against a stray `extensions.sourceMap` (a caller-supplied client
-    // configured elsewhere, say) leaking onto the plan unasked.
+    // Guards against a stray `extensions.sourceMap` leaking onto the plan unasked.
     mockGet.mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
@@ -385,9 +384,6 @@ describe('fetchExperience — source map', () => {
       resolveOptions
     );
 
-    // `extensions` stays on the object (the narrowing is type-level, not a copy),
-    // but the resolver ignores it — what matters is that the source map reaches
-    // the plan through the dedicated option rather than by accident.
     const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0];
     expect(payloadArg.nodes).toEqual(mockPayload.nodes);
     expect(payloadArg.viewports).toEqual(mockPayload.viewports);

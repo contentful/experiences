@@ -81,12 +81,7 @@ export interface ResolveExperienceOptions {
    * viewport. Defaults to viewport[0] when unset or unknown.
    */
   initialViewportId?: string;
-  /**
-   * Content source map to carry through onto the plan. `fetchExperience` passes
-   * the delivery response's `extensions.sourceMap` here when the caller asked
-   * for it; a direct `resolveExperience` caller can pass one it fetched itself.
-   * Omitted means the plan carries no source map.
-   */
+  /** Carried onto the plan as-is. Omit for no source map. */
   sourceMap?: ExperienceSourceMap;
 }
 
@@ -375,9 +370,8 @@ export async function resolveExperience(
   }
   log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
 
-  // `metadata` and `debug` ride along on the plan so the renderer does not have
-  // to be handed them a second time. `experience.metadata` is the already-merged
-  // object the resolvers saw, so both halves read exactly the same values.
+  // Reuse `experience.metadata` rather than re-merging, so resolvers and the
+  // renderer read the same object.
   const plan: PortableRenderPlan = {
     viewports: payload.viewports,
     nodes,

@@ -11,11 +11,7 @@ import type { PortableRenderPlan } from '@contentful/experiences-angular';
  */
 export interface ExperienceRouteData {
   slug: string;
-  /**
-   * The resolved plan. It carries its own `metadata`, `debug`, and pre-resolved
-   * viewport, so none of those are relayed separately — the renderer reads them
-   * off the plan.
-   */
+  /** Carries its own `metadata`, `debug`, and pre-resolved viewport. */
   experience: PortableRenderPlan | null;
   /** Only set when there is no plan to read it from. */
   debug?: boolean;

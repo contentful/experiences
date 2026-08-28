@@ -939,8 +939,7 @@ describe('resolveExperience — render context carried on the plan', () => {
   });
 
   it('hands resolvers the same metadata object it puts on the plan', async () => {
-    // The whole point of carrying it: one source, so resolvers and components
-    // cannot disagree about what the page passed in.
+    // One source, so resolvers and components cannot disagree.
     let seen: Record<string, unknown> | undefined;
     const config: ResolverConfig = {
       components: {

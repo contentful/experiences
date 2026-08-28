@@ -41,12 +41,11 @@
     renderUnknown = MissingComponent,
   }: ClientExperienceRendererProps = $props();
 
-  // Plan is the source of truth; props override. See ServerExperienceRenderer.
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
   const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
 
   const viewports = $derived(experience?.viewports ?? []);
-  // Seed from the plan's pre-resolved viewport when no explicit id is given, so
-  // first paint matches the server renderer. See ServerExperienceRenderer.
+  // Seed from the plan so first paint matches the server renderer.
   const seedViewportId = $derived(
     initialViewportId ?? experience?.viewports[experience.fallbackViewportIndex]?.id
   );

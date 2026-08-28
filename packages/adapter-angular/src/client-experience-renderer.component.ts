@@ -51,10 +51,8 @@ import type { Config, RenderContext } from './types.js';
 })
 export class ClientExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
-  // `undefined` means "not bound" — distinct from an explicit `[debug]="false"`,
-  // which must be able to override a plan fetched with debug on.
+  // `undefined` means "not bound", distinct from an explicit `[debug]="false"`.
   private readonly debugValue = signal<boolean | undefined>(undefined);
-  /** The plan is the source of truth; the input overrides it. */
   protected readonly resolvedDebug = computed(
     () => this.debugValue() ?? this.experienceValue()?.debug ?? false
   );
@@ -80,20 +78,14 @@ export class ClientExperienceRendererComponent {
     this.initialViewportIdValue.set(value);
   }
 
-  /**
-   * Per-render metadata override. The plan already carries whatever `metadata`
-   * the fetch ran with; this shallow-merges over it.
-   */
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   @Input() set metadata(value: Record<string, unknown> | undefined) {
     this.metadataValue.set(value);
   }
 
   /**
-   * Renders the resolved plan above the experience for inspection.
-   *
-   * Defaults to the `debug` the fetch ran with (carried on the plan). Bind it
-   * explicitly to override — `[debug]="false"` switches off a plan fetched with
-   * debug on.
+   * Renders the resolved plan above the experience for inspection. Defaults to
+   * the plan's `debug`; `[debug]="false"` overrides a debug-on plan.
    */
   @Input() set debug(value: boolean | undefined) {
     this.debugValue.set(value);
@@ -108,8 +100,7 @@ export class ClientExperienceRendererComponent {
   // a single input. See injectActiveViewport's docblock.
   private readonly tracker = injectActiveViewport(
     () => this.experienceValue()?.viewports ?? [],
-    // Seed from the plan's pre-resolved viewport when no explicit id is bound, so
-    // first paint matches the server renderer. See ServerExperienceRenderer.
+    // Seed from the plan so first paint matches the server renderer.
     () => {
       const explicit = this.initialViewportIdValue();
       if (explicit !== undefined) return explicit;

@@ -51,10 +51,8 @@ import type { Config, RenderContext } from './types.js';
 })
 export class ServerExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
-  // `undefined` means "not bound" — distinct from an explicit `[debug]="false"`,
-  // which must be able to override a plan fetched with debug on.
+  // `undefined` means "not bound", distinct from an explicit `[debug]="false"`.
   private readonly debugValue = signal<boolean | undefined>(undefined);
-  /** The plan is the source of truth; the input overrides it. */
   protected readonly resolvedDebug = computed(
     () => this.debugValue() ?? this.experienceValue()?.debug ?? false
   );
@@ -74,31 +72,20 @@ export class ServerExperienceRendererComponent {
 
   /**
    * Viewport to render for, typically derived from the request's User-Agent.
-   *
-   * Defaults to the viewport the plan was pre-resolved against
-   * (`fallbackViewportIndex`), so binding the same id on `fetchExperience` is
-   * enough — first paint then matches the pre-resolved design with no
-   * recompute. Bind this to render a different viewport than the design was
-   * resolved for.
+   * Defaults to the viewport the plan was pre-resolved against.
    */
   @Input() set initialViewportId(value: string | undefined) {
     this.initialViewportIdValue.set(value);
   }
 
-  /**
-   * Per-render metadata override. The plan already carries whatever `metadata`
-   * the fetch ran with; this shallow-merges over it.
-   */
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   @Input() set metadata(value: Record<string, unknown> | undefined) {
     this.metadataValue.set(value);
   }
 
   /**
-   * Renders the resolved plan above the experience for inspection.
-   *
-   * Defaults to the `debug` the fetch ran with (carried on the plan). Bind it
-   * explicitly to override — `[debug]="false"` switches off a plan fetched with
-   * debug on.
+   * Renders the resolved plan above the experience for inspection. Defaults to
+   * the plan's `debug`; `[debug]="false"` overrides a debug-on plan.
    */
   @Input() set debug(value: boolean | undefined) {
     this.debugValue.set(value);
@@ -117,8 +104,7 @@ export class ServerExperienceRendererComponent {
   private readonly renderContext = computed<RenderContext>(() => {
     const experience = this.experienceValue();
     const initialViewportId = this.initialViewportIdValue();
-    // No explicit seed means "whatever the plan was pre-resolved for" — keeps
-    // first paint aligned with `props.design` instead of recomputing.
+    // Default to the pre-resolved viewport so first paint needs no recompute.
     const activeViewportIndex = !experience
       ? 0
       : initialViewportId === undefined

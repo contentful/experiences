@@ -40,14 +40,12 @@
     renderUnknown = MissingComponent,
   }: ServerExperienceRendererProps = $props();
 
-  // The plan is the source of truth; props override. `??` rather than `||` so an
-  // explicit `debug={false}` can switch off a plan fetched with debug on.
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
   const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
 
   function buildContext(): RenderContext {
     const viewports = experience?.viewports ?? [];
-    // No explicit seed means "whatever the plan was pre-resolved for" — keeps
-    // first paint aligned with `props.design` instead of recomputing.
+    // Default to the pre-resolved viewport so first paint needs no recompute.
     const idx = !experience
       ? 0
       : initialViewportId === undefined

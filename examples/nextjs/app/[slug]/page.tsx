@@ -34,18 +34,13 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
     },
     {
       config: experienceConfig,
-      // `metadata` is opaque to the SDK: it reaches `resolveData` hooks as
-      // `ctx.experience.metadata` and components as `useExperience().metadata`.
       metadata: { slug: experienceId, locale },
       debug,
-      // Pre-resolve design against the UA-detected viewport so SSR paints
-      // correct design on first render.
       initialViewportId,
     }
   );
 
-  // `metadata`, `debug`, and the viewport all ride along on the resolved plan,
-  // so the renderer only needs `config` — component references cannot travel on
-  // the plan across the RSC boundary, so that one stays a prop.
+  // metadata, debug, and the viewport ride along on the plan; only `config` has
+  // to be passed twice, since component references cannot be serialized onto it.
   return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
 }

@@ -11,22 +11,12 @@ export type ExperienceOptions = {
   experienceId: string;
   locale?: string;
   /**
-   * Request the content source map alongside the experience. The resolved map
-   * lands on `PortableRenderPlan.sourceMap`; without this flag that field is
-   * absent.
+   * Fetch the content source map alongside the experience, onto
+   * `PortableRenderPlan.sourceMap`. Defaults to `false` because the map is large.
    *
-   * Two consequences worth knowing before switching it on:
-   *
-   *  - The map is large. It carries per-node field provenance for every entry,
-   *    asset, and layer in the experience, which is why it is opt-in rather
-   *    than always fetched.
-   *  - The request becomes a POST. The source-map opt-in is a request-body
-   *    field, and the delivery API only accepts a body on `getWithOverrides`,
-   *    so this path trades the plain `GET`'s CDN cacheability for the map.
-   *    Everything else about the request — query parameters, tokens, headers,
-   *    and the response shape — is identical.
-   *
-   * Defaults to `false`.
+   * Switches the request from `GET` to `POST` (the opt-in is a request-body
+   * field, only accepted by `getWithOverrides`), so it is not CDN-cacheable.
+   * Query params, auth, and the response shape are unchanged.
    */
   withSourceMap?: boolean;
 };
@@ -114,17 +104,10 @@ export async function fetchExperience(
     withSourceMap: Boolean(withSourceMap),
   });
 
-  // The delivery API gates the ExO entity shapes this SDK reads (`component` /
-  // `experienceTemplate` links) behind an alpha-feature header. Since
-  // `@contentful/experience-delivery@1.0.0-dev.7` the client sends it on every
-  // request itself, so a caller-supplied `{ client }` is covered too and we no
-  // longer set it here.
-  //
-  // Two methods hit the same endpoint: `get` is a plain GET, `getWithOverrides`
-  // a POST that accepts a request body. `extensions` — and therefore the
-  // source-map opt-in — exists only on the POST's request type, so asking for a
-  // source map is what decides which one runs. Query params, auth, and the
-  // response shape are identical either way.
+  // Both methods hit the same endpoint; only the POST accepts a body, and
+  // `extensions` (the source-map opt-in) lives there. Otherwise identical.
+  // The alpha-feature header is sent by the delivery client itself since
+  // 1.0.0-dev.7, so a caller-supplied `{ client }` is covered too.
   const response = withSourceMap
     ? await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
         locale,
@@ -136,9 +119,7 @@ export async function fetchExperience(
   const sourceMap = withSourceMap ? readSourceMap(response) : undefined;
 
   log.lazy('received raw payload', () => payload);
-  if (withSourceMap) {
-    log.log(sourceMap ? 'source map present on response' : 'source map requested but not returned');
-  }
+  if (withSourceMap && !sourceMap) log.log('source map requested but not returned');
 
   return resolveExperience(payload, config, {
     metadata,

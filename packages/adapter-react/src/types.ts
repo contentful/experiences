@@ -45,15 +45,7 @@ export interface ContentfulExperienceTemplate {
   resolved?: Record<string, unknown>;
 }
 
-/**
- * Render-time experience context — `debug`, `metadata`, `viewports`, the active
- * viewport, and the viewport the server pre-resolved design against.
- *
- * Re-exported from `@contentful/experiences-sdk-core` rather than declared here.
- * It is plain data with no React dependency, and every adapter exposes the same
- * shape through its own accessor idiom, so one declaration keeps the three
- * adapters from drifting. Read it with `useExperience()`.
- */
+/** Render-time experience context, read with `useExperience()`. Declared in core so all adapters share one shape. */
 export type { RenderContext };
 
 /**
