@@ -29,6 +29,8 @@ import type { Config } from '../types.js';
 export interface RenderOptions {
   config: Config;
   initialViewportId?: string;
+  metadata?: Record<string, unknown>;
+  debug?: boolean;
   renderUnknown?: Type<unknown>;
 }
 
@@ -57,6 +59,12 @@ export function render(
   // component's own defaults stay under test.
   if (options.initialViewportId !== undefined) {
     componentRef.setInput('initialViewportId', options.initialViewportId);
+  }
+  if (options.metadata !== undefined) {
+    componentRef.setInput('metadata', options.metadata);
+  }
+  if (options.debug !== undefined) {
+    componentRef.setInput('debug', options.debug);
   }
   if (options.renderUnknown !== undefined) {
     componentRef.setInput('renderUnknown', options.renderUnknown);

@@ -35,8 +35,13 @@
     experience,
     config,
     initialViewportId,
+    metadata,
+    debug,
     renderUnknown = MissingComponent,
   }: ServerExperienceRendererProps = $props();
+
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
 
   function buildContext(): RenderContext {
     const viewports = experience?.viewports ?? [];
@@ -48,8 +53,12 @@
         : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
-      debug: experience?.debug ?? false,
-      metadata: experience?.metadata ?? DEFAULT_CONTEXT.metadata,
+      debug: resolvedDebug,
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(metadata ?? {}),
+      },
       viewports,
       activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
       activeViewportIndex: idx,
@@ -62,7 +71,7 @@
 </script>
 
 {#if experience}
-  {#if experience.debug}
+  {#if resolvedDebug}
     <DebugExperience {experience} />
   {/if}
   <NodesRenderer

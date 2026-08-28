@@ -254,8 +254,9 @@ describe('ServerExperienceRenderer', () => {
 
     const { container: debugContainer } = render(ServerExperienceRenderer, {
       props: {
-        experience: { ...planWithMissing, debug: true },
+        experience: planWithMissing,
         config: justContainer,
+        debug: true,
       },
     });
     expect(debugContainer.innerHTML).toContain('data-experiences-missing="NotRegistered"');
@@ -281,7 +282,7 @@ describe('ServerExperienceRenderer', () => {
     expect(off.innerHTML).not.toContain('data-experiences-debug');
 
     const { container: on } = render(ServerExperienceRenderer, {
-      props: { experience: { ...plan, debug: true }, config: captureConfig },
+      props: { experience: plan, config: captureConfig, debug: true },
     });
     expect(on.innerHTML).toContain('data-experiences-debug');
     expect(on.innerHTML).toContain('Experience debug');
@@ -291,11 +292,10 @@ describe('ServerExperienceRenderer', () => {
     const captureConfig: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
-      captureConfig,
-      { metadata: { slug: 'home' } }
+      captureConfig
     );
     render(ServerExperienceRenderer, {
-      props: { experience: plan, config: captureConfig },
+      props: { experience: plan, config: captureConfig, metadata: { slug: 'home' } },
     });
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home' });
   });
@@ -954,7 +954,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       opts
     );
 
-  it('reads metadata off the plan — there is no renderer prop for it', async () => {
+  it('reads metadata off the plan without it being passed to the renderer', async () => {
     const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
 
     render(ServerExperienceRenderer, { props: { experience: plan, config: captureConfig } });
@@ -962,12 +962,40 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
-  it('reads debug off the plan — there is no renderer prop for it', async () => {
+  it('reads debug off the plan without it being passed to the renderer', async () => {
     const plan = await buildPlan({ debug: true });
 
     render(ServerExperienceRenderer, { props: { experience: plan, config: captureConfig } });
 
     expect(captureSink[0]!.experience.debug).toBe(true);
+  });
+
+  it('shallow-merges the metadata prop over the plan value', async () => {
+    const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
+
+    render(ServerExperienceRenderer, {
+      props: {
+        experience: plan,
+        config: captureConfig,
+        metadata: { locale: 'de-DE', extra: true },
+      },
+    });
+
+    expect(captureSink[0]!.experience.metadata).toEqual({
+      slug: 'home',
+      locale: 'de-DE',
+      extra: true,
+    });
+  });
+
+  it('lets an explicit debug={false} override a plan fetched with debug on', async () => {
+    const plan = await buildPlan({ debug: true });
+
+    render(ServerExperienceRenderer, {
+      props: { experience: plan, config: captureConfig, debug: false },
+    });
+
+    expect(captureSink[0]!.experience.debug).toBe(false);
   });
 
   it('renders the debug panel from the plan alone', async () => {
