@@ -10,7 +10,8 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
 - **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
-- **Two ways to consume design** (spacing, color, typography, layout), both fed by the same resolved values: `Section` declares the design keys it uses as **named props** and destructures them; `Heading`, `Text`, `Button`, `Image`, and `RichText` read the whole record with **`useDesignValues()`** and pipe it through `toCss()`. Prefer named props when you know the keys — a component that collects leftovers with `...rest` and forwards them to a DOM element will emit camelCase design keys as invalid HTML attributes.
+- **Design values as props** (spacing, color, typography, layout): every component declares the design keys it consumes as **named props** and destructures them. That is the recommended styling contract, and it's what all nine components here do. Don't collect leftovers with `...rest` and forward them to a DOM element — design keys are camelCase prop names, not HTML attributes, so React warns and they land in the markup as junk.
+- **One escape-hatch demo**: `components/Card.tsx` styles itself from props like the rest, but its nested `CardCta` child — not a registered component, so it has no props of its own — reads the card's design off context with **`useDesignValues()`**. That's the case props can't cover.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
 - **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
 
@@ -115,13 +116,15 @@ examples/nextjs/
 │   ├── layout.tsx                       # root layout
 │   ├── page.tsx                         # index; links to the demo experience
 │   └── [slug]/page.tsx                  # fetch + render + 404, preview, UA seeding, metadata
-├── components/                          # design-system components
+├── components/                          # design-system components; design arrives as props
 │   ├── Section.tsx                      # flex/grid layout primitive; design as named props
 │   ├── Heading.tsx
 │   ├── Text.tsx
 │   ├── RichText.tsx                     # minimal rich-text renderer
 │   ├── Image.tsx
 │   ├── Button.tsx
+│   ├── HeroPlain.tsx                    # composed component, content from a DataAssembly
+│   ├── Card.tsx                         # ditto; nested CardCta demos the useDesignValues() escape hatch
 │   └── Page.tsx                         # registered as a coded Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
@@ -133,20 +136,18 @@ examples/nextjs/
 
 The example separates **two layers**:
 
-1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus the resolved design values. `Section` names the design keys it consumes in its own props interface; the rest read them as a record via `useDesignValues()`, which imports nothing else SDK-shaped and returns `{}` outside a renderer, so they degrade gracefully.
+1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Each one names the design keys it consumes in its own props interface. Since they import nothing SDK-shaped and are just functions of their props, they're easy to unit-test and render in isolation.
 2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
 
 Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface.
 
 ```tsx
-// components/Heading.tsx: content prop + design read from the hook
+// components/Heading.tsx: content prop + design keys declared as props
 'use client';
-import { toCss, useDesignValues } from '@contentful/experiences-react';
 
-export function Heading({ text }: { text?: string }) {
-  const design = useDesignValues<{ as?: 'h1' | 'h2' | 'h3' }>();
-  const Tag = design.as ?? 'h2'; // semantic key, read by name
-  return <Tag style={toCss(design)}>{text}</Tag>; // toCss keeps CSS-shaped keys
+export function Heading({ text, as = 'h2', fontSize, fontWeight }: HeadingProps) {
+  const Tag = as; // semantic key, read by name
+  return <Tag style={{ fontSize, fontWeight }}>{text}</Tag>;
 }
 ```
 
@@ -207,7 +208,7 @@ So a payload like:
 }
 ```
 
-reaches your `Button` as `{ target: '_self', label: 'Click me', url: 'https://example.com/go' }` (after its `resolveData` runs). The same `{ target: '_self' }` is also what `useDesignValues()` returns, so either style sees identical values — declare `target` as a prop, or read it off the hook.
+reaches your `Button` as `{ target: '_self', label: 'Click me', url: 'https://example.com/go' }` (after its `resolveData` runs). The same `{ target: '_self' }` is what `useDesignValues()` would return, so both see identical values — declare `target` as a prop, which is what this app does.
 
 ### `resolveData`: sync or async transforms
 

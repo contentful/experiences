@@ -7,7 +7,8 @@ An Angular 20 + `@angular/ssr` app demonstrating `@contentful/experiences-angula
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-angular`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `<cf-server-experience>` (`ServerExperienceRendererComponent`).
 - **Hydration-safe viewport seeding**: User-Agent parsed on the server in `src/server.ts`, passed as `initialViewportId`.
-- **Styling via `injectDesignValues()` and `toCss()`**: components read their own design inside a `computed()`; design is never injected as props.
+- **Styling from design inputs**: resolved design auto-fills each component's declared `@Input()`s by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract — and in Angular, declaring the input is also what makes the key arrive.
+- **One escape-hatch demo**: `card.component.ts` styles itself from its inputs like the rest, but the nested `card-cta.component.ts` — not a registered component, so it has no inputs auto-filled — reads the card's design with `injectDesignValues()` inside a `computed()`. That's the case inputs can't cover.
 - **Design tokens**: `app/lib/experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
 - **Component registration**: bare Angular component classes for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`. `card` uses the latter — an async enrichment fetch that prefixes its title with `Featured: `, plus a metadata-aware rewrite of relative CTA URLs into `/{locale}/{slug}{path}`.
 - **Slot rendering**: `SectionComponent` and `PageComponent` take their slot as an input holding `PortableRenderNode[]` and render it with the exported `*cfNodes`.
@@ -92,9 +93,10 @@ examples/angular/
 │       ├── pages/
 │       │   ├── home.component.ts
 │       │   └── experience-page.component.ts   # renders <cf-server-experience>
-│       ├── components/               # plain design-system components
+│       ├── components/               # plain design-system components; design arrives as inputs
 │       │   ├── button.component.ts
 │       │   ├── card.component.ts
+│       │   ├── card-cta.component.ts # nested child; the injectDesignValues() escape hatch
 │       │   ├── heading.component.ts
 │       │   ├── hero-plain.component.ts
 │       │   ├── image.component.ts
@@ -117,7 +119,7 @@ examples/angular/
 
 Identical in shape to the Next.js and SvelteKit examples:
 
-1. **Design-system components** own their own markup and styling. They read design through `injectDesignValues()` rather than receiving it as props, so nothing has to be threaded down.
+1. **Design-system components** own their own markup and styling. They declare the design keys they consume as `@Input()`s and style from them; only the nested `card-cta.component.ts` reads design through `injectDesignValues()`, because it isn't a registered component and so has nothing auto-filled onto it.
 2. **`app/lib/experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your Angular component classes.
 3. **The server** calls `fetchExperience(experienceOptions, clientOptions, resolveOptions)` and passes the result to `<cf-server-experience>`, catching `NotFoundError` to render a 404.
 
@@ -129,7 +131,7 @@ Identical in shape to the Next.js and SvelteKit examples:
 
 **Only declared inputs are set.** The adapter filters the merged props to the target component's declared inputs, because binding an input a component doesn't declare is an error. Keys a component doesn't declare are dropped rather than passed — they are still reachable through `injectDesignValues()`. `hero-plain.component.ts` declares `@Input() body` it never renders, purely so the filter passes it through.
 
-**Dynamic elements are enumerated.** Svelte's `Heading.svelte` picks its tag with `<svelte:element this={tag}>`; Angular has no equivalent, so `heading.component.ts` clamps `design.as` to a known tuple and switches over the six heading tags.
+**Dynamic elements are enumerated.** Svelte's `Heading.svelte` picks its tag with `<svelte:element this={tag}>`; Angular has no equivalent, so `heading.component.ts` clamps its `as` input to a known tuple and switches over the six heading tags.
 
 **Two `angular.json` options are load-bearing, not boilerplate.**
 

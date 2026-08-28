@@ -7,7 +7,8 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
 - **Hydration-safe viewport seeding**: User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
-- **Styling via `getDesignValues()` and `toCss()`**: components read their own design inside a `$derived` (reactive across viewport changes); design is never injected as props.
+- **Styling from design props**: resolved design auto-fills each component's `$props()` by key, which is the recommended styling contract.
+- **Deliberate escape-hatch coverage**: `Header.svelte` reads design with `getDesignValues()` + `toCss()` inside a `$derived` (reactive across viewport changes), so this harness exercises that path against a real space. It accepts whatever CSS-shaped keys the space sends without enumerating them — the reason to reach for the hook rather than props here.
 - **Design tokens**: `experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
 - **Component registration**: bare Svelte components for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`.
 

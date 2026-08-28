@@ -62,7 +62,7 @@ injectContentfulExperienceTemplate(); // Same, for an enclosing coded Experience
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per key you style with is the recommended path; `injectDesignValues()` returns the same record as a `Signal` for cases inputs don't cover — including keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per design key you style with is the one recommended path — and in Angular it is also what makes the key arrive, since binding an undeclared input is an error. `injectDesignValues()` returns the same record as a `Signal`, as an escape hatch and as the way to read keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 

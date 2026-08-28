@@ -1,11 +1,7 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { injectDesignValues } from '@contentful/experiences-angular';
 
-interface CardDesign {
-  backgroundColor?: string;
-  color?: string;
-}
+import { CardCtaComponent } from './card-cta.component.js';
 
 /**
  * Content inputs, exported so `experience-config.ts` can pass them to
@@ -30,11 +26,15 @@ const BASE_STYLE: Record<string, string> = {
 
 /**
  * Compact card: image + title + teaser + CTA. Content properties come from a
- * `Card from Promotion` DataAssembly binding.
+ * `Card from Promotion` DataAssembly binding. The card itself styles from its
+ * declared inputs, like every other component here.
+ *
+ * This directory's one demonstration of the `injectDesignValues()` escape hatch
+ * lives in the nested `CardCtaComponent`.
  */
 @Component({
   selector: 'app-card',
-  imports: [NgStyle],
+  imports: [NgStyle, CardCtaComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article [ngStyle]="style()">
@@ -51,12 +51,7 @@ const BASE_STYLE: Record<string, string> = {
           <p style="margin: 0; line-height: 1.5;">{{ teaserValue() }}</p>
         }
         @if (ctaLabelValue() && ctaUrlValue()) {
-          <a
-            [href]="ctaUrlValue()"
-            style="margin-top: auto; display: inline-block; padding: 0.5rem 1rem; background: #111; color: #fff; text-decoration: none; border-radius: 0.25rem; align-self: flex-start;"
-          >
-            {{ ctaLabelValue() }}
-          </a>
+          <app-card-cta [label]="ctaLabelValue()" [url]="ctaUrlValue()" />
         }
       </div>
     </article>
@@ -68,6 +63,8 @@ export class CardComponent {
   protected readonly ctaLabelValue = signal<string | undefined>(undefined);
   protected readonly ctaUrlValue = signal<string | undefined>(undefined);
   protected readonly imageValue = signal<string | undefined>(undefined);
+  protected readonly backgroundColorValue = signal<string | undefined>(undefined);
+  protected readonly colorValue = signal<string | undefined>(undefined);
 
   @Input() set title(value: string | undefined) {
     this.titleValue.set(value);
@@ -89,14 +86,19 @@ export class CardComponent {
     this.imageValue.set(value);
   }
 
-  private readonly design = injectDesignValues<CardDesign>();
+  /** Design property. */
+  @Input() set backgroundColor(value: string | undefined) {
+    this.backgroundColorValue.set(value);
+  }
 
-  protected readonly style = computed(() => {
-    const design = this.design();
-    return {
-      ...BASE_STYLE,
-      ...(design.backgroundColor ? { background: design.backgroundColor } : {}),
-      ...(design.color ? { color: design.color } : {}),
-    };
-  });
+  /** Design property. */
+  @Input() set color(value: string | undefined) {
+    this.colorValue.set(value);
+  }
+
+  protected readonly style = computed(() => ({
+    ...BASE_STYLE,
+    ...(this.backgroundColorValue() ? { background: this.backgroundColorValue() } : {}),
+    ...(this.colorValue() ? { color: this.colorValue() } : {}),
+  }));
 }

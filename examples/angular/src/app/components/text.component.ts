@@ -1,10 +1,5 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { injectDesignValues, toCss } from '@contentful/experiences-angular';
-
-interface TextDesign {
-  align?: string;
-}
 
 @Component({
   selector: 'app-text',
@@ -14,22 +9,29 @@ interface TextDesign {
 })
 export class TextComponent {
   protected readonly textValue = signal('');
+  protected readonly alignValue = signal<string | undefined>(undefined);
+  protected readonly fontSizeValue = signal<string | undefined>(undefined);
 
+  /** Content property. */
   @Input() set text(value: string | undefined) {
     this.textValue.set(value ?? '');
   }
 
-  private readonly design = injectDesignValues<TextDesign>();
+  /** Design property — this design system's shorthand for `text-align`. */
+  @Input() set align(value: string | undefined) {
+    this.alignValue.set(value);
+  }
 
-  protected readonly style = computed(() => {
-    const design = this.design();
-    return {
-      fontSize: '16px',
-      lineHeight: '1.5',
-      color: '#4b5563',
-      margin: '0',
-      ...(design.align ? { textAlign: design.align } : {}),
-      ...toCss(design),
-    };
-  });
+  /** Design property. */
+  @Input() set fontSize(value: string | undefined) {
+    this.fontSizeValue.set(value);
+  }
+
+  protected readonly style = computed(() => ({
+    fontSize: this.fontSizeValue() ?? '16px',
+    lineHeight: '1.5',
+    color: '#4b5563',
+    margin: '0',
+    ...(this.alignValue() ? { textAlign: this.alignValue() } : {}),
+  }));
 }

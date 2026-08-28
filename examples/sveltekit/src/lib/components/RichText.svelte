@@ -10,6 +10,9 @@
 
   export interface RichTextProps {
     document?: unknown;
+    // Design properties, auto-filled as props.
+    align?: string;
+    fontSize?: string;
   }
 
   function extractDoc(input: unknown): RichDoc | null {
@@ -24,20 +27,14 @@
 </script>
 
 <script lang="ts">
-  import { getDesignValues, toCss } from '@contentful/experiences-svelte';
-
-  let { document }: RichTextProps = $props();
+  let { document, align, fontSize }: RichTextProps = $props();
   const doc = $derived(extractDoc(document));
 
-  const design = $derived(getDesignValues());
-  const style = $derived.by(() => {
-    const css = toCss(design);
-    const cssStr = Object.entries(css)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
-      .join('; ');
-    const align = design.align ? `text-align: ${design.align}; ` : '';
-    return `${align}${cssStr}`;
-  });
+  const style = $derived(
+    [align && `text-align: ${align}`, fontSize && `font-size: ${fontSize}`]
+      .filter(Boolean)
+      .join('; ')
+  );
 </script>
 
 {#if doc}

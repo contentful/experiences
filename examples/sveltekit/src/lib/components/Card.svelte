@@ -1,6 +1,10 @@
 <!--
   Compact card: image + title + teaser + CTA. Content properties come from
-  a `Card from Promotion` DataAssembly binding.
+  a `Card from Promotion` DataAssembly binding. The card itself styles from
+  props, like every other component here.
+
+  This directory's one demonstration of the `getDesignValues()` escape hatch
+  lives in the nested `CardCta.svelte`.
 -->
 <script lang="ts" module>
   export interface CardProps {
@@ -9,27 +13,30 @@
     ctaLabel?: string;
     ctaUrl?: string;
     image?: string;
+    // Design properties, auto-filled as props.
+    backgroundColor?: string;
+    color?: string;
   }
 </script>
 
 <script lang="ts">
-  import { getDesignValues } from '@contentful/experiences-svelte';
+  import CardCta from './CardCta.svelte';
 
-  let { title, teaser, ctaLabel, ctaUrl, image }: CardProps = $props();
+  let { title, teaser, ctaLabel, ctaUrl, image, backgroundColor, color }: CardProps = $props();
 
-  const design = $derived(getDesignValues());
-  const style = $derived.by(() => {
-    const parts = [
+  const style = $derived(
+    [
       'display: flex',
       'flex-direction: column',
       'border-radius: 0.5rem',
       'overflow: hidden',
       'box-shadow: 0 1px 3px rgba(0,0,0,0.08)',
-    ];
-    if (design.backgroundColor) parts.push(`background: ${design.backgroundColor}`);
-    if (design.color) parts.push(`color: ${design.color}`);
-    return parts.join('; ');
-  });
+      backgroundColor && `background: ${backgroundColor}`,
+      color && `color: ${color}`,
+    ]
+      .filter(Boolean)
+      .join('; ')
+  );
 </script>
 
 <article {style}>
@@ -44,12 +51,7 @@
       <p style="margin: 0; line-height: 1.5;">{teaser}</p>
     {/if}
     {#if ctaLabel && ctaUrl}
-      <a
-        href={ctaUrl}
-        style="margin-top: auto; display: inline-block; padding: 0.5rem 1rem; background: #111; color: #fff; text-decoration: none; border-radius: 0.25rem; align-self: flex-start;"
-      >
-        {ctaLabel}
-      </a>
+      <CardCta label={ctaLabel} url={ctaUrl} />
     {/if}
   </div>
 </article>

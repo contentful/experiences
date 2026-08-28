@@ -2,7 +2,7 @@
 
 A Next.js 15 App Router app demonstrating `@contentful/experiences-react` rendering an Experience payload fetched from XDA.
 
-This app shows the integration we recommend. Design values get resolved on the server and arrive as ordinary component props, so there's no hook to call and no client-side design plumbing to wire up. If you do need the `useDesignValues()` hook, it's still there; see [Reading design on the client](#reading-design-on-the-client-optional).
+This app shows the integration we recommend. Design values get resolved on the server and arrive as ordinary component props, so there's no hook to call and no client-side design plumbing to wire up. If you do need the `useDesignValues()` hook, it's still there; see [Reading design on the client](#reading-design-on-the-client-escape-hatch).
 
 ## What it shows
 
@@ -262,9 +262,9 @@ Design sits **below** content and `resolveData`, so an explicit editorial value 
 
 reaches your `Button` as `{ label: 'Click me', url: 'https://example.com/go', target: '_self' }` (after its `resolveData` runs), with content and design merged into one flat props object.
 
-### Reading design on the client (optional)
+### Reading design on the client (escape hatch)
 
-Auto-filled props cover the common case. Reach for the `useDesignValues()` hook when props aren't enough:
+Styling from auto-filled props is the recommended contract. Reach for the `useDesignValues()` hook only in the two cases props can't reach:
 
 - A **deeply nested presentational child** that isn't itself a registered component but needs the enclosing node's design.
 - Code that reads design **outside the props flow**, such as a `useEffect`, an imperative measurement, or a helper that isn't in the render path.

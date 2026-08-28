@@ -1,16 +1,5 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { injectDesignValues } from '@contentful/experiences-angular';
-
-/**
- * Design keys this component reads dynamically. Declaring the shape keeps dot
- * access working under `noPropertyAccessFromIndexSignature`.
- */
-interface ButtonDesign {
-  backgroundColor?: string;
-  color?: string;
-  target?: string;
-}
 
 const BASE_STYLE: Record<string, string> = {
   display: 'inline-flex',
@@ -18,8 +7,6 @@ const BASE_STYLE: Record<string, string> = {
   gap: '6px',
   padding: '0.75rem 1.5rem',
   borderRadius: '0.25rem',
-  background: '#111',
-  color: '#fff',
   textDecoration: 'none',
   fontWeight: '500',
   cursor: 'pointer',
@@ -34,7 +21,7 @@ const BASE_STYLE: Record<string, string> = {
       <a
         [href]="urlValue()"
         [ngStyle]="style()"
-        [attr.target]="target()"
+        [attr.target]="targetValue() ?? '_self'"
         rel="noopener noreferrer"
         >{{ labelValue() }}</a
       >
@@ -46,6 +33,9 @@ const BASE_STYLE: Record<string, string> = {
 export class ButtonComponent {
   protected readonly labelValue = signal('Button');
   protected readonly urlValue = signal<string | undefined>(undefined);
+  protected readonly targetValue = signal<string | undefined>(undefined);
+  protected readonly backgroundColorValue = signal<string | undefined>(undefined);
+  protected readonly colorValue = signal<string | undefined>(undefined);
 
   /** Content property. */
   @Input() set label(value: string | undefined) {
@@ -57,16 +47,24 @@ export class ButtonComponent {
     this.urlValue.set(value);
   }
 
-  private readonly design = injectDesignValues<ButtonDesign>();
+  /** Design property — semantic key, shapes the markup rather than the CSS. */
+  @Input() set target(value: string | undefined) {
+    this.targetValue.set(value);
+  }
 
-  protected readonly target = computed(() => this.design().target ?? '_self');
+  /** Design property. */
+  @Input() set backgroundColor(value: string | undefined) {
+    this.backgroundColorValue.set(value);
+  }
 
-  protected readonly style = computed(() => {
-    const design = this.design();
-    return {
-      ...BASE_STYLE,
-      ...(design.backgroundColor ? { background: design.backgroundColor } : {}),
-      ...(design.color ? { color: design.color } : {}),
-    };
-  });
+  /** Design property. */
+  @Input() set color(value: string | undefined) {
+    this.colorValue.set(value);
+  }
+
+  protected readonly style = computed(() => ({
+    ...BASE_STYLE,
+    background: this.backgroundColorValue() ?? '#111',
+    color: this.colorValue() ?? '#fff',
+  }));
 }

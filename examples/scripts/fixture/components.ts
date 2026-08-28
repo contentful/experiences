@@ -31,8 +31,8 @@ const sizeProp = (id: string, name: string, description = '') => ({
 
 // --- Design-system primitives ------------------------------------------------
 // Each is a shallow shape — enough to render, not a full copy of the source
-// space's schemas. The example app's design-system components read these design
-// values via useDesignValues() and (mostly) render them through toCss().
+// space's schemas. The example app's design-system components receive these
+// design values as auto-filled props, declared by name on each component.
 
 const Section: ComponentFixture = {
   id: 'Section',

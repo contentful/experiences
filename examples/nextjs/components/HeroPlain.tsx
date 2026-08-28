@@ -2,34 +2,38 @@
 
 import type { CSSProperties } from 'react';
 
-import { toCss, useDesignValues } from '@contentful/experiences-react';
-
 export interface HeroPlainProps {
   title?: string;
   body?: unknown;
   ctaLabel?: string;
   ctaUrl?: string;
   image?: string;
+  // Design properties, auto-filled as props.
+  backgroundColor?: string;
+  color?: string;
 }
 
 /**
  * Composed hero: title + optional body + CTA + hero image. All content
  * properties come from a `Hero from Promotion` DataAssembly binding — this
- * component just lays them out.
+ * component just lays them out and reads its two design properties by name.
  */
-export function HeroPlain({ title, ctaLabel, ctaUrl, image }: HeroPlainProps) {
-  const design = useDesignValues<{
-    backgroundColor?: string;
-    color?: string;
-  }>();
-
+export function HeroPlain({
+  title,
+  ctaLabel,
+  ctaUrl,
+  image,
+  backgroundColor,
+  color,
+}: HeroPlainProps) {
   const style: CSSProperties = {
     display: 'grid',
     gridTemplateColumns: image ? '1fr 1fr' : '1fr',
     alignItems: 'center',
     gap: '2rem',
     padding: '4rem 2rem',
-    ...toCss(design),
+    backgroundColor,
+    color,
   };
 
   return (
