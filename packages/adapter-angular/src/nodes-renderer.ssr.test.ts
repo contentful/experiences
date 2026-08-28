@@ -36,6 +36,7 @@ import {
 } from '@contentful/experiences-sdk-core';
 
 import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { BrokenFixture } from './test-fixtures/broken.fixture.js';
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import { ContainerFixture } from './test-fixtures/container.fixture.js';
 import { ExperienceTemplateFixture } from './test-fixtures/experience-template.fixture.js';
@@ -207,3 +208,68 @@ describe('server rendering (no DOM)', () => {
     expect(html).not.toContain('<main');
   });
 });
+
+/*
+ * Unlike React and Svelte — which each need a separate SSR-specific note
+ * because their server renderers don't run the class-error-boundary /
+ * `<svelte:boundary>` machinery at all (see the equivalent test files in
+ * those adapters) — Angular has no parallel server renderer. `renderApplication`
+ * bootstraps the exact same `ServerExperienceRendererComponent` tree and runs
+ * the exact same `NodeRenderEngine.createView` try/catch. Proven here, not
+ * just asserted: this is the one adapter where SSR and CSR error handling are
+ * verifiably the same code path, not just "should be."
+ */
+describe('server rendering (no DOM) — component-render-error', () => {
+  const brokenConfig: Config = {
+    components: { broken: BrokenFixture, 'contentful-button': ButtonFixture },
+  };
+
+  it('isolates the failing node under real SSR — sibling still renders, no crash', async () => {
+    const html = await renderToHtml(
+      {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('broken', { id: 'b' }), button('sibling')],
+      },
+      brokenConfig
+    );
+
+    expect(html).toContain('sibling');
+  });
+
+  it('emits the debug fallback markup server-side when debug is on', async () => {
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('broken', { id: 'b' })] },
+      brokenConfig
+    );
+
+    const bootstrap = (context: BootstrapContext) =>
+      bootstrapApplication(
+        RootComponentWithDebug,
+        {
+          providers: [
+            provideServerRendering(),
+            provideZonelessChangeDetection(),
+            { provide: PLAN, useValue: plan },
+            { provide: CONFIG, useValue: brokenConfig },
+          ],
+        },
+        context
+      );
+
+    const html = await renderApplication(bootstrap, {
+      document:
+        '<!doctype html><html><head></head><body><cf-root-debug></cf-root-debug></body></html>',
+    });
+    expect(html).toContain('data-experiences-render-error="broken"');
+  });
+});
+
+@Component({
+  selector: 'cf-root-debug',
+  imports: [ServerExperienceRendererComponent],
+  template: `<cf-server-experience [experience]="plan" [config]="config" [debug]="true" />`,
+})
+class RootComponentWithDebug {
+  protected readonly plan = inject(PLAN);
+  protected readonly config = inject(CONFIG);
+}

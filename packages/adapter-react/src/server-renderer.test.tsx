@@ -520,10 +520,16 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={cfg} debug />
+    );
     // The subtree survives — an unregistered template must not blank the page.
-    expect(html).toBe('<span>unwrapped</span>');
+    expect(html).toContain('<span>unwrapped</span>');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain(
+      'No experience template registered for id &quot;missing-experienceTemplate&quot;'
+    );
     warn.mockRestore();
   });
 });
@@ -817,7 +823,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     expect(html).not.toContain('DesignToken');
   });
 
-  it('warns and drops the key from the design values when the resolver returns undefined', async () => {
+  it('warns and passes the raw token through the design values when the resolver returns undefined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let captured: Record<string, unknown> = {};
     const Probe = () => {
@@ -843,7 +849,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    expect(captured).not.toHaveProperty('cfBackgroundColor');
+    expect(captured.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('button'));
     warn.mockRestore();

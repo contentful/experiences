@@ -17,6 +17,7 @@ export { default as ClientExperienceRenderer } from './ClientExperienceRenderer.
 export { default as ExperienceRenderer } from './ClientExperienceRenderer.svelte';
 export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.svelte';
 export { default as MissingComponent } from './MissingComponent.svelte';
+export { default as ComponentError } from './ComponentError.svelte';
 export { default as DebugExperience } from './DebugExperience.svelte';
 
 // Every slot already arrives as a same-named `Snippet[]` prop; this is exposed so
@@ -42,8 +43,11 @@ export type { ToCssOptions } from './design-utils.js';
 export type {
   ClientExperienceRendererProps,
   ClientExperienceRendererProps as ExperienceRendererProps,
+  ComponentErrorProps,
   DebugExperienceProps,
+  DiagnosticReporter,
   MissingComponentProps,
+  RenderError,
   RenderUnknown,
   ServerExperienceRendererProps,
 } from './component-props.js';
@@ -110,6 +114,7 @@ export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
+  ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
   createClient,

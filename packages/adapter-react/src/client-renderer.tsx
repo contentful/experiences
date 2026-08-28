@@ -7,7 +7,7 @@
 
 'use client';
 
-import type { ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import type {
   ExperienceContext,
@@ -15,10 +15,12 @@ import type {
   ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
+import { ComponentError } from './component-error';
+import { DiagnosticReporterContext } from './component-error-boundary';
 import { DebugExperience } from './debug-experience';
 import { ExperienceProvider } from './context';
 import { MissingComponent } from './missing-component';
-import { NodesRenderer, type RenderUnknown } from './nodes-renderer';
+import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer';
 import type { Config, RenderContext } from './types';
 import { useActiveViewport } from './use-active-viewport';
 
@@ -52,6 +54,8 @@ export interface ClientExperienceRendererProps {
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;
+  /** Override the fallback rendered when a registered component throws. */
+  renderError?: RenderError;
 }
 
 export function ClientExperienceRenderer({
@@ -61,9 +65,38 @@ export function ClientExperienceRenderer({
   metadata,
   debug = false,
   renderUnknown = MissingComponent,
+  renderError = ComponentError,
 }: ClientExperienceRendererProps): ReactNode {
+  const [renderDiagnostics, setRenderDiagnostics] = useState<Error[]>([]);
+  // A `setState` updater rather than the SSR renderer's plain-array push: this
+  // tree stays mounted and interactive, so a component that throws well after
+  // first paint (a later re-render, an event handler) must still make
+  // `<DebugExperience>` re-render with the new diagnostic — a mutated array
+  // wouldn't trigger that.
+  //
+  // `queueMicrotask` defers the actual `setState` call: most of these
+  // diagnostics (component-not-registered, malformed-slot,
+  // experience-template-not-registered) are reported synchronously from
+  // *inside* NodeRenderer's own render body, i.e. while React is mid-render
+  // of a descendant — calling this component's setState right there is
+  // exactly React's "Cannot update a component while rendering a different
+  // component" anti-pattern. Escaping to a microtask (same "break the
+  // synchronous call chain" rationale as core's resolveData deferral)
+  // schedules the update for after the current render/commit fully unwinds.
+  // `component-render-error`, reported from `componentDidCatch`, is already
+  // commit-phase-safe — deferring it too is harmless and keeps one code path.
+  // This is client-only (NodeRenderer's own onDiagnostic call is unchanged
+  // and stays synchronous — see nodes-renderer.tsx for why SSR needs that):
+  // `ServerExperienceRenderer` threads a plain synchronous array-push
+  // closure instead of this setState-backed one, so SSR is unaffected.
+  const onDiagnostic = useCallback((error: Error) => {
+    queueMicrotask(() => {
+      setRenderDiagnostics((prev) => [...prev, error]);
+    });
+  }, []);
+
+  const { activeViewportIndex } = useActiveViewport(experience?.viewports ?? [], initialViewportId);
   if (!experience) return null;
-  const { activeViewportIndex } = useActiveViewport(experience.viewports, initialViewportId);
   // Copy so the context shares no object identity with the plan arrays — see
   // the note in `server-renderer.tsx`.
   const contextViewports = experience.viewports.map((v) => ({ ...v }));
@@ -80,15 +113,32 @@ export function ClientExperienceRenderer({
 
   return (
     <ExperienceProvider value={renderContext}>
-      {debug ? <DebugExperience experience={experience} /> : null}
-      <NodesRenderer
-        nodes={experience.nodes}
-        config={config}
-        viewports={experience.viewports}
-        activeViewportIndex={activeViewportIndex}
-        fallbackViewportIndex={experience.fallbackViewportIndex}
-        renderUnknown={renderUnknown}
-      />
+      {/*
+        Established here, not in `ServerExperienceRenderer`: this Provider
+        (and the closure it carries) never crosses a Server→Client boundary
+        because everything from `ClientExperienceRenderer` down is already
+        client-rendered. `ComponentErrorBoundary` reads it via `contextType`
+        to report a render-time throw without receiving a callback prop —
+        see component-error-boundary.tsx for why that specifically matters.
+      */}
+      <DiagnosticReporterContext.Provider value={onDiagnostic}>
+        <NodesRenderer
+          nodes={experience.nodes}
+          config={config}
+          viewports={experience.viewports}
+          activeViewportIndex={activeViewportIndex}
+          fallbackViewportIndex={experience.fallbackViewportIndex}
+          renderUnknown={renderUnknown}
+          renderError={renderError}
+          onDiagnostic={onDiagnostic}
+        />
+      </DiagnosticReporterContext.Provider>
+      {debug ? (
+        <DebugExperience
+          experience={experience}
+          errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}
+        />
+      ) : null}
     </ExperienceProvider>
   );
 }

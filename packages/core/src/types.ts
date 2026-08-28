@@ -257,4 +257,15 @@ export interface PortableRenderPlan {
    * matches this, and recompute from `props.designRaw` otherwise.
    */
   fallbackViewportIndex: number;
+  /**
+   * Resolve-time diagnostics collected while building this plan — malformed
+   * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an
+   * unresolved design token. Plain `Error`s: the message names the node/
+   * component involved, and `resolve-data-failed`'s entry sets `.cause` to
+   * the original thrown/rejected error so the real stack trace stays
+   * reachable. Render-time diagnostics (unregistered id,
+   * component-render-error) are NOT here — each adapter collects those per
+   * render and merges both lists for `<DebugExperience>`.
+   */
+  diagnostics: Error[];
 }

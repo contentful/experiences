@@ -24,6 +24,7 @@ import {
 import { getViewportIndex } from '@contentful/experiences-design';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
+import { ComponentErrorComponent } from './component-error.component.js';
 import { DebugExperienceComponent } from './debug-experience.component.js';
 import { DEFAULT_CONTEXT, EMPTY_CONFIG, FALLBACK_VIEWPORT } from './experience-defaults.js';
 import { ExperienceScope } from './experience-scope.js';
@@ -40,12 +41,19 @@ import type { Config, RenderContext } from './types.js';
   // the customer's mount point, and they may well style it. Only the plumbing
   // *inside* it is anchor-only: `*cfNodes` puts the top-level nodes here as
   // siblings of a comment, so nothing the adapter owns wraps them.
+  //
+  // The node tree renders before `<cf-debug-experience>` here for consistency
+  // with the React adapter's element-order fix — Angular's own reactivity
+  // (`errors` is a signal read at template-check time) doesn't strictly
+  // require this ordering the way React's synchronous single-pass render
+  // does, but matching it keeps the three adapters' templates readable
+  // side-by-side.
   template: `
     @if (experienceValue(); as experience) {
-      @if (debugValue()) {
-        <cf-debug-experience [experience]="experience" />
-      }
       <ng-container *cfNodes="experience.nodes"></ng-container>
+      @if (debugValue()) {
+        <cf-debug-experience [experience]="experience" [errors]="errors()" />
+      }
     }
   `,
 })
@@ -56,6 +64,7 @@ export class ServerExperienceRendererComponent {
   private readonly initialViewportIdValue = signal<string | undefined>(undefined);
   private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
   private readonly renderUnknownValue = signal<Type<unknown>>(MissingComponentComponent);
+  private readonly renderErrorValue = signal<Type<unknown>>(ComponentErrorComponent);
 
   /** A resolved render plan, or `null` while one is still being fetched. */
   @Input({ required: true }) set experience(value: PortableRenderPlan | null | undefined) {
@@ -89,6 +98,11 @@ export class ServerExperienceRendererComponent {
     this.renderUnknownValue.set(value ?? MissingComponentComponent);
   }
 
+  /** Replaces the default error box rendered when a registered component throws. */
+  @Input() set renderError(value: Type<unknown> | undefined) {
+    this.renderErrorValue.set(value ?? ComponentErrorComponent);
+  }
+
   /**
    * A `computed`, not a one-shot build: on the server it evaluates once and
    * caches, but the same class is cheap to keep correct if inputs do change
@@ -110,10 +124,18 @@ export class ServerExperienceRendererComponent {
     };
   });
 
+  private readonly scope = inject(ExperienceScope);
+
+  /** Resolve-time + render-time diagnostics, merged for `<cf-debug-experience>`. */
+  protected readonly errors = computed<Error[]>(() => [
+    ...(this.experienceValue()?.diagnostics ?? []),
+    ...this.scope.diagnostics(),
+  ]);
+
   constructor() {
-    const scope = inject(ExperienceScope);
-    scope.connectExperience(() => this.renderContext());
-    scope.connectConfig(() => this.configValue() ?? EMPTY_CONFIG);
-    scope.connectRenderUnknown(() => this.renderUnknownValue());
+    this.scope.connectExperience(() => this.renderContext());
+    this.scope.connectConfig(() => this.configValue() ?? EMPTY_CONFIG);
+    this.scope.connectRenderUnknown(() => this.renderUnknownValue());
+    this.scope.connectRenderError(() => this.renderErrorValue());
   }
 }

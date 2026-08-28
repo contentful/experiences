@@ -178,16 +178,30 @@ describe('resolveExperience — IR construction', () => {
     expect(plan.nodes[0]!.registration.id).toBe('not-registered');
   });
 
-  it('throws when a slot value is not an array', async () => {
-    const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
-      nodes: [
-        componentNode('contentful-container', {
-          slots: { children: 'oops' as unknown as never },
-        }),
-      ],
-    };
-    await expect(resolveExperience(payload, emptyConfig)).rejects.toThrow(TypeError);
+  it('warns and drops a malformed slot instead of throwing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [
+          componentNode('contentful-container', {
+            id: 'page',
+            slots: { children: 'oops' as unknown as never },
+          }),
+        ],
+      };
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes[0]!.slots.children).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('Slot "children"');
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('Slot "children"');
+      expect(plan.diagnostics[0]!.message).toContain('page');
+      expect(plan.diagnostics[0]!.message).toContain('contentful-container');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('emits an experienceTemplate-kind node instead of dropping it', async () => {
@@ -585,7 +599,12 @@ describe('resolveExperience — experienceTemplates', () => {
   it('ignores sys.experienceTemplate entirely — it never reaches the plan', async () => {
     const plan = await resolveExperience(compositePayload(), emptyConfig);
     expect(plan).not.toHaveProperty('experienceTemplate');
-    expect(Object.keys(plan).sort()).toEqual(['fallbackViewportIndex', 'nodes', 'viewports']);
+    expect(Object.keys(plan).sort()).toEqual([
+      'diagnostics',
+      'fallbackViewportIndex',
+      'nodes',
+      'viewports',
+    ]);
   });
 
   it("keeps a template node's own contentProperties and designProperties", async () => {
@@ -774,19 +793,31 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     expect(plan.nodes[0]!.props.design).toMatchObject({ cfColor: '#ff0000' });
   });
 
-  it('omits token keys the resolver leaves undefined, without touching the raw property', async () => {
-    const config: ResolverConfig = {
-      components: {},
-      resolveToken: () => undefined,
-    };
-    const plan = await resolveExperience(designPayload(), config, {
-      initialViewportId: 'desktop',
-    });
-    expect(plan.nodes[0]!.props.design).not.toHaveProperty('cfColor');
-    expect(plan.nodes[0]!.props.designRaw.cfColor).toEqual({
-      type: 'DesignToken',
-      value: 'color.brand',
-    });
+  it('passes through the raw token when the resolver leaves it undefined, without touching the raw property', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const config: ResolverConfig = {
+        components: {},
+        resolveToken: () => undefined,
+      };
+      const plan = await resolveExperience(designPayload(), config, {
+        initialViewportId: 'desktop',
+      });
+      expect(plan.nodes[0]!.props.design.cfColor).toEqual({
+        type: 'DesignToken',
+        value: 'color.brand',
+      });
+      expect(plan.nodes[0]!.props.designRaw.cfColor).toEqual({
+        type: 'DesignToken',
+        value: 'color.brand',
+      });
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('color.brand');
+      expect(plan.diagnostics[0]!.message).toContain('resolveToken');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('warns server-side with the component id when a token is left unresolved', async () => {
@@ -900,6 +931,143 @@ describe('resolveExperience — debug logging', () => {
       expect(lines.filter((l) => l.includes('⏱')).length).toBe(1);
     } finally {
       spy.mockRestore();
+    }
+  });
+});
+
+describe('resolveExperience — diagnostics', () => {
+  it('is an empty array on a fully happy path (regression guard)', async () => {
+    const payload: ExperiencePayload = {
+      viewports: VIEWPORTS,
+      nodes: [
+        componentNode('contentful-heading', {
+          id: 'h',
+          contentProperties: { text: 'Hello' },
+          designProperties: { cfPadding: { type: 'ManualDesignValue', value: '8px' } },
+        }),
+      ],
+    };
+    const plan = await resolveExperience(payload, emptyConfig);
+    expect(plan.diagnostics).toEqual([]);
+  });
+
+  it('warns and falls back to an empty node list when payload.nodes is malformed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload = {
+        viewports: VIEWPORTS,
+        nodes: 'not-an-array',
+      } as unknown as ExperiencePayload;
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.nodes).toEqual([]);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('"nodes"');
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns and falls back to an empty viewport list when payload.viewports is malformed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload = {
+        viewports: undefined,
+        nodes: [componentNode('contentful-heading', { id: 'h' })],
+      } as unknown as ExperiencePayload;
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.viewports).toEqual([]);
+      expect(plan.fallbackViewportIndex).toBe(0);
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('"viewports"');
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it.each([null, undefined])(
+    'does not throw on a %s payload — degrades to an empty plan with a single diagnostic',
+    async (payload) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const plan = await resolveExperience(payload as unknown as ExperiencePayload, emptyConfig);
+        expect(plan.nodes).toEqual([]);
+        expect(plan.viewports).toEqual([]);
+        expect(plan.fallbackViewportIndex).toBe(0);
+        expect(plan.diagnostics).toHaveLength(1);
+        expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+        expect(plan.diagnostics[0]!.message).toContain('payload is');
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
+
+  it('isolates a resolveData hook that throws synchronously — other nodes still resolve', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
+      };
+      const config: ResolverConfig = {
+        components: {
+          broken: {
+            resolveData: () => {
+              throw new Error('boom');
+            },
+          },
+          fine: { resolveData: () => ({ ok: true }) },
+        },
+      };
+      const plan = await resolveExperience(payload, config);
+      expect(plan.nodes[0]!.props.resolved).toBeUndefined();
+      expect(plan.nodes[1]!.props.resolved).toEqual({ ok: true });
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('component:broken');
+      expect(plan.diagnostics[0]!.message).toContain('node "b"');
+      expect(plan.diagnostics[0]!.message).toContain('boom');
+      expect(plan.diagnostics[0]!.cause).toBeInstanceOf(Error);
+      expect((plan.diagnostics[0]!.cause as Error).message).toBe('boom');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('boom');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('isolates a resolveData hook that rejects — other nodes still resolve', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload: ExperiencePayload = {
+        viewports: VIEWPORTS,
+        nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
+      };
+      const config: ResolverConfig = {
+        components: {
+          broken: { resolveData: async () => Promise.reject(new Error('network down')) },
+          fine: { resolveData: () => ({ ok: true }) },
+        },
+      };
+      const plan = await resolveExperience(payload, config);
+      expect(plan.nodes[0]!.props.resolved).toBeUndefined();
+      expect(plan.nodes[1]!.props.resolved).toEqual({ ok: true });
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.message).toContain('component:broken');
+      expect(plan.diagnostics[0]!.message).toContain('node "b"');
+      expect(plan.diagnostics[0]!.message).toContain('network down');
+      expect(plan.diagnostics[0]!.cause).toBeInstanceOf(Error);
+      expect((plan.diagnostics[0]!.cause as Error).message).toBe('network down');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('network down');
+    } finally {
+      warn.mockRestore();
     }
   });
 });

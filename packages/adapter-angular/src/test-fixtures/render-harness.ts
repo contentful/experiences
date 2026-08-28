@@ -32,6 +32,7 @@ export interface RenderOptions {
   metadata?: Record<string, unknown>;
   debug?: boolean;
   renderUnknown?: Type<unknown>;
+  renderError?: Type<unknown>;
 }
 
 export interface RenderResult {
@@ -68,6 +69,9 @@ export function render(
   }
   if (options.renderUnknown !== undefined) {
     componentRef.setInput('renderUnknown', options.renderUnknown);
+  }
+  if (options.renderError !== undefined) {
+    componentRef.setInput('renderError', options.renderError);
   }
 
   fixture.detectChanges();

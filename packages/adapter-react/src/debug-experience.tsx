@@ -25,11 +25,21 @@ export interface DebugExperienceProps {
   experience: PortableRenderPlan;
   /** Start expanded. Defaults to collapsed to stay out of the way. */
   defaultOpen?: boolean;
+  /**
+   * Resolve-time + render-time diagnostics for this render, merged by the
+   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`). Plain
+   * `Error`s — the two cases that wrap a real caught exception
+   * (`component-render-error`, `resolve-data-failed`) set `.cause` to the
+   * original error, inspectable via `console.error` or `error.cause.stack`.
+   * Defaults to `[]` for a manually-mounted `<DebugExperience>`.
+   */
+  errors?: Error[];
 }
 
 export function DebugExperience({
   experience,
   defaultOpen = false,
+  errors = [],
 }: DebugExperienceProps): ReactNode {
   const nodeCount = experience.nodes.length;
   // Coded Experience Templates are ordinary top-level nodes, so name them from
@@ -43,9 +53,14 @@ export function DebugExperience({
       : ''
   }`;
 
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  const open = defaultOpen || errors.length > 0;
+
   return (
     <details
-      open={defaultOpen}
+      open={open}
       data-experiences-debug
       style={{
         margin: '1rem 0',
@@ -68,6 +83,7 @@ export function DebugExperience({
       >
         {summary}
       </summary>
+      {errors.length > 0 ? <DiagnosticList errors={errors} /> : null}
       <pre
         style={{
           margin: 0,
@@ -81,6 +97,18 @@ export function DebugExperience({
         {safeStringify(experience)}
       </pre>
     </details>
+  );
+}
+
+// Deliberately unstyled for now — this just needs to make the data visible,
+// not console-only. Visual treatment (grouping, color, counts) can grow later.
+function DiagnosticList({ errors }: { errors: Error[] }): ReactNode {
+  return (
+    <ul data-experiences-debug-errors>
+      {errors.map((error, index) => (
+        <li key={index}>{error.message}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -107,6 +135,11 @@ function safeStringify(value: unknown): string {
       2
     );
   } catch (err) {
-    return `[DebugExperience: could not serialize plan — ${(err as Error).message}]`;
+    // `err` isn't guaranteed to be an Error — a getter deep in customer data
+    // (a resolveData result, resolved design values) can `throw null` or
+    // `throw 'reason'` during JSON.stringify's replacer walk, and this
+    // fallback's whole job is to never throw itself.
+    const reason = err instanceof Error ? err.message : String(err);
+    return `[DebugExperience: could not serialize plan — ${reason}]`;
   }
 }

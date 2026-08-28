@@ -5,7 +5,12 @@ import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experie
 
 import { DebugExperience } from './debug-experience';
 
-const emptyPlan: PortableRenderPlan = { nodes: [], viewports: [], fallbackViewportIndex: 0 };
+const emptyPlan: PortableRenderPlan = {
+  nodes: [],
+  viewports: [],
+  fallbackViewportIndex: 0,
+  diagnostics: [],
+};
 
 function node(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
@@ -44,6 +49,7 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button')],
       fallbackViewportIndex: 0,
+      diagnostics: [],
     };
     expect(renderToStaticMarkup(<DebugExperience experience={one} />)).toContain(
       'Experience debug — 1 top-level node'
@@ -55,6 +61,7 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
+      diagnostics: [],
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
       'experience template: page'
@@ -66,6 +73,7 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button'), node('text')],
       fallbackViewportIndex: 0,
+      diagnostics: [],
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
     expect(html).toContain('Experience debug — 2 top-level nodes');
@@ -77,6 +85,7 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
       fallbackViewportIndex: 0,
+      diagnostics: [],
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
     expect(html).toContain('registration');
@@ -88,9 +97,68 @@ describe('DebugExperience', () => {
     const n = node('button');
     // A customer's resolveData could stash a self-referential object on props.
     n.props.resolved = { self: n.props };
-    const plan: PortableRenderPlan = { viewports: [], nodes: [n], fallbackViewportIndex: 0 };
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [n],
+      fallbackViewportIndex: 0,
+      diagnostics: [],
+    };
 
     expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain('[Circular]');
+  });
+
+  it('degrades a non-Error throw during serialization to a placeholder instead of crashing', () => {
+    const n = node('button');
+    // A customer's resolveData (or resolved design value) could stash a
+    // getter that throws a non-Error — a bare `throw null`/`throw 'reason'`
+    // rather than `throw new Error(...)`. JSON.stringify's replacer walk
+    // invokes it, and the safety net's job is to never throw itself either.
+    Object.defineProperty(n.props.resolved ?? (n.props.resolved = {}), 'poison', {
+      enumerable: true,
+      get(): never {
+        throw null;
+      },
+    });
+    const plan: PortableRenderPlan = {
+      viewports: [],
+      nodes: [n],
+      fallbackViewportIndex: 0,
+      diagnostics: [],
+    };
+
+    expect(() => renderToStaticMarkup(<DebugExperience experience={plan} />)).not.toThrow();
+    expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
+      'could not serialize plan'
+    );
+  });
+});
+
+describe('DebugExperience — errors prop', () => {
+  const warning = new Error('No component registered for id "hero".');
+  const error = new Error('Component "card" threw while rendering: boom.');
+
+  it('stays collapsed and renders no error list when errors is empty or omitted', () => {
+    const html = renderToStaticMarkup(<DebugExperience experience={emptyPlan} />);
+    expect(html).not.toContain('open=""');
+    expect(html).not.toContain('data-experiences-debug-errors');
+  });
+
+  it('auto-expands even without defaultOpen when there are errors', () => {
+    const html = renderToStaticMarkup(
+      <DebugExperience experience={emptyPlan} errors={[warning]} />
+    );
+    expect(html).toContain('open=""');
+  });
+
+  it('renders a diagnostic list above the JSON dump', () => {
+    const html = renderToStaticMarkup(
+      <DebugExperience experience={emptyPlan} errors={[warning, error]} />
+    );
+    expect(html).toContain('data-experiences-debug-errors');
+    expect(html).toContain('No component registered for id &quot;hero&quot;.');
+    expect(html).toContain('Component &quot;card&quot; threw while rendering: boom.');
+    // The error list appears before the JSON dump's <pre> tag.
+    expect(html.indexOf('data-experiences-debug-errors')).toBeLessThan(html.indexOf('<pre'));
   });
 });
