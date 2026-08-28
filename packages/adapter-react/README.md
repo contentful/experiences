@@ -50,7 +50,7 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 ### Styling + runtime context (hooks)
 
 ```ts
-useDesignValues<T>(); // Optional hook: the same resolved design record that auto-fills props
+useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
@@ -58,7 +58,7 @@ useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Te
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling straight from props is the recommended path; `useDesignValues()` exposes the same record for cases props don't cover. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling from those props is the one recommended path. `useDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 

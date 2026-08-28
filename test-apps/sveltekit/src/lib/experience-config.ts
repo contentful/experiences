@@ -1,6 +1,8 @@
 /**
  * Maps Contentful component / experience-template ids to the app's components, and wires
- * `resolveToken`. Components read design via `getDesignValues()`.
+ * `resolveToken`. Components style themselves from their auto-filled design
+ * props; `Header` is the deliberate exception, kept on `getDesignValues()` so
+ * this app exercises that path against a real space.
  */
 
 import {

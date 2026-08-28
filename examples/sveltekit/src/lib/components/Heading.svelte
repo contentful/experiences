@@ -3,25 +3,35 @@
 
   export interface HeadingProps {
     text?: string;
+    // Design properties, auto-filled as props — already cascaded to the active
+    // viewport and token-resolved by the time they arrive.
+    as?: HeadingTag;
+    align?: string;
+    fontSize?: string;
+    fontWeight?: string;
   }
 </script>
 
+<!--
+  The recommended way to style a component: declare the design properties you
+  consume as props and read them by name. They arrive resolved, so `as` (a
+  semantic key) picks the tag and the CSS-shaped keys go straight into the style
+  string. `align` is this design system's shorthand for `text-align`.
+-->
 <script lang="ts">
-  import { getDesignValues, toCss } from '@contentful/experiences-svelte';
+  let { text, as: tag = 'h2', align, fontSize, fontWeight }: HeadingProps = $props();
 
-  let { text }: HeadingProps = $props();
-
-  const design = $derived(getDesignValues());
-  const tag = $derived<HeadingTag>((design.as as HeadingTag | undefined) ?? 'h2');
-  const style = $derived.by(() => {
-    const base = 'margin: 0; color: #1f2937';
-    const css = toCss(design);
-    const cssStr = Object.entries(css)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
-      .join('; ');
-    const align = design.align ? `; text-align: ${design.align}` : '';
-    return `${base}${align}${cssStr ? '; ' + cssStr : ''}`;
-  });
+  const style = $derived(
+    [
+      'margin: 0',
+      'color: #1f2937',
+      align && `text-align: ${align}`,
+      fontSize && `font-size: ${fontSize}`,
+      fontWeight && `font-weight: ${fontWeight}`,
+    ]
+      .filter(Boolean)
+      .join('; ')
+  );
 </script>
 
 <svelte:element this={tag} {style}>{text ?? ''}</svelte:element>

@@ -1,7 +1,7 @@
 <!--
   Composed hero: title + optional body + CTA + hero image. All content
   properties come from a `Hero from Promotion` DataAssembly binding — this
-  component just lays them out.
+  component just lays them out and reads its two design properties by name.
 -->
 <script lang="ts" module>
   export interface HeroPlainProps {
@@ -10,27 +10,28 @@
     ctaLabel?: string;
     ctaUrl?: string;
     image?: string;
+    // Design properties, auto-filled as props.
+    backgroundColor?: string;
+    color?: string;
   }
 </script>
 
 <script lang="ts">
-  import { getDesignValues } from '@contentful/experiences-svelte';
+  let { title, ctaLabel, ctaUrl, image, backgroundColor, color }: HeroPlainProps = $props();
 
-  let { title, ctaLabel, ctaUrl, image }: HeroPlainProps = $props();
-
-  const design = $derived(getDesignValues());
-  const style = $derived.by(() => {
-    const parts = [
+  const style = $derived(
+    [
       'display: grid',
       image ? 'grid-template-columns: 1fr 1fr' : 'grid-template-columns: 1fr',
       'align-items: center',
       'gap: 2rem',
       'padding: 4rem 2rem',
-    ];
-    if (design.backgroundColor) parts.push(`background: ${design.backgroundColor}`);
-    if (design.color) parts.push(`color: ${design.color}`);
-    return parts.join('; ');
-  });
+      backgroundColor && `background: ${backgroundColor}`,
+      color && `color: ${color}`,
+    ]
+      .filter(Boolean)
+      .join('; ')
+  );
 </script>
 
 <section {style}>

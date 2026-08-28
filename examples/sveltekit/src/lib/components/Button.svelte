@@ -2,33 +2,37 @@
   export interface ButtonProps {
     label?: string;
     url?: string;
+    // Design properties, auto-filled as props. `target` is a semantic key (it
+    // shapes the markup, not the CSS); the other two are CSS-shaped.
+    target?: '_self' | '_blank';
+    backgroundColor?: string;
+    color?: string;
   }
 </script>
 
 <script lang="ts">
-  import { getDesignValues } from '@contentful/experiences-svelte';
+  let {
+    label = 'Button',
+    url,
+    target = '_self',
+    backgroundColor = '#111',
+    color = '#fff',
+  }: ButtonProps = $props();
 
-  let { label = 'Button', url }: ButtonProps = $props();
-
-  const design = $derived(getDesignValues());
-  const style = $derived.by(() => {
-    const parts = [
+  const style = $derived(
+    [
       'display: inline-flex',
       'align-items: center',
       'gap: 6px',
       'padding: 0.75rem 1.5rem',
       'border-radius: 0.25rem',
-      'background: #111',
-      'color: #fff',
       'text-decoration: none',
       'font-weight: 500',
       'cursor: pointer',
-    ];
-    if (design.backgroundColor) parts.push(`background: ${design.backgroundColor}`);
-    if (design.color) parts.push(`color: ${design.color}`);
-    return parts.join('; ');
-  });
-  const target = $derived((design.target as string | undefined) ?? '_self');
+      `background: ${backgroundColor}`,
+      `color: ${color}`,
+    ].join('; ')
+  );
 </script>
 
 {#if url}

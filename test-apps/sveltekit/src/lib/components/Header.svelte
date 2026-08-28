@@ -31,6 +31,12 @@
 
   let { text, children }: HeaderProps = $props();
 
+  // Deliberate `getDesignValues()` coverage for this harness. Every other
+  // component here — and every component in `examples/` — styles from
+  // auto-filled design props instead, which is the recommended path. The hook
+  // earns its place here because this app renders against a real space and
+  // accepts whatever CSS-shaped keys it sends without enumerating them.
+  //
   // Read in a $derived to stay reactive; `variant` picks the tag, `toCss`
   // keeps the CSS-shaped keys.
   const design = $derived(getDesignValues());

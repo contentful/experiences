@@ -42,7 +42,7 @@ useActiveViewport; // Rune-backed reactive object; you'll rarely need it directl
 ### Styling + runtime context (helpers)
 
 ```ts
-getDesignValues<T>(); // Optional helper: the same resolved design record that auto-fills props; read in a $derived to stay reactive
+getDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props; read in a $derived to stay reactive
 toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
 getExperience(); // RenderContext: debug, metadata, viewports, activeViewport
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
@@ -50,7 +50,7 @@ getContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Te
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling straight from `$props()` is the recommended path; `getDesignValues()` exposes the same record (read it in a `$derived` to stay reactive) for cases props don't cover. Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling from `$props()` is the one recommended path. `getDesignValues()` exposes the same record (read it in a `$derived` to stay reactive) as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 

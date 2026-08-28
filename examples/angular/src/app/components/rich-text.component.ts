@@ -1,6 +1,5 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { injectDesignValues, toCss } from '@contentful/experiences-angular';
 
 // Minimal rich-text renderer — matches the Next.js and SvelteKit examples'
 // coverage: paragraphs + bold/italic marks. The document shape follows
@@ -25,10 +24,6 @@ interface Paragraph {
 interface RichDoc {
   nodeType: 'document';
   content: Paragraph[];
-}
-
-interface RichTextDesign {
-  align?: string;
 }
 
 function extractDoc(input: unknown): RichDoc | null {
@@ -67,9 +62,22 @@ function extractDoc(input: unknown): RichDoc | null {
 })
 export class RichTextComponent {
   private readonly documentValue = signal<unknown>(undefined);
+  protected readonly alignValue = signal<string | undefined>(undefined);
+  protected readonly fontSizeValue = signal<string | undefined>(undefined);
 
+  /** Content property. */
   @Input() set document(value: unknown) {
     this.documentValue.set(value);
+  }
+
+  /** Design property — this design system's shorthand for `text-align`. */
+  @Input() set align(value: string | undefined) {
+    this.alignValue.set(value);
+  }
+
+  /** Design property. */
+  @Input() set fontSize(value: string | undefined) {
+    this.fontSizeValue.set(value);
   }
 
   protected readonly doc = computed(() => extractDoc(this.documentValue()));
@@ -78,13 +86,8 @@ export class RichTextComponent {
     return span.marks?.some((mark) => mark.type === type) ?? false;
   }
 
-  private readonly design = injectDesignValues<RichTextDesign>();
-
-  protected readonly style = computed(() => {
-    const design = this.design();
-    return {
-      ...(design.align ? { textAlign: design.align } : {}),
-      ...toCss(design),
-    };
-  });
+  protected readonly style = computed(() => ({
+    ...(this.alignValue() ? { textAlign: this.alignValue() } : {}),
+    ...(this.fontSizeValue() ? { fontSize: this.fontSizeValue() } : {}),
+  }));
 }

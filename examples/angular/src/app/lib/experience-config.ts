@@ -1,8 +1,9 @@
 /**
  * Maps Contentful component / experience-template ids to the app's Angular
  * components, and wires `resolveToken`. Registry keys match the last URN segment
- * of each node's `component` / `experienceTemplate`. Components read design via
- * `injectDesignValues()`.
+ * of each node's `component` / `experienceTemplate`. Components style themselves
+ * from their auto-filled design inputs; `resolveToken` is what turns design-token
+ * ids into the values those inputs carry.
  *
  * `card` is registered via `defineComponent({ resolveData, component })` to
  * demonstrate async enrichment (a stand-in for a catalog fetch) plus

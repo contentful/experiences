@@ -16,6 +16,8 @@ Pure, framework-agnostic viewport math for resolving Contentful's `DesignPropVal
 
 ## `toCss` and the CSS-property whitelist
 
+`toCss` is a companion to the design-hook escape hatch, not part of the recommended styling path. Components should style from their auto-filled design props, where they read the keys they declared and there is nothing to filter — see [Styling components](../../README.md#styling-components). `toCss` earns its place when you're holding a whole resolved record from `useDesignValues()` / `getDesignValues()` / `injectDesignValues()` and need the CSS-shaped subset of it.
+
 The adapters' `toCss` helper keeps only keys whose normalized form is in `CSS_PROPERTIES` and **drops everything else** — that's how semantic design values (`variant`, `as`, `ratio`, …) stay out of a style object. The trade-off is that a genuine CSS property missing from the set is dropped silently.
 
 If you hit that:

@@ -2,15 +2,14 @@
 
 import type { CSSProperties } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
-
 export interface ImageProps {
   src?: string;
   alt?: string | null;
+  // Design property, auto-filled as a prop.
+  radius?: string;
 }
 
-export function Image({ src, alt }: ImageProps) {
-  const design = useDesignValues();
+export function Image({ src, alt, radius }: ImageProps) {
   if (!src) return null;
 
   const style: CSSProperties = {
@@ -18,7 +17,7 @@ export function Image({ src, alt }: ImageProps) {
     width: '100%',
     height: 'auto',
     objectFit: 'cover',
-    borderRadius: (design.radius as string) ?? undefined,
+    borderRadius: radius,
   };
 
   return <img src={src} alt={alt ?? ''} style={style} />;

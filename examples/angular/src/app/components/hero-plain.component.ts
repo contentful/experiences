@@ -1,15 +1,10 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { injectDesignValues } from '@contentful/experiences-angular';
-
-interface HeroPlainDesign {
-  backgroundColor?: string;
-  color?: string;
-}
 
 /**
  * Composed hero: title + CTA + hero image. All content properties come from a
- * `Hero from Promotion` DataAssembly binding — this component just lays them out.
+ * `Hero from Promotion` DataAssembly binding — this component just lays them out
+ * and declares its two design properties as inputs.
  */
 @Component({
   selector: 'app-hero-plain',
@@ -45,6 +40,8 @@ export class HeroPlainComponent {
   protected readonly ctaLabelValue = signal<string | undefined>(undefined);
   protected readonly ctaUrlValue = signal<string | undefined>(undefined);
   protected readonly imageValue = signal<string | undefined>(undefined);
+  protected readonly backgroundColorValue = signal<string | undefined>(undefined);
+  protected readonly colorValue = signal<string | undefined>(undefined);
 
   @Input() set title(value: string | undefined) {
     this.titleValue.set(value);
@@ -68,18 +65,23 @@ export class HeroPlainComponent {
     this.imageValue.set(value);
   }
 
-  private readonly design = injectDesignValues<HeroPlainDesign>();
+  /** Design property. */
+  @Input() set backgroundColor(value: string | undefined) {
+    this.backgroundColorValue.set(value);
+  }
 
-  protected readonly style = computed(() => {
-    const design = this.design();
-    return {
-      display: 'grid',
-      gridTemplateColumns: this.imageValue() ? '1fr 1fr' : '1fr',
-      alignItems: 'center',
-      gap: '2rem',
-      padding: '4rem 2rem',
-      ...(design.backgroundColor ? { background: design.backgroundColor } : {}),
-      ...(design.color ? { color: design.color } : {}),
-    };
-  });
+  /** Design property. */
+  @Input() set color(value: string | undefined) {
+    this.colorValue.set(value);
+  }
+
+  protected readonly style = computed(() => ({
+    display: 'grid',
+    gridTemplateColumns: this.imageValue() ? '1fr 1fr' : '1fr',
+    alignItems: 'center',
+    gap: '2rem',
+    padding: '4rem 2rem',
+    ...(this.backgroundColorValue() ? { background: this.backgroundColorValue() } : {}),
+    ...(this.colorValue() ? { color: this.colorValue() } : {}),
+  }));
 }
