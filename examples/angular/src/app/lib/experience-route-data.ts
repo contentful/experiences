@@ -13,8 +13,12 @@ export interface ExperienceRouteData {
   slug: string;
   /** Carries its own `metadata`, `debug`, and pre-resolved viewport. */
   experience: PortableRenderPlan | null;
-  /** Only set when there is no plan to read it from. */
-  debug?: boolean;
+  /**
+   * The plan carries this too. Relayed so the page can demonstrate the
+   * renderer's override input, and so the not-found view (which has no plan)
+   * can read it.
+   */
+  debug: boolean;
   /** True when the delivery API had no Experience under `slug`. */
   notFound: boolean;
 }

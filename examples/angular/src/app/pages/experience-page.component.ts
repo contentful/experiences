@@ -5,8 +5,12 @@ import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
 
 /**
- * Renders the plan the Express layer already resolved. Only `config` is bound
- * alongside it — component classes cannot survive `TransferState`.
+ * Renders the plan the Express layer already resolved.
+ *
+ * `[metadata]` and `[debug]` are optional — the plan already carries what
+ * `fetchExperience` was given. They are bound here to show the render-time
+ * override: `metadata` merges over the plan's, `debug` replaces it. `[config]`
+ * is not optional; component classes cannot survive `TransferState`.
  *
  * `<cf-server-experience>` resolves the active viewport once and never
  * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)
@@ -18,7 +22,12 @@ import { experienceConfig } from '../lib/experience-config.js';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (experience; as plan) {
-      <cf-server-experience [experience]="plan" [config]="config" />
+      <cf-server-experience
+        [experience]="plan"
+        [config]="config"
+        [metadata]="renderMetadata"
+        [debug]="debug"
+      />
     } @else {
       <main
         style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;"
@@ -41,4 +50,6 @@ export class ExperiencePageComponent {
   protected readonly config = experienceConfig;
   protected readonly experience = this.data?.experience ?? null;
   protected readonly slug = this.data?.slug ?? '';
+  protected readonly debug = this.data?.debug ?? false;
+  protected readonly renderMetadata = { renderer: 'server' };
 }

@@ -40,7 +40,16 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
     }
   );
 
-  // metadata, debug, and the viewport ride along on the plan; only `config` has
-  // to be passed twice, since component references cannot be serialized onto it.
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+  // `metadata` and `debug` are both optional here — the plan already carries what
+  // `fetchExperience` was given. They are passed to show the render-time
+  // override: `metadata` merges over the plan's (so the component sees
+  // `slug`, `locale` *and* `renderer`), `debug` replaces it.
+  return (
+    <ServerExperienceRenderer
+      experience={experience}
+      config={experienceConfig}
+      metadata={{ renderer: 'server' }}
+      debug={debug}
+    />
+  );
 }
