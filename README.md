@@ -104,7 +104,7 @@ It throws `NotFoundError` when the id doesn't exist. See [Error handling](#fetch
 
 The signature is three grouped params: what to fetch (space, env, experience), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so future personalization params, digital-property identifiers, and transport options fit their respective group without reshaping the signature.
 
-**You pass render context once, to `fetchExperience`.** `metadata`, `debug`, and the viewport the design was pre-resolved against all ride along on the returned plan, so the renderer reads them from there — no second copy to keep in sync. The renderer accepts all three as props too, but only as overrides.
+**You pass render context once, to `fetchExperience`.** `metadata` and `debug` ride along on the returned plan, and the renderer reads them from there. Neither is a renderer prop — a second way to set them would just re-create the two-copies-out-of-sync problem, and `debug` is meant to be one switch across fetch and render, not two.
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
@@ -602,7 +602,7 @@ Three positional args map to three concerns that evolve independently:
 | `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
 | `resolveOptions`    | `{ config, metadata?, debug?, initialViewportId? }`                   | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
 
-All three of `metadata`, `debug`, and `initialViewportId` are recorded on the returned plan, so the renderer picks them up without being passed them again.
+`metadata`, `debug`, and the resolved viewport are recorded on the returned plan, and the renderer reads them from there.
 
 Configure both tokens up front and flip `preview: true` per call to hit the preview API. `preview: true` without `previewToken` throws an error. `host` is a full base-URL string for custom endpoints (staging, proxy, per-region); when set, it wins over the `preview`-derived default host.
 
@@ -763,22 +763,22 @@ Async. Walks the payload, classifies properties, runs every component's `resolve
 
 SSR-friendly renderer. No reactive subscriptions; the active viewport is resolved once. Safe to use in React Server Components.
 
-Only `experience` and `config` are needed. The other three are **overrides** — every one of them has a value on the plan already, so pass them only to render differently than the plan was fetched for.
+| Prop                | Type                                          | Required | Default                      | Description                                                                                                                   |
+| ------------------- | --------------------------------------------- | -------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `experience`        | `PortableRenderPlan`                          | yes      | n/a                          | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.                         |
+| `config`            | `Config`                                      | yes      | n/a                          | Same registry passed to `resolveExperience`. Looked up at render time for dispatch. Cannot travel on the plan — see below.    |
+| `initialViewportId` | `string`                                      | no       | The plan's fallback viewport | Viewport to render for. Defaults to the one design was pre-resolved against, so first paint needs no recompute.               |
+| `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent`           | Fallback for unregistered component types. Default `MissingComponent`: visible box when `debug` is on, silent null otherwise. |
 
-| Prop                | Type                                          | Required | Default                      | Description                                                                                                                                                            |
-| ------------------- | --------------------------------------------- | -------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experience`        | `PortableRenderPlan`                          | yes      | n/a                          | The resolved plan from `fetchExperience` or `resolveExperience`. An empty-nodes plan renders nothing.                                                                  |
-| `config`            | `Config`                                      | yes      | n/a                          | Same registry passed to `resolveExperience`. Looked up at render time for dispatch. Cannot travel on the plan — see below.                                             |
-| `initialViewportId` | `string`                                      | no       | The plan's fallback viewport | Seeds the active viewport. Defaults to the viewport design was pre-resolved against, so first paint needs no recompute.                                                |
-| `metadata`          | `Record<string, unknown>`                     | no       | The plan's `metadata`        | Shallow-merges **over** `plan.metadata`. Read via `useExperience().metadata`.                                                                                          |
-| `debug`             | `boolean`                                     | no       | The plan's `debug`           | Observability switch. Shows the missing-component box, and auto-mounts `<DebugExperience>` above the tree. An explicit `false` overrides a plan fetched with debug on. |
-| `renderUnknown`     | `(props: MissingComponentProps) => ReactNode` | no       | `MissingComponent`           | Fallback for unregistered component types. Default `MissingComponent`: visible box when `debug` is on, silent null otherwise.                                          |
+**`metadata` and `debug` are not props.** Both live on the plan. Set them on `fetchExperience` (or `resolveExperience`) and the renderer picks them up. If you build a plan by hand, set the fields directly.
 
-**Why `config` is still a prop.** The plan is plain serializable data by design — that is what lets it cross the RSC boundary, SvelteKit's `data`, and Angular's `TransferState`. `config` holds component references and an optional `resolveToken` function, neither of which survives serialization. So it is passed to both calls on purpose, and it is the only thing that is.
+**`initialViewportId` is a prop** because rendering a viewport other than the pre-resolved one is a real case — a preview pane showing one plan at two widths, say. The renderer recomputes design from the raw per-viewport values when it differs.
+
+**Why `config` is a prop.** The plan is plain serializable data by design — that is what lets it cross the RSC boundary, SvelteKit's `data`, and Angular's `TransferState`. `config` holds component references and an optional `resolveToken` function, neither of which survives serialization. So it is passed to both calls on purpose, and it is the only thing that is.
 
 ### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)
 
-Client-side renderer with reactive viewport tracking via `window.matchMedia`. Same prop shape as `ServerExperienceRenderer`, including the plan-carried defaults.
+Client-side renderer with reactive viewport tracking via `window.matchMedia`. Same prop shape as `ServerExperienceRenderer`.
 
 Server-safe: it does **not** throw during SSR. First paint uses the seeded viewport and registers no listeners when there is no `window`, so server output matches `<ServerExperienceRenderer>`; `matchMedia` takes over after hydration.
 

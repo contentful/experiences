@@ -262,7 +262,7 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const debugRender = render(planWithMissing, { config: justContainer, debug: true });
+    const debugRender = render({ ...planWithMissing, debug: true }, { config: justContainer });
     expect(debugRender.html).toContain('data-experiences-missing="NotRegistered"');
 
     const plainRender = render(planWithMissing, { config: justContainer });
@@ -282,7 +282,7 @@ describe('ServerExperienceRenderer', () => {
     const off = render(plan, { config: captureConfig });
     expect(off.html).not.toContain('data-experiences-debug');
 
-    const on = render(plan, { config: captureConfig, debug: true });
+    const on = render({ ...plan, debug: true }, { config: captureConfig });
     expect(on.html).toContain('data-experiences-debug');
     expect(on.container.textContent).toContain('Experience debug');
   });
@@ -294,9 +294,8 @@ describe('ServerExperienceRenderer', () => {
       nodes: [componentNode('capture', { id: 'c' })],
     };
 
-    render(await resolveExperience(capturePayload, captureConfig), {
+    render(await resolveExperience(capturePayload, captureConfig, { metadata: { slug: 'home' } }), {
       config: captureConfig,
-      metadata: { slug: 'home' },
     });
 
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home' });
@@ -859,7 +858,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       opts
     );
 
-  it('reads metadata off the plan without it being bound on the renderer', async () => {
+  it('reads metadata off the plan — there is no renderer input for it', async () => {
     const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
 
     render(plan, { config: captureConfig });
@@ -867,32 +866,12 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
-  it('reads debug off the plan without it being bound on the renderer', async () => {
+  it('reads debug off the plan — there is no renderer input for it', async () => {
     const plan = await buildPlan({ debug: true });
 
     render(plan, { config: captureConfig });
 
     expect(captureSink[0]!.experience.debug).toBe(true);
-  });
-
-  it('shallow-merges the metadata input over the plan value', async () => {
-    const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
-
-    render(plan, { config: captureConfig, metadata: { locale: 'de-DE', extra: true } });
-
-    expect(captureSink[0]!.experience.metadata).toEqual({
-      slug: 'home',
-      locale: 'de-DE',
-      extra: true,
-    });
-  });
-
-  it('lets an explicit debug=false override a plan fetched with debug on', async () => {
-    const plan = await buildPlan({ debug: true });
-
-    render(plan, { config: captureConfig, debug: false });
-
-    expect(captureSink[0]!.experience.debug).toBe(false);
   });
 
   it('renders the debug panel from the plan alone', async () => {

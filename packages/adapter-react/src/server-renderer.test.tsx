@@ -303,7 +303,10 @@ describe('ServerExperienceRenderer', () => {
     };
 
     const debugHtml = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={planWithMissing} config={justContainer} debug />
+      <ServerExperienceRenderer
+        experience={{ ...planWithMissing, debug: true }}
+        config={justContainer}
+      />
     );
     expect(debugHtml).toContain('data-experiences-missing="NotRegistered"');
 
@@ -329,7 +332,7 @@ describe('ServerExperienceRenderer', () => {
     expect(off).not.toContain('data-experiences-debug');
 
     const on = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={captureConfig} debug />
+      <ServerExperienceRenderer experience={{ ...plan, debug: true }} config={captureConfig} />
     );
     expect(on).toContain('data-experiences-debug');
     expect(on).toContain('Experience debug');
@@ -344,15 +347,10 @@ describe('ServerExperienceRenderer', () => {
     const captureConfig: Config = { components: { capture: Capture } };
     const plan = await resolveExperience(
       { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
+      captureConfig,
+      { metadata: { slug: 'home', locale: 'en-US' } }
     );
-    renderToStaticMarkup(
-      <ServerExperienceRenderer
-        experience={plan}
-        config={captureConfig}
-        metadata={{ slug: 'home', locale: 'en-US' }}
-      />
-    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={captureConfig} />);
     expect(seen!.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
@@ -1218,7 +1216,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     nodes: [componentNode('capture')],
   });
 
-  it('reads metadata off the plan without it being passed to the renderer', async () => {
+  it('reads metadata off the plan — there is no renderer prop for it', async () => {
     const { seen, config } = captureSetup();
     const plan = await resolveExperience(payload(), config, {
       metadata: { slug: 'home', locale: 'en-US' },
@@ -1229,48 +1227,11 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
-  it('reads debug off the plan without it being passed to the renderer', async () => {
+  it('reads debug off the plan — there is no renderer prop for it', async () => {
     const { seen, config } = captureSetup();
     const plan = await resolveExperience(payload(), config, { debug: true });
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
-
-    expect(seen[0].debug).toBe(true);
-  });
-
-  it('shallow-merges the metadata prop over the plan value', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config, {
-      metadata: { slug: 'home', locale: 'en-US' },
-    });
-
-    renderToStaticMarkup(
-      <ServerExperienceRenderer
-        experience={plan}
-        config={config}
-        metadata={{ locale: 'de-DE', extra: true }}
-      />
-    );
-
-    expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'de-DE', extra: true });
-  });
-
-  it('lets an explicit debug={false} override a plan fetched with debug on', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config, { debug: true });
-
-    renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} debug={false} />
-    );
-
-    expect(seen[0].debug).toBe(false);
-  });
-
-  it('lets an explicit debug override a plan fetched without it', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config);
-
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} debug />);
 
     expect(seen[0].debug).toBe(true);
   });

@@ -36,13 +36,8 @@
     experience,
     config,
     initialViewportId,
-    metadata,
-    debug,
     renderUnknown = MissingComponent,
   }: ClientExperienceRendererProps = $props();
-
-  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
-  const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
 
   const viewports = $derived(experience?.viewports ?? []);
   // Seed from the plan so first paint matches the server renderer.
@@ -55,12 +50,8 @@
   // reactive across viewport changes. The fields update in an $effect below.
   const liveContext = $state<RenderContext>({
     ...DEFAULT_CONTEXT,
-    debug: debug ?? experience?.debug ?? false,
-    metadata: {
-      ...DEFAULT_CONTEXT.metadata,
-      ...(experience?.metadata ?? {}),
-      ...(metadata ?? {}),
-    },
+    debug: experience?.debug ?? false,
+    metadata: experience?.metadata ?? DEFAULT_CONTEXT.metadata,
     viewports: experience?.viewports ?? [],
     activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
     activeViewportIndex: 0,
@@ -76,17 +67,13 @@
     liveContext.activeViewport = experience.viewports[idx] ?? FALLBACK_VIEWPORT;
     liveContext.activeViewportIndex = idx;
     liveContext.fallbackViewportIndex = experience.fallbackViewportIndex;
-    liveContext.debug = resolvedDebug;
-    liveContext.metadata = {
-      ...DEFAULT_CONTEXT.metadata,
-      ...experience.metadata,
-      ...(metadata ?? {}),
-    };
+    liveContext.debug = experience.debug;
+    liveContext.metadata = experience.metadata;
   });
 </script>
 
 {#if experience}
-  {#if resolvedDebug}
+  {#if experience.debug}
     <DebugExperience {experience} />
   {/if}
   <NodesRenderer

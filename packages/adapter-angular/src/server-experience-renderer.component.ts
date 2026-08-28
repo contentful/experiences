@@ -51,14 +51,9 @@ import type { Config, RenderContext } from './types.js';
 })
 export class ServerExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
-  // `undefined` means "not bound", distinct from an explicit `[debug]="false"`.
-  private readonly debugValue = signal<boolean | undefined>(undefined);
-  protected readonly resolvedDebug = computed(
-    () => this.debugValue() ?? this.experienceValue()?.debug ?? false
-  );
+  protected readonly resolvedDebug = computed(() => this.experienceValue()?.debug ?? false);
   private readonly configValue = signal<Config | null>(null);
   private readonly initialViewportIdValue = signal<string | undefined>(undefined);
-  private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
   private readonly renderUnknownValue = signal<Type<unknown>>(MissingComponentComponent);
 
   /** A resolved render plan, or `null` while one is still being fetched. */
@@ -76,19 +71,6 @@ export class ServerExperienceRendererComponent {
    */
   @Input() set initialViewportId(value: string | undefined) {
     this.initialViewportIdValue.set(value);
-  }
-
-  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
-  @Input() set metadata(value: Record<string, unknown> | undefined) {
-    this.metadataValue.set(value);
-  }
-
-  /**
-   * Renders the resolved plan above the experience for inspection. Defaults to
-   * the plan's `debug`; `[debug]="false"` overrides a debug-on plan.
-   */
-  @Input() set debug(value: boolean | undefined) {
-    this.debugValue.set(value);
   }
 
   /** Replaces the default missing-component box. Receives `componentId` and `nodeId`. */
@@ -112,12 +94,8 @@ export class ServerExperienceRendererComponent {
         : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
-      debug: this.resolvedDebug(),
-      metadata: {
-        ...DEFAULT_CONTEXT.metadata,
-        ...(experience?.metadata ?? {}),
-        ...(this.metadataValue() ?? {}),
-      },
+      debug: experience?.debug ?? false,
+      metadata: experience?.metadata ?? DEFAULT_CONTEXT.metadata,
       viewports: experience?.viewports ?? [],
       activeViewport: experience?.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT,
       activeViewportIndex,

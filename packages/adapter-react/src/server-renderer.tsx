@@ -40,15 +40,6 @@ export interface ServerExperienceRendererProps {
    * Defaults to the viewport the plan was pre-resolved against.
    */
   initialViewportId?: string;
-  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
-  metadata?: Record<string, unknown>;
-  /**
-   * Observability switch. When on: renders the visible missing-component box,
-   * turns the default `renderUnknown` fallback into the debug component, and
-   * auto-mounts `<DebugExperience>` (the resolved-plan JSON panel) after the
-   * tree. Defaults to the plan's `debug`.
-   */
-  debug?: boolean;
   /** Override the fallback rendered for unregistered component types. */
   renderUnknown?: RenderUnknown;
 }
@@ -57,14 +48,10 @@ export function ServerExperienceRenderer({
   experience,
   config,
   initialViewportId,
-  metadata,
-  debug,
   renderUnknown = MissingComponent,
 }: ServerExperienceRendererProps): ReactNode {
   if (!experience) return null;
 
-  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
-  const resolvedDebug = debug ?? experience.debug;
   // Default to the pre-resolved viewport so first paint needs no recompute.
   const activeViewportIndex =
     initialViewportId === undefined
@@ -79,8 +66,8 @@ export function ServerExperienceRenderer({
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
-    debug: resolvedDebug,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...experience.metadata, ...(metadata ?? {}) },
+    debug: experience.debug,
+    metadata: experience.metadata,
     viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
@@ -89,7 +76,7 @@ export function ServerExperienceRenderer({
 
   return (
     <ExperienceProvider value={renderContext}>
-      {resolvedDebug ? <DebugExperience experience={experience} /> : null}
+      {experience.debug ? <DebugExperience experience={experience} /> : null}
       <NodesRenderer
         nodes={experience.nodes}
         config={config}
