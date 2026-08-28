@@ -40,14 +40,20 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
     }
   );
 
-  // `metadata` and `debug` are both optional here — the plan already carries what
-  // `fetchExperience` was given. They are passed to show the render-time
-  // override: `metadata` merges over the plan's (so the component sees
-  // `slug`, `locale` *and* `renderer`), `debug` replaces it.
+  // All three render props are optional — the plan already carries what
+  // `fetchExperience` was given. Shown here to make the override path visible:
+  // `metadata` merges over the plan's (so the component sees `slug`, `locale`
+  // *and* `renderer`), while `debug` and `initialViewportId` replace it.
+  //
+  // Passing the same `initialViewportId` the fetch used is a no-op, since the
+  // renderer already defaults to the viewport design was pre-resolved against.
+  // It earns its place when you want a *different* viewport — a preview pane
+  // rendering one plan at two widths, say.
   return (
     <ServerExperienceRenderer
       experience={experience}
       config={experienceConfig}
+      initialViewportId={initialViewportId}
       metadata={{ renderer: 'server' }}
       debug={debug}
     />

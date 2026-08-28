@@ -19,6 +19,8 @@ export interface ExperienceRouteData {
    * can read it.
    */
   debug: boolean;
+  /** Also on the plan; relayed only to demonstrate the renderer's override input. */
+  initialViewportId?: string;
   /** True when the delivery API had no Experience under `slug`. */
   notFound: boolean;
 }

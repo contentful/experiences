@@ -34,9 +34,9 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       }
     );
 
-    // The plan carries metadata, debug, and the viewport. `debug` is relayed as
-    // well only so the page can demonstrate the renderer's override prop.
-    return { experience, previewMode, debug };
+    // The plan carries all of these. `debug` and `initialViewportId` are relayed
+    // as well only so the page can demonstrate the renderer's override props.
+    return { experience, previewMode, debug, initialViewportId };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Experience not found');
     throw err;

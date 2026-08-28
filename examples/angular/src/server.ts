@@ -83,12 +83,12 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
       }
     );
 
-    // The plan carries metadata, debug, and the viewport. `debug` is relayed as
-    // well only so the page can demonstrate the renderer's override input.
-    return { slug, experience, debug, notFound: false };
+    // The plan carries all of these. `debug` and `initialViewportId` are relayed
+    // as well only so the page can demonstrate the renderer's override inputs.
+    return { slug, experience, debug, initialViewportId, notFound: false };
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return { slug, experience: null, debug, notFound: true };
+      return { slug, experience: null, debug, initialViewportId, notFound: true };
     }
     throw error;
   }
