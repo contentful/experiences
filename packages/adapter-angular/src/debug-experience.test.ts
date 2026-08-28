@@ -38,7 +38,14 @@ function experienceTemplateNode(id: string): PortableRenderNode {
 }
 
 function plan(nodes: PortableRenderNode[]): PortableRenderPlan {
-  return { viewports: VIEWPORTS, fallbackViewportIndex: 0, nodes, diagnostics: [] };
+  return {
+    viewports: VIEWPORTS,
+    fallbackViewportIndex: 0,
+    nodes,
+    metadata: {},
+    debug: false,
+    diagnostics: [],
+  };
 }
 
 interface DebugResult {

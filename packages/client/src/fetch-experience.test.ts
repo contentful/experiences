@@ -6,7 +6,7 @@ import {
 import { ExperienceFetchError } from './errors.js';
 import { fetchExperience } from './fetch-experience.js';
 
-const { mockGet, mockPayload, mockPlan } = vi.hoisted(() => {
+const { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap } = vi.hoisted(() => {
   const mockPayload = {
     sys: { id: 'exp-1' },
     viewports: [{ id: 'default', query: '*' }],
@@ -19,9 +19,25 @@ const { mockGet, mockPayload, mockPlan } = vi.hoisted(() => {
     nodes: [],
   };
 
-  const mockGet = vi.fn().mockResolvedValue(mockPayload);
+  const mockSourceMap = {
+    version: 1,
+    variants: [],
+    spaces: ['space-1'],
+    environments: ['master'],
+    locales: ['en-US'],
+    entries: [{ entry: 'ref' }],
+    assets: [],
+    layers: [],
+    dataAssemblies: [],
+    nodes: { 'node-1': { field: 'title' } },
+  };
 
-  return { mockGet, mockPayload, mockPlan };
+  const mockGet = vi.fn().mockResolvedValue(mockPayload);
+  const mockGetWithOverrides = vi
+    .fn()
+    .mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
+
+  return { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap };
 });
 
 vi.mock('@contentful/experiences-sdk-core', () => ({
@@ -40,6 +56,7 @@ vi.mock('@contentful/experience-delivery', () => {
     ContentfulViewDeliveryClient: vi.fn().mockImplementation(() => ({
       experience: {
         get: mockGet,
+        getWithOverrides: mockGetWithOverrides,
       },
     })),
     // Real package exposes `NotFoundError` under the `ContentfulViewDelivery`
@@ -62,6 +79,10 @@ describe('fetchExperience', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue(mockPayload);
+    mockGetWithOverrides.mockResolvedValue({
+      ...mockPayload,
+      extensions: { sourceMap: mockSourceMap },
+    });
   });
 
   describe('inline credentials', () => {
@@ -312,5 +333,98 @@ describe('fetchExperience', () => {
       expect(error.experienceId).toBe('exp-1');
       expect(error.message).toContain('ECONNRESET');
     });
+  });
+});
+
+describe('fetchExperience — source map', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue(mockPayload);
+    mockGetWithOverrides.mockResolvedValue({
+      ...mockPayload,
+      extensions: { sourceMap: mockSourceMap },
+    });
+  });
+
+  it('uses the plain GET and requests no source map by default', async () => {
+    await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockGetWithOverrides).not.toHaveBeenCalled();
+  });
+
+  it('routes to getWithOverrides with the sourceMap extension when asked', async () => {
+    await fetchExperience(
+      { ...experienceOptions, locale: 'en-US', withSourceMap: true },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+      locale: 'en-US',
+      extensions: { sourceMap: {} },
+    });
+  });
+
+  it('forwards the response source map to resolveExperience', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(
+      { ...experienceOptions, withSourceMap: true },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      expect.anything(),
+      resolveOptions.config,
+      expect.objectContaining({ sourceMap: mockSourceMap })
+    );
+  });
+
+  it('forwards no source map when the flag is off, even if the response carries one', async () => {
+    // Guards against a stray `extensions.sourceMap` leaking onto the plan unasked.
+    mockGet.mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      expect.anything(),
+      resolveOptions.config,
+      expect.objectContaining({ sourceMap: undefined })
+    );
+  });
+
+  it('tolerates a requested source map the API did not return', async () => {
+    mockGetWithOverrides.mockResolvedValue({ ...mockPayload, extensions: {} });
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(
+      { ...experienceOptions, withSourceMap: true },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      expect.anything(),
+      resolveOptions.config,
+      expect.objectContaining({ sourceMap: undefined })
+    );
+  });
+
+  it('hands the resolver the experience payload, with the source map routed separately', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(
+      { ...experienceOptions, withSourceMap: true },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0];
+    expect(payloadArg.nodes).toEqual(mockPayload.nodes);
+    expect(payloadArg.viewports).toEqual(mockPayload.viewports);
   });
 });

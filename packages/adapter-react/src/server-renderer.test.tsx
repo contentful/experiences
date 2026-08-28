@@ -220,6 +220,7 @@ describe('ServerExperienceRenderer', () => {
         viewports: VIEWPORTS,
         activeViewport: VIEWPORTS[0],
         activeViewportIndex: 0,
+        fallbackViewportIndex: 0,
       },
     ]);
   });
@@ -1204,5 +1205,152 @@ describe('toCss', () => {
         { include: ['backgroundColor', 'variant'] }
       )
     ).toEqual({ backgroundColor: '#4f39f6' });
+  });
+});
+
+describe('ServerExperienceRenderer — render context carried on the plan', () => {
+  function captureSetup() {
+    const seen: Array<Record<string, unknown>> = [];
+    const Capture = () => {
+      seen.push(useExperience() as unknown as Record<string, unknown>);
+      return null;
+    };
+    const config: Config = { components: { capture: Capture } };
+    return { seen, config };
+  }
+
+  const payload = (): ExperiencePayload => ({
+    viewports: VIEWPORTS,
+    nodes: [componentNode('capture')],
+  });
+
+  it('reads metadata off the plan without it being passed to the renderer', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, {
+      metadata: { slug: 'home', locale: 'en-US' },
+    });
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+
+    expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'en-US' });
+  });
+
+  it('reads debug off the plan without it being passed to the renderer', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { debug: true });
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+
+    expect(seen[0].debug).toBe(true);
+  });
+
+  it('shallow-merges the metadata prop over the plan value', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, {
+      metadata: { slug: 'home', locale: 'en-US' },
+    });
+
+    renderToStaticMarkup(
+      <ServerExperienceRenderer
+        experience={plan}
+        config={config}
+        metadata={{ locale: 'de-DE', extra: true }}
+      />
+    );
+
+    expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'de-DE', extra: true });
+  });
+
+  it('lets an explicit debug={false} override a plan fetched with debug on', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { debug: true });
+
+    renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={config} debug={false} />
+    );
+
+    expect(seen[0].debug).toBe(false);
+  });
+
+  it('lets an explicit debug override a plan fetched without it', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config);
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} debug />);
+
+    expect(seen[0].debug).toBe(true);
+  });
+
+  it('publishes fallbackViewportIndex on the context, matching the other adapters', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+
+    expect(seen[0].fallbackViewportIndex).toBe(1);
+  });
+
+  it('seeds the active viewport from the plan when no initialViewportId is passed', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+
+    expect(seen[0].activeViewportIndex).toBe(1);
+    expect(seen[0].activeViewport).toEqual(VIEWPORTS[1]);
+  });
+
+  it('lets initialViewportId override the plan seed', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
+
+    renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />
+    );
+
+    // Legal: the renderer recomputes design from `designRaw` for the new viewport.
+    expect(seen[0].activeViewportIndex).toBe(2);
+    expect(seen[0].fallbackViewportIndex).toBe(1);
+  });
+
+  it('varies context per render by spreading the plan', async () => {
+    // The plan is the only channel for `metadata` / `debug`, so a per-render
+    // change means deriving a new plan. Spreading is shallow, which matters:
+    // `viewports` and `nodes` keep their identity, so nothing downstream that
+    // watches those references churns.
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config, { metadata: { slug: 'home' } });
+
+    const derived = {
+      ...plan,
+      debug: true,
+      metadata: { ...plan.metadata, viewer: 'anon' },
+    };
+    renderToStaticMarkup(<ServerExperienceRenderer experience={derived} config={config} />);
+
+    expect(seen[0].debug).toBe(true);
+    expect(seen[0].metadata).toEqual({ slug: 'home', viewer: 'anon' });
+    expect(derived.viewports).toBe(plan.viewports);
+    expect(derived.nodes).toBe(plan.nodes);
+  });
+
+  it('still falls back to viewport[0] when neither the plan nor the prop names one', async () => {
+    const { seen, config } = captureSetup();
+    const plan = await resolveExperience(payload(), config);
+
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+
+    expect(seen[0].activeViewportIndex).toBe(0);
+  });
+
+  it('renders the debug panel from the plan alone', async () => {
+    const config: Config = { components: { capture: () => null } };
+    const plan = await resolveExperience(payload(), config, { debug: true });
+
+    const html = renderToStaticMarkup(
+      <ServerExperienceRenderer experience={plan} config={config} />
+    );
+
+    expect(html).toContain('<details');
   });
 });

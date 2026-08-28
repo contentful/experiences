@@ -40,17 +40,17 @@ const FALLBACK_VIEWPORT: ViewportDef = {
 export interface ClientExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
-  /** Initial viewport seed; should match what the server-rendered output used. */
-  initialViewportId?: string;
   /**
-   * Arbitrary per-render metadata, readable by descendants via
-   * `useExperience()` and by resolvers via `ctx.experience.metadata`.
+   * Viewport to render for, typically derived from the request's User-Agent.
+   * Defaults to the viewport the plan was pre-resolved against.
    */
+  initialViewportId?: string;
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**
    * Observability switch. When on: renders the visible missing-component box,
    * turns the default `renderUnknown` fallback into the debug component, and
-   * auto-mounts `<DebugExperience>` after the tree.
+   * auto-mounts `<DebugExperience>` after the tree. Defaults to the plan's `debug`.
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;
@@ -63,7 +63,7 @@ export function ClientExperienceRenderer({
   config,
   initialViewportId,
   metadata,
-  debug = false,
+  debug,
   renderUnknown = MissingComponent,
   renderError = ComponentError,
 }: ClientExperienceRendererProps): ReactNode {
@@ -91,12 +91,27 @@ export function ClientExperienceRenderer({
   // closure instead of this setState-backed one, so SSR is unaffected.
   const onDiagnostic = useCallback((error: Error) => {
     queueMicrotask(() => {
-      setRenderDiagnostics((prev) => [...prev, error]);
+      // Dedup by message, the guard `NodeRenderer` used to hold in a `useRef`.
+      // It lives here so that module stays hook-free and therefore usable from
+      // a React Server Component. Returning `prev` unchanged also skips a
+      // pointless re-render, which matters more here than on the server: every
+      // ancestor re-render re-reports the same diagnostic.
+      setRenderDiagnostics((prev) =>
+        prev.some((seen) => seen.message === error.message) ? prev : [...prev, error]
+      );
     });
   }, []);
 
-  const { activeViewportIndex } = useActiveViewport(experience?.viewports ?? [], initialViewportId);
+  // Seed from the plan so first paint matches the server renderer. Computed
+  // before the `experience` guard because the hook below cannot be called
+  // conditionally.
+  const seedViewportId =
+    initialViewportId ??
+    (experience ? experience.viewports[experience.fallbackViewportIndex]?.id : undefined);
+  const { activeViewportIndex } = useActiveViewport(experience?.viewports ?? [], seedViewportId);
   if (!experience) return null;
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = debug ?? experience.debug;
   // Copy so the context shares no object identity with the plan arrays — see
   // the note in `server-renderer.tsx`.
   const contextViewports = experience.viewports.map((v) => ({ ...v }));
@@ -104,11 +119,12 @@ export function ClientExperienceRenderer({
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
-    debug,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
+    debug: resolvedDebug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...experience.metadata, ...(metadata ?? {}) },
     viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
+    fallbackViewportIndex: experience.fallbackViewportIndex,
   };
 
   return (
@@ -133,7 +149,7 @@ export function ClientExperienceRenderer({
           onDiagnostic={onDiagnostic}
         />
       </DiagnosticReporterContext.Provider>
-      {debug ? (
+      {resolvedDebug ? (
         <DebugExperience
           experience={experience}
           errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}

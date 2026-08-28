@@ -36,18 +36,25 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       config: experienceConfig,
       metadata: { slug: experienceId, locale },
       debug,
-      // Pre-resolve design against the UA-detected viewport (same seed the
-      // renderer uses) so SSR paints correct design on first render.
       initialViewportId,
     }
   );
 
+  // All three render props are optional — the plan already carries what
+  // `fetchExperience` was given. Shown here to make the override path visible:
+  // `metadata` merges over the plan's (so the component sees `slug`, `locale`
+  // *and* `renderer`), while `debug` and `initialViewportId` replace it.
+  //
+  // Passing the same `initialViewportId` the fetch used is a no-op, since the
+  // renderer already defaults to the viewport design was pre-resolved against.
+  // It earns its place when you want a *different* viewport — a preview pane
+  // rendering one plan at two widths, say.
   return (
     <ServerExperienceRenderer
       experience={experience}
       config={experienceConfig}
       initialViewportId={initialViewportId}
-      metadata={{ slug: experienceId, locale }}
+      metadata={{ renderer: 'server' }}
       debug={debug}
     />
   );

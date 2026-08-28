@@ -36,18 +36,18 @@ const FALLBACK_VIEWPORT: ViewportDef = {
 export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
-  /** Initial viewport seed (e.g. derived from User-Agent). Defaults to viewport[0]. */
-  initialViewportId?: string;
   /**
-   * Arbitrary per-render metadata, readable by descendants via
-   * `useExperience()` and by resolvers via `ctx.experience.metadata`.
+   * Viewport to render for, typically derived from the request's User-Agent.
+   * Defaults to the viewport the plan was pre-resolved against.
    */
+  initialViewportId?: string;
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**
    * Observability switch. When on: renders the visible missing-component box,
    * turns the default `renderUnknown` fallback into the debug component, and
    * auto-mounts `<DebugExperience>` (the resolved-plan JSON panel) after the
-   * tree. Pair with `debug` on `fetchExperience` for end-to-end logging.
+   * tree. Defaults to the plan's `debug`.
    */
   debug?: boolean;
   /** Override the fallback rendered for unregistered component types. */
@@ -61,13 +61,19 @@ export function ServerExperienceRenderer({
   config,
   initialViewportId,
   metadata,
-  debug = false,
+  debug,
   renderUnknown = MissingComponent,
   renderError = ComponentError,
 }: ServerExperienceRendererProps): ReactNode {
   if (!experience) return null;
 
-  const activeViewportIndex = getViewportIndex(experience.viewports, initialViewportId);
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = debug ?? experience.debug;
+  // Default to the pre-resolved viewport so first paint needs no recompute.
+  const activeViewportIndex =
+    initialViewportId === undefined
+      ? experience.fallbackViewportIndex
+      : getViewportIndex(experience.viewports, initialViewportId);
 
   // Copy viewports/activeViewport so the context (serialized + frozen by RSC)
   // shares no object identity with the plan arrays the renderers read below —
@@ -77,11 +83,12 @@ export function ServerExperienceRenderer({
 
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
-    debug,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
+    debug: resolvedDebug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...experience.metadata, ...(metadata ?? {}) },
     viewports: contextViewports,
     activeViewport,
     activeViewportIndex,
+    fallbackViewportIndex: experience.fallbackViewportIndex,
   };
 
   // Render-time diagnostics (unregistered id, a component that threw),
@@ -94,6 +101,16 @@ export function ServerExperienceRenderer({
   // right here, before React ever renders `tree` and gets a chance to push
   // into it.
   const renderDiagnostics: Error[] = [...(experience.diagnostics ?? [])];
+  // Dedup by message, the guard `NodeRenderer` used to hold in a `useRef`. It
+  // lives here so that module stays hook-free and therefore server-renderable.
+  // One pass on the server, so this mostly guards a node that reports the same
+  // message from several slots.
+  const seenDiagnostics = new Set(renderDiagnostics.map((error) => error.message));
+  const onDiagnostic = (error: Error): void => {
+    if (seenDiagnostics.has(error.message)) return;
+    seenDiagnostics.add(error.message);
+    renderDiagnostics.push(error);
+  };
 
   const tree = (
     <NodesRenderer
@@ -104,7 +121,7 @@ export function ServerExperienceRenderer({
       fallbackViewportIndex={experience.fallbackViewportIndex}
       renderUnknown={renderUnknown}
       renderError={renderError}
-      onDiagnostic={(diagnostic) => renderDiagnostics.push(diagnostic)}
+      onDiagnostic={onDiagnostic}
     />
   );
 
@@ -115,7 +132,9 @@ export function ServerExperienceRenderer({
   return (
     <ExperienceProvider value={renderContext}>
       {tree}
-      {debug ? <DebugExperience experience={experience} errors={renderDiagnostics} /> : null}
+      {resolvedDebug ? (
+        <DebugExperience experience={experience} errors={renderDiagnostics} />
+      ) : null}
     </ExperienceProvider>
   );
 }

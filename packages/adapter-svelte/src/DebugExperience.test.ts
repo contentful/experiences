@@ -9,6 +9,8 @@ const emptyPlan: PortableRenderPlan = {
   nodes: [],
   viewports: [],
   fallbackViewportIndex: 0,
+  metadata: {},
+  debug: false,
   diagnostics: [],
 };
 
@@ -51,6 +53,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [node('button')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: one } });
@@ -62,6 +66,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
@@ -73,6 +79,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [node('button'), node('text')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
@@ -85,6 +93,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const { container } = render(DebugExperience, { props: { experience: plan } });
@@ -100,6 +110,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [n],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
 
@@ -124,6 +136,8 @@ describe('DebugExperience.svelte', () => {
       viewports: [],
       nodes: [n],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
 

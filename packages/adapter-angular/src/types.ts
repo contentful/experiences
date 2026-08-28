@@ -22,11 +22,10 @@ import type { Type } from '@angular/core';
 
 import type {
   DesignPropValue,
-  ExperienceContext,
   PortableRenderNode,
+  RenderContext,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 export type { ResolveContext, ResolveToken };
@@ -71,22 +70,8 @@ export interface ContentfulExperienceTemplate {
   resolved?: Record<string, unknown>;
 }
 
-/**
- * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — a render-time value that resolvers cannot see.
- * Exposed via `injectExperience()`.
- */
-export interface RenderContext extends ExperienceContext {
-  activeViewport: ViewportDef;
-  activeViewportIndex: number;
-  /**
-   * Viewport index the server pre-resolved design against (from
-   * `PortableRenderPlan.fallbackViewportIndex`). Renderers use `props.design`
-   * as-is when `activeViewportIndex` matches, and recompute otherwise. Always a
-   * number — the plan field is required, so the match is a real comparison.
-   */
-  fallbackViewportIndex: number;
-}
+/** Render-time experience context, read with `injectExperience()`. Declared in core so all adapters share one shape. */
+export type { RenderContext };
 
 /**
  * Customer-supplied configuration for a single component type. The `component`

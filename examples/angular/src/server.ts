@@ -59,8 +59,7 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const debug = debugParam === 'true' || debugParam === '1';
   const locale = url.searchParams.get('locale') ?? 'en-US';
   const initialViewportId = detectViewportFromUserAgent(req.headers['user-agent'] ?? '');
-  // `metadata` is opaque to the SDK — it is handed back to `resolveData` hooks
-  // and to `injectExperience().metadata`. `card`'s hook reads both keys.
+  // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
   try {
@@ -80,16 +79,16 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
         config: experienceConfig,
         metadata,
         debug,
-        // Pre-resolve design against the UA-detected viewport (the same seed the
-        // renderer uses) so SSR paints correct design on first render.
         initialViewportId,
       }
     );
 
-    return { slug, experience, initialViewportId, debug, metadata, notFound: false };
+    // The plan carries all of these. `debug` and `initialViewportId` are relayed
+    // as well only so the page can demonstrate the renderer's override inputs.
+    return { slug, experience, debug, initialViewportId, notFound: false };
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return { slug, experience: null, initialViewportId, debug, metadata, notFound: true };
+      return { slug, experience: null, debug, initialViewportId, notFound: true };
     }
     throw error;
   }

@@ -11,10 +11,16 @@ import type { PortableRenderPlan } from '@contentful/experiences-angular';
  */
 export interface ExperienceRouteData {
   slug: string;
+  /** Carries its own `metadata`, `debug`, and pre-resolved viewport. */
   experience: PortableRenderPlan | null;
-  initialViewportId?: string;
+  /**
+   * The plan carries this too. Relayed so the page can demonstrate the
+   * renderer's override input, and so the not-found view (which has no plan)
+   * can read it.
+   */
   debug: boolean;
-  metadata: Record<string, unknown>;
+  /** Also on the plan; relayed only to demonstrate the renderer's override input. */
+  initialViewportId?: string;
   /** True when the delivery API had no Experience under `slug`. */
   notFound: boolean;
 }

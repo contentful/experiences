@@ -47,7 +47,7 @@ import type { Config, RenderContext } from './types.js';
   template: `
     @if (experienceValue(); as experience) {
       <ng-container *cfNodes="experience.nodes"></ng-container>
-      @if (debugValue()) {
+      @if (resolvedDebug()) {
         <cf-debug-experience [experience]="experience" [errors]="errors()" />
       }
     }
@@ -55,7 +55,11 @@ import type { Config, RenderContext } from './types.js';
 })
 export class ClientExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
-  protected readonly debugValue = signal(false);
+  // `undefined` means "not bound", distinct from an explicit `[debug]="false"`.
+  private readonly debugValue = signal<boolean | undefined>(undefined);
+  protected readonly resolvedDebug = computed(
+    () => this.debugValue() ?? this.experienceValue()?.debug ?? false
+  );
   private readonly configValue = signal<Config | null>(null);
   private readonly initialViewportIdValue = signal<string | undefined>(undefined);
   private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
@@ -79,13 +83,16 @@ export class ClientExperienceRendererComponent {
     this.initialViewportIdValue.set(value);
   }
 
-  /** Arbitrary values passed through to descendants via `injectExperience()`. */
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   @Input() set metadata(value: Record<string, unknown> | undefined) {
     this.metadataValue.set(value);
   }
 
-  /** Renders the resolved plan above the experience for inspection. */
-  @Input() set debug(value: boolean) {
+  /**
+   * Renders the resolved plan above the experience for inspection. Defaults to
+   * the plan's `debug`; `[debug]="false"` overrides a debug-on plan.
+   */
+  @Input() set debug(value: boolean | undefined) {
     this.debugValue.set(value);
   }
 
@@ -103,7 +110,13 @@ export class ClientExperienceRendererComponent {
   // a single input. See injectActiveViewport's docblock.
   private readonly tracker = injectActiveViewport(
     () => this.experienceValue()?.viewports ?? [],
-    () => this.initialViewportIdValue()
+    // Seed from the plan so first paint matches the server renderer.
+    () => {
+      const explicit = this.initialViewportIdValue();
+      if (explicit !== undefined) return explicit;
+      const experience = this.experienceValue();
+      return experience?.viewports[experience.fallbackViewportIndex]?.id;
+    }
   );
 
   private readonly renderContext = computed<RenderContext>(() => {
@@ -111,8 +124,12 @@ export class ClientExperienceRendererComponent {
     const activeViewportIndex = this.tracker.activeViewportIndex();
     return {
       ...DEFAULT_CONTEXT,
-      debug: this.debugValue(),
-      metadata: { ...DEFAULT_CONTEXT.metadata, ...(this.metadataValue() ?? {}) },
+      debug: this.resolvedDebug(),
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(this.metadataValue() ?? {}),
+      },
       viewports: experience?.viewports ?? [],
       activeViewport: experience?.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT,
       activeViewportIndex,

@@ -38,10 +38,13 @@
     config,
     initialViewportId,
     metadata,
-    debug = false,
+    debug,
     renderUnknown = MissingComponent,
     renderError = ComponentError,
   }: ClientExperienceRendererProps = $props();
+
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
 
   // Render-time diagnostics, `$state`-backed so a component that throws well
   // after first paint (a later re-render, an event handler) still makes
@@ -68,14 +71,22 @@
   }
 
   const viewports = $derived(experience?.viewports ?? []);
-  const tracker = useActiveViewport(viewports, initialViewportId);
+  // Seed from the plan so first paint matches the server renderer.
+  const seedViewportId = $derived(
+    initialViewportId ?? experience?.viewports[experience.fallbackViewportIndex]?.id
+  );
+  const tracker = useActiveViewport(viewports, seedViewportId);
 
   // A $state-backed mirror so descendants reading getExperience() stay
   // reactive across viewport changes. The fields update in an $effect below.
   const liveContext = $state<RenderContext>({
     ...DEFAULT_CONTEXT,
-    debug,
-    metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
+    debug: debug ?? experience?.debug ?? false,
+    metadata: {
+      ...DEFAULT_CONTEXT.metadata,
+      ...(experience?.metadata ?? {}),
+      ...(metadata ?? {}),
+    },
     viewports: experience?.viewports ?? [],
     activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
     activeViewportIndex: 0,
@@ -91,8 +102,12 @@
     liveContext.activeViewport = experience.viewports[idx] ?? FALLBACK_VIEWPORT;
     liveContext.activeViewportIndex = idx;
     liveContext.fallbackViewportIndex = experience.fallbackViewportIndex;
-    liveContext.debug = debug;
-    liveContext.metadata = { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) };
+    liveContext.debug = resolvedDebug;
+    liveContext.metadata = {
+      ...DEFAULT_CONTEXT.metadata,
+      ...experience.metadata,
+      ...(metadata ?? {}),
+    };
   });
 </script>
 
@@ -105,7 +120,7 @@
     {renderError}
     {onDiagnostic}
   />
-  {#if debug}
+  {#if resolvedDebug}
     <DebugExperience
       {experience}
       errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}

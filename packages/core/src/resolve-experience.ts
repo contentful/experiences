@@ -9,6 +9,7 @@ import { createDebugLogger, type DebugLogger } from './debug-logger';
 import type {
   DesignPropValue,
   ExperienceContext,
+  ExperienceSourceMap,
   ExperienceNode,
   ExperiencePayload,
   PortableRegistration,
@@ -80,6 +81,8 @@ export interface ResolveExperienceOptions {
    * viewport. Defaults to viewport[0] when unset or unknown.
    */
   initialViewportId?: string;
+  /** Carried onto the plan as-is. Omit for no source map. */
+  sourceMap?: ExperienceSourceMap;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -485,10 +488,17 @@ export async function resolveExperience(
   }
   log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
 
-  return {
+  // Reuse `experience.metadata` rather than re-merging, so resolvers and the
+  // renderer read the same object. `viewports` is the guarded local, not
+  // `payload.viewports` — a malformed payload degrades to an empty list.
+  const plan: PortableRenderPlan = {
     viewports,
     nodes,
     fallbackViewportIndex,
     diagnostics,
+    metadata: experience.metadata,
+    debug: experience.debug,
   };
+  if (options.sourceMap !== undefined) plan.sourceMap = options.sourceMap;
+  return plan;
 }

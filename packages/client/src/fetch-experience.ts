@@ -1,20 +1,30 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
-import type {
-  ExperiencePayload,
-  PortableRenderPlan,
-  ResolverConfig,
-} from '@contentful/experiences-sdk-core';
+import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
 import { ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
+import {
+  readSourceMap,
+  toExperiencePayload,
+  type ExperienceResponse,
+} from './to-experience-payload.js';
 
 export type ExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
   locale?: string;
+  /**
+   * Fetch the content source map alongside the experience, onto
+   * `PortableRenderPlan.sourceMap`. Defaults to `false` because the map is large.
+   *
+   * Switches the request from `GET` to `POST` (the opt-in is a request-body
+   * field, only accepted by `getWithOverrides`), so it is not CDN-cacheable.
+   * Query params, auth, and the response shape are unchanged.
+   */
+  withSourceMap?: boolean;
 };
 
 export type ClientOptions =
@@ -69,7 +79,7 @@ export async function fetchExperience(
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan> {
-  const { spaceId, environmentId, experienceId, locale } = experienceOptions;
+  const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
   const { config, metadata, debug, initialViewportId } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
@@ -92,11 +102,28 @@ export async function fetchExperience(
     log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
   }
 
-  log.log('fetching experience', { spaceId, environmentId, experienceId, locale });
+  log.log('fetching experience', {
+    spaceId,
+    environmentId,
+    experienceId,
+    locale,
+    withSourceMap: Boolean(withSourceMap),
+  });
 
-  let response: ContentfulViewDelivery.GetExperienceResponse;
+  // Typed as the union of both operations' responses — they declare the same
+  // union, but which one runs depends on `withSourceMap` below.
+  let response: ExperienceResponse;
   try {
-    response = await client.experience.get(spaceId, environmentId, experienceId, { locale });
+    // Both methods hit the same endpoint; only the POST accepts a body, and
+    // `extensions` (the source-map opt-in) lives there. Otherwise identical.
+    // The alpha-feature header is sent by the delivery client itself since
+    // 1.0.0-dev.7, so a caller-supplied `{ client }` is covered too.
+    response = withSourceMap
+      ? await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
+          locale,
+          extensions: { sourceMap: {} },
+        })
+      : await client.experience.get(spaceId, environmentId, experienceId, { locale });
   } catch (err) {
     // `NotFoundError` is a distinguishable, expected outcome (draft/unpublished/
     // wrong id) — callers already route it to their framework's 404 idiom, so
@@ -115,22 +142,16 @@ export async function fetchExperience(
     );
   }
 
-  // The delivery API gates the ExO entity shapes this SDK reads (`component` /
-  // `experienceTemplate` links) behind an alpha-feature header. Since
-  // `@contentful/experience-delivery@1.0.0-dev.7` the client sends it on every
-  // request itself, so a caller-supplied `{ client }` is covered too and we no
-  // longer set it here.
-  //
-  // The client still types `GetExperienceResponse` as a union of every shape the
-  // endpoint can return, so the narrowing stays manual. `HydratedExperienceView`
-  // is a structural superset of `ExperiencePayload`.
-  const payload = response as ContentfulViewDelivery.HydratedExperienceView as ExperiencePayload;
+  const payload = toExperiencePayload(response);
+  const sourceMap = withSourceMap ? readSourceMap(response) : undefined;
 
   log.lazy('received raw payload', () => payload);
+  if (withSourceMap && !sourceMap) log.log('source map requested but not returned');
 
   return resolveExperience(payload, config, {
     metadata,
     debug,
     initialViewportId,
+    sourceMap,
   });
 }

@@ -2,10 +2,9 @@ import type { ComponentType } from 'react';
 
 import type {
   DesignPropValue,
-  ExperienceContext,
+  RenderContext,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 /**
@@ -46,16 +45,8 @@ export interface ContentfulExperienceTemplate {
   resolved?: Record<string, unknown>;
 }
 
-/**
- * Render-time experience context. Extends the core `ExperienceContext` with
- * the active viewport — a render-time value that resolvers cannot see (they
- * run once before viewport resolution and are not re-triggered by viewport
- * changes). Exposed via `useExperience()` to any descendant of the renderer.
- */
-export interface RenderContext extends ExperienceContext {
-  activeViewport: ViewportDef;
-  activeViewportIndex: number;
-}
+/** Render-time experience context, read with `useExperience()`. Declared in core so all adapters share one shape. */
+export type { RenderContext };
 
 /**
  * Customer-supplied configuration for a single component. The `component`

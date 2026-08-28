@@ -5,8 +5,16 @@ import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
 
 /**
- * Renders the plan the Express layer already resolved. `<cf-server-experience>`
- * resolves the active viewport once from `initialViewportId` and never
+ * Renders the plan the Express layer already resolved.
+ *
+ * `[metadata]`, `[debug]` and `[initialViewportId]` are all optional — the plan
+ * already carries what `fetchExperience` was given. They are bound here to make
+ * the override path visible: `metadata` merges over the plan's, the other two
+ * replace it. Binding the fetch's own viewport is a no-op; the input earns its
+ * place when you want a different one. `[config]` is not optional; component
+ * classes cannot survive `TransferState`.
+ *
+ * `<cf-server-experience>` resolves the active viewport once and never
  * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)
  * if you want design values to follow live `matchMedia` changes on resize.
  */
@@ -20,7 +28,7 @@ import { experienceConfig } from '../lib/experience-config.js';
         [experience]="plan"
         [config]="config"
         [initialViewportId]="initialViewportId"
-        [metadata]="metadata"
+        [metadata]="renderMetadata"
         [debug]="debug"
       />
     } @else {
@@ -44,8 +52,8 @@ export class ExperiencePageComponent {
 
   protected readonly config = experienceConfig;
   protected readonly experience = this.data?.experience ?? null;
-  protected readonly initialViewportId = this.data?.initialViewportId;
-  protected readonly metadata = this.data?.metadata;
-  protected readonly debug = this.data?.debug ?? false;
   protected readonly slug = this.data?.slug ?? '';
+  protected readonly debug = this.data?.debug ?? false;
+  protected readonly initialViewportId = this.data?.initialViewportId;
+  protected readonly renderMetadata = { renderer: 'server' };
 }

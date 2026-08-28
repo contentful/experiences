@@ -37,18 +37,30 @@
     config,
     initialViewportId,
     metadata,
-    debug = false,
+    debug,
     renderUnknown = MissingComponent,
     renderError = ComponentError,
   }: ServerExperienceRendererProps = $props();
 
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = $derived(debug ?? experience?.debug ?? false);
+
   function buildContext(): RenderContext {
     const viewports = experience?.viewports ?? [];
-    const idx = experience ? getViewportIndex(experience.viewports, initialViewportId) : 0;
+    // Default to the pre-resolved viewport so first paint needs no recompute.
+    const idx = !experience
+      ? 0
+      : initialViewportId === undefined
+        ? experience.fallbackViewportIndex
+        : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
-      debug,
-      metadata: { ...DEFAULT_CONTEXT.metadata, ...(metadata ?? {}) },
+      debug: resolvedDebug,
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(metadata ?? {}),
+      },
       viewports,
       activeViewport: experience?.viewports[idx] ?? FALLBACK_VIEWPORT,
       activeViewportIndex: idx,
@@ -80,7 +92,7 @@
     {renderError}
     {onDiagnostic}
   />
-  {#if debug}
+  {#if resolvedDebug}
     <DebugExperience
       {experience}
       errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}

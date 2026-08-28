@@ -1,7 +1,8 @@
 /**
- * Per-render runtime context attached to every customer component as the
- * `experience` prop, and passed to every `resolveData` hook as `ctx.experience`.
- * The conventional, single injection point — kept small at v1.
+ * Per-render runtime context. Read through the adapter's accessor
+ * (`useExperience()` / `getExperience()` / `injectExperience()`), and passed to
+ * every `resolveData` hook as `ctx.experience`. Never spread onto component
+ * props — components receive only the props they declare.
  *
  * `viewports` (the *list*) is here so customer resolvers can inspect what
  * viewports an Experience declares (e.g. "is there a mobile viewport?").
@@ -18,8 +19,28 @@
  */
 export interface ExperienceContext {
   debug: boolean;
+  /**
+   * Free-form pass-through for application data. The SDK never writes a key
+   * here. Untyped on purpose — narrow at the read site.
+   *
+   * Must be plain serializable data: it rides on `PortableRenderPlan`, which
+   * crosses server/client boundaries.
+   */
   metadata: Record<string, unknown>;
   viewports: ViewportDef[];
+}
+
+/**
+ * `ExperienceContext` plus the viewport state that only exists at render time.
+ *
+ * Declared here, not per-adapter: it is plain data, so every adapter re-exports
+ * this same type and a field added here reaches all three at once.
+ */
+export interface RenderContext extends ExperienceContext {
+  activeViewport: ViewportDef;
+  activeViewportIndex: number;
+  /** Mirrors `PortableRenderPlan.fallbackViewportIndex`. */
+  fallbackViewportIndex: number;
 }
 
 /**
@@ -149,6 +170,27 @@ export interface ExperienceSys {
 }
 
 /**
+ * Content source map, returned under `extensions.sourceMap` when the request
+ * opts in. The SDK passes it through without interpreting it, so collections
+ * stay `unknown[]` — `core` takes no dependency on the delivery client. Narrow
+ * with `ContentfulViewDelivery.HydratedExperienceViewExtensionsSourceMap`.
+ *
+ * Mirrors `HydratedExperienceViewExtensionsSourceMap`.
+ */
+export interface ExperienceSourceMap {
+  version: number;
+  variants: unknown[];
+  spaces: string[];
+  environments: string[];
+  locales: string[];
+  entries: unknown[];
+  assets: unknown[];
+  layers: unknown[];
+  dataAssemblies: unknown[];
+  nodes: Record<string, unknown>;
+}
+
+/**
  * Top-level Experience payload as returned by the Experience Delivery API
  * (`HydratedExperienceView` from `@contentful/experience-delivery`).
  *
@@ -258,6 +300,16 @@ export interface PortableRenderPlan {
    */
   fallbackViewportIndex: number;
   /**
+   * The `metadata` the resolve step ran with, so the renderer does not need it
+   * passed again. The renderer's `metadata` prop merges over this. `{}` when
+   * the caller passed none.
+   */
+  metadata: Record<string, unknown>;
+  /** The `debug` flag the resolve step ran with. The renderer's prop overrides it. */
+  debug: boolean;
+  /** Present only when the fetch opted in via `withSourceMap`. */
+  sourceMap?: ExperienceSourceMap;
+  /**
    * Resolve-time diagnostics collected while building this plan — malformed
    * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an
    * unresolved design token. Plain `Error`s: the message names the node/
@@ -266,6 +318,11 @@ export interface PortableRenderPlan {
    * reachable. Render-time diagnostics (unregistered id,
    * component-render-error) are NOT here — each adapter collects those per
    * render and merges both lists for `<DebugExperience>`.
+   *
+   * Note these are `Error` instances, so unlike the rest of the plan they do
+   * not survive a server/client serialization boundary intact — see the
+   * `metadata` note above. Adapters read them during the render that produced
+   * them.
    */
   diagnostics: Error[];
 }

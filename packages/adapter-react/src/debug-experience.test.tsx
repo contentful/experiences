@@ -9,6 +9,8 @@ const emptyPlan: PortableRenderPlan = {
   nodes: [],
   viewports: [],
   fallbackViewportIndex: 0,
+  metadata: {},
+  debug: false,
   diagnostics: [],
 };
 
@@ -49,6 +51,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     expect(renderToStaticMarkup(<DebugExperience experience={one} />)).toContain(
@@ -61,6 +65,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [templateNode('page')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     expect(renderToStaticMarkup(<DebugExperience experience={plan} />)).toContain(
@@ -73,6 +79,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button'), node('text')],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
@@ -85,6 +93,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [node('button', { label: 'Go' })],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
     const html = renderToStaticMarkup(<DebugExperience experience={plan} />);
@@ -101,6 +111,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [n],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
 
