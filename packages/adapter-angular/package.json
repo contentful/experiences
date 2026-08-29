@@ -41,12 +41,12 @@
     "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
   },
   "devDependencies": {
-    "@angular/common": "20.3.28",
-    "@angular/compiler": "20.3.28",
-    "@angular/compiler-cli": "20.3.28",
-    "@angular/core": "20.3.28",
-    "@angular/platform-browser": "20.3.28",
-    "@angular/platform-server": "20.3.28",
+    "@angular/common": "22.1.4",
+    "@angular/compiler": "22.1.4",
+    "@angular/compiler-cli": "22.1.4",
+    "@angular/core": "22.1.4",
+    "@angular/platform-browser": "22.1.4",
+    "@angular/platform-server": "22.1.4",
     "@testing-library/jest-dom": "^7.0.1",
     "jsdom": "^30.0.1",
     "publint": "^0.3.24",
