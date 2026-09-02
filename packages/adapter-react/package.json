@@ -32,7 +32,11 @@
   "dependencies": {
     "@contentful/experiences-client": "0.4.0",
     "@contentful/experiences-sdk-core": "0.8.0",
-    "@contentful/experiences-design": "0.8.0"
+    "@contentful/experiences-design": "0.8.0",
+    "@contentful/experiences-live-preview": "0.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
