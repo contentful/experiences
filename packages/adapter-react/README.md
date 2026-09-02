@@ -8,7 +8,7 @@ The React adapter for the Contentful Experiences SDK. You bring your own React c
 npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
+This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
 ---
 
@@ -37,6 +37,35 @@ type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```ts
 resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
+
+### Live preview
+
+```tsx
+const livePreview = useLivePreview({
+  spaceId,
+  environmentId,
+  previewToken,
+  sessionId,
+  initialData,
+});
+
+const resolved = useResolvedExperience({
+  data: livePreview.data,
+  initialExperience,
+  resolveOptions: { config: experienceConfig },
+});
+
+<ClientExperienceRenderer experience={resolved.data} config={experienceConfig} />;
+```
+
+`useLivePreview` returns the latest raw Experience payload. `initialData` seeds
+the first value. `useResolvedExperience` turns that payload into the
+`PortableRenderPlan` consumed by the renderer and keeps the current rendered
+experience while an update is being resolved.
+
+The hooks expose `UseLivePreviewOptions`, `UseLivePreviewResult`,
+`LivePreviewResolveOptions`, `UseResolvedExperienceOptions`, and
+`UseResolvedExperienceResult`.
 
 ### Renderers
 
