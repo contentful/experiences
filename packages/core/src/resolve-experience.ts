@@ -5,7 +5,7 @@
  * viewport (see `resolveExperience` below).
  */
 
-import { createDebugLogger, type DebugLogger } from './debug-logger';
+import { createDebugLogger, type DebugLogger } from './debug-logger.js';
 import type {
   DesignPropValue,
   ExperienceContext,
@@ -18,8 +18,8 @@ import type {
   ResolveContext,
   ResolveToken,
   ViewportDef,
-} from './types';
-import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from './viewport';
+} from './types.js';
+import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from './viewport.js';
 
 /**
  * Structural type the resolver walker depends on. Matches the React /
