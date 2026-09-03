@@ -17,6 +17,8 @@ import {
 type FakeSocket = {
   readonly url: string;
   readonly close: ReturnType<typeof vi.fn>;
+  emitOpen(): void;
+  emitClose(event: { code: number; reason: string }): void;
   emitMessage(data: unknown): void;
 };
 
@@ -25,12 +27,21 @@ const sockets: FakeSocket[] = [];
 class FakeWebSocket {
   readonly url: string;
   readonly close = vi.fn();
+  onopen: ((event: { type: string }) => void) | null = null;
   onclose: ((event: { code: number; reason: string }) => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
   constructor(url: string) {
     this.url = url;
     sockets.push(this);
+  }
+
+  emitOpen(): void {
+    this.onopen?.({ type: 'open' });
+  }
+
+  emitClose(event: { code: number; reason: string }): void {
+    this.onclose?.(event);
   }
 
   emitMessage(data: unknown): void {
@@ -146,6 +157,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -177,6 +190,7 @@ describe('injectLivePreviewExperience', () => {
   });
 
   it('does not open a socket when preview credentials are incomplete', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
     const fixture = createFixture(LivePreviewExperienceProbe, (probe) => {
       probe.options.set({
         ...livePreviewOptions(payload('initial')),
@@ -191,6 +205,75 @@ describe('injectLivePreviewExperience', () => {
     expect(sockets).toHaveLength(0);
     expect(fixture.componentInstance.livePreview.data()?.nodes[0]?.contentProperties?.title).toBe(
       'initial'
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'static',
+      },
+      '*'
+    );
+    fixture.destroy();
+  });
+
+  it('sends live status after the session socket opens', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    const fixture = createFixture(LivePreviewExperienceProbe);
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+
+    expect(postMessage).not.toHaveBeenCalled();
+    sockets[0]?.emitOpen();
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'live',
+      },
+      '*'
+    );
+    fixture.destroy();
+  });
+
+  it('does not send static status while the session socket reconnects', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    const fixture = createFixture(LivePreviewExperienceProbe);
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+
+    vi.useFakeTimers();
+    sockets[0]?.emitOpen();
+    sockets[0]?.emitClose({ code: 1006, reason: 'network' });
+    vi.advanceTimersByTime(100);
+    sockets[1]?.emitOpen();
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'live',
+      },
+      '*'
+    );
+    fixture.destroy();
+  });
+
+  it('sends static status without Preview Session options', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    const fixture = createFixture(LivePreviewExperienceProbe, (probe) => {
+      probe.options.set({ initialPayload: payload('initial') });
+    });
+    await fixture.whenStable();
+
+    expect(sockets).toHaveLength(0);
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'static',
+      },
+      '*'
     );
     fixture.destroy();
   });
