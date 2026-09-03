@@ -1,8 +1,13 @@
 import { vi } from 'vitest';
-import type { WebSocketCloseEvent, WebSocketMessageEvent } from '../websocket.js';
+import type {
+  WebSocketCloseEvent,
+  WebSocketMessageEvent,
+  WebSocketOpenEvent,
+} from '../websocket.js';
 
 export type FakeSocket = {
   readonly url: string;
+  onopen: ((event: WebSocketOpenEvent) => void) | null;
   onclose: ((event: WebSocketCloseEvent) => void) | null;
   onmessage: ((event: WebSocketMessageEvent) => void) | null;
   close: ReturnType<typeof vi.fn>;
@@ -14,6 +19,7 @@ export const sockets: FakeSocket[] = [];
 
 export class FakeWebSocket {
   readonly url: string;
+  onopen: ((event: WebSocketOpenEvent) => void) | null = null;
   onclose: ((event: WebSocketCloseEvent) => void) | null = null;
   onmessage: ((event: WebSocketMessageEvent) => void) | null = null;
   readonly close = vi.fn();
@@ -21,6 +27,10 @@ export class FakeWebSocket {
   constructor(url: string) {
     this.url = url;
     sockets.push(this);
+  }
+
+  emitOpen(): void {
+    this.onopen?.({ type: 'open' });
   }
 
   emitClose(code = 1000, reason = ''): void {

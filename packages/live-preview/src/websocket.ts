@@ -3,11 +3,16 @@ export type WebSocketCloseEvent = {
   readonly reason: string;
 };
 
+export type WebSocketOpenEvent = {
+  readonly type: string;
+};
+
 export type WebSocketMessageEvent = {
   readonly data: unknown;
 };
 
 type WebSocket = {
+  onopen: ((event: WebSocketOpenEvent) => void) | null;
   onclose: ((event: WebSocketCloseEvent) => void) | null;
   onmessage: ((event: WebSocketMessageEvent) => void) | null;
   close(): void;
@@ -17,6 +22,7 @@ type WebSocketConstructor = new (url: string) => WebSocket;
 
 type WebSocketConnection = {
   close(): void;
+  onopen(handler: (event: WebSocketOpenEvent) => void): () => void;
   onmessage(handler: (event: WebSocketMessageEvent) => void): () => void;
 };
 
@@ -34,6 +40,7 @@ export function createWebSocketConnection(options: {
   let retryCount = 0;
   let closed = false;
 
+  const openHandlers = new Set<(event: WebSocketOpenEvent) => void>();
   const messageHandlers = new Set<(event: WebSocketMessageEvent) => void>();
 
   const clearRetryTimer = () => {
@@ -43,10 +50,12 @@ export function createWebSocketConnection(options: {
   };
 
   const clearHandlers = () => {
+    openHandlers.clear();
     messageHandlers.clear();
   };
 
   const detachSocketHandlers = (currentSocket: WebSocket) => {
+    currentSocket.onopen = null;
     currentSocket.onmessage = null;
     currentSocket.onclose = null;
   };
@@ -97,6 +106,23 @@ export function createWebSocketConnection(options: {
     const ws = new WS(options.url);
     websocket = ws;
     ws.onclose = (event) => handleClose(ws, event);
+    ws.onopen = (event) => {
+      if (websocket !== ws || closed) return;
+
+      let handlerError: unknown;
+      let hasHandlerError = false;
+
+      for (const handler of [...openHandlers]) {
+        try {
+          handler(event);
+        } catch (error: unknown) {
+          if (!hasHandlerError) handlerError = error;
+          hasHandlerError = true;
+        }
+      }
+
+      if (hasHandlerError) throw handlerError;
+    };
     ws.onmessage = (event) => {
       if (websocket !== ws || closed) return;
 
@@ -128,8 +154,17 @@ export function createWebSocketConnection(options: {
         return;
       }
 
-      currentSocket.onmessage = null;
+      detachSocketHandlers(currentSocket);
+      clearHandlers();
       currentSocket.close();
+    },
+    onopen(handler) {
+      if (closed) return () => undefined;
+
+      openHandlers.add(handler);
+      return () => {
+        openHandlers.delete(handler);
+      };
     },
     onmessage(handler) {
       if (closed) return () => undefined;

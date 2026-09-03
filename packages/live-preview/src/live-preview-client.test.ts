@@ -105,6 +105,50 @@ describe('createLivePreviewClient', () => {
     unsubscribe();
   });
 
+  it('reports static status when live-preview credentials are missing', () => {
+    const listener = vi.fn();
+    const source = createLivePreviewClient(sourceOptions());
+
+    const unsubscribe = source.subscribeStatus(listener);
+
+    expect(listener).toHaveBeenCalledWith('static');
+    unsubscribe();
+  });
+
+  it('reports live status when the session socket opens', () => {
+    setBrowser();
+    const listener = vi.fn();
+    const source = createLivePreviewClient(sourceOptions('session-id'));
+    const unsubscribeStatus = source.subscribeStatus(listener);
+    const unsubscribe = source.subscribe(vi.fn());
+
+    expect(listener).not.toHaveBeenCalled();
+    sockets[0]?.emitOpen();
+
+    expect(listener).toHaveBeenCalledWith('live');
+    unsubscribeStatus();
+    unsubscribe();
+  });
+
+  it('does not report static status when the session socket reconnects', () => {
+    vi.useFakeTimers();
+    setBrowser();
+    const listener = vi.fn();
+    const source = createLivePreviewClient(sourceOptions('session-id'));
+    const unsubscribeStatus = source.subscribeStatus(listener);
+    const unsubscribe = source.subscribe(vi.fn());
+
+    sockets[0]?.emitOpen();
+    sockets[0]?.emitClose(1006, 'network');
+    vi.advanceTimersByTime(100);
+    sockets[1]?.emitOpen();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('live');
+    unsubscribeStatus();
+    unsubscribe();
+  });
+
   it('uses the production Session origin when sessionHost is omitted', () => {
     setBrowser();
     const source = createLivePreviewClient({

@@ -13,12 +13,17 @@ class FakeWebSocket {
 
   readonly url: string;
   readonly close = vi.fn();
+  onopen: ((event: { type: string }) => void) | null = null;
   onclose: ((event: { code: number; reason: string }) => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
   constructor(url: string) {
     this.url = url;
     FakeWebSocket.instances.push(this);
+  }
+
+  emitOpen(): void {
+    this.onopen?.({ type: 'open' });
   }
 
   emitMessage(data: unknown): void {
@@ -93,6 +98,7 @@ describe('useLivePreview', () => {
       act(() => root?.unmount());
     }
     container?.remove();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -117,6 +123,7 @@ describe('useLivePreview', () => {
   });
 
   it('keeps the source inactive when a session credential is missing', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
     const initialData = payload('initial');
     ({ container, root } = renderRoot());
 
@@ -126,6 +133,91 @@ describe('useLivePreview', () => {
 
     expect(container.textContent).toBe('initial');
     expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'static',
+      },
+      '*'
+    );
+  });
+
+  it('sends live status after the session socket opens', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    ({ root } = renderRoot());
+
+    await act(async () => {
+      root.render(<LivePreviewProbe value={options()} />);
+    });
+
+    expect(postMessage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      FakeWebSocket.instances[0]?.emitOpen();
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'live',
+      },
+      '*'
+    );
+  });
+
+  it('does not send static status while the session socket reconnects', async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    ({ root } = renderRoot());
+
+    await act(async () => {
+      root.render(<LivePreviewProbe value={options()} />);
+      FakeWebSocket.instances[0]?.emitOpen();
+    });
+
+    await act(async () => {
+      FakeWebSocket.instances[0]?.onclose?.({ code: 1006, reason: 'network' });
+      vi.advanceTimersByTime(100);
+      FakeWebSocket.instances[1]?.emitOpen();
+    });
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      {
+        source: 'experiences/live-preview',
+        type: 'status',
+        status: 'live',
+      },
+      '*'
+    );
+  });
+
+  it('sends a new status when the live-preview configuration changes', async () => {
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    ({ root } = renderRoot());
+
+    await act(async () => {
+      root.render(<LivePreviewProbe value={options({ sessionId: undefined })} />);
+    });
+
+    await act(async () => {
+      root.render(<LivePreviewProbe value={options()} />);
+    });
+    await act(async () => {
+      FakeWebSocket.instances[0]?.emitOpen();
+    });
+
+    await act(async () => {
+      root.render(<LivePreviewProbe value={options({ sessionId: undefined })} />);
+    });
+
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      { source: 'experiences/live-preview', type: 'status', status: 'static' },
+      { source: 'experiences/live-preview', type: 'status', status: 'live' },
+      { source: 'experiences/live-preview', type: 'status', status: 'static' },
+    ]);
   });
 
   it('does not recreate the source when only the options object is recreated', async () => {
