@@ -158,6 +158,7 @@ describe('createWebSocketConnection', () => {
   it('propagates synchronous constructor failures', () => {
     const failure = new Error('invalid WebSocket configuration');
     class ThrowingWebSocket {
+      onopen: ((event: { type: string }) => void) | null = null;
       onclose: ((event: WebSocketCloseEvent) => void) | null = null;
       onmessage: ((event: WebSocketMessageEvent) => void) | null = null;
 
@@ -183,6 +184,7 @@ describe('createWebSocketConnection', () => {
 
     class RetryThenThrowWebSocket {
       static firstInstance: RetryThenThrowWebSocket | undefined;
+      onopen: ((event: { type: string }) => void) | null = null;
       onclose: ((event: WebSocketCloseEvent) => void) | null = null;
       onmessage: ((event: WebSocketMessageEvent) => void) | null = null;
 

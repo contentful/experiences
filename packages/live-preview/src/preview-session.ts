@@ -19,6 +19,11 @@ type SessionMessage =
   | { kind: 'unknown' }
   | { kind: 'invalid' };
 
+type PreviewSessionHandlers = {
+  onUpdate: (experience: ExperiencePayload) => void;
+  onOpen?: () => void;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -97,10 +102,11 @@ function isSessionEnded(event: WebSocketCloseEvent): boolean {
 
 export function subscribeToPreviewSession(
   options: PreviewSessionOptions,
-  onUpdate: (experience: ExperiencePayload) => void
+  handlers: PreviewSessionHandlers
 ): () => void {
   const log = createDebugLogger(options.debug, 'live-preview');
   const { sessionId, previewToken } = options;
+  const { onOpen, onUpdate } = handlers;
   if (sessionId === undefined || previewToken === undefined) return () => undefined;
 
   const connection = createWebSocketConnection({
@@ -110,6 +116,7 @@ export function subscribeToPreviewSession(
       RETRY_DELAYS_MS[retryAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] ?? 0,
   });
 
+  const unsubscribeFromOpen = onOpen ? connection.onopen(() => onOpen()) : undefined;
   const unsubscribe = connection.onmessage((event) => {
     const message = parseMessage(event.data);
 
@@ -127,6 +134,7 @@ export function subscribeToPreviewSession(
   });
 
   return () => {
+    unsubscribeFromOpen?.();
     unsubscribe();
     connection.close();
   };

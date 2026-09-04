@@ -17,7 +17,12 @@ type LivePreviewOptions = {
 type LivePreviewClient = {
   getSnapshot(): ExperiencePayload | undefined;
   subscribe(listener: () => void): () => void;
+  subscribeStatus(listener: (status: LivePreviewStatus) => void): () => void;
 };
+
+type LivePreviewStatus = 'live' | 'static';
+
+sendPreviewStatus(status: LivePreviewStatus): void;
 
 createLivePreviewClient(
   options: LivePreviewOptions,
@@ -38,6 +43,10 @@ and cancels pending retries.
 both values are provided. The caller supplies the session ID through
 `LivePreviewOptions`. `getSnapshot()` exposes the latest Preview Session data to
 the application.
+
+`subscribeStatus` reports `static` when the client has no WebSocket credentials
+and reports `live` after the socket opens. `sendPreviewStatus` forwards that
+status to the containing preview host. It is safe to call in server-side code.
 
 `sessionHost` is an optional WebSocket URL for the Preview Session service. It
 defaults to the production Contentful Session service. The SDK uses the URL as

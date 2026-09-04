@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import {
   createLivePreviewClient,
+  sendPreviewStatus,
   type LivePreviewOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -40,5 +41,7 @@ export function useLivePreview(options: UseLivePreviewOptions): UseLivePreviewRe
   ]);
 
   const data = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  useEffect(() => client.subscribeStatus(sendPreviewStatus), [client]);
+
   return { data };
 }
