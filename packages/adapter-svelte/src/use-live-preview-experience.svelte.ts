@@ -5,7 +5,7 @@ import {
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
 export type UseLivePreviewExperienceOptions = {
-  previewSessionOptions: PreviewSessionOptions;
+  previewSessionOptions?: PreviewSessionOptions;
   initialPayload?: ExperiencePayload;
 };
 
@@ -21,6 +21,9 @@ export function useLivePreviewExperience(
 
   $effect(() => {
     const { previewSessionOptions } = getOptions();
+    data = initialPayload;
+    if (previewSessionOptions === undefined) return;
+
     const client = createLivePreviewClient(previewSessionOptions, initialPayload);
 
     data = client.getSnapshot();

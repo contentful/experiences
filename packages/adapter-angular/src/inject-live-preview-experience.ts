@@ -7,7 +7,7 @@ import {
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
 export type InjectLivePreviewExperienceOptions = {
-  previewSessionOptions: PreviewSessionOptions;
+  previewSessionOptions?: PreviewSessionOptions;
   initialPayload?: ExperiencePayload;
 };
 
@@ -15,12 +15,11 @@ export interface InjectLivePreviewExperienceResult {
   readonly data: Signal<ExperiencePayload | undefined>;
 }
 
-type ConnectionOptions = PreviewSessionOptions;
+type ConnectionOptions = PreviewSessionOptions | undefined;
 
-function areConnectionOptionsEqual(
-  first: ConnectionOptions | undefined,
-  second: ConnectionOptions
-): boolean {
+function areConnectionOptionsEqual(first: ConnectionOptions, second: ConnectionOptions): boolean {
+  if (first === undefined || second === undefined) return first === second;
+
   return (
     first?.spaceId === second.spaceId &&
     first?.environmentId === second.environmentId &&
@@ -48,7 +47,10 @@ export function injectLivePreviewExperience(
   effect((onCleanup) => {
     if (!browserReady()) return;
 
-    const client = createLivePreviewClient(connectionOptions());
+    const options = connectionOptions();
+    if (options === undefined) return;
+
+    const client = createLivePreviewClient(options);
     const unsubscribe = client.subscribe(() => {
       currentData.set(client.getSnapshot());
     });

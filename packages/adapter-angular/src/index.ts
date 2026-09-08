@@ -51,6 +51,8 @@ export type {
   InjectLivePreviewExperienceOptions,
   InjectLivePreviewExperienceResult,
 } from './inject-live-preview-experience.js';
+export { injectLivePreview } from './inject-live-preview.js';
+export type { InjectLivePreviewOptions, InjectLivePreviewResult } from './inject-live-preview.js';
 export { injectExperiencePlan } from './inject-experience-plan.js';
 export type {
   ExperiencePlanResolveOptions,

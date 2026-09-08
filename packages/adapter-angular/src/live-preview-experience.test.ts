@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
+import { injectLivePreview, type InjectLivePreviewOptions } from './inject-live-preview.js';
 import {
   injectLivePreviewExperience,
   type InjectLivePreviewExperienceOptions,
@@ -114,6 +115,20 @@ class ExperiencePlanProbe {
     resolveOptions: { config: { components: {} } },
   });
   readonly plan = injectExperiencePlan(() => this.options());
+}
+
+@Component({
+  selector: 'cf-live-preview-plan-probe',
+  template: `<output>{{
+    livePreview.data()?.nodes?.[0]?.props?.content?.['title'] ?? ''
+  }}</output>`,
+})
+class LivePreviewPlanProbe {
+  readonly options = signal<InjectLivePreviewOptions>({
+    initialPlan,
+    resolveOptions: { config: { components: {} } },
+  });
+  readonly livePreview = injectLivePreview(() => this.options());
 }
 
 function createFixture<T>(component: Type<T>, setup?: (instance: T) => void) {
@@ -286,6 +301,16 @@ describe('injectExperiencePlan', () => {
     resolveFirst?.({});
     await Promise.resolve();
     expect(fixture.nativeElement.textContent).toContain('second');
+    fixture.destroy();
+  });
+});
+
+describe('injectLivePreview', () => {
+  it('returns the initial plan when no Preview Session is configured', () => {
+    const fixture = createFixture(LivePreviewPlanProbe);
+
+    expect(fixture.componentInstance.livePreview.data()).toBe(initialPlan);
+    expect(fixture.nativeElement.textContent).toContain('initial');
     fixture.destroy();
   });
 });

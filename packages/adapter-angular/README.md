@@ -93,6 +93,18 @@ the token as the WebSocket URL's `access_token` parameter.
 payload. It updates `plan.data()` after the resolver returns a complete
 plan. The current plan stays in place until the new plan is ready.
 
+When the app only needs the rendered plan, `injectLivePreview()` combines both
+steps and returns the same `{ data }` shape:
+
+```ts
+readonly livePreview = injectLivePreview(() => ({
+  previewSessionOptions,
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+}));
+```
+
 ### Renderers
 
 Every renderer is standalone; add it to your own component's `imports`.

@@ -9,7 +9,7 @@ import {
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
 export type UseLivePreviewExperienceOptions = {
-  previewSessionOptions: PreviewSessionOptions;
+  previewSessionOptions?: PreviewSessionOptions;
   initialPayload?: ExperiencePayload;
 };
 
@@ -22,16 +22,26 @@ export function useLivePreviewExperience(
 ): UseLivePreviewExperienceResult {
   const { previewSessionOptions, initialPayload } = options;
   const client = useMemo(() => {
+    if (previewSessionOptions === undefined) return undefined;
+
     return createLivePreviewClient(previewSessionOptions, initialPayload);
   }, [
-    previewSessionOptions.spaceId,
-    previewSessionOptions.environmentId,
-    previewSessionOptions.previewToken,
-    previewSessionOptions.sessionId,
-    previewSessionOptions.sessionHost,
-    previewSessionOptions.debug,
+    previewSessionOptions?.spaceId,
+    previewSessionOptions?.environmentId,
+    previewSessionOptions?.previewToken,
+    previewSessionOptions?.sessionId,
+    previewSessionOptions?.sessionHost,
+    previewSessionOptions?.debug,
   ]);
 
-  const data = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  const emptySource = useMemo(
+    () => ({
+      getSnapshot: () => initialPayload,
+      subscribe: () => () => undefined,
+    }),
+    [initialPayload]
+  );
+  const source = client ?? emptySource;
+  const data = useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot);
   return { data };
 }

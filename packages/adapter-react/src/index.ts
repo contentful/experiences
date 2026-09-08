@@ -42,6 +42,8 @@ export type {
   UseLivePreviewExperienceOptions,
   UseLivePreviewExperienceResult,
 } from './use-live-preview-experience';
+export { useLivePreview } from './use-live-preview';
+export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview';
 
 export { useExperiencePlan } from './use-experience-plan';
 export type {

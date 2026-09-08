@@ -69,6 +69,18 @@ The hooks expose `UseLivePreviewExperienceOptions`,
 `UseLivePreviewExperienceResult`, `ExperiencePlanResolveOptions`,
 `UseExperiencePlanOptions`, and `UseExperiencePlanResult`.
 
+When the app only needs the rendered plan, `useLivePreview` combines both
+steps and returns the same `{ data }` shape:
+
+```tsx
+const livePreview = useLivePreview({
+  previewSessionOptions,
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+});
+```
+
 ### Renderers
 
 ```ts
