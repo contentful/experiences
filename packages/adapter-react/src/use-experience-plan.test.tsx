@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
-import type { UseResolvedExperienceOptions } from './use-resolved-experience';
-import { useResolvedExperience } from './use-resolved-experience';
+import type { UseExperiencePlanOptions } from './use-experience-plan';
+import { useExperiencePlan } from './use-experience-plan';
 
 const payload = (title: string): ExperiencePayload => ({
   nodes: [
@@ -35,8 +35,8 @@ const payload = (title: string): ExperiencePayload => ({
   ],
 });
 
-function ResolvedExperienceProbe({ value }: { value: UseResolvedExperienceOptions }): ReactElement {
-  const { data } = useResolvedExperience(value);
+function ExperiencePlanProbe({ value }: { value: UseExperiencePlanOptions }): ReactElement {
+  const { data } = useExperiencePlan(value);
   const title = data?.nodes[0]?.props.content.title;
   return <output>{typeof title === 'string' ? title : ''}</output>;
 }
@@ -48,11 +48,11 @@ function renderRoot(): { container: HTMLElement; root: Root } {
   return { container, root };
 }
 
-describe('useResolvedExperience', () => {
+describe('useExperiencePlan', () => {
   let root: Root | undefined;
   let container: HTMLElement | undefined;
 
-  const initialExperience = {
+  const initialPlan = {
     fallbackViewportIndex: 0,
     nodes: [
       {
@@ -84,12 +84,12 @@ describe('useResolvedExperience', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the initial experience until raw data resolves', async () => {
+  it('keeps the initial plan until raw data resolves', async () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
       root.render(
-        <ResolvedExperienceProbe value={{ data: undefined, initialExperience, resolveOptions }} />
+        <ExperiencePlanProbe value={{ payload: undefined, initialPlan, resolveOptions }} />
       );
     });
 
@@ -97,9 +97,7 @@ describe('useResolvedExperience', () => {
 
     await act(async () => {
       root.render(
-        <ResolvedExperienceProbe
-          value={{ data: payload('updated'), initialExperience, resolveOptions }}
-        />
+        <ExperiencePlanProbe value={{ payload: payload('updated'), initialPlan, resolveOptions }} />
       );
       await Promise.resolve();
     });
@@ -107,7 +105,7 @@ describe('useResolvedExperience', () => {
     expect(container.textContent).toBe('updated');
   });
 
-  it('retains the initial experience when resolving raw data fails', async () => {
+  it('retains the initial plan when resolving raw data fails', async () => {
     const failingResolveOptions = {
       config: {
         components: {
@@ -122,10 +120,10 @@ describe('useResolvedExperience', () => {
 
     await act(async () => {
       root.render(
-        <ResolvedExperienceProbe
+        <ExperiencePlanProbe
           value={{
-            data: payload('failed'),
-            initialExperience,
+            payload: payload('failed'),
+            initialPlan,
             resolveOptions: failingResolveOptions,
           }}
         />
@@ -140,7 +138,7 @@ describe('useResolvedExperience', () => {
     expect(container.textContent).toBe('initial');
   });
 
-  it('allows only the latest async resolution to update the experience', async () => {
+  it('allows only the latest async resolution to update the plan', async () => {
     let resolveFirst: ((value: Record<string, unknown>) => void) | undefined;
     let resolveSecond: ((value: Record<string, unknown>) => void) | undefined;
     let resolveCall = 0;
@@ -164,10 +162,10 @@ describe('useResolvedExperience', () => {
 
     await act(async () => {
       root.render(
-        <ResolvedExperienceProbe
+        <ExperiencePlanProbe
           value={{
-            data: payload('first'),
-            initialExperience,
+            payload: payload('first'),
+            initialPlan,
             resolveOptions: controlledResolveOptions,
           }}
         />
@@ -178,10 +176,10 @@ describe('useResolvedExperience', () => {
 
     await act(async () => {
       root.render(
-        <ResolvedExperienceProbe
+        <ExperiencePlanProbe
           value={{
-            data: payload('second'),
-            initialExperience,
+            payload: payload('second'),
+            initialPlan,
             resolveOptions: controlledResolveOptions,
           }}
         />

@@ -5,11 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { injectLivePreview, type InjectLivePreviewOptions } from './inject-live-preview.js';
 import {
-  injectResolvedExperience,
-  type InjectResolvedExperienceOptions,
-} from './inject-resolved-experience.js';
+  injectLivePreviewExperience,
+  type InjectLivePreviewExperienceOptions,
+} from './inject-live-preview-experience.js';
+import {
+  injectExperiencePlan,
+  type InjectExperiencePlanOptions,
+} from './inject-experience-plan.js';
 
 const payload: ExperiencePayload = {
   nodes: [
@@ -28,7 +31,7 @@ const payload: ExperiencePayload = {
   viewports: [{ displayName: 'Default', id: 'default', previewSize: '1024px', query: '*' }],
 };
 
-const initialExperience: PortableRenderPlan = {
+const initialPlan: PortableRenderPlan = {
   fallbackViewportIndex: 0,
   nodes: [
     {
@@ -54,28 +57,30 @@ const DOCUMENT =
   }}</output>`,
 })
 class RawRoot {
-  readonly options: InjectLivePreviewOptions = {
-    environmentId: 'environment-id',
-    initialData: payload,
-    previewToken: 'preview-token',
-    sessionHost: 'wss://preview-session.example.test',
-    sessionId: 'session-id',
-    spaceId: 'space-id',
+  readonly options: InjectLivePreviewExperienceOptions = {
+    previewSessionOptions: {
+      environmentId: 'environment-id',
+      previewToken: 'preview-token',
+      sessionHost: 'wss://preview-session.example.test',
+      sessionId: 'session-id',
+      spaceId: 'space-id',
+    },
+    initialPayload: payload,
   };
-  readonly livePreview = injectLivePreview(() => this.options);
+  readonly livePreview = injectLivePreviewExperience(() => this.options);
 }
 
 @Component({
   selector: 'cf-resolved-root',
-  template: `<output>{{ resolved.data()?.nodes?.[0]?.props?.content?.['title'] ?? '' }}</output>`,
+  template: `<output>{{ plan.data()?.nodes?.[0]?.props?.content?.['title'] ?? '' }}</output>`,
 })
 class ResolvedRoot {
-  readonly options: InjectResolvedExperienceOptions = {
-    data: undefined,
-    initialExperience,
+  readonly options: InjectExperiencePlanOptions = {
+    payload: undefined,
+    initialPlan,
     resolveOptions: { config: { components: {} } },
   };
-  readonly resolved = injectResolvedExperience(() => this.options);
+  readonly plan = injectExperiencePlan(() => this.options);
 }
 
 async function render<T>(component: new (...args: never[]) => T): Promise<string> {
@@ -111,7 +116,7 @@ describe('live-preview Angular helpers during SSR', () => {
     expect(html).toContain('server data');
   });
 
-  it('renders the initial resolved experience without running the resolver', async () => {
+  it('renders the initial experience plan without running the resolver', async () => {
     const html = await render(ResolvedRoot);
 
     expect(html).toContain('server initial');

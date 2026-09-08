@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { injectLivePreview, type InjectLivePreviewOptions } from './inject-live-preview.js';
 import {
-  injectResolvedExperience,
-  type InjectResolvedExperienceOptions,
-} from './inject-resolved-experience.js';
+  injectLivePreviewExperience,
+  type InjectLivePreviewExperienceOptions,
+} from './inject-live-preview-experience.js';
+import {
+  injectExperiencePlan,
+  type InjectExperiencePlanOptions,
+} from './inject-experience-plan.js';
 
 type FakeSocket = {
   readonly url: string;
@@ -60,7 +63,7 @@ const payload = (title: string): ExperiencePayload => ({
   ],
 });
 
-const initialExperience: PortableRenderPlan = {
+const initialPlan: PortableRenderPlan = {
   fallbackViewportIndex: 0,
   nodes: [
     {
@@ -76,13 +79,17 @@ const initialExperience: PortableRenderPlan = {
   diagnostics: [],
 };
 
-const livePreviewOptions = (initialData?: ExperiencePayload): InjectLivePreviewOptions => ({
-  environmentId: 'environment-id',
-  initialData,
-  previewToken: 'preview-token',
-  sessionHost: 'wss://preview-session.example.test',
-  sessionId: 'session-id',
-  spaceId: 'space-id',
+const livePreviewOptions = (
+  initialPayload?: ExperiencePayload
+): InjectLivePreviewExperienceOptions => ({
+  previewSessionOptions: {
+    environmentId: 'environment-id',
+    previewToken: 'preview-token',
+    sessionHost: 'wss://preview-session.example.test',
+    sessionId: 'session-id',
+    spaceId: 'space-id',
+  },
+  initialPayload,
 });
 
 @Component({
@@ -91,22 +98,22 @@ const livePreviewOptions = (initialData?: ExperiencePayload): InjectLivePreviewO
     livePreview.data()?.nodes?.[0]?.contentProperties?.['title'] ?? ''
   }}</output>`,
 })
-class LivePreviewProbe {
-  readonly options = signal<InjectLivePreviewOptions>(livePreviewOptions());
-  readonly livePreview = injectLivePreview(() => this.options());
+class LivePreviewExperienceProbe {
+  readonly options = signal<InjectLivePreviewExperienceOptions>(livePreviewOptions());
+  readonly livePreview = injectLivePreviewExperience(() => this.options());
 }
 
 @Component({
-  selector: 'cf-resolved-experience-probe',
-  template: `<output>{{ resolved.data()?.nodes?.[0]?.props?.content?.['title'] ?? '' }}</output>`,
+  selector: 'cf-experience-plan-probe',
+  template: `<output>{{ plan.data()?.nodes?.[0]?.props?.content?.['title'] ?? '' }}</output>`,
 })
-class ResolvedExperienceProbe {
-  readonly options = signal<InjectResolvedExperienceOptions>({
-    data: undefined,
-    initialExperience,
+class ExperiencePlanProbe {
+  readonly options = signal<InjectExperiencePlanOptions>({
+    payload: undefined,
+    initialPlan,
     resolveOptions: { config: { components: {} } },
   });
-  readonly resolved = injectResolvedExperience(() => this.options());
+  readonly plan = injectExperiencePlan(() => this.options());
 }
 
 function createFixture<T>(component: Type<T>, setup?: (instance: T) => void) {
@@ -127,22 +134,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('injectLivePreview', () => {
+describe('injectLivePreviewExperience', () => {
   it('keeps initial data and opens the socket after the first render', async () => {
-    const initialData = payload('initial');
-    const fixture = createFixture(LivePreviewProbe, (probe) => {
-      probe.options.set(livePreviewOptions(initialData));
+    const initialPayload = payload('initial');
+    const fixture = createFixture(LivePreviewExperienceProbe, (probe) => {
+      probe.options.set(livePreviewOptions(initialPayload));
     });
 
     await vi.waitFor(() => expect(sockets).toHaveLength(1));
 
-    expect(fixture.componentInstance.livePreview.data()).toBe(initialData);
+    expect(fixture.componentInstance.livePreview.data()).toBe(initialPayload);
     expect(fixture.nativeElement.textContent).toContain('initial');
     fixture.destroy();
   });
 
   it('updates the signal from a valid next message', async () => {
-    const fixture = createFixture(LivePreviewProbe);
+    const fixture = createFixture(LivePreviewExperienceProbe);
     await vi.waitFor(() => expect(sockets).toHaveLength(1));
 
     const nextData = payload('updated');
@@ -155,10 +162,13 @@ describe('injectLivePreview', () => {
   });
 
   it('does not open a socket when preview credentials are incomplete', async () => {
-    const fixture = createFixture(LivePreviewProbe, (probe) => {
+    const fixture = createFixture(LivePreviewExperienceProbe, (probe) => {
       probe.options.set({
         ...livePreviewOptions(payload('initial')),
-        previewToken: undefined,
+        previewSessionOptions: {
+          ...livePreviewOptions().previewSessionOptions,
+          previewToken: undefined,
+        },
       });
     });
     await fixture.whenStable();
@@ -171,13 +181,16 @@ describe('injectLivePreview', () => {
   });
 
   it('replaces the client when connection options change and closes it on destroy', async () => {
-    const fixture = createFixture(LivePreviewProbe);
+    const fixture = createFixture(LivePreviewExperienceProbe);
     await vi.waitFor(() => expect(sockets).toHaveLength(1));
     const firstSocket = sockets[0];
 
     fixture.componentInstance.options.update((options) => ({
       ...options,
-      sessionId: 'next-session-id',
+      previewSessionOptions: {
+        ...options.previewSessionOptions,
+        sessionId: 'next-session-id',
+      },
     }));
     fixture.detectChanges();
 
@@ -191,29 +204,27 @@ describe('injectLivePreview', () => {
   });
 });
 
-describe('injectResolvedExperience', () => {
+describe('injectExperiencePlan', () => {
   it('keeps the initial experience until raw data resolves', async () => {
-    const fixture = createFixture(ResolvedExperienceProbe);
-    expect(fixture.componentInstance.resolved.data()).toBe(initialExperience);
+    const fixture = createFixture(ExperiencePlanProbe);
+    expect(fixture.componentInstance.plan.data()).toBe(initialPlan);
 
     fixture.componentInstance.options.update((options) => ({
       ...options,
-      data: payload('updated'),
+      payload: payload('updated'),
     }));
     fixture.detectChanges();
 
     await vi.waitFor(() => expect(fixture.nativeElement.textContent).toContain('updated'));
-    expect(fixture.componentInstance.resolved.data()?.nodes[0]?.props.content.title).toBe(
-      'updated'
-    );
+    expect(fixture.componentInstance.plan.data()?.nodes[0]?.props.content.title).toBe('updated');
     fixture.destroy();
   });
 
   it('retains the initial experience when resolving raw data produces diagnostics', async () => {
-    const fixture = createFixture(ResolvedExperienceProbe);
+    const fixture = createFixture(ExperiencePlanProbe);
     fixture.componentInstance.options.set({
-      data: payload('failed'),
-      initialExperience,
+      payload: payload('failed'),
+      initialPlan,
       resolveOptions: {
         config: {
           components: {
@@ -227,7 +238,7 @@ describe('injectResolvedExperience', () => {
     fixture.detectChanges();
 
     await fixture.whenStable();
-    expect(fixture.componentInstance.resolved.data()).toBe(initialExperience);
+    expect(fixture.componentInstance.plan.data()).toBe(initialPlan);
     expect(fixture.nativeElement.textContent).toContain('initial');
     fixture.destroy();
   });
@@ -236,7 +247,7 @@ describe('injectResolvedExperience', () => {
     let resolveFirst: ((value: Record<string, unknown>) => void) | undefined;
     let resolveSecond: ((value: Record<string, unknown>) => void) | undefined;
     let resolveCall = 0;
-    const fixture = createFixture(ResolvedExperienceProbe);
+    const fixture = createFixture(ExperiencePlanProbe);
 
     const resolveOptions = {
       config: {
@@ -254,16 +265,16 @@ describe('injectResolvedExperience', () => {
     };
 
     fixture.componentInstance.options.set({
-      data: payload('first'),
-      initialExperience,
+      payload: payload('first'),
+      initialPlan,
       resolveOptions,
     });
     fixture.detectChanges();
     await vi.waitFor(() => expect(resolveCall).toBe(1));
 
     fixture.componentInstance.options.set({
-      data: payload('second'),
-      initialExperience,
+      payload: payload('second'),
+      initialPlan,
       resolveOptions,
     });
     fixture.detectChanges();

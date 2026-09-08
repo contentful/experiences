@@ -33,32 +33,34 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 
 ```svelte
 <script lang="ts">
-  const livePreview = useLivePreview(() => ({
-    spaceId,
-    environmentId,
-    previewToken,
-    sessionId,
-    initialData,
+  const livePreview = useLivePreviewExperience(() => ({
+    previewSessionOptions: {
+      spaceId,
+      environmentId,
+      previewToken,
+      sessionId,
+    },
+    initialPayload,
   }));
 
-  const resolved = useResolvedExperience(() => ({
-    data: livePreview.data,
-    initialExperience,
+  const plan = useExperiencePlan(() => ({
+    payload: livePreview.data,
+    initialPlan,
     resolveOptions: { config: experienceConfig },
   }));
 </script>
 
-<ClientExperienceRenderer experience={resolved.data} config={experienceConfig} />
+<ClientExperienceRenderer experience={plan.data} config={experienceConfig} />
 ```
 
-`useLivePreview` returns the latest raw Experience payload. `initialData` seeds
-the first value. `useResolvedExperience` turns that payload into the
-`PortableRenderPlan` consumed by the renderer and keeps the current rendered
+`useLivePreviewExperience` returns the latest raw Experience payload.
+`initialPayload` seeds the first value. `useExperiencePlan` turns that payload
+into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
 experience while an update is being resolved.
 
-The hooks expose `UseLivePreviewOptions`, `UseLivePreviewResult`,
-`LivePreviewResolveOptions`, `UseResolvedExperienceOptions`, and
-`UseResolvedExperienceResult`.
+The hooks expose `UseLivePreviewExperienceOptions`,
+`UseLivePreviewExperienceResult`, `ExperiencePlanResolveOptions`,
+`UseExperiencePlanOptions`, and `UseExperiencePlanResult`.
 
 ### Renderers
 

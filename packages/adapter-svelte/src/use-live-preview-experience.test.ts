@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
-import LivePreviewProbe from './test-fixtures/LivePreviewProbe.svelte';
-import type { UseLivePreviewOptions } from './use-live-preview.svelte.js';
+import LivePreviewExperienceProbe from './test-fixtures/LivePreviewExperienceProbe.svelte';
+import type { UseLivePreviewExperienceOptions } from './use-live-preview-experience.svelte.js';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -50,16 +50,22 @@ const payload = (title: string): ExperiencePayload => ({
   ],
 });
 
-const options = (overrides: Partial<UseLivePreviewOptions> = {}): UseLivePreviewOptions => ({
+const previewSessionOptions = {
   environmentId: 'environment-id',
   previewToken: 'preview-token',
   sessionHost: 'wss://preview-session.example.test',
   sessionId: 'session-id',
   spaceId: 'space-id',
+};
+
+const options = (
+  overrides: Partial<UseLivePreviewExperienceOptions> = {}
+): UseLivePreviewExperienceOptions => ({
+  previewSessionOptions,
   ...overrides,
 });
 
-describe('useLivePreview', () => {
+describe('useLivePreviewExperience', () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
@@ -70,8 +76,10 @@ describe('useLivePreview', () => {
   });
 
   it('returns initial raw data and updates from the Preview Session', async () => {
-    const initialData = payload('initial');
-    const view = render(LivePreviewProbe, { props: { options: options({ initialData }) } });
+    const initialPayload = payload('initial');
+    const view = render(LivePreviewExperienceProbe, {
+      props: { options: options({ initialPayload }) },
+    });
     expect(view.container.textContent).toBe('initial');
     expect(FakeWebSocket.instances).toHaveLength(1);
 
@@ -82,8 +90,13 @@ describe('useLivePreview', () => {
   });
 
   it('does not connect when a session credential is missing', () => {
-    const view = render(LivePreviewProbe, {
-      props: { options: options({ initialData: payload('initial'), sessionId: undefined }) },
+    const view = render(LivePreviewExperienceProbe, {
+      props: {
+        options: options({
+          initialPayload: payload('initial'),
+          previewSessionOptions: { ...previewSessionOptions, sessionId: undefined },
+        }),
+      },
     });
 
     expect(view.container.textContent).toBe('initial');

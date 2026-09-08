@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
-import { useLivePreview, type UseLivePreviewOptions } from './use-live-preview';
+import {
+  useLivePreviewExperience,
+  type UseLivePreviewExperienceOptions,
+} from './use-live-preview-experience';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -52,12 +55,18 @@ const payload = (title: string): ExperiencePayload => ({
   ],
 });
 
-const options = (overrides: Partial<UseLivePreviewOptions> = {}): UseLivePreviewOptions => ({
+const previewSessionOptions = {
   environmentId: 'environment-id',
   previewToken: 'preview-token',
   sessionHost: 'wss://preview-session.example.test',
   sessionId: 'session-id',
   spaceId: 'space-id',
+};
+
+const options = (
+  overrides: Partial<UseLivePreviewExperienceOptions> = {}
+): UseLivePreviewExperienceOptions => ({
+  previewSessionOptions,
   ...overrides,
 });
 
@@ -66,8 +75,12 @@ function payloadTitle(value: ExperiencePayload | undefined): string {
   return typeof title === 'string' ? title : '';
 }
 
-function LivePreviewProbe({ value }: { value: UseLivePreviewOptions }): ReactElement {
-  const { data } = useLivePreview(value);
+function LivePreviewExperienceProbe({
+  value,
+}: {
+  value: UseLivePreviewExperienceOptions;
+}): ReactElement {
+  const { data } = useLivePreviewExperience(value);
   return <output>{payloadTitle(data)}</output>;
 }
 
@@ -78,7 +91,7 @@ function renderRoot(): { container: HTMLElement; root: Root } {
   return { container, root };
 }
 
-describe('useLivePreview', () => {
+describe('useLivePreviewExperience', () => {
   let root: Root | undefined;
   let container: HTMLElement | undefined;
 
@@ -97,11 +110,11 @@ describe('useLivePreview', () => {
   });
 
   it('returns initial data and updates when the session sends a message', async () => {
-    const initialData = payload('initial');
+    const initialPayload = payload('initial');
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(<LivePreviewProbe value={options({ initialData })} />);
+      root.render(<LivePreviewExperienceProbe value={options({ initialPayload })} />);
     });
 
     expect(container.textContent).toBe('initial');
@@ -117,11 +130,18 @@ describe('useLivePreview', () => {
   });
 
   it('keeps the source inactive when a session credential is missing', async () => {
-    const initialData = payload('initial');
+    const initialPayload = payload('initial');
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(<LivePreviewProbe value={options({ initialData, sessionId: undefined })} />);
+      root.render(
+        <LivePreviewExperienceProbe
+          value={options({
+            initialPayload,
+            previewSessionOptions: { ...previewSessionOptions, sessionId: undefined },
+          })}
+        />
+      );
     });
 
     expect(container.textContent).toBe('initial');
@@ -132,10 +152,10 @@ describe('useLivePreview', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(<LivePreviewProbe value={options()} />);
+      root.render(<LivePreviewExperienceProbe value={options()} />);
     });
     await act(async () => {
-      root.render(<LivePreviewProbe value={{ ...options() }} />);
+      root.render(<LivePreviewExperienceProbe value={{ ...options() }} />);
     });
 
     expect(FakeWebSocket.instances).toHaveLength(1);
@@ -145,12 +165,18 @@ describe('useLivePreview', () => {
   it('recreates the source when a connection option changes', async () => {
     ({ root } = renderRoot());
     await act(async () => {
-      root.render(<LivePreviewProbe value={options()} />);
+      root.render(<LivePreviewExperienceProbe value={options()} />);
     });
     const firstSocket = FakeWebSocket.instances[0];
 
     await act(async () => {
-      root.render(<LivePreviewProbe value={options({ sessionId: 'new-session-id' })} />);
+      root.render(
+        <LivePreviewExperienceProbe
+          value={options({
+            previewSessionOptions: { ...previewSessionOptions, sessionId: 'new-session-id' },
+          })}
+        />
+      );
     });
 
     expect(FakeWebSocket.instances).toHaveLength(2);

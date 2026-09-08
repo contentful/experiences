@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
-import ResolvedExperienceProbe from './test-fixtures/ResolvedExperienceProbe.svelte';
-import type { UseResolvedExperienceOptions } from './use-resolved-experience.svelte.js';
+import ExperiencePlanProbe from './test-fixtures/ExperiencePlanProbe.svelte';
+import type { UseExperiencePlanOptions } from './use-experience-plan.svelte.js';
 
 const payload = (title: string): ExperiencePayload => ({
   nodes: [
@@ -32,7 +32,7 @@ const payload = (title: string): ExperiencePayload => ({
   ],
 });
 
-const initialExperience = {
+const initialPlan = {
   fallbackViewportIndex: 0,
   nodes: [
     {
@@ -52,15 +52,15 @@ const resolveOptions = {
   config: { components: {} },
 };
 
-describe('useResolvedExperience', () => {
+describe('useExperiencePlan', () => {
   it('resolves raw data into an experience', async () => {
-    const view = render(ResolvedExperienceProbe, {
+    const view = render(ExperiencePlanProbe, {
       props: {
         options: {
-          data: payload('updated'),
-          initialExperience,
+          payload: payload('updated'),
+          initialPlan,
           resolveOptions,
-        } satisfies UseResolvedExperienceOptions,
+        } satisfies UseExperiencePlanOptions,
       },
     });
 
@@ -68,11 +68,11 @@ describe('useResolvedExperience', () => {
   });
 
   it('keeps the initial experience when resolving raw data fails', async () => {
-    const view = render(ResolvedExperienceProbe, {
+    const view = render(ExperiencePlanProbe, {
       props: {
         options: {
-          data: payload('failed'),
-          initialExperience,
+          payload: payload('failed'),
+          initialPlan,
           resolveOptions: {
             config: {
               components: {
@@ -82,7 +82,7 @@ describe('useResolvedExperience', () => {
               },
             },
           },
-        } satisfies UseResolvedExperienceOptions,
+        } satisfies UseExperiencePlanOptions,
       },
     });
 

@@ -46,15 +46,21 @@ export { NodeRendererDirective as NodeRenderer } from './node-renderer.directive
 export { injectActiveViewport } from './inject-active-viewport.js';
 export type { InjectActiveViewportResult } from './inject-active-viewport.js';
 
-export { injectLivePreview } from './inject-live-preview.js';
-export type { InjectLivePreviewOptions, InjectLivePreviewResult } from './inject-live-preview.js';
-export { injectResolvedExperience } from './inject-resolved-experience.js';
+export { injectLivePreviewExperience } from './inject-live-preview-experience.js';
 export type {
-  InjectResolvedExperienceOptions,
-  InjectResolvedExperienceResult,
-  LivePreviewResolveOptions,
-} from './inject-resolved-experience.js';
-export type { LivePreviewClient, LivePreviewOptions } from '@contentful/experiences-live-preview';
+  InjectLivePreviewExperienceOptions,
+  InjectLivePreviewExperienceResult,
+} from './inject-live-preview-experience.js';
+export { injectExperiencePlan } from './inject-experience-plan.js';
+export type {
+  ExperiencePlanResolveOptions,
+  InjectExperiencePlanOptions,
+  InjectExperiencePlanResult,
+} from './inject-experience-plan.js';
+export type {
+  LivePreviewClient,
+  PreviewSessionOptions,
+} from '@contentful/experiences-live-preview';
 
 // ─── Runtime context helpers ─────────────────────────────────────────────
 export {

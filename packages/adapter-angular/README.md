@@ -33,8 +33,8 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 
 ### Live preview
 
-Live preview uses two values. `injectLivePreview()` returns the raw Experience
-payload. `injectResolvedExperience()` passes that payload to
+Live preview uses two values. `injectLivePreviewExperience()` returns the raw Experience
+payload. `injectExperiencePlan()` passes that payload to
 `resolveExperience()` and returns the `PortableRenderPlan` consumed by the
 renderer. Keeping the values separate lets an app use the raw payload when it
 needs it.
@@ -49,10 +49,10 @@ the other framework adapters.
 import { Component, signal } from '@angular/core';
 import {
   ClientExperienceRenderer,
-  injectLivePreview,
-  injectResolvedExperience,
-  type InjectLivePreviewOptions,
-  type InjectResolvedExperienceOptions,
+  injectLivePreviewExperience,
+  injectExperiencePlan,
+  type InjectLivePreviewExperienceOptions,
+  type InjectExperiencePlanOptions,
   type PortableRenderPlan,
 } from '@contentful/experiences-angular';
 import { experienceConfig } from './experience-config';
@@ -60,21 +60,23 @@ import { experienceConfig } from './experience-config';
 @Component({
   selector: 'app-page',
   imports: [ClientExperienceRenderer],
-  template: `<cf-experience [experience]="resolved.data()" [config]="experienceConfig" />`,
+  template: `<cf-experience [experience]="plan.data()" [config]="experienceConfig" />`,
 })
 export class PageComponent {
-  readonly livePreviewOptions = signal<InjectLivePreviewOptions>({
-    spaceId: 'space-id',
-    environmentId: 'environment-id',
-    previewToken: 'preview-token',
-    sessionId: 'session-id',
+  readonly livePreviewOptions = signal<InjectLivePreviewExperienceOptions>({
+    previewSessionOptions: {
+      spaceId: 'space-id',
+      environmentId: 'environment-id',
+      previewToken: 'preview-token',
+      sessionId: 'session-id',
+    },
   });
-  readonly initialExperience = signal<PortableRenderPlan | undefined>(undefined);
+  readonly initialPlan = signal<PortableRenderPlan | undefined>(undefined);
 
-  readonly livePreview = injectLivePreview(() => this.livePreviewOptions());
-  readonly resolved = injectResolvedExperience((): InjectResolvedExperienceOptions => ({
-    data: this.livePreview.data(),
-    initialExperience: this.initialExperience(),
+  readonly livePreview = injectLivePreviewExperience(() => this.livePreviewOptions());
+  readonly plan = injectExperiencePlan((): InjectExperiencePlanOptions => ({
+    payload: this.livePreview.data(),
+    initialPlan: this.initialPlan(),
     resolveOptions: { config: experienceConfig },
   }));
 
@@ -82,13 +84,13 @@ export class PageComponent {
 }
 ```
 
-`injectLivePreview()` starts its subscription after the first browser render.
+`injectLivePreviewExperience()` starts its subscription after the first browser render.
 Set both `previewToken` and `sessionId` to receive Preview Session updates. The
 initial payload remains available while updates arrive. The browser SDK sends
 the token as the WebSocket URL's `access_token` parameter.
 
-`injectResolvedExperience()` calls `resolveExperience()` for each new raw
-payload. It updates `resolved.data()` after the resolver returns a complete
+`injectExperiencePlan()` calls `resolveExperience()` for each new raw
+payload. It updates `plan.data()` after the resolver returns a complete
 plan. The current plan stays in place until the new plan is ready.
 
 ### Renderers
@@ -103,8 +105,8 @@ NodesRenderer; // *cfNodes                Renders a slot's raw nodes (see Slot c
 NodeRenderer; // *cfNode                 Renders one node; NodesRenderer loops over it
 DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderers when debug is set
 injectActiveViewport; // Signal-backed viewport index; you'll rarely need it directly
-injectLivePreview; // Signal-backed raw Experience payload
-injectResolvedExperience; // Signal-backed PortableRenderPlan
+injectLivePreviewExperience; // Signal-backed raw Experience payload
+injectExperiencePlan; // Signal-backed PortableRenderPlan
 ```
 
 `NodesRenderer` and `NodeRenderer` are **structural directives**, not components, so they add no element of their own — see [Slot children](#slot-children).
@@ -141,11 +143,11 @@ type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
-// From live preview
-type LivePreviewOptions, LivePreviewClient,
-type InjectLivePreviewOptions, InjectLivePreviewResult,
-type InjectResolvedExperienceOptions, InjectResolvedExperienceResult,
-type LivePreviewResolveOptions
+// From live preview and the Angular adapter
+type PreviewSessionOptions, LivePreviewClient,
+type InjectLivePreviewExperienceOptions, InjectLivePreviewExperienceResult,
+type ExperiencePlanResolveOptions, InjectExperiencePlanOptions,
+type InjectExperiencePlanResult
 
 // From design (if you want to do your own viewport-aware resolution)
 getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,

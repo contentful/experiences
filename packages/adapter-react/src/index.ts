@@ -37,16 +37,22 @@ export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { DiagnosticReporter, RenderError, RenderUnknown } from './nodes-renderer';
 
-export { useLivePreview } from './use-live-preview';
-export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview';
-
-export { useResolvedExperience } from './use-resolved-experience';
+export { useLivePreviewExperience } from './use-live-preview-experience';
 export type {
-  LivePreviewResolveOptions,
-  UseResolvedExperienceOptions,
-  UseResolvedExperienceResult,
-} from './use-resolved-experience';
-export type { LivePreviewClient, LivePreviewOptions } from '@contentful/experiences-live-preview';
+  UseLivePreviewExperienceOptions,
+  UseLivePreviewExperienceResult,
+} from './use-live-preview-experience';
+
+export { useExperiencePlan } from './use-experience-plan';
+export type {
+  ExperiencePlanResolveOptions,
+  UseExperiencePlanOptions,
+  UseExperiencePlanResult,
+} from './use-experience-plan';
+export type {
+  LivePreviewClient,
+  PreviewSessionOptions,
+} from '@contentful/experiences-live-preview';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────
 export { useExperience, useContentfulComponent, useContentfulExperienceTemplate } from './context';

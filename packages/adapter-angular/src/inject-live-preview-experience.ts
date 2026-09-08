@@ -2,22 +2,20 @@ import { type Signal, afterNextRender, computed, effect, signal } from '@angular
 
 import {
   createLivePreviewClient,
-  type LivePreviewOptions,
+  type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
-export type InjectLivePreviewOptions = LivePreviewOptions & {
-  initialData?: ExperiencePayload;
+export type InjectLivePreviewExperienceOptions = {
+  previewSessionOptions: PreviewSessionOptions;
+  initialPayload?: ExperiencePayload;
 };
 
-export interface InjectLivePreviewResult {
+export interface InjectLivePreviewExperienceResult {
   readonly data: Signal<ExperiencePayload | undefined>;
 }
 
-type ConnectionOptions = Pick<
-  LivePreviewOptions,
-  'spaceId' | 'environmentId' | 'previewToken' | 'sessionId' | 'sessionHost' | 'debug'
->;
+type ConnectionOptions = PreviewSessionOptions;
 
 function areConnectionOptionsEqual(
   first: ConnectionOptions | undefined,
@@ -33,19 +31,15 @@ function areConnectionOptionsEqual(
   );
 }
 
-export function injectLivePreview(
-  getOptions: () => InjectLivePreviewOptions
-): InjectLivePreviewResult {
+export function injectLivePreviewExperience(
+  getOptions: () => InjectLivePreviewExperienceOptions
+): InjectLivePreviewExperienceResult {
   const browserReady = signal(false);
   const currentData = signal<ExperiencePayload | undefined>(undefined);
-  const data = computed(() => currentData() ?? getOptions().initialData);
-  const connectionOptions = computed<ConnectionOptions>(
-    () => {
-      const { spaceId, environmentId, previewToken, sessionId, sessionHost, debug } = getOptions();
-      return { spaceId, environmentId, previewToken, sessionId, sessionHost, debug };
-    },
-    { equal: areConnectionOptionsEqual }
-  );
+  const data = computed(() => currentData() ?? getOptions().initialPayload);
+  const connectionOptions = computed<ConnectionOptions>(() => getOptions().previewSessionOptions, {
+    equal: areConnectionOptionsEqual,
+  });
 
   afterNextRender(() => {
     browserReady.set(true);
