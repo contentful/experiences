@@ -1,3 +1,11 @@
+## 0.6.2 (2026-09-10)
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.4.2
+- Updated design to 0.8.2
+- Updated core to 0.8.2
+
 ## 0.6.1 (2026-09-02)
 
 ### 🧱 Updated Dependencies

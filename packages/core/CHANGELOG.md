@@ -1,3 +1,9 @@
+## 0.8.2 (2026-09-10)
+
+### 🚀 Features
+
+- **live-preview:** add live preview client [SPA-5151] ([#157](https://github.com/contentful/experiences/pull/157))
+
 ## 0.8.1 (2026-09-02)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
