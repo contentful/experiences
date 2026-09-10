@@ -144,7 +144,6 @@ export type DataAssemblyFixture = {
     string,
     {
       name: string;
-      linkType: 'Contentful:Entry';
       allowedContentTypes: string[];
     }
   >;
