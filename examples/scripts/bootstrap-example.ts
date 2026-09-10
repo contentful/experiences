@@ -440,7 +440,6 @@ async function seedDataAssembly(fixture: DataAssemblyFixture) {
     parameters[pid] = {
       name: pdef.name,
       type: 'ResourceLink',
-      linkType: 'Contentful:Entry',
       allowedResources: [
         {
           type: 'Contentful:Entry',

@@ -19,7 +19,6 @@ const heroAssembly: DataAssemblyFixture = {
   parameters: {
     promo: {
       name: 'Promotion entry',
-      linkType: 'Contentful:Entry',
       allowedContentTypes: ['promotion'],
     },
   },
@@ -63,7 +62,6 @@ const cardAssembly: DataAssemblyFixture = {
   parameters: {
     promo: {
       name: 'Promotion entry',
-      linkType: 'Contentful:Entry',
       allowedContentTypes: ['promotion'],
     },
   },
