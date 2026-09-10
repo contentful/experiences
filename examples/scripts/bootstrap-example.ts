@@ -307,7 +307,7 @@ async function seedComponent(fixture: ComponentFixture) {
     sys: { id: componentId, type: 'Component' },
     name: fixture.name,
     description: fixture.description ?? '',
-    viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
+    viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
       required: p.required ?? false,
@@ -345,7 +345,7 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
   const experienceTemplateBody = {
     name: fixture.name,
     description: fixture.description ?? '',
-    viewports: [{ id: 'all-sizes', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
+    viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
       required: p.required ?? false,
