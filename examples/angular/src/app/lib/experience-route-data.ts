@@ -1,4 +1,4 @@
-import type { PortableRenderPlan } from '@contentful/experiences-angular';
+import type { PortableRenderPlan, PreviewSessionOptions } from '@contentful/experiences-angular';
 
 /**
  * Everything the Express layer resolves per request, handed to Angular as the
@@ -11,6 +11,7 @@ import type { PortableRenderPlan } from '@contentful/experiences-angular';
  */
 export interface ExperienceRouteData {
   slug: string;
+  metadata: Record<string, unknown>;
   /** Carries its own `metadata`, `debug`, and pre-resolved viewport. */
   experience: PortableRenderPlan | null;
   /**
@@ -21,6 +22,10 @@ export interface ExperienceRouteData {
   debug: boolean;
   /** Also on the plan; relayed only to demonstrate the renderer's override input. */
   initialViewportId?: string;
+  /** True when the browser should use the live-preview renderer. */
+  livePreview: boolean;
+  /** Preview Session credentials used only when live preview is enabled. */
+  previewSessionOptions: PreviewSessionOptions;
   /** True when the delivery API had no Experience under `slug`. */
   notFound: boolean;
 }

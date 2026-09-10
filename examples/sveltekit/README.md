@@ -6,6 +6,7 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
+- **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
 - **Hydration-safe viewport seeding**: User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
 - **Styling from design props**: resolved design auto-fills each component's `$props()` by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract.
 - **One escape-hatch demo**: `Card.svelte` styles itself from props like the rest, but its nested `CardCta.svelte` — not a registered component, so it has no props of its own — reads the card's design with `getDesignValues()` inside a `$derived` (reactive across viewport changes). That's the case props can't cover.
@@ -44,13 +45,19 @@ Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in
 
 The route ([`src/routes/[slug]/+page.server.ts`](./src/routes/[slug]/+page.server.ts)) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request.
 
+### Optional: live preview
+
+Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
+
+The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route starts the browser subscription and uses the Preview API for the initial fetch. `?preview=true` remains an explicit way to use the Preview API without a live session.
+
 ### Tokens summary
 
-| Token       | API                | Used by                              | Required?             |
-| ----------- | ------------------ | ------------------------------------ | --------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
-| `CDA_TOKEN` | Content Delivery   | The example app                      | Yes, to run the app   |
-| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true` | Only for preview mode |
+| Token       | API                | Used by                                      | Required?             |
+| ----------- | ------------------ | -------------------------------------------- | --------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)         | Yes, to run bootstrap |
+| `CDA_TOKEN` | Content Delivery   | The example app                              | Yes, to run the app   |
+| `CPA_TOKEN` | Content Preview    | The example app when the Preview API is used | Only for preview mode |
 
 ## File map
 

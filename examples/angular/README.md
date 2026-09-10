@@ -6,6 +6,7 @@ An Angular 20 + `@angular/ssr` app demonstrating `@contentful/experiences-angula
 
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-angular`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `<cf-server-experience>` (`ServerExperienceRendererComponent`).
+- **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `injectLivePreview` applies Preview Session updates in the browser.
 - **Hydration-safe viewport seeding**: User-Agent parsed on the server in `src/server.ts`, passed as `initialViewportId`.
 - **Styling from design inputs**: resolved design auto-fills each component's declared `@Input()`s by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract — and in Angular, declaring the input is also what makes the key arrive.
 - **One escape-hatch demo**: `card.component.ts` styles itself from its inputs like the rest, but the nested `card-cta.component.ts` — not a registered component, so it has no inputs auto-filled — reads the card's design with `injectDesignValues()` inside a `computed()`. That's the case inputs can't cover.
@@ -65,13 +66,19 @@ Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in
 
 [`src/server.ts`](./src/server.ts) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request. `?debug=true` turns on the resolver's debug output the same way.
 
+### Optional: live preview
+
+Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched plan until a complete update arrives.
+
+The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route starts the browser subscription and uses the Preview API for the initial fetch. `?preview=true` remains an explicit way to use the Preview API without a live session.
+
 ### Tokens summary
 
-| Token       | API                | Used by                              | Required?             |
-| ----------- | ------------------ | ------------------------------------ | --------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
-| `CDA_TOKEN` | Content Delivery   | The example app                      | Yes, to run the app   |
-| `CPA_TOKEN` | Content Preview    | The example app when `?preview=true` | Only for preview mode |
+| Token       | API                | Used by                                      | Required?             |
+| ----------- | ------------------ | -------------------------------------------- | --------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)         | Yes, to run bootstrap |
+| `CDA_TOKEN` | Content Delivery   | The example app                              | Yes, to run the app   |
+| `CPA_TOKEN` | Content Preview    | The example app when the Preview API is used | Only for preview mode |
 
 ## File map
 

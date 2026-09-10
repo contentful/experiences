@@ -54,10 +54,15 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   }
 
   const preview = url.searchParams.get('preview');
-  const previewMode = preview === 'true' || preview === '1';
   const debugParam = url.searchParams.get('debug');
   const debug = debugParam === 'true' || debugParam === '1';
+  const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
   const locale = url.searchParams.get('locale') ?? 'en-US';
+  const environmentId = process.env['ENVIRONMENT_ID'] || 'master';
+  const previewToken = process.env['CPA_TOKEN'];
+  const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
+  const livePreview = Boolean(sessionId && previewToken);
+  const previewMode = preview === 'true' || preview === '1' || livePreview;
   const initialViewportId = detectViewportFromUserAgent(req.headers['user-agent'] ?? '');
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
@@ -66,13 +71,13 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
     const experience = await fetchExperience(
       {
         spaceId,
-        environmentId: process.env['ENVIRONMENT_ID'] || 'master',
+        environmentId,
         experienceId: slug,
         locale,
       },
       {
         accessToken,
-        previewToken: process.env['CPA_TOKEN'],
+        previewToken,
         preview: previewMode,
       },
       {
@@ -85,10 +90,28 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
 
     // The plan carries all of these. `debug` and `initialViewportId` are relayed
     // as well only so the page can demonstrate the renderer's override inputs.
-    return { slug, experience, debug, initialViewportId, notFound: false };
+    return {
+      slug,
+      metadata,
+      experience,
+      debug,
+      initialViewportId,
+      livePreview,
+      previewSessionOptions,
+      notFound: false,
+    };
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return { slug, experience: null, debug, initialViewportId, notFound: true };
+      return {
+        slug,
+        metadata,
+        experience: null,
+        debug,
+        initialViewportId,
+        livePreview,
+        previewSessionOptions,
+        notFound: true,
+      };
     }
     throw error;
   }
