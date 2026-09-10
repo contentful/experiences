@@ -1,0 +1,28 @@
+{
+  "name": "live-preview",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/live-preview/src",
+  "projectType": "library",
+  "tags": ["scope:runtime-neutral", "layer:live-preview"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/live-preview",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/live-preview",
+        "command": "vitest run"
+      }
+    }
+  }
+}
