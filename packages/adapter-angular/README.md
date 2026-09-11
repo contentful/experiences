@@ -33,8 +33,21 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 
 ### Live preview
 
-Live preview uses two values. `injectLivePreviewExperience()` returns the raw Experience
-payload. `injectExperiencePlan()` passes that payload to
+Use `injectLivePreview()` when the app should subscribe to Preview Session
+updates, resolve each payload, and render the resulting plan from `data`:
+
+```ts
+readonly livePreview = injectLivePreview(() => ({
+  previewSessionOptions,
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+}));
+```
+
+For separate access to the raw payload and rendered plan, use
+`injectLivePreviewExperience()` and `injectExperiencePlan()`. The first returns
+the raw Experience payload. The second passes that payload to
 `resolveExperience()` and returns the `PortableRenderPlan` consumed by the
 renderer. Keeping the values separate lets an app use the raw payload when it
 needs it.
@@ -46,13 +59,11 @@ the other framework adapters.
 
 ```ts
 // page.component.ts
-import { Component, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import {
   ClientExperienceRenderer,
   injectLivePreviewExperience,
   injectExperiencePlan,
-  type InjectLivePreviewExperienceOptions,
-  type InjectExperiencePlanOptions,
   type PortableRenderPlan,
 } from '@contentful/experiences-angular';
 import { experienceConfig } from './experience-config';
@@ -63,20 +74,20 @@ import { experienceConfig } from './experience-config';
   template: `<cf-experience [experience]="plan.data()" [config]="experienceConfig" />`,
 })
 export class PageComponent {
-  readonly livePreviewOptions = signal<InjectLivePreviewExperienceOptions>({
+  readonly livePreviewOptions = {
     previewSessionOptions: {
       spaceId: 'space-id',
       environmentId: 'environment-id',
       previewToken: 'preview-token',
       sessionId: 'session-id',
     },
-  });
-  readonly initialPlan = signal<PortableRenderPlan | undefined>(undefined);
+  };
+  readonly initialPlan: PortableRenderPlan | undefined = undefined;
 
-  readonly livePreview = injectLivePreviewExperience(() => this.livePreviewOptions());
-  readonly plan = injectExperiencePlan((): InjectExperiencePlanOptions => ({
+  readonly livePreview = injectLivePreviewExperience(() => this.livePreviewOptions);
+  readonly plan = injectExperiencePlan(() => ({
     payload: this.livePreview.data(),
-    initialPlan: this.initialPlan(),
+    initialPlan: this.initialPlan,
     resolveOptions: { config: experienceConfig },
   }));
 
@@ -92,18 +103,6 @@ the token as the WebSocket URL's `access_token` parameter.
 `injectExperiencePlan()` calls `resolveExperience()` for each new raw
 payload. It updates `plan.data()` after the resolver returns a complete
 plan. The current plan stays in place until the new plan is ready.
-
-When the app only needs the rendered plan, `injectLivePreview()` combines both
-steps and returns the same `{ data }` shape:
-
-```ts
-readonly livePreview = injectLivePreview(() => ({
-  previewSessionOptions,
-  initialPayload,
-  initialPlan,
-  resolveOptions: { config: experienceConfig },
-}));
-```
 
 ### Renderers
 

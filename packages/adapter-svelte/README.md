@@ -31,6 +31,25 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 
 ### Live preview
 
+Use `useLivePreview` when the app should subscribe to Preview Session updates,
+resolve each payload, and render the resulting plan from `data`:
+
+```svelte
+<script lang="ts">
+  const livePreview = useLivePreview(() => ({
+    previewSessionOptions,
+    initialPayload,
+    initialPlan,
+    resolveOptions: { config: experienceConfig },
+  }));
+</script>
+
+<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />
+```
+
+For separate access to the raw payload and rendered plan, use
+`useLivePreviewExperience` and `useExperiencePlan`:
+
 ```svelte
 <script lang="ts">
   const livePreview = useLivePreviewExperience(() => ({
@@ -57,24 +76,6 @@ resolveExperience(payload, config, opts?); // Async; walks payload, runs resolve
 `initialPayload` seeds the first value. `useExperiencePlan` turns that payload
 into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
 experience while an update is being resolved.
-
-The hooks expose `UseLivePreviewExperienceOptions`,
-`UseLivePreviewExperienceResult`, `ExperiencePlanResolveOptions`,
-`UseExperiencePlanOptions`, and `UseExperiencePlanResult`.
-
-When the app only needs the rendered plan, `useLivePreview` combines both
-steps and returns the same `{ data }` shape:
-
-```svelte
-<script lang="ts">
-  const livePreview = useLivePreview(() => ({
-    previewSessionOptions,
-    initialPayload,
-    initialPlan,
-    resolveOptions: { config: experienceConfig },
-  }));
-</script>
-```
 
 ### Renderers
 
