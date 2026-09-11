@@ -1,3 +1,17 @@
+## 0.1.3 (2026-09-11)
+
+### 🚀 Features
+
+- **live-preview:** expose preview status helper [SPA-5289] ([#170](https://github.com/contentful/experiences/pull/170))
+- **live-preview:** add framework adapters [SPA-5161] ([#165](https://github.com/contentful/experiences/pull/165))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.1
+- Updated client to 0.4.3
+- Updated design to 0.8.3
+- Updated core to 0.8.3
+
 ## 0.1.2 (2026-09-10)
 
 ### 🧱 Updated Dependencies

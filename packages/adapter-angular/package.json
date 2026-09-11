@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-angular",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Angular adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -32,10 +32,10 @@
     "test": "vitest run && vitest run -c vitest.ssr.config.ts"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.4.2",
-    "@contentful/experiences-design": "0.8.2",
-    "@contentful/experiences-live-preview": "0.1.0",
-    "@contentful/experiences-sdk-core": "0.8.2"
+    "@contentful/experiences-client": "0.4.3",
+    "@contentful/experiences-design": "0.8.3",
+    "@contentful/experiences-live-preview": "0.1.1",
+    "@contentful/experiences-sdk-core": "0.8.3"
   },
   "peerDependencies": {
     "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
