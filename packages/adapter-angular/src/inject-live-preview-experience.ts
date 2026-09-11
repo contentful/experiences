@@ -2,6 +2,7 @@ import { type Signal, afterNextRender, computed, effect, signal } from '@angular
 
 import {
   createLivePreviewClient,
+  sendPreviewStatus,
   type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -48,13 +49,20 @@ export function injectLivePreviewExperience(
     if (!browserReady()) return;
 
     const options = connectionOptions();
-    if (options === undefined) return;
+    if (options === undefined) {
+      sendPreviewStatus('static');
+      return;
+    }
 
     const client = createLivePreviewClient(options);
+    const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
     const unsubscribe = client.subscribe(() => {
       currentData.set(client.getSnapshot());
     });
-    onCleanup(unsubscribe);
+    onCleanup(() => {
+      unsubscribeStatus();
+      unsubscribe();
+    });
   });
 
   return { data };

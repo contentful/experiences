@@ -1,5 +1,6 @@
 import {
   createLivePreviewClient,
+  sendPreviewStatus,
   type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -22,16 +23,23 @@ export function useLivePreviewExperience(
   $effect(() => {
     const { previewSessionOptions } = getOptions();
     data = initialPayload;
-    if (previewSessionOptions === undefined) return;
+    if (previewSessionOptions === undefined) {
+      sendPreviewStatus('static');
+      return;
+    }
 
     const client = createLivePreviewClient(previewSessionOptions, initialPayload);
+    const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
 
     data = client.getSnapshot();
     const unsubscribe = client.subscribe(() => {
       data = client.getSnapshot();
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeStatus();
+      unsubscribe();
+    };
   });
 
   return {
