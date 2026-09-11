@@ -20,6 +20,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const sessionId = typeof sp.preview_session_id === 'string' ? sp.preview_session_id : undefined;
   const spaceId = process.env.SPACE_ID ?? '';
   const environmentId = process.env.ENVIRONMENT_ID ?? 'master';
+  const accessToken = process.env.CDA_TOKEN!;
   const previewToken = process.env.CPA_TOKEN;
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = Boolean(sessionId && previewToken);
@@ -36,7 +37,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
       locale,
     },
     {
-      accessToken: process.env.CDA_TOKEN!,
+      accessToken,
       previewToken,
       preview: previewMode,
     },
