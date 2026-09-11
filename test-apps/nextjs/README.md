@@ -10,6 +10,7 @@ This app shows the integration we recommend. Design values get resolved on the s
 - **Design values as props (recommended)**: resolved design (spacing, color, typography, layout) is auto-filled onto each component's props alongside content, so a component styles itself from props without calling any SDK hook. Every component `console.log`s its resolved props, so you can see what it received.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`. Design is resolved on the server, so the first paint is already styled correctly and there's no flash of unstyled content on hydration.
 - **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
+- **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
 - **User-Agent → viewport seeding** so SSR resolves design against the device's expected viewport, which keeps the client renderer's first paint from drifting on hydration.
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
@@ -61,13 +62,19 @@ Then visit `http://localhost:3000/landing?preview=true&locale=en-US`.
 
 The route wires this through `fetchExperience`'s client options — both tokens are passed up front and `preview: previewMode` selects which one to use per request. See the snippet in [The route](#the-route) below.
 
+### Optional: live preview
+
+Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `useLivePreview`, which keeps the server-fetched plan until a complete update arrives.
+
+The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route starts the browser subscription and uses the Preview API for the initial fetch. `?preview=true` remains an explicit way to use the Preview API without a live session.
+
 ### Tokens summary
 
 | Token       | API                | Used by                              | Required?             |
 | ----------- | ------------------ | ------------------------------------ | --------------------- |
 | `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap |
 | `CDA_TOKEN` | Content Delivery   | The app                              | Yes, to run the app   |
-| `CPA_TOKEN` | Content Preview    | The app when `?preview=true`         | Only for preview mode |
+| `CPA_TOKEN` | Content Preview    | The app when the Preview API is used | Only for preview mode |
 
 ## The route
 
@@ -127,6 +134,7 @@ test-apps/nextjs/
 │   ├── Image.tsx
 │   ├── Button.tsx
 │   ├── Card.tsx                         # image + title + teaser + CTA (async resolveData)
+│   ├── LivePreviewExperience.tsx        # client-side Preview Session subscription
 │   ├── HeroPlain.tsx
 │   └── Page.tsx                         # registered as a coded Experience Template
 └── lib/

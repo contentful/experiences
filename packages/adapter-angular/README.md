@@ -31,6 +31,79 @@ defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Tem
 resolveExperience(payload, config, opts?); // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
 
+### Live preview
+
+Use `injectLivePreview()` when the app should subscribe to Preview Session
+updates, resolve each payload, and render the resulting plan from `data`:
+
+```ts
+readonly livePreview = injectLivePreview(() => ({
+  previewSessionOptions,
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+}));
+```
+
+For separate access to the raw payload and rendered plan, use
+`injectLivePreviewExperience()` and `injectExperiencePlan()`. The first returns
+the raw Experience payload. The second passes that payload to
+`resolveExperience()` and returns the `PortableRenderPlan` consumed by the
+renderer. Keeping the values separate lets an app use the raw payload when it
+needs it.
+
+Both helpers take a getter. Angular can call an injection helper before it has
+assigned component inputs, so the getter reads the current values when Angular
+runs the helper. Each helper returns an object with a `data` signal, matching
+the other framework adapters.
+
+```ts
+// page.component.ts
+import { Component } from '@angular/core';
+import {
+  ClientExperienceRenderer,
+  injectLivePreviewExperience,
+  injectExperiencePlan,
+  type PortableRenderPlan,
+} from '@contentful/experiences-angular';
+import { experienceConfig } from './experience-config';
+
+@Component({
+  selector: 'app-page',
+  imports: [ClientExperienceRenderer],
+  template: `<cf-experience [experience]="plan.data()" [config]="experienceConfig" />`,
+})
+export class PageComponent {
+  readonly livePreviewOptions = {
+    previewSessionOptions: {
+      spaceId: 'space-id',
+      environmentId: 'environment-id',
+      previewToken: 'preview-token',
+      sessionId: 'session-id',
+    },
+  };
+  readonly initialPlan: PortableRenderPlan | undefined = undefined;
+
+  readonly livePreview = injectLivePreviewExperience(() => this.livePreviewOptions);
+  readonly plan = injectExperiencePlan(() => ({
+    payload: this.livePreview.data(),
+    initialPlan: this.initialPlan,
+    resolveOptions: { config: experienceConfig },
+  }));
+
+  protected readonly experienceConfig = experienceConfig;
+}
+```
+
+`injectLivePreviewExperience()` starts its subscription after the first browser render.
+Set both `previewToken` and `sessionId` to receive Preview Session updates. The
+initial payload remains available while updates arrive. The browser SDK sends
+the token as the WebSocket URL's `access_token` parameter.
+
+`injectExperiencePlan()` calls `resolveExperience()` for each new raw
+payload. It updates `plan.data()` after the resolver returns a complete
+plan. The current plan stays in place until the new plan is ready.
+
 ### Renderers
 
 Every renderer is standalone; add it to your own component's `imports`.
@@ -43,6 +116,8 @@ NodesRenderer; // *cfNodes                Renders a slot's raw nodes (see Slot c
 NodeRenderer; // *cfNode                 Renders one node; NodesRenderer loops over it
 DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderers when debug is set
 injectActiveViewport; // Signal-backed viewport index; you'll rarely need it directly
+injectLivePreviewExperience; // Signal-backed raw Experience payload
+injectExperiencePlan; // Signal-backed PortableRenderPlan
 ```
 
 `NodesRenderer` and `NodeRenderer` are **structural directives**, not components, so they add no element of their own — see [Slot children](#slot-children).
@@ -78,6 +153,12 @@ type PortableRenderPlan, PortableRenderNode, PortableRegistration,
 type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
 type ViewportDef, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
+
+// From live preview and the Angular adapter
+type PreviewSessionOptions, LivePreviewClient,
+type InjectLivePreviewExperienceOptions, InjectLivePreviewExperienceResult,
+type ExperiencePlanResolveOptions, InjectExperiencePlanOptions,
+type InjectExperiencePlanResult
 
 // From design (if you want to do your own viewport-aware resolution)
 getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,

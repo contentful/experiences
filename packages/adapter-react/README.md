@@ -8,7 +8,7 @@ The React adapter for the Contentful Experiences SDK. You bring your own React c
 npm install @contentful/experiences-react
 ```
 
-This is the **only SDK package you install**. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The other packages are workspace-internal.
+This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
 ---
 
@@ -37,6 +37,50 @@ type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```ts
 resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
+
+### Live preview
+
+Use `useLivePreview` when the app should subscribe to Preview Session updates,
+resolve each payload, and render the resulting plan from `data`:
+
+```tsx
+const livePreview = useLivePreview({
+  previewSessionOptions,
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+});
+
+<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
+```
+
+For separate access to the raw payload and rendered plan, use
+`useLivePreviewExperience` and `useExperiencePlan`:
+
+```tsx
+const livePreview = useLivePreviewExperience({
+  previewSessionOptions: {
+    spaceId,
+    environmentId,
+    previewToken,
+    sessionId,
+  },
+  initialPayload,
+});
+
+const plan = useExperiencePlan({
+  payload: livePreview.data,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+});
+
+<ClientExperienceRenderer experience={plan.data} config={experienceConfig} />;
+```
+
+`useLivePreviewExperience` returns the latest raw Experience payload.
+`initialPayload` seeds the first value. `useExperiencePlan` turns that payload
+into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
+experience while an update is being resolved.
 
 ### Renderers
 

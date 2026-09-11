@@ -12,13 +12,14 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only SDK package you install. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
 ## Contents
 
 - [Getting started](#getting-started-the-simple-path)
+- [Live preview](#live-preview)
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
@@ -110,6 +111,36 @@ The signature is three grouped params: what to fetch (space, env, experience), h
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
 A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
+
+---
+
+## Live preview
+
+The adapters can subscribe to a Contentful Preview Session and keep the rendered plan in sync with edits. Pass the Preview Session options, initial data, and resolver config to the combined hook:
+
+```tsx
+import { useLivePreview } from '@contentful/experiences-react';
+
+const livePreview = useLivePreview({
+  previewSessionOptions: {
+    spaceId,
+    environmentId,
+    previewToken,
+    sessionId,
+  },
+  initialPayload,
+  initialPlan,
+  resolveOptions: { config: experienceConfig },
+});
+
+<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
+```
+
+`livePreview.data` is the current `PortableRenderPlan`. The hook keeps the initial or last valid plan while a Preview Session update is received and resolved. Svelte exposes the same `useLivePreview` API through a getter. Angular exposes `injectLivePreview`, also through a getter.
+
+Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app needs the raw Experience payload. For framework-neutral code, use `createLivePreviewClient` from `@contentful/experiences-live-preview`.
+
+A connection starts only when both `previewToken` and `sessionId` are available.
 
 ---
 
@@ -1033,16 +1064,17 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 ## Workspace internals
 
-This is an Nx monorepo. You install only the framework adapter; the rest is workspace-internal.
+This is an Nx monorepo. Install the framework adapter for rendering. The live-preview package is also public for framework-neutral use; the remaining packages are workspace-internal.
 
-| Folder                                                   | npm name                           | Scope                                                                                              |
-| -------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core` | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`   | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`   | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`    | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`   | **Public.** Svelte 5 renderer with the same public API shape.                                      |
-| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`  | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
+| Folder                                                   | npm name                               | Scope                                                                                              |
+| -------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
+| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
+| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`.                                      |
+| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                              |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                        |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                      |
+| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages.
 

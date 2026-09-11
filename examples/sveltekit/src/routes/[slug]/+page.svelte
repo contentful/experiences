@@ -1,11 +1,35 @@
 <script lang="ts">
-  import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
+  import {
+    ClientExperienceRenderer,
+    ServerExperienceRenderer,
+    useLivePreview,
+  } from '@contentful/experiences-svelte';
 
   import { experienceConfig } from '$lib/experience-config.js';
 
   let { data } = $props();
+
+  const livePreview = useLivePreview(() => ({
+    previewSessionOptions: data.livePreview ? data.previewSessionOptions : undefined,
+    initialPlan: data.experience,
+    resolveOptions: {
+      config: experienceConfig,
+      initialViewportId: data.initialViewportId,
+      metadata: data.metadata,
+      debug: data.debug,
+    },
+  }));
 </script>
 
+{#if data.livePreview}
+  <ClientExperienceRenderer
+    experience={livePreview.data}
+    config={experienceConfig}
+    initialViewportId={data.initialViewportId}
+    metadata={data.metadata}
+    debug={data.debug}
+  />
+{:else}
 <!--
   All three render props are optional — the plan already carries what
   `fetchExperience` was given. Shown here to make the override path visible:
@@ -20,3 +44,4 @@
   metadata={{ renderer: 'server' }}
   debug={data.debug}
 />
+{/if}

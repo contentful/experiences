@@ -1,5 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ServerExperienceRendererComponent } from '@contentful/experiences-angular';
+import {
+  ClientExperienceRendererComponent,
+  ServerExperienceRendererComponent,
+  injectLivePreview,
+} from '@contentful/experiences-angular';
 
 import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
@@ -20,17 +24,27 @@ import { experienceConfig } from '../lib/experience-config.js';
  */
 @Component({
   selector: 'app-experience-page',
-  imports: [ServerExperienceRendererComponent],
+  imports: [ClientExperienceRendererComponent, ServerExperienceRendererComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (experience; as plan) {
-      <cf-server-experience
-        [experience]="plan"
-        [config]="config"
-        [initialViewportId]="initialViewportId"
-        [metadata]="renderMetadata"
-        [debug]="debug"
-      />
+      @if (livePreviewEnabled) {
+        <cf-experience
+          [experience]="livePreview.data()"
+          [config]="config"
+          [initialViewportId]="initialViewportId"
+          [metadata]="renderMetadata"
+          [debug]="debug"
+        />
+      } @else {
+        <cf-server-experience
+          [experience]="plan"
+          [config]="config"
+          [initialViewportId]="initialViewportId"
+          [metadata]="renderMetadata"
+          [debug]="debug"
+        />
+      }
     } @else {
       <main
         style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;"
@@ -55,5 +69,17 @@ export class ExperiencePageComponent {
   protected readonly slug = this.data?.slug ?? '';
   protected readonly debug = this.data?.debug ?? false;
   protected readonly initialViewportId = this.data?.initialViewportId;
-  protected readonly renderMetadata = { renderer: 'server' };
+  protected readonly livePreviewEnabled = this.data?.livePreview ?? false;
+  protected readonly previewSessionOptions = this.data?.previewSessionOptions;
+  protected readonly renderMetadata = { ...this.data?.metadata, renderer: 'server' };
+  protected readonly livePreview = injectLivePreview(() => ({
+    previewSessionOptions: this.livePreviewEnabled ? this.previewSessionOptions : undefined,
+    initialPlan: this.experience ?? undefined,
+    resolveOptions: {
+      config: experienceConfig,
+      initialViewportId: this.initialViewportId,
+      metadata: this.renderMetadata,
+      debug: this.debug,
+    },
+  }));
 }

@@ -28,6 +28,25 @@ export { default as NodesRenderer } from './NodesRenderer.svelte';
 export { useActiveViewport } from './use-active-viewport.svelte.js';
 export type { UseActiveViewportResult } from './use-active-viewport.svelte.js';
 
+export { useLivePreviewExperience } from './use-live-preview-experience.svelte.js';
+export type {
+  UseLivePreviewExperienceOptions,
+  UseLivePreviewExperienceResult,
+} from './use-live-preview-experience.svelte.js';
+export { useLivePreview } from './use-live-preview.svelte.js';
+export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview.svelte.js';
+
+export { useExperiencePlan } from './use-experience-plan.svelte.js';
+export type {
+  ExperiencePlanResolveOptions,
+  UseExperiencePlanOptions,
+  UseExperiencePlanResult,
+} from './use-experience-plan.svelte.js';
+export type {
+  LivePreviewClient,
+  PreviewSessionOptions,
+} from '@contentful/experiences-live-preview';
+
 // ─── Runtime context helpers ─────────────────────────────────────────────
 export {
   getExperience,

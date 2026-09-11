@@ -6,6 +6,7 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
+- **Live preview via `preview_session_id`**: use the Svelte adapter's `useLivePreview` to apply Preview Session updates while iterating on the SDK.
 - **Hydration-safe viewport seeding**: User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
 - **Styling from design props**: resolved design auto-fills each component's `$props()` by key, which is the recommended styling contract.
 - **Deliberate escape-hatch coverage**: `Header.svelte` reads design with `getDesignValues()` + `toCss()` inside a `$derived` (reactive across viewport changes), so this harness exercises that path against a real space. It accepts whatever CSS-shaped keys the space sends without enumerating them — the reason to reach for the hook rather than props here.
@@ -25,6 +26,10 @@ npm run dev
 ```
 
 Then visit `http://localhost:5173/<experience-id>`. The slug becomes the Experience ID passed to `client.view.getExperience`.
+
+### Live preview
+
+Set `CPA_TOKEN`, then open `/demo?preview_session_id=<session-id>`. The route reads the session ID from the URL, uses the Preview API for the initial fetch, and keeps the server-fetched plan until a complete Preview Session update arrives. With both `preview_session_id` and `CPA_TOKEN`, the browser subscription starts automatically; `?preview=true` remains an explicit way to use the Preview API without a live session.
 
 ## File map
 
