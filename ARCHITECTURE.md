@@ -148,20 +148,19 @@ rules above are review-time conventions, not build failures.
 npm workspaces and the Nx project graph cover **different** sets of directories,
 which is the single most surprising thing about this workspace.
 
-`package.json#workspaces` is `["packages/*", "examples/*", "test-apps/*"]` — all
-three are npm workspaces, so all three are symlinked and can consume the SDK
-packages by name (`"@contentful/experiences-react": "*"` in
-`examples/nextjs/package.json`).
+`package.json#workspaces` is `["packages/*", "examples/*"]` — both are npm
+workspaces, so both are symlinked and can consume the SDK packages by name
+(`"@contentful/experiences-react": "*"` in `examples/nextjs/package.json`).
 
-But `.nxignore` excludes `examples` and `test-apps`, and every plugin entry in
-`nx.json` is scoped to `include: ["packages/**/*"]`. So:
+But `.nxignore` excludes `examples`, and every plugin entry in `nx.json` is
+scoped to `include: ["packages/**/*"]`. So:
 
 - `npm run build` / `npm test` / `npm run lint` / `npm run typecheck` — each
   `nx run-many -t <target>` — touch **only** `packages/*`.
-- `nx graph`, `nx affected`, and `nx release` do not see the example or
-  test apps at all.
-- The example and test apps have no `project.json` and are run directly from
-  their own directories (`cd examples/nextjs && npm run dev`).
+- `nx graph`, `nx affected`, and `nx release` do not see the example apps at
+  all.
+- The example apps have no `project.json` and are run directly from their
+  own directories (`cd examples/nextjs && npm run dev`).
 
 ### Targets
 
