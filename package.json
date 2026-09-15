@@ -17,8 +17,7 @@
   },
   "workspaces": [
     "packages/*",
-    "examples/*",
-    "test-apps/*"
+    "examples/*"
   ],
   "scripts": {
     "build": "nx run-many -t build",

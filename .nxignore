@@ -1,7 +1,5 @@
-# Examples and test-apps are local testbeds for the SDK packages, not part
-# of the Nx project graph. They stay linked via npm workspaces (so they
-# consume the local SDK packages by symlink) but Nx commands like
-# `nx run-many`, `nx graph`, `nx affected`, and `nx release` ignore them
-# entirely.
+# Examples are a local testbed for the SDK packages, not part of the Nx
+# project graph. It stays linked via npm workspaces (so it consumes the
+# local SDK packages by symlink) but Nx commands like `nx run-many`,
+# `nx graph`, `nx affected`, and `nx release` ignore it entirely.
 examples
-test-apps

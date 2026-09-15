@@ -37,16 +37,13 @@ experiences/
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 │   └── adapter-angular/      # @contentful/experiences-angular (customer-facing)
-├── examples/                # Customer-facing example apps
-│   ├── nextjs/               # Next.js 15 example (external developers run this)
-│   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
-│   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
-└── test-apps/               # Internal testing
-    ├── nextjs/               # Next.js scratchpad
-    └── sveltekit/            # SvelteKit scratchpad
+└── examples/                # Customer-facing example apps
+    ├── nextjs/               # Next.js 15 example (external developers run this)
+    ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
+    └── angular/              # Angular 20 + @angular/ssr example (parity with both)
 ```
 
-**`examples/` vs `test-apps/`.** `examples/` is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working. `test-apps/` is where you experiment: try new component patterns, break things, prototype features. Don't reach into `examples/` when you just need a place to poke — copy your changes into `test-apps/` first, iterate there, then port back deliberately.
+**`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
 
 ### Package roles
 
