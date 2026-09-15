@@ -10,9 +10,7 @@ A working doc for any agent (or human) hacking on this repo. Covers what's where
 
 The renderer SDK suite for Contentful's **Experience Orchestration (ExO)** initiative. Customers register their design-system components against Contentful component-type ids, hand the SDK an Experience payload from XDA, and get back a rendered tree.
 
-Long-term plan (per Charles Hudson's RFC + Tyler Collins' Component Domain Model RFC) is **multi-framework**: React first, with Svelte already shipped as a second adapter to validate the runtime-neutral architecture. Angular / Vue / SwiftUI / Compose follow. Adapter packages are cheap to add by design.
-
-For the broader product context — RFC links, owning teams, related projects — see `~/ChaseOS/projects/active/experiences/` (operator's local notes, not in this repo).
+Long-term plan (per the Experiences SDK Suite RFC + the Component Domain Model RFC) is **multi-framework**: React first, with Svelte already shipped as a second adapter to validate the runtime-neutral architecture. Angular / Vue / SwiftUI / Compose follow. Adapter packages are cheap to add by design.
 
 ---
 
@@ -91,7 +89,7 @@ The plan is **runtime-neutral** — no React, no DOM, no platform assumptions. E
 The React adapter then:
 
 1. Computes the active viewport (server: from `initialViewportId`; client: from `useActiveViewport` + `matchMedia`).
-2. Builds a `RenderContext` with `{ isPreview, metadata, viewports, activeViewport, activeViewportIndex }`.
+2. Builds a `RenderContext` with `{ debug, metadata, viewports, activeViewport, activeViewportIndex, fallbackViewportIndex }`.
 3. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
 4. For each node: looks up the customer's config by `node.registration.id`, against `config.experienceTemplates` when `registration.kind === 'experienceTemplate'` and `config.components` otherwise. Resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), publishes that record on context for `useDesignValues()` / `getDesignValues()`, and merges it into the final props: `defaults < design < content < resolveData < slots`. Components style themselves from those props — that is the one recommended styling contract. The design hook (and `toCss`) is an escape hatch for nested children that aren't registered components and for design needed outside the render path.
 5. Injects one prop per slot the node carries, named after the slot and holding an array (`ReactNode[]` / `Snippet[]`) — `children` is just the conventional name for the default slot, not a special case. Both node kinds get this identically.
@@ -112,9 +110,9 @@ An unregistered id degrades rather than blanking the page: a **component** node 
 
 Each grouping evolves without touching the others.
 
-### Why `host: string` instead of `preview: boolean`?
+### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
-Two reasons. (1) The SDK shouldn't own the URL constants for XDN vs XPA — those are Contentful platform concerns that can add non-prod endpoints (staging, EU-region, per-account) which a boolean can't express. (2) A raw base URL passes cleanly to `ContentfulViewDeliveryClient.Options.baseUrl` — no translation layer. Callers write `host: previewMode ? 'https://preview.xdn.contentful.com' : 'https://xdn.contentful.com'` at the call site; the SDK just passes through.
+`preview` is the ergonomic toggle: pass both `accessToken` and `previewToken` once, then flip `preview` per call to pick the token and default host (`DELIVERY_HOST` vs `PREVIEW_HOST`) without touching either token. `host` is the escape hatch for URLs neither default covers — staging, a proxy, a per-region endpoint — and wins over the `preview`-derived default when both are set (`host: 'https://staging.xdn...' , preview: true` targets a non-prod preview endpoint). The `{ client }` branch ignores `preview` entirely; a caller-supplied client owns its own base URL.
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
@@ -190,7 +188,7 @@ Note that the _render fns_ are not structurally different — a coded Experience
 
 The payload's `id` field is optional from XDA. Without one, the SDK never invents an id (see "no auto-generated node IDs" above). But every node MUST resolve to a registered type — the payload always provides one of `component.sys.urn` / `experienceTemplate.sys.urn`. Treating `registration` as required lets the renderer dispatch reliably.
 
-The `registration` object exists as a seam for future capabilities/metadata Tyler's RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ kind, id }`; later it grows additively without breaking the IR.
+The `registration` object exists as a seam for future capabilities/metadata the Component Domain Model RFC describes (state requirements, supported events, lifecycle hints, fallback ids). Today it's just `{ kind, id }`; later it grows additively without breaking the IR.
 
 ### Why do `Components` and `ExperienceTemplates` use `<any>` internally?
 
@@ -220,7 +218,7 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 ### Package boundaries
 
 - **`core` may not depend on `react`, the delivery client, or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
-- **`design` may not depend on `core` for runtime; it imports types only.** This keeps `design` a pure-utility package usable in isolation.
+- **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
 - **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
@@ -302,61 +300,35 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ---
 
-## Where things get researched / debated
-
-This repo is the **implementation**. Strategy / RFC / inter-team discussion lives in:
-
-- **Operator's local notes** at `~/ChaseOS/projects/active/experiences/` (Chase's machine):
-  - `meeting-prep-tyler-1on1.md` — open architectural questions to discuss with Tyler Collins. Read this before any major decision.
-  - `research-charles-rfc.md` — Charles Hudson's Experiences SDK Suite RFC
-  - `research-tyler-domain-model.md` — Tyler's Component Domain Model RFC
-  - `research-tyler-repo-model.md` — Tyler's Workspace + Package Composition RFC
-  - `research-pr72-and-delivery-client.md` — Thomas Kellermeier's PR #72 + the official `@contentful/experience-delivery` client
-  - `research-puck.md` — research on Puck (puckeditor.com) as prior art
-  - `research-nx-structure.md` — Nx best practices for this monorepo
-  - `decision-nx-package-layout.md` — concrete Nx layout decisions
-  - `open-questions.md` — live architectural tensions
-  - `experiences.md` — project hub with the broader story
-
-- **Confluence** (Contentful org):
-  - Charles' Experiences SDK Suite RFC
-  - Tyler's two component-model docs (linked from his pages)
-
-- **#exo-sdks** Slack channel — weekly engineering syncs run by Manuel Spagnolo
-
-When you're about to make a non-trivial design decision, **check the meeting-prep doc first**. Tyler / Charles / Manuel may have already framed the tradeoff or signaled a direction.
-
----
-
 ## Things known to be deferred / incomplete
 
 ### Design tokens
 
-Customer-supplied resolver for `DesignToken` envelopes. Today the SDK passes `DesignToken` envelopes through to customer components untouched. Future `defineTokens([...])` API will let customers declare resolvers (theme + brand + channel + viewport-aware). Tokens RFC'd in Tyler's domain-model doc; deferred to a future package.
+Customer-supplied resolver for `DesignToken` envelopes. Today the SDK passes `DesignToken` envelopes through to customer components untouched. Future `defineTokens([...])` API will let customers declare resolvers (theme + brand + channel + viewport-aware).
 
 ### Capabilities on `node.registration`
 
-Tyler's RFC describes `registration: { capabilities: { state, slots, events, lifecycle, rendering } }`. Today we only have `{ componentId }`. The seam exists; the fields are additive when capabilities ship.
+The Component Domain Model RFC describes `registration: { capabilities: { state, slots, events, lifecycle, rendering } }`. Today we only have `{ componentId }`. The seam exists; the fields are additive when capabilities ship.
 
 ### Composite component types
 
-If a Contentful ComponentType is editor-authored (a "composite" of other component types) rather than coded, behavior is unclear. Open question for Tyler. Today's SDK assumes every node references a coded ComponentType the customer has registered.
+An editor-authored ("composite") Experience Template arrives as plain `component` nodes at the root — no wrapping `experienceTemplate` node at all. Covered by tests (`resolve-experience.test.ts`'s `compositePayload` cases, `server-renderer.test.tsx`'s "renders a composite experience unwrapped" case).
 
 ### Fragments
 
-`@contentful/experience-delivery` exposes a separate `client.fragment.getFragment(...)` endpoint. Today's SDK doesn't see fragments — they're either inlined into the parent Experience by the API, or fetched separately by the customer. Open question for Tyler.
+`@contentful/experience-delivery` exposes a separate `client.experienceFragment.get(...)` endpoint (`GET /experience_fragments/{id}`; the older `client.fragment.get(...)` is `@deprecated` in favor of it). Today's SDK doesn't see fragments — they're either inlined into the parent Experience by the API, or fetched separately by the customer.
 
 ### Slug routing
 
-`client.view.getExperience(spaceId, envId, **experienceId**, ...)` takes an Experience ID, not a slug. Customers want `/blog/my-post` URLs, not `/IBMF5dElL6tgVuNR40fST`. No SDK-side helper today. Open question for Tyler.
+`client.view.getExperience(spaceId, envId, **experienceId**, ...)` takes an Experience ID, not a slug. Customers want `/blog/my-post` URLs, not `/IBMF5dElL6tgVuNR40fST`. No SDK-side helper today.
 
 ### Viewport authoring
 
-There's no editor UI for declaring viewports per-Experience (or globally). Real payloads currently arrive with one wildcard viewport. The SDK's cascade math is correct and works against multi-viewport payloads — but the platform side is missing. Open question for Tyler.
+There's no editor UI for declaring viewports per-Experience (or globally). Real payloads currently arrive with one wildcard viewport. The SDK's cascade math is correct and works against multi-viewport payloads — but the platform side is missing.
 
 ### `resolveData` advanced merge policy
 
-Tyler's RFC describes `defineComponent({ props: { resolve, mergePolicy: { precedence, conflictStrategy }, private } })` — multi-source merge with explicit conflict handling. Today we have a single `resolveData` fn with fixed precedence. Open question for Tyler — is the simpler shape good enough for v1?
+The Component Domain Model RFC describes `defineComponent({ props: { resolve, mergePolicy: { precedence, conflictStrategy }, private } })` — multi-source merge with explicit conflict handling. Today we have a single `resolveData` fn with fixed precedence.
 
 ### `useExperience()` hook split
 
@@ -402,12 +374,12 @@ by value on the server, and `NodesRenderer` constructs one snippet call by hand.
 Anything touching snippets or slot rendering needs coverage in **both**.
 
 `adapter-angular` uses the same two-config split — `vitest.config.ts` (jsdom) and
-`vitest.ssr.config.ts` (node, `*.ssr.test.ts`, currently
-`nodes-renderer.ssr.test.ts`) — for the same reason: the SSR path bootstraps
-through `@angular/platform-server`, which behaves differently enough from the
-jsdom path to need its own environment. Note that `test.projects` in a single
-config would be the tidier form, but that needs Vitest 3.2+ and the workspace is
-pinned to 1.6.
+`vitest.ssr.config.ts` (node, `*.ssr.test.ts`, currently `nodes-renderer.ssr.test.ts`,
+`debug-panel-coverage.ssr.test.ts`, and `live-preview-experience.ssr.test.ts`) — for
+the same reason: the SSR path bootstraps through `@angular/platform-server`, which
+behaves differently enough from the jsdom path to need its own environment. Note
+that `test.projects` in a single config would be the tidier form, but that needs
+Vitest 3.2+ and the workspace is pinned to 1.6.
 
 ### Build everything from scratch
 
@@ -430,7 +402,7 @@ cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev                  # http://localhost:3000/landing
 ```
 
-The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, ComponentTypes, Template, DataAssemblies, Experience — via the experiences management API (currently `contentful-management@12.6.0-dev.4`). Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
+The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, Components, Experience Templates, DataAssemblies, Experience — via the experiences management API. Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
 
 ### Add a new framework adapter
 
@@ -511,9 +483,8 @@ The first-ever release for a new package needs `--first-release` on its first ru
 ## What to do when something seems wrong
 
 1. **Read this doc and the README.** Re-read; it's likely covered.
-2. **Check `~/ChaseOS/projects/active/experiences/meeting-prep-tyler-1on1.md`** for open questions — your "bug" might actually be an unresolved design question.
-3. **Run `npx nx graph`** to confirm what depends on what.
-4. **Check the example app builds.** It's the integration test for the whole pipeline. If it fails, the bug is in the SDK; if it passes, the bug is somewhere in the customer code.
-5. **`git diff main`** — is there a stale change-set you forgot about?
+2. **Run `npx nx graph`** to confirm what depends on what.
+3. **Check the example app builds.** It's the integration test for the whole pipeline. If it fails, the bug is in the SDK; if it passes, the bug is somewhere in the customer code.
+4. **`git diff main`** — is there a stale change-set you forgot about?
 
 If after all that it's still wrong, **document it in this file** under a "Things known to be broken" section, even if you fix it immediately. Someone will hit the same issue.
