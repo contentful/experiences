@@ -183,11 +183,14 @@ The two-config test split on the Svelte and Angular adapters exists because
 their client and server compilations are not interchangeable — the reasoning is
 in AGENTS.md under "Run tests".
 
-`typecheck` is inferred by the `@nx/js/typescript` plugin for the five packages
-that carry a `tsconfig.lib.json`; `adapter-angular` additionally declares an
-explicit `typecheck` target (`tsc --noEmit -p tsconfig.json`) in its
-`project.json`. `adapter-svelte` has no `tsconfig.lib.json` and instead exposes a
-`check` script running `svelte-check`.
+`typecheck` is inferred by the `@nx/js/typescript` plugin for the six packages
+that carry a `tsconfig.lib.json` (`core`, `client`, `design`, `adapter-react`,
+`adapter-angular`, `live-preview`); `adapter-angular` overrides the inferred
+target with its own explicit `typecheck` (`tsc --noEmit -p tsconfig.json`) in
+`project.json`, since it doesn't build via `tsc --build`/`tsup` like the
+others. `adapter-svelte` has no `tsconfig.lib.json` and instead exposes a
+`check` script running `svelte-check` — its own real typecheck gate, so its
+`tsconfig.json` is the one package config still left with `noEmit: true`.
 
 ---
 
@@ -198,10 +201,10 @@ Two roots, one level of packages under each:
 ```
 tsconfig.base.json                dev / editor options
 ├── tsconfig.json                 trivial root (files: [], include: [])
-└── packages/*/tsconfig.json      noEmit; adds test types, includes config files
+└── packages/*/tsconfig.json      outDir: out-tsc; adds test types, includes config files
 
 tsconfig.build.json               emit options
-└── packages/*/tsconfig.lib.json  outDir / rootDir; excludes tests
+└── packages/*/tsconfig.lib.json  outDir: dist / rootDir: src; excludes tests
 ```
 
 `tsconfig.base.json` and `tsconfig.build.json` currently hold identical
@@ -212,6 +215,13 @@ diverge without one leaking into the other. `tsup` and `ngc` read the
 branch: it extends its own package `tsconfig.json` so it can layer
 `angularCompilerOptions` (`compilationMode: "partial"`, `strictTemplates`) on
 top.
+
+`tsconfig.json`'s `outDir: out-tsc` is a separate, gitignored scratch
+directory from `tsconfig.lib.json`'s `outDir: dist` — the two configs
+disagree on scope (`tsconfig.json` includes test files, `vitest.config.ts`,
+and `tsup.config.ts` itself; `tsconfig.lib.json` excludes all of that), so a
+`tsc --build` run against `tsconfig.json` can't emit into `dist/` without
+conflicting with the real build output `tsup`/`ngc` produce there.
 
 **Neither root declares `paths`.** Cross-package imports resolve through npm
 workspace symlinks, not TypeScript path aliases. Nothing needs updating in a
