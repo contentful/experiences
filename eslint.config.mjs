@@ -92,6 +92,7 @@ export default [
       '**/coverage/',
       '**/.next/',
       '**/.svelte-kit/',
+      '**/out-tsc/',
       '**/next-env.d.ts',
       '**/*.config.{js,mjs}',
       '.husky/',
