@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing! This SDK renders Contentful Experience Orchestration (ExO) payloads against your own design-system components. Contributions from the community are welcome and appreciated.
 
-> ⚠️ This project is **pre-alpha** and not yet published to npm. Public APIs are unstable and will change. If you're building something on top of the SDK, expect breaking changes between commits.
+> ⚠️ This project is **alpha** and actively published to npm. Public APIs are unstable and will change. If you're building something on top of the SDK, expect breaking changes between commits.
 
 ## 🤝 How to contribute
 
