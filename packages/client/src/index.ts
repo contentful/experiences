@@ -5,6 +5,7 @@ export {
   ContentfulViewDeliveryClient,
 } from '@contentful/experience-delivery';
 export const NotFoundError = ContentfulViewDelivery.NotFoundError;
+// eslint-disable-next-line no-redeclare -- value + type share a name across separate TS namespaces, not a real redeclaration
 export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundError>;
 export { ExperienceFetchError } from './errors.js';
 export { createClient } from './create-client.js';

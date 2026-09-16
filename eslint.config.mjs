@@ -21,13 +21,18 @@ export default [
         __filename: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        performance: 'readonly',
+        queueMicrotask: 'readonly',
         // Browser globals — used in React adapter (gated by typeof window checks)
         window: 'readonly',
         document: 'readonly',
         HTMLElement: 'readonly',
+        HTMLDivElement: 'readonly',
+        HTMLDetailsElement: 'readonly',
         Element: 'readonly',
         MediaQueryList: 'readonly',
         MediaQueryListEvent: 'readonly',
+        URL: 'readonly',
         crypto: 'readonly',
         globalThis: 'readonly',
         setTimeout: 'readonly',
@@ -59,6 +64,25 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+  {
+    // JSX namespace import used only in type position (React.ReactElement, React.ContextType, …).
+    files: ['packages/adapter-react/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        React: 'readonly',
+      },
+    },
+  },
+  {
+    // Svelte 5 runes are compiler-injected globals, not imports.
+    files: ['packages/adapter-svelte/**/*.svelte.ts'],
+    languageOptions: {
+      globals: {
+        $state: 'readonly',
+        $effect: 'readonly',
+      },
+    },
+  },
   prettierConfig,
   {
     ignores: [
@@ -67,6 +91,7 @@ export default [
       '**/build/',
       '**/coverage/',
       '**/.next/',
+      '**/.svelte-kit/',
       '**/next-env.d.ts',
       '**/*.config.{js,mjs}',
       '.husky/',
