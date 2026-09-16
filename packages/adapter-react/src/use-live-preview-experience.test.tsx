@@ -114,7 +114,7 @@ describe('useLivePreviewExperience', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(<LivePreviewExperienceProbe value={options({ initialPayload })} />);
+      root!.render(<LivePreviewExperienceProbe value={options({ initialPayload })} />);
     });
 
     expect(container.textContent).toBe('initial');
@@ -134,7 +134,7 @@ describe('useLivePreviewExperience', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <LivePreviewExperienceProbe
           value={options({
             initialPayload,
@@ -152,10 +152,10 @@ describe('useLivePreviewExperience', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(<LivePreviewExperienceProbe value={options()} />);
+      root!.render(<LivePreviewExperienceProbe value={options()} />);
     });
     await act(async () => {
-      root.render(<LivePreviewExperienceProbe value={{ ...options() }} />);
+      root!.render(<LivePreviewExperienceProbe value={{ ...options() }} />);
     });
 
     expect(FakeWebSocket.instances).toHaveLength(1);
@@ -165,12 +165,12 @@ describe('useLivePreviewExperience', () => {
   it('recreates the source when a connection option changes', async () => {
     ({ root } = renderRoot());
     await act(async () => {
-      root.render(<LivePreviewExperienceProbe value={options()} />);
+      root!.render(<LivePreviewExperienceProbe value={options()} />);
     });
     const firstSocket = FakeWebSocket.instances[0];
 
     await act(async () => {
-      root.render(
+      root!.render(
         <LivePreviewExperienceProbe
           value={options({
             previewSessionOptions: { ...previewSessionOptions, sessionId: 'new-session-id' },

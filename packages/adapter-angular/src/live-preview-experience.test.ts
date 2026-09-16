@@ -195,7 +195,7 @@ describe('injectLivePreviewExperience', () => {
       probe.options.set({
         ...livePreviewOptions(payload('initial')),
         previewSessionOptions: {
-          ...livePreviewOptions().previewSessionOptions,
+          ...livePreviewOptions().previewSessionOptions!,
           previewToken: undefined,
         },
       });
@@ -286,7 +286,7 @@ describe('injectLivePreviewExperience', () => {
     fixture.componentInstance.options.update((options) => ({
       ...options,
       previewSessionOptions: {
-        ...options.previewSessionOptions,
+        ...options.previewSessionOptions!,
         sessionId: 'next-session-id',
       },
     }));

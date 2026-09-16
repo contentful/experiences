@@ -98,12 +98,12 @@ function RawLivePreviewProbe({
   options: UseLivePreviewExperienceOptions;
 }): ReactElement {
   const { data } = useLivePreviewExperience(options);
-  return <output>{data?.nodes[0]?.contentProperties?.title ?? ''}</output>;
+  return <output>{(data?.nodes[0]?.contentProperties?.title as string) ?? ''}</output>;
 }
 
 function LivePreviewProbe({ options }: { options: UseLivePreviewOptions }): ReactElement {
   const { data } = useLivePreview(options);
-  return <output>{data?.nodes[0]?.props.content.title ?? ''}</output>;
+  return <output>{(data?.nodes[0]?.props.content.title as string) ?? ''}</output>;
 }
 
 function renderRoot(): { container: HTMLElement; root: Root } {
@@ -135,7 +135,7 @@ describe('useLivePreview', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <LivePreviewProbe
           options={{
             initialPlan,
@@ -154,7 +154,7 @@ describe('useLivePreview', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <RawLivePreviewProbe
           options={rawOptions({
             initialPayload,
@@ -181,7 +181,7 @@ describe('useLivePreview', () => {
     ({ root } = renderRoot());
 
     await act(async () => {
-      root.render(<RawLivePreviewProbe options={rawOptions()} />);
+      root!.render(<RawLivePreviewProbe options={rawOptions()} />);
     });
 
     expect(postMessage).not.toHaveBeenCalled();
@@ -206,7 +206,7 @@ describe('useLivePreview', () => {
     ({ root } = renderRoot());
 
     await act(async () => {
-      root.render(<RawLivePreviewProbe options={rawOptions()} />);
+      root!.render(<RawLivePreviewProbe options={rawOptions()} />);
       FakeWebSocket.instances[0]?.emitOpen();
     });
 
@@ -232,7 +232,7 @@ describe('useLivePreview', () => {
     ({ root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <RawLivePreviewProbe
           options={rawOptions({
             previewSessionOptions: { ...previewSessionOptions, sessionId: undefined },
@@ -242,14 +242,14 @@ describe('useLivePreview', () => {
     });
 
     await act(async () => {
-      root.render(<RawLivePreviewProbe options={rawOptions()} />);
+      root!.render(<RawLivePreviewProbe options={rawOptions()} />);
     });
     await act(async () => {
       FakeWebSocket.instances[0]?.emitOpen();
     });
 
     await act(async () => {
-      root.render(
+      root!.render(
         <RawLivePreviewProbe
           options={rawOptions({
             previewSessionOptions: { ...previewSessionOptions, sessionId: undefined },

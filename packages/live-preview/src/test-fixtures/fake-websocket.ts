@@ -11,6 +11,7 @@ export type FakeSocket = {
   onclose: ((event: WebSocketCloseEvent) => void) | null;
   onmessage: ((event: WebSocketMessageEvent) => void) | null;
   close: ReturnType<typeof vi.fn>;
+  emitOpen(): void;
   emitClose(code?: number, reason?: string): void;
   emitMessage(data: unknown): void;
 };
