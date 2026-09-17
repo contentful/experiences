@@ -106,11 +106,11 @@ sibling working copy regardless of the declared version.
 `packages/design` imports values from `core`, not only types:
 `packages/design/src/select-resolved-design.ts` calls `applyTokenResolver` and
 `resolveDesignProperties`, which is why `core` sits under `dependencies` in that
-manifest. `packages/design/src/viewport.ts` additionally re-exports those same
-four helpers verbatim; its header comment records why — the cascade and
-token-resolution helpers moved into `core` so the resolve pipeline could
-pre-resolve design server-side, and `design` kept re-exporting them to leave its
-own public API unchanged. So `core` and `design` expose some identical symbol
+manifest. `packages/design/src/design-values.ts` additionally re-exports those
+same helpers verbatim; its header comment records why — the design-value and
+token-resolution helpers live in `core` so the resolve pipeline can resolve
+design server-side, and `design` re-exports them to leave its own public API
+unchanged. So `core` and `design` expose some identical symbol
 names, and the adapters re-export the `design` copy
 (`packages/adapter-react/src/index.ts`).
 
@@ -293,7 +293,7 @@ bump from them, so a message that escapes the hook silently changes what ships.
 | Change                            | Touch                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------ |
 | Payload shape / resolve semantics | `packages/core`                                                                |
-| Viewport or design-value math     | `packages/design`                                                              |
+| Design-value math                 | `packages/design`                                                              |
 | Delivery, auth, hosts             | `packages/client`                                                              |
 | Rendering for one framework       | that adapter only                                                              |
 | Public API surface                | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |

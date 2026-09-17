@@ -29,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isExperiencePayload(value: unknown): value is ExperiencePayload {
-  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.viewports)) {
+  if (!isRecord(value) || !Array.isArray(value.nodes)) {
     return false;
   }
 

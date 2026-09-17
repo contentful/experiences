@@ -9,12 +9,6 @@ import type {
 import { resolveExperience, type ResolverConfig } from './resolve-experience';
 import type { ResolveContext } from './types';
 
-const VIEWPORTS = [
-  { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
-  { id: 'tablet', query: '<992px', displayName: 'Tablet', previewSize: '100%' },
-  { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
-];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -66,7 +60,6 @@ const emptyConfig: ResolverConfig = { components: {} };
 describe('resolveExperience — IR construction', () => {
   it('emits a node per top-level instance with nested slot trees', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'page',
@@ -97,12 +90,10 @@ describe('resolveExperience — IR construction', () => {
     expect(plan.nodes[0]!.slots.children).toHaveLength(1);
     expect(plan.nodes[0]!.slots.children![0]!.nodeId).toBe('heading');
     expect(plan.nodes[0]!.slots.children![0]!.props.content.text).toBe('Hello');
-    expect(plan.viewports).toBe(VIEWPORTS);
   });
 
   it('extracts the registration id from component.sys.urn', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('contentful-button', { id: 'b' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
@@ -111,19 +102,12 @@ describe('resolveExperience — IR construction', () => {
 
   it('preserves discriminated design-prop values on the IR', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-button', {
           id: 'b',
           contentProperties: { label: 'Go' },
           designProperties: {
-            cfPadding: {
-              type: 'ValuesByViewport',
-              values: {
-                desktop: { type: 'ManualDesignValue', value: '12px' },
-                mobile: { type: 'ManualDesignValue', value: '8px' },
-              },
-            },
+            cfPadding: { type: 'ManualDesignValue', value: '12px' },
             cfBorderColor: { type: 'DesignToken', value: 'color.border' },
           },
         }),
@@ -132,20 +116,13 @@ describe('resolveExperience — IR construction', () => {
     const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.nodes[0]!.props.content).toEqual({ label: 'Go' });
     expect(plan.nodes[0]!.props.designRaw).toEqual({
-      cfPadding: {
-        type: 'ValuesByViewport',
-        values: {
-          desktop: { type: 'ManualDesignValue', value: '12px' },
-          mobile: { type: 'ManualDesignValue', value: '8px' },
-        },
-      },
+      cfPadding: { type: 'ManualDesignValue', value: '12px' },
       cfBorderColor: { type: 'DesignToken', value: 'color.border' },
     });
   });
 
   it('handles multiple top-level nodes', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-heading', { id: 'h' }),
         componentNode('contentful-text', { id: 't' }),
@@ -157,7 +134,6 @@ describe('resolveExperience — IR construction', () => {
 
   it('passes through nodeId from payload, leaves it absent when not supplied', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           slots: { children: [componentNode('contentful-heading')] },
@@ -171,7 +147,6 @@ describe('resolveExperience — IR construction', () => {
 
   it('still emits nodes for unregistered component types (render-time fallback handles them)', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('not-registered', { id: 'nr' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
@@ -183,7 +158,6 @@ describe('resolveExperience — IR construction', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-container', {
             id: 'page',
@@ -209,7 +183,6 @@ describe('resolveExperience — IR construction', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           experienceTemplateNode('some-experienceTemplate', { id: 'tpl' }),
           componentNode('contentful-heading', { id: 'after' }),
@@ -230,7 +203,6 @@ describe('resolveExperience — IR construction', () => {
 
   it('handles deeply nested slot trees', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'page',
@@ -284,7 +256,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-heading', { id: 'before' }),
           unknownNode({ id: 'mystery' }),
@@ -304,7 +275,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           unknownNode({
             id: 'mystery',
@@ -335,7 +305,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           { component: {} } as unknown as ComponentNode,
           componentNode('contentful-button', { id: 'after' }),
@@ -353,7 +322,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           experienceTemplateNode('page', {
             id: 'tpl',
@@ -380,7 +348,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [unknownNode({ id: 'mystery' })],
       };
       await resolveExperience(payload, emptyConfig, { debug: true });
@@ -395,7 +362,6 @@ describe('resolveExperience — unidentifiable nodes', () => {
 
 describe('resolveExperience — resolveData hooks', () => {
   const heroPayload: ExperiencePayload = {
-    viewports: VIEWPORTS,
     nodes: [
       componentNode('hero', {
         id: 'h',
@@ -448,7 +414,6 @@ describe('resolveExperience — resolveData hooks', () => {
   it('runs resolvers in parallel', async () => {
     const order: string[] = [];
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('a', { id: 'a' }), componentNode('b', { id: 'b' })],
     };
     const config: ResolverConfig = {
@@ -476,9 +441,8 @@ describe('resolveExperience — resolveData hooks', () => {
     expect(order.indexOf('b:start')).toBeLessThan(order.indexOf('a:end'));
   });
 
-  it('exposes raw design properties (not viewport-resolved scalars) in ctx.design', async () => {
+  it('exposes raw design envelopes (not unwrapped scalars) in ctx.design', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('hero', {
           id: 'h',
@@ -507,7 +471,6 @@ describe('resolveExperience — resolveData hooks', () => {
 
   it('exposes the merged experience context to resolvers', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('hero', { id: 'h' })],
     };
     let captured: unknown;
@@ -528,7 +491,6 @@ describe('resolveExperience — resolveData hooks', () => {
     expect(captured).toEqual({
       debug: true,
       metadata: { locale: 'en-US' },
-      viewports: VIEWPORTS,
     });
   });
 });
@@ -541,7 +503,6 @@ describe('resolveExperience — experienceTemplates', () => {
    */
   const codedPayload = (): ExperiencePayload => ({
     sys: sysWithExperienceTemplate('page'),
-    viewports: VIEWPORTS,
     nodes: [
       experienceTemplateNode('page', {
         id: 'tpl',
@@ -563,7 +524,6 @@ describe('resolveExperience — experienceTemplates', () => {
    */
   const compositePayload = (): ExperiencePayload => ({
     sys: sysWithExperienceTemplate('hero'),
-    viewports: VIEWPORTS,
     nodes: [
       componentNode('button', { id: 'btn' }),
       componentNode('text', { id: 'txt' }),
@@ -600,19 +560,11 @@ describe('resolveExperience — experienceTemplates', () => {
   it('ignores sys.experienceTemplate entirely — it never reaches the plan', async () => {
     const plan = await resolveExperience(compositePayload(), emptyConfig);
     expect(plan).not.toHaveProperty('experienceTemplate');
-    expect(Object.keys(plan).sort()).toEqual([
-      'debug',
-      'diagnostics',
-      'fallbackViewportIndex',
-      'metadata',
-      'nodes',
-      'viewports',
-    ]);
+    expect(Object.keys(plan).sort()).toEqual(['debug', 'diagnostics', 'metadata', 'nodes']);
   });
 
   it("keeps a template node's own contentProperties and designProperties", async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -658,7 +610,6 @@ describe('resolveExperience — experienceTemplates', () => {
 
   it('still emits the template node when no template config is registered', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [experienceTemplateNode('not-registered', { id: 'tpl' })],
     };
     const plan = await resolveExperience(payload, emptyConfig);
@@ -670,21 +621,13 @@ describe('resolveExperience — experienceTemplates', () => {
   });
 });
 
-describe('resolveExperience — server-side design pre-resolution', () => {
-  // desktop-first cascade: index 0 = desktop (wildcard), 2 = mobile.
+describe('resolveExperience — design value resolution', () => {
   const designPayload = (): ExperiencePayload => ({
-    viewports: VIEWPORTS,
     nodes: [
       componentNode('contentful-container', {
         id: 'page',
         designProperties: {
-          cfPadding: {
-            type: 'ValuesByViewport',
-            values: {
-              desktop: { type: 'ManualDesignValue', value: '40px' },
-              mobile: { type: 'ManualDesignValue', value: '8px' },
-            },
-          },
+          cfPadding: { type: 'ManualDesignValue', value: '40px' },
           cfColor: { type: 'DesignToken', value: 'color.brand' },
         },
         slots: {
@@ -692,13 +635,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
             componentNode('contentful-heading', {
               id: 'heading',
               designProperties: {
-                cfFontSize: {
-                  type: 'ValuesByViewport',
-                  values: {
-                    desktop: { type: 'ManualDesignValue', value: '32px' },
-                    mobile: { type: 'ManualDesignValue', value: '20px' },
-                  },
-                },
+                cfFontSize: { type: 'ManualDesignValue', value: '32px' },
               },
             }),
           ],
@@ -707,61 +644,8 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     ],
   });
 
-  it('pre-resolves against viewport[0] when no fallback viewport is given', async () => {
+  it('unwraps design envelopes into props.design, through slot children', async () => {
     const plan = await resolveExperience(designPayload(), emptyConfig);
-    // No fallback configured → default to viewport[0] (desktop, index 0).
-    expect(plan.fallbackViewportIndex).toBe(0);
-    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
-    expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
-      cfFontSize: '32px',
-    });
-  });
-
-  it('uses config.fallbackViewportId as the default when no override is given', async () => {
-    const config: ResolverConfig = { components: {}, fallbackViewportId: 'mobile' };
-    const plan = await resolveExperience(designPayload(), config);
-    expect(plan.fallbackViewportIndex).toBe(2);
-    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '8px' });
-  });
-
-  it('lets initialViewportId override config.fallbackViewportId', async () => {
-    const config: ResolverConfig = { components: {}, fallbackViewportId: 'mobile' };
-    const plan = await resolveExperience(designPayload(), config, {
-      initialViewportId: 'desktop',
-    });
-    expect(plan.fallbackViewportIndex).toBe(0);
-    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
-  });
-
-  it('records the fallback viewport index for the given id', async () => {
-    const plan = await resolveExperience(designPayload(), emptyConfig, {
-      initialViewportId: 'mobile',
-    });
-    expect(plan.fallbackViewportIndex).toBe(2);
-  });
-
-  it('falls back to viewport[0] for an unknown initialViewportId', async () => {
-    const plan = await resolveExperience(designPayload(), emptyConfig, {
-      initialViewportId: 'does-not-exist',
-    });
-    expect(plan.fallbackViewportIndex).toBe(0);
-  });
-
-  it('cascades design against the fallback viewport into props.design', async () => {
-    const plan = await resolveExperience(designPayload(), emptyConfig, {
-      initialViewportId: 'mobile',
-    });
-    // Mobile is the active fallback → mobile-specific values win the cascade.
-    expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '8px' });
-    expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
-      cfFontSize: '20px',
-    });
-  });
-
-  it('cascades against the desktop fallback when seeded with desktop', async () => {
-    const plan = await resolveExperience(designPayload(), emptyConfig, {
-      initialViewportId: 'desktop',
-    });
     expect(plan.nodes[0]!.props.design).toMatchObject({ cfPadding: '40px' });
     expect(plan.nodes[0]!.slots.children![0]!.props.design).toEqual({
       cfFontSize: '32px',
@@ -769,15 +653,10 @@ describe('resolveExperience — server-side design pre-resolution', () => {
   });
 
   it('always preserves the raw design properties on props.designRaw', async () => {
-    const plan = await resolveExperience(designPayload(), emptyConfig, {
-      initialViewportId: 'mobile',
-    });
+    const plan = await resolveExperience(designPayload(), emptyConfig);
     expect(plan.nodes[0]!.props.designRaw.cfPadding).toEqual({
-      type: 'ValuesByViewport',
-      values: {
-        desktop: { type: 'ManualDesignValue', value: '40px' },
-        mobile: { type: 'ManualDesignValue', value: '8px' },
-      },
+      type: 'ManualDesignValue',
+      value: '40px',
     });
     expect(plan.nodes[0]!.props.designRaw.cfColor).toEqual({
       type: 'DesignToken',
@@ -790,9 +669,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
       components: {},
       resolveToken: (ref) => (ref.value === 'color.brand' ? '#ff0000' : undefined),
     };
-    const plan = await resolveExperience(designPayload(), config, {
-      initialViewportId: 'desktop',
-    });
+    const plan = await resolveExperience(designPayload(), config);
     expect(plan.nodes[0]!.props.design).toMatchObject({ cfColor: '#ff0000' });
   });
 
@@ -803,9 +680,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
         components: {},
         resolveToken: () => undefined,
       };
-      const plan = await resolveExperience(designPayload(), config, {
-        initialViewportId: 'desktop',
-      });
+      const plan = await resolveExperience(designPayload(), config);
       expect(plan.nodes[0]!.props.design.cfColor).toEqual({
         type: 'DesignToken',
         value: 'color.brand',
@@ -827,7 +702,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const config: ResolverConfig = { components: {}, resolveToken: () => undefined };
-      await resolveExperience(designPayload(), config, { initialViewportId: 'desktop' });
+      await resolveExperience(designPayload(), config);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('color.brand'));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-container'));
     } finally {
@@ -835,33 +710,20 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     }
   });
 
-  it('pre-resolves design on an experienceTemplate node like any other node', async () => {
+  it('resolves design on an experienceTemplate node like any other node', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
           designProperties: {
-            cfPadding: {
-              type: 'ValuesByViewport',
-              values: {
-                desktop: { type: 'ManualDesignValue', value: '40px' },
-                mobile: { type: 'ManualDesignValue', value: '8px' },
-              },
-            },
+            cfPadding: { type: 'ManualDesignValue', value: '8px' },
           },
           slots: {
             content: [
               componentNode('contentful-heading', {
                 id: 'h',
                 designProperties: {
-                  cfFontSize: {
-                    type: 'ValuesByViewport',
-                    values: {
-                      desktop: { type: 'ManualDesignValue', value: '32px' },
-                      mobile: { type: 'ManualDesignValue', value: '20px' },
-                    },
-                  },
+                  cfFontSize: { type: 'ManualDesignValue', value: '20px' },
                 },
               }),
             ],
@@ -869,9 +731,7 @@ describe('resolveExperience — server-side design pre-resolution', () => {
         }),
       ],
     };
-    const plan = await resolveExperience(payload, emptyConfig, {
-      initialViewportId: 'mobile',
-    });
+    const plan = await resolveExperience(payload, emptyConfig);
     expect(plan.nodes[0]!.props.design).toEqual({ cfPadding: '8px' });
     expect(plan.nodes[0]!.slots.content![0]!.props.design).toEqual({ cfFontSize: '20px' });
   });
@@ -880,7 +740,6 @@ describe('resolveExperience — server-side design pre-resolution', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           experienceTemplateNode('page', {
             id: 'tpl',
@@ -904,7 +763,6 @@ describe('resolveExperience — debug logging', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('hero', { id: 'h' })],
       };
       await resolveExperience(payload, emptyConfig);
@@ -918,7 +776,6 @@ describe('resolveExperience — debug logging', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('hero', { id: 'h' })],
       };
       const config: ResolverConfig = {
@@ -940,7 +797,6 @@ describe('resolveExperience — debug logging', () => {
 
 describe('resolveExperience — render context carried on the plan', () => {
   const payload = (): ExperiencePayload => ({
-    viewports: VIEWPORTS,
     nodes: [componentNode('button')],
   });
 
@@ -1014,7 +870,6 @@ describe('resolveExperience — render context carried on the plan', () => {
 describe('resolveExperience — diagnostics', () => {
   it('is an empty array on a fully happy path (regression guard)', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-heading', {
           id: 'h',
@@ -1031,7 +886,6 @@ describe('resolveExperience — diagnostics', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload = {
-        viewports: VIEWPORTS,
         nodes: 'not-an-array',
       } as unknown as ExperiencePayload;
       const plan = await resolveExperience(payload, emptyConfig);
@@ -1045,25 +899,6 @@ describe('resolveExperience — diagnostics', () => {
     }
   });
 
-  it('warns and falls back to an empty viewport list when payload.viewports is malformed', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const payload = {
-        viewports: undefined,
-        nodes: [componentNode('contentful-heading', { id: 'h' })],
-      } as unknown as ExperiencePayload;
-      const plan = await resolveExperience(payload, emptyConfig);
-      expect(plan.viewports).toEqual([]);
-      expect(plan.fallbackViewportIndex).toBe(0);
-      expect(plan.diagnostics).toHaveLength(1);
-      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
-      expect(plan.diagnostics[0]!.message).toContain('"viewports"');
-      expect(warn).toHaveBeenCalledTimes(1);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
   it.each([null, undefined])(
     'does not throw on a %s payload — degrades to an empty plan with a single diagnostic',
     async (payload) => {
@@ -1071,8 +906,6 @@ describe('resolveExperience — diagnostics', () => {
       try {
         const plan = await resolveExperience(payload as unknown as ExperiencePayload, emptyConfig);
         expect(plan.nodes).toEqual([]);
-        expect(plan.viewports).toEqual([]);
-        expect(plan.fallbackViewportIndex).toBe(0);
         expect(plan.diagnostics).toHaveLength(1);
         expect(plan.diagnostics[0]).toBeInstanceOf(Error);
         expect(plan.diagnostics[0]!.message).toContain('payload is');
@@ -1087,7 +920,6 @@ describe('resolveExperience — diagnostics', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
       };
       const config: ResolverConfig = {
@@ -1121,7 +953,6 @@ describe('resolveExperience — diagnostics', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
       };
       const config: ResolverConfig = {

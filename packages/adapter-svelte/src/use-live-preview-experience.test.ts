@@ -49,14 +49,6 @@ const payload = (title: string): ExperiencePayload => ({
     },
   ],
   sys: { type: 'Experience' },
-  viewports: [
-    {
-      displayName: 'Default',
-      id: 'default',
-      previewSize: '1024px',
-      query: '*',
-    },
-  ],
 });
 
 const previewSessionOptions = {

@@ -2,7 +2,7 @@
  * `component-render-error` isolation — creation-time throws caught by the
  * try/catch in `NodeRenderEngine.createView`. Uses the same jsdom harness as
  * server-renderer.test.ts (`render()` from render-harness.ts), which exercises
- * `ServerExperienceRendererComponent` through `TestBed.createComponent` — the
+ * `ExperienceRendererComponent` through `TestBed.createComponent` — the
  * same code path Angular runs for CSR. See nodes-renderer.ssr.test.ts for the
  * real `@angular/platform-server` proof that this also holds under true SSR
  * (there is only one `createComponent` call site in this adapter — no
@@ -21,10 +21,8 @@ import {
 import { render } from './test-fixtures/render-harness.js';
 import { BrokenFixture } from './test-fixtures/broken.fixture.js';
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
-import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { ExperienceRendererComponent } from './experience-renderer.component.js';
 import type { Config } from './types.js';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -55,7 +53,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('broken', { id: 'b' }),
           componentNode('contentful-button', { id: 'f', contentProperties: { label: 'sibling' } }),
@@ -80,7 +77,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: BrokenFixture } };
@@ -97,7 +93,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
 
   it('honors a custom renderError override', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: BrokenFixture } };
@@ -114,7 +109,6 @@ describe('NodeRenderEngine — render-time diagnostics dedupe across re-syncs', 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -130,7 +124,7 @@ describe('NodeRenderEngine — render-time diagnostics dedupe across re-syncs', 
       // regression, matching the equivalent React/Svelte fixes.
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
-      const fixture = TestBed.createComponent(ServerExperienceRendererComponent);
+      const fixture = TestBed.createComponent(ExperienceRendererComponent);
       fixture.componentRef.setInput('experience', plan);
       fixture.componentRef.setInput('config', config);
       fixture.componentRef.setInput('debug', true);
@@ -151,17 +145,11 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
   it('isolates a node whose design-token resolution starts throwing on the second sync — sibling unaffected, fallback shown, recovers if resolution succeeds again', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      // `selectResolvedDesign` only calls `resolveToken` at all when the
-      // active viewport differs from the fallback one — with a single
-      // viewport it always returns the (already fallback-resolved) design
-      // as-is. A second viewport, with `initialViewportId` below pointing at
-      // it, is what actually exercises the adapter's own resolveToken path.
-      const twoViewports = [
-        ...VIEWPORTS,
-        { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
-      ];
+      // `selectResolvedDesign` only calls `resolveToken` when the config
+      // supplies one — otherwise it returns the plan's already-resolved design
+      // as-is. The `failingConfig` below is what exercises the adapter's own
+      // resolveToken path.
       const payload: ExperiencePayload = {
-        viewports: twoViewports,
         nodes: [
           componentNode('contentful-button', {
             id: 'b',
@@ -175,8 +163,7 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
       };
       // Deliberately no `resolveToken` passed to resolveExperience (core) —
       // the raw DesignToken passes through to `designRaw`, so the adapter's
-      // *own* `config.resolveToken` (below) is what actually resolves it,
-      // exactly as it does live per active viewport.
+      // *own* `config.resolveToken` (below) is what actually resolves it.
       const config: Config = {
         components: { 'contentful-button': ButtonFixture },
       };
@@ -194,11 +181,10 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
 
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
-      const fixture = TestBed.createComponent(ServerExperienceRendererComponent);
+      const fixture = TestBed.createComponent(ExperienceRendererComponent);
       fixture.componentRef.setInput('experience', plan);
       fixture.componentRef.setInput('config', failingConfig);
       fixture.componentRef.setInput('debug', true);
-      fixture.componentRef.setInput('initialViewportId', 'mobile');
 
       // First sync: resolveToken's first call succeeds — both nodes mount
       // cleanly.
@@ -268,7 +254,6 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
     }
 
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('later-throw', { id: 'b' })],
     };
     const config: Config = { components: { 'later-throw': LaterThrowFixture } };
@@ -276,7 +261,7 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
 
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
-    const fixture = TestBed.createComponent(ServerExperienceRendererComponent);
+    const fixture = TestBed.createComponent(ExperienceRendererComponent);
     fixture.componentRef.setInput('experience', plan);
     fixture.componentRef.setInput('config', config);
     fixture.detectChanges();

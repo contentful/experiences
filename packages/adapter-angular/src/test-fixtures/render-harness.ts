@@ -23,12 +23,11 @@ import { TestBed } from '@angular/core/testing';
 
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { ServerExperienceRendererComponent } from '../server-experience-renderer.component.js';
+import { ExperienceRendererComponent } from '../experience-renderer.component.js';
 import type { Config } from '../types.js';
 
 export interface RenderOptions {
   config: Config;
-  initialViewportId?: string;
   metadata?: Record<string, unknown>;
   debug?: boolean;
   renderUnknown?: Type<unknown>;
@@ -51,16 +50,13 @@ export function render(
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
 
-  const fixture = TestBed.createComponent(ServerExperienceRendererComponent);
+  const fixture = TestBed.createComponent(ExperienceRendererComponent);
   const { componentRef } = fixture;
 
   componentRef.setInput('experience', experience);
   componentRef.setInput('config', options.config);
   // Only set the optional inputs that were actually asked for, so the
   // component's own defaults stay under test.
-  if (options.initialViewportId !== undefined) {
-    componentRef.setInput('initialViewportId', options.initialViewportId);
-  }
   if (options.metadata !== undefined) {
     componentRef.setInput('metadata', options.metadata);
   }

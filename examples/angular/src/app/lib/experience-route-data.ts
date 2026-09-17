@@ -12,7 +12,7 @@ import type { PortableRenderPlan, PreviewSessionOptions } from '@contentful/expe
 export interface ExperienceRouteData {
   slug: string;
   metadata: Record<string, unknown>;
-  /** Carries its own `metadata`, `debug`, and pre-resolved viewport. */
+  /** Carries its own `metadata` and `debug`. */
   experience: PortableRenderPlan | null;
   /**
    * The plan carries this too. Relayed so the page can demonstrate the
@@ -20,8 +20,6 @@ export interface ExperienceRouteData {
    * can read it.
    */
   debug: boolean;
-  /** Also on the plan; relayed only to demonstrate the renderer's override input. */
-  initialViewportId?: string;
   /** True when the browser should use the live-preview renderer. */
   livePreview: boolean;
   /** Preview Session credentials used only when live preview is enabled. */

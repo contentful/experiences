@@ -66,12 +66,6 @@ export type ResolveOptions = {
    * debug fallback). A single boolean across fetch + resolve + render.
    */
   debug?: boolean;
-  /**
-   * Per-request fallback viewport for server-side design pre-resolution. Pass
-   * the same id you seed the renderer's `initialViewportId` with (e.g. a
-   * User-Agent-derived viewport) so SSR paints correct design on first render.
-   */
-  initialViewportId?: string;
 };
 
 export async function fetchExperience(
@@ -80,7 +74,7 @@ export async function fetchExperience(
   resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan> {
   const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
-  const { config, metadata, debug, initialViewportId } = resolveOptions;
+  const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
   let client: ContentfulViewDeliveryClient;
@@ -151,7 +145,6 @@ export async function fetchExperience(
   return resolveExperience(payload, config, {
     metadata,
     debug,
-    initialViewportId,
     sourceMap,
   });
 }

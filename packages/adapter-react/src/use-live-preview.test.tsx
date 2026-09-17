@@ -51,18 +51,9 @@ const payload = (title: string): ExperiencePayload => ({
     },
   ],
   sys: { type: 'Experience' },
-  viewports: [
-    {
-      displayName: 'Default',
-      id: 'default',
-      previewSize: '1024px',
-      query: '*',
-    },
-  ],
 });
 
 const initialPlan: PortableRenderPlan = {
-  fallbackViewportIndex: 0,
   nodes: [
     {
       nodeId: 'initial',
@@ -71,7 +62,6 @@ const initialPlan: PortableRenderPlan = {
       slots: {},
     },
   ],
-  viewports: payload('initial').viewports,
   metadata: {},
   debug: false,
   diagnostics: [],

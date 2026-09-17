@@ -3,8 +3,8 @@
 import { useResolvedDesign } from './context';
 
 /**
- * Read the current node's resolved design values (viewport-cascaded +
- * token-resolved). Returns `{}` when there's no design in scope.
+ * Read the current node's resolved design values (token-resolved). Returns
+ * `{}` when there's no design in scope.
  *
  * Pass a type argument to shape the bag, like `useState<T>()`:
  *

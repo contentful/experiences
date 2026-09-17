@@ -1,7 +1,10 @@
 # Styling contract: resolved design values arrive as props
 
 - **Date:** 2026-08-28
-- **Status:** Accepted
+- **Status:** Accepted; the viewport-cascade details are superseded by
+  [Merge the client and server renderers](./2026-09-16-merge-client-server-renderers.md)
+  (2026-09-16), which removed viewports from the SDK. The styling contract itself
+  — resolved design values arriving as props — still holds.
 - **Ticket:** [AIS-358](https://contentful.atlassian.net/browse/AIS-358) (spike), under [AIS-336](https://contentful.atlassian.net/browse/AIS-336) ExO SDK — Core Renderer
 
 ## Context
@@ -85,6 +88,11 @@ new props. A real stylesheet with media queries would handle resize with no JS a
 all. This is the deliberate trade we are making for a single, explainable
 contract, and it is worth stating plainly rather than having a partner discover
 it: first paint is correct from SSR, and resize costs a render.
+
+> **Superseded 2026-09-16.** Viewports were removed from the platform and from
+> this SDK, so there is no breakpoint to cross and no cascade to recompute —
+> design values are flat and resolved once. This consequence no longer applies.
+> See [Merge the client and server renderers](./2026-09-16-merge-client-server-renderers.md).
 
 **Reversing course on the stylesheet path would not be cheap.** Recording what it
 would take, so a future revisit starts from facts:

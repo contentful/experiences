@@ -10,7 +10,7 @@
  * these overly brittle.
  *
  * jsdom is needed file-wide only for the `component-render-error` case
- * (the one failure mode `ClientExperienceRenderer`'s reactive collector is
+ * (the one failure mode `ExperienceRenderer`'s reactive collector is
  * needed for); `renderToStaticMarkup` works fine under jsdom too, so the
  * other 7 SSR-friendly cases share this file without a second environment.
  *
@@ -28,14 +28,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { ClientExperienceRenderer } from './client-renderer';
-import { ServerExperienceRenderer } from './server-renderer';
+import { ExperienceRenderer } from './experience-renderer';
 import type { Config } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -78,12 +75,9 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
   it('malformed-payload: a non-array nodes field', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const plan = await resolveExperience(
-        { viewports: VIEWPORTS, nodes: 'not-an-array' } as never,
-        { components: {} }
-      );
+      const plan = await resolveExperience({ nodes: 'not-an-array' } as never, { components: {} });
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={{ components: {} }} debug />
+        <ExperienceRenderer experience={plan} config={{ components: {} }} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('&quot;nodes&quot; is not an array');
@@ -96,7 +90,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-container', {
             id: 'page',
@@ -107,7 +100,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       const config: Config = { components: { 'contentful-container': Button } };
       const plan = await resolveExperience(payload, config);
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('Slot &quot;children&quot;');
@@ -120,13 +113,12 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [{ pattern: {} } as unknown as ComponentNode, componentNode('button', { id: 'b' })],
       };
       const config: Config = { components: { button: Button } };
       const plan = await resolveExperience(payload, config);
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('Skipping unidentifiable node');
@@ -139,7 +131,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('button', { id: 'b' })],
       };
       const config: Config = {
@@ -156,7 +147,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       expect(plan.diagnostics[0]).toBeInstanceOf(Error);
       expect((plan.diagnostics[0]!.cause as Error)?.message).toBe('enrichment service down');
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('component:button');
@@ -170,7 +161,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -181,7 +171,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       const config: Config = { components: { button: Button }, resolveToken: () => undefined };
       const plan = await resolveExperience(payload, config);
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('color.brand');
@@ -195,13 +185,12 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
       const plan = await resolveExperience(payload, config);
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('No component registered for id &quot;missing&quot;');
@@ -214,7 +203,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           {
             experienceTemplate: {
@@ -231,7 +219,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       const config: Config = { components: {} };
       const plan = await resolveExperience(payload, config);
       const html = renderToStaticMarkup(
-        <ServerExperienceRenderer experience={plan} config={config} debug />
+        <ExperienceRenderer experience={plan} config={config} debug />
       );
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain(
@@ -246,7 +234,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
@@ -256,7 +243,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       document.body.appendChild(container);
       root = createRoot(container);
       act(() => {
-        root!.render(<ClientExperienceRenderer experience={plan} config={config} debug />);
+        root!.render(<ExperienceRenderer experience={plan} config={config} debug />);
       });
       await flushMicrotasks();
 

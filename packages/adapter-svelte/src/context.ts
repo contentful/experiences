@@ -5,11 +5,10 @@
  * that needs the Experience runtime context or the underlying payload calls
  * the helper from the top of its `<script>` block.
  *
- * Reactivity: the client renderer stores a `$state` proxy in context, so
- * reads through the returned object (`exp.activeViewport`, from the
- * template or a `$derived`) stay reactive across viewport changes.
- * Destructuring the return of `getExperience()` loses that reactivity —
- * same rule as Svelte 5 `$props()`.
+ * Reactivity: the renderer stores a `$state` proxy in context, so reads
+ * through the returned object (from the template or a `$derived`) stay
+ * reactive when the renderer's props change. Destructuring the return of
+ * `getExperience()` loses that reactivity — same rule as Svelte 5 `$props()`.
  *
  * `getContext` / `setContext` must be called during synchronous component
  * initialization (top of the `<script>` block), not inside async callbacks
@@ -40,9 +39,9 @@ export function setContentfulExperienceTemplate(tpl: ContentfulExperienceTemplat
 }
 
 /**
- * Publish the resolved design values for the enclosing node or experience template. Takes a
- * getter (not a snapshot) so callers reading it inside a `$derived` stay
- * reactive across viewport changes.
+ * Publish the resolved design values for the enclosing node or experience
+ * template. Takes a getter (not a snapshot) so callers reading it inside a
+ * `$derived` stay reactive.
  */
 export function setResolvedDesign(getDesign: () => Record<string, unknown>): void {
   setContext(RESOLVED_DESIGN_KEY, getDesign);
@@ -51,9 +50,7 @@ export function setResolvedDesign(getDesign: () => Record<string, unknown>): voi
 export function getExperience(): RenderContext {
   const ctx = getContext<RenderContext | undefined>(EXPERIENCE_KEY);
   if (!ctx) {
-    throw new Error(
-      'getExperience() must be called inside a <ServerExperienceRenderer> or <ClientExperienceRenderer> subtree.'
-    );
+    throw new Error('getExperience() must be called inside an <ExperienceRenderer> subtree.');
   }
   return ctx;
 }

@@ -5,11 +5,10 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 ## What it shows
 
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
-- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
+- **SSR rendering** with `ExperienceRenderer` from `@contentful/experiences-svelte`, the single renderer for both SSR and the browser.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
-- **Hydration-safe viewport seeding**: User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
 - **Styling from design props**: resolved design auto-fills each component's `$props()` by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract.
-- **One escape-hatch demo**: `Card.svelte` styles itself from props like the rest, but its nested `CardCta.svelte` — not a registered component, so it has no props of its own — reads the card's design with `getDesignValues()` inside a `$derived` (reactive across viewport changes). That's the case props can't cover.
+- **One escape-hatch demo**: `Card.svelte` styles itself from props like the rest, but its nested `CardCta.svelte` — not a registered component, so it has no props of its own — reads the card's design with `getDesignValues()` inside a `$derived`. That's the case props can't cover.
 - **Design tokens**: `experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
 - **Component registration**: bare Svelte components for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`.
 
@@ -82,7 +81,6 @@ examples/sveltekit/
 │       │   ├── RichText.svelte
 │       │   ├── Section.svelte  # renders its `children` slot
 │       │   └── Text.svelte
-│       ├── detect-viewport.ts
 │       └── experience-config.ts    # integration layer (maps components + experience templates into experienceConfig)
 ├── svelte.config.js
 ├── vite.config.ts
@@ -95,6 +93,6 @@ Identical to the Next.js example:
 
 1. **Design-system components** stay portable, with no `@contentful/*` imports.
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
-3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` and pass the result to `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
+3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` and pass the result to `<ExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
 
 The only Svelte-specific difference is slots: each slot becomes a prop named after the slot holding a `Snippet[]` (render each with `{@render child()}`), where the React adapter hands you a `ReactNode[]` instead. `children` is just the conventional name for the default slot, not a special case. A slot's raw nodes are also still reachable via `getContentfulComponent().slots` and renderable through the exported `<NodesRenderer />`. See [`packages/adapter-svelte/README.md`](../../packages/adapter-svelte/README.md) for the full Svelte API surface.

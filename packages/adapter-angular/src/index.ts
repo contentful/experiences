@@ -2,14 +2,13 @@
  * Public API surface for `@contentful/experiences-angular`.
  *
  * Customers add ONLY this package to their app's dependencies. Everything
- * needed to render an Experience — types, the resolver, viewport utilities,
- * the renderer components, the authoring helpers — is re-exported from here.
- * The internal `@contentful/experiences-sdk-core` and
- * `@contentful/experiences-design` packages are workspace-only implementation
- * details; they are not part of the public API.
+ * needed to render an Experience — types, the resolver, the renderer, the
+ * authoring helpers — is re-exported from here. The internal
+ * `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
+ * packages are workspace-only implementation details; they are not part of the
+ * public API.
  *
- * `ExperienceRenderer` is an alias for `ClientExperienceRenderer`; SSR
- * consumers explicitly import `ServerExperienceRenderer`.
+ * One renderer, `<cf-experience>`, serves both SSR and browser rendering.
  *
  * Names carry Angular's `Component` or `Directive` suffix, matching the
  * framework's own convention; the un-suffixed aliases exist so the three
@@ -17,12 +16,9 @@
  * full mapping.
  */
 
-// ─── Renderers ─────────────────────────────────────────────────────────────
-export { ClientExperienceRendererComponent } from './client-experience-renderer.component.js';
-export { ClientExperienceRendererComponent as ClientExperienceRenderer } from './client-experience-renderer.component.js';
-export { ClientExperienceRendererComponent as ExperienceRenderer } from './client-experience-renderer.component.js';
-export { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
-export { ServerExperienceRendererComponent as ServerExperienceRenderer } from './server-experience-renderer.component.js';
+// ─── Renderer ──────────────────────────────────────────────────────────────
+export { ExperienceRendererComponent } from './experience-renderer.component.js';
+export { ExperienceRendererComponent as ExperienceRenderer } from './experience-renderer.component.js';
 export { MissingComponentComponent } from './missing-component.component.js';
 export { MissingComponentComponent as MissingComponent } from './missing-component.component.js';
 export { ComponentErrorComponent } from './component-error.component.js';
@@ -42,9 +38,6 @@ export { NodesRendererDirective } from './node-renderer.directive.js';
 export { NodesRendererDirective as NodesRenderer } from './node-renderer.directive.js';
 export { NodeRendererDirective } from './node-renderer.directive.js';
 export { NodeRendererDirective as NodeRenderer } from './node-renderer.directive.js';
-
-export { injectActiveViewport } from './inject-active-viewport.js';
-export type { InjectActiveViewportResult } from './inject-active-viewport.js';
 
 export { injectLivePreviewExperience } from './inject-live-preview-experience.js';
 export type {
@@ -120,19 +113,15 @@ export type {
   PortableRenderNode,
   PortableRenderPlan,
   ResolveContext,
-  ValuesByViewport,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
 export {
   CSS_PROPERTIES,
-  getValueForViewport,
-  getViewportIndex,
+  getDesignValue,
   isCssProperty,
   resolveDesignProperties,
   toCssKey,
-  toCssMediaQuery,
 } from '@contentful/experiences-design';
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────

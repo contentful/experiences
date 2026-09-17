@@ -5,11 +5,10 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 ## What it shows
 
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
-- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
+- **SSR rendering** with `ExperienceRenderer` from `@contentful/experiences-react` — one renderer for both SSR and the browser.
 - **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
-- **User-Agent → viewport seeding** so SSR renders at the device's expected viewport (avoids hydration drift on the client renderer's first paint).
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Design values as props** (spacing, color, typography, layout): every component declares the design keys it consumes as **named props** and destructures them. That is the recommended styling contract, and it's what all nine components here do. Don't collect leftovers with `...rest` and forward them to a DOM element — design keys are camelCase prop names, not HTML attributes, so React warns and they land in the markup as junk.
 - **One escape-hatch demo**: `components/Card.tsx` styles itself from props like the rest, but its nested `CardCta` child — not a registered component, so it has no props of its own — reads the card's design off context with **`useDesignValues()`**. That's the case props can't cover.
@@ -45,7 +44,7 @@ cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
+Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
 ### Optional: preview mode
 
@@ -77,7 +76,7 @@ The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN
 
 ## The route
 
-One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, debug mode, viewport seeding, and per-page metadata are all wired up as `searchParams` + header reads.
+One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ExperienceRenderer>` renders it. Preview mode, debug mode, and per-page metadata are all wired up as `searchParams` reads.
 
 | Try it locally                                                  | Source                                         | Config                                                                           |
 | --------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -102,10 +101,9 @@ const experience = await fetchExperience(
   }
 );
 return (
-  <ServerExperienceRenderer
+  <ExperienceRenderer
     experience={experience}
     config={experienceConfig}
-    initialViewportId={initialViewportId}
     metadata={{ slug, locale }}
     debug={debug}
   />
@@ -137,7 +135,6 @@ examples/nextjs/
 │   └── Page.tsx                         # registered as a coded Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
-    ├── detect-viewport.ts               # User-Agent to viewport id
     └── experience-config.tsx            # the integration layer: component registry + async resolveData + tokens
 ```
 
@@ -202,7 +199,7 @@ export const experienceConfig: Config = { components, experienceTemplates, resol
 The component receives a flat set of props composed of (last-wins):
 
 1. `defaults` (componentConfig.defaults, fallback values)
-2. resolved design values (cascaded to the active viewport, run through `resolveToken`)
+2. resolved design values (envelopes unwrapped, run through `resolveToken`)
 3. `contentProperties` (editorial values from the payload)
 4. `resolveData()` (return value of componentConfig.resolveData, see below)
 5. slot props (each named slot becomes a pre-rendered React subtree)
@@ -245,8 +242,8 @@ const experience = await fetchExperience(
 );
 ```
 
-Resolvers run in parallel across nodes. Viewport resolution stays at render
-time, so client-side viewport changes never re-trigger `resolveData`.
+Resolvers run in parallel across nodes, once per resolve — they do not re-run on
+render.
 
 #### Optional `metadata` + `debug`
 
@@ -278,9 +275,8 @@ const experience = await fetchExperience(
 );
 ```
 
-Pair with `<ServerExperienceRenderer initialViewportId={...}>` (User-Agent
-parsed on the server) when you want SSR output to match the device's expected
-viewport. Otherwise the renderer defaults to `viewports[0]`.
+Pass the same `metadata` and `debug` to `<ExperienceRenderer>` only when you want
+to override what the plan already carries.
 
 ### `defineExperienceTemplate`: coded Experience Templates
 

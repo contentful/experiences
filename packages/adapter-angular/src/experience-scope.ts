@@ -7,7 +7,7 @@
  * context, the registry, and the unknown-component renderer.
  *
  * Why three independent sources rather than one object: connecting them
- * separately keeps a viewport change (which only touches `experience`) from
+ * separately keeps a context change (which only touches `experience`) from
  * invalidating readers of `config` or `renderUnknown`.
  *
  * Why getters rather than snapshots: a static `providers` array cannot see

@@ -6,7 +6,7 @@
 
 import { Fragment, createElement, type ReactNode } from 'react';
 
-import type { PortableRenderNode, ViewportDef } from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 import { selectResolvedDesign } from '@contentful/experiences-design';
 
 import { ComponentErrorBoundary } from './component-error-boundary';
@@ -29,26 +29,15 @@ export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 export type RenderError = (props: ComponentErrorProps) => ReactNode;
 
 /**
- * Reports one render-time diagnostic (unregistered id, a component that
- * threw). `ServerExperienceRenderer` passes a closure that pushes onto a
- * plain array (SSR is synchronous top-down, so the array is fully populated
- * by the time `<DebugExperience>` reads it — see the element-order note
- * there). `ClientExperienceRenderer` passes a `setState` updater instead, so
- * `<DebugExperience>` re-renders reactively when a later interaction throws.
+ * Reports one render-time diagnostic (unregistered id, a component that threw).
+ * `ExperienceRenderer` supplies a closure pushing onto a plain array; in debug
+ * mode `DebugCollector` also collects reactively. See both files.
  */
 export type DiagnosticReporter = (error: Error) => void;
 
-// Internal renderers take `viewports` + `activeViewportIndex`, not the whole
-// RenderContext object — the context is published once via ExperienceProvider,
-// and re-threading it as an element prop makes React's RSC serializer back-patch
-// a shared reference into frozen props ("Cannot assign to read only property").
 export interface NodesRendererProps {
   nodes: PortableRenderNode[];
   config: Config;
-  viewports: ViewportDef[];
-  activeViewportIndex: number;
-  /** Viewport index the server pre-resolved design against. */
-  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
@@ -57,9 +46,6 @@ export interface NodesRendererProps {
 export function NodesRenderer({
   nodes,
   config,
-  viewports,
-  activeViewportIndex,
-  fallbackViewportIndex,
   renderUnknown,
   renderError,
   onDiagnostic,
@@ -72,9 +58,6 @@ export function NodesRenderer({
           key={node.nodeId ?? index}
           node={node}
           config={config}
-          viewports={viewports}
-          activeViewportIndex={activeViewportIndex}
-          fallbackViewportIndex={fallbackViewportIndex}
           renderUnknown={renderUnknown}
           renderError={renderError}
           onDiagnostic={onDiagnostic}
@@ -87,9 +70,6 @@ export function NodesRenderer({
 interface NodeRendererProps {
   node: PortableRenderNode;
   config: Config;
-  viewports: ViewportDef[];
-  activeViewportIndex: number;
-  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
@@ -98,9 +78,6 @@ interface NodeRendererProps {
 function NodeRenderer({
   node,
   config,
-  viewports,
-  activeViewportIndex,
-  fallbackViewportIndex,
   renderUnknown,
   renderError,
   onDiagnostic,
@@ -118,7 +95,7 @@ function NodeRenderer({
   // malformed slot would otherwise be re-reported every time — the collectors
   // drop a message they already hold. Keeping the guard there rather than in a
   // `useRef` is what lets this module stay hook-free, and therefore usable from
-  // a React Server Component: `ServerExperienceRenderer` renders it without a
+  // a React Server Component: `ExperienceRenderer` renders it without a
   // `'use client'` boundary, which is what keeps `config` (component
   // references, unserializable) from having to cross one.
 
@@ -152,9 +129,6 @@ function NodeRenderer({
         key={child.nodeId ?? index}
         node={child}
         config={config}
-        viewports={viewports}
-        activeViewportIndex={activeViewportIndex}
-        fallbackViewportIndex={fallbackViewportIndex}
         renderUnknown={renderUnknown}
         renderError={renderError}
         onDiagnostic={onDiagnostic}
@@ -191,9 +165,6 @@ function NodeRenderer({
 
   const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
     node.props,
-    viewports,
-    activeViewportIndex,
-    fallbackViewportIndex,
     config.resolveToken
   );
   if (unresolved.length && typeof console !== 'undefined') {

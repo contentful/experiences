@@ -4,7 +4,7 @@
  *
  * Behavior: a visible debug box when `debug` is on, silent null otherwise.
  * The console.warn fires either way so the miss is never fully silent.
- * Customers can override per-render via <ServerExperienceRenderer renderUnknown=... />.
+ * Customers can override per-render via <ExperienceRenderer renderUnknown=... />.
 -->
 <script lang="ts">
   import type { MissingComponentProps } from './component-props.js';

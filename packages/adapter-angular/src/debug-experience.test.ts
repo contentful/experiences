@@ -17,8 +17,6 @@ import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experie
 
 import { DebugExperienceComponent } from './debug-experience.component.js';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(id: string, content: Record<string, unknown> = {}): PortableRenderNode {
   return {
     nodeId: id,
@@ -39,8 +37,6 @@ function experienceTemplateNode(id: string): PortableRenderNode {
 
 function plan(nodes: PortableRenderNode[]): PortableRenderPlan {
   return {
-    viewports: VIEWPORTS,
-    fallbackViewportIndex: 0,
     nodes,
     metadata: {},
     debug: false,

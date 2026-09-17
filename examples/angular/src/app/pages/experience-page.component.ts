@@ -1,9 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import {
-  ClientExperienceRendererComponent,
-  ServerExperienceRendererComponent,
-  injectLivePreview,
-} from '@contentful/experiences-angular';
+import { ExperienceRendererComponent, injectLivePreview } from '@contentful/experiences-angular';
 
 import { ExperienceStore } from '../experience-store.js';
 import { experienceConfig } from '../lib/experience-config.js';
@@ -11,40 +7,26 @@ import { experienceConfig } from '../lib/experience-config.js';
 /**
  * Renders the plan the Express layer already resolved.
  *
- * `[metadata]`, `[debug]` and `[initialViewportId]` are all optional — the plan
- * already carries what `fetchExperience` was given. They are bound here to make
- * the override path visible: `metadata` merges over the plan's, the other two
- * replace it. Binding the fetch's own viewport is a no-op; the input earns its
- * place when you want a different one. `[config]` is not optional; component
- * classes cannot survive `TransferState`.
+ * `[metadata]` and `[debug]` are both optional — the plan already carries what
+ * `fetchExperience` was given. They are bound here to make the override path
+ * visible: `metadata` merges over the plan's, `debug` replaces it. `[config]` is
+ * not optional; component classes cannot survive `TransferState`.
  *
- * `<cf-server-experience>` resolves the active viewport once and never
- * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)
- * if you want design values to follow live `matchMedia` changes on resize.
+ * `<cf-experience>` is the only renderer — the same component under SSR and in
+ * the browser. Live preview just swaps which plan it renders.
  */
 @Component({
   selector: 'app-experience-page',
-  imports: [ClientExperienceRendererComponent, ServerExperienceRendererComponent],
+  imports: [ExperienceRendererComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (experience; as plan) {
-      @if (livePreviewEnabled) {
-        <cf-experience
-          [experience]="livePreview.data()"
-          [config]="config"
-          [initialViewportId]="initialViewportId"
-          [metadata]="renderMetadata"
-          [debug]="debug"
-        />
-      } @else {
-        <cf-server-experience
-          [experience]="plan"
-          [config]="config"
-          [initialViewportId]="initialViewportId"
-          [metadata]="renderMetadata"
-          [debug]="debug"
-        />
-      }
+      <cf-experience
+        [experience]="livePreviewEnabled ? livePreview.data() : plan"
+        [config]="config"
+        [metadata]="renderMetadata"
+        [debug]="debug"
+      />
     } @else {
       <main
         style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;"
@@ -68,7 +50,6 @@ export class ExperiencePageComponent {
   protected readonly experience = this.data?.experience ?? null;
   protected readonly slug = this.data?.slug ?? '';
   protected readonly debug = this.data?.debug ?? false;
-  protected readonly initialViewportId = this.data?.initialViewportId;
   protected readonly livePreviewEnabled = this.data?.livePreview ?? false;
   protected readonly previewSessionOptions = this.data?.previewSessionOptions;
   protected readonly renderMetadata = { ...this.data?.metadata, renderer: 'server' };
@@ -77,7 +58,6 @@ export class ExperiencePageComponent {
     initialPlan: this.experience ?? undefined,
     resolveOptions: {
       config: experienceConfig,
-      initialViewportId: this.initialViewportId,
       metadata: this.renderMetadata,
       debug: this.debug,
     },

@@ -17,12 +17,10 @@ import { render } from 'svelte/server';
 import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
+import ExperienceRenderer from './ExperienceRenderer.svelte';
 import type { Config } from './types.js';
 
 import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -42,7 +40,6 @@ describe('debug panel — true SSR coverage of a resolve-time diagnostic', () =>
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -56,7 +53,7 @@ describe('debug panel — true SSR coverage of a resolve-time diagnostic', () =>
       };
       const plan = await resolveExperience(payload, config);
 
-      const html = render(ServerExperienceRenderer as never, {
+      const html = render(ExperienceRenderer as never, {
         props: { experience: plan, config, debug: true } as never,
       }).body;
 

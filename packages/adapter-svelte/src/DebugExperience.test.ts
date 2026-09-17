@@ -7,8 +7,6 @@ import DebugExperience from './DebugExperience.svelte';
 
 const emptyPlan: PortableRenderPlan = {
   nodes: [],
-  viewports: [],
-  fallbackViewportIndex: 0,
   metadata: {},
   debug: false,
   diagnostics: [],
@@ -50,9 +48,7 @@ describe('DebugExperience.svelte', () => {
     expect(zero.innerHTML).toContain('Experience debug — 0 top-level nodes');
 
     const one: PortableRenderPlan = {
-      viewports: [],
       nodes: [node('button')],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -63,9 +59,7 @@ describe('DebugExperience.svelte', () => {
 
   it('names experienceTemplate nodes in the summary', () => {
     const plan: PortableRenderPlan = {
-      viewports: [],
       nodes: [templateNode('page')],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -76,9 +70,7 @@ describe('DebugExperience.svelte', () => {
 
   it('omits the experience-template summary for a composite experience', () => {
     const plan: PortableRenderPlan = {
-      viewports: [],
       nodes: [node('button'), node('text')],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -90,9 +82,7 @@ describe('DebugExperience.svelte', () => {
 
   it('dumps the plan as pretty JSON', () => {
     const plan: PortableRenderPlan = {
-      viewports: [],
       nodes: [node('button', { label: 'Go' })],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -107,9 +97,7 @@ describe('DebugExperience.svelte', () => {
     const n = node('button');
     n.props.resolved = { self: n.props };
     const plan: PortableRenderPlan = {
-      viewports: [],
       nodes: [n],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -133,9 +121,7 @@ describe('DebugExperience.svelte', () => {
       },
     });
     const plan: PortableRenderPlan = {
-      viewports: [],
       nodes: [n],
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],

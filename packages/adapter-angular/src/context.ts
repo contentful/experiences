@@ -5,7 +5,7 @@
  * context or the underlying payload injects it here.
  *
  * Reactivity: every accessor returns a `Signal`, so reads from a template or a
- * `computed()` stay live across viewport changes. Call the signal at the point
+ * `computed()` stay live across context changes. Call the signal at the point
  * of use — capturing `injectExperience()()` once loses reactivity, the same rule
  * as any other signal read.
  *
@@ -29,16 +29,14 @@ const EMPTY_EXPERIENCE_TEMPLATE = signal<ContentfulExperienceTemplate | undefine
 ).asReadonly();
 
 /**
- * Render-time experience context: viewports, active viewport, metadata, debug.
+ * Render-time experience context: metadata and the debug flag.
  * Throws outside a renderer subtree — reading experience context where there is
  * no experience is a programming error, not a state to branch on.
  */
 export function injectExperience(): Signal<RenderContext> {
   const scope = inject(ExperienceScope, { optional: true });
   if (!scope) {
-    throw new Error(
-      'injectExperience() must be called inside a <cf-server-experience> or <cf-experience> subtree.'
-    );
+    throw new Error('injectExperience() must be called inside a <cf-experience> subtree.');
   }
   return scope.experience;
 }
