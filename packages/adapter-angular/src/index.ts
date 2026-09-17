@@ -61,7 +61,15 @@ export type {
 } from './inject-experience-plan.js';
 export type {
   LivePreviewClient,
+  PreviewSessionClientOptions,
+  PreviewSessionExperienceOptions,
   PreviewSessionOptions,
+  PreviewSessionResolveOptions,
+} from '@contentful/experiences-live-preview';
+export {
+  fetchPreviewSession,
+  PREVIEW_WEBSOCKET_HOST,
+  PreviewSessionFetchError,
 } from '@contentful/experiences-live-preview';
 
 // ─── Runtime context helpers ─────────────────────────────────────────────

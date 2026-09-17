@@ -1,6 +1,10 @@
 import { error } from '@sveltejs/kit';
 
-import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
+import {
+  NotFoundError,
+  fetchExperience,
+  fetchPreviewSession,
+} from '@contentful/experiences-svelte';
 import { env } from '$env/dynamic/private';
 import { detectViewportFromUserAgent } from '$lib/detect-viewport.js';
 import { experienceConfig } from '$lib/experience-config.js';
@@ -28,28 +32,35 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
     );
   }
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
-  const livePreview = Boolean(sessionId && previewToken);
+  const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
 
   try {
-    const experience = await fetchExperience(
-      {
-        spaceId,
-        environmentId,
-        experienceId: params.slug,
-      },
-      {
-        accessToken,
-        previewToken,
-        preview: previewMode,
-      },
-      {
-        config: experienceConfig,
-        metadata,
-        debug,
-        initialViewportId,
-      }
-    );
+    const resolveOptions = {
+      config: experienceConfig,
+      metadata,
+      debug,
+      initialViewportId,
+    };
+    const experience = livePreview
+      ? await fetchPreviewSession(
+          { spaceId, environmentId, sessionId },
+          { previewToken },
+          resolveOptions
+        )
+      : await fetchExperience(
+          {
+            spaceId,
+            environmentId,
+            experienceId: params.slug,
+          },
+          {
+            accessToken,
+            previewToken,
+            preview: previewMode,
+          },
+          resolveOptions
+        );
 
     return {
       experience,

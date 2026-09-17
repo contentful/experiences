@@ -70,7 +70,7 @@ Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in
 
 Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched plan until a complete update arrives.
 
-The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route starts the browser subscription and uses the Preview API for the initial fetch. `?preview=true` remains an explicit way to use the Preview API without a live session.
+The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
 ### Tokens summary
 

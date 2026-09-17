@@ -25,6 +25,26 @@ defineComponent<Props>(config); // Type-narrowing identity for component-type co
 defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Template configs
 ```
 
+### Fetching
+
+```ts
+fetchExperience(experienceOptions, clientOptions, resolveOptions); // Async; fetches from XDA and resolves in one call
+fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions); // Async; fetches and resolves a Preview Session Experience
+```
+
+Use `fetchPreviewSession` for the initial render when the Contentful app
+provides a `preview_session_id`. It fetches the current Preview Session
+snapshot and resolves it into a `PortableRenderPlan`. Use `injectLivePreview`
+to receive subsequent WebSocket updates:
+
+```ts
+const plan = await fetchPreviewSession(
+  { spaceId, environmentId, sessionId },
+  { previewToken },
+  { config: experienceConfig }
+);
+```
+
 ### Resolver
 
 ```ts
@@ -165,8 +185,12 @@ getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
 isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
-createClient, fetchExperience, ContentfulViewDelivery, ContentfulViewDeliveryClient,
-NotFoundError, DELIVERY_HOST, PREVIEW_HOST
+createClient, fetchExperience, fetchPreviewSession, ContentfulViewDelivery,
+ContentfulViewDeliveryClient, NotFoundError, PreviewSessionFetchError,
+DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST
+
+type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,
+  PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
 ---

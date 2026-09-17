@@ -1,5 +1,9 @@
 import { headers } from 'next/headers';
-import { ServerExperienceRenderer, fetchExperience } from '@contentful/experiences-react';
+import {
+  ServerExperienceRenderer,
+  fetchExperience,
+  fetchPreviewSession,
+} from '@contentful/experiences-react';
 
 import { LivePreviewExperience } from '@/components/LivePreviewExperience';
 import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
@@ -23,34 +27,41 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const accessToken = process.env.CDA_TOKEN!;
   const previewToken = process.env.CPA_TOKEN;
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
-  const livePreview = Boolean(sessionId && previewToken);
+  const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
 
   const userAgent = (await headers()).get('user-agent') ?? '';
   const initialViewportId = detectViewportFromUserAgent(userAgent);
 
-  const experience = await fetchExperience(
-    {
-      spaceId,
-      environmentId,
-      experienceId,
-      locale,
-    },
-    {
-      accessToken,
-      previewToken,
-      preview: previewMode,
-    },
-    {
-      config: experienceConfig,
-      metadata: { slug: experienceId, locale },
-      debug,
-      initialViewportId,
-    }
-  );
+  const resolveOptions = {
+    config: experienceConfig,
+    metadata: { slug: experienceId, locale },
+    debug,
+    initialViewportId,
+  };
+  const experience = livePreview
+    ? await fetchPreviewSession(
+        { spaceId, environmentId, sessionId },
+        { previewToken },
+        resolveOptions
+      )
+    : await fetchExperience(
+        {
+          spaceId,
+          environmentId,
+          experienceId,
+          locale,
+        },
+        {
+          accessToken,
+          previewToken,
+          preview: previewMode,
+        },
+        resolveOptions
+      );
 
   // All three render props are optional — the plan already carries what
-  // `fetchExperience` was given. Shown here to make the override path visible:
+  // the fetch was given. Shown here to make the override path visible:
   // `metadata` merges over the plan's (so the component sees `slug`, `locale`
   // *and* `renderer`), while `debug` and `initialViewportId` replace it.
   //

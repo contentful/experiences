@@ -14,6 +14,34 @@ type PreviewSessionOptions = {
   debug?: boolean;
 };
 
+type PreviewSessionExperienceOptions = {
+  spaceId: string;
+  environmentId: string;
+  sessionId: string;
+};
+
+type PreviewSessionClientOptions = {
+  previewToken: string;
+  host?: string;
+};
+
+type PreviewSessionResolveOptions = {
+  config: ResolverConfig;
+  metadata?: Record<string, unknown>;
+  debug?: boolean;
+  initialViewportId?: string;
+};
+
+fetchPreviewSession(
+  previewSessionOptions: PreviewSessionExperienceOptions,
+  clientOptions: PreviewSessionClientOptions,
+  resolveOptions: PreviewSessionResolveOptions,
+): Promise<PortableRenderPlan>;
+
+PreviewSessionFetchError;
+NotFoundError;
+PREVIEW_WEBSOCKET_HOST;
+
 type LivePreviewClient = {
   getSnapshot(): ExperiencePayload | undefined;
   subscribe(listener: () => void): () => void;
@@ -27,6 +55,26 @@ createLivePreviewClient(
 
 sendPreviewStatus(status: LivePreviewStatus): void;
 ```
+
+Use `fetchPreviewSession` for the initial render when the Contentful app
+provides a `preview_session_id`. It fetches the current Preview Session
+snapshot and resolves it into a `PortableRenderPlan`. Use `createLivePreviewClient`
+to receive subsequent WebSocket updates.
+
+```ts
+import { fetchPreviewSession } from '@contentful/experiences-live-preview';
+
+const plan = await fetchPreviewSession(
+  { spaceId, environmentId, sessionId },
+  { previewToken },
+  { config: experienceConfig }
+);
+```
+
+The request sends `previewToken` as a Bearer token in the `Authorization`
+header. `host` selects a compatible Preview Session API host and defaults to
+the production host. A missing session throws `NotFoundError`. Other request
+and response failures throw `PreviewSessionFetchError`.
 
 ## Usage
 

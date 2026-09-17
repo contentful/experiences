@@ -12,7 +12,7 @@ import { experienceConfig } from '../lib/experience-config.js';
  * Renders the plan the Express layer already resolved.
  *
  * `[metadata]`, `[debug]` and `[initialViewportId]` are all optional — the plan
- * already carries what `fetchExperience` was given. They are bound here to make
+ * already carries what the fetch was given. They are bound here to make
  * the override path visible: `metadata` merges over the plan's, the other two
  * replace it. Binding the fetch's own viewport is a no-op; the input earns its
  * place when you want a different one. `[config]` is not optional; component
