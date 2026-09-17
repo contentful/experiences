@@ -136,6 +136,8 @@ describe('DebugExperience', () => {
       viewports: [],
       nodes: [n],
       fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
       diagnostics: [],
     };
 

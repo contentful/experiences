@@ -88,7 +88,7 @@ describe('useExperiencePlan', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <ExperiencePlanProbe value={{ payload: undefined, initialPlan, resolveOptions }} />
       );
     });
@@ -96,7 +96,7 @@ describe('useExperiencePlan', () => {
     expect(container.textContent).toBe('initial');
 
     await act(async () => {
-      root.render(
+      root!.render(
         <ExperiencePlanProbe value={{ payload: payload('updated'), initialPlan, resolveOptions }} />
       );
       await Promise.resolve();
@@ -119,7 +119,7 @@ describe('useExperiencePlan', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <ExperiencePlanProbe
           value={{
             payload: payload('failed'),
@@ -161,7 +161,7 @@ describe('useExperiencePlan', () => {
     ({ container, root } = renderRoot());
 
     await act(async () => {
-      root.render(
+      root!.render(
         <ExperiencePlanProbe
           value={{
             payload: payload('first'),
@@ -175,7 +175,7 @@ describe('useExperiencePlan', () => {
     await vi.waitFor(() => expect(resolveCall).toBe(1));
 
     await act(async () => {
-      root.render(
+      root!.render(
         <ExperiencePlanProbe
           value={{
             payload: payload('second'),

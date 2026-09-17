@@ -621,7 +621,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
 
     render(await resolveExperience(tokenPayload, cfg), { config: cfg });
 
-    expect(captureSink[0]!.designValues.cfBackgroundColor).toEqual(dt('color/unknown'));
+    expect(captureSink[0]!.designValues!.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
 

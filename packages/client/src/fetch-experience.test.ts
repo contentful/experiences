@@ -423,7 +423,7 @@ describe('fetchExperience — source map', () => {
       resolveOptions
     );
 
-    const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0];
+    const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0]!;
     expect(payloadArg.nodes).toEqual(mockPayload.nodes);
     expect(payloadArg.viewports).toEqual(mockPayload.viewports);
   });

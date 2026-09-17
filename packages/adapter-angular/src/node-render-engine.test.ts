@@ -235,6 +235,7 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
       const recoveredHtml = (fixture.nativeElement as HTMLElement).innerHTML;
       expect(recoveredHtml).not.toContain('data-experiences-render-error');
       expect(recoveredHtml).toContain('sibling');
+      expect(recoveredCalls).toBeGreaterThan(0);
     } finally {
       warn.mockRestore();
     }

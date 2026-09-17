@@ -144,7 +144,7 @@ CI runs on every push and PR via `.github/workflows/main.yaml`, which orchestrat
 | Job         | When                                 | What it does                                         |
 | ----------- | ------------------------------------ | ---------------------------------------------------- |
 | **Build**   | All pushes and PRs                   | `npm ci` → `npm run build`, caches `packages/*/dist` |
-| **Check**   | After Build                          | lint → format check → tests                          |
+| **Check**   | After Build                          | lint → typecheck → format check → tests              |
 | **Release** | Push to `main` (after Build + Check) | Nx Release → publish → GitHub release                |
 
 ## Releases

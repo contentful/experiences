@@ -10,6 +10,7 @@ import type {
   ExperienceTemplateNode,
   ManualDesignValue,
   PortableRenderNode,
+  PortableRenderPlan,
   ValuesByViewport,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
@@ -281,8 +282,12 @@ describe('ServerExperienceRenderer', () => {
         'contentful-container': ({ children }: { children?: ReactNode }) => <div>{children}</div>,
       },
     };
-    const planWithMissing = {
+    const planWithMissing: PortableRenderPlan = {
       viewports: VIEWPORTS,
+      fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'root',
@@ -422,8 +427,12 @@ describe('ServerExperienceRenderer', () => {
       },
     };
     // Simulate a plan that already went through resolveExperience.
-    const planWithResolved = {
+    const planWithResolved: PortableRenderPlan = {
       viewports: VIEWPORTS,
+      fallbackViewportIndex: 0,
+      metadata: {},
+      debug: false,
+      diagnostics: [],
       nodes: [
         {
           nodeId: 'r',
@@ -431,6 +440,7 @@ describe('ServerExperienceRenderer', () => {
           props: {
             content: { value: 'fromContent' },
             design: {},
+            designRaw: {},
             resolved: { value: 'fromResolveData' },
           },
           slots: {},
@@ -749,7 +759,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    expect((captured as Record<string, unknown>).resolved).toEqual({ enriched: 'yes' });
+    expect(captured!.resolved).toEqual({ enriched: 'yes' });
   });
 
   it('exposes experienceTemplateId/content/design/resolved via useContentfulExperienceTemplate()', async () => {
@@ -1081,7 +1091,7 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     // with no design either, so the hook has nothing to resolve.
     let captured: Record<string, unknown> | null = null;
     const Probe = ({ content }: { content?: ReactNode[] }) => {
-      captured = useDesignValues();
+      captured = useDesignValues<Record<string, unknown>>();
       return <>{content}</>;
     };
     const Item = () => null;
@@ -1106,7 +1116,7 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
   it('returns {} when called outside any renderer subtree', () => {
     let captured: Record<string, unknown> | null = null;
     const Probe = () => {
-      captured = useDesignValues();
+      captured = useDesignValues<Record<string, unknown>>();
       return null;
     };
     renderToStaticMarkup(<Probe />);
@@ -1232,7 +1242,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
 
-    expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'en-US' });
+    expect(seen[0]!.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
 
   it('reads debug off the plan without it being passed to the renderer', async () => {
@@ -1241,7 +1251,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
 
-    expect(seen[0].debug).toBe(true);
+    expect(seen[0]!.debug).toBe(true);
   });
 
   it('shallow-merges the metadata prop over the plan value', async () => {
@@ -1258,7 +1268,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       />
     );
 
-    expect(seen[0].metadata).toEqual({ slug: 'home', locale: 'de-DE', extra: true });
+    expect(seen[0]!.metadata).toEqual({ slug: 'home', locale: 'de-DE', extra: true });
   });
 
   it('lets an explicit debug={false} override a plan fetched with debug on', async () => {
@@ -1269,7 +1279,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
       <ServerExperienceRenderer experience={plan} config={config} debug={false} />
     );
 
-    expect(seen[0].debug).toBe(false);
+    expect(seen[0]!.debug).toBe(false);
   });
 
   it('lets an explicit debug override a plan fetched without it', async () => {
@@ -1278,7 +1288,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} debug />);
 
-    expect(seen[0].debug).toBe(true);
+    expect(seen[0]!.debug).toBe(true);
   });
 
   it('publishes fallbackViewportIndex on the context, matching the other adapters', async () => {
@@ -1287,7 +1297,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
 
-    expect(seen[0].fallbackViewportIndex).toBe(1);
+    expect(seen[0]!.fallbackViewportIndex).toBe(1);
   });
 
   it('seeds the active viewport from the plan when no initialViewportId is passed', async () => {
@@ -1296,8 +1306,8 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
 
-    expect(seen[0].activeViewportIndex).toBe(1);
-    expect(seen[0].activeViewport).toEqual(VIEWPORTS[1]);
+    expect(seen[0]!.activeViewportIndex).toBe(1);
+    expect(seen[0]!.activeViewport).toEqual(VIEWPORTS[1]);
   });
 
   it('lets initialViewportId override the plan seed', async () => {
@@ -1309,8 +1319,8 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     );
 
     // Legal: the renderer recomputes design from `designRaw` for the new viewport.
-    expect(seen[0].activeViewportIndex).toBe(2);
-    expect(seen[0].fallbackViewportIndex).toBe(1);
+    expect(seen[0]!.activeViewportIndex).toBe(2);
+    expect(seen[0]!.fallbackViewportIndex).toBe(1);
   });
 
   it('varies context per render by spreading the plan', async () => {
@@ -1328,8 +1338,8 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     };
     renderToStaticMarkup(<ServerExperienceRenderer experience={derived} config={config} />);
 
-    expect(seen[0].debug).toBe(true);
-    expect(seen[0].metadata).toEqual({ slug: 'home', viewer: 'anon' });
+    expect(seen[0]!.debug).toBe(true);
+    expect(seen[0]!.metadata).toEqual({ slug: 'home', viewer: 'anon' });
     expect(derived.viewports).toBe(plan.viewports);
     expect(derived.nodes).toBe(plan.nodes);
   });
@@ -1340,7 +1350,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
 
-    expect(seen[0].activeViewportIndex).toBe(0);
+    expect(seen[0]!.activeViewportIndex).toBe(0);
   });
 
   it('renders the debug panel from the plan alone', async () => {

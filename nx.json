@@ -53,7 +53,7 @@
     },
     {
       "plugin": "@nx/eslint/plugin",
-      "include": ["packages/**/*"],
+      "include": ["packages/**/*", "eslint.config.mjs"],
       "options": {
         "targetName": "lint"
       }

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 
-import type { DesignPropValue, ManualDesignValue, ValuesByViewport, ViewportDef } from './types';
+import type {
+  DesignPropValue,
+  DesignToken,
+  ManualDesignValue,
+  ValuesByViewport,
+  ViewportDef,
+} from './types';
 
 import {
   applyTokenResolver,
@@ -20,7 +26,7 @@ const m = (value: string | number | boolean): ManualDesignValue => ({
   value,
 });
 
-const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
+const vbv = (values: Record<string, ManualDesignValue | DesignToken>): ValuesByViewport => ({
   type: 'ValuesByViewport',
   values,
 });
@@ -77,13 +83,14 @@ describe('getValueForViewport', () => {
   });
 
   it('passes through a DesignToken inside a ValuesByViewport cascade', () => {
-    const token: ManualDesignValue | { type: 'DesignToken'; value: string } = {
+    const token: DesignToken = {
       type: 'DesignToken',
       value: 'color.primary',
     };
-    expect(getValueForViewport(vbv({ desktop: token as ManualDesignValue }), VIEWPORTS, 0)).toEqual(
-      { type: 'DesignToken', value: 'color.primary' }
-    );
+    expect(getValueForViewport(vbv({ desktop: token }), VIEWPORTS, 0)).toEqual({
+      type: 'DesignToken',
+      value: 'color.primary',
+    });
   });
 });
 
@@ -134,7 +141,7 @@ describe('resolveDesignProperties', () => {
 });
 
 describe('applyTokenResolver', () => {
-  const token = (value: string): DesignPropValue => ({ type: 'DesignToken', value });
+  const token = (value: string): DesignToken => ({ type: 'DesignToken', value });
 
   it('passes scalars through and reports no unresolved ids when no resolver is supplied and there are no tokens', () => {
     const input = { cfPadding: '20px', cfActive: true };

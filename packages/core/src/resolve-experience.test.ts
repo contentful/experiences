@@ -7,6 +7,7 @@ import type {
 } from '@contentful/experiences-sdk-core';
 
 import { resolveExperience, type ResolverConfig } from './resolve-experience';
+import type { ResolveContext } from './types';
 
 const VIEWPORTS = [
   { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
@@ -418,7 +419,7 @@ describe('resolveExperience — resolveData hooks', () => {
     const config: ResolverConfig = {
       components: {
         hero: {
-          resolveData: ({ content }) => ({
+          resolveData: ({ content }: ResolveContext) => ({
             heading: String(content.headingRaw ?? '').toUpperCase(),
           }),
         },
@@ -434,7 +435,7 @@ describe('resolveExperience — resolveData hooks', () => {
     const config: ResolverConfig = {
       components: {
         hero: {
-          resolveData: async ({ content }) => ({
+          resolveData: async ({ content }: ResolveContext) => ({
             formatted: `[${String(content.sku)}]`,
           }),
         },
@@ -491,7 +492,7 @@ describe('resolveExperience — resolveData hooks', () => {
     const config: ResolverConfig = {
       components: {
         hero: {
-          resolveData: ({ design }) => {
+          resolveData: ({ design }: ResolveContext) => {
             captured = design;
             return {};
           },
@@ -513,7 +514,7 @@ describe('resolveExperience — resolveData hooks', () => {
     const config: ResolverConfig = {
       components: {
         hero: {
-          resolveData: ({ experience }) => {
+          resolveData: ({ experience }: ResolveContext) => {
             captured = experience;
             return {};
           },
@@ -634,7 +635,7 @@ describe('resolveExperience — experienceTemplates', () => {
       components: {},
       experienceTemplates: {
         page: {
-          resolveData: ({ experience }) => ({
+          resolveData: ({ experience }: ResolveContext) => ({
             heading: experience.debug ? 'DEBUG' : 'LIVE',
           }),
         },
