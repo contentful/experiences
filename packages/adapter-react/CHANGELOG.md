@@ -1,3 +1,13 @@
+## 0.8.4 (2026-09-18)
+
+### 🚀 Features
+
+- **live-preview:** support resource resolution [SPA-5369] ([#193](https://github.com/contentful/experiences/pull/193))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.2
+
 ## 0.8.3 (2026-09-11)
 
 ### 🚀 Features
