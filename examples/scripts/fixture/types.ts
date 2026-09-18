@@ -166,6 +166,8 @@ export type ExperienceFixture = {
   name: string;
   description?: string;
   experienceTemplateId: string;
+  // Still sent on write: the management API requires it, even though the SDK no
+  // longer reads it. See the note in bootstrap-example.ts.
   viewports: Array<{ id: string; query: string; displayName: string; previewSize: string }>;
   slots: { content: ExperienceNode[] };
 };
@@ -177,7 +179,7 @@ export type InlineExperienceFragmentNode = {
   id: string;
   nodeType: 'InlineExperienceFragment';
   componentId: string;
-  designProperties?: Record<string, ViewportValue>;
+  designProperties?: Record<string, WriteValue>;
   contentBindings: {
     dataAssemblyTempId: TempId;
     parameters: Record<string, { $entryTempId: TempId }>;
@@ -190,13 +192,15 @@ export type ContainerNode = {
   id: string;
   nodeType: 'InlineExperienceFragment';
   componentId: string;
-  contentProperties?: Record<string, ViewportValue>;
-  designProperties?: Record<string, ViewportValue>;
+  contentProperties?: Record<string, WriteValue>;
+  designProperties?: Record<string, WriteValue>;
   slots?: Record<string, ExperienceNode[]>;
 };
 
-// A design/content property value is keyed by viewport id ('_' = default).
-export type ViewportValue = Record<string, DesignValue>;
+// Property values are written keyed by viewport id, with '_' the only key still
+// used. The API flattens this to a bare `DesignValue` in SPA-5269 Phase 2; until
+// then writes keep the wrapper. Values are read back flat by the SDK.
+export type WriteValue = Record<string, DesignValue>;
 
 export type DesignValue =
   | { type: 'ManualDesignValue'; value: string | number | boolean | null }

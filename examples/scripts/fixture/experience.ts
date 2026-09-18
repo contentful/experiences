@@ -6,7 +6,8 @@ const manualValue = (value: string | number | boolean): DesignValue => ({
   value,
 });
 
-// Wrap a design value for the default viewport ('_').
+// Wrap a value in the write-side envelope the management API still expects.
+// See the note on `WriteValue` in types.ts.
 const atDefault = (value: DesignValue) => ({ _: value });
 
 const heroNode: ExperienceNode = {

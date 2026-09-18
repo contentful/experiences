@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-16
 - **Status:** Accepted
-- **Ticket:** [AIS-562](https://contentful.atlassian.net/browse/AIS-562) (spike), under [AIS-365](https://contentful.atlassian.net/browse/AIS-365) ExO SDK — Beta Readiness
+- **Ticket:** AIS-562 (spike), under AIS-365 ExO SDK — Beta Readiness
 
 ## Context
 
@@ -33,11 +33,10 @@ imported by a React Server Component. `useActiveViewport` needs `useState` and
 `AGENTS.md` recorded exactly that as the reason two files existed.
 
 What changed is upstream: viewports are being removed from the ExO platform
-([SPA-5269](https://contentful.atlassian.net/browse/SPA-5269)). Only one viewport
-(`{ id: "" }`) has ever been used in production, and design properties flatten
-from `{ prop: { "": value } }` to `{ prop: value }`. With no viewports there is
-nothing reactive to subscribe to, which removes the constraint that forced the
-split.
+(SPA-5269). Only one viewport (`{ id: "" }`) has ever been used in production,
+and design properties flatten from `{ prop: { "": value } }` to
+`{ prop: value }`. With no viewports there is nothing reactive to subscribe to,
+which removes the constraint that forced the split.
 
 ## Decision
 

@@ -31,8 +31,7 @@ export interface SectionProps {
 
 /**
  * Flex/grid layout primitive. Its semantic design keys (`direction`, `ratio`, …)
- * arrive as auto-filled props, already cascaded to the viewport and
- * token-resolved to CSS by `resolveToken`.
+ * arrive as auto-filled props, already resolved to CSS by `resolveToken`.
  *
  * Declare the design keys you consume by name and destructure them, as below.
  * Don't collect leftovers with `...rest` and forward them to a DOM element —

@@ -5,7 +5,7 @@
   [Merge the client and server renderers](./2026-09-16-merge-client-server-renderers.md)
   (2026-09-16), which removed viewports from the SDK. The styling contract itself
   — resolved design values arriving as props — still holds.
-- **Ticket:** [AIS-358](https://contentful.atlassian.net/browse/AIS-358) (spike), under [AIS-336](https://contentful.atlassian.net/browse/AIS-336) ExO SDK — Core Renderer
+- **Ticket:** AIS-358 (spike), under AIS-336 ExO SDK — Core Renderer
 
 ## Context
 
