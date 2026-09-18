@@ -26,6 +26,7 @@ function areConnectionOptionsEqual(first: ConnectionOptions, second: ConnectionO
     first?.environmentId === second.environmentId &&
     first?.previewToken === second.previewToken &&
     first?.sessionId === second.sessionId &&
+    first?.resourceResolution === second.resourceResolution &&
     first?.sessionHost === second.sessionHost &&
     first?.debug === second.debug
   );

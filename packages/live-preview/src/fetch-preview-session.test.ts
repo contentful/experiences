@@ -91,6 +91,19 @@ describe('fetchPreviewSession', () => {
     );
   });
 
+  it('passes resource resolution to the Preview Session request', async () => {
+    await fetchPreviewSession(
+      { ...experienceOptions, resourceResolution: 'encoded+value/=' },
+      { previewToken: 'preview-token' },
+      resolveOptions
+    );
+
+    expect(mockClient.fetch).toHaveBeenCalledWith(
+      '/spaces/space-1/environments/master/preview_sessions/session-1/experience' +
+        '?resource_resolution=encoded%2Bvalue%2F%3D'
+    );
+  });
+
   it('preserves NotFoundError for a missing session', async () => {
     mockClient.fetch.mockResolvedValue(response({ message: 'not found' }, 404));
 

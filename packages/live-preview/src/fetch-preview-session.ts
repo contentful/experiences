@@ -8,12 +8,16 @@ import {
 } from '@contentful/experiences-sdk-core';
 import { PreviewSessionFetchError } from './errors.js';
 import { isExperiencePayload } from './experience-payload.js';
-import { previewSessionPath } from './preview-session-url.js';
+import { previewSessionGetExperienceUrl } from './preview-session-url.js';
 
 export type PreviewSessionExperienceOptions = {
   spaceId: string;
   environmentId: string;
   sessionId: string;
+  /**
+   * Opaque encoded resource-resolution value for referenced spaces.
+   */
+  resourceResolution?: string;
 };
 
 export type PreviewSessionClientOptions = {
@@ -37,7 +41,7 @@ export async function fetchPreviewSession(
   clientOptions: PreviewSessionClientOptions,
   resolveOptions: PreviewSessionResolveOptions
 ): Promise<PortableRenderPlan> {
-  const { spaceId, environmentId, sessionId } = previewSessionOptions;
+  const { spaceId, environmentId, sessionId, resourceResolution } = previewSessionOptions;
   const { previewToken, host } = clientOptions;
   const { config, metadata, debug, initialViewportId } = resolveOptions;
   const log = createDebugLogger(debug, 'live-preview');
@@ -50,7 +54,9 @@ export async function fetchPreviewSession(
 
   let payload: ExperiencePayload;
   try {
-    const response = await client.fetch(`/${previewSessionPath(previewSessionOptions)}/experience`);
+    const response = await client.fetch(
+      previewSessionGetExperienceUrl({ ...previewSessionOptions, resourceResolution })
+    );
     if (response.status === 404) {
       throw new NotFoundError();
     }

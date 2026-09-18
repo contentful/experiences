@@ -300,6 +300,25 @@ describe('injectLivePreviewExperience', () => {
 
     expect(secondSocket?.close).toHaveBeenCalledTimes(1);
   });
+
+  it('replaces the client when resource resolution changes', async () => {
+    const fixture = createFixture(LivePreviewExperienceProbe);
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    const firstSocket = sockets[0];
+
+    fixture.componentInstance.options.update((options) => ({
+      ...options,
+      previewSessionOptions: {
+        ...options.previewSessionOptions!,
+        resourceResolution: 'next-resource-resolution',
+      },
+    }));
+    fixture.detectChanges();
+
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    expect(firstSocket?.close).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+  });
 });
 
 describe('injectExperiencePlan', () => {

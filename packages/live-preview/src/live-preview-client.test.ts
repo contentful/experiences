@@ -175,6 +175,22 @@ describe('createLivePreviewClient', () => {
     unsubscribe();
   });
 
+  it('passes resource resolution to the WebSocket session URL', () => {
+    setBrowser();
+    const source = createLivePreviewClient({
+      ...sourceOptions('session-id'),
+      resourceResolution: 'encoded+value/=',
+    });
+    const unsubscribe = source.subscribe(vi.fn());
+
+    expect(sockets[0]?.url).toBe(
+      'wss://preview-session.example.test/spaces/space-id/environments/environment-id/' +
+        'preview_sessions/session-id/subscribe?access_token=preview-token&' +
+        'resource_resolution=encoded%2Bvalue%2F%3D'
+    );
+    unsubscribe();
+  });
+
   it('returns the raw data from a valid next message', async () => {
     setBrowser();
     const source = createLivePreviewClient(sourceOptions('session-id'));

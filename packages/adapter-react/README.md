@@ -48,6 +48,10 @@ const plan = await fetchPreviewSession(
 );
 ```
 
+If the Preview Session references resources from other spaces, pass the same
+encoded `resourceResolution` value in the `previewSessionOptions` passed to
+`fetchPreviewSession` and `useLivePreview`.
+
 ### Resolver
 
 ```ts
