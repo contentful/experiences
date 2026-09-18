@@ -79,7 +79,7 @@ npm run dev                  # http://localhost:3000/<experience-id>
 ```
 packages/
 ├── core/            # @contentful/experiences-sdk-core   — runtime-neutral types + resolveExperience
-├── design/          # @contentful/experiences-design — pure viewport + design-value math
+├── design/          # @contentful/experiences-design — pure design-value math
 ├── client/          # @contentful/experiences-client — delivery client + fetchExperience
 ├── live-preview/    # @contentful/experiences-live-preview (optional customer-facing Preview Session source for any framework)
 ├── adapter-react/   # @contentful/experiences-react  — React renderer (customer-facing)

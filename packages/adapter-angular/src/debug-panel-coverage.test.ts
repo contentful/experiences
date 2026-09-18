@@ -7,7 +7,7 @@
  * of the real message, not the whole string, so wording tweaks don't make
  * these overly brittle.
  *
- * `component-render-error` uses the same `ServerExperienceRendererComponent`
+ * `component-render-error` uses the same `ExperienceRendererComponent`
  * + `render()` helper as every other code here — Angular is the one adapter
  * where SSR and CSR share the exact same `createComponent` catch path (see
  * the README's SSR/CSR asymmetry section), so there's no separate
@@ -16,7 +16,7 @@
  * needed either.
  *
  * This file runs under jsdom (vitest.config.ts), same as the rest of this
- * package's suite — `render()` mounts `ServerExperienceRendererComponent` via
+ * package's suite — `render()` mounts `ExperienceRendererComponent` via
  * `TestBed`/`detectChanges()`, not a real server render. True, no-DOM SSR
  * coverage of a resolve-time diagnostic (`token-unresolved`, via
  * `renderApplication`) lives in `debug-panel-coverage.ssr.test.ts`.
@@ -30,8 +30,6 @@ import { render } from './test-fixtures/render-harness.js';
 import { BrokenFixture } from './test-fixtures/broken.fixture.js';
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import type { Config } from './types.js';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -50,10 +48,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
   it('malformed-payload: a non-array nodes field', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const plan = await resolveExperience(
-        { viewports: VIEWPORTS, nodes: 'not-an-array' } as never,
-        { components: {} }
-      );
+      const plan = await resolveExperience({ nodes: 'not-an-array' } as never, { components: {} });
       const { html } = render(plan, { config: { components: {} }, debug: true });
       expect(html).toContain('data-experiences-debug-errors');
       expect(html).toContain('"nodes" is not an array');
@@ -66,7 +61,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-container', {
             id: 'page',
@@ -88,7 +82,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [{ pattern: {} } as unknown as ComponentNode, componentNode('button', { id: 'b' })],
       };
       const config: Config = { components: { button: ButtonFixture } };
@@ -105,7 +98,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('button', { id: 'b' })],
       };
       const config: Config = {
@@ -134,7 +126,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -160,7 +151,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -177,7 +167,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           {
             experienceTemplate: {
@@ -205,7 +194,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: BrokenFixture } };

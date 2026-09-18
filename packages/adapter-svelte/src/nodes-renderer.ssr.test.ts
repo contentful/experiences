@@ -21,15 +21,13 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
+import ExperienceRenderer from './ExperienceRenderer.svelte';
 import type { Config } from './types.js';
 
 import BrokenFixture from './test-fixtures/BrokenFixture.svelte';
 import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
 import ContainerFixture from './test-fixtures/ContainerFixture.svelte';
 import ExperienceTemplateFixture from './test-fixtures/ExperienceTemplateFixture.svelte';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 const componentNode = (
   typeId: string,
@@ -77,7 +75,7 @@ const config: Config = {
 
 const renderPlan = async (payload: ExperiencePayload) => {
   const plan = await resolveExperience(payload, config);
-  return render(ServerExperienceRenderer as never, {
+  return render(ExperienceRenderer as never, {
     props: { experience: plan, config } as never,
   }).body;
 };
@@ -85,7 +83,6 @@ const renderPlan = async (payload: ExperiencePayload) => {
 describe('NodesRenderer — SSR (server-compiled output)', () => {
   it('renders a component node’s slot children', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'container',
@@ -102,7 +99,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders a coded Experience Template node’s named `content` slot', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -122,7 +118,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders deeply nested slot children', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -147,7 +142,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders a composite experience unwrapped', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [button('Alone')],
     });
 
@@ -173,7 +167,6 @@ describe('NodesRenderer — SSR component-render-error (the documented gap)', ()
 
   it('has no recovery path under svelte/server — no graceful fallback markup is produced', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), button('sibling')],
     };
     const plan = await resolveExperience(payload, brokenConfig);
@@ -191,7 +184,7 @@ describe('NodesRenderer — SSR component-render-error (the documented gap)', ()
     let html: string | undefined;
     let caught: unknown;
     try {
-      html = render(ServerExperienceRenderer as never, {
+      html = render(ExperienceRenderer as never, {
         props: { experience: plan, config: brokenConfig } as never,
       }).body;
     } catch (err) {

@@ -48,7 +48,7 @@ experiences/
 | Folder                     | npm name                               | Audience                                                                                       |
 | -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `packages/core`            | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
-| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                              |
+| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure design-value math.                                                          |
 | `packages/client`          | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                       |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                |
@@ -88,11 +88,10 @@ The plan is **runtime-neutral** — no React, no DOM, no platform assumptions. E
 
 The React adapter then:
 
-1. Computes the active viewport (server: from `initialViewportId`; client: from `useActiveViewport` + `matchMedia`).
-2. Builds a `RenderContext` with `{ debug, metadata, viewports, activeViewport, activeViewportIndex, fallbackViewportIndex }`.
-3. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
-4. For each node: looks up the customer's config by `node.registration.id`, against `config.experienceTemplates` when `registration.kind === 'experienceTemplate'` and `config.components` otherwise. Resolves design-prop envelopes to scalars at the active viewport (viewport cascade + `resolveToken`), publishes that record on context for `useDesignValues()` / `getDesignValues()`, and merges it into the final props: `defaults < design < content < resolveData < slots`. Components style themselves from those props — that is the one recommended styling contract. The design hook (and `toCss`) is an escape hatch for nested children that aren't registered components and for design needed outside the render path.
-5. Injects one prop per slot the node carries, named after the slot and holding an array (`ReactNode[]` / `Snippet[]`) — `children` is just the conventional name for the default slot, not a special case. Both node kinds get this identically.
+1. Builds a `RenderContext` with `{ debug, metadata }`.
+2. Walks the plan top-down, pre-rendering slot subtrees as ReactNodes.
+3. For each node: looks up the customer's config by `node.registration.id`, against `config.experienceTemplates` when `registration.kind === 'experienceTemplate'` and `config.components` otherwise. Uses the plan's already-resolved design record (re-deriving it from `designRaw` only when the adapter `Config` supplies its own `resolveToken`), publishes that record on context for `useDesignValues()` / `getDesignValues()`, and merges it into the final props: `defaults < design < content < resolveData < slots`. Components style themselves from those props — that is the one recommended styling contract. The design hook (and `toCss`) is an escape hatch for nested children that aren't registered components and for design needed outside the render path.
+4. Injects one prop per slot the node carries, named after the slot and holding an array (`ReactNode[]` / `Snippet[]`) — `children` is just the conventional name for the default slot, not a special case. Both node kinds get this identically.
 
 An unregistered id degrades rather than blanking the page: a **component** node renders `renderUnknown` (the missing-component box), a **template** node warns and renders its slot children unwrapped.
 
@@ -137,7 +136,7 @@ Returning `null` for a payload with `nodes: []` would conflate two states the CM
 - **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
 - **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
 
-So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns `{ viewports, nodes: [] }`). `fetchExperience` returns `PortableRenderPlan`, never `null`.
+So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns `{ nodes: [] }`). `fetchExperience` returns `PortableRenderPlan`, never `null`.
 
 For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch and use the adapter's dependency on `@contentful/experience-delivery`.
 
@@ -145,9 +144,9 @@ For the missing-experience case, `NotFoundError` is re-exported from the adapter
 
 Two functions would cost the customer page three lines of imports, four function calls, and two passes of `componentMap`. One entry point avoids that. The sync vs async distinction (tree-walking is synchronous; `resolveData` hooks are async) is implementation detail customers don't care about.
 
-### Why is `ctx.design` raw envelopes inside `resolveData`, not viewport-resolved scalars?
+### Why is `ctx.design` raw envelopes inside `resolveData`, not unwrapped scalars?
 
-Two reasons. (1) Viewport changes on the client should NOT re-trigger async `resolveData` hooks — those might be expensive (database lookups, external API calls). Keeping the resolver pre-viewport means it runs once. (2) If a customer's resolver genuinely needs viewport-aware logic, they can import `getValueForViewport` from the SDK and call it explicitly.
+The resolver sees the payload as authored, so it can branch on whether a value is a `ManualDesignValue` or an unresolved `DesignToken` — information unwrapping throws away. A resolver that just wants the scalar can call `getDesignValue` from the SDK explicitly.
 
 ### Why JS-at-render-time for design properties (not CSS variables)?
 
@@ -156,19 +155,17 @@ Pros of JS-at-render-time (current default): handles non-CSS values (booleans, c
 
 Going JS-first; CSS-vars opt-in is a future feature flag (`defineComponent({ design: 'css' | 'runtime' })`).
 
-### Why `activeViewport` in `RenderContext`, not on the plan?
-
-The list of viewports is on the plan (it's runtime-neutral metadata from the payload). The **active** viewport is per-render and per-framework — React reads it via `matchMedia`, SwiftUI via `@Environment`, Compose via `LocalConfiguration`. Each adapter computes it the way its platform does.
-
-If we baked `activeViewport` into the plan, the plan would either need to be re-built on every viewport change (expensive) or carry framework-specific concepts (breaking the runtime-neutral promise). Neither is right.
-
 ### Why no auto-generated node IDs?
 
 We had `generateId()` early on. It's gone. The XDA payload sometimes carries `node.id`; when it does, we pass it through as `node.nodeId` on the IR. When it doesn't, `node.nodeId` is `undefined` and React keys fall back to array index, missing-component warnings omit the id. Generating fake IDs internally added a `crypto.getRandomValues` call per node and gave customers a surface to mistakenly rely on for stable references.
 
-### Why is `Server` separate from `Client` instead of one component?
+### Why is there one renderer now, when `Server` and `Client` used to be separate?
 
-React's RSC compilation requires a `'use client'` directive at the top of files using hooks. A single component can't both be importable from a server component AND use `useEffect`/`useState`. Two files is mechanically forced; the customer-facing API is two symbols (`ServerExperienceRenderer` for SSR, `ClientExperienceRenderer` aliased as `ExperienceRenderer` for client-side editor mode).
+They were separate because RSC forced it. React requires `'use client'` at the top of any file using hooks, and a component in such a file cannot be imported by a Server Component — so a renderer calling `useActiveViewport` (`useState` + `useEffect`, to track `matchMedia`) could never be RSC-renderable. Two files was mechanically forced, not a design preference.
+
+Removing viewports removed the last hook from the render path. Design values now arrive already resolved on `props.design`, so there is nothing reactive to subscribe to, and one directive-free `ExperienceRenderer` serves both SSR and the browser. Client-only hooks (`useExperience`, `useDesignValues`, the context hooks) stay behind `'use client'` in their own modules — a customer component calling one becomes a Client Component while the renderer above it stays a Server Component, which is ordinary RSC composition and the reason no subpath-export split was needed.
+
+One exception survives: debug mode mounts `DebugCollector`, a small `'use client'` component owning the reactive diagnostics list, because `componentDidCatch` fires only client-side and a component throwing after hydration must still reach the debug panel. It receives the already-rendered tree as `children` (elements cross the RSC boundary; `config` does not). With `debug` off — every production render — nothing client-side is mounted. See [the ADR](./docs/ADRs/2026-09-16-merge-client-server-renderers.md).
 
 ### Why does the customer's `experience-config` use the design-system's own `*Props` types?
 
@@ -218,7 +215,7 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 ### Package boundaries
 
 - **`core` may not depend on `react`, the delivery client, or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
-- **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
+- **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `design-values.ts` re-exports those same helpers verbatim to keep `design`'s own public API unchanged after the token-resolution logic moved into `core` for server-side resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
 - **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
@@ -250,11 +247,9 @@ Tsup strips the directive when bundling. We use `bundle: false` per package, whi
 
 ### Hooks must be in a file with `'use client'`
 
-`use-active-viewport.ts` and `client-renderer.tsx` both start with `'use client'`. If you add a new file using React hooks, **it needs the directive**. Otherwise Next.js's RSC analyzer will complain at build time even if the import is technically correct.
+`context.tsx`, `use-design-values.tsx`, and `debug-collector.tsx` all start with `'use client'`. If you add a new file using React hooks, **it needs the directive**. Otherwise Next.js's RSC analyzer will complain at build time even if the import is technically correct.
 
-### The active-viewport fallback
-
-If `experience.viewports` is empty, `experience.viewports[0]` is `undefined`. Both renderers guard with a `FALLBACK_VIEWPORT` (`{ id: '_', query: '*', displayName: 'Default', previewSize: '100%' }`) so `experience.activeViewport` is always non-null in customer code. Design-prop resolution against an empty viewport list returns `undefined` for any prop — same as before, no breakage.
+Note the inverse constraint too: `experience-renderer.tsx`, `nodes-renderer.tsx`, and `debug-experience.tsx` are deliberately **directive-free and hook-free** so they render as Server Components. Adding a hook to any of them would force `'use client'` onto the whole render tree and undo the renderer merge.
 
 ### `@types/react` deduplication
 
@@ -304,7 +299,7 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ### Design tokens
 
-Customer-supplied resolver for `DesignToken` envelopes. Today the SDK passes `DesignToken` envelopes through to customer components untouched. Future `defineTokens([...])` API will let customers declare resolvers (theme + brand + channel + viewport-aware).
+Customer-supplied resolver for `DesignToken` envelopes. Today the SDK passes `DesignToken` envelopes through to customer components untouched. Future `defineTokens([...])` API will let customers declare resolvers (theme + brand + channel aware).
 
 ### Capabilities on `node.registration`
 
@@ -322,21 +317,17 @@ An editor-authored ("composite") Experience Template arrives as plain `component
 
 `client.view.getExperience(spaceId, envId, **experienceId**, ...)` takes an Experience ID, not a slug. Customers want `/blog/my-post` URLs, not `/IBMF5dElL6tgVuNR40fST`. No SDK-side helper today.
 
-### Viewport authoring
-
-There's no editor UI for declaring viewports per-Experience (or globally). Real payloads currently arrive with one wildcard viewport. The SDK's cascade math is correct and works against multi-viewport payloads — but the platform side is missing.
-
 ### `resolveData` advanced merge policy
 
 The Component Domain Model RFC describes `defineComponent({ props: { resolve, mergePolicy: { precedence, conflictStrategy }, private } })` — multi-source merge with explicit conflict handling. Today we have a single `resolveData` fn with fixed precedence.
 
 ### `useExperience()` hook split
 
-`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — `debug`, `metadata`, `viewports`, `activeViewport`, `activeViewportIndex` — as one object. An open question is whether that single hook should split into narrower reads (e.g. `useViewport()`, `useMetadata()`, `useDebug()`) so a component that only needs the active viewport doesn't re-render on unrelated context changes.
+`useExperience()` (React) / `getExperience()` (Svelte) returns the whole `RenderContext` — now just `debug` and `metadata` — as one object. An open question is whether it should split into narrower reads (e.g. `useMetadata()`, `useDebug()`) so a component that only needs one doesn't re-render on unrelated context changes.
 
-Investigation (consumer sweep): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. `useActiveViewport` is a separate hook already; it feeds the renderer, not components. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — but also no internal forcing function. Reactivity today: React republishes the whole context object on viewport change (so any `useExperience()` consumer re-renders); Svelte's `getExperience()` returns a `$state` mirror whose fields update in place, so fine-grained reactivity already works there via `$derived`. The asymmetry means a split would mostly benefit React.
+Investigation (consumer sweep): the only **SDK-internal** consumer of the context is `MissingComponent`, which reads `debug`. Every other read is **customer-facing** through the public `useExperience()` / `getExperience()`. So a split is a pure public-API change with no internal blocker — and no internal forcing function.
 
-Deferred: the single hook stands for now. Revisit if React re-render churn shows up in practice, or alongside the live-preview transport work (which adds another context-shaped subscription). When it lands, split React with context selectors (or separate providers) and mirror the Svelte side with narrow `get*()` helpers for API parity.
+Deferred, and now less pressing than it was: removing viewports took the per-render churn out of the context, so it changes only when the renderer's own props change. Revisit alongside the live-preview transport work, which adds another context-shaped subscription.
 
 ### Svelte: no SSR recovery for `component-render-error`
 

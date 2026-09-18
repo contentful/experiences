@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ClientExperienceRenderer,
+  ExperienceRenderer,
   useLivePreview,
   type PortableRenderPlan,
   type PreviewSessionOptions,
@@ -12,7 +12,6 @@ import { experienceConfig } from '@/lib/experience-config';
 interface LivePreviewExperienceProps {
   initialPlan: PortableRenderPlan;
   previewSessionOptions?: PreviewSessionOptions;
-  initialViewportId?: string;
   metadata?: Record<string, unknown>;
   debug?: boolean;
 }
@@ -20,26 +19,19 @@ interface LivePreviewExperienceProps {
 export function LivePreviewExperience({
   initialPlan,
   previewSessionOptions,
-  initialViewportId,
   metadata,
   debug,
 }: LivePreviewExperienceProps) {
   const livePreview = useLivePreview({
     previewSessionOptions,
     initialPlan,
-    resolveOptions: {
-      config: experienceConfig,
-      initialViewportId,
-      metadata,
-      debug,
-    },
+    resolveOptions: { config: experienceConfig, metadata, debug },
   });
 
   return (
-    <ClientExperienceRenderer
+    <ExperienceRenderer
       experience={livePreview.data}
       config={experienceConfig}
-      initialViewportId={initialViewportId}
       metadata={metadata}
       debug={debug}
     />

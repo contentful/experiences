@@ -2,9 +2,8 @@
  * Port of adapter-svelte/src/nodes-renderer.ssr.test.ts.
  *
  * Runs in `node`, not jsdom (see vitest.ssr.config.ts) — the point is that a
- * plan renders to HTML with no DOM at all, so `injectActiveViewport`'s
- * `matchMedia` path and `afterNextRender` must both stay untouched on the
- * server.
+ * plan renders to HTML with no DOM at all, so nothing in the renderer may
+ * touch `window` or depend on `afterNextRender` firing.
  *
  * Angular's SSR entry point is `renderApplication`, which takes a *bootstrap
  * function*, not a component. Two things about that contract are load-bearing
@@ -35,14 +34,12 @@ import {
   resolveExperience,
 } from '@contentful/experiences-sdk-core';
 
-import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { ExperienceRendererComponent } from './experience-renderer.component.js';
 import { BrokenFixture } from './test-fixtures/broken.fixture.js';
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import { ContainerFixture } from './test-fixtures/container.fixture.js';
 import { ExperienceTemplateFixture } from './test-fixtures/experience-template.fixture.js';
 import type { Config } from './types.js';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -89,8 +86,8 @@ const CONFIG = new InjectionToken<Config>('test.config');
 
 @Component({
   selector: 'cf-root',
-  imports: [ServerExperienceRendererComponent],
-  template: `<cf-server-experience [experience]="plan" [config]="config" />`,
+  imports: [ExperienceRendererComponent],
+  template: `<cf-experience [experience]="plan" [config]="config" />`,
 })
 class RootComponent {
   protected readonly plan = inject(PLAN);
@@ -122,7 +119,6 @@ async function renderToHtml(payload: ExperiencePayload, cfg: Config = config): P
 describe('server rendering (no DOM)', () => {
   it('renders slot children inside their parent', async () => {
     const html = await renderToHtml({
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'c',
@@ -142,7 +138,6 @@ describe('server rendering (no DOM)', () => {
    */
   it('emits no adapter elements in the server response', async () => {
     const html = await renderToHtml({
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'c',
@@ -160,7 +155,6 @@ describe('server rendering (no DOM)', () => {
 
   it("renders a coded experience template's named content slot", async () => {
     const html = await renderToHtml({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -179,7 +173,6 @@ describe('server rendering (no DOM)', () => {
 
   it('renders a deeply nested tree', async () => {
     const html = await renderToHtml({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -200,7 +193,6 @@ describe('server rendering (no DOM)', () => {
 
   it('renders a composite experience unwrapped', async () => {
     const html = await renderToHtml({
-      viewports: VIEWPORTS,
       nodes: [button('Alone')],
     });
 
@@ -214,7 +206,7 @@ describe('server rendering (no DOM)', () => {
  * because their server renderers don't run the class-error-boundary /
  * `<svelte:boundary>` machinery at all (see the equivalent test files in
  * those adapters) — Angular has no parallel server renderer. `renderApplication`
- * bootstraps the exact same `ServerExperienceRendererComponent` tree and runs
+ * bootstraps the exact same `ExperienceRendererComponent` tree and runs
  * the exact same `NodeRenderEngine.createView` try/catch. Proven here, not
  * just asserted: this is the one adapter where SSR and CSR error handling are
  * verifiably the same code path, not just "should be."
@@ -227,7 +219,6 @@ describe('server rendering (no DOM) — component-render-error', () => {
   it('isolates the failing node under real SSR — sibling still renders, no crash', async () => {
     const html = await renderToHtml(
       {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' }), button('sibling')],
       },
       brokenConfig
@@ -238,7 +229,7 @@ describe('server rendering (no DOM) — component-render-error', () => {
 
   it('emits the debug fallback markup server-side when debug is on', async () => {
     const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('broken', { id: 'b' })] },
+      { nodes: [componentNode('broken', { id: 'b' })] },
       brokenConfig
     );
 
@@ -266,8 +257,8 @@ describe('server rendering (no DOM) — component-render-error', () => {
 
 @Component({
   selector: 'cf-root-debug',
-  imports: [ServerExperienceRendererComponent],
-  template: `<cf-server-experience [experience]="plan" [config]="config" [debug]="true" />`,
+  imports: [ExperienceRendererComponent],
+  template: `<cf-experience [experience]="plan" [config]="config" [debug]="true" />`,
 })
 class RootComponentWithDebug {
   protected readonly plan = inject(PLAN);

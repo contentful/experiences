@@ -32,7 +32,12 @@
   interface NodeRendererProps {
     node: PortableRenderNode;
     config: Config;
-    experience: RenderContext;
+    /**
+     * Accepted but not read — design resolution no longer needs it. Kept because
+     * `NodesRenderer` is a public export that threads it through; descendants
+     * read the context via `getExperience()`.
+     */
+    experience?: RenderContext;
     renderUnknown: RenderUnknown;
     renderError: RenderError;
     onDiagnostic: DiagnosticReporter;
@@ -47,7 +52,6 @@
   let {
     node,
     config,
-    experience,
     renderUnknown,
     renderError,
     onDiagnostic,
@@ -58,7 +62,7 @@
   const isExperienceTemplate = kind === 'experienceTemplate';
 
   // Any reactive re-run of this component's `$derived`/`{@const}` blocks
-  // (e.g. an ancestor's viewport change) would otherwise re-report the same
+  // (e.g. an ancestor's prop change) would otherwise re-report the same
   // diagnostic every time — matches Angular's `lastDiagnostics` guard in
   // NodeRenderEngine and React's equivalent in NodeRenderer. `reported` is a
   // plain (non-reactive) binding, stable for this component instance's
@@ -103,13 +107,7 @@
   }
 
   const tokenResolvedDesign = $derived.by(() => {
-    const { props, unresolved } = selectResolvedDesign(
-      node.props,
-      experience.viewports,
-      experience.activeViewportIndex,
-      experience.fallbackViewportIndex,
-      config.resolveToken
-    );
+    const { props, unresolved } = selectResolvedDesign(node.props, config.resolveToken);
     if (unresolved.length && typeof console !== 'undefined') {
       console.warn(
         `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on ${kind} "${id}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`

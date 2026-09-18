@@ -9,13 +9,11 @@ import { fetchExperience } from './fetch-experience.js';
 const { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap } = vi.hoisted(() => {
   const mockPayload = {
     sys: { id: 'exp-1' },
-    viewports: [{ id: 'default', query: '*' }],
     nodes: [{ sys: { urn: 'urn:ctfl:component:hero' }, content: {}, design: {}, slots: {} }],
     errors: [],
   };
 
   const mockPlan = {
-    viewports: mockPayload.viewports,
     nodes: [],
   };
 
@@ -425,6 +423,5 @@ describe('fetchExperience — source map', () => {
 
     const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0]!;
     expect(payloadArg.nodes).toEqual(mockPayload.nodes);
-    expect(payloadArg.viewports).toEqual(mockPayload.viewports);
   });
 });

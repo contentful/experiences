@@ -7,8 +7,8 @@ export type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 export interface HeadingProps {
   text?: string;
   children?: ReactNode;
-  // Design properties, auto-filled as props — already cascaded to the active
-  // viewport and token-resolved by the time they arrive.
+  // Design properties, auto-filled as props — already resolved by the time they
+  // arrive.
   as?: HeadingTag;
   align?: CSSProperties['textAlign'];
   fontSize?: string;

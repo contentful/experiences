@@ -7,11 +7,10 @@ import type {
   ExperienceTemplateNode,
   ManualDesignValue,
   PortableRenderPlan,
-  ValuesByViewport,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
+import ExperienceRenderer from './ExperienceRenderer.svelte';
 import type { Config } from './types.js';
 
 import CapturingComponent from './test-fixtures/CapturingComponent.svelte';
@@ -25,18 +24,7 @@ import WrappingContainerFixture from './test-fixtures/WrappingContainerFixture.s
 import { captureSink } from './test-fixtures/capture-sink.js';
 import { toCss } from './design-utils.js';
 
-const VIEWPORTS = [
-  { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
-  { id: 'tablet', query: '<992px', displayName: 'Tablet', previewSize: '100%' },
-  { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
-];
-
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
-
-const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
-  type: 'ValuesByViewport',
-  values,
-});
 
 const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
@@ -103,13 +91,12 @@ const config: Config = {
 };
 
 const payload: ExperiencePayload = {
-  viewports: VIEWPORTS,
   nodes: [
     componentNode('contentful-container', {
       id: 'page',
       contentProperties: {},
       designProperties: {
-        cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
+        cfPadding: m('40px'),
       },
       slots: {
         children: [
@@ -117,18 +104,14 @@ const payload: ExperiencePayload = {
             id: 'heading',
             contentProperties: { text: 'Build faster' },
             designProperties: {
-              cfFontSize: vbv({ desktop: m('32px'), mobile: m('20px') }),
+              cfFontSize: m('32px'),
             },
           }),
           componentNode('contentful-button', {
             id: 'btn',
             contentProperties: { label: 'Get started' },
             designProperties: {
-              cfBackgroundColor: vbv({
-                desktop: m('#4f39f6'),
-                tablet: m('#ff0000'),
-                mobile: m('#00aa00'),
-              }),
+              cfBackgroundColor: m('#4f39f6'),
             },
           }),
         ],
@@ -137,10 +120,10 @@ const payload: ExperiencePayload = {
   ],
 };
 
-describe('ServerExperienceRenderer', () => {
+describe('ExperienceRenderer', () => {
   it('renders a nested experience with desktop-resolved design props by default', async () => {
     const plan = await resolveExperience(payload, config);
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config },
     });
     const html = container.innerHTML;
@@ -152,75 +135,16 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('Get started');
   });
 
-  it('honors initialViewportId when resolving design props', async () => {
-    const plan = await resolveExperience(payload, config);
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config, initialViewportId: 'mobile' },
-    });
-    const html = container.innerHTML;
-
-    expect(html).toContain('data-padding="12px"');
-    expect(html).toContain('data-font-size="20px"');
-    expect(html).toContain('data-bg="#00aa00"');
-  });
-
-  it('cascades design values when the active viewport has none', async () => {
-    const plan = await resolveExperience(payload, config);
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config, initialViewportId: 'tablet' },
-    });
-    const html = container.innerHTML;
-
-    expect(html).toContain('data-font-size="32px"'); // cascaded from desktop
-    expect(html).toContain('data-bg="#ff0000"'); // tablet-specific
-  });
-
   it('renders nothing meaningful when plan is null/undefined', () => {
-    const { container: nullContainer } = render(ServerExperienceRenderer, {
+    const { container: nullContainer } = render(ExperienceRenderer, {
       props: { experience: null, config },
     });
     expect(nullContainer.querySelector('*')).toBeNull();
 
-    const { container: undefContainer } = render(ServerExperienceRenderer, {
+    const { container: undefContainer } = render(ExperienceRenderer, {
       props: { experience: undefined, config },
     });
     expect(undefContainer.querySelector('*')).toBeNull();
-  });
-
-  it('exposes the active viewport on render context (defaults to viewport[0])', async () => {
-    const captureConfig: Config = { components: { capture: CapturingComponent } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
-    render(ServerExperienceRenderer, {
-      props: { experience: plan, config: captureConfig },
-    });
-
-    expect(captureSink.length).toBe(1);
-    const ctx = captureSink[0]!.experience;
-    expect(ctx.activeViewportIndex).toBe(0);
-    expect(ctx.activeViewport).toBe(VIEWPORTS[0]);
-    expect(ctx.viewports).toBe(VIEWPORTS);
-  });
-
-  it('honors initialViewportId when computing the active viewport', async () => {
-    const captureConfig: Config = { components: { capture: CapturingComponent } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
-    render(ServerExperienceRenderer, {
-      props: {
-        experience: plan,
-        config: captureConfig,
-        initialViewportId: 'mobile',
-      },
-    });
-
-    const ctx = captureSink[0]!.experience;
-    expect(ctx.activeViewportIndex).toBe(2);
-    expect(ctx.activeViewport).toBe(VIEWPORTS[2]);
   });
 
   it('renders missing-component fallback in debug mode', () => {
@@ -229,8 +153,6 @@ describe('ServerExperienceRenderer', () => {
       components: { 'contentful-container': ContainerFixture },
     };
     const planWithMissing: PortableRenderPlan = {
-      viewports: VIEWPORTS,
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -253,7 +175,7 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
 
-    const { container: debugContainer } = render(ServerExperienceRenderer, {
+    const { container: debugContainer } = render(ExperienceRenderer, {
       props: {
         experience: planWithMissing,
         config: justContainer,
@@ -262,7 +184,7 @@ describe('ServerExperienceRenderer', () => {
     });
     expect(debugContainer.innerHTML).toContain('data-experiences-missing="NotRegistered"');
 
-    const { container: prodContainer } = render(ServerExperienceRenderer, {
+    const { container: prodContainer } = render(ExperienceRenderer, {
       props: { experience: planWithMissing, config: justContainer },
     });
     expect(prodContainer.innerHTML).not.toContain('data-experiences-missing');
@@ -273,16 +195,16 @@ describe('ServerExperienceRenderer', () => {
   it('auto-mounts DebugExperience only when debug is on', async () => {
     const captureConfig: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
+      { nodes: [componentNode('capture', { id: 'c' })] },
       captureConfig
     );
 
-    const { container: off } = render(ServerExperienceRenderer, {
+    const { container: off } = render(ExperienceRenderer, {
       props: { experience: plan, config: captureConfig },
     });
     expect(off.innerHTML).not.toContain('data-experiences-debug');
 
-    const { container: on } = render(ServerExperienceRenderer, {
+    const { container: on } = render(ExperienceRenderer, {
       props: { experience: plan, config: captureConfig, debug: true },
     });
     expect(on.innerHTML).toContain('data-experiences-debug');
@@ -292,10 +214,10 @@ describe('ServerExperienceRenderer', () => {
   it('threads top-level metadata into getExperience()', async () => {
     const captureConfig: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
+      { nodes: [componentNode('capture', { id: 'c' })] },
       captureConfig
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: captureConfig, metadata: { slug: 'home' } },
     });
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home' });
@@ -312,7 +234,6 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', {
             id: 'i',
@@ -322,7 +243,7 @@ describe('ServerExperienceRenderer', () => {
       },
       itemConfig
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: itemConfig },
     });
     expect(container.innerHTML).toContain('data-variant="fromContent"');
@@ -340,7 +261,6 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', {
             id: 'i',
@@ -350,7 +270,7 @@ describe('ServerExperienceRenderer', () => {
       },
       itemConfig
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: itemConfig },
     });
     expect(container.innerHTML).toContain('data-variant=""');
@@ -366,8 +286,6 @@ describe('ServerExperienceRenderer', () => {
       },
     };
     const planWithResolved: PortableRenderPlan = {
-      viewports: VIEWPORTS,
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -385,7 +303,7 @@ describe('ServerExperienceRenderer', () => {
         },
       ],
     };
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: planWithResolved, config: precedenceConfig },
     });
     expect(container.innerHTML).toContain('data-value="fromResolveData"');
@@ -402,7 +320,6 @@ describe('ServerExperienceRenderer', () => {
     // prop — the fixture renders it, so the child only appears if that holds.
     const tplPayload: ExperiencePayload = {
       sys: sysWithExperienceTemplate('page'),
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -413,7 +330,7 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: tplConfig },
     });
     expect(container.innerHTML).toContain('data-experience-template="page"');
@@ -432,7 +349,6 @@ describe('ServerExperienceRenderer', () => {
     const plan = await resolveExperience(
       {
         sys: sysWithExperienceTemplate('hero'),
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', { id: 'a', contentProperties: { value: 'one' } }),
           componentNode('item', { id: 'b', contentProperties: { value: 'two' } }),
@@ -440,7 +356,7 @@ describe('ServerExperienceRenderer', () => {
       },
       cfg
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     expect(container.innerHTML).toContain('data-value="one"');
@@ -454,7 +370,6 @@ describe('ServerExperienceRenderer', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const cfg: Config = { components: { item: PrecedenceFixture } };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('missing-experienceTemplate', {
           id: 'tpl',
@@ -467,7 +382,7 @@ describe('ServerExperienceRenderer', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg, debug: true },
     });
     // The subtree survives — an unregistered template must not blank the page.
@@ -482,9 +397,8 @@ describe('ServerExperienceRenderer', () => {
   });
 });
 
-describe('ServerExperienceRenderer — slot children as an array', () => {
+describe('ExperienceRenderer — slot children as an array', () => {
   const childrenPayload = (): ExperiencePayload => ({
-    viewports: VIEWPORTS,
     nodes: [
       componentNode('contentful-container', {
         id: 'c',
@@ -516,7 +430,7 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
       },
     };
     const plan = await resolveExperience(childrenPayload(), cfg);
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
 
@@ -538,10 +452,10 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
       components: { 'contentful-container': WrappingContainerFixture },
     };
     const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('contentful-container', { id: 'c' })] },
+      { nodes: [componentNode('contentful-container', { id: 'c' })] },
       cfg
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     expect(captureSink[0]!.props.childCount).toBe(0);
@@ -550,17 +464,16 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
   });
 });
 
-describe('ServerExperienceRenderer — bare-component registrations', () => {
+describe('ExperienceRenderer — bare-component registrations', () => {
   it('accepts a bare Svelte component as a registry entry', async () => {
     const cfg: Config = { components: { item: PrecedenceFixture } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [componentNode('item', { id: 'b', contentProperties: { value: 'hi' } })],
       },
       cfg
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     expect(container.innerHTML).toContain('data-value="hi"');
@@ -570,7 +483,6 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'c',
@@ -580,7 +492,7 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     const keys = Object.keys(captureSink[0]!.props);
@@ -593,23 +505,22 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
   });
 });
 
-describe('ServerExperienceRenderer — getContentfulComponent()', () => {
+describe('ExperienceRenderer — getContentfulComponent()', () => {
   it('exposes the raw Contentful payload to descendants', async () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'btn-1',
             contentProperties: { label: 'Buy now' },
-            designProperties: { cfPadding: vbv({ desktop: m('40px') }) },
+            designProperties: { cfPadding: m('40px') },
           }),
         ],
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
 
@@ -618,7 +529,7 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
       componentId: 'capture',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
-      design: { cfPadding: vbv({ desktop: m('40px') }) },
+      design: { cfPadding: m('40px') },
       resolved: undefined,
     });
   });
@@ -632,11 +543,8 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
         },
       },
     };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'i' })] },
-      cfg
-    );
-    render(ServerExperienceRenderer, {
+    const plan = await resolveExperience({ nodes: [componentNode('capture', { id: 'i' })] }, cfg);
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
 
@@ -644,7 +552,7 @@ describe('ServerExperienceRenderer — getContentfulComponent()', () => {
   });
 });
 
-describe('ServerExperienceRenderer — resolveToken', () => {
+describe('ExperienceRenderer — resolveToken', () => {
   it('passes DesignToken values through the resolver before render', async () => {
     const cfg: Config = {
       components: { 'contentful-button': ButtonFixture },
@@ -652,7 +560,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-button', {
             id: 'b',
@@ -663,7 +570,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       },
       cfg
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     expect(container.innerHTML).toContain('data-bg="#4f39f6"');
@@ -678,7 +585,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-button', {
             id: 'b',
@@ -689,11 +595,11 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
 
-    expect(captureSink[0]!.designValues.cfBackgroundColor).toEqual(dt('color/unknown'));
+    expect(captureSink[0]!.designValues?.cfBackgroundColor).toEqual(dt('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('contentful-button'));
     warn.mockRestore();
@@ -703,7 +609,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     const cfg: Config = { components: { 'contentful-button': ButtonFixture } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-button', {
             id: 'b',
@@ -714,7 +619,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       },
       cfg
     );
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     // Svelte stringifies the token object into "[object Object]" on the
@@ -731,7 +636,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const tplPayload: ExperiencePayload = {
       sys: sysWithExperienceTemplate('page'),
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -743,21 +647,18 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, tplConfig);
-    // Render at a non-fallback viewport (mobile ≠ fallback index 0) so the
-    // adapter recomputes from the raw design and runs resolveToken itself.
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config: tplConfig, initialViewportId: 'mobile' },
+    const { container } = render(ExperienceRenderer, {
+      props: { experience: plan, config: tplConfig },
     });
     expect(container.innerHTML).toContain('data-bg="#111827"');
   });
 });
 
-describe('ServerExperienceRenderer — design values auto-fill props', () => {
+describe('ExperienceRenderer — design values auto-fill props', () => {
   it('spreads resolved design values onto component props by their raw key', async () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'p',
@@ -768,7 +669,7 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     // Content flows as a prop, and design auto-fills props under its raw key.
@@ -788,7 +689,6 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'p',
@@ -800,14 +700,14 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
     expect(captureSink[0]!.props).toMatchObject({ cfPadding: 'from-content' });
   });
 });
 
-describe('ServerExperienceRenderer — getDesignValues()', () => {
+describe('ExperienceRenderer — getDesignValues()', () => {
   it('returns the resolved design values for the current node', async () => {
     const cfg: Config = {
       components: { capture: CapturingComponent },
@@ -815,7 +715,6 @@ describe('ServerExperienceRenderer — getDesignValues()', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'p',
@@ -828,77 +727,62 @@ describe('ServerExperienceRenderer — getDesignValues()', () => {
       },
       cfg
     );
-    render(ServerExperienceRenderer, { props: { experience: plan, config: cfg } });
+    render(ExperienceRenderer, { props: { experience: plan, config: cfg } });
     expect(captureSink[0]!.designValues).toEqual({
       cfBackgroundColor: '#4f39f6',
       cfPadding: '24px',
     });
   });
 
-  it('honors the active viewport when reading design values', async () => {
+  it('reads design values for a node with no slots', async () => {
     const cfg: Config = { components: { capture: CapturingComponent } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('capture', {
             id: 'p',
-            designProperties: {
-              cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
-            },
+            designProperties: { cfPadding: m('40px') },
           }),
         ],
       },
       cfg
     );
-    render(ServerExperienceRenderer, {
-      props: { experience: plan, config: cfg, initialViewportId: 'mobile' },
-    });
-    expect(captureSink[0]!.designValues).toEqual({ cfPadding: '12px' });
+    render(ExperienceRenderer, { props: { experience: plan, config: cfg } });
+    expect(captureSink[0]!.designValues).toEqual({ cfPadding: '40px' });
   });
 });
 
-describe('ServerExperienceRenderer — server pre-resolved design values', () => {
+describe('ExperienceRenderer — resolved design values', () => {
   const probePayload: ExperiencePayload = {
-    viewports: VIEWPORTS,
     nodes: [
       componentNode('contentful-container', {
         id: 'p',
-        designProperties: { cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }) },
+        designProperties: { cfPadding: m('40px') },
       }),
     ],
   };
 
-  it('consumes props.design as-is when the active viewport equals the fallback', async () => {
-    const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
-    // Tamper the precomputed values with a sentinel the cascade could never produce.
+  it('consumes props.design as-is when no resolveToken is configured', async () => {
+    const plan = await resolveExperience(probePayload, config);
+    // Tamper the precomputed values with a sentinel resolution could never produce.
     plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config, initialViewportId: 'mobile' },
+    const { container } = render(ExperienceRenderer, {
+      props: { experience: plan, config },
     });
     expect(container.innerHTML).toContain('data-padding="SENTINEL"');
   });
 
-  it('recomputes from raw design properties when the active viewport differs from the fallback', async () => {
-    const plan = await resolveExperience(probePayload, config, { initialViewportId: 'mobile' });
+  it('recomputes from raw design properties when the config supplies resolveToken', async () => {
+    const plan = await resolveExperience(probePayload, config);
     plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
-    // Active viewport (desktop, idx 0) ≠ fallback (mobile, idx 2) → recompute.
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config, initialViewportId: 'desktop' },
+    // A render-time `resolveToken` means the adapter re-derives design from
+    // `designRaw` rather than trusting the plan's precomputed record.
+    const withToken: Config = { ...config, resolveToken: () => undefined };
+    const { container } = render(ExperienceRenderer, {
+      props: { experience: plan, config: withToken },
     });
     expect(container.innerHTML).toContain('data-padding="40px"');
     expect(container.innerHTML).not.toContain('SENTINEL');
-  });
-
-  it('recomputes when the active viewport differs from the default fallback (viewport[0])', async () => {
-    const plan = await resolveExperience(probePayload, config);
-    // No fallback configured → pre-resolved against viewport[0] (desktop, idx 0).
-    expect(plan.fallbackViewportIndex).toBe(0);
-    // Active viewport is mobile (idx 2) ≠ fallback (idx 0) → recompute to 12px.
-    const { container } = render(ServerExperienceRenderer, {
-      props: { experience: plan, config, initialViewportId: 'mobile' },
-    });
-    expect(container.innerHTML).toContain('data-padding="12px"');
   });
 });
 
@@ -946,7 +830,7 @@ describe('toCss (Svelte)', () => {
   });
 });
 
-describe('ServerExperienceRenderer — render context carried on the plan', () => {
+describe('ExperienceRenderer — render context carried on the plan', () => {
   beforeEach(() => {
     captureSink.splice(0);
   });
@@ -954,16 +838,12 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   const captureConfig: Config = { components: { capture: CapturingComponent } };
 
   const buildPlan = (opts?: Parameters<typeof resolveExperience>[2]) =>
-    resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture', { id: 'c' })] },
-      captureConfig,
-      opts
-    );
+    resolveExperience({ nodes: [componentNode('capture', { id: 'c' })] }, captureConfig, opts);
 
   it('reads metadata off the plan without it being passed to the renderer', async () => {
     const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
 
-    render(ServerExperienceRenderer, { props: { experience: plan, config: captureConfig } });
+    render(ExperienceRenderer, { props: { experience: plan, config: captureConfig } });
 
     expect(captureSink[0]!.experience.metadata).toEqual({ slug: 'home', locale: 'en-US' });
   });
@@ -971,7 +851,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   it('reads debug off the plan without it being passed to the renderer', async () => {
     const plan = await buildPlan({ debug: true });
 
-    render(ServerExperienceRenderer, { props: { experience: plan, config: captureConfig } });
+    render(ExperienceRenderer, { props: { experience: plan, config: captureConfig } });
 
     expect(captureSink[0]!.experience.debug).toBe(true);
   });
@@ -979,7 +859,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   it('shallow-merges the metadata prop over the plan value', async () => {
     const plan = await buildPlan({ metadata: { slug: 'home', locale: 'en-US' } });
 
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: {
         experience: plan,
         config: captureConfig,
@@ -997,7 +877,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   it('lets an explicit debug={false} override a plan fetched with debug on', async () => {
     const plan = await buildPlan({ debug: true });
 
-    render(ServerExperienceRenderer, {
+    render(ExperienceRenderer, {
       props: { experience: plan, config: captureConfig, debug: false },
     });
 
@@ -1007,7 +887,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   it('renders the debug panel from the plan alone', async () => {
     const plan = await buildPlan({ debug: true });
 
-    const { container } = render(ServerExperienceRenderer, {
+    const { container } = render(ExperienceRenderer, {
       props: { experience: plan, config: captureConfig },
     });
 

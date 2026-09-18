@@ -6,8 +6,8 @@ type HeadingTag = (typeof HEADING_TAGS)[number];
 
 /**
  * The recommended way to style a component: declare the design properties you
- * consume as inputs and read them by name. They arrive resolved for the active
- * viewport, with design tokens already looked up, so there's no conversion step.
+ * consume as inputs and read them by name. They arrive resolved, with design
+ * tokens already looked up, so there's no conversion step.
  *
  * In Angular, declaring the input is also what makes the design property arrive
  * at all — the renderer only binds inputs a component declares. Undeclared keys

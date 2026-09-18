@@ -2,14 +2,12 @@
 
 > ⚠️ **Internal package.** You don't install this directly — the framework adapter (e.g. [`@contentful/experiences-react`](../adapter-react/)) re-exports the utilities you need.
 
-Pure, framework-agnostic viewport math for resolving Contentful's `DesignPropValue` envelopes against an active viewport.
+Pure, framework-agnostic helpers for resolving Contentful's `DesignPropValue` envelopes into the flat records adapters hand to components.
 
 ## What lives here
 
-- **`toCssMediaQuery(viewport)`** — convert Contentful's media-query DSL (`<992px`, `>1200px`, `*`) to a CSS media query string. The wildcard and any unrecognized format return `undefined`.
-- **`getViewportIndex(viewports, id?)`** — resolve a viewport id to its index in the cascade list.
-- **`getValueForViewport(prop, viewports, activeIdx)`** — unwrap a `DesignPropValue`. `ManualDesignValue` → its scalar; `ValuesByViewport` → cascade-lookup at the active viewport, then unwrap; `DesignToken` → pass the envelope through (you resolve it via `resolveToken` in v1).
-- **`resolveDesignProperties(designProps, viewports, activeIdx)`** — apply `getValueForViewport` to every key of a node's design-property bag.
+- **`getDesignValue(prop)`** — unwrap a `DesignPropValue`. `ManualDesignValue` → its scalar; `DesignToken` → pass the envelope through (you resolve it via `resolveToken` in v1).
+- **`resolveDesignProperties(designProps)`** — apply `getDesignValue` to every key of a node's design-property bag.
 - **`applyTokenResolver(props, resolveToken?)`** — run a resolved design record through the Config's `resolveToken`. Scalars pass through; `DesignToken` envelopes are resolved, and any that resolve to `undefined` are dropped and reported in `unresolved`. With no resolver the record is returned unchanged — and if it still contains tokens, a one-time console warning fires (they'd otherwise reach components as raw envelope objects).
 - **`toCssKey(key)`** — normalize a design-record key to a candidate CSS property name: strip an optional `cf` prefix and camelCase kebab/snake (`cf-font-size` → `fontSize`).
 - **`isCssProperty(key)` / `CSS_PROPERTIES`** — membership test and the underlying `Set` of CSS property names the adapters' `toCss` will emit.
@@ -26,10 +24,6 @@ If you hit that:
 - **Extend the set.** `CSS_PROPERTIES` is exported and mutable (`CSS_PROPERTIES.add('containerType')`) — a key added there flows through `toCss` on the next render.
 
 The list is intentionally curated rather than exhaustive (a full CSS-property warning would misfire on the semantic keys `toCss` is meant to drop). Open a PR to add commonly-needed properties.
-
-## Cascade behavior
-
-Viewport order in the payload encodes cascade direction (desktop-first descending, mobile-first ascending). `getValueForViewport` walks backwards from the active viewport toward `viewports[0]`, returning the first defined value — emulating CSS cascade behavior at runtime.
 
 See [`../../AGENTS.md`](../../AGENTS.md) for the design rationale and multi-framework story.
 

@@ -1,9 +1,5 @@
 <script lang="ts">
-  import {
-    ClientExperienceRenderer,
-    ServerExperienceRenderer,
-    useLivePreview,
-  } from '@contentful/experiences-svelte';
+  import { ExperienceRenderer, useLivePreview } from '@contentful/experiences-svelte';
 
   import { experienceConfig } from '$lib/experience-config.js';
 
@@ -14,34 +10,29 @@
     initialPlan: data.experience,
     resolveOptions: {
       config: experienceConfig,
-      initialViewportId: data.initialViewportId,
       metadata: data.metadata,
       debug: data.debug,
     },
   }));
 </script>
 
+<!--
+  Both render props are optional — the plan already carries what
+  `fetchExperience` was given. Bound here to show the override path:
+  `metadata` merges over the plan's, `debug` replaces it.
+-->
 {#if data.livePreview}
-  <ClientExperienceRenderer
+  <ExperienceRenderer
     experience={livePreview.data}
     config={experienceConfig}
-    initialViewportId={data.initialViewportId}
     metadata={data.metadata}
     debug={data.debug}
   />
 {:else}
-<!--
-  All three render props are optional — the plan already carries what
-  `fetchExperience` was given. Shown here to make the override path visible:
-  `metadata` merges over the plan's, `debug` and `initialViewportId` replace it.
-  Passing the fetch's own viewport is a no-op; the prop earns its place when you
-  want a different one.
--->
-<ServerExperienceRenderer
-  experience={data.experience}
-  config={experienceConfig}
-  initialViewportId={data.initialViewportId}
-  metadata={{ renderer: 'server' }}
-  debug={data.debug}
-/>
+  <ExperienceRenderer
+    experience={data.experience}
+    config={experienceConfig}
+    metadata={{ renderer: 'server' }}
+    debug={data.debug}
+  />
 {/if}

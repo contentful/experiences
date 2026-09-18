@@ -11,5 +11,6 @@ conventions, see [AGENTS.md](../../AGENTS.md).
 
 | Date       | Record                                                                                                               | Status   |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
+| 2026-09-16 | [Merge the client and server renderers into one](./2026-09-16-merge-client-server-renderers.md)                      | Accepted |
 | 2026-08-28 | [Styling contract: resolved design values arrive as props](./2026-08-28-styling-contract-design-props.md)            | Accepted |
 | 2026-08-25 | [Independent per-package versioning with Nx Release](./2026-08-25-independent-package-versioning-with-nx-release.md) | Accepted |

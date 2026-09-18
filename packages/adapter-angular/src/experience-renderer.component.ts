@@ -1,14 +1,6 @@
 /*
- * Server-side entry point. Port of adapter-svelte/src/ServerExperienceRenderer.svelte.
- *
- * Resolves the active viewport once, from `initialViewportId`, and never
- * reconsiders — no `matchMedia`, no listeners, nothing that touches `window`.
- * Use it wherever the render happens outside a browser: an `@angular/ssr` server
- * route, a prerender, an email or PDF pipeline.
- *
- * For a browser render that should follow viewport changes, use
- * `<cf-experience>` instead. The two are mutually exclusive: SSR cannot react to
- * a viewport the server cannot observe.
+ * The Experience renderer, for both SSR and browser rendering. Port of
+ * adapter-svelte/src/ExperienceRenderer.svelte. Nothing here touches `window`.
  */
 
 import {
@@ -21,33 +13,27 @@ import {
   signal,
 } from '@angular/core';
 
-import { getViewportIndex } from '@contentful/experiences-design';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { ComponentErrorComponent } from './component-error.component.js';
 import { DebugExperienceComponent } from './debug-experience.component.js';
-import { DEFAULT_CONTEXT, EMPTY_CONFIG, FALLBACK_VIEWPORT } from './experience-defaults.js';
+import { DEFAULT_CONTEXT, EMPTY_CONFIG } from './experience-defaults.js';
 import { ExperienceScope } from './experience-scope.js';
 import { MissingComponentComponent } from './missing-component.component.js';
 import { NodesRendererDirective } from './node-renderer.directive.js';
 import type { Config, RenderContext } from './types.js';
 
 @Component({
-  selector: 'cf-server-experience',
+  selector: 'cf-experience',
   imports: [DebugExperienceComponent, NodesRendererDirective],
   providers: [ExperienceScope],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // The `<cf-server-experience>` host element itself stays a real element — it is
-  // the customer's mount point, and they may well style it. Only the plumbing
-  // *inside* it is anchor-only: `*cfNodes` puts the top-level nodes here as
+  // The host element stays real — it is the customer's mount point. Only the
+  // plumbing inside is anchor-only: `*cfNodes` places top-level nodes as
   // siblings of a comment, so nothing the adapter owns wraps them.
   //
-  // The node tree renders before `<cf-debug-experience>` here for consistency
-  // with the React adapter's element-order fix — Angular's own reactivity
-  // (`errors` is a signal read at template-check time) doesn't strictly
-  // require this ordering the way React's synchronous single-pass render
-  // does, but matching it keeps the three adapters' templates readable
-  // side-by-side.
+  // Tree before the panel, matching the React adapter's element order (where it
+  // is load-bearing; Angular's signals don't require it).
   template: `
     @if (experienceValue(); as experience) {
       <ng-container *cfNodes="experience.nodes"></ng-container>
@@ -57,7 +43,7 @@ import type { Config, RenderContext } from './types.js';
     }
   `,
 })
-export class ServerExperienceRendererComponent {
+export class ExperienceRendererComponent {
   protected readonly experienceValue = signal<PortableRenderPlan | null>(null);
   // `undefined` means "not bound", distinct from an explicit `[debug]="false"`.
   private readonly debugValue = signal<boolean | undefined>(undefined);
@@ -65,7 +51,6 @@ export class ServerExperienceRendererComponent {
     () => this.debugValue() ?? this.experienceValue()?.debug ?? false
   );
   private readonly configValue = signal<Config | null>(null);
-  private readonly initialViewportIdValue = signal<string | undefined>(undefined);
   private readonly metadataValue = signal<Record<string, unknown> | undefined>(undefined);
   private readonly renderUnknownValue = signal<Type<unknown>>(MissingComponentComponent);
   private readonly renderErrorValue = signal<Type<unknown>>(ComponentErrorComponent);
@@ -77,14 +62,6 @@ export class ServerExperienceRendererComponent {
 
   @Input({ required: true }) set config(value: Config) {
     this.configValue.set(value);
-  }
-
-  /**
-   * Viewport to render for, typically derived from the request's User-Agent.
-   * Defaults to the viewport the plan was pre-resolved against.
-   */
-  @Input() set initialViewportId(value: string | undefined) {
-    this.initialViewportIdValue.set(value);
   }
 
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
@@ -110,20 +87,10 @@ export class ServerExperienceRendererComponent {
     this.renderErrorValue.set(value ?? ComponentErrorComponent);
   }
 
-  /**
-   * A `computed`, not a one-shot build: on the server it evaluates once and
-   * caches, but the same class is cheap to keep correct if inputs do change
-   * (a test harness rebinding, a resolved plan arriving late).
-   */
+  // A `computed`, not a one-shot build, so a late-arriving plan or a rebound
+  // input stays correct.
   private readonly renderContext = computed<RenderContext>(() => {
     const experience = this.experienceValue();
-    const initialViewportId = this.initialViewportIdValue();
-    // Default to the pre-resolved viewport so first paint needs no recompute.
-    const activeViewportIndex = !experience
-      ? 0
-      : initialViewportId === undefined
-        ? experience.fallbackViewportIndex
-        : getViewportIndex(experience.viewports, initialViewportId);
     return {
       ...DEFAULT_CONTEXT,
       debug: this.resolvedDebug(),
@@ -132,10 +99,6 @@ export class ServerExperienceRendererComponent {
         ...(experience?.metadata ?? {}),
         ...(this.metadataValue() ?? {}),
       },
-      viewports: experience?.viewports ?? [],
-      activeViewport: experience?.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT,
-      activeViewportIndex,
-      fallbackViewportIndex: experience?.fallbackViewportIndex ?? 0,
     };
   });
 

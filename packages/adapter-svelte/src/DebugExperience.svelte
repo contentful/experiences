@@ -1,15 +1,15 @@
 <!--
  * First-party debug panel. Renders the resolved Experience plan as pretty
  * JSON so a customer can see exactly what the SDK interpreted from the payload
- * — node tree, registrations, resolved props, viewports.
+ * — node tree, registrations, resolved props.
  *
  * Two ways to use it:
  *  - Auto-mounted by the renderers when `debug` is on (above the tree).
  *  - Mounted manually anywhere: `<DebugExperience experience={plan} />`.
  *
  * v1 is just the JSON dump wrapped in a native <details> so it collapses
- * without any extra JS. Room to grow into a node-tree explorer, viewport
- * indicator, and resolveData timing panel — kept deliberately small for now.
+ * without any extra JS. Room to grow into a node-tree explorer and a
+ * resolveData timing panel — kept deliberately small for now.
 -->
 <script lang="ts">
   import type { DebugExperienceProps } from './component-props.js';

@@ -4,21 +4,20 @@
  * import from a file with no directive ("You're importing a class component.
  * It only works in a Client Component..."), even though the class itself
  * renders fine under every SSR path this SDK supports. `nodes-renderer.tsx`
- * stays directive-free so it can still be imported from `server-renderer.tsx`
+ * stays directive-free so it can still be imported from `experience-renderer.tsx`
  * (a genuine Server Component); Server Components importing Client
  * Components is the normal RSC pattern, so this split costs nothing.
  *
  * Reporting goes through `DiagnosticReporterContext`, not a prop, for a
- * second RSC reason beyond the class-component one above: `NodeRenderer`
- * runs as part of the SERVER render when reached from
- * `ServerExperienceRenderer` (a real Server Component with no directive), and
- * React refuses to serialize a plain closure passed as a Client Component
- * prop from there ("Event handlers cannot be passed to Client Component
- * props"). Only `ClientExperienceRenderer` establishes this context (with a
- * `Provider` element that, being entirely within its own already-client-
- * rendered tree, never crosses that boundary); `context` reads `null` under
- * `ServerExperienceRenderer`, which is fine because `componentDidCatch` never
- * runs there anyway (see the class doc comment).
+ * second RSC reason beyond the class-component one above: `NodeRenderer` runs
+ * as part of the SERVER render when reached from `ExperienceRenderer` (which is
+ * directive-free, so a real Server Component), and React refuses to serialize a
+ * plain closure passed as a Client Component prop from there ("Event handlers
+ * cannot be passed to Client Component props"). The context is established by
+ * `DebugCollector` — itself a Client Component, so its `Provider` never crosses
+ * the boundary — and only in debug mode. With debug off `context` reads `null`,
+ * which is fine: there is no panel to report into, and `componentDidCatch`
+ * never runs server-side anyway (see the class doc comment).
  */
 'use client';
 
@@ -64,11 +63,10 @@ interface ComponentErrorBoundaryState {
  *
  * Net effect: the diagnostic fires only client-side — after hydration for an
  * SSR-rendered page, or immediately for a client-only render.
- * `ServerExperienceRenderer`'s own SSR-time diagnostics list can therefore
- * never contain a `component-render-error` entry; only
- * `ClientExperienceRenderer`'s reactive collector can, which is exactly why
- * that collector is `useState`-based rather than a plain array. See the
- * README's error-handling section.
+ * The renderer's synchronous SSR-time diagnostics list can therefore never
+ * contain a `component-render-error` entry; only `DebugCollector`'s reactive
+ * collector can, which is exactly why that collector is `useState`-based
+ * rather than a plain array. See the README's error-handling section.
  *
  * The legacy synchronous `renderToString`/`renderToStaticMarkup` APIs also
  * honor the Suspense `fallback` for a thrown Error, not just a thrown

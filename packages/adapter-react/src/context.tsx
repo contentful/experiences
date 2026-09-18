@@ -21,8 +21,9 @@ const ContentfulExperienceTemplateContext = createContext<ContentfulExperienceTe
 const ResolvedDesignContext = createContext<Record<string, unknown> | null>(null);
 
 // Wrapped as real client-component functions, not re-exported `Context.Provider`
-// objects — the server renderer imports these across the RSC boundary and
-// Next.js requires a function reference there ("Element type is invalid" otherwise).
+// objects — `ExperienceRenderer` is directive-free (a Server Component) and
+// imports these across the RSC boundary, where Next.js requires a function
+// reference ("Element type is invalid" otherwise).
 
 export function ExperienceProvider({
   value,
@@ -73,16 +74,13 @@ export function ResolvedDesignProvider({
 }
 
 /**
- * Read the current Experience runtime context — viewports, the active
- * viewport, the `debug` flag, and free-form metadata. Throws when called
- * outside any Experience renderer subtree.
+ * Read the current Experience runtime context — the `debug` flag and free-form
+ * metadata. Throws when called outside any Experience renderer subtree.
  */
 export function useExperience(): RenderContext {
   const ctx = useContext(ExperienceContext);
   if (ctx === null) {
-    throw new Error(
-      'useExperience() must be called inside a <ServerExperienceRenderer> or <ClientExperienceRenderer> subtree.'
-    );
+    throw new Error('useExperience() must be called inside an <ExperienceRenderer> subtree.');
   }
   return ctx;
 }
@@ -107,9 +105,9 @@ export function useContentfulExperienceTemplate(): ContentfulExperienceTemplate 
 
 /**
  * Read the design values the renderer already resolved for the enclosing
- * node or experience template — viewport-cascaded and token-resolved, the same
- * bag that feeds the component's props. Returns `null` outside a rendered
- * node / experience template, which `useDesignValues` treats as "nothing to read."
+ * node or experience template — token-resolved, the same bag that feeds the
+ * component's props. Returns `null` outside a rendered node / experience
+ * template, which `useDesignValues` treats as "nothing to read."
  */
 export function useResolvedDesign(): Record<string, unknown> | null {
   return useContext(ResolvedDesignContext);

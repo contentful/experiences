@@ -30,10 +30,8 @@ import { renderToPipeableStream, renderToStaticMarkup } from 'react-dom/server';
 import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { ServerExperienceRenderer } from './server-renderer';
+import { ExperienceRenderer } from './experience-renderer';
 import type { Config } from './types';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -76,17 +74,16 @@ function renderToStreamedHtml(element: React.ReactElement): Promise<string> {
   });
 }
 
-describe('ServerExperienceRenderer — component-render-error under Fizz (renderToPipeableStream)', () => {
+describe('ExperienceRenderer — component-render-error under Fizz (renderToPipeableStream)', () => {
   it('isolates the failing node — sibling still renders, no crash', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
     };
     const config: Config = { components: { broken: Broken, fine: Fine } };
     const plan = await resolveExperience(payload, config);
 
     const html = await renderToStreamedHtml(
-      <ServerExperienceRenderer experience={plan} config={config} />
+      <ExperienceRenderer experience={plan} config={config} />
     );
 
     expect(html).toContain('data-fine');
@@ -95,14 +92,13 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
 
   it('emits the debug fallback markup as the Suspense recovery content when debug is on', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: Broken } };
     const plan = await resolveExperience(payload, config);
 
     const html = await renderToStreamedHtml(
-      <ServerExperienceRenderer experience={plan} config={config} debug />
+      <ExperienceRenderer experience={plan} config={config} debug />
     );
     expect(html).toContain('data-experiences-render-error="broken"');
   });
@@ -111,13 +107,12 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
       const plan = await resolveExperience(payload, config);
 
-      await renderToStreamedHtml(<ServerExperienceRenderer experience={plan} config={config} />);
+      await renderToStreamedHtml(<ExperienceRenderer experience={plan} config={config} />);
 
       // `getDerivedStateFromError` — and therefore our reporting inside its
       // `render()` — never runs server-side under Fizz; only Suspense
@@ -130,10 +125,9 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
   });
 });
 
-describe('ServerExperienceRenderer — component-render-error under the legacy renderToStaticMarkup', () => {
+describe('ExperienceRenderer — component-render-error under the legacy renderToStaticMarkup', () => {
   it('degrades gracefully too — fallback renders, sibling isolated, no crash', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
     };
     const config: Config = { components: { broken: Broken, fine: Fine } };
@@ -143,9 +137,7 @@ describe('ServerExperienceRenderer — component-render-error under the legacy r
     // isn't documented to honor Suspense for a thrown Error (only for a
     // thrown thenable), but it empirically does, so it's locked in here
     // rather than left as an assumption.
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} />
-    );
+    const html = renderToStaticMarkup(<ExperienceRenderer experience={plan} config={config} />);
     expect(html).toContain('data-fine');
   });
 
@@ -153,13 +145,12 @@ describe('ServerExperienceRenderer — component-render-error under the legacy r
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
       const plan = await resolveExperience(payload, config);
 
-      renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
+      renderToStaticMarkup(<ExperienceRenderer experience={plan} config={config} />);
 
       expect(warn).not.toHaveBeenCalled();
     } finally {

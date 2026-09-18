@@ -1,19 +1,19 @@
 /*
  * First-party debug panel. Renders the resolved Experience plan as pretty
  * JSON so a customer can see exactly what the SDK interpreted from the payload
- * — node tree, registrations, resolved props, viewports.
+ * — node tree, registrations, resolved props.
  *
  * Two ways to use it:
- *  - Auto-mounted by the renderers when `debug` is on (above the tree).
+ *  - Auto-mounted by the renderer when `debug` is on (after the tree).
  *  - Mounted manually anywhere: `<DebugExperience experience={plan} />`.
  *
  * v1 is just the JSON dump wrapped in a native <details> so it collapses
  * without any client JS (safe in server components). Room to grow into a
- * node-tree explorer, viewport indicator, and resolveData timing panel — kept
- * deliberately small for now.
+ * node-tree explorer and resolveData timing panel — kept deliberately small
+ * for now.
  *
- * No React hooks here on purpose: it must render in both server and client
- * renderer subtrees.
+ * No React hooks here on purpose: it must render in both server-rendered and
+ * client-rendered subtrees.
  */
 
 import type { ReactNode } from 'react';
@@ -27,7 +27,7 @@ export interface DebugExperienceProps {
   defaultOpen?: boolean;
   /**
    * Resolve-time + render-time diagnostics for this render, merged by the
-   * caller (`ServerExperienceRenderer` / `ClientExperienceRenderer`). Plain
+   * caller (`ExperienceRenderer`, via `DebugCollector` in debug mode). Plain
    * `Error`s — the two cases that wrap a real caught exception
    * (`component-render-error`, `resolve-data-failed`) set `.cause` to the
    * original error, inspectable via `console.error` or `error.cause.stack`.

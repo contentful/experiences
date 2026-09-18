@@ -25,14 +25,6 @@ const payload = (title: string): ExperiencePayload => ({
     },
   ],
   sys: { type: 'Experience' },
-  viewports: [
-    {
-      displayName: 'Default',
-      id: 'default',
-      previewSize: '1024px',
-      query: '*',
-    },
-  ],
 });
 
 function ExperiencePlanProbe({ value }: { value: UseExperiencePlanOptions }): ReactElement {
@@ -53,7 +45,6 @@ describe('useExperiencePlan', () => {
   let container: HTMLElement | undefined;
 
   const initialPlan = {
-    fallbackViewportIndex: 0,
     nodes: [
       {
         nodeId: 'initial',
@@ -62,7 +53,6 @@ describe('useExperiencePlan', () => {
         slots: {},
       },
     ],
-    viewports: payload('initial').viewports,
     metadata: {},
     debug: false,
     diagnostics: [],

@@ -61,7 +61,7 @@ the other framework adapters.
 // page.component.ts
 import { Component } from '@angular/core';
 import {
-  ClientExperienceRenderer,
+  ExperienceRenderer,
   injectLivePreviewExperience,
   injectExperiencePlan,
   type PortableRenderPlan,
@@ -70,7 +70,7 @@ import { experienceConfig } from './experience-config';
 
 @Component({
   selector: 'app-page',
-  imports: [ClientExperienceRenderer],
+  imports: [ExperienceRenderer],
   template: `<cf-experience [experience]="plan.data()" [config]="experienceConfig" />`,
 })
 export class PageComponent {
@@ -109,20 +109,18 @@ plan. The current plan stays in place until the new plan is ready.
 Every renderer is standalone; add it to your own component's `imports`.
 
 ```ts
-ServerExperienceRenderer; // <cf-server-experience>  SSR-safe; active viewport seeded from initialViewportId
-ClientExperienceRenderer; // <cf-experience>         Subscribes to window.matchMedia
+ExperienceRenderer; // <cf-experience>         One renderer for SSR and the browser
 MissingComponent; // <cf-missing-component>  Default fallback for unregistered component types
 NodesRenderer; // *cfNodes                Renders a slot's raw nodes (see Slot children)
 NodeRenderer; // *cfNode                 Renders one node; NodesRenderer loops over it
-DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderers when debug is set
-injectActiveViewport; // Signal-backed viewport index; you'll rarely need it directly
+DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderer when debug is set
 injectLivePreviewExperience; // Signal-backed raw Experience payload
 injectExperiencePlan; // Signal-backed PortableRenderPlan
 ```
 
 `NodesRenderer` and `NodeRenderer` are **structural directives**, not components, so they add no element of their own — see [Slot children](#slot-children).
 
-Each is also exported under its Angular-suffixed class name (`ServerExperienceRendererComponent`, `NodesRendererDirective`, and so on), and `ExperienceRenderer` is an alias for `ClientExperienceRenderer`.
+Each is also exported under its Angular-suffixed class name (`ExperienceRendererComponent`, `NodesRendererDirective`, and so on).
 
 ### Styling + runtime context (helpers)
 
@@ -131,13 +129,13 @@ All four are `inject()`-based: call them from a field initializer or a construct
 ```ts
 injectDesignValues<T>(); // Signal of the resolved design record that auto-fills inputs
 toCss(design, options?); // Turns a design record into a plain style object for [ngStyle]
-injectExperience(); // Signal<RenderContext>: debug, metadata, viewports, activeViewport
+injectExperience(); // Signal<RenderContext>: debug, metadata
 injectContentfulComponent(); // Signal of the raw payload for the enclosing node (or undefined)
 injectContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per design key you style with is the one recommended path — and in Angular it is also what makes the key arrive, since binding an undeclared input is an error. `injectDesignValues()` returns the same record as a `Signal`, as an escape hatch and as the way to read keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values (token-resolved server-side) are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per design key you style with is the one recommended path — and in Angular it is also what makes the key arrive, since binding an undeclared input is an error. `injectDesignValues()` returns the same record as a `Signal`, as an escape hatch and as the way to read keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -150,8 +148,8 @@ type RenderContext, RenderUnknown, ResolveToken, SlotNodes,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
 type ComponentRef, ExperienceTemplateRef, ExperienceSys,
 type PortableRenderPlan, PortableRenderNode, PortableRegistration,
-type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
-type ViewportDef, ExperienceContext, ResolveContext,
+type DesignPropValue, ManualDesignValue, DesignToken,
+type ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
 // From live preview and the Angular adapter
@@ -160,8 +158,8 @@ type InjectLivePreviewExperienceOptions, InjectLivePreviewExperienceResult,
 type ExperiencePlanResolveOptions, InjectExperiencePlanOptions,
 type InjectExperiencePlanResult
 
-// From design (if you want to do your own viewport-aware resolution)
-getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
+// From design (if you want to do your own design resolution)
+getDesignValue, resolveDesignProperties,
 isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
@@ -249,13 +247,13 @@ export const experienceConfig: Config = { components, resolveToken };
 ```ts
 // page.component.ts
 import { Component, Input } from '@angular/core';
-import { ServerExperienceRenderer, type PortableRenderPlan } from '@contentful/experiences-angular';
+import { ExperienceRenderer, type PortableRenderPlan } from '@contentful/experiences-angular';
 import { experienceConfig } from './experience-config';
 
 @Component({
   selector: 'app-page',
-  imports: [ServerExperienceRenderer],
-  template: `<cf-server-experience [experience]="experience" [config]="config" />`,
+  imports: [ExperienceRenderer],
+  template: `<cf-experience [experience]="experience" [config]="config" />`,
 })
 export class PageComponent {
   @Input() experience!: PortableRenderPlan;
@@ -305,29 +303,28 @@ The same nodes are also on the payload at `injectContentfulComponent()().slots` 
 
 ## Parity table
 
-Everything below is a deliberate divergence from React and Svelte, forced by an Angular primitive. Semantics — merge precedence, the viewport cascade, degradation behaviour, context walk-up — are identical across all three adapters and covered by the same ported test suite.
+Everything below is a deliberate divergence from React and Svelte, forced by an Angular primitive. Semantics — merge precedence, design resolution, degradation behaviour, context walk-up — are identical across all three adapters and covered by the same ported test suite.
 
-| Concern                                          | React                                                                                        | Svelte                                                       | Angular                                                                          | Why                                                                                                                                                                                       |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime accessors                                | `useExperience()`, `useDesignValues()`                                                       | `getExperience()`, `getDesignValues()`                       | `injectExperience()`, `injectDesignValues()`                                     | Angular's DI idiom. Must be called from an injection context.                                                                                                                             |
-| Accessor return type                             | plain value (re-renders)                                                                     | plain value (read in `$derived`)                             | `Signal<T>` — call it to read                                                    | Signals are Angular's reactive primitive.                                                                                                                                                 |
-| Renderer usage                                   | `<ServerExperienceRenderer …/>`                                                              | `<ServerExperienceRenderer …/>`                              | `<cf-server-experience …/>` after adding `ServerExperienceRenderer` to `imports` | Angular components are referenced by selector, imported by class.                                                                                                                         |
-| Slot children                                    | `children: ReactNode` — render directly                                                      | `Snippet[]` — `{@render child()}`                            | `PortableRenderNode[]` — render with `*cfNodes`                                  | Angular has no lazy named-slot primitive; `projectableNodes` is positional and eager.                                                                                                     |
-| `NodesRenderer`                                  | not exported                                                                                 | exported (escape hatch)                                      | exported and **load-bearing**                                                    | It is the only way to render a slot.                                                                                                                                                      |
-| Undeclared merged keys                           | passed through as props                                                                      | passed through as props                                      | **dropped**                                                                      | Binding an input a component does not declare is an error, so the merged record is filtered via `reflectComponentType`. Still readable through `injectDesignValues()`.                    |
-| Reading dropped keys                             | n/a                                                                                          | n/a                                                          | `injectDesignValues()`                                                           | The full resolved design record is always available regardless of declared inputs.                                                                                                        |
-| Component inputs                                 | props                                                                                        | `$props()`                                                   | `@Input()` setter → `signal`                                                     | Signal `input()` is AOT-only; a JIT consumer reports zero declared inputs, which would break `reflectComponentType` filtering.                                                            |
-| Input naming                                     | any                                                                                          | any                                                          | setter takes the payload key; the readable signal needs a distinct name          | A class cannot declare a field and an accessor under one name, and under `useDefineForClassFields: false` the field initializer would assign straight through the setter.                 |
-| `injectActiveViewport` args                      | values                                                                                       | values                                                       | **getters** (`() => viewports`)                                                  | An injection context runs before inputs are bound. Every `Signal` is already a getter, so passing one works unchanged.                                                                    |
-| Missing-component warning                        | effect                                                                                       | effect                                                       | `ngOnInit`                                                                       | So the diagnostic also fires during server rendering.                                                                                                                                     |
-| Prop-shape types                                 | inferred                                                                                     | separate `*.ts` per component                                | not needed                                                                       | Angular components are `.ts`, so `tsc --noEmit` already resolves them.                                                                                                                    |
-| Style helper output                              | `CSSProperties`                                                                              | plain record                                                 | plain record for `[ngStyle]`                                                     | Scalar-only, same as Svelte.                                                                                                                                                              |
-| `component-render-error` under SSR               | caught (internal `<Suspense>` degrades gracefully under both legacy and streaming renderers) | **not caught** — `<svelte:boundary>` doesn't run server-side | caught, identically to CSR                                                       | Angular has no separate server renderer — `createComponent` is the same call either way. See the root README's [error-handling section](../../README.md#error-handling--troubleshooting). |
-| `component-render-error` after a later re-render | caught (standard class boundary)                                                             | caught (standard `<svelte:boundary>`)                        | **not caught** — creation-time only                                              | `ApplicationRef` resolves `ErrorHandler` once from the root injector, so a per-node override can't catch a later change-detection throw. Documented gap; see the root README.             |
+| Concern                                          | React                                                                                        | Svelte                                                       | Angular                                                                 | Why                                                                                                                                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime accessors                                | `useExperience()`, `useDesignValues()`                                                       | `getExperience()`, `getDesignValues()`                       | `injectExperience()`, `injectDesignValues()`                            | Angular's DI idiom. Must be called from an injection context.                                                                                                                             |
+| Accessor return type                             | plain value (re-renders)                                                                     | plain value (read in `$derived`)                             | `Signal<T>` — call it to read                                           | Signals are Angular's reactive primitive.                                                                                                                                                 |
+| Renderer usage                                   | `<ExperienceRenderer …/>`                                                                    | `<ExperienceRenderer …/>`                                    | `<cf-experience …/>` after adding `ExperienceRenderer` to `imports`     | Angular components are referenced by selector, imported by class.                                                                                                                         |
+| Slot children                                    | `children: ReactNode` — render directly                                                      | `Snippet[]` — `{@render child()}`                            | `PortableRenderNode[]` — render with `*cfNodes`                         | Angular has no lazy named-slot primitive; `projectableNodes` is positional and eager.                                                                                                     |
+| `NodesRenderer`                                  | not exported                                                                                 | exported (escape hatch)                                      | exported and **load-bearing**                                           | It is the only way to render a slot.                                                                                                                                                      |
+| Undeclared merged keys                           | passed through as props                                                                      | passed through as props                                      | **dropped**                                                             | Binding an input a component does not declare is an error, so the merged record is filtered via `reflectComponentType`. Still readable through `injectDesignValues()`.                    |
+| Reading dropped keys                             | n/a                                                                                          | n/a                                                          | `injectDesignValues()`                                                  | The full resolved design record is always available regardless of declared inputs.                                                                                                        |
+| Component inputs                                 | props                                                                                        | `$props()`                                                   | `@Input()` setter → `signal`                                            | Signal `input()` is AOT-only; a JIT consumer reports zero declared inputs, which would break `reflectComponentType` filtering.                                                            |
+| Input naming                                     | any                                                                                          | any                                                          | setter takes the payload key; the readable signal needs a distinct name | A class cannot declare a field and an accessor under one name, and under `useDefineForClassFields: false` the field initializer would assign straight through the setter.                 |
+| Missing-component warning                        | effect                                                                                       | effect                                                       | `ngOnInit`                                                              | So the diagnostic also fires during server rendering.                                                                                                                                     |
+| Prop-shape types                                 | inferred                                                                                     | separate `*.ts` per component                                | not needed                                                              | Angular components are `.ts`, so `tsc --noEmit` already resolves them.                                                                                                                    |
+| Style helper output                              | `CSSProperties`                                                                              | plain record                                                 | plain record for `[ngStyle]`                                            | Scalar-only, same as Svelte.                                                                                                                                                              |
+| `component-render-error` under SSR               | caught (internal `<Suspense>` degrades gracefully under both legacy and streaming renderers) | **not caught** — `<svelte:boundary>` doesn't run server-side | caught, identically to CSR                                              | Angular has no separate server renderer — `createComponent` is the same call either way. See the root README's [error-handling section](../../README.md#error-handling--troubleshooting). |
+| `component-render-error` after a later re-render | caught (standard class boundary)                                                             | caught (standard `<svelte:boundary>`)                        | **not caught** — creation-time only                                     | `ApplicationRef` resolves `ErrorHandler` once from the root injector, so a per-node override can't catch a later change-detection throw. Documented gap; see the root README.             |
 
 **Not** a divergence: the DOM around slot children. React renders them through a fragment, Svelte through no element, and Angular through structural directives — no adapter element in any of the three. Dispatch deliberately does not use components, because an Angular component always has a host element and no configuration removes it; `display: contents` would hide such a wrapper from layout but not from `> .card`, `:nth-child(n)`, or the sibling combinators.
 
-For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+For the full getting-started walkthrough, the merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
 

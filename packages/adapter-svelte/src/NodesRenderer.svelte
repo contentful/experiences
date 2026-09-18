@@ -16,9 +16,7 @@
  *
  * The Experience runtime context and the raw Contentful payload are read
  * via `getExperience` / `getContentfulComponent`.
- *
- * Server vs client variants share this component; they differ only in how
- * the active viewport is sourced (initial seed vs reactive matchMedia).
+
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte';

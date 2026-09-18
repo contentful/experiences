@@ -24,11 +24,9 @@ import {
   resolveExperience,
 } from '@contentful/experiences-sdk-core';
 
-import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { ExperienceRendererComponent } from './experience-renderer.component.js';
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import type { Config } from './types.js';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -48,8 +46,8 @@ const CONFIG = new InjectionToken<Config>('test.config');
 
 @Component({
   selector: 'cf-root-debug',
-  imports: [ServerExperienceRendererComponent],
-  template: `<cf-server-experience [experience]="plan" [config]="config" [debug]="true" />`,
+  imports: [ExperienceRendererComponent],
+  template: `<cf-experience [experience]="plan" [config]="config" [debug]="true" />`,
 })
 class RootComponentWithDebug {
   protected readonly plan = inject(PLAN);
@@ -61,7 +59,6 @@ describe('debug panel — true SSR coverage of a resolve-time diagnostic', () =>
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',

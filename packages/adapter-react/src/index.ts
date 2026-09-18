@@ -2,26 +2,21 @@
  * Public API surface for `@contentful/experiences-react`.
  *
  * Customers add ONLY this package to their app's dependencies. Everything
- * needed to render an Experience — types, the resolver, viewport utilities,
- * the renderer components, the authoring helpers — is re-exported from here.
- * The internal `@contentful/experiences-sdk-core` and
- * `@contentful/experiences-design` packages are workspace-only implementation
- * details; they are not part of the public API.
+ * needed to render an Experience — types, the resolver, the renderer, the
+ * authoring helpers — is re-exported from here. The internal
+ * `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
+ * packages are workspace-only implementation details; they are not part of the
+ * public API.
  *
- * `ExperienceRenderer` is an alias for `ClientExperienceRenderer`; SSR
- * consumers explicitly import `ServerExperienceRenderer`.
+ * One renderer, `ExperienceRenderer`, serves both SSR and client rendering. It
+ * is directive-free, so it renders as a React Server Component; the hooks below
+ * are `'use client'` and a component calling one becomes a Client Component in
+ * the normal RSC way.
  */
 
-// ─── Renderers ─────────────────────────────────────────────────────────────
-export {
-  ClientExperienceRenderer as ExperienceRenderer,
-  ClientExperienceRenderer,
-} from './client-renderer';
-export type { ClientExperienceRendererProps as ExperienceRendererProps } from './client-renderer';
-export type { ClientExperienceRendererProps } from './client-renderer';
-
-export { ServerExperienceRenderer } from './server-renderer';
-export type { ServerExperienceRendererProps } from './server-renderer';
+// ─── Renderer ──────────────────────────────────────────────────────────────
+export { ExperienceRenderer } from './experience-renderer';
+export type { ExperienceRendererProps } from './experience-renderer';
 
 export { MissingComponent } from './missing-component';
 export type { MissingComponentProps } from './missing-component';
@@ -31,9 +26,6 @@ export type { ComponentErrorProps } from './component-error';
 
 export { DebugExperience } from './debug-experience';
 export type { DebugExperienceProps } from './debug-experience';
-
-export { useActiveViewport } from './use-active-viewport';
-export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { DiagnosticReporter, RenderError, RenderUnknown } from './nodes-renderer';
 
@@ -105,19 +97,15 @@ export type {
   PortableRenderNode,
   PortableRenderPlan,
   ResolveContext,
-  ValuesByViewport,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
 export {
   CSS_PROPERTIES,
-  getValueForViewport,
-  getViewportIndex,
+  getDesignValue,
   isCssProperty,
   resolveDesignProperties,
   toCssKey,
-  toCssMediaQuery,
 } from '@contentful/experiences-design';
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────

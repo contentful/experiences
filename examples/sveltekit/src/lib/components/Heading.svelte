@@ -3,8 +3,8 @@
 
   export interface HeadingProps {
     text?: string;
-    // Design properties, auto-filled as props — already cascaded to the active
-    // viewport and token-resolved by the time they arrive.
+    // Design properties, auto-filled as props — already token-resolved by the
+    // time they arrive.
     as?: HeadingTag;
     align?: string;
     fontSize?: string;

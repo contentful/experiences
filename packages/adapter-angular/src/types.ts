@@ -39,8 +39,8 @@ export type { ResolveContext, ResolveToken };
  * re-rendering a slot's nodes yourself through the exported `*cfNodes`.
  *
  * Design properties stay in their **raw discriminated form** here (the same
- * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
- * token-resolved values are what `injectDesignValues()` returns.
+ * shape `ctx.design` carries inside `resolveData`). The token-resolved values
+ * are what `injectDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentId: string;

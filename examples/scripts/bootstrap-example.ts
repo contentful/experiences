@@ -307,6 +307,10 @@ async function seedComponent(fixture: ComponentFixture) {
     sys: { id: componentId, type: 'Component' },
     name: fixture.name,
     description: fixture.description ?? '',
+    // The SDK no longer reads viewports, but the management API still requires
+    // the field on write (it is `required` in contentful-management 12.x types).
+    // It goes away for writers in SPA-5269 Phase 3; sending the single default
+    // viewport keeps this script working against today's API.
     viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
@@ -345,6 +349,7 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
   const experienceTemplateBody = {
     name: fixture.name,
     description: fixture.description ?? '',
+    // Still required on write — see the note in the Component upsert above.
     viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
@@ -606,6 +611,7 @@ async function seedExperience(fixture: ExperienceFixture) {
   const commonBody = {
     name: fixture.name,
     description: fixture.description ?? '',
+    // Still required on write — see the note in the Component upsert above.
     viewports: fixture.viewports,
     designProperties: {},
     metadata: { tags: [], concepts: [] },

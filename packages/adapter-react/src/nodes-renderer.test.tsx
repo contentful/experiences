@@ -17,13 +17,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { ClientExperienceRenderer } from './client-renderer';
+import { ExperienceRenderer } from './experience-renderer';
 import type { Config } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -48,8 +46,9 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 // Render-time diagnostics (component-not-registered, malformed-slot,
-// experience-template-not-registered) reach ClientExperienceRenderer's state
-// via a `queueMicrotask`-deferred setState (see client-renderer.tsx) so the
+// experience-template-not-registered) are collected synchronously by
+// ExperienceRenderer; a component that throws reaches DebugCollector's state
+// via a `queueMicrotask`-deferred setState (see debug-collector.tsx) so the
 // update never lands mid-render of a different component. `mount` always
 // flushes that microtask before returning — not just for tests that assert
 // on the result, but so a test that doesn't care (e.g. one only checking the
@@ -80,26 +79,24 @@ afterEach(() => {
   root = null;
 });
 
-describe('ClientExperienceRenderer — component-render-error, client-side catch', () => {
+describe('ExperienceRenderer — component-render-error, client-side catch', () => {
   it('isolates the failing node, records a diagnostic, and shows it in DebugExperience', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
       };
       const config: Config = { components: { broken: Broken, fine: Fine } };
       const plan = await resolveExperience(payload, config);
 
-      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
+      await mount(<ExperienceRenderer experience={plan} config={config} debug />);
 
       expect(container!.querySelector('[data-fine]')).not.toBeNull();
       expect(container!.querySelector('[data-experiences-render-error="broken"]')).not.toBeNull();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
 
-      // The error boundary's onError call updates ClientExperienceRenderer's
-      // render-diagnostics state; DebugExperience should reflect it once
-      // React settles.
+      // The error boundary's report updates DebugCollector's state;
+      // DebugExperience should reflect it once React settles.
       const errorList = container!.querySelector('[data-experiences-debug-errors]');
       expect(errorList).not.toBeNull();
       expect(errorList!.textContent).toContain('Component "broken"');
@@ -113,13 +110,12 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
       const plan = await resolveExperience(payload, config);
 
-      await mount(<ClientExperienceRenderer experience={plan} config={config} />);
+      await mount(<ExperienceRenderer experience={plan} config={config} />);
 
       expect(container!.querySelector('[data-experiences-render-error]')).toBeNull();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
@@ -130,7 +126,6 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
 
   it('honors a custom renderError override', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: Broken } };
@@ -140,31 +135,28 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
       <div data-custom-error={componentId} />
     );
 
-    await mount(
-      <ClientExperienceRenderer experience={plan} config={config} renderError={CustomError} />
-    );
+    await mount(<ExperienceRenderer experience={plan} config={config} renderError={CustomError} />);
 
     expect(container!.querySelector('[data-custom-error="broken"]')).not.toBeNull();
   });
 });
 
-describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-renders', () => {
+describe('ExperienceRenderer — render-time diagnostics dedupe across re-renders', () => {
   it('reports a persistently-unregistered component only once, not once per re-render', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
       const plan = await resolveExperience(payload, config);
 
-      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
+      await mount(<ExperienceRenderer experience={plan} config={config} debug />);
       // Force NodeRenderer to re-execute its function body without any real
-      // new occurrence — an ancestor re-render (a viewport change, an
+      // new occurrence — an ancestor re-render (a prop change, an
       // unrelated parent state update) does the same thing in production.
       act(() => {
-        root!.render(<ClientExperienceRenderer experience={plan} config={config} debug />);
+        root!.render(<ExperienceRenderer experience={plan} config={config} debug />);
       });
       await flushMicrotasks();
 
