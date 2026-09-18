@@ -31,6 +31,7 @@ export function useLivePreviewExperience(
     previewSessionOptions?.environmentId,
     previewSessionOptions?.previewToken,
     previewSessionOptions?.sessionId,
+    previewSessionOptions?.resourceResolution,
     previewSessionOptions?.sessionHost,
     previewSessionOptions?.debug,
   ]);

@@ -10,6 +10,7 @@ type PreviewSessionOptions = {
   environmentId: string;
   previewToken?: string;
   sessionId?: string;
+  resourceResolution?: string;
   sessionHost?: string;
   debug?: boolean;
 };
@@ -18,6 +19,7 @@ type PreviewSessionExperienceOptions = {
   spaceId: string;
   environmentId: string;
   sessionId: string;
+  resourceResolution?: string;
 };
 
 type PreviewSessionClientOptions = {
@@ -73,8 +75,11 @@ const plan = await fetchPreviewSession(
 
 The request sends `previewToken` as a Bearer token in the `Authorization`
 header. `host` selects a compatible Preview Session API host and defaults to
-the production host. A missing session throws `NotFoundError`. Other request
-and response failures throw `PreviewSessionFetchError`.
+the production host. Pass the same encoded `resourceResolution` value in the
+`previewSessionOptions` passed to `fetchPreviewSession` and
+`createLivePreviewClient` when the session references resources from other
+spaces. A missing session throws `NotFoundError`. Other request and response
+failures throw `PreviewSessionFetchError`.
 
 ## Usage
 
@@ -91,7 +96,8 @@ both values are provided. The caller supplies the session ID through
 `sessionHost` is an optional WebSocket URL for the Preview Session service. It
 defaults to the production Contentful Session service. The SDK uses the URL as
 supplied, appends the subscription route, and sends `previewToken` as the
-encoded `access_token` query parameter.
+encoded `access_token` query parameter. When provided, `resourceResolution` is
+sent as the encoded `resource_resolution` query parameter.
 
 When you use the package directly in a Contentful preview, connect the client's
 status subscription to `sendPreviewStatus`:

@@ -11,6 +11,10 @@ export type PreviewSessionOptions = {
   previewToken?: string;
   sessionId?: string;
   /**
+   * Opaque encoded resource-resolution value for referenced spaces.
+   */
+  resourceResolution?: string;
+  /**
    * Custom WebSocket URL for Preview Session subscriptions (staging, proxy, per-region).
    * Omit to use the production Preview Session WebSocket host.
    */

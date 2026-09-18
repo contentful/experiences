@@ -182,4 +182,28 @@ describe('useLivePreviewExperience', () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(firstSocket?.close).toHaveBeenCalledTimes(1);
   });
+
+  it('recreates the source when resource resolution changes', async () => {
+    ({ root } = renderRoot());
+    await act(async () => {
+      root!.render(<LivePreviewExperienceProbe value={options()} />);
+    });
+    const firstSocket = FakeWebSocket.instances[0];
+
+    await act(async () => {
+      root!.render(
+        <LivePreviewExperienceProbe
+          value={options({
+            previewSessionOptions: {
+              ...previewSessionOptions,
+              resourceResolution: 'next-resource-resolution',
+            },
+          })}
+        />
+      );
+    });
+
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(firstSocket?.close).toHaveBeenCalledTimes(1);
+  });
 });
