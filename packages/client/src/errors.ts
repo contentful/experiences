@@ -10,17 +10,21 @@
  * package) is the one exception: it passes through undisturbed so callers
  * can route it to their framework's 404 idiom, per the existing
  * distinguishable-404 contract.
+ *
+ * `environmentId` is `undefined` for the destination-shaped `fetchExperience`
+ * branches — the destinations delivery endpoints are space-scoped only, with
+ * no environment segment, unlike the by-id path.
  */
 export class ExperienceFetchError extends Error {
   readonly spaceId: string;
-  readonly environmentId: string;
+  readonly environmentId: string | undefined;
   readonly experienceId: string;
 
   constructor(
     message: string,
     options: {
       spaceId: string;
-      environmentId: string;
+      environmentId?: string;
       experienceId: string;
       cause?: unknown;
     }

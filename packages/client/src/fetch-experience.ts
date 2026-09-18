@@ -8,10 +8,11 @@ import { PREVIEW_HOST } from './hosts.js';
 import {
   readSourceMap,
   toExperiencePayload,
+  toExperiencePayloadFromDestination,
   type ExperienceResponse,
 } from './to-experience-payload.js';
 
-export type ExperienceOptions = {
+export type ByIdExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
@@ -26,6 +27,31 @@ export type ExperienceOptions = {
    */
   withSourceMap?: boolean;
 };
+
+/**
+ * Resolve an Experience by the Destination Node a marketer wired up, instead
+ * of a caller-supplied `experienceId`. No `environmentId` or `locale` — the
+ * destinations delivery endpoints are space-scoped only and have no locale
+ * param, unlike the by-id path. No `withSourceMap` either — the destinations
+ * endpoints expose `extensions.personalization`, not `extensions.sourceMap`.
+ */
+export type ByDestinationNodeIdExperienceOptions = {
+  spaceId: string;
+  destinationId: string;
+  nodeId: string;
+};
+
+export type ExperienceOptions = ByIdExperienceOptions | ByDestinationNodeIdExperienceOptions;
+
+/**
+ * A Destination resolution that the app must act on as control flow — honor
+ * it by navigating or re-resolving at the new path — rather than a hydrated
+ * Experience to render. Modeled as a normal return value, not a thrown error,
+ * per the Destinations delivery API's own framing of a redirect response.
+ */
+export interface DestinationRedirectResult {
+  redirect: { path: string };
+}
 
 export type ClientOptions =
   | {
@@ -74,12 +100,26 @@ export type ResolveOptions = {
   initialViewportId?: string;
 };
 
+// TS overload signatures, not real redeclarations — base ESLint's no-redeclare doesn't know the
+// overload form (@typescript-eslint's own version does), so each repeated signature needs a
+// disable comment.
+export async function fetchExperience(
+  experienceOptions: ByIdExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
+): Promise<PortableRenderPlan>;
+// eslint-disable-next-line no-redeclare -- see above
+export async function fetchExperience(
+  experienceOptions: ByDestinationNodeIdExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
+): Promise<PortableRenderPlan | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- see above
 export async function fetchExperience(
   experienceOptions: ExperienceOptions,
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
-): Promise<PortableRenderPlan> {
-  const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
+): Promise<PortableRenderPlan | DestinationRedirectResult> {
   const { config, metadata, debug, initialViewportId } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
@@ -101,6 +141,17 @@ export async function fetchExperience(
     });
     log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
   }
+
+  if ('destinationId' in experienceOptions) {
+    return fetchByDestinationNodeId(experienceOptions, client, log, {
+      config,
+      metadata,
+      debug,
+      initialViewportId,
+    });
+  }
+
+  const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
 
   log.log('fetching experience', {
     spaceId,
@@ -153,5 +204,67 @@ export async function fetchExperience(
     debug,
     initialViewportId,
     sourceMap,
+  });
+}
+
+/**
+ * Destination-shaped branch of `fetchExperience`. Split out because the
+ * by-id branch above stays byte-for-byte what it was before this ticket —
+ * keeping the new branch in its own function makes that diff obvious rather
+ * than interleaving both code paths in one body.
+ */
+async function fetchByDestinationNodeId(
+  experienceOptions: ByDestinationNodeIdExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  log: ReturnType<typeof createDebugLogger>,
+  resolveOptions: {
+    config: ResolverConfig;
+    metadata: Record<string, unknown> | undefined;
+    debug: boolean | undefined;
+    initialViewportId: string | undefined;
+  }
+): Promise<PortableRenderPlan | DestinationRedirectResult> {
+  const { spaceId, destinationId, nodeId } = experienceOptions;
+  const { config, metadata, debug, initialViewportId } = resolveOptions;
+
+  log.log('resolving destination experience by node id', { spaceId, destinationId, nodeId });
+
+  let response: ContentfulViewDelivery.DestinationExperienceResolutionResponse;
+  try {
+    response = await client.destination.resolveByNodeId(spaceId, destinationId, nodeId);
+  } catch (err) {
+    if (err instanceof ContentfulViewDelivery.NotFoundError) {
+      throw err;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new ExperienceFetchError(
+      `Failed to resolve Destination Node "${nodeId}" (space "${spaceId}", destination ` +
+        `"${destinationId}"): ${reason}. Check network connectivity, the access token, and ` +
+        `that the space/destination/node ids are correct.`,
+      { spaceId, experienceId: nodeId, cause: err }
+    );
+  }
+
+  if ('redirect' in response) {
+    log.log('destination resolved to a redirect', response.redirect);
+    return { redirect: response.redirect };
+  }
+
+  const [firstExperience] = response.experiences;
+  if (!firstExperience) {
+    throw new ExperienceFetchError(
+      `Destination "${destinationId}" resolved Node "${nodeId}" to zero Experiences ` +
+        `(space "${spaceId}"). Expected exactly one hydrated Experience or a redirect.`,
+      { spaceId, experienceId: nodeId }
+    );
+  }
+
+  const payload = toExperiencePayloadFromDestination(firstExperience.experience);
+  log.lazy('received raw payload', () => payload);
+
+  return resolveExperience(payload, config, {
+    metadata,
+    debug,
+    initialViewportId,
   });
 }

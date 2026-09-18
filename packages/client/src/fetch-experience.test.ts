@@ -6,9 +6,24 @@ import {
 import { ExperienceFetchError } from './errors.js';
 import { fetchExperience } from './fetch-experience.js';
 
-const { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap } = vi.hoisted(() => {
+const {
+  mockGet,
+  mockGetWithOverrides,
+  mockResolveByNodeId,
+  mockPayload,
+  mockDestinationExperience,
+  mockPlan,
+  mockSourceMap,
+} = vi.hoisted(() => {
   const mockPayload = {
     sys: { id: 'exp-1' },
+    viewports: [{ id: 'default', query: '*' }],
+    nodes: [{ sys: { urn: 'urn:ctfl:component:hero' }, content: {}, design: {}, slots: {} }],
+    errors: [],
+  };
+
+  const mockDestinationExperience = {
+    sys: { id: 'exp-2' },
     viewports: [{ id: 'default', query: '*' }],
     nodes: [{ sys: { urn: 'urn:ctfl:component:hero' }, content: {}, design: {}, slots: {} }],
     errors: [],
@@ -36,8 +51,19 @@ const { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap } = 
   const mockGetWithOverrides = vi
     .fn()
     .mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
+  const mockResolveByNodeId = vi
+    .fn()
+    .mockResolvedValue({ experiences: [{ path: '/', experience: mockDestinationExperience }] });
 
-  return { mockGet, mockGetWithOverrides, mockPayload, mockPlan, mockSourceMap };
+  return {
+    mockGet,
+    mockGetWithOverrides,
+    mockResolveByNodeId,
+    mockPayload,
+    mockDestinationExperience,
+    mockPlan,
+    mockSourceMap,
+  };
 });
 
 vi.mock('@contentful/experiences-sdk-core', () => ({
@@ -57,6 +83,9 @@ vi.mock('@contentful/experience-delivery', () => {
       experience: {
         get: mockGet,
         getWithOverrides: mockGetWithOverrides,
+      },
+      destination: {
+        resolveByNodeId: mockResolveByNodeId,
       },
     })),
     // Real package exposes `NotFoundError` under the `ContentfulViewDelivery`
@@ -426,5 +455,122 @@ describe('fetchExperience — source map', () => {
     const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0]!;
     expect(payloadArg.nodes).toEqual(mockPayload.nodes);
     expect(payloadArg.viewports).toEqual(mockPayload.viewports);
+  });
+});
+
+describe('fetchExperience — destinationId + nodeId', () => {
+  const destinationOptions = {
+    spaceId: 'space-1',
+    destinationId: 'dest-1',
+    nodeId: 'node-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveByNodeId.mockResolvedValue({
+      experiences: [{ path: '/', experience: mockDestinationExperience }],
+    });
+  });
+
+  it('calls client.destination.resolveByNodeId with spaceId, destinationId, nodeId', async () => {
+    await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+  });
+
+  it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    const result = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      mockDestinationExperience,
+      resolveOptions.config,
+      expect.anything()
+    );
+    expect(result).toEqual(mockPlan);
+  });
+
+  it('returns a redirect as a discriminated result, not a thrown error', async () => {
+    mockResolveByNodeId.mockResolvedValue({ redirect: { path: '/new-path' } });
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    const result = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(result).toEqual({ redirect: { path: '/new-path' } });
+    expect(resolveExperience).not.toHaveBeenCalled();
+  });
+
+  it('propagates NotFoundError from the delivery client to the caller undisturbed', async () => {
+    const notFound = new ContentfulViewDelivery.NotFoundError('destination not found');
+    mockResolveByNodeId.mockRejectedValue(notFound);
+
+    const rejection: unknown = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((e) => e);
+
+    expect(rejection).toBe(notFound);
+  });
+
+  it('wraps a non-NotFoundError resolution failure in ExperienceFetchError', async () => {
+    const networkError = new Error('fetch failed: ECONNRESET');
+    mockResolveByNodeId.mockRejectedValue(networkError);
+
+    const rejection: unknown = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((e) => e);
+
+    expect(rejection).toBeInstanceOf(ExperienceFetchError);
+    const error = rejection as ExperienceFetchError;
+    expect(error.cause).toBe(networkError);
+    expect(error.spaceId).toBe('space-1');
+    expect(error.environmentId).toBeUndefined();
+    expect(error.message).toContain('ECONNRESET');
+  });
+
+  it('throws ExperienceFetchError when the response has zero experiences and no redirect', async () => {
+    mockResolveByNodeId.mockResolvedValue({ experiences: [] });
+
+    const rejection: unknown = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((e) => e);
+
+    expect(rejection).toBeInstanceOf(ExperienceFetchError);
+    expect((rejection as ExperienceFetchError).message).toContain('zero Experiences');
+  });
+
+  it('rejects withSourceMap on destination-shaped options at compile time', () => {
+    // @ts-expect-error — withSourceMap is not a member of ByDestinationNodeIdExperienceOptions,
+    // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
+    // required destinationId/nodeId aren't part of that member either — a real compile error.
+    void fetchExperience(
+      { ...destinationOptions, withSourceMap: true },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+  });
+
+  it('rejects mixing experienceId with destinationId at compile time', () => {
+    // @ts-expect-error — experienceId and destinationId/nodeId belong to different
+    // members of the ExperienceOptions union; no combination of extra keys satisfies both.
+    void fetchExperience(
+      { ...destinationOptions, experienceId: 'exp-1' },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
   });
 });

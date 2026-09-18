@@ -11,7 +11,18 @@ export { ExperienceFetchError } from './errors.js';
 export { createClient } from './create-client.js';
 export type { CreateClientOptions } from './create-client.js';
 export { fetchExperience } from './fetch-experience.js';
-export { readSourceMap, toExperiencePayload } from './to-experience-payload.js';
+export {
+  readSourceMap,
+  toExperiencePayload,
+  toExperiencePayloadFromDestination,
+} from './to-experience-payload.js';
 export type { ExperienceResponse } from './to-experience-payload.js';
-export type { ExperienceOptions, ClientOptions, ResolveOptions } from './fetch-experience.js';
+export type {
+  ExperienceOptions,
+  ByIdExperienceOptions,
+  ByDestinationNodeIdExperienceOptions,
+  ClientOptions,
+  ResolveOptions,
+  DestinationRedirectResult,
+} from './fetch-experience.js';
 export { DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST } from './hosts.js';
