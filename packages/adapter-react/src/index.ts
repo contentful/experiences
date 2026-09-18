@@ -53,7 +53,15 @@ export type {
 } from './use-experience-plan';
 export type {
   LivePreviewClient,
+  PreviewSessionClientOptions,
+  PreviewSessionExperienceOptions,
   PreviewSessionOptions,
+  PreviewSessionResolveOptions,
+} from '@contentful/experiences-live-preview';
+export {
+  fetchPreviewSession,
+  PREVIEW_WEBSOCKET_HOST,
+  PreviewSessionFetchError,
 } from '@contentful/experiences-live-preview';
 
 // ─── Runtime context hooks ───────────────────────────────────────────────

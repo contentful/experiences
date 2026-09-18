@@ -49,7 +49,7 @@ The route ([`src/routes/[slug]/+page.server.ts`](./src/routes/[slug]/+page.serve
 
 Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
 
-The Contentful preview app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route starts the browser subscription and uses the Preview API for the initial fetch. `?preview=true` remains an explicit way to use the Preview API without a live session.
+The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
 ### Tokens summary
 

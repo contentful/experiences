@@ -7,7 +7,11 @@ import {
   isMainModule,
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
-import { NotFoundError, fetchExperience } from '@contentful/experiences-angular';
+import {
+  NotFoundError,
+  fetchExperience,
+  fetchPreviewSession,
+} from '@contentful/experiences-angular';
 import express from 'express';
 
 import { detectViewportFromUserAgent } from './app/lib/detect-viewport.js';
@@ -61,32 +65,39 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const environmentId = process.env['ENVIRONMENT_ID'] || 'master';
   const previewToken = process.env['CPA_TOKEN'];
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
-  const livePreview = Boolean(sessionId && previewToken);
+  const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
   const initialViewportId = detectViewportFromUserAgent(req.headers['user-agent'] ?? '');
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
   try {
-    const experience = await fetchExperience(
-      {
-        spaceId,
-        environmentId,
-        experienceId: slug,
-        locale,
-      },
-      {
-        accessToken,
-        previewToken,
-        preview: previewMode,
-      },
-      {
-        config: experienceConfig,
-        metadata,
-        debug,
-        initialViewportId,
-      }
-    );
+    const resolveOptions = {
+      config: experienceConfig,
+      metadata,
+      debug,
+      initialViewportId,
+    };
+    const experience = livePreview
+      ? await fetchPreviewSession(
+          { spaceId, environmentId, sessionId },
+          { previewToken },
+          resolveOptions
+        )
+      : await fetchExperience(
+          {
+            spaceId,
+            environmentId,
+            experienceId: slug,
+            locale,
+          },
+          {
+            accessToken,
+            previewToken,
+            preview: previewMode,
+          },
+          resolveOptions
+        );
 
     // The plan carries all of these. `debug` and `initialViewportId` are relayed
     // as well only so the page can demonstrate the renderer's override inputs.

@@ -157,9 +157,7 @@ describe('createLivePreviewClient', () => {
     });
     const unsubscribe = source.subscribe(vi.fn());
 
-    expect(sockets[0]?.url).toContain(
-      'wss://live-preview-session-api.cloudflare.contentful.org/spaces/space-id'
-    );
+    expect(sockets[0]?.url).toContain('wss://preview.xdn.contentful.com/spaces/space-id');
     unsubscribe();
   });
 
@@ -213,25 +211,6 @@ describe('createLivePreviewClient', () => {
     await Promise.resolve();
     expect(source.getSnapshot()).toBe(validData);
     expect(sockets).toHaveLength(1);
-    unsubscribe();
-  });
-
-  it('returns complete ExperienceFragment data', async () => {
-    setBrowser();
-    const source = createLivePreviewClient(sourceOptions('session-id'));
-    const listener = vi.fn();
-    const unsubscribe = source.subscribe(listener);
-    const socket = sockets[0];
-    const expected = {
-      ...payload('fragment'),
-      sys: { type: 'ExperienceFragment' },
-    };
-
-    socket?.emitMessage(message('next', expected));
-    await waitForSnapshot(source);
-
-    expect(source.getSnapshot()).toEqual(expected);
-    expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
   });
 

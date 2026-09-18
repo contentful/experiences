@@ -1,7 +1,8 @@
 import { createDebugLogger, type ExperiencePayload } from '@contentful/experiences-sdk-core';
+import { isErrorPayload, isExperiencePayload, isRecord } from './experience-payload.js';
 import { createWebSocketConnection, type WebSocketCloseEvent } from './websocket.js';
+import { previewSessionSubscribeUrl } from './preview-session-url.js';
 
-const DEFAULT_SESSION_HOST = 'wss://live-preview-session-api.cloudflare.contentful.org';
 const RETRY_DELAYS_MS: readonly number[] = [100, 500, 1000];
 
 export type PreviewSessionOptions = {
@@ -9,6 +10,10 @@ export type PreviewSessionOptions = {
   environmentId: string;
   previewToken?: string;
   sessionId?: string;
+  /**
+   * Custom WebSocket URL for Preview Session subscriptions (staging, proxy, per-region).
+   * Omit to use the production Preview Session WebSocket host.
+   */
   sessionHost?: string;
   debug?: boolean;
 };
@@ -23,24 +28,6 @@ type PreviewSessionHandlers = {
   onUpdate: (experience: ExperiencePayload) => void;
   onOpen?: () => void;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isExperiencePayload(value: unknown): value is ExperiencePayload {
-  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.viewports)) {
-    return false;
-  }
-
-  if (!isRecord(value.sys) || Array.isArray(value.sys)) return false;
-  return value.sys.type === 'Experience' || value.sys.type === 'ExperienceFragment';
-}
-
-function isErrorPayload(value: unknown): boolean {
-  if (!isRecord(value) || !isRecord(value.sys) || Array.isArray(value.sys)) return false;
-  return value.sys.type === 'Error' && typeof value.sys.id === 'string';
-}
 
 function parseMessage(data: unknown): SessionMessage {
   let message: unknown = data;
@@ -70,30 +57,6 @@ function parseMessage(data: unknown): SessionMessage {
   return { kind: 'unknown' };
 }
 
-function buildWebSocketUrl(
-  options: PreviewSessionOptions,
-  sessionId: string,
-  previewToken: string
-): string {
-  const url = new globalThis.URL(options.sessionHost ?? DEFAULT_SESSION_HOST);
-
-  const basePath = url.pathname.replace(/\/+$/, '');
-  const route = [
-    'spaces',
-    encodeURIComponent(options.spaceId),
-    'environments',
-    encodeURIComponent(options.environmentId),
-    'preview_sessions',
-    encodeURIComponent(sessionId),
-    'subscribe',
-  ].join('/');
-  url.pathname = `${basePath}/${route}`;
-  url.searchParams.set('access_token', previewToken);
-  url.hash = '';
-
-  return url.toString();
-}
-
 function isSessionEnded(event: WebSocketCloseEvent): boolean {
   if (event.code !== 1000) return false;
   const reason = event.reason.trim().toLowerCase();
@@ -110,7 +73,7 @@ export function subscribeToPreviewSession(
   if (sessionId === undefined || previewToken === undefined) return () => undefined;
 
   const connection = createWebSocketConnection({
-    url: buildWebSocketUrl(options, sessionId, previewToken),
+    url: previewSessionSubscribeUrl({ ...options, sessionId, previewToken }),
     retry: (failureCount, event) => failureCount < RETRY_DELAYS_MS.length && !isSessionEnded(event),
     retryDelay: (retryAttempt) =>
       RETRY_DELAYS_MS[retryAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] ?? 0,
