@@ -21,6 +21,7 @@ export type {
   ExperienceOptions,
   ByIdExperienceOptions,
   ByDestinationNodeIdExperienceOptions,
+  ByDestinationPathExperienceOptions,
   ClientOptions,
   ResolveOptions,
   DestinationRedirectResult,

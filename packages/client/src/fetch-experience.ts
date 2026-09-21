@@ -41,7 +41,23 @@ export type ByDestinationNodeIdExperienceOptions = {
   nodeId: string;
 };
 
-export type ExperienceOptions = ByIdExperienceOptions | ByDestinationNodeIdExperienceOptions;
+/**
+ * Resolve an Experience by the absolute path a marketer wired up to a
+ * Destination Node, instead of a node id directly. Same scoping as
+ * `ByDestinationNodeIdExperienceOptions` — no `environmentId`, `locale`, or
+ * `withSourceMap`.
+ */
+export type ByDestinationPathExperienceOptions = {
+  spaceId: string;
+  destinationId: string;
+  /** Absolute path to resolve. Must start with `/`. */
+  path: string;
+};
+
+export type ExperienceOptions =
+  | ByIdExperienceOptions
+  | ByDestinationNodeIdExperienceOptions
+  | ByDestinationPathExperienceOptions;
 
 /**
  * A Destination resolution that the app must act on as control flow — honor
@@ -116,6 +132,12 @@ export async function fetchExperience(
 ): Promise<PortableRenderPlan | DestinationRedirectResult>;
 // eslint-disable-next-line no-redeclare -- see above
 export async function fetchExperience(
+  experienceOptions: ByDestinationPathExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
+): Promise<PortableRenderPlan | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- see above
+export async function fetchExperience(
   experienceOptions: ExperienceOptions,
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
@@ -142,13 +164,24 @@ export async function fetchExperience(
     log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
   }
 
-  if ('destinationId' in experienceOptions) {
-    return fetchByDestinationNodeId(experienceOptions, client, log, {
-      config,
-      metadata,
-      debug,
-      initialViewportId,
-    });
+  if ('nodeId' in experienceOptions) {
+    const { spaceId, destinationId, nodeId } = experienceOptions;
+    return fetchByDestination(
+      { spaceId, destinationId, locator: nodeId },
+      () => client.destination.resolveByNodeId(spaceId, destinationId, nodeId),
+      log,
+      { config, metadata, debug, initialViewportId }
+    );
+  }
+
+  if ('path' in experienceOptions) {
+    const { spaceId, destinationId, path } = experienceOptions;
+    return fetchByDestination(
+      { spaceId, destinationId, locator: path },
+      () => client.destination.resolveByPath(spaceId, destinationId, { path }),
+      log,
+      { config, metadata, debug, initialViewportId }
+    );
   }
 
   const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
@@ -208,14 +241,19 @@ export async function fetchExperience(
 }
 
 /**
- * Destination-shaped branch of `fetchExperience`. Split out because the
- * by-id branch above stays byte-for-byte what it was before this ticket —
- * keeping the new branch in its own function makes that diff obvious rather
- * than interleaving both code paths in one body.
+ * Shared response-handling for both destination-shaped `fetchExperience`
+ * branches (by node id, by path). Split out from the by-id branch above
+ * because that one stays byte-for-byte what it was before this ticket —
+ * keeping the new logic in its own function makes that diff obvious rather
+ * than interleaving both code paths in one body. `resolve` is the one thing
+ * that differs between the two callers (which delivery-client method to
+ * call); everything after the response comes back — redirect-as-return-value,
+ * the zero-experiences guard, feeding the hydrated payload into
+ * `resolveExperience` — is identical, so it lives here once.
  */
-async function fetchByDestinationNodeId(
-  experienceOptions: ByDestinationNodeIdExperienceOptions,
-  client: ContentfulViewDeliveryClient,
+async function fetchByDestination(
+  identity: { spaceId: string; destinationId: string; locator: string },
+  resolve: () => Promise<ContentfulViewDelivery.DestinationExperienceResolutionResponse>,
   log: ReturnType<typeof createDebugLogger>,
   resolveOptions: {
     config: ResolverConfig;
@@ -224,24 +262,24 @@ async function fetchByDestinationNodeId(
     initialViewportId: string | undefined;
   }
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-  const { spaceId, destinationId, nodeId } = experienceOptions;
+  const { spaceId, destinationId, locator } = identity;
   const { config, metadata, debug, initialViewportId } = resolveOptions;
 
-  log.log('resolving destination experience by node id', { spaceId, destinationId, nodeId });
+  log.log('resolving destination experience', { spaceId, destinationId, locator });
 
   let response: ContentfulViewDelivery.DestinationExperienceResolutionResponse;
   try {
-    response = await client.destination.resolveByNodeId(spaceId, destinationId, nodeId);
+    response = await resolve();
   } catch (err) {
     if (err instanceof ContentfulViewDelivery.NotFoundError) {
       throw err;
     }
     const reason = err instanceof Error ? err.message : String(err);
     throw new ExperienceFetchError(
-      `Failed to resolve Destination Node "${nodeId}" (space "${spaceId}", destination ` +
-        `"${destinationId}"): ${reason}. Check network connectivity, the access token, and ` +
-        `that the space/destination/node ids are correct.`,
-      { spaceId, experienceId: nodeId, cause: err }
+      `Failed to resolve Destination "${destinationId}" at "${locator}" (space "${spaceId}"): ` +
+        `${reason}. Check network connectivity, the access token, and that the space/` +
+        `destination/node-or-path values are correct.`,
+      { spaceId, experienceId: locator, cause: err }
     );
   }
 
@@ -253,9 +291,9 @@ async function fetchByDestinationNodeId(
   const [firstExperience] = response.experiences;
   if (!firstExperience) {
     throw new ExperienceFetchError(
-      `Destination "${destinationId}" resolved Node "${nodeId}" to zero Experiences ` +
+      `Destination "${destinationId}" resolved "${locator}" to zero Experiences ` +
         `(space "${spaceId}"). Expected exactly one hydrated Experience or a redirect.`,
-      { spaceId, experienceId: nodeId }
+      { spaceId, experienceId: locator }
     );
   }
 
