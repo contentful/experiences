@@ -97,15 +97,16 @@ const customClient = createClient({
 });
 ```
 
-#### `DELIVERY_HOST` / `PREVIEW_HOST`
+#### `DELIVERY_HOST` / `PREVIEW_HOST` / `PREVIEW_WEBSOCKET_HOST`
 
-Named constants for the canonical XDA delivery and preview URLs. Use them so you don't have to hardcode the URL strings in your app.
+Named constants for the canonical delivery, preview, and Preview Session WebSocket URLs. Use them so you don't have to hardcode the URL strings in your app.
 
 ```ts
-import { DELIVERY_HOST, PREVIEW_HOST } from '@contentful/experiences-react';
+import { DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST } from '@contentful/experiences-react';
 
 DELIVERY_HOST; // 'https://xdn.contentful.com'
 PREVIEW_HOST; // 'https://preview.xdn.contentful.com'
+PREVIEW_WEBSOCKET_HOST; // 'wss://preview.xdn.contentful.com'
 ```
 
 `createClient` is the fixed-mode path — one client, one token, one host. If you need to flip between delivery and preview per request (e.g. an `isPreview` URL param), use `fetchExperience`'s inline-credentials form with `preview: boolean` instead of pre-building a client here. See ["Preview mode"](#preview-mode) above.
