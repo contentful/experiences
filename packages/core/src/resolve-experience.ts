@@ -403,9 +403,13 @@ export async function resolveExperience(
   const payloadNodes = isPlainPayload
     ? ensureArray<ExperienceNode>(payload.nodes, 'nodes', log, diagnostics)
     : [];
-  const viewports = isPlainPayload
-    ? ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics)
-    : [];
+  // `viewports` is being removed from the API, so its absence is expected, not
+  // malformed — only warn via `ensureArray` when the field is present but not
+  // an array. Otherwise default to `[]` silently.
+  const viewports =
+    isPlainPayload && payload.viewports !== undefined
+      ? ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics)
+      : [];
 
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.

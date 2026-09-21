@@ -51,6 +51,11 @@ export interface RenderContext extends ExperienceContext {
  * always matches. The viewport order encodes the cascade direction —
  * desktop-first (descending) or mobile-first (ascending).
  */
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action is needed: design property values arrive flat. Will not be
+ * removed before 2026-10-06.
+ */
 export interface ViewportDef {
   id: string;
   query: string;
@@ -85,6 +90,11 @@ export interface DesignToken {
  */
 export type ResolveToken = (ref: DesignToken) => unknown;
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action is needed: design property values arrive flat. Will not be
+ * removed before 2026-10-06.
+ */
 export interface ValuesByViewport {
   type: 'ValuesByViewport';
   values: Record<string, ManualDesignValue | DesignToken>;
@@ -201,7 +211,11 @@ export interface ExperienceSourceMap {
  * `@contentful/experience-delivery` sends on every request.
  */
 export interface ExperiencePayload {
-  viewports: ViewportDef[];
+  /**
+   * @deprecated Absent once the API stops sending `viewports`. `resolveExperience`
+   * defaults to `[]` when this is missing.
+   */
+  viewports?: ViewportDef[];
   nodes: ExperienceNode[];
   errors?: unknown[];
   extensions?: unknown;

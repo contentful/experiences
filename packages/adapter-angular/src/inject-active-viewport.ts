@@ -22,6 +22,11 @@ import { DestroyRef, type Signal, afterNextRender, computed, inject, signal } fr
 import { createMediaQueryMatchers, getViewportIndex } from '@contentful/experiences-design';
 import type { ViewportDef } from '@contentful/experiences-sdk-core';
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs, with no
+ * direct replacement — use CSS media queries or `window.matchMedia` instead.
+ * Will not be removed before 2026-10-06.
+ */
 export interface InjectActiveViewportResult {
   readonly activeViewportIndex: Signal<number>;
 }
@@ -41,6 +46,10 @@ export interface InjectActiveViewportResult {
  *
  *   readonly experience = injectExperience();
  *   private readonly tracker = injectActiveViewport(() => this.experience().viewports);
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs, with no
+ * direct replacement — use CSS media queries or `window.matchMedia` instead.
+ * Will not be removed before 2026-10-06.
  */
 export function injectActiveViewport(
   viewports: () => ViewportDef[],

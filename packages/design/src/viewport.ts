@@ -19,6 +19,10 @@ const MEDIA_QUERY_REGEXP = /^(<|>)(\d+)(px|cm|mm|in|pt|pc)$/;
  * Convert a Contentful viewport `query` string into a CSS media query.
  * Returns `undefined` for the wildcard "*" (always matches; no media query needed)
  * or for any unrecognized format.
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action is needed: this helper is only used by the deprecated
+ * active-viewport hooks. Will not be removed before 2026-10-06.
  */
 export function toCssMediaQuery(viewport: ViewportDef): string | undefined {
   const { query } = viewport;

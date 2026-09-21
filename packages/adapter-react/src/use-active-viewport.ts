@@ -45,10 +45,20 @@ function useMediaQueryMatchers(viewports: ViewportDef[]): boolean[] {
   return matches;
 }
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs, with no
+ * direct replacement — use CSS media queries or `window.matchMedia` instead.
+ * Will not be removed before 2026-10-06.
+ */
 export interface UseActiveViewportResult {
   activeViewportIndex: number;
 }
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs, with no
+ * direct replacement — use CSS media queries or `window.matchMedia` instead.
+ * Will not be removed before 2026-10-06.
+ */
 export function useActiveViewport(
   viewports: ViewportDef[],
   initialViewportId?: string
