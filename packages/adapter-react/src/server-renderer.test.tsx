@@ -1174,6 +1174,30 @@ describe('ServerExperienceRenderer — server pre-resolved design values', () =>
   });
 });
 
+describe('ServerExperienceRenderer — absent payload.viewports', () => {
+  it('renders flat design values when the payload has no viewports field', async () => {
+    const Probe = () => {
+      const design = useDesignValues();
+      return <div data-padding={design.cfPadding as string} />;
+    };
+    const cfg: Config = { components: { probe: Probe } };
+    const plan = await resolveExperience(
+      {
+        nodes: [
+          componentNode('probe', {
+            id: 'p',
+            designProperties: { cfPadding: m('40px') },
+          }),
+        ],
+      } as ExperiencePayload,
+      cfg
+    );
+    expect(plan.viewports).toEqual([]);
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(html).toContain('data-padding="40px"');
+  });
+});
+
 describe('toCss', () => {
   it('converts bare (non-cf) CSS keys — the shape real payloads use', () => {
     expect(toCss({ fontSize: '20px', backgroundColor: '#4f39f6' })).toEqual({

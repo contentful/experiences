@@ -9,8 +9,14 @@
 import type { DesignPropValue, ResolveToken, ViewportDef } from '@contentful/experiences-sdk-core';
 import { applyTokenResolver, resolveDesignProperties } from '@contentful/experiences-sdk-core';
 
-// Use the server-resolved `props.design` when the active viewport matches the
-// fallback; otherwise recompute the cascade from raw `props.designRaw`.
+/**
+ * Use the server-resolved `props.design` when the active viewport matches the
+ * fallback; otherwise recompute the cascade from raw `props.designRaw`.
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action needed — with a single viewport, the active and fallback
+ * indices always match and this always returns `props.design`. Will be removed no earlier than 2026-10-16.
+ */
 export function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },
   viewports: ViewportDef[],

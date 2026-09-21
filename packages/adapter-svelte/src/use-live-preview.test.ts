@@ -22,7 +22,7 @@ const initialPlan: PortableRenderPlan = {
       slots: {},
     },
   ],
-  viewports: payload.viewports,
+  viewports: payload.viewports!,
   metadata: {},
   debug: false,
   diagnostics: [],

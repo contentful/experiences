@@ -14,6 +14,10 @@
 import type { ViewportDef } from '@contentful/experiences-sdk-core';
 import { createMediaQueryMatchers, getViewportIndex } from '@contentful/experiences-design';
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs. No direct
+ * replacement — use CSS media queries or `window.matchMedia`. Will be removed no earlier than 2026-10-16.
+ */
 export interface UseActiveViewportResult {
   readonly activeViewportIndex: number;
 }
@@ -25,6 +29,9 @@ export interface UseActiveViewportResult {
  *
  * Must be called at the top level of a `.svelte` component or a function
  * that's itself called during component setup (because of `$effect`).
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No direct
+ * replacement — use CSS media queries or `window.matchMedia`. Will be removed no earlier than 2026-10-16.
  */
 export function useActiveViewport(
   viewports: ViewportDef[],

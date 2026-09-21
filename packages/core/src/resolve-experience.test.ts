@@ -1049,7 +1049,7 @@ describe('resolveExperience — diagnostics', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload = {
-        viewports: undefined,
+        viewports: 'not-an-array',
         nodes: [componentNode('contentful-heading', { id: 'h' })],
       } as unknown as ExperiencePayload;
       const plan = await resolveExperience(payload, emptyConfig);
@@ -1059,6 +1059,22 @@ describe('resolveExperience — diagnostics', () => {
       expect(plan.diagnostics[0]).toBeInstanceOf(Error);
       expect(plan.diagnostics[0]!.message).toContain('"viewports"');
       expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('falls back to an empty viewport list without warning when payload.viewports is absent', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const payload = {
+        nodes: [componentNode('contentful-heading', { id: 'h' })],
+      } as unknown as ExperiencePayload;
+      const plan = await resolveExperience(payload, emptyConfig);
+      expect(plan.viewports).toEqual([]);
+      expect(plan.fallbackViewportIndex).toBe(0);
+      expect(plan.diagnostics).toHaveLength(0);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

@@ -807,6 +807,26 @@ describe('ServerExperienceRenderer — server pre-resolved design values', () =>
   });
 });
 
+describe('ServerExperienceRenderer — absent payload.viewports', () => {
+  it('renders flat design values when the payload has no viewports field', async () => {
+    const config: Config = { components: { heading: HeadingFixture } };
+    const plan = await resolveExperience(
+      {
+        nodes: [
+          componentNode('heading', {
+            id: 'h',
+            designProperties: { cfFontSize: m('32px') },
+          }),
+        ],
+      } as unknown as ExperiencePayload,
+      config
+    );
+    expect(plan.viewports).toEqual([]);
+    const { html } = render(plan, { config });
+    expect(html).toContain('data-font-size="32px"');
+  });
+});
+
 describe('toCss (Angular)', () => {
   it('converts bare (non-cf) CSS keys — the shape real payloads use', () => {
     expect(toCss({ fontSize: '20px', backgroundColor: '#4f39f6' })).toEqual({

@@ -18,7 +18,13 @@ import type {
   ViewportDef,
 } from './types.js';
 
-/** Viewport id → index. Returns 0 (the wildcard viewport) when unknown. */
+/**
+ * Viewport id → index. Returns 0 (the wildcard viewport) when unknown.
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action needed — design property values arrive flat and this
+ * resolution step is skipped automatically. Will be removed no earlier than 2026-10-16.
+ */
 export function getViewportIndex(viewports: ViewportDef[], viewportId?: string): number {
   if (!viewportId) return 0;
   const index = viewports.findIndex((v) => v.id === viewportId);
@@ -49,7 +55,13 @@ function resolveValuesByViewport(
   return undefined;
 }
 
-/** Resolve one design property to its render-time value (cascade + unwrap). */
+/**
+ * Resolve one design property to its render-time value (cascade + unwrap).
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action needed — flat values already return early here and this
+ * cascade step is skipped automatically. Will be removed no earlier than 2026-10-16.
+ */
 export function getValueForViewport(
   prop: DesignPropValue | undefined,
   viewports: ViewportDef[],

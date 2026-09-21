@@ -15,6 +15,11 @@ import type { ViewportDef } from '@contentful/experiences-sdk-core';
 
 import { toCssMediaQuery } from './viewport';
 
+/**
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action needed — this type is only used by the deprecated
+ * active-viewport hooks. Will be removed no earlier than 2026-10-16.
+ */
 export interface MediaQueryMatcher {
   index: number;
   signal: MediaQueryList;
@@ -27,6 +32,10 @@ export interface MediaQueryMatcher {
  * Outside the browser the matcher list comes back empty and only the wildcard
  * viewport is marked as matching, so callers stay SSR-safe without their own
  * `typeof window` guard.
+ *
+ * @deprecated Viewports are being removed from the Experiences APIs. No
+ * customer action needed — this helper is only used by the deprecated
+ * active-viewport hooks. Will be removed no earlier than 2026-10-16.
  */
 export function createMediaQueryMatchers(
   viewports: ViewportDef[]

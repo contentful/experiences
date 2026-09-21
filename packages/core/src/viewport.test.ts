@@ -44,6 +44,11 @@ describe('getViewportIndex', () => {
   it('returns 0 for an unknown viewport id', () => {
     expect(getViewportIndex(VIEWPORTS, 'nope')).toBe(0);
   });
+
+  it('returns 0 for an empty viewports array instead of throwing', () => {
+    expect(getViewportIndex([])).toBe(0);
+    expect(getViewportIndex([], 'desktop')).toBe(0);
+  });
 });
 
 describe('getValueForViewport', () => {
@@ -91,6 +96,14 @@ describe('getValueForViewport', () => {
       type: 'DesignToken',
       value: 'color.primary',
     });
+  });
+
+  it('unwraps a flat ManualDesignValue even with an empty viewports array', () => {
+    expect(getValueForViewport(m('40px'), [], 0)).toBe('40px');
+  });
+
+  it('cascades a ValuesByViewport keyed by "_" against an empty viewports array', () => {
+    expect(getValueForViewport(vbv({ _: m('40px') }), [], 0)).toBeUndefined();
   });
 });
 
