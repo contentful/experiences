@@ -39,8 +39,7 @@ export function readSourceMap(response: ExperienceResponse): ExperienceSourceMap
  *
  * Same cast rationale as `toExperiencePayload` above, for the destination
  * resolution endpoints' `HydratedExperience` shape instead of the by-id
- * endpoints' `HydratedExperienceView`. Already a hydrated payload — no URN
- * parsing needed here (unlike the sitemap endpoint's child paths).
+ * endpoints' `HydratedExperienceView`.
  */
 export function toExperiencePayloadFromDestination(
   experience: ContentfulViewDelivery.HydratedExperience

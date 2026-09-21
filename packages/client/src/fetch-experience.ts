@@ -29,11 +29,9 @@ export type ByIdExperienceOptions = {
 };
 
 /**
- * Resolve an Experience by the Destination Node a marketer wired up, instead
- * of a caller-supplied `experienceId`. No `environmentId` or `locale` — the
- * destinations delivery endpoints are space-scoped only and have no locale
- * param, unlike the by-id path. No `withSourceMap` either — the destinations
- * endpoints expose `extensions.personalization`, not `extensions.sourceMap`.
+ * Resolve an Experience by the Destination Node instead of `experienceId`
+ * The destinations delivery endpoints are space-scoped only and have no locale
+ * param, unlike the by-id path.
  */
 export type ByDestinationNodeIdExperienceOptions = {
   spaceId: string;
@@ -42,10 +40,9 @@ export type ByDestinationNodeIdExperienceOptions = {
 };
 
 /**
- * Resolve an Experience by the absolute path a marketer wired up to a
+ * Resolve an Experience by the absolute path wired up to a
  * Destination Node, instead of a node id directly. Same scoping as
- * `ByDestinationNodeIdExperienceOptions` — no `environmentId`, `locale`, or
- * `withSourceMap`.
+ * `ByDestinationNodeIdExperienceOptions` — no `environmentId` or `locale`.
  */
 export type ByDestinationPathExperienceOptions = {
   spaceId: string;
@@ -55,9 +52,7 @@ export type ByDestinationPathExperienceOptions = {
 };
 
 export type ExperienceOptions =
-  | ByIdExperienceOptions
-  | ByDestinationNodeIdExperienceOptions
-  | ByDestinationPathExperienceOptions;
+  ByIdExperienceOptions | ByDestinationNodeIdExperienceOptions | ByDestinationPathExperienceOptions;
 
 /**
  * A Destination resolution that the app must act on as control flow — honor
@@ -242,14 +237,7 @@ export async function fetchExperience(
 
 /**
  * Shared response-handling for both destination-shaped `fetchExperience`
- * branches (by node id, by path). Split out from the by-id branch above
- * because that one stays byte-for-byte what it was before this ticket —
- * keeping the new logic in its own function makes that diff obvious rather
- * than interleaving both code paths in one body. `resolve` is the one thing
- * that differs between the two callers (which delivery-client method to
- * call); everything after the response comes back — redirect-as-return-value,
- * the zero-experiences guard, feeding the hydrated payload into
- * `resolveExperience` — is identical, so it lives here once.
+ * branches (by node id, by path).
  */
 async function fetchByDestination(
   identity: { spaceId: string; destinationId: string; locator: string },
