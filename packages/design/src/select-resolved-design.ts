@@ -14,8 +14,9 @@ import { applyTokenResolver, resolveDesignProperties } from '@contentful/experie
  * fallback; otherwise recompute the cascade from raw `props.designRaw`.
  *
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — with a single viewport, the active and fallback
- * indices always match and this always returns `props.design`. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: with a single viewport, the active and fallback
+ * indices always match, so this always returns `props.design`. Will not be
+ * removed before 2026-10-06.
  */
 export function selectResolvedDesign(
   props: { design: Record<string, unknown>; designRaw: Record<string, DesignPropValue> },

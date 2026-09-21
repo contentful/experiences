@@ -22,8 +22,9 @@ import type {
  * Viewport id → index. Returns 0 (the wildcard viewport) when unknown.
  *
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — design property values arrive flat and this
- * resolution step is skipped automatically. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: design property values arrive flat, so this
+ * resolution step is skipped automatically. Will not be removed before
+ * 2026-10-06.
  */
 export function getViewportIndex(viewports: ViewportDef[], viewportId?: string): number {
   if (!viewportId) return 0;
@@ -59,8 +60,9 @@ function resolveValuesByViewport(
  * Resolve one design property to its render-time value (cascade + unwrap).
  *
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — flat values already return early here and this
- * cascade step is skipped automatically. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: flat values already return early here, so this
+ * cascade step is skipped automatically. Will not be removed before
+ * 2026-10-06.
  */
 export function getValueForViewport(
   prop: DesignPropValue | undefined,

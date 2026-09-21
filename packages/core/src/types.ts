@@ -53,7 +53,8 @@ export interface RenderContext extends ExperienceContext {
  */
 /**
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — design property values arrive flat. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: design property values arrive flat. Will not be
+ * removed before 2026-10-06.
  */
 export interface ViewportDef {
   id: string;
@@ -91,7 +92,8 @@ export type ResolveToken = (ref: DesignToken) => unknown;
 
 /**
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — design property values arrive flat. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: design property values arrive flat. Will not be
+ * removed before 2026-10-06.
  */
 export interface ValuesByViewport {
   type: 'ValuesByViewport';
@@ -210,7 +212,7 @@ export interface ExperienceSourceMap {
  */
 export interface ExperiencePayload {
   /**
-   * Absent once the API stops sending `viewports`. `resolveExperience`
+   * @deprecated Absent once the API stops sending `viewports`. `resolveExperience`
    * defaults to `[]` when this is missing.
    */
   viewports?: ViewportDef[];

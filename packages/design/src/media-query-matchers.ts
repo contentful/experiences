@@ -17,8 +17,8 @@ import { toCssMediaQuery } from './viewport';
 
 /**
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — this type is only used by the deprecated
- * active-viewport hooks. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: this type is only used by the deprecated
+ * active-viewport hooks. Will not be removed before 2026-10-06.
  */
 export interface MediaQueryMatcher {
   index: number;
@@ -34,8 +34,8 @@ export interface MediaQueryMatcher {
  * `typeof window` guard.
  *
  * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action needed — this helper is only used by the deprecated
- * active-viewport hooks. Will be removed no earlier than 2026-10-16.
+ * customer action is needed: this helper is only used by the deprecated
+ * active-viewport hooks. Will not be removed before 2026-10-06.
  */
 export function createMediaQueryMatchers(
   viewports: ViewportDef[]
