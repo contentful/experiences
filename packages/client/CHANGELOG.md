@@ -1,3 +1,9 @@
+## 0.4.4 (2026-09-21)
+
+### 🩹 Fixes
+
+- **client:** publish websocket host export [SPA-5290] ([#197](https://github.com/contentful/experiences/pull/197))
+
 ## 0.4.3 (2026-09-11)
 
 ### 🧱 Updated Dependencies
