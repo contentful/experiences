@@ -15,6 +15,7 @@ export interface UseLivePreviewOptions {
 
 export interface UseLivePreviewResult {
   readonly data: PortableRenderPlan | undefined;
+  readonly error: Error | undefined;
 }
 
 export function useLivePreview(options: UseLivePreviewOptions): UseLivePreviewResult {
@@ -23,9 +24,11 @@ export function useLivePreview(options: UseLivePreviewOptions): UseLivePreviewRe
     initialPayload: options.initialPayload,
   });
 
-  return useExperiencePlan({
+  const plan = useExperiencePlan({
     payload: livePreview.data,
     initialPlan: options.initialPlan,
     resolveOptions: options.resolveOptions,
   });
+
+  return { data: plan.data, error: livePreview.error };
 }

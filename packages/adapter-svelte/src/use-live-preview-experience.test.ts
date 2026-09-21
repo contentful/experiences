@@ -1,4 +1,5 @@
 import { render } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -160,6 +161,22 @@ describe('useLivePreviewExperience', () => {
         status: 'live',
       },
       '*'
+    );
+  });
+
+  it('exposes a connection error after retries are exhausted', async () => {
+    vi.useFakeTimers();
+    const view = render(LivePreviewExperienceProbe, { props: { options: options() } });
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      FakeWebSocket.instances.at(-1)?.emitClose({ code: 1006, reason: 'network' });
+      vi.runOnlyPendingTimers();
+    }
+    FakeWebSocket.instances.at(-1)?.emitClose({ code: 1006, reason: 'network' });
+    await tick();
+
+    expect(view.container.querySelector('output')?.dataset.error).toBe(
+      'LivePreviewConnectionError'
     );
   });
 

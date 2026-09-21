@@ -31,6 +31,7 @@ export function createWebSocketConnection(options: {
   retry?: number | ((failureCount: number, event: WebSocketCloseEvent) => boolean);
   retryDelay?: number | ((retryAttempt: number, event: WebSocketCloseEvent) => number);
   WebSocket?: WebSocketConstructor;
+  onFailure?: (error: unknown) => void;
 }): WebSocketConnection {
   const WS = options.WebSocket ?? (globalThis.WebSocket as WebSocketConstructor | undefined);
   if (!WS) throw new Error('WebSocket constructor is not available in this runtime.');
@@ -93,9 +94,10 @@ export function createWebSocketConnection(options: {
       if (closed) return;
       try {
         connect();
-      } catch {
+      } catch (error: unknown) {
         closed = true;
         clearHandlers();
+        options.onFailure?.(error);
       }
     }, delay);
   };

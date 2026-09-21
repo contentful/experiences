@@ -30,6 +30,10 @@ class FakeWebSocket {
     this.onopen?.({ type: 'open' });
   }
 
+  emitClose(code = 1000, reason = ''): void {
+    this.onclose?.({ code, reason });
+  }
+
   emitMessage(data: unknown): void {
     this.onmessage?.({ data });
   }
@@ -97,8 +101,12 @@ function RawLivePreviewProbe({
 }: {
   options: UseLivePreviewExperienceOptions;
 }): ReactElement {
-  const { data } = useLivePreviewExperience(options);
-  return <output>{(data?.nodes[0]?.contentProperties?.title as string) ?? ''}</output>;
+  const { data, error } = useLivePreviewExperience(options);
+  return (
+    <output data-error={error?.name ?? ''}>
+      {(data?.nodes[0]?.contentProperties?.title as string) ?? ''}
+    </output>
+  );
 }
 
 function LivePreviewProbe({ options }: { options: UseLivePreviewOptions }): ReactElement {
@@ -225,6 +233,25 @@ describe('useLivePreview', () => {
       },
       '*'
     );
+  });
+
+  it('exposes a connection error after retries are exhausted', async () => {
+    vi.useFakeTimers();
+    ({ container, root } = renderRoot());
+
+    await act(async () => {
+      root!.render(<RawLivePreviewProbe options={rawOptions()} />);
+    });
+
+    await act(async () => {
+      for (let retry = 0; retry < 3; retry += 1) {
+        FakeWebSocket.instances.at(-1)?.emitClose(1006, 'network');
+        vi.runOnlyPendingTimers();
+      }
+      FakeWebSocket.instances.at(-1)?.emitClose(1006, 'network');
+    });
+
+    expect(container.querySelector('output')?.dataset.error).toBe('LivePreviewConnectionError');
   });
 
   it('sends a new status when the live-preview configuration changes', async () => {

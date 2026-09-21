@@ -23,3 +23,10 @@ export class PreviewSessionFetchError extends Error {
     this.sessionId = options.sessionId;
   }
 }
+
+export class LivePreviewConnectionError extends Error {
+  constructor() {
+    super('Live Preview connection failed.');
+    this.name = 'LivePreviewConnectionError';
+  }
+}

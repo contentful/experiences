@@ -136,7 +136,7 @@ const livePreview = useLivePreview({
 <ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
 ```
 
-`livePreview.data` is the current `PortableRenderPlan`. The hook keeps the initial or last valid plan while a Preview Session update is received and resolved. Svelte exposes the same `useLivePreview` API through a getter. Angular exposes `injectLivePreview`, also through a getter.
+`livePreview.data` is the current `PortableRenderPlan`. The hook keeps the initial or last valid plan while a Preview Session update is received and resolved. `livePreview.error` contains an error when the live-preview connection fails, while the last valid data remains available. Svelte exposes the same `useLivePreview` API through a getter. Angular exposes `injectLivePreview`, also through a getter.
 
 Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app needs the raw Experience payload. For framework-neutral code, use `createLivePreviewClient` from `@contentful/experiences-live-preview`.
 

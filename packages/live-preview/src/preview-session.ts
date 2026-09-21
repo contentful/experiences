@@ -2,6 +2,7 @@ import { createDebugLogger, type ExperiencePayload } from '@contentful/experienc
 import { isErrorPayload, isExperiencePayload, isRecord } from './experience-payload.js';
 import { createWebSocketConnection, type WebSocketCloseEvent } from './websocket.js';
 import { previewSessionSubscribeUrl } from './preview-session-url.js';
+import { LivePreviewConnectionError } from './errors.js';
 
 const RETRY_DELAYS_MS: readonly number[] = [100, 500, 1000];
 
@@ -31,6 +32,7 @@ type SessionMessage =
 type PreviewSessionHandlers = {
   onUpdate: (experience: ExperiencePayload) => void;
   onOpen?: () => void;
+  onError?: (error: LivePreviewConnectionError) => void;
 };
 
 function parseMessage(data: unknown): SessionMessage {
@@ -73,14 +75,23 @@ export function subscribeToPreviewSession(
 ): () => void {
   const log = createDebugLogger(options.debug, 'live-preview');
   const { sessionId, previewToken } = options;
-  const { onOpen, onUpdate } = handlers;
+  const { onError, onOpen, onUpdate } = handlers;
   if (sessionId === undefined || previewToken === undefined) return () => undefined;
 
   const connection = createWebSocketConnection({
     url: previewSessionSubscribeUrl({ ...options, sessionId, previewToken }),
-    retry: (failureCount, event) => failureCount < RETRY_DELAYS_MS.length && !isSessionEnded(event),
+    retry: (failureCount, event) => {
+      const sessionEnded = isSessionEnded(event);
+      const hasExhaustedRetries = failureCount >= RETRY_DELAYS_MS.length;
+      const shouldRetry = !hasExhaustedRetries && !sessionEnded;
+      if (hasExhaustedRetries || sessionEnded) {
+        onError?.(new LivePreviewConnectionError());
+      }
+      return shouldRetry;
+    },
     retryDelay: (retryAttempt) =>
       RETRY_DELAYS_MS[retryAttempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] ?? 0,
+    onFailure: () => onError?.(new LivePreviewConnectionError()),
   });
 
   const unsubscribeFromOpen = onOpen ? connection.onopen(() => onOpen()) : undefined;

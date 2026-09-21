@@ -106,7 +106,7 @@ const livePreviewOptions = (
 
 @Component({
   selector: 'cf-live-preview-probe',
-  template: `<output>{{
+  template: `<output [attr.data-error]="livePreview.error()?.name ?? ''">{{
     livePreview.data()?.nodes?.[0]?.contentProperties?.['title'] ?? ''
   }}</output>`,
 })
@@ -255,6 +255,25 @@ describe('injectLivePreviewExperience', () => {
         status: 'live',
       },
       '*'
+    );
+    fixture.destroy();
+  });
+
+  it('exposes a connection error after retries are exhausted', async () => {
+    const fixture = createFixture(LivePreviewExperienceProbe);
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    vi.useFakeTimers();
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      sockets.at(-1)?.emitClose({ code: 1006, reason: 'network' });
+      vi.runOnlyPendingTimers();
+    }
+    sockets.at(-1)?.emitClose({ code: 1006, reason: 'network' });
+
+    expect(fixture.componentInstance.livePreview.error()?.name).toBe('LivePreviewConnectionError');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('output')?.dataset.error).toBe(
+      'LivePreviewConnectionError'
     );
     fixture.destroy();
   });

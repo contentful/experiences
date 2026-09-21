@@ -22,6 +22,9 @@
 </script>
 
 {#if data.livePreview}
+  {#if livePreview.error}
+    <p role="status">Live preview is unavailable. Showing the last valid experience.</p>
+  {/if}
   <ClientExperienceRenderer
     experience={livePreview.data}
     config={experienceConfig}

@@ -6,4 +6,6 @@
   const livePreview = useLivePreviewExperience(() => options);
 </script>
 
-<output>{livePreview.data?.nodes[0]?.contentProperties?.title ?? ''}</output>
+<output data-error={livePreview.error?.name ?? ''}>
+  {livePreview.data?.nodes[0]?.contentProperties?.title ?? ''}
+</output>
