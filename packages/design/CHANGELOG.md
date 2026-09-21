@@ -1,3 +1,17 @@
+## 0.8.4 (2026-09-21)
+
+### 🚀 Features
+
+- deprecate the SDK viewport surface, guard absent viewports [SPA-5272] ([4a74473](https://github.com/contentful/experiences/commit/4a74473))
+
+### 🩹 Fixes
+
+- reword deprecation notices, drop internal ticket link [SPA-5272] ([8361460](https://github.com/contentful/experiences/commit/8361460))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.8.4
+
 ## 0.8.3 (2026-09-11)
 
 ### 🧱 Updated Dependencies

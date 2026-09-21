@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-live-preview",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Optional live preview for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
     "directory": "packages/live-preview"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.4.4",
-    "@contentful/experiences-sdk-core": "0.8.3"
+    "@contentful/experiences-client": "0.4.5",
+    "@contentful/experiences-sdk-core": "0.8.4"
   }
 }
