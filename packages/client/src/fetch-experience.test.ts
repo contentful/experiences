@@ -696,5 +696,4 @@ describe('fetchExperience — destinationId + path', () => {
       resolveOptions
     );
   });
-
 });
