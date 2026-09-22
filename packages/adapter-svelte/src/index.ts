@@ -151,10 +151,15 @@ export {
   fetchExperience,
   readSourceMap,
   toExperiencePayload,
+  toExperiencePayloadFromDestination,
 } from '@contentful/experiences-client';
 export type {
+  ByDestinationNodeIdExperienceOptions,
+  ByDestinationPathExperienceOptions,
+  ByIdExperienceOptions,
   ClientOptions,
   CreateClientOptions,
+  DestinationRedirectResult,
   ExperienceOptions,
   ExperienceResponse,
   ResolveOptions,

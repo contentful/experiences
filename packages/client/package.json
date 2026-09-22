@@ -30,7 +30,7 @@
     "directory": "packages/client"
   },
   "dependencies": {
-    "@contentful/experience-delivery": "1.0.0-dev.7",
+    "@contentful/experience-delivery": "1.0.0-dev.8",
     "@contentful/experiences-sdk-core": "0.8.5"
   }
 }

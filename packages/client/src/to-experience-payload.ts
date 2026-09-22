@@ -33,3 +33,16 @@ export function readSourceMap(response: ExperienceResponse): ExperienceSourceMap
   const extensions = (response as ContentfulViewDelivery.HydratedExperienceView).extensions;
   return extensions?.sourceMap as ExperienceSourceMap | undefined;
 }
+
+/**
+ * Narrow a `ResolvedDestinationExperience.experience` to `ExperiencePayload`.
+ *
+ * Same cast rationale as `toExperiencePayload` above, for the destination
+ * resolution endpoints' `HydratedExperience` shape instead of the by-id
+ * endpoints' `HydratedExperienceView`.
+ */
+export function toExperiencePayloadFromDestination(
+  experience: ContentfulViewDelivery.HydratedExperience
+): ExperiencePayload {
+  return experience as unknown as ExperiencePayload;
+}
