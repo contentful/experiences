@@ -1,3 +1,16 @@
+## 0.6.9 (2026-09-22)
+
+### 🚀 Features
+
+- add destination node ID and path resolution to fetchExperience [AIS-567] ([#200](https://github.com/contentful/experiences/pull/200))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.7
+- Updated client to 0.4.7
+- Updated design to 0.8.6
+- Updated core to 0.8.6
+
 ## 0.6.8 (2026-09-22)
 
 ### 🧱 Updated Dependencies
