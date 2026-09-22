@@ -36,3 +36,36 @@ export class ExperienceFetchError extends Error {
     this.experienceId = options.experienceId;
   }
 }
+
+/**
+ * Thrown by `fetchExperience` when `clientOptions.preview` is `true` and
+ * `experienceOptions` is destination-shaped (`destinationId` + `nodeId` or
+ * `destinationId` + `path`). The Destinations Delivery API has no preview
+ * host or preview-token support yet, so this guards against silently hitting the
+ * production host with a preview token it doesn't accept.
+ *
+ * This is a bridge, not a permanent design: revisit once the platform ships
+ * preview support for destinations.
+ *
+ * Only fires for the inline-credentials branch of `ClientOptions`. A
+ * caller-supplied `{ client }` already ignores `preview` entirely, per that
+ * branch's existing contract.
+ */
+export class DestinationPreviewNotSupportedError extends Error {
+  readonly spaceId: string;
+  readonly destinationId: string;
+  readonly nodeId: string | undefined;
+  readonly path: string | undefined;
+
+  constructor(
+    message: string,
+    options: { spaceId: string; destinationId: string; nodeId?: string; path?: string }
+  ) {
+    super(message);
+    this.name = 'DestinationPreviewNotSupportedError';
+    this.spaceId = options.spaceId;
+    this.destinationId = options.destinationId;
+    this.nodeId = options.nodeId;
+    this.path = options.path;
+  }
+}
