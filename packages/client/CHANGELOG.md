@@ -1,3 +1,9 @@
+## 0.4.8 (2026-09-22)
+
+### 🚀 Features
+
+- guard against preview mode with destination fetches [AIS-568] ([#201](https://github.com/contentful/experiences/pull/201))
+
 ## 0.4.7 (2026-09-22)
 
 ### 🚀 Features

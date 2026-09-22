@@ -1,3 +1,10 @@
+## 0.1.10 (2026-09-22)
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.8
+- Updated client to 0.4.8
+
 ## 0.1.9 (2026-09-22)
 
 ### 🚀 Features
