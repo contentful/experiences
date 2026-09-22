@@ -3,7 +3,7 @@ import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { createClient } from './create-client.js';
-import { ExperienceFetchError } from './errors.js';
+import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
 import {
   readSourceMap,
@@ -139,6 +139,24 @@ export async function fetchExperience(
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
   const { config, metadata, debug, initialViewportId } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
+
+  if (
+    !('client' in clientOptions) &&
+    clientOptions.preview &&
+    'destinationId' in experienceOptions
+  ) {
+    const { spaceId, destinationId } = experienceOptions;
+    const locator =
+      'nodeId' in experienceOptions
+        ? { nodeId: experienceOptions.nodeId }
+        : { path: experienceOptions.path };
+    throw new DestinationPreviewNotSupportedError(
+      `fetchExperience() called with preview: true and a destination-shaped experienceOptions ` +
+        `(destinationId "${destinationId}"). The Destinations Delivery API does not support ` +
+        `preview mode yet — pass preview: false (or omit it) for destination-based fetches.`,
+      { spaceId, destinationId, ...locator }
+    );
+  }
 
   let client: ContentfulViewDeliveryClient;
   if ('client' in clientOptions) {
