@@ -2,15 +2,17 @@ import type { ContentfulViewDeliveryClient } from '@contentful/experience-delive
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
-import { createClient } from './create-delivery-client.js';
-import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
-import { PREVIEW_HOST } from './hosts.js';
+import { assertDestinationPreviewSupported } from './destination-guards.js';
+import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
+import { ExperienceFetchError } from './errors.js';
 import {
   readSourceMap,
   toExperiencePayload,
   toExperiencePayloadFromDestination,
   type ExperienceResponse,
 } from './to-experience-payload.js';
+
+export type { ClientOptions };
 
 type DeliveryExperienceRequestExtensions =
   ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensions;
@@ -76,30 +78,6 @@ export interface DestinationRedirectResult {
   redirect: { path: string };
 }
 
-export type ClientOptions =
-  | {
-      accessToken: string;
-      /**
-       * Preview access token. Required when calling with `preview: true`.
-       */
-      previewToken?: string;
-      /**
-       * Flip between delivery (default) and preview at request time. When
-       * `true`, `fetchExperience` uses `previewToken` and the preview host;
-       * when `false` or unset, it uses `accessToken` and the delivery host.
-       * Ignored when a pre-made `client` is passed instead of inline creds.
-       */
-      preview?: boolean;
-      /**
-       * Custom base URL for the delivery client (staging, proxy, per-region).
-       * Wins over the `preview`-derived default host — combine `host` with
-       * `preview: true` to point preview mode at a non-prod endpoint.
-       * Omit for the standard delivery / preview hosts.
-       */
-      host?: string;
-    }
-  | { client: ContentfulViewDeliveryClient };
-
 export type ResolveOptions = {
   config: ResolverConfig;
   /**
@@ -152,42 +130,20 @@ export async function fetchExperience(
   const { config, metadata, debug, initialViewportId } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
-  if (
-    !('client' in clientOptions) &&
-    clientOptions.preview &&
-    'destinationId' in experienceOptions
-  ) {
+  if (!('client' in clientOptions) && 'destinationId' in experienceOptions) {
     const { spaceId, destinationId } = experienceOptions;
     const locator =
       'nodeId' in experienceOptions
         ? { nodeId: experienceOptions.nodeId }
         : { path: experienceOptions.path };
-    throw new DestinationPreviewNotSupportedError(
-      `fetchExperience() called with preview: true and a destination-shaped experienceOptions ` +
-        `(destinationId "${destinationId}"). The Destinations Delivery API does not support ` +
-        `preview mode yet — pass preview: false (or omit it) for destination-based fetches.`,
-      { spaceId, destinationId, ...locator }
-    );
+    assertDestinationPreviewSupported(clientOptions.preview, {
+      spaceId,
+      destinationId,
+      ...locator,
+    });
   }
 
-  let client: ContentfulViewDeliveryClient;
-  if ('client' in clientOptions) {
-    client = clientOptions.client;
-    log.log('using caller-supplied delivery client');
-  } else {
-    const { accessToken, previewToken, preview, host } = clientOptions;
-    if (preview && !previewToken) {
-      throw new Error(
-        'fetchExperience() called with preview: true but no previewToken was provided'
-      );
-    }
-    const resolvedHost = host ?? (preview ? PREVIEW_HOST : undefined);
-    client = createClient({
-      accessToken: preview ? (previewToken as string) : accessToken,
-      host: resolvedHost,
-    });
-    log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
-  }
+  const client = resolveDeliveryClient(clientOptions, log, 'fetchExperience');
 
   if ('nodeId' in experienceOptions) {
     const { spaceId, destinationId, nodeId } = experienceOptions;
