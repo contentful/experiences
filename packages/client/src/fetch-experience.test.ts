@@ -3,7 +3,7 @@ import {
   ContentfulViewDeliveryClient,
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
-import { ExperienceFetchError } from './errors.js';
+import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
 import { fetchExperience } from './fetch-experience.js';
 
 const {
@@ -559,6 +559,31 @@ describe('fetchExperience — destinationId + nodeId', () => {
     expect((rejection as ExperienceFetchError).message).toContain('zero Experiences');
   });
 
+  it('throws DestinationPreviewNotSupportedError when preview is true for a nodeId-shaped fetch, before any network call', async () => {
+    const rejection: unknown = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
+      resolveOptions
+    ).catch((e) => e);
+
+    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
+    const error = rejection as DestinationPreviewNotSupportedError;
+    expect(error.spaceId).toBe('space-1');
+    expect(error.destinationId).toBe('dest-1');
+    expect(error.nodeId).toBe('node-1');
+    expect(mockResolveByNodeId).not.toHaveBeenCalled();
+    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+  });
+
+  it('does not guard preview + destination-shaped options when a pre-made client is provided', async () => {
+    const client = new ContentfulViewDeliveryClient({ token: 'preview-token' });
+    vi.mocked(ContentfulViewDeliveryClient).mockClear();
+
+    await fetchExperience(destinationOptions, { client, preview: true }, resolveOptions);
+
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+  });
+
   it('rejects withSourceMap on destination-shaped options at compile time', () => {
     // @ts-expect-error — withSourceMap is not a member of ByDestinationNodeIdExperienceOptions,
     // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
@@ -674,6 +699,22 @@ describe('fetchExperience — destinationId + path', () => {
 
     expect(rejection).toBeInstanceOf(ExperienceFetchError);
     expect((rejection as ExperienceFetchError).message).toContain('zero Experiences');
+  });
+
+  it('throws DestinationPreviewNotSupportedError when preview is true for a path-shaped fetch, before any network call', async () => {
+    const rejection: unknown = await fetchExperience(
+      destinationOptions,
+      { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
+      resolveOptions
+    ).catch((e) => e);
+
+    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
+    const error = rejection as DestinationPreviewNotSupportedError;
+    expect(error.spaceId).toBe('space-1');
+    expect(error.destinationId).toBe('dest-1');
+    expect(error.path).toBe('/products');
+    expect(mockResolveByPath).not.toHaveBeenCalled();
+    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
   });
 
   it('rejects withSourceMap on destination-shaped options at compile time', () => {
