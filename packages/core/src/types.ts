@@ -27,6 +27,10 @@ export interface ExperienceContext {
    * crosses server/client boundaries.
    */
   metadata: Record<string, unknown>;
+  /**
+   * @deprecated Viewports are being removed from the Experiences APIs. Design
+   * property values arrive flat. Will not be removed before 2026-10-06.
+   */
   viewports: ViewportDef[];
 }
 
@@ -37,9 +41,20 @@ export interface ExperienceContext {
  * this same type and a field added here reaches all three at once.
  */
 export interface RenderContext extends ExperienceContext {
+  /**
+   * @deprecated Viewport state is being removed from the Experiences APIs.
+   * Will not be removed before 2026-10-06.
+   */
   activeViewport: ViewportDef;
+  /**
+   * @deprecated Viewport state is being removed from the Experiences APIs.
+   * Will not be removed before 2026-10-06.
+   */
   activeViewportIndex: number;
-  /** Mirrors `PortableRenderPlan.fallbackViewportIndex`. */
+  /**
+   * @deprecated Viewport state is being removed from the Experiences APIs.
+   * Will not be removed before 2026-10-06.
+   */
   fallbackViewportIndex: number;
 }
 
@@ -213,7 +228,7 @@ export interface ExperienceSourceMap {
 export interface ExperiencePayload {
   /**
    * @deprecated Absent once the API stops sending `viewports`. `resolveExperience`
-   * defaults to `[]` when this is missing.
+   * defaults to `[]` when this is missing. Will not be removed before 2026-10-06.
    */
   viewports?: ViewportDef[];
   nodes: ExperienceNode[];
@@ -283,7 +298,10 @@ export interface PortableRenderNode {
     /** Flat, viewport-cascaded, token-resolved design values (server-side). */
     design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
-    /** Raw per-viewport design, for client re-resolution on viewport change. */
+    /**
+     * @deprecated Design property values are becoming flat. Will not be
+     * removed before 2026-10-06.
+     */
     designRaw: Record<string, DesignPropValue>;
   };
   /**
@@ -305,12 +323,15 @@ export interface PortableRenderNode {
  * is no plan-level template concept — see `PortableRegistration`.
  */
 export interface PortableRenderPlan {
+  /**
+   * @deprecated Viewports are being removed from the Experiences APIs. Design
+   * property values arrive flat. Will not be removed before 2026-10-06.
+   */
   viewports: ViewportDef[];
   nodes: PortableRenderNode[];
   /**
-   * Viewport index the server pre-resolved design against (viewport[0] by
-   * default). Adapters use `props.design` as-is when their active viewport
-   * matches this, and recompute from `props.designRaw` otherwise.
+   * @deprecated Viewport state is being removed from the Experiences APIs.
+   * Will not be removed before 2026-10-06.
    */
   fallbackViewportIndex: number;
   /**

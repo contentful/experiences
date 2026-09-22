@@ -208,6 +208,23 @@ describe('createLivePreviewClient', () => {
     unsubscribe();
   });
 
+  it('returns the raw data from a next message without viewports', async () => {
+    setBrowser();
+    const source = createLivePreviewClient(sourceOptions('session-id'));
+    const listener = vi.fn();
+    const unsubscribe = source.subscribe(listener);
+    const socket = sockets[0];
+    const expected = payload('hello');
+    delete expected.viewports;
+
+    socket?.emitMessage(message('next', expected));
+    await waitForSnapshot(source);
+
+    expect(source.getResult().data).toEqual(expected);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
   it('retains the last data for unknown, invalid, and error messages', async () => {
     setBrowser();
     const source = createLivePreviewClient(sourceOptions('session-id'));

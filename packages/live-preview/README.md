@@ -98,6 +98,9 @@ it until a valid update arrives. Without `initialPayload`, the data starts as
 `getResult().error` is set when the live-preview connection fails. The last
 valid data remains available in `getResult().data`.
 
+A valid payload may omit the deprecated `viewports` field while the APIs migrate
+to flat design-property values.
+
 `sessionId` and `previewToken` are optional. The package opens a socket only when
 both values are provided. The caller supplies the session ID through
 `PreviewSessionOptions`.
