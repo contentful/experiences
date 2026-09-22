@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-angular",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Angular adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -34,7 +34,7 @@
   "dependencies": {
     "@contentful/experiences-client": "0.4.5",
     "@contentful/experiences-design": "0.8.4",
-    "@contentful/experiences-live-preview": "0.1.4",
+    "@contentful/experiences-live-preview": "0.1.5",
     "@contentful/experiences-sdk-core": "0.8.4"
   },
   "peerDependencies": {

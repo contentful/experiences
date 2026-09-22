@@ -1,3 +1,13 @@
+## 0.6.7 (2026-09-22)
+
+### 🚀 Features
+
+- **live-preview:** expose connection errors [SPA-5151] ([#198](https://github.com/contentful/experiences/pull/198))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.5
+
 ## 0.6.6 (2026-09-21)
 
 ### 🚀 Features
