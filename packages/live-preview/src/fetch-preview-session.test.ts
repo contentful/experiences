@@ -75,6 +75,28 @@ describe('fetchPreviewSession', () => {
     });
   });
 
+  it('accepts an Experience response without viewports', async () => {
+    const payloadWithoutViewports = {
+      sys: { type: 'Experience' },
+      nodes: [],
+    };
+    mockClient.fetch.mockResolvedValue(response(payloadWithoutViewports));
+
+    await expect(
+      fetchPreviewSession(experienceOptions, { previewToken: 'preview-token' }, resolveOptions)
+    ).resolves.toBe(mockPlan);
+
+    expect(mockResolveExperience).toHaveBeenCalledWith(
+      payloadWithoutViewports,
+      resolveOptions.config,
+      {
+        metadata: resolveOptions.metadata,
+        debug: resolveOptions.debug,
+        initialViewportId: resolveOptions.initialViewportId,
+      }
+    );
+  });
+
   it('uses the supplied host as the endpoint base URL', async () => {
     await fetchPreviewSession(
       experienceOptions,
@@ -136,7 +158,6 @@ describe('fetchPreviewSession', () => {
 
   it.each([
     new globalThis.Response('not json'),
-    response({ sys: { type: 'Experience' }, nodes: [] }),
     response({ sys: { type: 'ExperienceFragment' }, viewports: [], nodes: [] }),
   ])('rejects a malformed Experience response', async (invalidResponse) => {
     mockClient.fetch.mockResolvedValue(invalidResponse);

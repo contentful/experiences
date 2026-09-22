@@ -75,7 +75,14 @@ export function getValueForViewport(
   return unwrapInner(resolveValuesByViewport(prop, viewports, activeViewportIndex));
 }
 
-/** Resolve every design property on a node into a flat record keyed by name. */
+/**
+ * Resolve every design property on a node into a flat record keyed by name.
+ *
+ * NOTE: once viewports are removed from the Experiences APIs, every design
+ * property value arrives already flat, so the `viewports` and
+ * `activeViewportIndex` parameters will be dropped. Will not happen before
+ * 2026-10-06.
+ */
 export function resolveDesignProperties(
   designProperties: Record<string, DesignPropValue> | undefined,
   viewports: ViewportDef[],
