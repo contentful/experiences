@@ -53,6 +53,7 @@ export type {
 } from './use-experience-plan';
 export type {
   LivePreviewClient,
+  LivePreviewResult,
   PreviewSessionClientOptions,
   PreviewSessionExperienceOptions,
   PreviewSessionOptions,
@@ -60,6 +61,7 @@ export type {
 } from '@contentful/experiences-live-preview';
 export {
   fetchPreviewSession,
+  LivePreviewConnectionError,
   PREVIEW_WEBSOCKET_HOST,
   PreviewSessionFetchError,
 } from '@contentful/experiences-live-preview';

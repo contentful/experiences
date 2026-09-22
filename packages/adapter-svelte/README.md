@@ -101,6 +101,9 @@ For separate access to the raw payload and rendered plan, use
 into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
 experience while an update is being resolved.
 
+The live-preview results also expose `error` when the Preview Session connection
+fails. The last valid `data` remains available.
+
 ### Renderers
 
 ```ts
@@ -145,6 +148,7 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 // From client
 fetchExperience, fetchPreviewSession, createClient, ContentfulViewDelivery,
 ContentfulViewDeliveryClient, NotFoundError, PreviewSessionFetchError,
+LivePreviewConnectionError,
 DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST
 
 type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,

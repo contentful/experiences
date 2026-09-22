@@ -3,6 +3,7 @@ import { type Signal, afterNextRender, computed, effect, signal } from '@angular
 import {
   createLivePreviewClient,
   sendPreviewStatus,
+  type LivePreviewResult,
   type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -14,6 +15,7 @@ export type InjectLivePreviewExperienceOptions = {
 
 export interface InjectLivePreviewExperienceResult {
   readonly data: Signal<ExperiencePayload | undefined>;
+  readonly error: Signal<Error | undefined>;
 }
 
 type ConnectionOptions = PreviewSessionOptions | undefined;
@@ -36,8 +38,9 @@ export function injectLivePreviewExperience(
   getOptions: () => InjectLivePreviewExperienceOptions
 ): InjectLivePreviewExperienceResult {
   const browserReady = signal(false);
-  const currentData = signal<ExperiencePayload | undefined>(undefined);
-  const data = computed(() => currentData() ?? getOptions().initialPayload);
+  const currentResult = signal<LivePreviewResult>({ data: undefined, error: undefined });
+  const data = computed(() => currentResult().data ?? getOptions().initialPayload);
+  const error = computed(() => currentResult().error);
   const connectionOptions = computed<ConnectionOptions>(() => getOptions().previewSessionOptions, {
     equal: areConnectionOptionsEqual,
   });
@@ -50,6 +53,7 @@ export function injectLivePreviewExperience(
     if (!browserReady()) return;
 
     const options = connectionOptions();
+    currentResult.update((result) => ({ ...result, error: undefined }));
     if (options === undefined) {
       sendPreviewStatus('static');
       return;
@@ -57,8 +61,9 @@ export function injectLivePreviewExperience(
 
     const client = createLivePreviewClient(options);
     const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
+    currentResult.set(client.getResult());
     const unsubscribe = client.subscribe(() => {
-      currentData.set(client.getSnapshot());
+      currentResult.set(client.getResult());
     });
     onCleanup(() => {
       unsubscribeStatus();
@@ -66,5 +71,5 @@ export function injectLivePreviewExperience(
     });
   });
 
-  return { data };
+  return { data, error };
 }

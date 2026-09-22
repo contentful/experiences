@@ -41,11 +41,17 @@ fetchPreviewSession(
 ): Promise<PortableRenderPlan>;
 
 PreviewSessionFetchError;
+LivePreviewConnectionError;
 NotFoundError;
 PREVIEW_WEBSOCKET_HOST;
 
+type LivePreviewResult = {
+  data: ExperiencePayload | undefined;
+  error: Error | undefined;
+};
+
 type LivePreviewClient = {
-  getSnapshot(): ExperiencePayload | undefined;
+  getResult(): LivePreviewResult;
   subscribe(listener: () => void): () => void;
   subscribeStatus(listener: (status: LivePreviewStatus) => void): () => void;
 };
@@ -85,9 +91,12 @@ failures throw `PreviewSessionFetchError`.
 
 `createLivePreviewClient` returns a data source for a Preview Session. It opens
 the socket when the first listener subscribes and publishes each valid `next`
-payload as received. If you pass `initialPayload`, `getSnapshot()` returns it
-until a valid update arrives. Without `initialPayload`, the snapshot starts as
+payload as received. If you pass `initialPayload`, `getResult().data` returns
+it until a valid update arrives. Without `initialPayload`, the data starts as
 `undefined`.
+
+`getResult().error` is set when the live-preview connection fails. The last
+valid data remains available in `getResult().data`.
 
 `sessionId` and `previewToken` are optional. The package opens a socket only when
 both values are provided. The caller supplies the session ID through
@@ -108,7 +117,7 @@ import { createLivePreviewClient, sendPreviewStatus } from '@contentful/experien
 const client = createLivePreviewClient(previewSessionOptions);
 const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
 const unsubscribe = client.subscribe(() => {
-  const experience = client.getSnapshot();
+  const experience = client.getResult().data;
   if (experience) updatePreview(experience);
 });
 ```

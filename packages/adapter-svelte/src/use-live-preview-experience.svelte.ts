@@ -1,6 +1,7 @@
 import {
   createLivePreviewClient,
   sendPreviewStatus,
+  type LivePreviewResult,
   type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -12,17 +13,21 @@ export type UseLivePreviewExperienceOptions = {
 
 export interface UseLivePreviewExperienceResult {
   readonly data: ExperiencePayload | undefined;
+  readonly error: Error | undefined;
 }
 
 export function useLivePreviewExperience(
   getOptions: () => UseLivePreviewExperienceOptions
 ): UseLivePreviewExperienceResult {
   const initialPayload = getOptions().initialPayload;
-  let data = $state<ExperiencePayload | undefined>(initialPayload);
+  let result = $state<LivePreviewResult>({
+    data: initialPayload,
+    error: undefined,
+  });
 
   $effect(() => {
     const { previewSessionOptions } = getOptions();
-    data = initialPayload;
+    result = { data: initialPayload, error: undefined };
     if (previewSessionOptions === undefined) {
       sendPreviewStatus('static');
       return;
@@ -31,9 +36,9 @@ export function useLivePreviewExperience(
     const client = createLivePreviewClient(previewSessionOptions, initialPayload);
     const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
 
-    data = client.getSnapshot();
+    result = client.getResult();
     const unsubscribe = client.subscribe(() => {
-      data = client.getSnapshot();
+      result = client.getResult();
     });
 
     return () => {
@@ -44,7 +49,10 @@ export function useLivePreviewExperience(
 
   return {
     get data() {
-      return data;
+      return result.data;
+    },
+    get error() {
+      return result.error;
     },
   };
 }
