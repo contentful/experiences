@@ -128,6 +128,9 @@ the token as the WebSocket URL's `access_token` parameter.
 payload. It updates `plan.data()` after the resolver returns a complete
 plan. The current plan stays in place until the new plan is ready.
 
+The live-preview results also expose an `error` signal when the Preview Session
+connection fails. The last valid `data` remains available.
+
 ### Renderers
 
 Every renderer is standalone; add it to your own component's `imports`.
@@ -191,6 +194,7 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 // From client
 createClient, fetchExperience, fetchPreviewSession, ContentfulViewDelivery,
 ContentfulViewDeliveryClient, NotFoundError, PreviewSessionFetchError,
+LivePreviewConnectionError,
 DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST
 
 type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,

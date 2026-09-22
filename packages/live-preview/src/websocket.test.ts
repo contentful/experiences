@@ -180,6 +180,7 @@ describe('createWebSocketConnection', () => {
   it('does not throw when a retry cannot construct a socket', () => {
     vi.useFakeTimers();
     const failure = new Error('retry failed');
+    const onFailure = vi.fn();
     let attempts = 0;
 
     class RetryThenThrowWebSocket {
@@ -202,12 +203,14 @@ describe('createWebSocketConnection', () => {
       retry: 1,
       retryDelay: 0,
       url: 'wss://preview-session.example.test/subscribe',
+      onFailure,
     });
 
     RetryThenThrowWebSocket.firstInstance?.onclose?.({ code: 1006, reason: 'network' });
 
     expect(() => vi.runOnlyPendingTimers()).not.toThrow();
     expect(attempts).toBe(2);
+    expect(onFailure).toHaveBeenCalledWith(failure);
     connection.close();
   });
 });

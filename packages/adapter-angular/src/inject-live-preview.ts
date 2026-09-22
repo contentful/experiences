@@ -6,7 +6,10 @@ import {
   type ExperiencePlanResolveOptions,
   type InjectExperiencePlanResult,
 } from './inject-experience-plan.js';
-import { injectLivePreviewExperience } from './inject-live-preview-experience.js';
+import {
+  injectLivePreviewExperience,
+  type InjectLivePreviewExperienceResult,
+} from './inject-live-preview-experience.js';
 
 export interface InjectLivePreviewOptions {
   previewSessionOptions?: PreviewSessionOptions;
@@ -17,6 +20,7 @@ export interface InjectLivePreviewOptions {
 
 export interface InjectLivePreviewResult {
   readonly data: InjectExperiencePlanResult['data'];
+  readonly error: InjectLivePreviewExperienceResult['error'];
 }
 
 export function injectLivePreview(
@@ -27,8 +31,10 @@ export function injectLivePreview(
     return { previewSessionOptions, initialPayload };
   });
 
-  return injectExperiencePlan(() => {
+  const plan = injectExperiencePlan(() => {
     const { initialPlan, resolveOptions } = getOptions();
     return { payload: livePreview.data(), initialPlan, resolveOptions };
   });
+
+  return { data: plan.data, error: livePreview.error };
 }

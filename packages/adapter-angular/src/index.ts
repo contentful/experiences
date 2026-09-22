@@ -61,6 +61,7 @@ export type {
 } from './inject-experience-plan.js';
 export type {
   LivePreviewClient,
+  LivePreviewResult,
   PreviewSessionClientOptions,
   PreviewSessionExperienceOptions,
   PreviewSessionOptions,
@@ -68,6 +69,7 @@ export type {
 } from '@contentful/experiences-live-preview';
 export {
   fetchPreviewSession,
+  LivePreviewConnectionError,
   PREVIEW_WEBSOCKET_HOST,
   PreviewSessionFetchError,
 } from '@contentful/experiences-live-preview';

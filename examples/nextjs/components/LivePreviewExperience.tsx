@@ -36,12 +36,17 @@ export function LivePreviewExperience({
   });
 
   return (
-    <ClientExperienceRenderer
-      experience={livePreview.data}
-      config={experienceConfig}
-      initialViewportId={initialViewportId}
-      metadata={metadata}
-      debug={debug}
-    />
+    <>
+      {livePreview.error && (
+        <p role="status">Live preview is unavailable. Showing the last valid experience.</p>
+      )}
+      <ClientExperienceRenderer
+        experience={livePreview.data}
+        config={experienceConfig}
+        initialViewportId={initialViewportId}
+        metadata={metadata}
+        debug={debug}
+      />
+    </>
   );
 }

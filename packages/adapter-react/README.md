@@ -30,6 +30,7 @@ createClient(options)                       // Functional constructor matching t
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID doesn't exist
 PreviewSessionFetchError                   // Thrown when fetching a Preview Session fails
+LivePreviewConnectionError                 // Reported when the live-preview connection fails
 ContentfulViewDelivery                      // Full error namespace from the delivery client
 type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,
   PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
@@ -101,6 +102,9 @@ const plan = useExperiencePlan({
 `initialPayload` seeds the first value. `useExperiencePlan` turns that payload
 into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
 experience while an update is being resolved.
+
+The live-preview results also expose `error` when the Preview Session connection
+fails. The last valid `data` remains available.
 
 ### Renderers
 

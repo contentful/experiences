@@ -29,6 +29,9 @@ import { experienceConfig } from '../lib/experience-config.js';
   template: `
     @if (experience; as plan) {
       @if (livePreviewEnabled) {
+        @if (livePreview.error()) {
+          <p role="status">Live preview is unavailable. Showing the last valid experience.</p>
+        }
         <cf-experience
           [experience]="livePreview.data()"
           [config]="config"

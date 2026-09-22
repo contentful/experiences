@@ -5,6 +5,8 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import {
   createLivePreviewClient,
   sendPreviewStatus,
+  type LivePreviewClient,
+  type LivePreviewResult,
   type PreviewSessionOptions,
 } from '@contentful/experiences-live-preview';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -16,6 +18,7 @@ export type UseLivePreviewExperienceOptions = {
 
 export interface UseLivePreviewExperienceResult {
   readonly data: ExperiencePayload | undefined;
+  readonly error: Error | undefined;
 }
 
 export function useLivePreviewExperience(
@@ -36,15 +39,15 @@ export function useLivePreviewExperience(
     previewSessionOptions?.debug,
   ]);
 
-  const emptySource = useMemo(
-    () => ({
-      getSnapshot: () => initialPayload,
+  const emptySource = useMemo<Pick<LivePreviewClient, 'getResult' | 'subscribe'>>(() => {
+    const result: LivePreviewResult = { data: initialPayload, error: undefined };
+    return {
+      getResult: () => result,
       subscribe: () => () => undefined,
-    }),
-    [initialPayload]
-  );
+    };
+  }, [initialPayload]);
   const source = client ?? emptySource;
-  const data = useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot);
+  const result = useSyncExternalStore(source.subscribe, source.getResult, source.getResult);
 
   useEffect(() => {
     if (client === undefined) {
@@ -55,5 +58,5 @@ export function useLivePreviewExperience(
     return client.subscribeStatus(sendPreviewStatus);
   }, [client]);
 
-  return { data };
+  return result;
 }

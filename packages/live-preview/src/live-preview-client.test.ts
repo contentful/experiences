@@ -1,6 +1,6 @@
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLivePreviewClient } from './index';
+import { createLivePreviewClient, LivePreviewConnectionError } from './index';
 import {
   FakeWebSocket,
   resetSockets,
@@ -51,7 +51,7 @@ function sourceOptions(sessionId?: string, overrides: { previewToken?: string } 
 
 async function waitForSnapshot(source: ReturnType<typeof createLivePreviewClient>): Promise<void> {
   await vi.waitFor(() => {
-    expect(source.getSnapshot()).toBeDefined();
+    expect(source.getResult().data).toBeDefined();
   });
 }
 
@@ -71,7 +71,8 @@ describe('createLivePreviewClient', () => {
     const initialPayload = payload('initial');
     const source = createLivePreviewClient(sourceOptions('session-id'), initialPayload);
 
-    expect(source.getSnapshot()).toBe(initialPayload);
+    expect(source.getResult().data).toBe(initialPayload);
+    expect(source.getResult()).toEqual({ data: initialPayload, error: undefined });
     expect(sockets).toHaveLength(0);
   });
 
@@ -79,7 +80,7 @@ describe('createLivePreviewClient', () => {
     setBrowser();
     const source = createLivePreviewClient(sourceOptions('session-id'));
 
-    expect(source.getSnapshot()).toBeUndefined();
+    expect(source.getResult().data).toBeUndefined();
     expect(sockets).toHaveLength(0);
   });
 
@@ -202,7 +203,24 @@ describe('createLivePreviewClient', () => {
     socket?.emitMessage(message('next', expected));
     await waitForSnapshot(source);
 
-    expect(source.getSnapshot()).toEqual(expected);
+    expect(source.getResult().data).toEqual(expected);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('returns the raw data from a next message without viewports', async () => {
+    setBrowser();
+    const source = createLivePreviewClient(sourceOptions('session-id'));
+    const listener = vi.fn();
+    const unsubscribe = source.subscribe(listener);
+    const socket = sockets[0];
+    const expected = payload('hello');
+    delete expected.viewports;
+
+    socket?.emitMessage(message('next', expected));
+    await waitForSnapshot(source);
+
+    expect(source.getResult().data).toEqual(expected);
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
   });
@@ -215,7 +233,7 @@ describe('createLivePreviewClient', () => {
 
     socket?.emitMessage(message('next', payload('valid')));
     await waitForSnapshot(source);
-    const validData = source.getSnapshot();
+    const validData = source.getResult().data;
 
     socket?.emitMessage(message('unknown', {}));
     socket?.emitMessage('{not-json');
@@ -225,7 +243,7 @@ describe('createLivePreviewClient', () => {
     socket?.emitMessage(message('next', { ...payload('invalid-sys'), sys: null }));
 
     await Promise.resolve();
-    expect(source.getSnapshot()).toBe(validData);
+    expect(source.getResult().data).toBe(validData);
     expect(sockets).toHaveLength(1);
     unsubscribe();
   });
@@ -242,7 +260,7 @@ describe('createLivePreviewClient', () => {
     socket?.emitMessage(message('next', first));
     socket?.emitMessage(message('next', second));
 
-    expect(source.getSnapshot()).toEqual(second);
+    expect(source.getResult().data).toEqual(second);
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
@@ -262,17 +280,65 @@ describe('createLivePreviewClient', () => {
     unsubscribe();
   });
 
-  it('does not retry after the session is deleted or expired', () => {
+  it('returns the last data and a connection error after retries are exhausted', () => {
+    vi.useFakeTimers();
+    setBrowser();
+    const initialPayload = payload('initial');
+    const source = createLivePreviewClient(sourceOptions('session-id'), initialPayload);
+    const statusListener = vi.fn();
+    const unsubscribeStatus = source.subscribeStatus(statusListener);
+    const unsubscribe = source.subscribe(vi.fn());
+
+    sockets[0]?.emitOpen();
+    runSocketRetries(3);
+    sockets.at(-1)?.emitClose(1006, 'network');
+
+    expect(source.getResult().data).toBe(initialPayload);
+    expect(source.getResult().error).toBeInstanceOf(LivePreviewConnectionError);
+    expect(source.getResult().error?.message).toBe('Live Preview connection failed.');
+    expect(statusListener).toHaveBeenLastCalledWith('static');
+
+    unsubscribeStatus();
+    unsubscribe();
+  });
+
+  it.each(['deleted', 'expired'] as const)('reports when the session is %s', (reason) => {
+    vi.useFakeTimers();
+    setBrowser();
+    const source = createLivePreviewClient(sourceOptions('session-id'));
+    const statusListener = vi.fn();
+    const unsubscribeStatus = source.subscribeStatus(statusListener);
+    const unsubscribe = source.subscribe(vi.fn());
+
+    sockets[0]?.emitOpen();
+    sockets[0]?.emitClose(1000, reason);
+    vi.runAllTimers();
+
+    expect(sockets).toHaveLength(1);
+    expect(source.getResult().error).toBeInstanceOf(LivePreviewConnectionError);
+    expect(statusListener).toHaveBeenLastCalledWith('static');
+    unsubscribeStatus();
+    unsubscribe();
+  });
+
+  it('keeps a connection error until a later connection opens', () => {
     vi.useFakeTimers();
     setBrowser();
     const source = createLivePreviewClient(sourceOptions('session-id'));
     const unsubscribe = source.subscribe(vi.fn());
 
-    sockets[0]?.emitClose(1000, 'expired');
-    vi.runAllTimers();
+    runSocketRetries(3);
+    sockets.at(-1)?.emitClose(1006, 'network');
+    expect(source.getResult().error).toBeInstanceOf(LivePreviewConnectionError);
 
-    expect(sockets).toHaveLength(1);
     unsubscribe();
+    const resubscribe = source.subscribe(vi.fn());
+    expect(source.getResult().error).toBeInstanceOf(LivePreviewConnectionError);
+
+    sockets.at(-1)?.emitOpen();
+    expect(source.getResult().error).toBeUndefined();
+
+    resubscribe();
   });
 
   it('propagates socket construction failures without logging a credential-bearing URL', () => {
@@ -377,7 +443,7 @@ describe('createLivePreviewClient', () => {
     expect(() => source.subscribe(vi.fn())).toThrow(
       'WebSocket constructor is not available in this runtime.'
     );
-    expect(source.getSnapshot()).toBeUndefined();
+    expect(source.getResult().data).toBeUndefined();
   });
 
   it('does not require WebSocket support during SSR without a session id', () => {
@@ -386,6 +452,6 @@ describe('createLivePreviewClient', () => {
     const source = createLivePreviewClient(sourceOptions());
 
     expect(() => source.subscribe(vi.fn())).not.toThrow();
-    expect(source.getSnapshot()).toBeUndefined();
+    expect(source.getResult().data).toBeUndefined();
   });
 });

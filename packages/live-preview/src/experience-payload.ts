@@ -5,7 +5,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isExperiencePayload(value: unknown): value is ExperiencePayload {
-  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.viewports)) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.nodes) ||
+    (value.viewports !== undefined && !Array.isArray(value.viewports))
+  ) {
     return false;
   }
 

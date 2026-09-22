@@ -3,7 +3,14 @@ import { subscribeToPreviewSession, type PreviewSessionOptions } from './preview
 
 export type LivePreviewStatus = 'live' | 'static';
 
+export type LivePreviewResult = {
+  readonly data: ExperiencePayload | undefined;
+  readonly error: Error | undefined;
+};
+
 export type LivePreviewClient = {
+  getResult(): LivePreviewResult;
+  /** @deprecated Use getResult().data instead. */
   getSnapshot(): ExperiencePayload | undefined;
   subscribe(listener: () => void): () => void;
   subscribeStatus(listener: (status: LivePreviewStatus) => void): () => void;
@@ -23,15 +30,25 @@ export function createLivePreviewClient(
     previewSessionOptions.sessionId !== undefined &&
     previewSessionOptions.previewToken !== undefined;
   let currentStatus: LivePreviewStatus | undefined = hasLivePreviewOptions ? undefined : 'static';
-  let currentData = initialPayload;
+  let currentResult: LivePreviewResult = { data: initialPayload, error: undefined };
   let unsubscribeFromSession: (() => void) | undefined;
 
   const updateData = (data: ExperiencePayload): void => {
-    currentData = data;
+    currentResult = { ...currentResult, data };
+    notifyListeners();
+  };
+
+  const updateError = (error: Error): void => {
+    currentResult = { ...currentResult, error };
+    updateStatus('static');
     notifyListeners();
   };
 
   const updateStatus = (status: LivePreviewStatus): void => {
+    if (status === 'live' && currentResult.error !== undefined) {
+      currentResult = { ...currentResult, error: undefined };
+      notifyListeners();
+    }
     if (currentStatus === status) return;
     currentStatus = status;
     for (const { handler } of [...statusListeners]) handler(status);
@@ -44,7 +61,8 @@ export function createLivePreviewClient(
   };
 
   return {
-    getSnapshot: () => currentData,
+    getResult: () => currentResult,
+    getSnapshot: () => currentResult.data,
     subscribe(listener) {
       const subscription = { handler: listener };
       const isFirstSubscriber = listeners.size === 0;
@@ -53,6 +71,7 @@ export function createLivePreviewClient(
         try {
           unsubscribeFromSession = subscribeToPreviewSession(previewSessionOptions, {
             onOpen: () => updateStatus('live'),
+            onError: updateError,
             onUpdate: updateData,
           });
         } catch (error: unknown) {
