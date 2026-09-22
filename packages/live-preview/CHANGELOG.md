@@ -1,3 +1,14 @@
+## 0.1.6 (2026-09-22)
+
+### 🩹 Fixes
+
+- **live-preview:** accept payloads without viewports [SPA-5272] ([6db6fa7](https://github.com/contentful/experiences/commit/6db6fa7))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.4.6
+- Updated core to 0.8.5
+
 ## 0.1.5 (2026-09-22)
 
 ### 🚀 Features
