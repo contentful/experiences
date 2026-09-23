@@ -78,7 +78,7 @@ export const UniversalEventBuilderArgs = z.object({
 
 export type UniversalEventBuilderArgs = z.infer<typeof UniversalEventBuilderArgs>;
 
-export const ExoInteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
+export const InteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
   entityId: z.string(),
   entityKind: ExoEntityKind,
   entityKindId: z.optional(z.string()),
@@ -90,25 +90,25 @@ export const ExoInteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs,
   variantIndex: z.optional(z.number()),
 });
 
-export type ExoInteractionBuilderArgsBase = z.infer<typeof ExoInteractionBuilderArgsBase>;
+export type InteractionBuilderArgsBase = z.infer<typeof InteractionBuilderArgsBase>;
 
-export const ExoViewBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
+export const ViewBuilderArgs = z.extend(InteractionBuilderArgsBase, {
   viewId: z.string(),
   viewDurationMs: z.int().check(z.minimum(0)),
 });
 
-export type ExoViewBuilderArgs = z.infer<typeof ExoViewBuilderArgs>;
+export type ViewBuilderArgs = z.infer<typeof ViewBuilderArgs>;
 
-export const ExoClickBuilderArgs = ExoInteractionBuilderArgsBase;
+export const ClickBuilderArgs = InteractionBuilderArgsBase;
 
-export type ExoClickBuilderArgs = z.infer<typeof ExoClickBuilderArgs>;
+export type ClickBuilderArgs = z.infer<typeof ClickBuilderArgs>;
 
-export const ExoHoverBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
+export const HoverBuilderArgs = z.extend(InteractionBuilderArgsBase, {
   hoverId: z.string(),
   hoverDurationMs: z.int().check(z.minimum(0)),
 });
 
-export type ExoHoverBuilderArgs = z.infer<typeof ExoHoverBuilderArgs>;
+export type HoverBuilderArgs = z.infer<typeof HoverBuilderArgs>;
 
 const FlagInteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
   componentId: z.string(),
@@ -223,8 +223,8 @@ class EventBuilder {
   }
 
   private buildInteractionBase(
-    args: ExoInteractionBuilderArgsBase
-  ): UniversalEventProperties & ExoInteractionBuilderArgsBase {
+    args: InteractionBuilderArgsBase
+  ): UniversalEventProperties & InteractionBuilderArgsBase {
     const { campaign, locale, location, page, screen, userAgent, ...interactionProperties } = args;
 
     return {
@@ -240,9 +240,9 @@ class EventBuilder {
     };
   }
 
-  buildExoView(args: ExoViewBuilderArgs): ExoViewEvent {
+  buildView(args: ViewBuilderArgs): ExoViewEvent {
     const { viewId, viewDurationMs, ...interaction } = parseWithFriendlyError(
-      ExoViewBuilderArgs,
+      ViewBuilderArgs,
       args
     );
 
@@ -254,8 +254,8 @@ class EventBuilder {
     };
   }
 
-  buildExoClick(args: ExoClickBuilderArgs): ExoClickEvent {
-    const interaction = parseWithFriendlyError(ExoClickBuilderArgs, args);
+  buildClick(args: ClickBuilderArgs): ExoClickEvent {
+    const interaction = parseWithFriendlyError(ClickBuilderArgs, args);
 
     return {
       ...this.buildInteractionBase(interaction),
@@ -263,9 +263,9 @@ class EventBuilder {
     };
   }
 
-  buildExoHover(args: ExoHoverBuilderArgs): ExoHoverEvent {
+  buildHover(args: HoverBuilderArgs): ExoHoverEvent {
     const { hoverId, hoverDurationMs, ...interaction } = parseWithFriendlyError(
-      ExoHoverBuilderArgs,
+      HoverBuilderArgs,
       args
     );
 
