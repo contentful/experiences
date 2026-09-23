@@ -222,10 +222,10 @@ class EventBuilder {
     };
   }
 
-  private buildExoInteractionBase(
+  private buildInteractionBase(
     args: ExoInteractionBuilderArgsBase
   ): UniversalEventProperties & ExoInteractionBuilderArgsBase {
-    const { campaign, locale, location, page, screen, userAgent, ...exoProperties } = args;
+    const { campaign, locale, location, page, screen, userAgent, ...interactionProperties } = args;
 
     return {
       ...this.buildUniversalEventProperties({
@@ -236,7 +236,7 @@ class EventBuilder {
         screen,
         userAgent,
       }),
-      ...exoProperties,
+      ...interactionProperties,
     };
   }
 
@@ -247,7 +247,7 @@ class EventBuilder {
     );
 
     return {
-      ...this.buildExoInteractionBase(interaction),
+      ...this.buildInteractionBase(interaction),
       type: 'exo_node_view',
       viewId,
       viewDurationMs,
@@ -258,7 +258,7 @@ class EventBuilder {
     const interaction = parseWithFriendlyError(ExoClickBuilderArgs, args);
 
     return {
-      ...this.buildExoInteractionBase(interaction),
+      ...this.buildInteractionBase(interaction),
       type: 'exo_node_click',
     };
   }
@@ -270,7 +270,7 @@ class EventBuilder {
     );
 
     return {
-      ...this.buildExoInteractionBase(interaction),
+      ...this.buildInteractionBase(interaction),
       type: 'exo_node_hover',
       hoverId,
       hoverDurationMs,
