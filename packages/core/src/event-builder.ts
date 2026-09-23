@@ -95,23 +95,23 @@ export const ExoInteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs,
 
 export type ExoInteractionBuilderArgsBase = z.infer<typeof ExoInteractionBuilderArgsBase>;
 
-export const ViewBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
+export const ExoViewBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
   viewId: z.string(),
   viewDurationMs: z.int().check(z.minimum(0)),
 });
 
-export type ViewBuilderArgs = z.infer<typeof ViewBuilderArgs>;
+export type ExoViewBuilderArgs = z.infer<typeof ExoViewBuilderArgs>;
 
-export const ClickBuilderArgs = ExoInteractionBuilderArgsBase;
+export const ExoClickBuilderArgs = ExoInteractionBuilderArgsBase;
 
-export type ClickBuilderArgs = z.infer<typeof ClickBuilderArgs>;
+export type ExoClickBuilderArgs = z.infer<typeof ExoClickBuilderArgs>;
 
-export const HoverBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
+export const ExoHoverBuilderArgs = z.extend(ExoInteractionBuilderArgsBase, {
   hoverId: z.string(),
   hoverDurationMs: z.int().check(z.minimum(0)),
 });
 
-export type HoverBuilderArgs = z.infer<typeof HoverBuilderArgs>;
+export type ExoHoverBuilderArgs = z.infer<typeof ExoHoverBuilderArgs>;
 
 const FlagInteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
   componentId: z.string(),
@@ -243,9 +243,9 @@ class EventBuilder {
     };
   }
 
-  buildView(args: ViewBuilderArgs): ExoViewEvent {
+  buildExoView(args: ExoViewBuilderArgs): ExoViewEvent {
     const { viewId, viewDurationMs, ...interaction } = parseWithFriendlyError(
-      ViewBuilderArgs,
+      ExoViewBuilderArgs,
       args
     );
 
@@ -257,8 +257,8 @@ class EventBuilder {
     };
   }
 
-  buildClick(args: ClickBuilderArgs): ExoClickEvent {
-    const interaction = parseWithFriendlyError(ClickBuilderArgs, args);
+  buildExoClick(args: ExoClickBuilderArgs): ExoClickEvent {
+    const interaction = parseWithFriendlyError(ExoClickBuilderArgs, args);
 
     return {
       ...this.buildExoInteractionBase(interaction),
@@ -266,9 +266,9 @@ class EventBuilder {
     };
   }
 
-  buildHover(args: HoverBuilderArgs): ExoHoverEvent {
+  buildExoHover(args: ExoHoverBuilderArgs): ExoHoverEvent {
     const { hoverId, hoverDurationMs, ...interaction } = parseWithFriendlyError(
-      HoverBuilderArgs,
+      ExoHoverBuilderArgs,
       args
     );
 

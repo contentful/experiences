@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('EventBuilder', () => {
   it('builds an API-compatible ExO view event', () => {
-    const event = createBuilder().buildView({
+    const event = createBuilder().buildExoView({
       ...interaction,
       viewId: 'view-1',
       viewDurationMs: 1_000,
@@ -44,8 +44,8 @@ describe('EventBuilder', () => {
 
   it('builds API-compatible ExO click and hover events', () => {
     const builder = createBuilder();
-    const click = builder.buildClick(interaction);
-    const hover = builder.buildHover({
+    const click = builder.buildExoClick(interaction);
+    const hover = builder.buildExoHover({
       ...interaction,
       hoverId: 'hover-1',
       hoverDurationMs: 500,
@@ -70,7 +70,7 @@ describe('EventBuilder', () => {
       getUserAgent: () => 'test-agent',
     });
 
-    const event = builder.buildClick(interaction);
+    const event = builder.buildExoClick(interaction);
 
     expect(event.context).toMatchObject({
       campaign: { name: 'launch', source: 'newsletter' },
@@ -107,7 +107,7 @@ describe('EventBuilder', () => {
 
   it('rejects invalid ExO interaction arguments', () => {
     expect(() =>
-      createBuilder().buildView({
+      createBuilder().buildExoView({
         ...interaction,
         viewId: 'view-1',
         viewDurationMs: -1,

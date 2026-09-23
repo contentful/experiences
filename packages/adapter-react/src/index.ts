@@ -108,16 +108,16 @@ export {
   ExoViewEvent,
 } from '@contentful/experiences-sdk-core';
 export type {
-  ClickBuilderArgs,
   EventBuilderConfig,
+  ExoClickBuilderArgs,
+  ExoHoverBuilderArgs,
   ExoInteractionBuilderArgsBase,
+  ExoViewBuilderArgs,
   FlagViewBuilderArgs,
-  HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
-  ViewBuilderArgs,
 } from '@contentful/experiences-sdk-core';
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
