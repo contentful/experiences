@@ -98,15 +98,7 @@ export { resolveExperience } from '@contentful/experiences-sdk-core';
 export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
 // ─── Event builder (re-exported from render-core) ─────────────────────────
-export {
-  DEFAULT_PAGE_PROPERTIES,
-  EventBuilder,
-  ExoClickEvent,
-  ExoEntityKind,
-  ExoEventProperties,
-  ExoHoverEvent,
-  ExoViewEvent,
-} from '@contentful/experiences-sdk-core';
+export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-sdk-core';
 export type {
   EventBuilderConfig,
   ExoClickBuilderArgs,

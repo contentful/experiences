@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import EventBuilder, {
-  DEFAULT_PAGE_PROPERTIES,
+import EventBuilder, { DEFAULT_PAGE_PROPERTIES } from './event-builder';
+
+import {
   ExoClickEvent,
   ExoHoverEvent,
   ExoViewEvent,
-} from './event-builder';
+} from '@contentful/optimization-api-client/api-schemas';
 
 const LIBRARY = { name: '@contentful/experiences-sdk-core', version: '0.8.4' };
 

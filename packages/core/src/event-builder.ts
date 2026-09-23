@@ -6,7 +6,6 @@ import {
   type Channel,
   ExoClickEvent,
   ExoEntityKind,
-  ExoEventProperties,
   ExoHoverEvent,
   ExoViewEvent,
   GeoLocation,
@@ -26,8 +25,6 @@ import {
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import { merge } from 'es-toolkit/object';
 import * as z from 'zod/mini';
-
-export { ExoClickEvent, ExoEntityKind, ExoEventProperties, ExoHoverEvent, ExoViewEvent };
 
 const eventBuilderLogger = createScopedLogger('Experiences:EventBuilder');
 
