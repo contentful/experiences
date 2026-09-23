@@ -58,6 +58,40 @@ describe('EventBuilder', () => {
     expect(hover.type).toBe('exo_node_hover');
   });
 
+  it('builds ExO events without optimization selection data', () => {
+    const builder = createBuilder();
+    const view = builder.buildExoView({
+      entityId: 'experience-1',
+      entityKind: 'Experience',
+      viewId: 'view-1',
+      viewDurationMs: 1_000,
+    });
+    const click = builder.buildExoClick({
+      entityId: 'experience-1',
+      entityKind: 'Experience',
+    });
+    const hover = builder.buildExoHover({
+      entityId: 'experience-1',
+      entityKind: 'Experience',
+      hoverId: 'hover-1',
+      hoverDurationMs: 500,
+    });
+
+    expect(ExoViewEvent.parse(view)).toEqual(view);
+    expect(ExoClickEvent.parse(click)).toEqual(click);
+    expect(ExoHoverEvent.parse(hover)).toEqual(hover);
+
+    for (const event of [view, click, hover]) {
+      expect(event).toMatchObject({
+        entityId: 'experience-1',
+        entityKind: 'Experience',
+      });
+      expect(event).not.toHaveProperty('optimizationId');
+      expect(event).not.toHaveProperty('variantId');
+      expect(event).not.toHaveProperty('variantIndex');
+    }
+  });
+
   it('uses configured context providers and infers campaign values', () => {
     const builder = new EventBuilder({
       channel: 'web',
