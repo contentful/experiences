@@ -3,6 +3,8 @@ export { resolveExperience } from './resolve-experience.js';
 export type { ResolverConfig, ResolveExperienceOptions } from './resolve-experience.js';
 export { createDebugLogger } from './debug-logger.js';
 export type { DebugLogger } from './debug-logger.js';
+export { default as EventBuilder } from './event-builder.js';
+export * from './event-builder.js';
 export {
   applyTokenResolver,
   getValueForViewport,
