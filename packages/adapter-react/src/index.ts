@@ -97,8 +97,8 @@ export type {
 export { resolveExperience } from '@contentful/experiences-sdk-core';
 export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
-// ─── Event builder (re-exported from render-core) ─────────────────────────
-export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-sdk-core';
+// ─── Event builder (re-exported from client) ──────────────────────────────
+export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-client';
 export type {
   ClickBuilderArgs,
   EventBuilderConfig,
@@ -110,7 +110,7 @@ export type {
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
-} from '@contentful/experiences-sdk-core';
+} from '@contentful/experiences-client';
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
 export type {

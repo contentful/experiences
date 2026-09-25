@@ -23,6 +23,14 @@
         "cwd": "packages/client",
         "command": "vitest run"
       }
+    },
+    "verify-release-artifact": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/client",
+        "command": "node --input-type=module -e \"import { readFile } from 'node:fs/promises'; const manifest = JSON.parse(await readFile('package.json', 'utf8')); const { eventBuilderLibrary } = await import('./dist/sdk-info.js'); if (eventBuilderLibrary.version !== manifest.version) throw new Error('Client event library version ' + eventBuilderLibrary.version + ' does not match package version ' + manifest.version);\""
+      }
     }
   }
 }

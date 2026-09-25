@@ -7,7 +7,7 @@ name: Prerelease
 #
 # This means the `dev` branch accumulates its own CHANGELOG history
 # and is not meant to be merged back into `main` — features should
-# land on `main` independently to keep main's CHANGELOG clean. 
+# land on `main` independently to keep main's CHANGELOG clean.
 #
 # Combined with nx's releaseTagPatternStrictPreid (set in nx.json),
 # dev tags cannot affect main's stable release computation — stable
@@ -96,10 +96,11 @@ jobs:
         # Nx handles the version bump, CHANGELOG.md prepend, commit back to
         # the `dev` branch, git tag, and GitHub Release. `--skip-publish`
         # defers the actual npm publish to the next step so we can pass
-        # `--tag dev` explicitly 
+        # `--tag dev` explicitly
         run: npx nx release --specifier prerelease --preid dev --skip-publish
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+          CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT: 'true'
 
       - name: NX Publish
         # Explicit `--tag dev` ensures the `latest` dist-tag on npm is never

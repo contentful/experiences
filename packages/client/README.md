@@ -2,11 +2,50 @@
 
 > **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays zero-dep and framework adapters that don't need network access don't pull it in transitively.
+Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays dependency-free and framework adapters that don't need network access don't pull it in transitively. It also owns the lower-layer shared `ContentfulExperiences` runtime for future Node/Web SDKs, event construction, and one-shot Preview Session HTTP loading.
+
+`ContentfulExperiences` is intentionally not re-exported by framework adapters
+and is not a new application-facing adapter API. The existing free functions
+remain supported for adapter and application integration.
 
 ---
 
 ## What's in here
+
+### Shared lower-layer runtime
+
+`ContentfulExperiences` is an internal shared runtime contract for future
+Node/Web SDKs. Construct it with a space, environment, resolver configuration,
+and a delivery client source; optionally provide a preview client source. It
+retains those clients, merges configured resolve defaults with per-call options,
+and exposes `resolveExperience`, by-id/destination `fetchExperience`, and
+`fetchPreviewSession` methods. Calling `fetchExperience` with `preview: true`
+or `fetchPreviewSession` requires the optional preview client.
+
+The runtime constructs and owns one `EventBuilder`. Its defaults are server
+channel, this SDK's library identity, and the runtime locale; callers may
+override the supported event-builder configuration. This is the owner of event
+construction for the lower layer, rather than Core or Live Preview.
+
+This package's direct dependencies are the generated delivery client,
+`@contentful/optimization-api-client` (event schemas and logger), `es-toolkit`
+(event-property merging), and `zod` (event argument schemas), in addition to
+Core. None of those dependencies are introduced into Core.
+
+### `fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions)`
+
+Fetches one Preview Session Experience snapshot over HTTP and resolves it into a
+`PortableRenderPlan`. `previewSessionOptions` contains `spaceId`,
+`environmentId`, `sessionId`, and optional opaque `resourceResolution`;
+`clientOptions` contains a required `previewToken` and optional compatible
+`host`; `resolveOptions` contains `config` and optional `metadata`, `debug`,
+and `initialViewportId`.
+
+`NotFoundError` passes through for a missing session. Other transport, response,
+or payload-shape failures throw `PreviewSessionFetchError`. Live Preview
+re-exports this function, its option types, and that error so its WebSocket
+external store can be paired with an initial HTTP snapshot. This function is
+one-shot only; socket subscription state belongs to Live Preview.
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 

@@ -2,6 +2,12 @@
 
 Optional live preview for Contentful Experiences.
 
+This package owns Preview Session WebSocket subscription and external-store
+state. For the initial one-shot HTTP snapshot, it re-exports Client's
+`fetchPreviewSession`, its option types, and `PreviewSessionFetchError`; the
+HTTP implementation and retained-client lower-layer runtime remain in
+`@contentful/experiences-client`.
+
 ## API
 
 ```ts
@@ -64,7 +70,7 @@ createLivePreviewClient(
 sendPreviewStatus(status: LivePreviewStatus): void;
 ```
 
-Use `fetchPreviewSession` for the initial render when the Contentful app
+Use the re-exported `fetchPreviewSession` for the initial render when the Contentful app
 provides a `preview_session_id`. It fetches the current Preview Session
 snapshot and resolves it into a `PortableRenderPlan`. Use `createLivePreviewClient`
 to receive subsequent WebSocket updates.
@@ -89,7 +95,7 @@ failures throw `PreviewSessionFetchError`.
 
 ## Usage
 
-`createLivePreviewClient` returns a data source for a Preview Session. It opens
+`createLivePreviewClient` returns an external-store data source for a Preview Session. It opens
 the socket when the first listener subscribes and publishes each valid `next`
 payload as received. If you pass `initialPayload`, `getResult().data` returns
 it until a valid update arrives. Without `initialPayload`, the data starts as

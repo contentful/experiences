@@ -1,4 +1,5 @@
 import { PREVIEW_WEBSOCKET_HOST } from '@contentful/experiences-client';
+export { previewSessionGetExperienceUrl } from '@contentful/experiences-client';
 
 type PreviewSessionRouteOptions = {
   spaceId: string;
@@ -15,19 +16,6 @@ function previewSessionPath(options: PreviewSessionRouteOptions): string {
     'preview_sessions',
     encodeURIComponent(options.sessionId),
   ].join('/');
-}
-
-export function previewSessionGetExperienceUrl({
-  resourceResolution,
-  ...options
-}: PreviewSessionRouteOptions & { resourceResolution?: string }): string {
-  const path = `/${previewSessionPath(options)}/experience`;
-  if (resourceResolution === undefined) return path;
-
-  const searchParams = new globalThis.URLSearchParams({
-    resource_resolution: resourceResolution,
-  });
-  return `${path}?${searchParams.toString()}`;
 }
 
 export function previewSessionSubscribeUrl({

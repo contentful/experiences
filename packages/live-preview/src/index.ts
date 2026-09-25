@@ -1,7 +1,7 @@
 export { createLivePreviewClient } from './live-preview-client.js';
 export { sendPreviewStatus } from './preview-status.js';
-export { fetchPreviewSession } from './fetch-preview-session.js';
-export { LivePreviewConnectionError, PreviewSessionFetchError } from './errors.js';
+export { LivePreviewConnectionError } from './errors.js';
+export { fetchPreviewSession, PreviewSessionFetchError } from '@contentful/experiences-client';
 export { PREVIEW_WEBSOCKET_HOST } from '@contentful/experiences-client';
 export type {
   LivePreviewClient,
@@ -13,5 +13,5 @@ export type {
   PreviewSessionClientOptions,
   PreviewSessionExperienceOptions,
   PreviewSessionResolveOptions,
-} from './fetch-preview-session.js';
+} from '@contentful/experiences-client';
 export { NotFoundError } from '@contentful/experiences-client';
