@@ -2,11 +2,35 @@
 
 > **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays zero-dep and framework adapters that don't need network access don't pull it in transitively.
+Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays dependency-free and framework adapters that don't need network access don't pull it in transitively. It also owns the lower-layer shared `ContentfulExperiences` runtime for future Node/Web SDKs and event construction.
+
+`ContentfulExperiences` is intentionally not re-exported by framework adapters
+and is not a new application-facing adapter API. The existing free functions
+remain supported for adapter and application integration.
 
 ---
 
 ## What's in here
+
+### Shared lower-layer runtime
+
+`ContentfulExperiences` is an internal shared runtime contract for future
+Node/Web SDKs. Construct it with a space, environment, resolver configuration,
+and a delivery client source; optionally provide a preview client source. It
+retains those clients, merges configured resolve defaults with per-call options,
+and exposes `resolveExperience` and by-id/destination `fetchExperience` methods.
+Calling `fetchExperience` with `preview: true` requires the optional preview
+client.
+
+The runtime constructs and owns one `EventBuilder`. Its defaults are server
+channel, this SDK's library identity, and the runtime locale; callers may
+override the supported event-builder configuration. This is the owner of event
+construction for the lower layer, rather than Core.
+
+This package's direct dependencies are the generated delivery client,
+`@contentful/optimization-api-client` (event schemas and logger), `es-toolkit`
+(event-property merging), and `zod` (event argument schemas), in addition to
+Core. None of those dependencies are introduced into Core.
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
