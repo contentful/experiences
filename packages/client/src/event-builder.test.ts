@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import EventBuilder, { DEFAULT_PAGE_PROPERTIES } from './event-builder';
+import { eventBuilderLibrary } from './sdk-info';
 
 import {
   ExoClickEvent,
@@ -27,6 +28,13 @@ afterEach(() => {
 });
 
 describe('EventBuilder', () => {
+  it('uses an unbundled SDK library fallback', () => {
+    expect(eventBuilderLibrary).toEqual({
+      name: '@contentful/experiences-client',
+      version: '0.0.0',
+    });
+  });
+
   it('builds an API-compatible ExO view event', () => {
     const event = createBuilder().buildView({
       ...interaction,

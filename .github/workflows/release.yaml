@@ -79,6 +79,7 @@ jobs:
           npx nx release --yes
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
+          CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT: 'true'
 
       - name: Get latest release tag
         id: get-tag

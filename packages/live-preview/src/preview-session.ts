@@ -1,5 +1,10 @@
-import { createDebugLogger, type ExperiencePayload } from '@contentful/experiences-sdk-core';
-import { isErrorPayload, isExperiencePayload, isRecord } from './experience-payload.js';
+import {
+  createDebugLogger,
+  isExperiencePayload,
+  isRecord,
+  type ExperiencePayload,
+} from '@contentful/experiences-sdk-core';
+import { isErrorPayload } from './experience-payload.js';
 import { createWebSocketConnection, type WebSocketCloseEvent } from './websocket.js';
 import { previewSessionSubscribeUrl } from './preview-session-url.js';
 import { LivePreviewConnectionError } from './errors.js';

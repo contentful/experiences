@@ -53,34 +53,35 @@ Two consequences of that boundary shape recur throughout the layout below:
 
 ## Package graph
 
-Six libraries under `packages/`, in three layers. Every edge below is a
+Seven libraries under `packages/`, in three layers. Every edge below is a
 `dependencies` entry in the respective `package.json`; there are no other
 cross-package edges.
 
 ```
-  layer 3          adapter-react     adapter-svelte     adapter-angular
-  (public)              │                  │                  │
-                        └──────────┬───────┴──────────────────┬┘
-                                   │                          │
-  layer 2                       design                     client ──▶ @contentful/experience-delivery
-  (internal)                       │                          │              (external, exact pin)
-                                   └────────────┬─────────────┘
-                                                │
-  layer 1                                     core
-  (internal)                          (zero dependencies)
+  layer 3       adapter-react   adapter-svelte   adapter-angular   live-preview
+  (public)           │                │                │                │
+                     └───────────┬────┴───────────┬────┴────────────────┘
+                                 │                │
+  layer 2                     design           client ──▶ @contentful/experience-delivery
+  (internal)                    │                │    ├─▶ @contentful/optimization-api-client
+                                └───────────┬────┘    ├─▶ es-toolkit
+                                            │         └─▶ zod
+  layer 1                                  core
+  (internal)                       (zero dependencies)
 ```
 
 Each adapter also depends on `core` **directly**, not only through `design` and
 `client` — all three names appear in every `packages/adapter-*/package.json`.
 
-| Nx project        | Directory                  | npm name                           | Depends on                 | Public? |
-| ----------------- | -------------------------- | ---------------------------------- | -------------------------- | ------- |
-| `core`            | `packages/core`            | `@contentful/experiences-sdk-core` | — (nothing)                | no      |
-| `design`          | `packages/design`          | `@contentful/experiences-design`   | `core`                     | no      |
-| `client`          | `packages/client`          | `@contentful/experiences-client`   | `core`, delivery client    | no      |
-| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`    | `core`, `design`, `client` | yes     |
-| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`   | `core`, `design`, `client` | yes     |
-| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`  | `core`, `design`, `client` | yes     |
+| Nx project        | Directory                  | npm name                               | Depends on                                                            | Public? |
+| ----------------- | -------------------------- | -------------------------------------- | --------------------------------------------------------------------- | ------- |
+| `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | — (nothing)                                                           | no      |
+| `design`          | `packages/design`          | `@contentful/experiences-design`       | `core`                                                                | no      |
+| `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, delivery client, optimization API client, `es-toolkit`, `zod` | no      |
+| `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                                      | yes     |
+| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`                                            | yes     |
+| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`                                            | yes     |
+| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`                                            | yes     |
 
 The graph is acyclic and the adapters are leaves — nothing depends on an
 adapter, and no adapter depends on another. That is what makes a
@@ -124,17 +125,41 @@ taking the dependency. The rationale is in AGENTS.md; the structural point is
 that this keeps `core` at zero dependencies, which is the invariant every future
 adapter inherits.
 
+### Core, client runtime, and Live Preview responsibilities
+
+`core` is genuinely dependency-free: it contains payload and render-plan types,
+`resolveExperience`, diagnostics, viewport/design-resolution helpers, and the
+structural `isExperiencePayload` / `isRecord` guard for JSON payloads. It does
+not own delivery transport, event construction, or connection state.
+
+`client` owns delivery integration and the lower-layer shared
+`ContentfulExperiences` runtime intended for future Node/Web SDKs. That runtime
+retains its delivery client and optional preview client, creates one
+`EventBuilder` for event construction, and exposes retained-client fetch and
+resolve operations, including one-shot Preview Session HTTP fetches. Its
+`EventBuilder` depends on the optimization API schemas/logger plus `es-toolkit`
+and `zod`; those are Client's dependencies, not Core's. The established free
+functions remain supported alongside the runtime.
+
+This is an internal lower-layer contract, not a new application-facing adapter
+API: framework-adapter barrels do not re-export `ContentfulExperiences`.
+`live-preview` remains the public framework-neutral Preview Session layer. It
+owns WebSocket subscription and external-store state, and re-exports Client's
+one-shot `fetchPreviewSession` function, its option types, and
+`PreviewSessionFetchError` so callers can compose initial HTTP loading with
+subsequent socket updates.
+
 ---
 
 ## Layering rules and where they live
 
-| Rule                                      | Encoded in                                                                             | Enforced by                                                                    |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `core` has no dependencies                | `packages/core/package.json` (no `dependencies`)                                       | review                                                                         |
-| Only `client` reaches the delivery client | `packages/client/package.json`                                                         | review                                                                         |
-| Frameworks are peers, never deps          | `packages/adapter-*/package.json`                                                      | `publint`, in `adapter-angular`'s Nx `build` target                            |
-| Adapters are the only public surface      | `packages/adapter-*/src/index.ts`                                                      | review                                                                         |
-| Project scope for tags                    | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
+| Rule                                            | Encoded in                                                                             | Enforced by                                                                    |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `core` has no dependencies                      | `packages/core/package.json` (no `dependencies`)                                       | review                                                                         |
+| Only `client` reaches the delivery client       | `packages/client/package.json`                                                         | review                                                                         |
+| Frameworks are peers, never deps                | `packages/adapter-*/package.json`                                                      | `publint`, in `adapter-angular`'s Nx `build` target                            |
+| Adapters do not surface the lower-layer runtime | `packages/adapter-*/src/index.ts`                                                      | review                                                                         |
+| Project scope for tags                          | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
 
 The `tags` in each `project.json` are the seam for mechanical enforcement: the
 vocabulary is already assigned consistently, but `eslint.config.mjs` does not

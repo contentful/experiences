@@ -7,10 +7,35 @@ export {
 export const NotFoundError = ContentfulViewDelivery.NotFoundError;
 // eslint-disable-next-line no-redeclare -- value + type share a name across separate TS namespaces, not a real redeclaration
 export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundError>;
-export { ExperienceFetchError, DestinationPreviewNotSupportedError } from './errors.js';
+export {
+  ExperienceFetchError,
+  DestinationPreviewNotSupportedError,
+  PreviewSessionFetchError,
+} from './errors.js';
 export { createClient } from './create-client.js';
 export type { CreateClientOptions } from './create-client.js';
+export { default as EventBuilder } from './event-builder.js';
+export * from './event-builder.js';
 export { fetchExperience } from './fetch-experience.js';
+export { fetchPreviewSession } from './fetch-preview-session.js';
+export { ContentfulExperiences } from './contentful-experiences.js';
+export type {
+  ContentfulExperiencesConfig,
+  ExperienceRuntime,
+  RuntimeFetchExperienceOptions,
+  RuntimeFetchByDestinationNodeOptions,
+  RuntimeFetchByDestinationPathOptions,
+  RuntimeFetchPreviewSessionOptions,
+  RuntimeClientSource,
+  RuntimeEventBuilderConfig,
+  RuntimeResolveOptions,
+} from './contentful-experiences.js';
+export type {
+  PreviewSessionClientOptions,
+  PreviewSessionExperienceOptions,
+  PreviewSessionResolveOptions,
+} from './fetch-preview-session.js';
+export { previewSessionGetExperienceUrl } from './preview-session-url.js';
 export {
   readSourceMap,
   toExperiencePayload,

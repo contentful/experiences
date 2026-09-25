@@ -45,17 +45,24 @@ experiences/
 
 ### Package roles
 
-| Folder                     | npm name                               | Audience                                                                                       |
-| -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/core`            | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                     |
-| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                              |
-| `packages/client`          | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`. Keeps the delivery dep isolated. |
-| `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                       |
-| `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                |
-| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
-| `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.    |
+| Folder                     | npm name                               | Audience                                                                                                      |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `packages/core`            | `@contentful/experiences-sdk-core`     | **Internal.** Dependency-free payload/plan types, resolution, diagnostics, design helpers, and payload guard. |
+| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                                             |
+| `packages/client`          | `@contentful/experiences-client`       | **Internal.** Delivery integration, free fetch functions, and the lower-layer shared runtime.                 |
+| `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional Preview Session WebSocket/external-store source; forwards one-shot fetch.       |
+| `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                               |
+| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                            |
+| `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                   |
 
 **Customers install the framework adapter for rendering.** The optional `@contentful/experiences-live-preview` package is customer-facing and can be used directly by an application or as an adapter's live-preview data source. The framework adapters declare `core`, `design`, and `client` as dependencies.
+
+`ContentfulExperiences` lives in `client` as the shared lower-layer runtime for
+future Node/Web SDKs. It retains delivery and optional preview clients, owns one
+`EventBuilder`, and coordinates fetch/resolve operations. It is deliberately
+not re-exported through framework adapters and is not a new application-facing
+adapter API. Existing free functions (`fetchExperience`, `resolveExperience`,
+and `fetchPreviewSession`) remain supported.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 
@@ -217,9 +224,9 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 
 ### Package boundaries
 
-- **`core` may not depend on `react`, the delivery client, or any framework-specific package.** Enforced by code review (no module-boundary lint rule yet, but it should land).
+- **`core` has no dependencies.** It may not depend on `react`, the delivery client, or any framework-specific package. It owns runtime-neutral payload/plan types, resolution, diagnostics, design-resolution support, and the structural `isExperiencePayload` / `isRecord` guard for JSON payloads. Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
-- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`.
+- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`. Client also owns the shared `ContentfulExperiences` runtime, `EventBuilder`, and the one-shot Preview Session HTTP fetch. The runtime retains delivery/preview clients and constructs its one `EventBuilder`; Live Preview owns only WebSocket/external-store state.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
 **Consequence for `core`'s payload types.** Because `core` stays zero-dep, its payload-facing types (`ExperienceNode`, `ComponentNode`, `ExperienceTemplateNode`, `ComponentRef`, `ExperienceTemplateRef`, `ExperienceSys`, `ExperiencePayload`) are **hand-mirrored** from `@contentful/experience-delivery` rather than imported from it. Each carries a doc comment naming its upstream counterpart (`RenamedComponentTreeNode`, `ComponentLink`, `RenamedDeliveryExperienceSys`, …). They're deliberately structural supersets — a few upstream-required fields are optional here so `resolveExperience` also accepts hand-authored payloads — which is why `fetch-experience.ts` can assert a delivery response straight to `ExperiencePayload` with no normalization step.
