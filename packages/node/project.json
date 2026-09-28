@@ -1,0 +1,36 @@
+{
+  "name": "node",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/node/src",
+  "projectType": "library",
+  "tags": ["scope:sdk", "runtime:node"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/node",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/node",
+        "command": "vitest run"
+      }
+    },
+    "verify-release-artifact": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/node",
+        "command": "node --input-type=module -e \"import { readFile } from 'node:fs/promises'; const manifest = JSON.parse(await readFile('package.json', 'utf8')); const { DEFAULT_EVENT_CONTEXT_LIBRARY } = await import('./dist/sdk-info.js'); if (DEFAULT_EVENT_CONTEXT_LIBRARY.version !== manifest.version) throw new Error('Default event context library version ' + DEFAULT_EVENT_CONTEXT_LIBRARY.version + ' does not match package version ' + manifest.version);\""
+      }
+    }
+  }
+}

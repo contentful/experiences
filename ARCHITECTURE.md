@@ -53,15 +53,15 @@ Two consequences of that boundary shape recur throughout the layout below:
 
 ## Package graph
 
-Seven libraries under `packages/`, in three layers. Every edge below is a
+Eight libraries under `packages/`, in three layers. Every edge below is a
 `dependencies` entry in the respective `package.json`; there are no other
 cross-package edges.
 
 ```
-  layer 3       adapter-react   adapter-svelte   adapter-angular   live-preview
-  (public)           │                │                │                │
-                     └───────────┬────┴───────────┬────┴────────────────┘
-                                 │                │
+  layer 3       adapter-*       live-preview       node
+  (public)           │                │               │
+                     └───────────┬────┴───────────────┘
+                                 │
   layer 2                     design           client ──▶ @contentful/experience-delivery
   (internal)                    │                │    ├─▶ @contentful/optimization-api-client
                                 └───────────┬────┘    ├─▶ es-toolkit
@@ -78,15 +78,16 @@ Each adapter also depends on `core` **directly**, not only through `design` and
 | `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | — (nothing)                                                           | no      |
 | `design`          | `packages/design`          | `@contentful/experiences-design`       | `core`                                                                | no      |
 | `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, delivery client, optimization API client, `es-toolkit`, `zod` | no      |
+| `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`                                                      | yes     |
 | `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                                      | yes     |
 | `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`                                            | yes     |
 | `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`                                            | yes     |
 | `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`                                            | yes     |
 
-The graph is acyclic and the adapters are leaves — nothing depends on an
-adapter, and no adapter depends on another. That is what makes a
-new framework additive: adding `packages/adapter-vue` adds a leaf and changes no
-existing edge.
+The graph is acyclic and public packages are leaves — nothing depends on a
+public package, and no adapter depends on another. That is what makes a new
+framework or platform additive: adding `packages/adapter-vue` or a future Web
+SDK adds a leaf and changes no existing edge.
 
 **Directory name, Nx project name, and npm package name are three separate
 identifiers** (`packages/adapter-react` / `adapter-react` /
@@ -125,36 +126,46 @@ taking the dependency. The rationale is in AGENTS.md; the structural point is
 that this keeps `core` at zero dependencies, which is the invariant every future
 adapter inherits.
 
-### Core, client runtime, and Live Preview responsibilities
+### Core, Client, Node SDK, and Live Preview responsibilities
 
 `core` is genuinely dependency-free: it contains payload and render-plan types,
 `resolveExperience`, diagnostics, and viewport/design-resolution helpers. It
 does not own delivery transport, event construction, or connection state.
 
-`client` owns delivery integration and the lower-layer shared
-`ContentfulExperiences` runtime intended for future Node/Web SDKs. That runtime
-retains its delivery client and optional preview client, creates one
-`EventBuilder` for event construction, and exposes retained-client fetch and
-resolve operations. Its `EventBuilder` depends on the optimization API
-schemas/logger plus `es-toolkit` and `zod`; those are Client's dependencies, not
-Core's. The established free functions remain supported alongside the runtime.
+`client` owns delivery integration, conversion, free fetch functions, the
+runtime-neutral `EventBuilder`, and the lower-layer shared
+`ContentfulExperiences` runtime. Its `EventBuilder` depends on the optimization
+API schemas/logger plus `es-toolkit` and `zod`; those are Client's dependencies,
+not Core's. The shared runtime retains stable resolver configuration, delivery
+and optional preview clients, and one base event builder. It is stateless with
+respect to request and browser state and requires its platform caller to provide
+the event channel instead of assuming server or Web.
 
-This is an internal lower-layer contract, not a new application-facing adapter
-API: framework-adapter barrels do not re-export `ContentfulExperiences`.
-`live-preview` remains the public framework-neutral Preview Session layer. It
-owns its HTTP loading, WebSocket subscription, external-store state, and errors.
+`node` is the public Node-specific leaf over the shared Client runtime. Its
+process-long SDK instance retains only stable configuration and reusable
+delivery transports; `forRequest()` creates a request-local facade for fetch,
+resolve, and destination operations. This keeps locale and resolve options from
+crossing concurrent requests. Node event methods are separate additive work and
+are not part of this interim contract. A future Web SDK is a sibling public leaf
+over Client and Core, not a subclass of Node or a source of Node state.
+
+Framework-adapter barrels do not re-export Node's request facade. `live-preview`
+remains the public framework-neutral Preview Session layer. It owns its HTTP
+loading, WebSocket subscription, external-store state, and errors.
 
 ---
 
 ## Layering rules and where they live
 
-| Rule                                            | Encoded in                                                                             | Enforced by                                                                    |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `core` has no dependencies                      | `packages/core/package.json` (no `dependencies`)                                       | review                                                                         |
-| Only `client` reaches the delivery client       | `packages/client/package.json`                                                         | review                                                                         |
-| Frameworks are peers, never deps                | `packages/adapter-*/package.json`                                                      | `publint`, in `adapter-angular`'s Nx `build` target                            |
-| Adapters do not surface the lower-layer runtime | `packages/adapter-*/src/index.ts`                                                      | review                                                                         |
-| Project scope for tags                          | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
+| Rule                                            | Encoded in                                                                                          | Enforced by                                                                    |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `core` has no dependencies                      | `packages/core/package.json` (no `dependencies`)                                                    | review                                                                         |
+| Only `client` reaches the delivery client       | `packages/client/package.json`                                                                      | review                                                                         |
+| Client is runtime-neutral and request-stateless | `packages/client/src/*`                                                                             | review                                                                         |
+| Node request state stays request-local          | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
+| Frameworks are peers, never deps                | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
+| Adapters do not surface Node's request facade   | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
+| Project scope for tags                          | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
 
 The `tags` in each `project.json` are the seam for mechanical enforcement: the
 vocabulary is already assigned consistently, but `eslint.config.mjs` does not
@@ -310,16 +321,17 @@ bump from them, so a message that escapes the hook silently changes what ships.
 
 ## Where a change lands
 
-| Change                            | Touch                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------ |
-| Payload shape / resolve semantics | `packages/core`                                                                |
-| Viewport or design-value math     | `packages/design`                                                              |
-| Delivery, auth, hosts             | `packages/client`                                                              |
-| Rendering for one framework       | that adapter only                                                              |
-| Public API surface                | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |
-| New framework adapter             | new `packages/adapter-<fw>` leaf + a `project.json` with its own build command |
-| Workspace-wide compiler options   | `tsconfig.base.json` and/or `tsconfig.build.json`                              |
-| Build/release orchestration       | `nx.json`, `.github/workflows/*`                                               |
+| Change                                                                   | Touch                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Payload shape / resolve semantics                                        | `packages/core`                                                                |
+| Viewport or design-value math                                            | `packages/design`                                                              |
+| Delivery, auth, hosts                                                    | `packages/client`                                                              |
+| Node request facade and request-local fetch/resolve/destination defaults | `packages/node`                                                                |
+| Rendering for one framework                                              | that adapter only                                                              |
+| Public API surface                                                       | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |
+| New framework adapter                                                    | new `packages/adapter-<fw>` leaf + a `project.json` with its own build command |
+| Workspace-wide compiler options                                          | `tsconfig.base.json` and/or `tsconfig.build.json`                              |
+| Build/release orchestration                                              | `nx.json`, `.github/workflows/*`                                               |
 
 Step-by-step procedures for the new-adapter and release rows — including the
 baseline git tag a new package needs before it can be published — are in

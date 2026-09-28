@@ -5,4 +5,6 @@ npx lint-staged
 if [ "$CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT" = "true" ]; then
   npx nx build client --skip-nx-cache
   npx nx run client:verify-release-artifact
+  npx nx build node --skip-nx-cache
+  npx nx run node:verify-release-artifact
 fi

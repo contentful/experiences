@@ -31,6 +31,7 @@ experiences/
 │   ├── core/                 # @contentful/experiences-sdk-core (internal)
 │   ├── design/               # @contentful/experiences-design (internal)
 │   ├── client/               # @contentful/experiences-client (internal)
+│   ├── node/                 # @contentful/experiences-node (customer-facing Node SDK)
 │   ├── live-preview/         # @contentful/experiences-live-preview (customer-facing, optional)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
@@ -45,23 +46,29 @@ experiences/
 
 ### Package roles
 
-| Folder                     | npm name                               | Audience                                                                                       |
-| -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/core`            | `@contentful/experiences-sdk-core`     | **Internal.** Dependency-free payload/plan types, resolution, diagnostics, and design helpers. |
-| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                              |
-| `packages/client`          | `@contentful/experiences-client`       | **Internal.** Delivery integration, free fetch functions, and the lower-layer shared runtime.  |
-| `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                       |
-| `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                |
-| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                             |
-| `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.    |
+| Folder                     | npm name                               | Audience                                                                                                                                               |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/core`            | `@contentful/experiences-sdk-core`     | **Internal.** Dependency-free payload/plan types, resolution, diagnostics, and design helpers.                                                         |
+| `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                                                                                      |
+| `packages/client`          | `@contentful/experiences-client`       | **Internal.** Runtime-neutral shared runtime, delivery integration, free fetch functions, and a base `EventBuilder` with an explicit platform channel. |
+| `packages/node`            | `@contentful/experiences-node`         | **Customer-facing.** Node SDK with request-scoped fetch, resolve, and destination operations.                                                          |
+| `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                                               |
+| `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                                        |
+| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                                     |
+| `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                                            |
 
 **Customers install the framework adapter for rendering.** The optional `@contentful/experiences-live-preview` package is customer-facing and can be used directly by an application or as an adapter's live-preview data source. The framework adapters declare `core`, `design`, and `client` as dependencies.
 
-`ContentfulExperiences` lives in `client` as the shared lower-layer runtime for
-future Node/Web SDKs. It retains delivery and optional preview clients, owns one
-`EventBuilder`, and coordinates fetch/resolve operations. It is deliberately
-not re-exported through framework adapters and is not a new application-facing
-adapter API. Existing free functions remain supported.
+`client` remains runtime-neutral and stateless with respect to request and
+browser state. Its lower-layer `ContentfulExperiences` runtime retains stable
+configuration, delivery and optional preview clients, and one base
+`EventBuilder` configured with an explicit platform channel; it never retains
+request-varying locale or resolve options. The public Node SDK extends that
+runtime with `ContentfulExperiences.forRequest()`, which creates a request-local
+facade for fetch, resolve, and destination operations. Node event methods are
+separate additive work and are not part of this interim contract. A future Web
+SDK is a sibling public leaf over Client and Core, not a subclass of Node.
+Existing free functions remain supported.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 
@@ -225,7 +232,8 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 
 - **`core` has no dependencies.** It may not depend on `react`, the delivery client, or any framework-specific package. It owns runtime-neutral payload/plan types, resolution, diagnostics, and design-resolution support. Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
-- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter or from `core`. Client also owns the shared `ContentfulExperiences` runtime and `EventBuilder`. The runtime retains delivery and optional preview-delivery clients and constructs its one `EventBuilder`; Live Preview remains independently configured in its own package.
+- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter, from `core`, or from the public Node SDK. Live Preview remains independently configured in its own package.
+- **`client` is runtime-neutral and request-stateless.** It owns delivery integration, free functions, conversion, the reusable base `EventBuilder` configured with an explicit platform channel, and the lower-layer shared runtime. That runtime may retain stable configuration and reusable delivery transports, but never request or browser state. `packages/node` is the public Node leaf; `forRequest()` owns request-local locale and resolve options for fetch, resolve, and destination operations. Node event methods remain separate additive work without a documented contract. A future Web SDK remains a sibling leaf over Client and Core.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
 **Consequence for `core`'s payload types.** Because `core` stays zero-dep, its payload-facing types (`ExperienceNode`, `ComponentNode`, `ExperienceTemplateNode`, `ComponentRef`, `ExperienceTemplateRef`, `ExperienceSys`, `ExperiencePayload`) are **hand-mirrored** from `@contentful/experience-delivery` rather than imported from it. Each carries a doc comment naming its upstream counterpart (`RenamedComponentTreeNode`, `ComponentLink`, `RenamedDeliveryExperienceSys`, …). They're deliberately structural supersets — a few upstream-required fields are optional here so `resolveExperience` also accepts hand-authored payloads — which is why `fetch-experience.ts` can assert a delivery response straight to `ExperiencePayload` with no normalization step.

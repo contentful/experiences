@@ -22,7 +22,7 @@ export type RuntimeResolveOptions = {
 };
 
 export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'library'> & {
-  channel?: EventBuilderConfig['channel'];
+  channel: EventBuilderConfig['channel'];
   library?: Partial<EventBuilderConfig['library']>;
 };
 
@@ -75,7 +75,7 @@ export type ContentfulExperiencesConfig = {
   delivery: RuntimeClientSource;
   preview?: RuntimeClientSource;
   resolveDefaults?: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
-  eventBuilder?: RuntimeEventBuilderConfig;
+  eventBuilder: RuntimeEventBuilderConfig;
 };
 
 export class ContentfulExperiences implements ExperienceRuntime {
@@ -99,12 +99,10 @@ export class ContentfulExperiences implements ExperienceRuntime {
       config.preview === undefined ? undefined : resolveClient(config.preview, PREVIEW_HOST);
     this.#resolveDefaults = config.resolveDefaults ?? {};
 
-    const eventBuilder = config.eventBuilder ?? {};
     this.eventBuilder = new EventBuilder({
-      ...eventBuilder,
-      channel: eventBuilder.channel ?? 'server',
-      library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...eventBuilder.library },
-      getLocale: eventBuilder.getLocale ?? (() => this.locale),
+      ...config.eventBuilder,
+      library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library },
+      getLocale: config.eventBuilder.getLocale ?? (() => this.locale),
     });
   }
 
