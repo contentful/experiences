@@ -16,16 +16,16 @@ remain supported for adapter and application integration.
 
 `ContentfulExperiences` is an internal shared runtime contract for future
 Node/Web SDKs. Construct it with a space, environment, resolver configuration,
-and a delivery client source; optionally provide a preview client source. It
-retains those clients, merges configured resolve defaults with per-call options,
-and exposes `resolveExperience` and by-id/destination `fetchExperience` methods.
-Calling `fetchExperience` with `preview: true` requires the optional preview
-client.
+a delivery client source, and an `eventBuilder` config with an explicit
+`channel`; optionally provide a preview client source. It retains those clients,
+merges configured resolve defaults with per-call options, and exposes
+`resolveExperience` and by-id/destination `fetchExperience` methods. Calling
+`fetchExperience` with `preview: true` requires the optional preview client.
 
-The runtime constructs and owns one `EventBuilder`. Its defaults are server
-channel, this SDK's library identity, and the runtime locale; callers may
-override the supported event-builder configuration. This is the owner of event
-construction for the lower layer, rather than Core.
+The runtime constructs and owns one `EventBuilder`. The caller supplies its
+channel, while the runtime retains this SDK's default library identity and the
+runtime locale unless overridden. This is the owner of event construction for
+the lower layer, rather than Core.
 
 This package's direct dependencies are the generated delivery client,
 `@contentful/optimization-api-client` (event schemas and logger), `es-toolkit`

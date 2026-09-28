@@ -1,0 +1,36 @@
+{
+  "name": "@contentful/experiences-node",
+  "version": "0.0.0",
+  "description": "Node.js SDK for Contentful Experiences",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/contentful/experiences.git",
+    "directory": "packages/node"
+  },
+  "dependencies": {
+    "@contentful/experiences-client": "0.4.9",
+    "@contentful/experiences-sdk-core": "0.8.7"
+  }
+}

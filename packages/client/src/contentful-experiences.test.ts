@@ -22,6 +22,7 @@ describe('ContentfulExperiences', () => {
       delivery: { accessToken: 'delivery' },
       preview: { accessToken: 'preview' },
       resolveDefaults: { metadata: { site: 'main', shared: 'default' }, debug: true },
+      eventBuilder: { channel: 'server' },
     });
     expect(mockCreateClient).toHaveBeenCalledTimes(2);
     expect(mockCreateClient).toHaveBeenNthCalledWith(1, {
@@ -63,6 +64,7 @@ describe('ContentfulExperiences', () => {
       resolverConfig: { components: {} },
       delivery: { client: delivery },
       preview: { client: preview },
+      eventBuilder: { channel: 'server' },
     });
     await runtime.fetchByDestinationNode({ destinationId: 'dest', nodeId: 'node' });
     expect(mockFetchExperience).toHaveBeenLastCalledWith(
@@ -81,6 +83,7 @@ describe('ContentfulExperiences', () => {
       environmentId: 'env',
       resolverConfig: { components: {} },
       delivery: { client: delivery },
+      eventBuilder: { channel: 'server' },
     });
     expect(() => withoutPreview.fetchExperience({ experienceId: 'exp', preview: true })).toThrow(
       'fetchExperience()'
