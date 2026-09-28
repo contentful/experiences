@@ -31,6 +31,9 @@
   },
   "dependencies": {
     "@contentful/experience-delivery": "1.0.0-dev.8",
-    "@contentful/experiences-sdk-core": "0.8.6"
+    "@contentful/experiences-sdk-core": "0.8.6",
+    "@contentful/optimization-api-client": "^2.0.1",
+    "es-toolkit": "^1.46.0",
+    "zod": "^4.3.6"
   }
 }
