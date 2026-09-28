@@ -85,6 +85,17 @@ if ('redirect' in result) {
 
 Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata, debug, and viewport selection.
 
+For either delivery or preview, transport configuration is trusted: the bearer
+token is sent to the endpoint selected by that configuration. `environmentId`
+is the Contentful environment identifier used by by-ID requests; it is not the
+generated delivery client's optional `environment` endpoint setting. The
+Experiences `host` option maps to the generated client's `baseUrl`, while a raw
+`ContentfulViewDeliveryClient` can use `baseUrl` directly for a trusted custom
+endpoint. Explicit `host`/raw-client `baseUrl` wins over generated-client
+`environment`, which wins over the delivery or preview default. Direct CPA
+preview fetches are distinct from Preview Session live updates, which are owned
+by `@contentful/experiences-live-preview`.
+
 ## Errors
 
 `NotFoundError` is re-exported for missing Experiences. Other delivery and resolution errors propagate to the caller, allowing your framework to apply its normal error handling.
@@ -110,7 +121,7 @@ Do not store a request facade beyond the request that created it. Each `forReque
 
 ## Architecture boundary
 
-This package is a public Node-specific leaf over the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. Client stays runtime-neutral and stateless with respect to request and browser state: its shared runtime retains only stable configuration, reusable delivery transports, and a base `EventBuilder` configured with an explicit platform channel. The Node SDK does not add a request-bound event facade in this interim. A future Web SDK will be a sibling public package over the same lower layers, not a subclass of this Node SDK.
+This package is a public Node-specific leaf over the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. Client stays runtime-neutral and stateless with respect to request and browser state: its shared runtime retains only stable configuration, reusable delivery transports, and a base `EventBuilder` configured with an explicit platform channel. The Node SDK does not add a request-bound event facade in this interim. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
 
 ## License
 

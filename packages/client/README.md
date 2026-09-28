@@ -2,7 +2,7 @@
 
 > **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays dependency-free and framework adapters that don't need network access don't pull it in transitively. It also owns the lower-layer shared `ContentfulExperiences` runtime for future Node/Web SDKs and event construction.
+Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays dependency-free and framework adapters that don't need network access don't pull it in transitively. It also owns the lower-layer shared `ContentfulExperiences` runtime for the public Node and Web SDKs and event construction.
 
 `ContentfulExperiences` is intentionally not re-exported by framework adapters
 and is not a new application-facing adapter API. The existing free functions
@@ -14,13 +14,29 @@ remain supported for adapter and application integration.
 
 ### Shared lower-layer runtime
 
-`ContentfulExperiences` is an internal shared runtime contract for future
+`ContentfulExperiences` is an internal shared runtime contract for the public
 Node/Web SDKs. Construct it with a space, environment, resolver configuration,
 a delivery client source, and an `eventBuilder` config with an explicit
 `channel`; optionally provide a preview client source. It retains those clients,
 merges configured resolve defaults with per-call options, and exposes
 `resolveExperience` and by-id/destination `fetchExperience` methods. Calling
 `fetchExperience` with `preview: true` requires the optional preview client.
+
+The Client transport configuration is trusted: its bearer token is sent to the
+selected endpoint. `environmentId` is the Contentful environment identifier
+passed to by-ID Experience requests; it is not the generated delivery client's
+optional `environment` endpoint setting. For a Client-created transport,
+Experiences' `host` is passed through as the generated client's `baseUrl`.
+Callers that construct a raw `ContentfulViewDeliveryClient` may configure
+`baseUrl` directly. This is how both public leaves can use trusted custom
+endpoints (for example, a proxy, staging service, or regional endpoint).
+Endpoint precedence is explicit `host`/raw-client `baseUrl`, then the generated
+client's `environment`, then the delivery or preview default.
+
+The optional preview client enables direct CPA fetches by Experience ID through
+the same shared runtime. It is separate from `@contentful/experiences-live-preview`,
+which owns Preview Session HTTP loading, WebSocket subscription, and update state.
+Destination operations continue to use the delivery client.
 
 The runtime constructs and owns one `EventBuilder`. The caller supplies its
 channel, while the runtime retains this SDK's default library identity and the

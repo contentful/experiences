@@ -12,6 +12,26 @@ vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockReso
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 
+class DynamicLocaleExperiences extends ContentfulExperiences {
+  currentLocale: string | undefined;
+
+  constructor(locale: string) {
+    super({
+      spaceId: 'space',
+      environmentId: 'env',
+      locale,
+      resolverConfig: { components: {} },
+      delivery: { client: {} as never },
+      eventBuilder: { channel: 'server' },
+    });
+    this.currentLocale = locale;
+  }
+
+  override get locale(): string | undefined {
+    return this.currentLocale;
+  }
+}
+
 describe('ContentfulExperiences', () => {
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
     const runtime = new ContentfulExperiences({
@@ -90,6 +110,51 @@ describe('ContentfulExperiences', () => {
     );
   });
 
+  it('preserves an explicit generated-client environment for preview clients', () => {
+    mockCreateClient.mockClear();
+
+    new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'env',
+      resolverConfig: { components: {} },
+      delivery: { client: {} as never },
+      preview: {
+        accessToken: 'preview',
+        environment: 'https://preview-environment.example',
+      },
+      eventBuilder: { channel: 'server' },
+    });
+
+    expect(mockCreateClient).toHaveBeenCalledWith({
+      accessToken: 'preview',
+      environment: 'https://preview-environment.example',
+      host: undefined,
+    });
+  });
+
+  it('gives an explicit host precedence over generated-client environment', () => {
+    mockCreateClient.mockClear();
+
+    new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'env',
+      resolverConfig: { components: {} },
+      delivery: { client: {} as never },
+      preview: {
+        accessToken: 'preview',
+        environment: 'https://preview-environment.example',
+        host: 'https://preview-host.example',
+      },
+      eventBuilder: { channel: 'server' },
+    });
+
+    expect(mockCreateClient).toHaveBeenCalledWith({
+      accessToken: 'preview',
+      environment: 'https://preview-environment.example',
+      host: 'https://preview-host.example',
+    });
+  });
+
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {
     const runtime = new ContentfulExperiences({
       spaceId: 'space',
@@ -106,5 +171,19 @@ describe('ContentfulExperiences', () => {
     });
     expect(runtime.eventBuilder.getLocale()).toBe('de-DE');
     expect(runtime.eventBuilder).toBe(runtime.eventBuilder);
+  });
+
+  it('reads locale dynamically for fetches and default EventBuilder locale', async () => {
+    const runtime = new DynamicLocaleExperiences('en-US');
+
+    runtime.currentLocale = 'de-DE';
+    await runtime.fetchExperience({ experienceId: 'exp' });
+
+    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+      expect.objectContaining({ locale: 'de-DE' }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(runtime.eventBuilder.getLocale()).toBe('de-DE');
   });
 });
