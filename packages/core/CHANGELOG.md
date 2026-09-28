@@ -1,3 +1,7 @@
+## 0.9.0 (2026-09-28)
+
+This was a version bump only for core to align it with other projects, there were no code changes.
+
 ## 0.8.7 (2026-09-28)
 
 ### 🚀 Features

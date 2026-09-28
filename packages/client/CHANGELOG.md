@@ -1,3 +1,37 @@
+## 0.5.0 (2026-09-28)
+
+### 🚀 Features
+
+- ⚠️  add request-scoped Node SDK ([#207](https://github.com/contentful/experiences/pull/207))
+
+### ⚠️  Breaking Changes
+
+- add request-scoped Node SDK  ([#207](https://github.com/contentful/experiences/pull/207))
+  ContentfulExperiencesConfig now requires eventBuilder.channel."
+  M	.husky/pre-commit
+  M	AGENTS.md
+  M	ARCHITECTURE.md
+  M	README.md
+  M	package-lock.json
+  M	packages/client/README.md
+  M	packages/client/src/contentful-experiences.test.ts
+  M	packages/client/src/contentful-experiences.ts
+  A	packages/node/README.md
+  A	packages/node/package.json
+  A	packages/node/project.json
+  A	packages/node/src/contentful-experiences.test.ts
+  A	packages/node/src/contentful-experiences.ts
+  A	packages/node/src/index.ts
+  A	packages/node/src/sdk-info.ts
+  A	packages/node/tsconfig.json
+  A	packages/node/tsconfig.lib.json
+  A	packages/node/tsup.config.ts
+  A	packages/node/vitest.config.ts
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.9.0
+
 ## 0.4.9 (2026-09-28)
 
 ### 🚀 Features
