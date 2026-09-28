@@ -1,3 +1,14 @@
+## 0.8.7 (2026-09-28)
+
+### 🚀 Features
+
+- add shared Experiences client runtime ([#206](https://github.com/contentful/experiences/pull/206))
+- add ExO event builder ([caf2772](https://github.com/contentful/experiences/commit/caf2772))
+
+### 🩹 Fixes
+
+- allow unattributed ExO events ([eea817a](https://github.com/contentful/experiences/commit/eea817a))
+
 ## 0.8.6 (2026-09-22)
 
 This was a version bump only for core to align it with other projects, there were no code changes.

@@ -1,3 +1,17 @@
+## 0.1.11 (2026-09-28)
+
+### 🚀 Features
+
+- add shared Experiences client runtime ([#206](https://github.com/contentful/experiences/pull/206))
+- add ExO event builder ([caf2772](https://github.com/contentful/experiences/commit/caf2772))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.1.9
+- Updated client to 0.4.9
+- Updated design to 0.8.7
+- Updated core to 0.8.7
+
 ## 0.1.10 (2026-09-22)
 
 ### 🧱 Updated Dependencies

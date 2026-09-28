@@ -1,3 +1,13 @@
+## 0.4.9 (2026-09-28)
+
+### 🚀 Features
+
+- add shared Experiences client runtime ([#206](https://github.com/contentful/experiences/pull/206))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.8.7
+
 ## 0.4.8 (2026-09-22)
 
 ### 🚀 Features
