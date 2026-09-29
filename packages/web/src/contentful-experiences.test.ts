@@ -100,6 +100,25 @@ describe('Web ContentfulExperiences', () => {
     });
   });
 
+  it('forwards personalization extensions with Web event context', async () => {
+    const runtime = createRuntime();
+    const fetch = vi
+      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+    const page = runtime.eventBuilder.buildPageView();
+    const extensions = {
+      personalization: {
+        profileId: 'profile-1',
+        events: [page],
+      },
+    };
+
+    await runtime.fetchExperience({ experienceId: 'personalized', extensions });
+
+    expect(page.channel).toBe('web');
+    expect(fetch).toHaveBeenCalledWith({ experienceId: 'personalized', extensions });
+  });
+
   it('keeps mutable locale state isolated between instances', () => {
     const english = createRuntime({ locale: 'en-US' });
     const french = createRuntime({ locale: 'fr-FR' });

@@ -18,6 +18,7 @@ export {
 export type {
   CreateClientOptions,
   DestinationRedirectResult,
+  ExperienceRequestExtensions,
   RuntimeClientSource,
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
