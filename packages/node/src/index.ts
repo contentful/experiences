@@ -8,17 +8,14 @@ export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-i
 
 export {
   ContentfulViewDelivery,
-  ContentfulViewDeliveryClient,
   DELIVERY_HOST,
   DestinationPreviewNotSupportedError,
   EventProfileRequiredError,
   ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
-  createClient,
 } from '@contentful/experiences-client';
 export type {
-  CreateClientOptions,
   DestinationRedirectResult,
   ExperienceRequestExtensions,
   PersonalizationOptions,
@@ -31,7 +28,7 @@ export type {
   PageViewBuilderArgs,
   RuntimeEventMethods,
   RuntimeOptimizationConfig,
-  RuntimeClientSource,
+  RuntimeDeliveryClientOptions,
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
   RuntimeFetchExperienceOptions,

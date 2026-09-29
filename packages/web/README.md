@@ -12,11 +12,11 @@ npm install @contentful/experiences-web
 
 ## Browser transport and preview
 
-This package inherits Client's by-ID Experience transport capabilities: it can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only.
+This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only.
 
-Browser configuration is trusted application configuration. A bearer token is sent to the endpoint selected by that configuration, so validate the endpoint's origin, CORS/preflight policy, and token scope before constructing the SDK. Do not place tokens in query strings. Browser-visible delivery and preview tokens must be appropriate for the audience and origin that can load them; use a server boundary when that is not acceptable.
+Browser configuration is trusted application configuration. When configured, a bearer token is sent to the selected endpoint, so validate its origin, CORS/preflight policy, and token scope before constructing the SDK. Do not place tokens in query strings. Browser-visible delivery and preview tokens must be appropriate for the audience and origin that can load them; use a server boundary when that is not acceptable.
 
-`environmentId` identifies the Contentful environment used by an Experience request. It is distinct from the generated delivery client's optional `environment` endpoint configuration. For endpoint selection, the Experiences SDK's `host` maps to the generated client's `baseUrl`; a raw `ContentfulViewDeliveryClient` can instead be constructed with `baseUrl` directly. Endpoint precedence is explicit `host`/raw-client `baseUrl`, then generated-client `environment`, then the delivery or preview default. These options support trusted custom endpoints such as a proxy, staging service, or regional endpoint.
+`environmentId` identifies the Contentful environment used by an Experience request. It is distinct from the generated delivery client's optional `environment` endpoint configuration. The runtime constructs its clients: `host` maps to the generated client's `baseUrl`. Endpoint precedence is explicit `host`, then generated-client `environment`, then the delivery or preview default. These options support trusted custom endpoints such as a proxy, staging service, or regional endpoint.
 
 ```ts
 import { ContentfulExperiences } from '@contentful/experiences-web';
@@ -25,10 +25,7 @@ const experiences = new ContentfulExperiences({
   spaceId,
   environmentId: 'master',
   resolverConfig,
-  delivery: {
-    accessToken: publicDeliveryToken,
-    host: 'https://experiences-proxy.example.com', // optional trusted endpoint
-  },
+  delivery: { accessToken: publicDeliveryToken },
   preview: { accessToken: publicPreviewToken }, // optional direct CPA client
   locale: 'en-US',
   app: { name: 'storefront', version: '1.0.0' },
@@ -41,6 +38,16 @@ experiences.setLocale('de-DE');
 ```
 
 The generated delivery client must be able to reach the selected endpoint from the browser using its Authorization and feature headers. Validate CORS/preflight behavior in the browsers you support before deployment. If direct browser access is not appropriate, use a trusted same-origin client or an application BFF.
+
+For a tokenless same-origin proxy, provide an explicit `host` without an
+`accessToken`; the proxy owns the token and generated bearer authentication is
+disabled in the browser client:
+
+```ts
+delivery: {
+  host: 'https://application.example/experience-proxy',
+}
+```
 
 Optional custom Optimization endpoints receive complete event, profile, and
 browser-context payloads. The runtime constructs and owns the Optimization

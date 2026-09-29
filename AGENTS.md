@@ -62,20 +62,25 @@ experiences/
 **Customers install the framework adapter for rendering.** The optional `@contentful/experiences-live-preview` package is customer-facing and can be used directly by an application or as an adapter's live-preview data source. The framework adapters declare `core`, `design`, and `client` as dependencies.
 
 `client` remains runtime-neutral and stateless with respect to request and
-browser state. Its lower-layer `ContentfulExperiences` runtime retains stable
-configuration, delivery and optional preview clients, direct Optimization
-transport, and one base `EventBuilder` configured with an explicit platform
-channel; it never retains request-varying locale, resolve options, profile, or
-context. The public Node SDK extends that runtime with
+browser state. Its lower-layer `ContentfulExperiences` runtime accepts
+`RuntimeDeliveryClientOptions` configuration and constructs/owns its Delivery,
+optional Preview, and Optimization clients; runtime constructors do not accept
+caller-created clients. `accessToken` accepts the generated client's token
+supplier. It may be omitted only when an explicit trusted proxy `host` is
+configured: generated bearer auth is then disabled and that proxy owns upstream
+authentication. The runtime retains stable configuration and one base
+`EventBuilder` configured with an explicit platform channel; it never retains
+request-varying locale, resolve options, profile, or context. The public Node
+SDK extends that runtime with
 `ContentfulExperiences.forRequest()`, which creates a request-local facade for
 fetch, resolve, destination, and event operations. Node profile and event
 context are volatile request data. The public Web SDK is a sibling leaf over
 Client and Core, not a subclass of Node. It inherits Client's trusted
 custom-endpoint and direct by-ID preview capabilities. Web owns mutable browser
 locale, browser context providers, and an in-memory-only profile, with redaction
-before browser values are retained or emitted. Browser-visible bearer tokens are
-sent to the configured endpoint, so endpoint origin, CORS policy, and token
-scope are the application's responsibility.
+before browser values are retained or emitted. Direct browser tokens are
+credentials, but are intentionally browser-visible when their scope and the
+endpoint's CORS policy make that appropriate; otherwise use a trusted proxy.
 
 Both public leaves expose direct event methods: `identify`, `page`, and `track`
 use the Optimization Experience API, while `trackView`, `trackClick`,
@@ -105,7 +110,13 @@ fetchExperience(experienceOptions, clientOptions, resolveOptions) → <Experienc
 
 `fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Experience Delivery API and calls `resolveExperience` internally. The three positional args group by concern: **which experience**, **how to fetch**, **how to resolve**. Each grouping evolves independently (personalization slots into arg 3; digital-property identifiers widen arg 1) — a shape chosen to avoid one flat options object growing unbounded.
 
-Customers who want to manage the delivery client themselves have two paths: `createClient({ accessToken, host? })` (functional constructor, our option shape), or `new ContentfulViewDeliveryClient({ token, baseUrl? })` (underlying delivery client, its option shape). Either way, pass the resulting client as `{ client }` in `clientOptions`.
+The existing free `fetchExperience` and framework-adapter path remains separate
+from runtime construction. Customers who want to manage a delivery client there
+have two paths: `createClient({ accessToken, host? })` (functional constructor,
+our option shape), or `new ContentfulViewDeliveryClient({ token, baseUrl? })`
+(underlying delivery client, its option shape). Either way, pass the resulting
+client as `{ client }` in `clientOptions`. That caller-supplied client branch is
+not accepted by the Node or Web runtime constructors.
 
 `resolveExperience` (called internally by `fetchExperience`) is the **resolve step**:
 
@@ -146,7 +157,17 @@ Each grouping evolves without touching the others.
 
 ### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
-`preview` is the ergonomic toggle: pass both `accessToken` and `previewToken` once, then flip `preview` per call to pick the token and default host (`DELIVERY_HOST` vs `PREVIEW_HOST`) without touching either token. `host` is the escape hatch for URLs neither default covers — staging, a proxy, a per-region endpoint — and wins over both the generated client's `environment` endpoint option and the `preview`-derived default (`host: 'https://staging.xdn...' , preview: true` targets a non-prod preview endpoint). When `host` is absent, an explicit generated-client `environment` wins over the delivery/preview default. The `{ client }` branch ignores `preview` entirely; a caller-supplied client owns its own base URL.
+This describes the unchanged free `fetchExperience`/adapter path, not the
+Node/Web runtime constructors. `preview` is the ergonomic toggle: pass both
+`accessToken` and `previewToken` once, then flip `preview` per call to pick the
+token and default host (`DELIVERY_HOST` vs `PREVIEW_HOST`) without touching
+either token. `host` is the escape hatch for URLs neither default covers —
+staging, a proxy, a per-region endpoint — and wins over both the generated
+client's `environment` endpoint option and the `preview`-derived default
+(`host: 'https://staging.xdn...' , preview: true` targets a non-prod preview
+endpoint). When `host` is absent, an explicit generated-client `environment`
+wins over the delivery/preview default. The `{ client }` branch ignores
+`preview` entirely; a caller-supplied client owns its own base URL.
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
@@ -254,7 +275,7 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 - **`core` has no dependencies.** It may not depend on `react`, the delivery client, or any framework-specific package. It owns runtime-neutral payload/plan types, resolution, diagnostics, and design-resolution support. Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
 - **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter, from `core`, or from the public Node or Web SDK. Live Preview remains independently configured in its own package.
-- **`client` is runtime-neutral and request-stateless.** It owns delivery integration, direct Optimization transport and event construction, free functions, conversion, the reusable base `EventBuilder` configured with an explicit platform channel, and the lower-layer shared runtime. That runtime may retain stable configuration and reusable delivery, preview, and Optimization transports, but never request or browser state. `packages/node` is the public Node leaf; `forRequest()` owns request-local locale, resolve options, and volatile event profile/context for fetch, resolve, destination, and event operations. `packages/web` is the public browser sibling: it owns mutable browser locale and browser-context providers plus an in-memory-only event profile, and inherits trusted custom-endpoint plus direct by-ID CPA preview support. `identify`, `page`, and `track` use the Experience API; `trackView`, `trackClick`, `trackHover`, and `trackFlagView` use Insights. There are no SDK queues, durable persistence, consent gates, beacon/lifecycle delivery, automatic renderer tracking, or Live Preview event integration. Direct CPA fetching is distinct from the Preview Session HTTP/WebSocket functionality owned by `packages/live-preview`; manually invoked event methods still send during preview.
+- **`client` is runtime-neutral and request-stateless.** It owns delivery integration, direct Optimization transport and event construction, free functions, conversion, the reusable base `EventBuilder` configured with an explicit platform channel, and the lower-layer shared runtime. Node/Web runtime constructors take `RuntimeDeliveryClientOptions`, then construct and retain their own Delivery, optional Preview, and Optimization clients; they never accept caller-created delivery clients. A token may be a supplier, or may be omitted only with an explicit proxy host, which disables generated auth and must own upstream authentication. The runtime never retains request or browser state. `packages/node` is the public Node leaf; `forRequest()` owns request-local locale, resolve options, and volatile event profile/context for fetch, resolve, destination, and event operations. `packages/web` is the public browser sibling: it owns mutable browser locale and browser-context providers plus an in-memory-only event profile, and inherits trusted custom-endpoint plus direct by-ID CPA preview support. `identify`, `page`, and `track` use the Experience API; `trackView`, `trackClick`, `trackHover`, and `trackFlagView` use Insights. There are no SDK queues, durable persistence, consent gates, beacon/lifecycle delivery, automatic renderer tracking, or Live Preview event integration. Direct CPA fetching is distinct from the Preview Session HTTP/WebSocket functionality owned by `packages/live-preview`; manually invoked event methods still send during preview. The separate adapter/free `fetchExperience(..., { client })`, `createClient`, and raw `ContentfulViewDeliveryClient` paths remain supported.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
 **Consequence for `core`'s payload types.** Because `core` stays zero-dep, its payload-facing types (`ExperienceNode`, `ComponentNode`, `ExperienceTemplateNode`, `ComponentRef`, `ExperienceTemplateRef`, `ExperienceSys`, `ExperiencePayload`) are **hand-mirrored** from `@contentful/experience-delivery` rather than imported from it. Each carries a doc comment naming its upstream counterpart (`RenamedComponentTreeNode`, `ComponentLink`, `RenamedDeliveryExperienceSys`, …). They're deliberately structural supersets — a few upstream-required fields are optional here so `resolveExperience` also accepts hand-authored payloads — which is why `fetch-experience.ts` can assert a delivery response straight to `ExperiencePayload` with no normalization step.

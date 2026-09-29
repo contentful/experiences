@@ -1,23 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { mockApiClient, mockCreateClient, mockFetchExperience, mockResolveExperience } = vi.hoisted(
-  () => {
-    const mockOptimizationClient = {
-      experience: { upsertProfile: vi.fn() },
-      insights: { sendBatchEvents: vi.fn() },
-    };
-    return {
-      mockApiClient: vi.fn(function MockApiClient() {
-        return mockOptimizationClient;
-      }),
-      mockCreateClient: vi.fn((source) => ({ source })),
-      mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
-      mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
-    };
-  }
-);
+const {
+  mockApiClient,
+  mockCreateRuntimeDeliveryClient,
+  mockFetchExperience,
+  mockResolveExperience,
+} = vi.hoisted(() => {
+  const mockOptimizationClient = {
+    experience: { upsertProfile: vi.fn() },
+    insights: { sendBatchEvents: vi.fn() },
+  };
+  return {
+    mockApiClient: vi.fn(function MockApiClient() {
+      return mockOptimizationClient;
+    }),
+    mockCreateRuntimeDeliveryClient: vi.fn((source) => ({ source })),
+    mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
+    mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
+  };
+});
 
-vi.mock('./create-client.js', () => ({ createClient: mockCreateClient }));
+vi.mock('./create-delivery-client.js', () => ({
+  createRuntimeDeliveryClient: mockCreateRuntimeDeliveryClient,
+}));
 vi.mock('./fetch-experience.js', () => ({ fetchExperience: mockFetchExperience }));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
 vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient }));
@@ -33,7 +38,7 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
       environmentId: 'env',
       locale,
       resolverConfig: { components: {} },
-      delivery: { client: {} as never },
+      delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
     this.currentLocale = locale;
@@ -52,7 +57,7 @@ describe('ContentfulExperiences', () => {
       spaceId: 'space',
       environmentId: 'staging',
       resolverConfig: { components: {} },
-      delivery: { client: {} as never },
+      delivery: { accessToken: 'delivery' },
       optimization: {
         experienceBaseUrl: 'https://experience.example',
         insightsBaseUrl: 'https://insights.example',
@@ -75,6 +80,8 @@ describe('ContentfulExperiences', () => {
   });
 
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
+    mockCreateRuntimeDeliveryClient.mockClear();
+
     const runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'env',
@@ -85,15 +92,15 @@ describe('ContentfulExperiences', () => {
       resolveDefaults: { metadata: { site: 'main', shared: 'default' }, debug: true },
       eventBuilder: { channel: 'server' },
     });
-    expect(mockCreateClient).toHaveBeenCalledTimes(2);
-    expect(mockCreateClient).toHaveBeenNthCalledWith(1, {
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledTimes(2);
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(1, {
       accessToken: 'delivery',
-      host: undefined,
     });
-    expect(mockCreateClient).toHaveBeenNthCalledWith(2, {
-      accessToken: 'preview',
-      host: 'https://preview.xdn.contentful.com',
-    });
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+      2,
+      { accessToken: 'preview' },
+      'https://preview.xdn.contentful.com'
+    );
     await runtime.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
       { metadata: { shared: 'call' } }
@@ -130,14 +137,16 @@ describe('ContentfulExperiences', () => {
   });
 
   it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
+    mockCreateRuntimeDeliveryClient.mockClear();
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
+    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
     const runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
-      delivery: { client: delivery },
-      preview: { client: preview },
+      delivery: { accessToken: 'delivery' },
+      preview: { accessToken: 'preview' },
       eventBuilder: { channel: 'server' },
     });
     await runtime.fetchByDestinationNode({ destinationId: 'dest', nodeId: 'node' });
@@ -156,7 +165,7 @@ describe('ContentfulExperiences', () => {
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
-      delivery: { client: delivery },
+      delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
     expect(() => withoutPreview.fetchExperience({ experienceId: 'exp', preview: true })).toThrow(
@@ -165,13 +174,13 @@ describe('ContentfulExperiences', () => {
   });
 
   it('preserves an explicit generated-client environment for preview clients', () => {
-    mockCreateClient.mockClear();
+    mockCreateRuntimeDeliveryClient.mockClear();
 
     new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
-      delivery: { client: {} as never },
+      delivery: { accessToken: 'delivery' },
       preview: {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
@@ -179,21 +188,23 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
 
-    expect(mockCreateClient).toHaveBeenCalledWith({
-      accessToken: 'preview',
-      environment: 'https://preview-environment.example',
-      host: undefined,
-    });
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+      {
+        accessToken: 'preview',
+        environment: 'https://preview-environment.example',
+      },
+      'https://preview.xdn.contentful.com'
+    );
   });
 
   it('gives an explicit host precedence over generated-client environment', () => {
-    mockCreateClient.mockClear();
+    mockCreateRuntimeDeliveryClient.mockClear();
 
     new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
-      delivery: { client: {} as never },
+      delivery: { accessToken: 'delivery' },
       preview: {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
@@ -202,11 +213,14 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
 
-    expect(mockCreateClient).toHaveBeenCalledWith({
-      accessToken: 'preview',
-      environment: 'https://preview-environment.example',
-      host: 'https://preview-host.example',
-    });
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+      {
+        accessToken: 'preview',
+        environment: 'https://preview-environment.example',
+        host: 'https://preview-host.example',
+      },
+      'https://preview.xdn.contentful.com'
+    );
   });
 
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {
@@ -215,7 +229,7 @@ describe('ContentfulExperiences', () => {
       environmentId: 'env',
       locale: 'fr-FR',
       resolverConfig: { components: {} },
-      delivery: { client: {} as never },
+      delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'web', library: { version: 'test' }, getLocale: () => 'de-DE' },
     });
     expect(runtime.eventBuilder.channel).toBe('web');

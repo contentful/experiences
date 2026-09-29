@@ -2,7 +2,6 @@
 
 import {
   ContentfulExperiences as ClientContentfulExperiences,
-  ContentfulViewDeliveryClient,
   EventProfileRequiredError,
 } from '@contentful/experiences-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +22,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
     environmentId: 'environment',
     locale: 'en-US',
     resolverConfig: { components: {} },
-    delivery: { client: {} as never },
+    delivery: { accessToken: 'delivery-token' },
     ...overrides,
   });
 }
@@ -145,7 +144,7 @@ describe('Web ContentfulExperiences', () => {
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
   });
 
-  it('accepts shared endpoint and preview configuration', async () => {
+  it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
     const baseConfig = {
       spaceId: 'space',
       environmentId: 'environment',
@@ -161,14 +160,9 @@ describe('Web ContentfulExperiences', () => {
       ...baseConfig,
       delivery: { accessToken: 'delivery-token', environment: 'https://environment.example' },
     } satisfies ExperiencesWebConfig;
-    const rawClientConfig = {
+    const tokenlessProxyConfig = {
       ...baseConfig,
-      delivery: {
-        client: new ContentfulViewDeliveryClient({
-          token: 'delivery-token',
-          baseUrl: 'https://base-url.example',
-        }),
-      },
+      delivery: { host: 'https://application.example/experience-proxy' },
     } satisfies ExperiencesWebConfig;
     const options: Parameters<ContentfulExperiences['fetchExperience']>[0] = {
       experienceId: 'experience',
@@ -177,11 +171,9 @@ describe('Web ContentfulExperiences', () => {
 
     expect(() => new ContentfulExperiences(hostConfig)).not.toThrow();
     expect(() => new ContentfulExperiences(environmentConfig)).not.toThrow();
-    expect(() => new ContentfulExperiences(rawClientConfig)).not.toThrow();
+    expect(() => new ContentfulExperiences(tokenlessProxyConfig)).not.toThrow();
     expect(options).toBeDefined();
-    const runtime = createRuntime({
-      preview: { client: {} as never },
-    });
+    const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [], viewports: [] } as never);

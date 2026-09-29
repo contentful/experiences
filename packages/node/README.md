@@ -136,16 +136,16 @@ if ('redirect' in result) {
 
 Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata, debug, and viewport selection.
 
-For either delivery or preview, transport configuration is trusted: the bearer
-token is sent to the endpoint selected by that configuration. `environmentId`
-is the Contentful environment identifier used by by-ID requests; it is not the
-generated delivery client's optional `environment` endpoint setting. The
-Experiences `host` option maps to the generated client's `baseUrl`, while a raw
-`ContentfulViewDeliveryClient` can use `baseUrl` directly for a trusted custom
-endpoint. Explicit `host`/raw-client `baseUrl` wins over generated-client
-`environment`, which wins over the delivery or preview default. Direct CPA
-preview fetches are distinct from Preview Session live updates, which are owned
-by `@contentful/experiences-live-preview`.
+The runtime owns its Delivery and Preview clients. Configure each with an
+`accessToken`, or configure a tokenless trusted proxy by supplying an explicit
+`host`; the runtime disables generated bearer authentication for the latter.
+For token-bearing transports, the bearer token is sent to the configured
+endpoint. `environmentId` is the Contentful environment identifier used by
+by-ID requests; it is not the generated delivery client's optional `environment`
+endpoint setting. An explicit `host` wins over generated-client `environment`,
+which wins over the Delivery or Preview default. Direct CPA preview fetches are
+distinct from Preview Session live updates, which are owned by
+`@contentful/experiences-live-preview`.
 
 The runtime owns its Optimization API client. Configure trusted custom
 `experienceBaseUrl` or `insightsBaseUrl` endpoints through the constructor's

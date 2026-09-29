@@ -123,9 +123,12 @@ names, and the adapters re-export the `design` copy
 `@contentful/experience-delivery`, and it re-exports the pieces customers need
 (`ContentfulViewDeliveryClient`, `NotFoundError`) from
 `packages/client/src/index.ts` so the adapters can pass them through without
-taking the dependency. The rationale is in AGENTS.md; the structural point is
-that this keeps `core` at zero dependencies, which is the invariant every future
-adapter inherits.
+taking the dependency. The public adapter/free-function surface still supports
+`fetchExperience(..., { client })`, `createClient`, and a raw delivery client.
+Those are deliberately separate from Node/Web runtime construction: a runtime
+takes `RuntimeDeliveryClientOptions` and constructs its own delivery clients.
+The rationale is in AGENTS.md; the structural point is that this keeps `core` at
+zero dependencies, which is the invariant every future adapter inherits.
 
 ### Core, Client, Node SDK, and Live Preview responsibilities
 
@@ -137,11 +140,15 @@ does not own delivery transport, event construction, or connection state.
 Optimization transport and event construction, the runtime-neutral
 `EventBuilder`, and the lower-layer shared `ContentfulExperiences` runtime. Its
 event layer depends on the optimization API client, schemas/logger plus
-`es-toolkit` and `zod`; those are Client's dependencies, not Core's. The shared
-runtime retains stable resolver configuration, delivery and optional preview
-clients, direct Optimization transport, and one base event builder. It is
-stateless with respect to request and browser state and requires its platform
-caller to provide the event channel instead of assuming server or Web.
+`es-toolkit` and `zod`; those are Client's dependencies, not Core's. Runtime
+constructors accept `RuntimeDeliveryClientOptions` configuration, then construct
+and retain their own Delivery, optional Preview, and Optimization clients; a
+caller cannot inject a pre-built delivery client. `accessToken` can be the
+generated client's token supplier. It may be omitted only with an explicit proxy
+host, which disables generated bearer auth and must supply upstream auth itself.
+The shared runtime is stateless with respect to request and browser state and
+requires its platform caller to provide the event channel instead of assuming
+server or Web.
 
 `node` is the public Node-specific leaf over the shared Client runtime. Its
 process-long SDK instance retains only stable configuration and reusable
@@ -166,11 +173,14 @@ without retaining state.
 
 For both public leaves, `environmentId` names the Contentful environment used
 by by-ID Experience requests; it is distinct from the generated delivery
-client's optional `environment` endpoint configuration. The Experiences `host`
-option maps to that client's `baseUrl`; callers using a raw client configure
-`baseUrl` directly. Explicit `host`/raw-client `baseUrl` wins over generated-client
-`environment`, which wins over the delivery or preview default. This configuration
-is trusted: its bearer token goes to the selected endpoint. Direct CPA preview
+client's optional `environment` endpoint configuration. The runtime's `host`
+option maps to that client's `baseUrl`; explicit `host` wins over generated-client
+`environment`, which wins over the delivery or preview default. A tokenless
+runtime host is an explicit proxy boundary: generated auth is disabled and the
+proxy owns upstream credentials. A runtime token is sent to its configured
+endpoint. On Web this is intentionally browser-visible only when token scope and
+CORS make that safe; otherwise use the proxy. Raw-client `baseUrl` configuration
+belongs only to the separate adapter/free-function paths. Direct CPA preview
 fetches are separate from the Preview Session HTTP/WebSocket transport that
 `live-preview` owns.
 

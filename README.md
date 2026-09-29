@@ -12,7 +12,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; it owns browser locale/context state and an in-memory-only event profile, and inherits Client's trusted endpoint and direct by-ID preview capabilities. Browser tokens are visible to users and must be scoped and CORS-protected accordingly. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus an in-memory-only event profile. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
@@ -154,6 +154,14 @@ Session is active.
 The public Node and Web SDKs provide direct event methods. `identify`, `page`,
 and `track` send through the Optimization Experience API. `trackView`,
 `trackClick`, `trackHover`, and `trackFlagView` send through the Insights API.
+
+Runtime constructors accept `RuntimeDeliveryClientOptions` for `delivery` and,
+optionally, `preview`; they construct and own the Delivery, Preview, and
+Optimization clients. They do not accept a caller-created
+`ContentfulViewDeliveryClient`. `accessToken` can be a value or token supplier.
+It may be omitted only when an explicit trusted proxy `host` is supplied; the
+runtime disables generated bearer auth in that case and the proxy must own
+upstream authentication.
 
 On Node, call event methods only from the `forRequest()` facade. The profile and
 event context are request-local, volatile values; do not put them on the
@@ -771,6 +779,10 @@ Then visit `/landing` (or whichever experienceId the bootstrap printed). See eac
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
 Async. Fetches an Experience from the Experience Delivery API and resolves it in one call, the same as fetching the payload yourself and then calling `resolveExperience`. Returns a `PortableRenderPlan`.
+
+This is the established adapter/free-function API, not the Node/Web runtime
+constructor contract. Its caller-supplied `{ client }` branch, `createClient`,
+and direct `ContentfulViewDeliveryClient` use remain supported.
 
 Three positional args map to three concerns that evolve independently:
 

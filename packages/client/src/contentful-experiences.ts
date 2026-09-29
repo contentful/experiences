@@ -7,14 +7,16 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
-import { createClient } from './create-client.js';
+import {
+  createRuntimeDeliveryClient,
+  type RuntimeDeliveryClientOptions,
+} from './create-delivery-client.js';
 import {
   fetchExperience,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
   type PersonalizationOptions,
 } from './fetch-experience.js';
-import type { CreateClientOptions } from './create-client.js';
 import {
   createRuntimeOptimizationClient,
   type RuntimeOptimizationConfig,
@@ -28,7 +30,6 @@ import {
   type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
 
-export type RuntimeClientSource = CreateClientOptions | { client: ContentfulViewDeliveryClient };
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
   debug?: boolean;
@@ -87,8 +88,10 @@ export type ContentfulExperiencesConfig = {
   environmentId: string;
   locale?: string;
   resolverConfig: ResolverConfig;
-  delivery: RuntimeClientSource;
-  preview?: RuntimeClientSource;
+  /** Configuration for the runtime-owned Content Delivery API client. */
+  delivery: RuntimeDeliveryClientOptions;
+  /** Optional configuration for the runtime-owned Content Preview API client. */
+  preview?: RuntimeDeliveryClientOptions;
   /** Overrides for the runtime-owned Experience and Insights event transport. */
   optimization?: RuntimeOptimizationConfig;
   resolveDefaults?: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
@@ -112,9 +115,11 @@ export class ContentfulExperiences implements ExperienceRuntime {
     this.environmentId = config.environmentId;
     this.#locale = config.locale;
     this.#resolverConfig = config.resolverConfig;
-    this.#deliveryClient = resolveClient(config.delivery);
+    this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
     this.#previewClient =
-      config.preview === undefined ? undefined : resolveClient(config.preview, PREVIEW_HOST);
+      config.preview === undefined
+        ? undefined
+        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
     this.optimizationApi = createRuntimeOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
@@ -204,16 +209,4 @@ export class ContentfulExperiences implements ExperienceRuntime {
       initialViewportId: options?.initialViewportId,
     };
   }
-}
-
-function resolveClient(
-  source: RuntimeClientSource,
-  defaultHost?: string
-): ContentfulViewDeliveryClient {
-  if ('client' in source) return source.client;
-
-  return createClient({
-    ...source,
-    host: source.host ?? (source.environment === undefined ? defaultHost : undefined),
-  });
 }

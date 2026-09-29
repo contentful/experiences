@@ -10,7 +10,7 @@ function createRuntime() {
     environmentId: 'environment',
     locale: 'en-US',
     resolverConfig: { components: {} },
-    delivery: { client: {} as never },
+    delivery: { accessToken: 'delivery-token' },
     resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
     app: { name: 'site', version: '1.0.0' },
   });
@@ -28,7 +28,7 @@ function createEventRuntime() {
     environmentId: 'environment',
     locale: 'en-US',
     resolverConfig: { components: {} },
-    delivery: { client: {} as never },
+    delivery: { accessToken: 'delivery-token' },
   });
   const upsertProfile = vi
     .spyOn(runtime.optimizationApiForTest.experience, 'upsertProfile')
