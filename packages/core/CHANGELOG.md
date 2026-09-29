@@ -1,3 +1,7 @@
+## 0.9.2 (2026-09-29)
+
+This was a version bump only for core to align it with other projects, there were no code changes.
+
 ## 0.9.1 (2026-09-29)
 
 This was a version bump only for core to align it with other projects, there were no code changes.

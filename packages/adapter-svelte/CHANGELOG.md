@@ -1,3 +1,12 @@
+## 0.7.2 (2026-09-29)
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.2.2
+- Updated client to 0.5.2
+- Updated design to 0.9.2
+- Updated core to 0.9.2
+
 ## 0.7.1 (2026-09-29)
 
 ### 🧱 Updated Dependencies

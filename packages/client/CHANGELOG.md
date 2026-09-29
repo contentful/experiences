@@ -1,3 +1,13 @@
+## 0.5.2 (2026-09-29)
+
+### 🩹 Fixes
+
+- **client:** bump @contentful/experience-delivery to 1.0.0-dev.9 [AIS-658] ([#210](https://github.com/contentful/experiences/pull/210))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.9.2
+
 ## 0.5.1 (2026-09-29)
 
 ### 🚀 Features
