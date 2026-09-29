@@ -203,8 +203,7 @@ export async function fetchExperience(
     environmentId,
     experienceId,
     locale,
-    personalization: extensions?.personalization !== undefined,
-    sourceMap: extensions?.sourceMap !== undefined,
+    extensions,
   });
 
   const response = await fetchByExperienceId(client, experienceOptions);
@@ -213,9 +212,6 @@ export async function fetchExperience(
   const sourceMap = extensions?.sourceMap !== undefined ? readSourceMap(response) : undefined;
 
   log.lazy('received raw payload', () => payload);
-  if (extensions?.sourceMap !== undefined && !sourceMap) {
-    log.log('source map requested but not returned');
-  }
 
   return resolveExperience(payload, config, {
     metadata,
