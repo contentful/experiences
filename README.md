@@ -169,10 +169,11 @@ process-long SDK instance. On the Web, the SDK keeps its event profile only in
 memory. Reloading the page discards it; call `reset()` at logout, consent
 withdrawal, or another browser visitor boundary.
 
-The SDK sends the event at the call site. It does not queue events, persist them
-durably, gate them on consent, use beacon or page-lifecycle delivery, or attach
-automatic tracking to the renderer. Consent and tracking policy remain the
-application’s responsibility.
+The default direct-delivery path sends an event at its call site. The SDK does
+not provide a general event queue, durable persistence, consent gate, beacon or
+page-lifecycle delivery, or automatic renderer tracking. Consent and tracking
+policy remain the application’s responsibility. The narrowly scoped paired
+replay protocol below is the only deferred-delivery path.
 
 Calls are not serialized. Await `identify`, `page`, or `track` before starting
 another profile-producing or Insights call on the same runtime or request
@@ -183,6 +184,70 @@ title, viewport, and User-Agent data. Use the browser context providers to
 redact or replace values before they are retained or sent, and avoid putting
 authentication material, raw identifiers, or other personal data into event
 context or properties.
+
+### Paired server-to-browser replay
+
+The default Node delivery mode is `commit`: request events send from the server
+and are suitable for server-only execution. Only Node's `forRequest()` context
+can select `eventDelivery: 'handoff'`, for an integration that passes that same
+request's events to `@contentful/experiences-web`. Web has no delivery mode.
+
+In handoff mode, await every call. Successful `identify`, `page`, and `track`
+calls are cumulatively evaluated by the Experience API with `preflight: true`
+and staged rather than committed. Insights calls (`trackView`, `trackClick`,
+`trackHover`, and `trackFlagView`) stage without transport; `true` means the
+event was accepted into the handoff, not delivered. After all calls settle,
+call `createEventHandoff({ initialPageRouteKey })` exactly once. It finalizes
+the journal and prevents later event calls; a second call throws. In `commit`
+mode it returns `undefined`. A handoff-mode request profile is preflight output,
+not committed browser state.
+
+Pass the handoff as `eventHandoff` when constructing the Web runtime, instead
+of `profile` (the two are mutually exclusive). Web validates the payload and
+scope before eagerly replaying the ordered events. Each committed Experience
+response supplies the profile for later entries, and ordinary Web calls wait at
+this barrier. `whenEventHandoffCommitted()` resolves only when replay succeeds.
+An adapter may suppress its initial browser `page` only when that fulfilled
+receipt's `initialPageRouteKey` equals its current route key.
+
+```ts
+import { ContentfulExperiences as WebContentfulExperiences } from '@contentful/experiences-web';
+
+// Server request handler: create exactly one handoff for this response.
+const request = experiences.forRequest({
+  locale: requestLocale,
+  eventDelivery: 'handoff',
+  eventContext: { page: serverPageProperties },
+});
+
+await request.page();
+await request.track({ event: 'experience_rendered' });
+const eventHandoff = request.createEventHandoff({ initialPageRouteKey: routeKey });
+// Serialize eventHandoff safely into this user's private, no-store response.
+
+// Browser bootstrap for that same response/user.
+const web = new WebContentfulExperiences({
+  spaceId,
+  environmentId,
+  resolverConfig: experienceConfig,
+  delivery: { host: 'https://application.example/experience-proxy' },
+  eventHandoff,
+});
+const receipt = await web.whenEventHandoffCommitted();
+const initialPageWasReplayed = receipt.initialPageRouteKey === routeKey;
+```
+
+The handoff contains the exact generated event bodies and is browser-visible.
+Use escaped serialization in a private, no-store response. Do not include
+secrets or server-only traits, and never put it in a shared cache, log, or
+persistent store. The runtime enforces an internal 64 KiB serialized-payload
+cap.
+
+Replay stops on the first failed event. Earlier events can already have been
+committed, there is no automatic retry, and the protocol does not provide a
+distributed exactly-once guarantee; retrying the whole handoff can duplicate
+events committed before the failure. No framework adapter or example is wired
+to this contract yet; it remains independent from Live Preview.
 
 ---
 

@@ -165,7 +165,21 @@ Optimization Experience API; `trackView`, `trackClick`, `trackHover`, and
 `trackFlagView` target the Insights API. The SDK deliberately has no event
 queue, durable persistence, consent gate, beacon/lifecycle delivery, automatic
 renderer tracking, or Live Preview event integration. A manual event call still
-sends while a direct CPA preview fetch is active.
+sends while a direct CPA preview fetch is active. The exception is an explicit,
+request-scoped Node handoff for a paired browser integration: it is a one-shot
+journal, not a general queue. Node defaults to direct `commit` delivery;
+`eventDelivery: 'handoff'` cumulatively preflights Experience events and stages
+Insights events for browser replay. Web has no mode selector: an optional,
+mutually exclusive `eventHandoff` starts one eager ordered commit and gates its
+ordinary event methods until it succeeds. The handoff contains the exact,
+browser-visible event bodies and must use escaped serialization in a
+private/no-store response; exclude secrets and server-only traits, and never
+cache, log, or persist it. Its internal serialized-payload cap is 64 KiB.
+Replay can partially commit, stops on failure, does not retry automatically,
+and is not distributed exactly-once delivery. An adapter may suppress an
+initial browser `page` only after a fulfilled receipt's `initialPageRouteKey`
+matches the rendered route. No adapter or example is yet wired to this protocol;
+Live Preview remains independent. See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
 By-ID fetch options can carry first-class personalization with a profile id and
 caller-built events; Client maps it to XDA's extension body, and Node proxies it

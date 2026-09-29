@@ -26,6 +26,7 @@ import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import {
   createRuntimeEventMethods,
   type RuntimeEventBindings,
+  type RuntimeEventDispatch,
   type RuntimeEventMethods,
   type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
@@ -138,8 +139,11 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return this.#locale;
   }
 
-  protected createEventMethods(bindings: RuntimeEventBindings): RuntimeEventMethods {
-    return createRuntimeEventMethods(this.optimizationApi, this.eventBuilder, bindings);
+  protected createEventMethods(
+    bindings: RuntimeEventBindings,
+    dispatch?: RuntimeEventDispatch
+  ): RuntimeEventMethods {
+    return createRuntimeEventMethods(this.optimizationApi, this.eventBuilder, bindings, dispatch);
   }
 
   resolveExperience(

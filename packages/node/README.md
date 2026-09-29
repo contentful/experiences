@@ -95,6 +95,18 @@ runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method'
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Insights call on the same request facade.
 
+### Replay handoff for framework adapters
+
+Only a Node request chooses delivery. Omit `eventDelivery` (or use `'commit'`)
+for direct server events; `createEventHandoff()` then returns `undefined`. Use
+`'handoff'` only when the paired browser runtime will receive this request's
+events. Await every event call: successful Experience calls are cumulatively
+preflighted and Insights calls stage without transport (`true` means accepted).
+Finalize once with `createEventHandoff({ initialPageRouteKey })`; later event
+calls and a second finalization throw. Preflight profile data is not committed
+browser state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
+for response transport, browser bootstrap, and page suppression.
+
 ## Precedence
 
 For settings that occur at more than one scope, later scope wins:

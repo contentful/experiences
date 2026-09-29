@@ -59,14 +59,31 @@ the Optimization client. Custom Optimization base URLs receive complete event
 and profile payloads, so treat them as sensitive-data destinations and use only
 trusted HTTPS origins outside explicit local development.
 
-The bound event methods send immediately: `identify`, `page`, and `track`
-upsert a profile through the Experience API; view, click, hover, and flag-view
-events send a one-event batch through Insights. Queues, durable profile
-persistence, consent gating, lifecycle/beacon delivery, automatic interaction
-tracking, and Live Preview integration are intentionally owned by later work.
-Because there is no event queue, callers must await profile-producing calls
-before starting another profile-producing or Insights call on the same bound
-runtime.
+The bound event methods normally send immediately: `identify`, `page`, and
+`track` upsert a profile through the Experience API; view, click, hover, and
+flag-view events send a one-event batch through Insights. Queues, durable
+profile persistence, consent gating, lifecycle/beacon delivery, automatic
+interaction tracking, and Live Preview integration are intentionally absent.
+The Node leaf additionally has a request-scoped, one-shot handoff journal for
+paired browser replay; it is not an SDK queue or persistence mechanism. Because
+calls are not serialized, callers must await profile-producing calls before
+starting another profile-producing or Insights call on the same bound runtime.
+
+### Server-to-browser event handoff contract
+
+`RuntimeEventHandoff` is the internal replay payload between Node and Web. Node
+alone chooses direct `commit` or paired-browser `handoff` delivery per request.
+The handoff holds a version, Contentful scope, optional initial profile, ordered
+Experience/Insights event bodies, and an optional initial-page route key. Its
+internal serialized-payload cap is 64 KiB. Node cumulatively preflights
+successful Experience events and stages Insights events; Web validates the
+payload before its eager ordered replay and chains each resulting profile.
+
+The payload is browser-visible sensitive data. Application integration must use
+escaped serialization in a private, no-store response and exclude secrets and
+server-only traits. Do not cache, log, or persist it. Replay may partially
+commit, has no automatic retry or distributed exactly-once guarantee, and is
+independent from Live Preview. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
 
 This package's direct dependencies are the generated delivery client,
 `@contentful/optimization-api-client` (event schemas, logger, and transport), `es-toolkit`

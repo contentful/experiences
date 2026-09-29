@@ -140,6 +140,35 @@ user-agent data with the providers above before triggering events.
 There is no browser event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Insights call on the same runtime.
 
+## Server event handoff
+
+Pass a request's Node-produced `eventHandoff` to the Web runtime to commit its
+ordered events in the browser. `eventHandoff` and an initial `profile` are
+mutually exclusive. Web has no delivery mode: it validates the handoff and
+Contentful scope before one eager replay, chains profiles from Experience
+responses, and makes ordinary event methods wait.
+
+```ts
+const experiences = new ContentfulExperiences({
+  spaceId,
+  environmentId,
+  resolverConfig,
+  delivery,
+  eventHandoff,
+});
+
+const receipt = await experiences.whenEventHandoffCommitted();
+const skipInitialPage = receipt.initialPageRouteKey === currentRouteKey;
+```
+
+The receipt resolves only after successful replay. Suppress an adapter's
+initial client `page` only when its `initialPageRouteKey` matches the hydrated
+route; a missing key, mismatch, or rejected receipt does not authorize it.
+Replay can partially commit and has no automatic retry or distributed
+exactly-once guarantee. The handoff is browser-visible; use escaped
+serialization in a private, no-store response and do not cache, log, or persist
+it. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
+
 ## SSR import safety
 
 The package can be imported by server-rendered applications, but importing it must not read browser globals or start browser work. Import safety does not make the live Web runtime a server runtime: create and use browser-owned SDK state only in client-side lifecycle code, and use the Node SDK plus a serializable `PortableRenderPlan` for server rendering. The separate SSR test configuration protects the public-entry import and pure browser-context fallbacks without promising that future stateful Web construction will run on the server.

@@ -2,8 +2,11 @@
 
 import {
   ContentfulExperiences as ClientContentfulExperiences,
+  EventBuilder,
   EventProfileRequiredError,
+  type RuntimeEventHandoff,
 } from '@contentful/experiences-client';
+import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
@@ -35,6 +38,33 @@ function mockOptimization(runtime: TestContentfulExperiences, profile = { id: 'u
     sendBatchEvents: vi
       .spyOn(runtime.optimization.insights, 'sendBatchEvents')
       .mockResolvedValue(true),
+  };
+}
+
+function createHandoff(
+  events: RuntimeEventHandoff['events'],
+  overrides: Record<string, unknown> = {}
+): RuntimeEventHandoff {
+  return {
+    version: 1 as const,
+    spaceId: 'space',
+    environmentId: 'environment',
+    events,
+    ...overrides,
+  } as RuntimeEventHandoff;
+}
+
+function createHandoffEvents() {
+  const builder = new EventBuilder({ channel: 'server', library: { name: 'test', version: '1' } });
+  const page = builder.buildPageView();
+  const click = builder.buildClick({ entityId: 'experience', entityKind: 'Experience' });
+  return {
+    page,
+    click,
+    staged: [
+      { transport: 'experience', event: page },
+      { transport: 'insights', event: click },
+    ] satisfies RuntimeEventHandoff['events'],
   };
 }
 
@@ -183,13 +213,144 @@ describe('Web ContentfulExperiences', () => {
     expect(fetch).toHaveBeenCalledWith(options);
   });
 
+  it('returns an immediate empty receipt when no event handoff is supplied', async () => {
+    const runtime = createRuntime();
+
+    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
+  });
+
+  it('eagerly replays exact handoff events in sequence and chains the committed profile', async () => {
+    const { page, click, staged } = createHandoffEvents();
+    const calls: string[] = [];
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockImplementation(async (input, options) => {
+        calls.push('experience');
+        expect(input).toEqual({ profileId: undefined, events: [page] });
+        expect(options).toEqual({ locale: page.context.locale });
+        return { profile: { id: 'committed-profile' } } as never;
+      });
+    const insights = vi
+      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .mockImplementation(async (batches) => {
+        calls.push('insights');
+        expect(batches).toEqual([{ profile: { id: 'committed-profile' }, events: [click] }]);
+        return true;
+      });
+
+    const runtime = createRuntime({
+      eventHandoff: createHandoff(staged, {
+        initialPageRouteKey: '/initial',
+      }),
+    });
+    const replay = runtime.whenEventHandoffCommitted();
+
+    expect(runtime.whenEventHandoffCommitted()).toBe(replay);
+    await expect(replay).resolves.toEqual({
+      initialPageRouteKey: '/initial',
+    });
+    expect(calls).toEqual(['experience', 'insights']);
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(insights).toHaveBeenCalledOnce();
+    expect(runtime.profile).toEqual({ id: 'committed-profile' });
+  });
+
+  it('holds ordinary events behind a pending replay barrier and rejects reset while pending', async () => {
+    const { staged } = createHandoffEvents();
+    let resolveReplay!: (value: unknown) => void;
+    const replayResponse = new Promise((resolve) => {
+      resolveReplay = resolve;
+    });
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockReturnValueOnce(replayResponse as never)
+      .mockResolvedValue({ profile: { id: 'after-replay' } } as never);
+    const runtime = createRuntime({ eventHandoff: createHandoff([staged[0]!]) });
+
+    const ordinary = runtime.track({ event: 'after-handoff' });
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(() => runtime.reset()).toThrow('Cannot reset while an event handoff is pending');
+
+    resolveReplay({ profile: { id: 'committed-profile' } });
+    await ordinary;
+    expect(upsert).toHaveBeenCalledTimes(2);
+    runtime.reset();
+    expect(runtime.profile).toBeUndefined();
+  });
+
+  it('rejects invalid versions and scope before event transport', () => {
+    const upsert = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+    const insights = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
+
+    expect(() => createRuntime({ eventHandoff: createHandoff([], { version: 2 }) })).toThrow();
+    expect(() =>
+      createRuntime({ eventHandoff: createHandoff([], { environmentId: 'other' }) })
+    ).toThrow('Runtime event handoff does not match this space or environment');
+    expect(() =>
+      createRuntime({ profile: { id: 'profile' }, eventHandoff: createHandoff([]) } as never)
+    ).toThrow('accepts either profile or eventHandoff');
+    expect(upsert).not.toHaveBeenCalled();
+    expect(insights).not.toHaveBeenCalled();
+  });
+
+  it('fails the receipt and suppresses initialPage when replay fails', async () => {
+    const { staged } = createHandoffEvents();
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockRejectedValue(new Error('offline'));
+    const insights = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
+    const runtime = createRuntime({
+      eventHandoff: createHandoff([staged[0]!], {
+        initialPageRouteKey: '/initial',
+      }),
+    });
+
+    await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow('offline');
+    await expect(runtime.track({ event: 'must-not-overtake' })).rejects.toThrow('offline');
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(insights).not.toHaveBeenCalled();
+  });
+
+  it('does not report an Insights event as committed when its transport returns false', async () => {
+    const { staged } = createHandoffEvents();
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+      profile: { id: 'committed-profile' },
+    } as never);
+    vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(false);
+    const runtime = createRuntime({ eventHandoff: createHandoff(staged) });
+
+    await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow(
+      'Runtime event handoff Insights replay was not committed'
+    );
+  });
+
+  it('adopts the handoff profile for an Insights-only replay and later browser events', async () => {
+    const { staged } = createHandoffEvents();
+    const insights = vi
+      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .mockResolvedValue(true);
+    const runtime = createRuntime({
+      eventHandoff: createHandoff([staged[1]!], { initialProfileId: 'initial-profile' }),
+    });
+
+    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
+    expect(runtime.profile).toEqual({ id: 'initial-profile' });
+
+    await runtime.trackClick({ entityId: 'later', entityKind: 'InlineComponent' });
+    expect(insights).toHaveBeenLastCalledWith([
+      expect.objectContaining({ profile: { id: 'initial-profile' } }),
+    ]);
+  });
+
   it('keeps the event profile in memory and updates it from Experience events', async () => {
     const runtime = createRuntime({
       profile: { id: 'initial-profile' },
     });
     const optimization = mockOptimization(runtime);
 
-    await runtime.track({ event: 'started' });
+    const track = runtime.track({ event: 'started' });
+    expect(optimization.upsertProfile).toHaveBeenCalledOnce();
+    await track;
 
     expect(optimization.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ profileId: 'initial-profile' }),

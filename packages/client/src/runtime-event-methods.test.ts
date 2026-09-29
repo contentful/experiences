@@ -6,6 +6,7 @@ import {
   EventProfileRequiredError,
   type EventOptimizationData,
   type EventProfile,
+  type RuntimeEventDispatch,
   type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
 
@@ -29,6 +30,7 @@ function createFixture(
     profile?: EventProfile;
     consent?: boolean;
     sendResult?: boolean;
+    dispatch?: RuntimeEventDispatch;
   } = {}
 ) {
   let profile = options.profile;
@@ -42,14 +44,19 @@ function createFixture(
     channel: 'server',
     library: { name: '@contentful/experiences-node', version: 'test' },
   });
-  const methods = createRuntimeEventMethods(api, eventBuilder, {
-    getProfile: () => profile,
-    setProfile: (nextProfile) => {
-      profile = nextProfile;
+  const methods = createRuntimeEventMethods(
+    api,
+    eventBuilder,
+    {
+      getProfile: () => profile,
+      setProfile: (nextProfile) => {
+        profile = nextProfile;
+      },
+      getEventContext: () => ({ locale: 'de-DE' }),
+      getConsent: () => options.consent,
     },
-    getEventContext: () => ({ locale: 'de-DE' }),
-    getConsent: () => options.consent,
-  });
+    options.dispatch
+  );
 
   return { methods, sendBatchEvents, upsertProfile };
 }
@@ -146,6 +153,35 @@ describe('RuntimeEventMethods', () => {
     await expect(
       methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: -1 })
     ).rejects.toThrow();
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('supports a runtime-owned dispatch strategy without using the direct transports', async () => {
+    const dispatch: RuntimeEventDispatch = {
+      experience: vi.fn().mockResolvedValue(optimizationData('profile-from-dispatch')),
+      insights: vi.fn().mockResolvedValue(true),
+    };
+    const { methods, sendBatchEvents, upsertProfile } = createFixture({
+      consent: true,
+      dispatch,
+      profile: { id: 'initial-profile' },
+    });
+
+    await methods.page();
+    await methods.trackClick(interaction);
+
+    expect(dispatch.experience).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'page',
+        context: expect.objectContaining({ gdpr: { isConsentGiven: true } }),
+      }),
+      { id: 'initial-profile' }
+    );
+    expect(dispatch.insights).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'exo_node_click' }),
+      { id: 'profile-from-dispatch' }
+    );
+    expect(upsertProfile).not.toHaveBeenCalled();
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 });

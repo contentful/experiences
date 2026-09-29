@@ -27,6 +27,8 @@ export type {
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
   RuntimeEventMethods,
+  RuntimeEventHandoff,
+  RuntimeServerEventDelivery,
   RuntimeOptimizationConfig,
   RuntimeDeliveryClientOptions,
   RuntimeFetchByDestinationNodeOptions,
