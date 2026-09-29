@@ -1,14 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { mockCreateClient, mockFetchExperience, mockResolveExperience } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn((source) => ({ source })),
-  mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
-  mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
-}));
+const { mockApiClient, mockCreateClient, mockFetchExperience, mockResolveExperience } = vi.hoisted(
+  () => {
+    const mockOptimizationClient = {
+      experience: { upsertProfile: vi.fn() },
+      insights: { sendBatchEvents: vi.fn() },
+    };
+    return {
+      mockApiClient: vi.fn(function MockApiClient() {
+        return mockOptimizationClient;
+      }),
+      mockCreateClient: vi.fn((source) => ({ source })),
+      mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
+      mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
+    };
+  }
+);
 
 vi.mock('./create-client.js', () => ({ createClient: mockCreateClient }));
 vi.mock('./fetch-experience.js', () => ({ fetchExperience: mockFetchExperience }));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
+vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient }));
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 
@@ -33,6 +45,35 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
 }
 
 describe('ContentfulExperiences', () => {
+  it('constructs Optimization transport from the runtime Contentful identifiers', () => {
+    mockApiClient.mockClear();
+
+    new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'staging',
+      resolverConfig: { components: {} },
+      delivery: { client: {} as never },
+      optimization: {
+        experienceBaseUrl: 'https://experience.example',
+        insightsBaseUrl: 'https://insights.example',
+        enabledFeatures: ['location'],
+        fetchOptions: { retries: 3 },
+      },
+      eventBuilder: { channel: 'server' },
+    });
+
+    expect(mockApiClient).toHaveBeenCalledWith({
+      spaceId: 'space',
+      environment: 'staging',
+      fetchOptions: { retries: 3 },
+      experience: {
+        baseUrl: 'https://experience.example',
+        enabledFeatures: ['location'],
+      },
+      insights: { baseUrl: 'https://insights.example' },
+    });
+  });
+
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
     const runtime = new ContentfulExperiences({
       spaceId: 'space',

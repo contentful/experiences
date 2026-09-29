@@ -12,7 +12,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch and resolve work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale and resolve options. For browser fetch and resolve work without a renderer, install `@contentful/experiences-web`; it owns browser locale and context state and inherits Client's trusted endpoint and direct by-ID preview capabilities. Browser tokens are visible to users and must be scoped and CORS-protected accordingly. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; it owns browser locale/context state and an in-memory-only event profile, and inherits Client's trusted endpoint and direct by-ID preview capabilities. Browser tokens are visible to users and must be scoped and CORS-protected accordingly. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
@@ -20,6 +20,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 
 - [Getting started](#getting-started-the-simple-path)
 - [Live preview](#live-preview)
+- [Event tracking](#event-tracking)
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
@@ -141,6 +142,39 @@ const livePreview = useLivePreview({
 Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app needs the raw Experience payload. For framework-neutral code, use `createLivePreviewClient` from `@contentful/experiences-live-preview`.
 
 A connection starts only when both `previewToken` and `sessionId` are available.
+
+Live Preview does not trigger or suppress analytics automatically. A manually
+invoked event method still sends while a direct CPA preview fetch or Preview
+Session is active.
+
+---
+
+## Event tracking
+
+The public Node and Web SDKs provide direct event methods. `identify`, `page`,
+and `track` send through the Optimization Experience API. `trackView`,
+`trackClick`, `trackHover`, and `trackFlagView` send through the Insights API.
+
+On Node, call event methods only from the `forRequest()` facade. The profile and
+event context are request-local, volatile values; do not put them on the
+process-long SDK instance. On the Web, the SDK keeps its event profile only in
+memory. Reloading the page discards it; call `reset()` at logout, consent
+withdrawal, or another browser visitor boundary.
+
+The SDK sends the event at the call site. It does not queue events, persist them
+durably, gate them on consent, use beacon or page-lifecycle delivery, or attach
+automatic tracking to the renderer. Consent and tracking policy remain the
+application’s responsibility.
+
+Calls are not serialized. Await `identify`, `page`, or `track` before starting
+another profile-producing or Insights call on the same runtime or request
+facade.
+
+Web event context is read from the browser and can include URL, query, referrer,
+title, viewport, and User-Agent data. Use the browser context providers to
+redact or replace values before they are retained or sent, and avoid putting
+authentication material, raw identifiers, or other personal data into event
+context or properties.
 
 ---
 
@@ -1064,19 +1098,19 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 ## Workspace internals
 
-This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes; `@contentful/experiences-web` is public for browser fetch and resolve work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
+This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes, including request-bound event delivery; `@contentful/experiences-web` is public for browser fetch, resolve, and direct event work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
 
-| Folder                                                   | npm name                               | Scope                                                                                              |
-| -------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch and resolve operations.                             |
-| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state and shared transport capabilities.     |
-| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                              |
-| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                      |
-| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
+| Folder                                                   | npm name                               | Scope                                                                                                               |
+| -------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                                          |
+| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`).                  |
+| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client, direct Optimization transport, event construction, and `fetchExperience`. |
+| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch, resolve, and event operations.                                      |
+| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state, in-memory event profile, and direct event operations.  |
+| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                               |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                                         |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                       |
+| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                              |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. The Web SDK is a sibling public package to the Node SDK over Client and Core; it owns browser state and does not inherit Node request semantics.
 

@@ -10,6 +10,7 @@ export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundE
 export { ExperienceFetchError, DestinationPreviewNotSupportedError } from './errors.js';
 export { createClient } from './create-client.js';
 export type { CreateClientOptions } from './create-client.js';
+export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { fetchExperience } from './fetch-experience.js';
@@ -24,6 +25,15 @@ export type {
   RuntimeEventBuilderConfig,
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
+export { EventProfileRequiredError } from './runtime-event-methods.js';
+export type {
+  EventOptimizationData,
+  EventProfile,
+  ExperienceEventMethod,
+  InsightsEventMethod,
+  RuntimeEventBindings,
+  RuntimeEventMethods,
+} from './runtime-event-methods.js';
 export {
   readSourceMap,
   toExperiencePayload,

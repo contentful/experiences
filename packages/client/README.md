@@ -38,13 +38,34 @@ the same shared runtime. It is separate from `@contentful/experiences-live-previ
 which owns Preview Session HTTP loading, WebSocket subscription, and update state.
 Destination operations continue to use the delivery client.
 
-The runtime constructs and owns one `EventBuilder`. The caller supplies its
-channel, while the runtime retains this SDK's default library identity and the
-runtime locale unless overridden. This is the owner of event construction for
-the lower layer, rather than Core.
+The runtime constructs and owns one `EventBuilder` and one Optimization API
+client. The caller supplies the event channel, while the runtime retains this
+SDK's default library identity and the runtime locale unless overridden. This
+package owns event construction and direct transport for the lower layer,
+rather than Core. It exposes a protected binding point used by the public Node
+and Web leaves; Client itself does not retain a mutable event profile.
+
+By default the Optimization client uses the runtime's `spaceId` and maps its
+Contentful `environmentId` to the Optimization client's `environment` option.
+This is the same Contentful environment identifier passed to by-ID delivery
+requests, not the generated delivery client's endpoint-valued `environment`
+setting. The optional `optimization` configuration can provide API-specific
+endpoint, feature, and fetch overrides; the runtime always constructs and owns
+the Optimization client. Custom Optimization base URLs receive complete event
+and profile payloads, so treat them as sensitive-data destinations and use only
+trusted HTTPS origins outside explicit local development.
+
+The bound event methods send immediately: `identify`, `page`, and `track`
+upsert a profile through the Experience API; view, click, hover, and flag-view
+events send a one-event batch through Insights. Queues, durable profile
+persistence, consent gating, lifecycle/beacon delivery, automatic interaction
+tracking, and Live Preview integration are intentionally owned by later work.
+Because there is no event queue, callers must await profile-producing calls
+before starting another profile-producing or Insights call on the same bound
+runtime.
 
 This package's direct dependencies are the generated delivery client,
-`@contentful/optimization-api-client` (event schemas and logger), `es-toolkit`
+`@contentful/optimization-api-client` (event schemas, logger, and transport), `es-toolkit`
 (event-property merging), and `zod` (event argument schemas), in addition to
 Core. None of those dependencies are introduced into Core.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
+import { EventProfileRequiredError } from '@contentful/experiences-client';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 function createRuntime() {
@@ -13,6 +14,30 @@ function createRuntime() {
     resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
     app: { name: 'site', version: '1.0.0' },
   });
+}
+
+class TestContentfulExperiences extends ContentfulExperiences {
+  get optimizationApiForTest() {
+    return this.optimizationApi;
+  }
+}
+
+function createEventRuntime() {
+  const runtime = new TestContentfulExperiences({
+    spaceId: 'space',
+    environmentId: 'environment',
+    locale: 'en-US',
+    resolverConfig: { components: {} },
+    delivery: { client: {} as never },
+  });
+  const upsertProfile = vi
+    .spyOn(runtime.optimizationApiForTest.experience, 'upsertProfile')
+    .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
+  const sendBatchEvents = vi
+    .spyOn(runtime.optimizationApiForTest.insights, 'sendBatchEvents')
+    .mockResolvedValue(true);
+
+  return { runtime, sendBatchEvents, upsertProfile };
 }
 
 describe('Node ContentfulExperiences', () => {
@@ -147,5 +172,117 @@ describe('Node ContentfulExperiences', () => {
       { destinationId: 'destination', path: '/path' },
       { metadata: { request: true }, debug: undefined, initialViewportId: undefined }
     );
+  });
+
+  it('retains profile updates within its request facade and delegates experience events', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
+
+    await request.identify({ userId: 'user-1' });
+
+    expect(upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ profileId: 'initial-profile' }),
+      { locale: 'en-US' }
+    );
+    expect(request.profile).toEqual({ id: 'updated-profile' });
+  });
+
+  it('requires a request-local profile before delegating Insights events', async () => {
+    const { runtime, sendBatchEvents } = createEventRuntime();
+    const request = runtime.forRequest();
+
+    await expect(
+      request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+    ).rejects.toBeInstanceOf(EventProfileRequiredError);
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('keeps concurrent event profiles and context isolated, with locale precedence and consent', async () => {
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    const german = runtime.forRequest({
+      locale: 'de-DE',
+      profile: { id: 'german-profile' },
+      eventContext: { locale: 'context-locale', userAgent: 'german-agent' },
+      eventConsent: false,
+    });
+    const french = runtime.forRequest({
+      locale: 'fr-FR',
+      profile: { id: 'french-profile' },
+      eventContext: { userAgent: 'french-agent' },
+      eventConsent: true,
+    });
+
+    await Promise.all([
+      german.track({ event: 'viewed', locale: 'method-locale' }),
+      french.track({ event: 'viewed' }),
+      german.trackClick({ entityId: 'german-entry', entityKind: 'InlineComponent' }),
+      french.trackClick({ entityId: 'french-entry', entityKind: 'InlineComponent' }),
+    ]);
+
+    expect(upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              locale: 'method-locale',
+              userAgent: 'german-agent',
+              gdpr: { isConsentGiven: false },
+            }),
+          }),
+        ],
+      }),
+      { locale: 'method-locale' }
+    );
+    expect(upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              locale: 'fr-FR',
+              userAgent: 'french-agent',
+              gdpr: { isConsentGiven: true },
+            }),
+          }),
+        ],
+      }),
+      { locale: 'fr-FR' }
+    );
+    expect(sendBatchEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        profile: { id: 'german-profile' },
+        events: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              locale: 'de-DE',
+              userAgent: 'german-agent',
+              gdpr: { isConsentGiven: false },
+            }),
+          }),
+        ],
+      }),
+    ]);
+    expect(sendBatchEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        profile: { id: 'french-profile' },
+        events: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              locale: 'fr-FR',
+              userAgent: 'french-agent',
+              gdpr: { isConsentGiven: true },
+            }),
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('uses event context locale when no request locale is supplied', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const request = runtime.forRequest({ eventContext: { locale: 'it-IT' } });
+
+    await request.track({ event: 'viewed' });
+
+    expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'it-IT' });
   });
 });

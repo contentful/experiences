@@ -3,6 +3,7 @@
 import {
   ContentfulExperiences as ClientContentfulExperiences,
   ContentfulViewDeliveryClient,
+  EventProfileRequiredError,
 } from '@contentful/experiences-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,8 +11,14 @@ import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
-  return new ContentfulExperiences({
+class TestContentfulExperiences extends ContentfulExperiences {
+  get optimization(): typeof this.optimizationApi {
+    return this.optimizationApi;
+  }
+}
+
+function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestContentfulExperiences {
+  return new TestContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
@@ -19,6 +26,17 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
     delivery: { client: {} as never },
     ...overrides,
   });
+}
+
+function mockOptimization(runtime: TestContentfulExperiences, profile = { id: 'updated-profile' }) {
+  return {
+    upsertProfile: vi
+      .spyOn(runtime.optimization.experience, 'upsertProfile')
+      .mockResolvedValue({ profile } as never),
+    sendBatchEvents: vi
+      .spyOn(runtime.optimization.insights, 'sendBatchEvents')
+      .mockResolvedValue(true),
+  };
 }
 
 afterEach(() => {
@@ -171,6 +189,113 @@ describe('Web ContentfulExperiences', () => {
     await runtime.fetchExperience(options);
 
     expect(fetch).toHaveBeenCalledWith(options);
+  });
+
+  it('keeps the event profile in memory and updates it from Experience events', async () => {
+    const runtime = createRuntime({
+      profile: { id: 'initial-profile' },
+    });
+    const optimization = mockOptimization(runtime);
+
+    await runtime.track({ event: 'started' });
+
+    expect(optimization.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ profileId: 'initial-profile' }),
+      { locale: 'en-US' }
+    );
+    expect(runtime.profile).toEqual({ id: 'updated-profile' });
+  });
+
+  it('requires a volatile profile for Insights events', async () => {
+    const runtime = createRuntime();
+    mockOptimization(runtime);
+
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).rejects.toBeInstanceOf(EventProfileRequiredError);
+  });
+
+  it('resets the volatile profile before establishing a new one', async () => {
+    const runtime = createRuntime({
+      profile: { id: 'first-profile' },
+    });
+    const optimization = mockOptimization(runtime);
+
+    runtime.reset();
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).rejects.toBeInstanceOf(EventProfileRequiredError);
+
+    await runtime.page();
+    await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+
+    expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
+      expect.objectContaining({ profile: { id: 'updated-profile' } }),
+    ]);
+  });
+
+  it('does not restore a prior profile from an in-flight Experience response', async () => {
+    let resolveResponse!: (value: { profile: { id: string } }) => void;
+    const response = new Promise<{ profile: { id: string } }>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const runtime = createRuntime({
+      profile: { id: 'first-profile' },
+    });
+    const optimization = mockOptimization(runtime);
+    optimization.upsertProfile.mockReturnValueOnce(response as never);
+
+    const pending = runtime.track({ event: 'started-before-session-change' });
+    runtime.reset();
+    await runtime.page();
+    resolveResponse({ profile: { id: 'first-profile-from-api' } });
+
+    await pending;
+    expect(runtime.profile).toEqual({ id: 'updated-profile' });
+  });
+
+  it('uses the latest redacted browser context, locale, and consent without gating events', async () => {
+    const runtime = createRuntime({
+      locale: 'en-US',
+      profile: { id: 'visitor' },
+      browserContext: {
+        getPageProperties: () => ({
+          path: window.location.pathname,
+          query: {},
+          referrer: '',
+          search: '',
+          title: document.title,
+          url: `${window.location.origin}${window.location.pathname}`,
+        }),
+        getUserAgent: () => 'redacted-agent',
+        getConsent: () => false,
+      },
+    });
+    const optimization = mockOptimization(runtime, { id: 'visitor' });
+
+    window.history.replaceState({}, '', '/latest?secret=omit');
+    document.title = 'Latest page';
+    runtime.setLocale('de-DE');
+
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).resolves.toBe(true);
+
+    expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
+      {
+        profile: { id: 'visitor' },
+        events: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              locale: 'de-DE',
+              gdpr: { isConsentGiven: false },
+              page: expect.objectContaining({ path: '/latest', query: {} }),
+              userAgent: 'redacted-agent',
+            }),
+          }),
+        ],
+      },
+    ]);
   });
 });
 

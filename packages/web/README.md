@@ -42,6 +42,12 @@ experiences.setLocale('de-DE');
 
 The generated delivery client must be able to reach the selected endpoint from the browser using its Authorization and feature headers. Validate CORS/preflight behavior in the browsers you support before deployment. If direct browser access is not appropriate, use a trusted same-origin client or an application BFF.
 
+Optional custom Optimization endpoints receive complete event, profile, and
+browser-context payloads. The runtime constructs and owns the Optimization
+client; configure its Experience and Insights endpoints through `optimization`.
+Treat custom endpoints as sensitive-data destinations and use only trusted HTTPS
+origins outside explicit local development.
+
 Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
 
 ## Personalization
@@ -70,6 +76,10 @@ Locale is mutable browser state. Update it with `setLocale()` rather than sharin
 
 The default event context is read lazily and includes the current URL, path, query parameters, search, hash, referrer, title, viewport dimensions, and User-Agent. SPA navigation is therefore reflected without reconstructing the SDK. These values can contain sensitive data.
 
+Calling an event method sends these default values to the Optimization service.
+If URLs, query parameters, referrers, or User-Agent values are not approved for
+that destination, configure redacting providers before triggering events.
+
 Use `browserContext.getPageProperties` and `browserContext.getUserAgent` to redact or replace the defaults before a value is retained, logged, or sent onward. Do not expose authentication material, raw identifiers, or personal data merely because it is available in the browser.
 
 ```ts
@@ -89,6 +99,40 @@ const experiences = new ContentfulExperiences({
 });
 ```
 
+## Events
+
+The Web runtime provides direct event methods: `identify`, `page`, `track`,
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
+initial profile when creating the runtime, or identify a profile before sending
+Insights events. Experience event responses can supply a profile to the runtime,
+but profile state is volatile: this package does not generate identifiers
+locally, persist them, or restore them after a reload.
+Call `reset()` at logout, consent withdrawal, or another browser session
+boundary. The next `identify`, `page`, or `track` call establishes the next
+volatile profile.
+
+```ts
+const experiences = new ContentfulExperiences({
+  // delivery and resolver configuration...
+  profile: { id: 'visitor-123' },
+  browserContext: {
+    getConsent: () => consentStore.hasAnalyticsConsent(),
+  },
+});
+
+await experiences.track({ event: 'cta_clicked', properties: { placement: 'hero' } });
+
+// At logout or another visitor boundary:
+experiences.reset();
+```
+
+Each call reads the current locale and browser context, so SPA navigation and
+`setLocale()` changes are reflected without recreating the runtime. The consent
+provider annotates the event context; it does not gate sending. Redact page and
+user-agent data with the providers above before triggering events.
+There is no browser event queue: await `identify`, `page`, or `track` before
+starting another profile-producing or Insights call on the same runtime.
+
 ## SSR import safety
 
 The package can be imported by server-rendered applications, but importing it must not read browser globals or start browser work. Import safety does not make the live Web runtime a server runtime: create and use browser-owned SDK state only in client-side lifecycle code, and use the Node SDK plus a serializable `PortableRenderPlan` for server rendering. The separate SSR test configuration protects the public-entry import and pure browser-context fallbacks without promising that future stateful Web construction will run on the server.
@@ -101,7 +145,8 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No event methods, persistence, or offline queues yet.
+- No profile persistence, offline queues, beacon/lifecycle delivery, consent
+  gating, or automatic event tracking.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.
 
 ## Architecture boundary
