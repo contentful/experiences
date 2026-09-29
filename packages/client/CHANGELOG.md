@@ -1,3 +1,13 @@
+## 0.5.1 (2026-09-29)
+
+### 🚀 Features
+
+- add Web SDK runtime ([#208](https://github.com/contentful/experiences/pull/208))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.9.1
+
 ## 0.5.0 (2026-09-28)
 
 ### 🚀 Features
