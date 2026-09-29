@@ -53,14 +53,14 @@ Two consequences of that boundary shape recur throughout the layout below:
 
 ## Package graph
 
-Eight libraries under `packages/`, in three layers. Every edge below is a
+Nine libraries under `packages/`, in three layers. Every edge below is a
 `dependencies` entry in the respective `package.json`; there are no other
 cross-package edges.
 
 ```
-  layer 3       adapter-*       live-preview       node
-  (public)           │                │               │
-                     └───────────┬────┴───────────────┘
+  layer 3       adapter-*       live-preview       node       web
+  (public)           │                │               │         │
+                     └───────────┬────┴───────────────┴─────────┘
                                  │
   layer 2                     design           client ──▶ @contentful/experience-delivery
   (internal)                    │                │    ├─▶ @contentful/optimization-api-client
@@ -79,6 +79,7 @@ Each adapter also depends on `core` **directly**, not only through `design` and
 | `design`          | `packages/design`          | `@contentful/experiences-design`       | `core`                                                                | no      |
 | `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, delivery client, optimization API client, `es-toolkit`, `zod` | no      |
 | `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`                                                      | yes     |
+| `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`                                                      | yes     |
 | `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                                      | yes     |
 | `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`                                            | yes     |
 | `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`                                            | yes     |
@@ -86,8 +87,8 @@ Each adapter also depends on `core` **directly**, not only through `design` and
 
 The graph is acyclic and public packages are leaves — nothing depends on a
 public package, and no adapter depends on another. That is what makes a new
-framework or platform additive: adding `packages/adapter-vue` or a future Web
-SDK adds a leaf and changes no existing edge.
+framework or platform additive: adding `packages/adapter-vue` adds a leaf and
+changes no existing edge. The Web SDK is the existing platform sibling of Node.
 
 **Directory name, Nx project name, and npm package name are three separate
 identifiers** (`packages/adapter-react` / `adapter-react` /
@@ -146,8 +147,21 @@ process-long SDK instance retains only stable configuration and reusable
 delivery transports; `forRequest()` creates a request-local facade for fetch,
 resolve, and destination operations. This keeps locale and resolve options from
 crossing concurrent requests. Node event methods are separate additive work and
-are not part of this interim contract. A future Web SDK is a sibling public leaf
-over Client and Core, not a subclass of Node or a source of Node state.
+are not part of this interim contract. `web` is a sibling public leaf over
+Client and Core, not a subclass of Node or a source of Node state. It owns
+mutable browser locale and browser context providers, and inherits the shared
+runtime's trusted custom-endpoint and direct by-ID CPA preview capabilities. It
+has no operational event methods, persistence, or queues in this interim.
+
+For both public leaves, `environmentId` names the Contentful environment used
+by by-ID Experience requests; it is distinct from the generated delivery
+client's optional `environment` endpoint configuration. The Experiences `host`
+option maps to that client's `baseUrl`; callers using a raw client configure
+`baseUrl` directly. Explicit `host`/raw-client `baseUrl` wins over generated-client
+`environment`, which wins over the delivery or preview default. This configuration
+is trusted: its bearer token goes to the selected endpoint. Direct CPA preview
+fetches are separate from the Preview Session HTTP/WebSocket transport that
+`live-preview` owns.
 
 Framework-adapter barrels do not re-export Node's request facade. `live-preview`
 remains the public framework-neutral Preview Session layer. It owns its HTTP
@@ -163,6 +177,7 @@ loading, WebSocket subscription, external-store state, and errors.
 | Only `client` reaches the delivery client       | `packages/client/package.json`                                                                      | review                                                                         |
 | Client is runtime-neutral and request-stateless | `packages/client/src/*`                                                                             | review                                                                         |
 | Node request state stays request-local          | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
+| Web browser state stays browser-owned           | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
 | Frameworks are peers, never deps                | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
 | Adapters do not surface Node's request facade   | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
 | Project scope for tags                          | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
@@ -206,22 +221,25 @@ commands in `project.json`, because the three adapters do not share a build tool
 | `core`            | `tsup`                                | `vitest run`                                              |
 | `design`          | `tsup`                                | `vitest run`                                              |
 | `client`          | `tsup`                                | `vitest run`                                              |
+| `node`            | `tsup`                                | `vitest run`                                              |
+| `web`             | `tsup`                                | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
+| `live-preview`    | `tsup`                                | `vitest run`                                              |
 | `adapter-react`   | `tsup`                                | `vitest run`                                              |
 | `adapter-svelte`  | `svelte-package -i src -o dist`       | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 | `adapter-angular` | `ngc -p tsconfig.lib.json && publint` | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 
-The two-config test split on the Svelte and Angular adapters exists because
-their client and server compilations are not interchangeable — the reasoning is
-in AGENTS.md under "Run tests".
+The separate browser/SSR test configs on Web, Svelte, and Angular keep browser
+globals and framework client behavior out of the Node test environment. The
+adapter-specific reasoning is in AGENTS.md under "Run tests".
 
-`typecheck` is inferred by the `@nx/js/typescript` plugin for the six packages
+`typecheck` is inferred by the `@nx/js/typescript` plugin for the eight packages
 that carry a `tsconfig.lib.json` (`core`, `client`, `design`, `adapter-react`,
-`adapter-angular`, `live-preview`); `adapter-angular` overrides the inferred
-target with its own explicit `typecheck` (`tsc --noEmit -p tsconfig.json`) in
-`project.json`, since it doesn't build via `tsc --build`/`tsup` like the
-others. `adapter-svelte` has no `tsconfig.lib.json` and instead exposes a
-`check` script running `svelte-check` — its own real typecheck gate, so its
-`tsconfig.json` is the one package config still left with `noEmit: true`.
+`adapter-angular`, `live-preview`, `node`, `web`); `adapter-angular` overrides the
+inferred target with its own explicit `typecheck` (`tsc --noEmit -p tsconfig.json`)
+in `project.json`, since it doesn't build via `tsc --build`/`tsup` like the
+others. `adapter-svelte` has no `tsconfig.lib.json` and instead exposes a `check`
+script running `svelte-check` — its own real typecheck gate, so its `tsconfig.json`
+is the one package config still left with `noEmit: true`.
 
 ---
 
@@ -271,8 +289,8 @@ without rebuilding after the version bump, so publishing from a generated
 `packages/adapter-angular/tsconfig.lib.json` records this as the reason that
 package uses `ngc` instead of `ng-packagr`.
 
-All six packages are ESM only — every manifest declares `"type": "module"` and
-`sideEffects: false`, and the four `tsup` packages emit `format: ['esm']` and
+All nine packages are ESM only — every manifest declares `"type": "module"` and
+`sideEffects: false`, and the seven `tsup` packages emit `format: ['esm']` and
 nothing else.
 
 The `tsup` packages set `bundle: false`, so `dist` mirrors `src` file for file.
@@ -327,6 +345,7 @@ bump from them, so a message that escapes the hook silently changes what ships.
 | Viewport or design-value math                                            | `packages/design`                                                              |
 | Delivery, auth, hosts                                                    | `packages/client`                                                              |
 | Node request facade and request-local fetch/resolve/destination defaults | `packages/node`                                                                |
+| Web browser locale, context providers, and shared-runtime fetch/resolve  | `packages/web`                                                                 |
 | Rendering for one framework                                              | that adapter only                                                              |
 | Public API surface                                                       | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |
 | New framework adapter                                                    | new `packages/adapter-<fw>` leaf + a `project.json` with its own build command |

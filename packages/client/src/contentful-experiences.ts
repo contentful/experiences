@@ -81,9 +81,9 @@ export type ContentfulExperiencesConfig = {
 export class ContentfulExperiences implements ExperienceRuntime {
   readonly spaceId: string;
   readonly environmentId: string;
-  readonly locale: string | undefined;
   readonly eventBuilder: EventBuilder;
 
+  readonly #locale: string | undefined;
   readonly #resolverConfig: ResolverConfig;
   readonly #deliveryClient: ContentfulViewDeliveryClient;
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
@@ -92,7 +92,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
   constructor(config: ContentfulExperiencesConfig) {
     this.spaceId = config.spaceId;
     this.environmentId = config.environmentId;
-    this.locale = config.locale;
+    this.#locale = config.locale;
     this.#resolverConfig = config.resolverConfig;
     this.#deliveryClient = resolveClient(config.delivery);
     this.#previewClient =
@@ -104,6 +104,10 @@ export class ContentfulExperiences implements ExperienceRuntime {
       library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library },
       getLocale: config.eventBuilder.getLocale ?? (() => this.locale),
     });
+  }
+
+  get locale(): string | undefined {
+    return this.#locale;
   }
 
   resolveExperience(
@@ -178,7 +182,10 @@ function resolveClient(
   source: RuntimeClientSource,
   defaultHost?: string
 ): ContentfulViewDeliveryClient {
-  return 'client' in source
-    ? source.client
-    : createClient({ ...source, host: source.host ?? defaultHost });
+  if ('client' in source) return source.client;
+
+  return createClient({
+    ...source,
+    host: source.host ?? (source.environment === undefined ? defaultHost : undefined),
+  });
 }

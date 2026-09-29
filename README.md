@@ -12,7 +12,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch and resolve work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale and resolve options. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch and resolve work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale and resolve options. For browser fetch and resolve work without a renderer, install `@contentful/experiences-web`; it owns browser locale and context state and inherits Client's trusted endpoint and direct by-ID preview capabilities. Browser tokens are visible to users and must be scoped and CORS-protected accordingly. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
@@ -1064,7 +1064,7 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 ## Workspace internals
 
-This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes, and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use; the remaining packages are workspace-internal.
+This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes; `@contentful/experiences-web` is public for browser fetch and resolve work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
 
 | Folder                                                   | npm name                               | Scope                                                                                              |
 | -------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -1072,12 +1072,13 @@ This is an Nx monorepo. Install the framework adapter for rendering. `@contentfu
 | [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
 | [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`.                                      |
 | [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch and resolve operations.                             |
+| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state and shared transport capabilities.     |
 | [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                              |
 | [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                        |
 | [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                      |
 | [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
 
-Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. A future Web SDK is a sibling public package to the Node SDK over Client and Core; it does not inherit Node request semantics.
+Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. The Web SDK is a sibling public package to the Node SDK over Client and Core; it owns browser state and does not inherit Node request semantics.
 
 ```sh
 npm install --ignore-scripts        # husky prepare can fail in fresh clones; safe to skip

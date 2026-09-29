@@ -7,4 +7,6 @@ if [ "$CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT" = "true" ]; then
   npx nx run client:verify-release-artifact
   npx nx build node --skip-nx-cache
   npx nx run node:verify-release-artifact
+  npx nx build web --skip-nx-cache
+  npx nx run web:verify-release-artifact
 fi

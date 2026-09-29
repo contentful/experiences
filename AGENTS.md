@@ -32,6 +32,7 @@ experiences/
 │   ├── design/               # @contentful/experiences-design (internal)
 │   ├── client/               # @contentful/experiences-client (internal)
 │   ├── node/                 # @contentful/experiences-node (customer-facing Node SDK)
+│   ├── web/                  # @contentful/experiences-web (customer-facing Web SDK)
 │   ├── live-preview/         # @contentful/experiences-live-preview (customer-facing, optional)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
@@ -52,6 +53,7 @@ experiences/
 | `packages/design`          | `@contentful/experiences-design`       | **Internal.** Pure viewport math.                                                                                                                      |
 | `packages/client`          | `@contentful/experiences-client`       | **Internal.** Runtime-neutral shared runtime, delivery integration, free fetch functions, and a base `EventBuilder` with an explicit platform channel. |
 | `packages/node`            | `@contentful/experiences-node`         | **Customer-facing.** Node SDK with request-scoped fetch, resolve, and destination operations.                                                          |
+| `packages/web`             | `@contentful/experiences-web`          | **Customer-facing.** Web SDK with browser-owned locale/context state and shared transport capabilities.                                                |
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                                               |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                                        |
 | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                                     |
@@ -66,8 +68,13 @@ configuration, delivery and optional preview clients, and one base
 request-varying locale or resolve options. The public Node SDK extends that
 runtime with `ContentfulExperiences.forRequest()`, which creates a request-local
 facade for fetch, resolve, and destination operations. Node event methods are
-separate additive work and are not part of this interim contract. A future Web
-SDK is a sibling public leaf over Client and Core, not a subclass of Node.
+separate additive work and are not part of this interim contract. The public Web
+SDK is a sibling leaf over Client and Core, not a subclass of Node. It inherits
+Client's trusted custom-endpoint and direct by-ID preview capabilities. Web owns
+mutable browser locale and browser context providers, with redaction before
+values are retained or emitted. Browser-visible bearer tokens are sent to the
+configured endpoint, so endpoint origin, CORS policy, and token scope are the
+application's responsibility.
 Existing free functions remain supported.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
@@ -125,7 +132,7 @@ Each grouping evolves without touching the others.
 
 ### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
-`preview` is the ergonomic toggle: pass both `accessToken` and `previewToken` once, then flip `preview` per call to pick the token and default host (`DELIVERY_HOST` vs `PREVIEW_HOST`) without touching either token. `host` is the escape hatch for URLs neither default covers — staging, a proxy, a per-region endpoint — and wins over the `preview`-derived default when both are set (`host: 'https://staging.xdn...' , preview: true` targets a non-prod preview endpoint). The `{ client }` branch ignores `preview` entirely; a caller-supplied client owns its own base URL.
+`preview` is the ergonomic toggle: pass both `accessToken` and `previewToken` once, then flip `preview` per call to pick the token and default host (`DELIVERY_HOST` vs `PREVIEW_HOST`) without touching either token. `host` is the escape hatch for URLs neither default covers — staging, a proxy, a per-region endpoint — and wins over both the generated client's `environment` endpoint option and the `preview`-derived default (`host: 'https://staging.xdn...' , preview: true` targets a non-prod preview endpoint). When `host` is absent, an explicit generated-client `environment` wins over the delivery/preview default. The `{ client }` branch ignores `preview` entirely; a caller-supplied client owns its own base URL.
 
 ### Why does every delivery request carry `x-contentful-enable-alpha-feature: new-exo-entity-types`?
 
@@ -232,8 +239,8 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 
 - **`core` has no dependencies.** It may not depend on `react`, the delivery client, or any framework-specific package. It owns runtime-neutral payload/plan types, resolution, diagnostics, and design-resolution support. Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` depends on `core` for both types and runtime values.** `select-resolved-design.ts` calls `core`'s `applyTokenResolver` / `resolveDesignProperties` directly, and `viewport.ts` re-exports those same helpers (plus `getValueForViewport`, `getViewportIndex`) verbatim to keep `design`'s own public API unchanged after the cascade/token-resolution logic moved into `core` for server-side pre-resolution (AIS-386). See [ARCHITECTURE.md § The design → core edge](./ARCHITECTURE.md#the-design--core-edge) for the full rationale.
-- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter, from `core`, or from the public Node SDK. Live Preview remains independently configured in its own package.
-- **`client` is runtime-neutral and request-stateless.** It owns delivery integration, free functions, conversion, the reusable base `EventBuilder` configured with an explicit platform channel, and the lower-layer shared runtime. That runtime may retain stable configuration and reusable delivery transports, but never request or browser state. `packages/node` is the public Node leaf; `forRequest()` owns request-local locale and resolve options for fetch, resolve, and destination operations. Node event methods remain separate additive work without a documented contract. A future Web SDK remains a sibling leaf over Client and Core.
+- **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter, from `core`, or from the public Node or Web SDK. Live Preview remains independently configured in its own package.
+- **`client` is runtime-neutral and request-stateless.** It owns delivery integration, free functions, conversion, the reusable base `EventBuilder` configured with an explicit platform channel, and the lower-layer shared runtime. That runtime may retain stable configuration and reusable delivery and optional preview transports, but never request or browser state. `packages/node` is the public Node leaf; `forRequest()` owns request-local locale and resolve options for fetch, resolve, and destination operations. `packages/web` is the public browser sibling: it owns mutable browser locale and browser-context providers and inherits trusted custom-endpoint plus direct by-ID CPA preview support. It has no operational event methods, persistence, or queues in this interim. Direct CPA fetching is distinct from the Preview Session HTTP/WebSocket functionality owned by `packages/live-preview`. Node event methods remain separate additive work without a documented contract.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 
 **Consequence for `core`'s payload types.** Because `core` stays zero-dep, its payload-facing types (`ExperienceNode`, `ComponentNode`, `ExperienceTemplateNode`, `ComponentRef`, `ExperienceTemplateRef`, `ExperienceSys`, `ExperiencePayload`) are **hand-mirrored** from `@contentful/experience-delivery` rather than imported from it. Each carries a doc comment naming its upstream counterpart (`RenamedComponentTreeNode`, `ComponentLink`, `RenamedDeliveryExperienceSys`, …). They're deliberately structural supersets — a few upstream-required fields are optional here so `resolveExperience` also accepts hand-authored payloads — which is why `fetch-experience.ts` can assert a delivery response straight to `ExperiencePayload` with no normalization step.
@@ -391,9 +398,13 @@ Anything touching snippets or slot rendering needs coverage in **both**.
 `vitest.ssr.config.ts` (node, `*.ssr.test.ts`, currently `nodes-renderer.ssr.test.ts`,
 `debug-panel-coverage.ssr.test.ts`, and `live-preview-experience.ssr.test.ts`) — for
 the same reason: the SSR path bootstraps through `@angular/platform-server`, which
-behaves differently enough from the jsdom path to need its own environment. Note
-that `test.projects` in a single config would be the tidier form, but that needs
-Vitest 3.2+ and the workspace is pinned to 1.6.
+behaves differently enough from the jsdom path to need its own environment.
+
+`web` also uses two configs: `vitest.config.ts` runs browser-context behavior in
+jsdom, while `vitest.ssr.config.ts` runs `*.ssr.test.ts` in Node to prove that
+the public entry imports safely and pure context helpers fall back without browser
+globals. It does not promise that the future stateful Web runtime can be constructed
+or operated during SSR.
 
 ### Build everything from scratch
 
