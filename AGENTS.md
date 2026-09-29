@@ -67,8 +67,10 @@ configuration, delivery and optional preview clients, and one base
 `EventBuilder` configured with an explicit platform channel; it never retains
 request-varying locale or resolve options. The public Node SDK extends that
 runtime with `ContentfulExperiences.forRequest()`, which creates a request-local
-facade for fetch, resolve, and destination operations. Node event methods are
-separate additive work and are not part of this interim contract. The public Web
+facade for fetch, resolve, and destination operations. By-ID fetch options can
+carry an XDA `personalization` extension with a profile id and caller-built
+events; Node proxies it without retaining personalization state. Operational
+event methods are separate additive work and are not part of this interim contract. The public Web
 SDK is a sibling leaf over Client and Core, not a subclass of Node. It inherits
 Client's trusted custom-endpoint and direct by-ID preview capabilities. Web owns
 mutable browser locale and browser context providers, with redaction before

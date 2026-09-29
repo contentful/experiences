@@ -146,8 +146,10 @@ the event channel instead of assuming server or Web.
 process-long SDK instance retains only stable configuration and reusable
 delivery transports; `forRequest()` creates a request-local facade for fetch,
 resolve, and destination operations. This keeps locale and resolve options from
-crossing concurrent requests. Node event methods are separate additive work and
-are not part of this interim contract. `web` is a sibling public leaf over
+crossing concurrent requests. By-ID fetch options can carry an XDA
+`personalization` extension with a profile id and caller-built events; Node
+proxies it without retaining personalization state. Operational event methods
+are separate additive work and are not part of this interim contract. `web` is a sibling public leaf over
 Client and Core, not a subclass of Node or a source of Node state. It owns
 mutable browser locale and browser context providers, and inherits the shared
 runtime's trusted custom-endpoint and direct by-ID CPA preview capabilities. It

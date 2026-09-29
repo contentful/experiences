@@ -52,6 +52,8 @@ Core. None of those dependencies are introduced into Core.
 
 The primary fetch + resolve entry point. Fetches an Experience payload from the Experience Delivery API and resolves it into a `PortableRenderPlan` in one call.
 
+By-ID options accept an `extensions` object typed from the Experience Delivery client. Use its `personalization` member to send a profile id and events, and `sourceMap: {}` to request a content source map. Supplying `extensions` uses the POST operation, and sibling extensions can be sent together in the same request body.
+
 Three positional args group by concern:
 
 | Arg                 | Type                                                                  | Purpose                                                                                |

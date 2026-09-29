@@ -8,7 +8,11 @@ import type {
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
 import { createClient } from './create-client.js';
-import { fetchExperience, type DestinationRedirectResult } from './fetch-experience.js';
+import {
+  fetchExperience,
+  type DestinationRedirectResult,
+  type ExperienceRequestExtensions,
+} from './fetch-experience.js';
 import type { CreateClientOptions } from './create-client.js';
 import { PREVIEW_HOST } from './hosts.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
@@ -29,8 +33,8 @@ export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'li
 export type RuntimeFetchExperienceOptions = {
   experienceId: string;
   locale?: string;
+  extensions?: ExperienceRequestExtensions;
   preview?: boolean;
-  withSourceMap?: boolean;
 };
 
 export type RuntimeFetchByDestinationNodeOptions = {
@@ -136,7 +140,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
         environmentId: this.environmentId,
         experienceId: options.experienceId,
         locale: options.locale ?? this.locale,
-        withSourceMap: options.withSourceMap,
+        extensions: options.extensions,
       },
       {
         client: options.preview

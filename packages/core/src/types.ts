@@ -342,7 +342,7 @@ export interface PortableRenderPlan {
   metadata: Record<string, unknown>;
   /** The `debug` flag the resolve step ran with. The renderer's prop overrides it. */
   debug: boolean;
-  /** Present only when the fetch opted in via `withSourceMap`. */
+  /** Present only when the fetch requested the `sourceMap` extension. */
   sourceMap?: ExperienceSourceMap;
   /**
    * Resolve-time diagnostics collected while building this plan — malformed

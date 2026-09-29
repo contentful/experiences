@@ -44,6 +44,27 @@ const plan = await request.fetchExperience({ experienceId });
 
 The singleton retains only stable SDK configuration and reusable delivery transports. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests.
 
+## Personalization
+
+Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
+
+```ts
+const plan = await request.fetchExperience({
+  experienceId,
+  extensions: {
+    personalization: {
+      profileId,
+      events: [
+        experiences.eventBuilder.buildIdentify({ userId }),
+        experiences.eventBuilder.buildPageView(),
+      ],
+    },
+  },
+});
+```
+
+Personalization is request data rather than request-context state. Supplying `extensions` switches the XDA call to POST. Add `sourceMap: {}` beside `personalization` when both extensions are needed. Enabling or disabling automatic optimization behavior is outside this contract.
+
 ## Precedence
 
 For settings that occur at more than one scope, later scope wins:

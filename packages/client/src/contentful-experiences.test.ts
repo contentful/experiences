@@ -66,9 +66,20 @@ describe('ContentfulExperiences', () => {
         initialViewportId: undefined,
       }
     );
-    await runtime.fetchExperience({ experienceId: 'exp', locale: 'de-DE', withSourceMap: true });
+    const personalization = {
+      profileId: 'profile-1',
+      events: [runtime.eventBuilder.buildPageView()],
+    };
+    await runtime.fetchExperience({
+      experienceId: 'exp',
+      locale: 'de-DE',
+      extensions: { personalization, sourceMap: {} },
+    });
     expect(mockFetchExperience).toHaveBeenCalledWith(
-      expect.objectContaining({ locale: 'de-DE', withSourceMap: true }),
+      expect.objectContaining({
+        locale: 'de-DE',
+        extensions: { personalization, sourceMap: {} },
+      }),
       expect.objectContaining({ client: expect.anything() }),
       expect.objectContaining({ config: { components: {} } })
     );

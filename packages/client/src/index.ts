@@ -32,6 +32,7 @@ export {
 export type { ExperienceResponse } from './to-experience-payload.js';
 export type {
   ExperienceOptions,
+  ExperienceRequestExtensions,
   ByIdExperienceOptions,
   ByDestinationNodeIdExperienceOptions,
   ByDestinationPathExperienceOptions,
