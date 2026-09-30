@@ -49,6 +49,7 @@ export default [
         getComputedStyle: 'readonly',
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
+        PointerEvent: 'readonly',
         URL: 'readonly',
         crypto: 'readonly',
         globalThis: 'readonly',
