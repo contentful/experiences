@@ -170,9 +170,13 @@ memory. Reloading the page discards it; call `reset()` at logout, consent
 withdrawal, or another browser visitor boundary.
 
 The default direct-delivery path sends an event at its call site. The SDK does
-not provide a general event queue, durable persistence, consent gate, beacon or
-page-lifecycle delivery, or automatic renderer tracking. Consent and tracking
-policy remain the application’s responsibility. The narrowly scoped paired
+not provide a general event queue, durable persistence, consent gate, or beacon or
+page-lifecycle delivery. Consent policy remains the application’s
+responsibility. The Web runtime can track views, hovers, and clicks on rendered
+Experiences and Fragments automatically with `startInteractionTracking()`; those
+events go through the same direct methods (see the
+[Web SDK README](./packages/web/README.md#interaction-tracking)). No framework
+adapter marks tracked elements yet. The narrowly scoped paired
 replay protocol below is the only deferred-delivery path.
 
 Calls are not serialized. Await `identify`, `page`, or `track` before starting
