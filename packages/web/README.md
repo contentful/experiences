@@ -169,7 +169,8 @@ await session.stop();
 ```
 
 - **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
-  Fragments only.
+  Fragments only. Nothing else is tracked: a lookup result with any other
+  `entityKind`, such as an inline Fragment or Component, is ignored.
 - A view counts after one second at least 10% visible. A hover counts after one
   second. Each is reported when it qualifies and again with its final duration,
   under the same `viewId` or `hoverId`.

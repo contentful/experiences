@@ -5,7 +5,6 @@ export type TrackedEntityKind = Extract<ClickBuilderArgs['entityKind'], 'Experie
 export type TrackingAttribution = Pick<
   ClickBuilderArgs,
   | 'entityId'
-  | 'entityKind'
   | 'entityKindId'
   | 'variantId'
   | 'variantIndex'

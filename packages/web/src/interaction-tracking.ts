@@ -21,7 +21,7 @@
  */
 
 import type { ContentfulExperiences } from './contentful-experiences.js';
-import type { TrackingAttribution } from './tracking/attribution.js';
+import { isTrackedEntity, type TrackingAttribution } from './tracking/attribution.js';
 import { TRACKING_NODE_ATTRIBUTE } from './tracking-attributes.js';
 import { createClickDetector } from './tracking/click/create-click-detector.js';
 import { createHoverDetector } from './tracking/hover/create-hover-detector.js';
@@ -77,9 +77,13 @@ export function createInteractionTracking(
 
   const root = options.root ?? document;
 
+  // The single path detectors read attribution through, so the entity-kind rule
+  // cannot be bypassed: anything other than an Experience or Fragment is treated
+  // as "nothing to track" and its element is never observed.
   const resolveElementAttribution = (element: Element): TrackingAttribution | undefined => {
     const nodeId = element.getAttribute(TRACKING_NODE_ATTRIBUTE);
-    return nodeId ? options.resolveAttribution(nodeId) : undefined;
+    const attribution = nodeId ? options.resolveAttribution(nodeId) : undefined;
+    return isTrackedEntity(attribution) ? attribution : undefined;
   };
 
   const detectors: InteractionDetector[] = [];

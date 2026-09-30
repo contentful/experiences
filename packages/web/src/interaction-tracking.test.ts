@@ -275,4 +275,39 @@ describe('createInteractionTracking', () => {
     expect(final).toMatchObject({ viewId: first.viewId, viewDurationMs: 1600 });
     tracking.destroy();
   });
+
+  it.each(['InlineFragment', 'InlineComponent', 'Unknown'])(
+    'never tracks a node whose attribution is a %s',
+    async (entityKind) => {
+      vi.useFakeTimers();
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+      const io = installIOPolyfill();
+      const element = stamped('node-inline');
+      document.body.append(element);
+      const events = createEvents();
+      // Untyped data, e.g. a lookup built from a raw payload.
+      const inline = { entityId: 'inline', entityKind } as unknown as TrackingAttribution;
+      const tracking = createInteractionTracking(events, {
+        resolveAttribution: (nodeId) => (nodeId === 'node-inline' ? inline : undefined),
+      });
+
+      expect(io.getLast().observed.has(element)).toBe(false);
+      io.getLast().trigger(element, true);
+      element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+      click(element);
+      await vi.advanceTimersByTimeAsync(1500);
+      await tracking.endActive();
+
+      expect(events.trackView).not.toHaveBeenCalled();
+      expect(events.trackHover).not.toHaveBeenCalled();
+      expect(events.trackClick).not.toHaveBeenCalled();
+      tracking.destroy();
+    }
+  );
+
+  it('rejects inline entity kinds at the type level', () => {
+    // @ts-expect-error — inline nodes are not tracking targets
+    const inline: TrackingAttribution = { entityId: 'x', entityKind: 'InlineComponent' };
+    expect(inline).toBeDefined();
+  });
 });
