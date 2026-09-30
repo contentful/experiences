@@ -142,6 +142,10 @@ starting another profile-producing or Analytics call on the same runtime.
 
 ## Interaction tracking
 
+> **Experimental.** `startInteractionTracking()` and its option and session types
+> may change or be removed without a major version bump. It is a lower layer for a
+> planned configured root that will start tracking and supply attribution itself.
+
 The runtime can track views, hovers, and clicks on rendered Experiences and
 Fragments automatically. Mark the outermost element of each tracked Experience or
 Fragment with its node id, then start a tracking session with a lookup from node
