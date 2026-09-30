@@ -7,20 +7,20 @@ import {
   type RuntimeEventHandoff,
   type RuntimeEventHandoffReceipt,
   type RuntimeEventMethods,
-} from "@contentful/experiences-client";
+} from '@contentful/experiences-client';
 
-import { getPageProperties, getUserAgent } from "./browser-event-context.js";
+import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import {
   createInteractionTracking,
   type InteractionTracking,
   type InteractionTrackingOptions,
-} from "./interaction-tracking.js";
-import { DEFAULT_EVENT_CONTEXT_LIBRARY } from "./sdk-info.js";
+} from './interaction-tracking.js';
+import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
   EventBuilderConfig,
-  "getPageProperties" | "getUserAgent" | "getConsent"
+  'getPageProperties' | 'getUserAgent' | 'getConsent'
 >;
 
 /**
@@ -41,16 +41,16 @@ type WebEventStateConfig =
       eventHandoffRouteKey: string;
     };
 
-export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, "eventBuilder" | "locale"> &
+export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> &
   WebEventStateConfig & {
     locale?: string;
-    app?: EventBuilderConfig["app"];
+    app?: EventBuilderConfig['app'];
     browserContext?: BrowserEventContextProviders;
   };
 
 type WebEventMethods = Pick<
   RuntimeEventMethods,
-  "identify" | "page" | "track" | "trackView" | "trackClick" | "trackHover" | "trackFlagView"
+  'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
 export type InteractionTrackingStartOptions = InteractionTrackingOptions;
@@ -69,19 +69,19 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   #interactionTracking: InteractionTracking | undefined;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
-  readonly identify: WebEventMethods["identify"] = (...args) =>
+  readonly identify: WebEventMethods['identify'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.identify(...args));
-  readonly page: WebEventMethods["page"] = (...args) =>
+  readonly page: WebEventMethods['page'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.page(...args));
-  readonly track: WebEventMethods["track"] = (...args) =>
+  readonly track: WebEventMethods['track'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.track(...args));
-  readonly trackView: WebEventMethods["trackView"] = (...args) =>
+  readonly trackView: WebEventMethods['trackView'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.trackView(...args));
-  readonly trackClick: WebEventMethods["trackClick"] = (...args) =>
+  readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.trackClick(...args));
-  readonly trackHover: WebEventMethods["trackHover"] = (...args) =>
+  readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.trackHover(...args));
-  readonly trackFlagView: WebEventMethods["trackFlagView"] = (...args) =>
+  readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
     this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args));
 
   constructor(config: ExperiencesWebConfig) {
@@ -91,7 +91,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       ...clientConfig,
       eventBuilder: {
         app,
-        channel: "web",
+        channel: 'web',
         library: DEFAULT_EVENT_CONTEXT_LIBRARY,
         getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
@@ -99,7 +99,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       },
     });
     if (profile !== undefined && eventHandoff !== undefined) {
-      throw new TypeError("ExperiencesWebConfig accepts either profile or eventHandoff, not both");
+      throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
     this.#profile = profile;
@@ -141,7 +141,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   /** Clears volatile event state when the active browser profile changes. */
   reset(): void {
     if (this.#eventHandoffPending) {
-      throw new Error("Cannot reset while an event handoff is pending");
+      throw new Error('Cannot reset while an event handoff is pending');
     }
     this.#profile = undefined;
     this.#profileRevision += 1;
@@ -149,7 +149,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
 
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
     if (this.#interactionTracking) {
-      throw new Error("Interaction tracking is already running; stop it before starting again");
+      throw new Error('Interaction tracking is already running; stop it before starting again');
     }
     const tracking = createInteractionTracking(this, options);
     this.#interactionTracking = tracking;
@@ -160,10 +160,15 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
         if (this.#interactionTracking === tracking) tracking.refresh();
       },
       stop: () => {
-        stopping ??= tracking.endActive().finally(() => {
-          tracking.destroy();
-          if (this.#interactionTracking === tracking) this.#interactionTracking = undefined;
-        });
+        if (stopping) return stopping;
+        // Everything but the sends is synchronous: `endActive()` ends in-progress
+        // views and hovers before its first await, so the session can be torn
+        // down and its slot released at once, and only the final events are
+        // still in flight when a new session starts.
+        if (this.#interactionTracking === tracking) this.#interactionTracking = undefined;
+        const flushed = tracking.endActive();
+        tracking.destroy();
+        stopping = flushed;
         return stopping;
       },
     };
@@ -176,22 +181,22 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
 
   #startEventHandoff(
     input: RuntimeEventHandoff | undefined,
-    currentRouteKey: string | undefined,
+    currentRouteKey: string | undefined
   ): Promise<RuntimeEventHandoffReceipt> {
     if (input === undefined) {
       return Promise.resolve({});
     }
     if (currentRouteKey === undefined) {
-      throw new TypeError("ExperiencesWebConfig eventHandoff requires eventHandoffRouteKey");
+      throw new TypeError('ExperiencesWebConfig eventHandoff requires eventHandoffRouteKey');
     }
 
     const handoff = parseRuntimeEventHandoff(input);
     if (handoff.spaceId !== this.spaceId || handoff.environmentId !== this.environmentId) {
-      throw new TypeError("Runtime event handoff does not match this space or environment");
+      throw new TypeError('Runtime event handoff does not match this space or environment');
     }
 
     const hasPage = handoff.events.some(
-      (entry) => entry.transport === "personalization" && entry.event.type === "page",
+      (entry) => entry.transport === 'personalization' && entry.event.type === 'page'
     );
     if (
       hasPage &&
@@ -211,32 +216,32 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       this.#profile = profile;
       for (let index = 0; index < handoff.events.length;) {
         const staged = handoff.events[index]!;
-        if (staged.transport === "personalization") {
+        if (staged.transport === 'personalization') {
           const locale = staged.event.context.locale;
           const events = [staged.event];
           index += 1;
           while (index < handoff.events.length) {
             const next = handoff.events[index]!;
-            if (next.transport !== "personalization" || next.event.context.locale !== locale) break;
+            if (next.transport !== 'personalization' || next.event.context.locale !== locale) break;
             events.push(next.event);
             index += 1;
           }
           const result = await this.optimizationApi.personalization.upsertProfile(
             { profileId: profile?.id, events },
-            { locale },
+            { locale }
           );
           profile = result.profile;
           this.#profile = profile;
         } else {
           index += 1;
           if (profile === undefined) {
-            throw new Error("Runtime event handoff Analytics replay requires a committed profile");
+            throw new Error('Runtime event handoff Analytics replay requires a committed profile');
           }
           const committed = await this.optimizationApi.analytics.sendBatchEvents([
             { profile, events: [staged.event] },
           ]);
           if (!committed) {
-            throw new Error("Runtime event handoff Analytics replay was not committed");
+            throw new Error('Runtime event handoff Analytics replay was not committed');
           }
         }
       }

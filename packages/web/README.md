@@ -186,7 +186,9 @@ await session.stop();
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
   so server-rendered components can import it.
 - `startInteractionTracking` does nothing outside a browser. One session runs per
-  runtime at a time.
+  runtime at a time. `stop()` frees it immediately, so a new session can start
+  from a React effect whose cleanup cannot await; the stopped session finishes
+  sending its final events in the background.
 
 See the [rendering-modes ADR](../../docs/ADRs/2026-09-30-interaction-tracking-across-rendering-modes.md)
 for where the attribution lookup comes from under SSR, CSR, and Server Components.

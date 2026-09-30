@@ -113,6 +113,59 @@ describe('ContentfulExperiences interaction tracking', () => {
     await second.stop();
   });
 
+  it('allows a new session right after stop without awaiting it, as an effect cleanup does', async () => {
+    const io = installIOPolyfill();
+    const runtime = createRuntime();
+    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(true);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const page = render('node:page', 'main');
+    const hero = render('node:hero', 'button');
+    const options = { resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId] };
+
+    // Mount → unmount → mount, as React StrictMode or a dependency change does.
+    const first = runtime.startInteractionTracking(options);
+    io.getLast().trigger(page, true);
+    await advance(1200);
+    void first.stop();
+    const second = runtime.startInteractionTracking(options);
+    await advance(0);
+
+    // The first session still flushed its in-progress view.
+    expect(trackView.mock.calls.map(([args]) => args.viewDurationMs)).toEqual([1000, 1200]);
+    // The second session tracks; the stopped one no longer does.
+    click(hero);
+    expect(trackClick).toHaveBeenCalledOnce();
+    await second.stop();
+  });
+
+  it("stops a session's listeners at once, so events are not counted twice while it flushes", async () => {
+    const io = installIOPolyfill();
+    const runtime = createRuntime();
+    let finishSend!: () => void;
+    const trackView = vi
+      .spyOn(runtime, 'trackView')
+      .mockImplementation(() => new Promise((resolve) => (finishSend = () => resolve(true))));
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const page = render('node:page', 'main');
+    const hero = render('node:hero', 'button');
+    const options = { resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId] };
+
+    const first = runtime.startInteractionTracking(options);
+    io.getLast().trigger(page, true);
+    await advance(1000);
+    finishSend();
+    await advance(200);
+    const flushed = first.stop(); // the final view is still being sent
+    const second = runtime.startInteractionTracking(options);
+    click(hero);
+
+    expect(trackClick).toHaveBeenCalledOnce();
+    finishSend();
+    await flushed;
+    expect(trackView).toHaveBeenCalledTimes(2);
+    await second.stop();
+  });
+
   it('keeps sessions isolated between runtime instances', async () => {
     const a = createRuntime();
     const b = createRuntime();

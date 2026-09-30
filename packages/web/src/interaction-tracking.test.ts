@@ -310,4 +310,24 @@ describe('createInteractionTracking', () => {
     const inline: TrackingAttribution = { entityId: 'x', entityKind: 'InlineComponent' };
     expect(inline).toBeDefined();
   });
+
+  it('ends in-progress views synchronously in endActive, so destroy right after still sends them', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    const io = installIOPolyfill();
+    const experience = stamped('node-experience', 'main');
+    document.body.append(experience);
+    const events = createEvents();
+    const tracking = createInteractionTracking(events, {
+      resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+    });
+
+    io.getLast().trigger(experience, true);
+    await vi.advanceTimersByTimeAsync(1300);
+    const flushed = tracking.endActive();
+    tracking.destroy();
+    await flushed;
+
+    expect(events.trackView.mock.calls.map(([args]) => args.viewDurationMs)).toEqual([1000, 1300]);
+  });
 });
