@@ -1,3 +1,18 @@
+## 0.1.0 (2026-09-30)
+
+### 🚀 Features
+
+- ⚠️  add XDA personalization extensions ([#211](https://github.com/contentful/experiences/pull/211))
+
+### ⚠️  Breaking Changes
+
+- add XDA personalization extensions  ([#211](https://github.com/contentful/experiences/pull/211))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.6.0
+- Updated core to 0.10.0
+
 ## 0.0.2 (2026-09-29)
 
 ### 🧱 Updated Dependencies
