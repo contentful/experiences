@@ -50,6 +50,7 @@ export default [
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
         PointerEvent: 'readonly',
+        MouseEvent: 'readonly',
         URL: 'readonly',
         crypto: 'readonly',
         globalThis: 'readonly',
