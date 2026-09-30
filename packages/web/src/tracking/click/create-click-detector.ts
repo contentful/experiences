@@ -1,5 +1,6 @@
 import type { ClickBuilderArgs } from '@contentful/experiences-client';
 
+import { TRACKING_CLICKABLE_ATTRIBUTE } from '../../tracking-attributes.js';
 import {
   type InteractionDetector,
   isFragment,
@@ -8,7 +9,7 @@ import {
   toInteractionArgs,
 } from '../interaction-detector.js';
 
-/** Elements a visitor can meaningfully click. `data-ctfl-clickable` opts others in. */
+/** Elements a visitor can meaningfully click. `TRACKING_CLICKABLE_ATTRIBUTE` opts others in. */
 const CLICKABLE_SELECTOR = [
   'a[href]',
   'button',
@@ -19,7 +20,7 @@ const CLICKABLE_SELECTOR = [
   '[role="button"]',
   '[role="link"]',
   '[onclick]',
-  '[data-ctfl-clickable="true"]',
+  `[${TRACKING_CLICKABLE_ATTRIBUTE}="true"]`,
 ].join(',');
 
 const hasOnclickPropertyHandler = (element: Element): boolean =>

@@ -22,7 +22,7 @@
 
 import type { ContentfulExperiences } from './contentful-experiences.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
-import { TRACKING_NODE_ATTRIBUTE } from './tracking/attributes.js';
+import { TRACKING_NODE_ATTRIBUTE } from './tracking-attributes.js';
 import { createClickDetector } from './tracking/click/create-click-detector.js';
 import { createHoverDetector } from './tracking/hover/create-hover-detector.js';
 import type { InteractionDetector } from './tracking/interaction-detector.js';

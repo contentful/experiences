@@ -1,4 +1,4 @@
-import { TRACKING_NODE_ATTRIBUTE } from '../attributes.js';
+import { TRACKING_NODE_ATTRIBUTE } from '../../tracking-attributes.js';
 import { CAN_ADD_LISTENERS } from '../observer-support.js';
 
 import { DEFAULTS, type ElementState } from './element-view-observer-support.js';
