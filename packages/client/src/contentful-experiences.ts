@@ -7,18 +7,29 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
-import { createClient } from './create-client.js';
+import {
+  createRuntimeDeliveryClient,
+  type RuntimeDeliveryClientOptions,
+} from './create-delivery-client.js';
 import {
   fetchExperience,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
   type PersonalizationOptions,
 } from './fetch-experience.js';
-import type { CreateClientOptions } from './create-client.js';
+import {
+  createRuntimeOptimizationClient,
+  type RuntimeOptimizationConfig,
+} from './create-optimization-client.js';
 import { PREVIEW_HOST } from './hosts.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
-
-export type RuntimeClientSource = CreateClientOptions | { client: ContentfulViewDeliveryClient };
+import {
+  createRuntimeEventMethods,
+  type RuntimeEventBindings,
+  type RuntimeEventDispatch,
+  type RuntimeEventMethods,
+  type RuntimeOptimizationApiClient,
+} from './runtime-event-methods.js';
 
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
@@ -78,8 +89,12 @@ export type ContentfulExperiencesConfig = {
   environmentId: string;
   locale?: string;
   resolverConfig: ResolverConfig;
-  delivery: RuntimeClientSource;
-  preview?: RuntimeClientSource;
+  /** Configuration for the runtime-owned Content Delivery API client. */
+  delivery: RuntimeDeliveryClientOptions;
+  /** Optional configuration for the runtime-owned Content Preview API client. */
+  preview?: RuntimeDeliveryClientOptions;
+  /** Overrides for the runtime-owned Personalization and Analytics event transport. */
+  optimization?: RuntimeOptimizationConfig;
   resolveDefaults?: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
   eventBuilder: RuntimeEventBuilderConfig;
 };
@@ -93,6 +108,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
   readonly #resolverConfig: ResolverConfig;
   readonly #deliveryClient: ContentfulViewDeliveryClient;
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
+  protected readonly optimizationApi: RuntimeOptimizationApiClient;
   readonly #resolveDefaults: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
 
   constructor(config: ContentfulExperiencesConfig) {
@@ -100,9 +116,16 @@ export class ContentfulExperiences implements ExperienceRuntime {
     this.environmentId = config.environmentId;
     this.#locale = config.locale;
     this.#resolverConfig = config.resolverConfig;
-    this.#deliveryClient = resolveClient(config.delivery);
+    this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
     this.#previewClient =
-      config.preview === undefined ? undefined : resolveClient(config.preview, PREVIEW_HOST);
+      config.preview === undefined
+        ? undefined
+        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
+    this.optimizationApi = createRuntimeOptimizationClient({
+      spaceId: config.spaceId,
+      environmentId: config.environmentId,
+      ...config.optimization,
+    });
     this.#resolveDefaults = config.resolveDefaults ?? {};
 
     this.eventBuilder = new EventBuilder({
@@ -114,6 +137,13 @@ export class ContentfulExperiences implements ExperienceRuntime {
 
   get locale(): string | undefined {
     return this.#locale;
+  }
+
+  protected createEventMethods(
+    bindings: RuntimeEventBindings,
+    dispatch?: RuntimeEventDispatch
+  ): RuntimeEventMethods {
+    return createRuntimeEventMethods(this.optimizationApi, this.eventBuilder, bindings, dispatch);
   }
 
   resolveExperience(
@@ -183,16 +213,4 @@ export class ContentfulExperiences implements ExperienceRuntime {
       initialViewportId: options?.initialViewportId,
     };
   }
-}
-
-function resolveClient(
-  source: RuntimeClientSource,
-  defaultHost?: string
-): ContentfulViewDeliveryClient {
-  if ('client' in source) return source.client;
-
-  return createClient({
-    ...source,
-    host: source.host ?? (source.environment === undefined ? defaultHost : undefined),
-  });
 }

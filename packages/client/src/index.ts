@@ -8,8 +8,12 @@ export const NotFoundError = ContentfulViewDelivery.NotFoundError;
 // eslint-disable-next-line no-redeclare -- value + type share a name across separate TS namespaces, not a real redeclaration
 export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundError>;
 export { ExperienceFetchError, DestinationPreviewNotSupportedError } from './errors.js';
-export { createClient } from './create-client.js';
-export type { CreateClientOptions } from './create-client.js';
+export { createClient } from './create-delivery-client.js';
+export type {
+  CreateClientOptions,
+  RuntimeDeliveryClientOptions,
+} from './create-delivery-client.js';
+export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { fetchExperience } from './fetch-experience.js';
@@ -20,10 +24,29 @@ export type {
   RuntimeFetchExperienceOptions,
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
-  RuntimeClientSource,
   RuntimeEventBuilderConfig,
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
+export { EventProfileRequiredError } from './runtime-event-methods.js';
+export type {
+  EventOptimizationData,
+  EventProfile,
+  AnalyticsEventMethod,
+  PersonalizationEventMethod,
+  RuntimeEventBindings,
+  RuntimeEventMethods,
+} from './runtime-event-methods.js';
+export {
+  assertRuntimeEventHandoffSize,
+  parseRuntimeEventHandoff,
+  RUNTIME_EVENT_HANDOFF_VERSION,
+} from './runtime-event-handoff.js';
+export type {
+  RuntimeEventHandoff,
+  RuntimeEventHandoffEvent,
+  RuntimeEventHandoffReceipt,
+  RuntimeServerEventDelivery,
+} from './runtime-event-handoff.js';
 export {
   readSourceMap,
   toExperiencePayload,

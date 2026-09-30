@@ -4,9 +4,9 @@ import EventBuilder, { DEFAULT_PAGE_PROPERTIES } from './event-builder';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info';
 
 import {
-  ExoClickEvent,
-  ExoHoverEvent,
-  ExoViewEvent,
+  ExoClickEvent as OptimizationExoClickEvent,
+  ExoHoverEvent as OptimizationExoHoverEvent,
+  ExoViewEvent as OptimizationExoViewEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 
 const LIBRARY = { name: '@contentful/experiences-sdk-core', version: '0.8.4' };
@@ -42,7 +42,7 @@ describe('EventBuilder', () => {
       viewDurationMs: 1_000,
     });
 
-    expect(ExoViewEvent.parse(event)).toEqual(event);
+    expect(OptimizationExoViewEvent.parse(event)).toEqual(event);
     expect(event).toMatchObject({
       ...interaction,
       type: 'exo_node_view',
@@ -60,8 +60,8 @@ describe('EventBuilder', () => {
       hoverDurationMs: 500,
     });
 
-    expect(ExoClickEvent.parse(click)).toEqual(click);
-    expect(ExoHoverEvent.parse(hover)).toEqual(hover);
+    expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
+    expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
     expect(click.type).toBe('exo_node_click');
     expect(hover.type).toBe('exo_node_hover');
   });
@@ -85,9 +85,9 @@ describe('EventBuilder', () => {
       hoverDurationMs: 500,
     });
 
-    expect(ExoViewEvent.parse(view)).toEqual(view);
-    expect(ExoClickEvent.parse(click)).toEqual(click);
-    expect(ExoHoverEvent.parse(hover)).toEqual(hover);
+    expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
+    expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
+    expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
 
     for (const event of [view, click, hover]) {
       expect(event).toMatchObject({

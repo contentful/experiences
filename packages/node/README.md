@@ -63,6 +63,53 @@ const plan = await request.fetchExperience({
 
 Personalization is request data rather than request-context state. Supplying it switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. Enabling or disabling automatic optimization behavior is outside this contract.
 
+## Request-scoped events
+
+Event methods live on the request facade, never on the process-long SDK instance. Supply the
+current profile and request-derived event values when creating the facade; event calls update that
+facade's profile without affecting concurrent requests.
+
+```ts
+const experienceRequest = experiences.forRequest({
+  locale: requestLocale,
+  profile: currentProfile,
+  eventContext: { page: pageProperties, userAgent },
+  eventConsent: hasAnalyticsConsent,
+});
+
+await experienceRequest.identify({ userId });
+// Persist experienceRequest.profile if your application stores profiles between requests.
+
+await experienceRequest.track({ event: 'checkout_started' });
+await experienceRequest.trackClick({
+  entityId: 'checkout-button',
+  entityKind: 'InlineComponent',
+});
+```
+
+`identify`, `page`, and `track` update the request profile from the Personalization API response.
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
+current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
+runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
+`eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
+There is no request event queue: await `identify`, `page`, or `track` before
+starting another profile-producing or Analytics call on the same request facade.
+
+### Replay handoff for framework adapters
+
+Only a Node request chooses delivery. Omit `eventDelivery` (or use `'commit'`)
+for direct server events; `createEventHandoff()` then returns `undefined`. Use
+`'handoff'` only when the paired browser runtime will receive this request's
+events. Prefer `previewInitialPersonalization()` for the initial sequence: it sends
+an ordered `identify` / `track` prefix plus one final `page` in a single
+preflight request. Individual Personalization methods remain cumulatively
+preflighted, and Analytics calls stage without transport (`true` means accepted).
+A page-bearing journal requires `initialPageRouteKey` when finalized. Finalize
+once with `createEventHandoff({ initialPageRouteKey })`; later event calls and a
+second finalization throw. Preflight profile data is not committed browser
+state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
+for response transport, browser route admission, and page fallback.
+
 ## Precedence
 
 For settings that occur at more than one scope, later scope wins:
@@ -104,16 +151,22 @@ if ('redirect' in result) {
 
 Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata, debug, and viewport selection.
 
-For either delivery or preview, transport configuration is trusted: the bearer
-token is sent to the endpoint selected by that configuration. `environmentId`
-is the Contentful environment identifier used by by-ID requests; it is not the
-generated delivery client's optional `environment` endpoint setting. The
-Experiences `host` option maps to the generated client's `baseUrl`, while a raw
-`ContentfulViewDeliveryClient` can use `baseUrl` directly for a trusted custom
-endpoint. Explicit `host`/raw-client `baseUrl` wins over generated-client
-`environment`, which wins over the delivery or preview default. Direct CPA
-preview fetches are distinct from Preview Session live updates, which are owned
-by `@contentful/experiences-live-preview`.
+The runtime owns its Delivery and Preview clients. Configure each with an
+`accessToken`, or configure a tokenless trusted proxy by supplying an explicit
+`host`; the runtime disables generated bearer authentication for the latter.
+For token-bearing transports, the bearer token is sent to the configured
+endpoint. `environmentId` is the Contentful environment identifier used by
+by-ID requests; it is not the generated delivery client's optional `environment`
+endpoint setting. An explicit `host` wins over generated-client `environment`,
+which wins over the Delivery or Preview default. Direct CPA preview fetches are
+distinct from Preview Session live updates, which are owned by
+`@contentful/experiences-live-preview`.
+
+The runtime owns its Optimization API client. Configure trusted custom
+`personalizationBaseUrl` or `analyticsBaseUrl` endpoints through the
+constructor's `optimization` options; those endpoints receive complete event
+and profile payloads, so use only trusted HTTPS origins outside explicit local
+development.
 
 ## Errors
 
@@ -136,11 +189,13 @@ try {
 
 Do not store a request facade beyond the request that created it. Each `forRequest()` call returns a separate object with its own locale and resolve options; concurrent requests do not share those values.
 
-`forRequest()` intentionally has no event methods or request-bound builder in this lean interim. The long-lived class still inherits Client's context-free base `EventBuilder`; the Node SDK does not add request state or request-specific behavior to that lower-level surface. Operational event methods will be separate additive work.
+`forRequest()` is the only event-triggering surface. The long-lived class retains stable transport
+configuration and a context-free base `EventBuilder`; it does not retain request profiles, locale,
+page, user-agent, consent, or other request-sensitive event state.
 
 ## Architecture boundary
 
-This package is a public Node-specific leaf over the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. Client stays runtime-neutral and stateless with respect to request and browser state: its shared runtime retains only stable configuration, reusable delivery transports, and a base `EventBuilder` configured with an explicit platform channel. The Node SDK does not add a request-bound event facade in this interim. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
+This package is a public Node-specific leaf over the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. Client stays runtime-neutral and stateless with respect to request and browser state: its shared runtime retains only stable configuration, reusable delivery and Optimization transports, and a base `EventBuilder` configured with an explicit platform channel. The Node SDK binds event behavior and volatile profile state to each request facade. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
 
 ## License
 

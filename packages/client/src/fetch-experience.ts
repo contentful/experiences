@@ -2,7 +2,7 @@ import type { ContentfulViewDeliveryClient } from '@contentful/experience-delive
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
-import { createClient } from './create-client.js';
+import { createClient } from './create-delivery-client.js';
 import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
 import {

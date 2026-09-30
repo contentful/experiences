@@ -12,7 +12,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch and resolve work without a renderer, install `@contentful/experiences-node`; use `forRequest()` to bind request-local locale and resolve options. For browser fetch and resolve work without a renderer, install `@contentful/experiences-web`; it owns browser locale and context state and inherits Client's trusted endpoint and direct by-ID preview capabilities. Browser tokens are visible to users and must be scoped and CORS-protected accordingly. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus an in-memory-only event profile. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
@@ -20,6 +20,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 
 - [Getting started](#getting-started-the-simple-path)
 - [Live preview](#live-preview)
+- [Event tracking](#event-tracking)
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
@@ -141,6 +142,124 @@ const livePreview = useLivePreview({
 Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app needs the raw Experience payload. For framework-neutral code, use `createLivePreviewClient` from `@contentful/experiences-live-preview`.
 
 A connection starts only when both `previewToken` and `sessionId` are available.
+
+Live Preview does not trigger or suppress analytics automatically. A manually
+invoked event method still sends while a direct CPA preview fetch or Preview
+Session is active.
+
+---
+
+## Event tracking
+
+The public Node and Web SDKs provide direct event methods. `identify`, `page`,
+and `track` send through the Personalization API. `trackView`, `trackClick`,
+`trackHover`, and `trackFlagView` send through the Analytics API.
+
+Runtime constructors accept `RuntimeDeliveryClientOptions` for `delivery` and,
+optionally, `preview`; they construct and own the Delivery, Preview, and
+Optimization clients. They do not accept a caller-created
+`ContentfulViewDeliveryClient`. `accessToken` can be a value or token supplier.
+It may be omitted only when an explicit trusted proxy `host` is supplied; the
+runtime disables generated bearer auth in that case and the proxy must own
+upstream authentication.
+
+On Node, call event methods only from the `forRequest()` facade. The profile and
+event context are request-local, volatile values; do not put them on the
+process-long SDK instance. On the Web, the SDK keeps its event profile only in
+memory. Reloading the page discards it; call `reset()` at logout, consent
+withdrawal, or another browser visitor boundary.
+
+The default direct-delivery path sends an event at its call site. The SDK does
+not provide a general event queue, durable persistence, consent gate, beacon or
+page-lifecycle delivery, or automatic renderer tracking. Consent and tracking
+policy remain the application’s responsibility. The narrowly scoped paired
+replay protocol below is the only deferred-delivery path.
+
+Calls are not serialized. Await `identify`, `page`, or `track` before starting
+another profile-producing or Analytics call on the same runtime or request
+facade.
+
+Web event context is read from the browser and can include URL, query, referrer,
+title, viewport, and User-Agent data. Use the browser context providers to
+redact or replace values before they are retained or sent, and avoid putting
+authentication material, raw identifiers, or other personal data into event
+context or properties.
+
+### Paired server-to-browser replay
+
+The default Node delivery mode is `commit`: request events send from the server
+and are suitable for server-only execution. Only Node's `forRequest()` context
+can select `eventDelivery: 'handoff'`, for an integration that passes that same
+request's events to `@contentful/experiences-web`. Web has no delivery mode.
+
+In handoff mode, `previewInitialPersonalization()` is the efficient initial-page
+path: it preflights an ordered `identify` / `track` prefix plus one final `page`
+as a single Personalization API batch and stages the exact generated events. The
+individual `identify`, `page`, and `track` methods remain available and
+cumulatively preflight the journal once per call. Analytics calls (`trackView`,
+`trackClick`, `trackHover`, and `trackFlagView`) stage without transport; `true`
+means the event was accepted into the handoff, not delivered. After all calls
+settle, call `createEventHandoff({ initialPageRouteKey })` exactly once. It
+finalizes the journal and prevents later event calls; a second call throws. In
+`commit` mode it returns `undefined`. A handoff-mode request profile is
+preflight output, not committed browser state.
+
+Pass the handoff as `eventHandoff` when constructing the Web runtime, instead
+of `profile` (the two are mutually exclusive), and pass the browser's current
+route identity as `eventHandoffRouteKey`. A page-bearing journal replays only
+when its server and browser route keys are both present and equal; otherwise
+Web skips the complete journal and resolves an empty receipt so the application
+can send its ordinary browser page. Compatible adjacent Personalization entries
+are committed as one batch, while locale changes and Analytics entries preserve
+ordering boundaries. Ordinary Web calls wait while replay is pending. A failed
+replay rejects `whenEventHandoffCommitted()` but releases later direct calls,
+allowing an ordinary page fallback.
+
+```ts
+import { ContentfulExperiences as WebContentfulExperiences } from '@contentful/experiences-web';
+
+// Server request handler: create exactly one handoff for this response.
+const request = experiences.forRequest({
+  locale: requestLocale,
+  eventDelivery: 'handoff',
+  eventContext: { page: serverPageProperties },
+});
+
+await request.previewInitialPersonalization({
+  events: [{ type: 'track', event: 'experience_rendered' }],
+});
+const eventHandoff = request.createEventHandoff({ initialPageRouteKey: routeKey });
+// Serialize eventHandoff safely into this user's private, no-store response.
+
+// Browser bootstrap for that same response/user.
+const web = new WebContentfulExperiences({
+  spaceId,
+  environmentId,
+  resolverConfig: experienceConfig,
+  delivery: { host: 'https://application.example/experience-proxy' },
+  eventHandoff,
+  eventHandoffRouteKey: routeKey,
+});
+try {
+  const receipt = await web.whenEventHandoffCommitted();
+  if (receipt.initialPageRouteKey !== routeKey) await web.page();
+} catch {
+  await web.page();
+}
+```
+
+The handoff contains the exact generated event bodies and is browser-visible.
+Use escaped serialization in a private, no-store response. Do not include
+secrets or server-only traits, and never put it in a shared cache, log, or
+persistent store. The runtime enforces an internal 64 KiB serialized-payload
+cap.
+
+Replay stops on the first failed batch or Analytics entry. Earlier entries can
+already have been committed, there is no automatic retry, and the protocol does
+not provide a distributed exactly-once guarantee; retrying the whole handoff can
+duplicate events committed before the failure. Later direct Web calls remain
+available for fallback. No framework adapter or example is wired to this
+contract yet; it remains independent from Live Preview.
 
 ---
 
@@ -738,6 +857,10 @@ Then visit `/landing` (or whichever experienceId the bootstrap printed). See eac
 
 Async. Fetches an Experience from the Experience Delivery API and resolves it in one call, the same as fetching the payload yourself and then calling `resolveExperience`. Returns a `PortableRenderPlan`.
 
+This is the established adapter/free-function API, not the Node/Web runtime
+constructor contract. Its caller-supplied `{ client }` branch, `createClient`,
+and direct `ContentfulViewDeliveryClient` use remain supported.
+
 Three positional args map to three concerns that evolve independently:
 
 | Arg                 | Type                                                                               | Purpose                                                                                                                                                    |
@@ -1064,19 +1187,19 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 ## Workspace internals
 
-This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes; `@contentful/experiences-web` is public for browser fetch and resolve work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
+This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes, including request-bound event delivery; `@contentful/experiences-web` is public for browser fetch, resolve, and direct event work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
 
-| Folder                                                   | npm name                               | Scope                                                                                              |
-| -------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                         |
-| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`). |
-| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client + `fetchExperience`.                                      |
-| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch and resolve operations.                             |
-| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state and shared transport capabilities.     |
-| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                              |
-| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                      |
-| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.             |
+| Folder                                                   | npm name                               | Scope                                                                                                               |
+| -------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                                          |
+| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** Viewport math (`getValueForViewport`, `resolveDesignProperties`, `toCssMediaQuery`).                  |
+| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Experience delivery client, direct Optimization transport, event construction, and `fetchExperience`. |
+| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch, resolve, and event operations.                                      |
+| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state, in-memory event profile, and direct event operations.  |
+| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                               |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                                         |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                       |
+| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                              |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. The Web SDK is a sibling public package to the Node SDK over Client and Core; it owns browser state and does not inherit Node request semantics.
 

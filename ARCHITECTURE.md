@@ -123,9 +123,12 @@ names, and the adapters re-export the `design` copy
 `@contentful/experience-delivery`, and it re-exports the pieces customers need
 (`ContentfulViewDeliveryClient`, `NotFoundError`) from
 `packages/client/src/index.ts` so the adapters can pass them through without
-taking the dependency. The rationale is in AGENTS.md; the structural point is
-that this keeps `core` at zero dependencies, which is the invariant every future
-adapter inherits.
+taking the dependency. The public adapter/free-function surface still supports
+`fetchExperience(..., { client })`, `createClient`, and a raw delivery client.
+Those are deliberately separate from Node/Web runtime construction: a runtime
+takes `RuntimeDeliveryClientOptions` and constructs its own delivery clients.
+The rationale is in AGENTS.md; the structural point is that this keeps `core` at
+zero dependencies, which is the invariant every future adapter inherits.
 
 ### Core, Client, Node SDK, and Live Preview responsibilities
 
@@ -133,35 +136,68 @@ adapter inherits.
 `resolveExperience`, diagnostics, and viewport/design-resolution helpers. It
 does not own delivery transport, event construction, or connection state.
 
-`client` owns delivery integration, conversion, free fetch functions, the
-runtime-neutral `EventBuilder`, and the lower-layer shared
-`ContentfulExperiences` runtime. Its `EventBuilder` depends on the optimization
-API schemas/logger plus `es-toolkit` and `zod`; those are Client's dependencies,
-not Core's. The shared runtime retains stable resolver configuration, delivery
-and optional preview clients, and one base event builder. It is stateless with
-respect to request and browser state and requires its platform caller to provide
-the event channel instead of assuming server or Web.
+`client` owns delivery integration, conversion, free fetch functions, direct
+Optimization transport and event construction, the runtime-neutral
+`EventBuilder`, and the lower-layer shared `ContentfulExperiences` runtime. Its
+event layer depends on the optimization API client, schemas/logger plus
+`es-toolkit` and `zod`; those are Client's dependencies, not Core's. Runtime
+constructors accept `RuntimeDeliveryClientOptions` configuration, then construct
+and retain their own Delivery, optional Preview, and Optimization clients; a
+caller cannot inject a pre-built delivery client. `accessToken` can be the
+generated client's token supplier. It may be omitted only with an explicit proxy
+host, which disables generated bearer auth and must supply upstream auth itself.
+The shared runtime is stateless with respect to request and browser state and
+requires its platform caller to provide the event channel instead of assuming
+server or Web.
 
 `node` is the public Node-specific leaf over the shared Client runtime. Its
 process-long SDK instance retains only stable configuration and reusable
 delivery transports; `forRequest()` creates a request-local facade for fetch,
-resolve, and destination operations. This keeps locale and resolve options from
-crossing concurrent requests. By-ID fetch options can carry first-class
-personalization with a profile id and caller-built events; Client maps it to
-XDA's extension body, and Node proxies it without retaining state. Operational event methods
-are separate additive work and are not part of this interim contract. `web` is a sibling public leaf over
-Client and Core, not a subclass of Node or a source of Node state. It owns
-mutable browser locale and browser context providers, and inherits the shared
-runtime's trusted custom-endpoint and direct by-ID CPA preview capabilities. It
-has no operational event methods, persistence, or queues in this interim.
+resolve, destination, and event operations. This keeps locale, resolve options,
+and volatile event profile/context from crossing concurrent requests. `web` is a
+sibling public leaf over Client and Core, not a subclass of Node or a source of
+Node state. It owns mutable browser locale, browser context providers, and an
+in-memory-only event profile, and inherits the shared runtime's trusted
+custom-endpoint and direct by-ID CPA preview capabilities.
+
+Both leaves trigger events directly. `identify`, `page`, and `track` target the
+Personalization API; `trackView`, `trackClick`, `trackHover`, and
+`trackFlagView` target the Analytics API. The SDK deliberately has no event
+queue, durable persistence, consent gate, beacon/lifecycle delivery, automatic
+renderer tracking, or Live Preview event integration. A manual event call still
+sends while a direct CPA preview fetch is active. The exception is an explicit,
+request-scoped Node handoff for a paired browser integration: it is a one-shot
+journal, not a general queue. Node defaults to direct `commit` delivery;
+`eventDelivery: 'handoff'` can preflight the initial Personalization sequence in one
+batch, while individual Personalization methods remain cumulative and Analytics
+methods stage for browser replay. Web has no mode selector: `eventHandoff`
+(mutually exclusive with `profile`) requires the current browser route key.
+Page-bearing journals commit only when their route marker matches. Compatible
+adjacent Personalization entries share a request; locale changes and Analytics
+entries remain ordering boundaries. The handoff contains the exact,
+browser-visible event bodies and must use escaped serialization in a
+private/no-store response; exclude secrets and server-only traits, and never
+cache, log, or persist it. Its internal serialized-payload cap is 64 KiB.
+Replay can partially commit, stops on failure, does not retry automatically,
+and is not distributed exactly-once delivery. A rejected replay receipt releases
+later direct calls so an adapter can send its ordinary initial page. No adapter
+or example is yet wired to this protocol;
+Live Preview remains independent. See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
+
+By-ID fetch options can carry first-class personalization with a profile id and
+caller-built events; Client maps it to XDA's extension body, and Node proxies it
+without retaining state.
 
 For both public leaves, `environmentId` names the Contentful environment used
 by by-ID Experience requests; it is distinct from the generated delivery
-client's optional `environment` endpoint configuration. The Experiences `host`
-option maps to that client's `baseUrl`; callers using a raw client configure
-`baseUrl` directly. Explicit `host`/raw-client `baseUrl` wins over generated-client
-`environment`, which wins over the delivery or preview default. This configuration
-is trusted: its bearer token goes to the selected endpoint. Direct CPA preview
+client's optional `environment` endpoint configuration. The runtime's `host`
+option maps to that client's `baseUrl`; explicit `host` wins over generated-client
+`environment`, which wins over the delivery or preview default. A tokenless
+runtime host is an explicit proxy boundary: generated auth is disabled and the
+proxy owns upstream credentials. A runtime token is sent to its configured
+endpoint. On Web this is intentionally browser-visible only when token scope and
+CORS make that safe; otherwise use the proxy. Raw-client `baseUrl` configuration
+belongs only to the separate adapter/free-function paths. Direct CPA preview
 fetches are separate from the Preview Session HTTP/WebSocket transport that
 `live-preview` owns.
 
@@ -173,16 +209,16 @@ loading, WebSocket subscription, external-store state, and errors.
 
 ## Layering rules and where they live
 
-| Rule                                            | Encoded in                                                                                          | Enforced by                                                                    |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `core` has no dependencies                      | `packages/core/package.json` (no `dependencies`)                                                    | review                                                                         |
-| Only `client` reaches the delivery client       | `packages/client/package.json`                                                                      | review                                                                         |
-| Client is runtime-neutral and request-stateless | `packages/client/src/*`                                                                             | review                                                                         |
-| Node request state stays request-local          | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
-| Web browser state stays browser-owned           | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
-| Frameworks are peers, never deps                | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
-| Adapters do not surface Node's request facade   | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
-| Project scope for tags                          | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
+| Rule                                                             | Encoded in                                                                                          | Enforced by                                                                    |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `core` has no dependencies                                       | `packages/core/package.json` (no `dependencies`)                                                    | review                                                                         |
+| Only `client` reaches the delivery client                        | `packages/client/package.json`                                                                      | review                                                                         |
+| Client is runtime-neutral and request-stateless                  | `packages/client/src/*`                                                                             | review                                                                         |
+| Node request state and volatile event context stay request-local | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
+| Web browser state and in-memory event profile stay browser-owned | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
+| Frameworks are peers, never deps                                 | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
+| Adapters do not surface Node's request facade                    | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
+| Project scope for tags                                           | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
 
 The `tags` in each `project.json` are the seam for mechanical enforcement: the
 vocabulary is already assigned consistently, but `eslint.config.mjs` does not
@@ -341,18 +377,18 @@ bump from them, so a message that escapes the hook silently changes what ships.
 
 ## Where a change lands
 
-| Change                                                                   | Touch                                                                          |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Payload shape / resolve semantics                                        | `packages/core`                                                                |
-| Viewport or design-value math                                            | `packages/design`                                                              |
-| Delivery, auth, hosts                                                    | `packages/client`                                                              |
-| Node request facade and request-local fetch/resolve/destination defaults | `packages/node`                                                                |
-| Web browser locale, context providers, and shared-runtime fetch/resolve  | `packages/web`                                                                 |
-| Rendering for one framework                                              | that adapter only                                                              |
-| Public API surface                                                       | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |
-| New framework adapter                                                    | new `packages/adapter-<fw>` leaf + a `project.json` with its own build command |
-| Workspace-wide compiler options                                          | `tsconfig.base.json` and/or `tsconfig.build.json`                              |
-| Build/release orchestration                                              | `nx.json`, `.github/workflows/*`                                               |
+| Change                                                                                                  | Touch                                                                          |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Payload shape / resolve semantics                                                                       | `packages/core`                                                                |
+| Viewport or design-value math                                                                           | `packages/design`                                                              |
+| Delivery, auth, hosts                                                                                   | `packages/client`                                                              |
+| Node request facade, request-local fetch/resolve/destination defaults, and event context                | `packages/node`                                                                |
+| Web browser locale, context providers, in-memory event profile, and shared-runtime fetch/resolve/events | `packages/web`                                                                 |
+| Rendering for one framework                                                                             | that adapter only                                                              |
+| Public API surface                                                                                      | every `packages/adapter-*/src/index.ts` — they are kept at parity deliberately |
+| New framework adapter                                                                                   | new `packages/adapter-<fw>` leaf + a `project.json` with its own build command |
+| Workspace-wide compiler options                                                                         | `tsconfig.base.json` and/or `tsconfig.build.json`                              |
+| Build/release orchestration                                                                             | `nx.json`, `.github/workflows/*`                                               |
 
 Step-by-step procedures for the new-adapter and release rows — including the
 baseline git tag a new package needs before it can be published — are in
