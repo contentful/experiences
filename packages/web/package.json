@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser SDK for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
     "directory": "packages/web"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.6.0",
+    "@contentful/experiences-client": "0.7.0",
     "@contentful/experiences-sdk-core": "0.10.0"
   },
   "devDependencies": {

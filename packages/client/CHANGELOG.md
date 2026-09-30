@@ -1,3 +1,13 @@
+## 0.7.0 (2026-09-30)
+
+### 🚀 Features
+
+- ⚠️  add event-triggering methods to runtimes ([#209](https://github.com/contentful/experiences/pull/209))
+
+### ⚠️  Breaking Changes
+
+- add event-triggering methods to runtimes  ([#209](https://github.com/contentful/experiences/pull/209))
+
 ## 0.6.0 (2026-09-30)
 
 ### 🚀 Features
