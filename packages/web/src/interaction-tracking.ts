@@ -25,7 +25,7 @@ import { isTrackedEntity, type TrackingAttribution } from './tracking/attributio
 import { TRACKING_NODE_ATTRIBUTE } from './tracking-attributes.js';
 import { createClickDetector } from './tracking/click/create-click-detector.js';
 import { createHoverDetector } from './tracking/hover/create-hover-detector.js';
-import type { InteractionDetector } from './tracking/interaction-detector.js';
+import { type InteractionDetector, toInteractionArgs } from './tracking/interaction-detector.js';
 import { createViewDetector } from './tracking/view/create-view-detector.js';
 import type { ElementViewObserverOptions } from './tracking/view/element-view-observer-support.js';
 
@@ -104,22 +104,38 @@ export function createInteractionTracking(
     );
   }
 
-  // Elements currently handed to the detectors.
-  const observed = new Set<Element>();
+  // Elements currently handed to the detectors, with the entity each was handed
+  // over as.
+  const observed = new Map<Element, string>();
 
   const isInRoot = (element: Element): boolean =>
     element.isConnected && (root === document || root.contains(element));
 
-  /** Brings one element's detector state in line with the DOM and the lookup. */
-  const reconcile = (element: Element): void => {
-    const trackable = isInRoot(element) && resolveElementAttribution(element) !== undefined;
+  /** Identifies what an interaction is reported against; any change is a different target. */
+  const entityKey = (attribution: TrackingAttribution): string =>
+    JSON.stringify(toInteractionArgs(attribution));
 
-    if (trackable && !observed.has(element)) {
-      observed.add(element);
+  const remove = (element: Element): void => {
+    observed.delete(element);
+    for (const detector of detectors) detector.onElementRemoved(element);
+  };
+
+  /**
+   * Brings one element's detector state in line with the DOM and the lookup.
+   * An element that now names a different entity — its node id changed, or
+   * `refresh()` resolved different attribution — is removed and re-added, so
+   * no view or hover is reported under two entities. The Optimization SDK does
+   * the same when an entry id attribute changes.
+   */
+  const reconcile = (element: Element): void => {
+    const attribution = isInRoot(element) ? resolveElementAttribution(element) : undefined;
+    const key = attribution ? entityKey(attribution) : undefined;
+    const current = observed.get(element);
+
+    if (current !== undefined && current !== key) remove(element);
+    if (key !== undefined && current !== key) {
+      observed.set(element, key);
       for (const detector of detectors) detector.onElementAdded(element);
-    } else if (!trackable && observed.has(element)) {
-      observed.delete(element);
-      for (const detector of detectors) detector.onElementRemoved(element);
     }
   };
 
@@ -154,7 +170,7 @@ export function createInteractionTracking(
 
   return {
     refresh() {
-      const candidates = new Set<Element>(observed);
+      const candidates = new Set<Element>(observed.keys());
       root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
       for (const element of candidates) reconcile(element);
     },

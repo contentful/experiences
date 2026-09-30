@@ -113,8 +113,11 @@ the rendered plan in the browser supplies the id → attribution lookup.**
 5. **A new plan means a new lookup.**
    - On a Live Preview update or client navigation, the owner swaps the lookup and
      calls `refresh()`.
-   - If an update changes a node's id, the re-rendered attribute is picked up as an
-     attribute change. A test covers this
+   - An element that starts naming a different entity is treated as removed and
+     re-added, as in the Optimization SDK. That covers a re-rendered attribute
+     with a new node id, and `refresh()` resolving different attribution. So no
+     view or hover is ever reported under two entities, but a view or hover in
+     progress on that element is dropped without its final event
      (`packages/web/src/interaction-tracking.test.ts`).
    - Before tearing tracking down, the owner calls `endActive()` so that views and
      hovers in progress send their final events.
@@ -135,6 +138,11 @@ the rendered plan in the browser supplies the id → attribution lookup.**
 - **`display: contents`:** an element with `display: contents` has no box of its
   own. The view observer handles it by measuring its single rendered child, or its
   content rects when there is more than one child.
+- **Removed elements:** an element removed from the page mid-view or mid-hover is
+  dropped without its final event, matching the Optimization SDK. The view or
+  hover is still counted, because the qualifying event is sent at one second;
+  only its final duration is lost. Pages that remove content on navigation can
+  call the session's `stop()` first to send those final events.
 - **Unload delivery:** the final view and hover events fired on `pagehide` go
   through the normal `trackView` and `trackHover` calls. Getting them delivered
   reliably is left to the event queue and beacon work in

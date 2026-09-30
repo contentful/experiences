@@ -330,4 +330,80 @@ describe('createInteractionTracking', () => {
 
     expect(events.trackView.mock.calls.map(([args]) => args.viewDurationMs)).toEqual([1000, 1300]);
   });
+
+  describe('when an element starts naming a different entity', () => {
+    const setup = () => {
+      vi.useFakeTimers();
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+      const io = installIOPolyfill();
+      const element = stamped('node-a', 'main');
+      document.body.append(element);
+      const events = createEvents();
+      const attributions: Record<string, TrackingAttribution> = {
+        'node-a': { entityId: 'a', entityKind: 'Experience' },
+        'node-b': { entityId: 'b', entityKind: 'Experience' },
+      };
+      const tracking = createInteractionTracking(events, {
+        resolveAttribution: (nodeId) => attributions[nodeId],
+      });
+      return { io, element, events, attributions, tracking };
+    };
+
+    const viewsBy = (trackView: ReturnType<typeof vi.fn>) =>
+      trackView.mock.calls.map(([args]) => `${args.entityId}:${args.viewId}`);
+
+    it('starts a fresh view when its node id changes, as the Optimization SDK does', async () => {
+      const { io, element, events, tracking } = setup();
+
+      io.getLast().trigger(element, true);
+      await vi.advanceTimersByTimeAsync(1000);
+      element.setAttribute(TRACKING_NODE_ATTRIBUTE, 'node-b');
+      await vi.advanceTimersByTimeAsync(0);
+      io.getLast().trigger(element, true);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const [first, second] = events.trackView.mock.calls.map(([args]) => args);
+      expect(events.trackView).toHaveBeenCalledTimes(2);
+      expect(first).toMatchObject({ entityId: 'a' });
+      expect(second).toMatchObject({ entityId: 'b' });
+      expect(second.viewId).not.toBe(first.viewId);
+      // No view id is ever reported under two entities.
+      expect(new Set(viewsBy(events.trackView).map((v) => v.split(':')[1])).size).toBe(2);
+      tracking.destroy();
+    });
+
+    it('starts a fresh view when refresh returns a different entity for it', async () => {
+      const { io, element, events, attributions, tracking } = setup();
+
+      io.getLast().trigger(element, true);
+      await vi.advanceTimersByTimeAsync(1000);
+      attributions['node-a'] = { entityId: 'a2', entityKind: 'Experience' };
+      tracking.refresh();
+      io.getLast().trigger(element, true);
+      await vi.advanceTimersByTimeAsync(1000);
+      await tracking.endActive();
+
+      const reported = events.trackView.mock.calls.map(([args]) => args);
+      const byViewId = new Map<string, Set<string>>();
+      for (const args of reported) {
+        byViewId.set(args.viewId, (byViewId.get(args.viewId) ?? new Set()).add(args.entityId));
+      }
+      expect([...byViewId.values()].every((entities) => entities.size === 1)).toBe(true);
+      expect(reported.map((args) => args.entityId)).toContain('a2');
+      tracking.destroy();
+    });
+
+    it('keeps an in-progress view when refresh returns the same attribution', async () => {
+      const { io, element, events, attributions, tracking } = setup();
+
+      io.getLast().trigger(element, true);
+      await vi.advanceTimersByTimeAsync(600);
+      attributions['node-a'] = { entityId: 'a', entityKind: 'Experience' };
+      tracking.refresh();
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(events.trackView).toHaveBeenCalledOnce();
+      tracking.destroy();
+    });
+  });
 });
