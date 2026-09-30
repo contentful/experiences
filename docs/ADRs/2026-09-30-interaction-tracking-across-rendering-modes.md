@@ -20,7 +20,15 @@ entry tracking:
   `MutationObserver`, and hands them to the view, hover, and click detectors.
 - The attribute holds only a node id. Detectors turn it into attribution by calling
   a caller-supplied `resolveAttribution(nodeId)` when an event fires.
-- It is internal and is not exported from the package entry.
+- `createInteractionTracking` itself is internal. The public entry point is the Web
+  runtime's `startInteractionTracking({ resolveAttribution, … })`, which wires it to
+  the instance's `trackView`, `trackHover`, and `trackClick` and returns a session
+  with `refresh()` and `stop()`. One session runs per runtime.
+- `startInteractionTracking` is marked experimental. The consumer DX proposal has a
+  configured root (`createExperiences({ optimization })` plus the renderer) start
+  tracking and supply attribution itself, so consumers never call it. Until that
+  root exists, the caller supplies the lookup and owns the session, and the method
+  may change or be removed without a major version bump.
 
 The attribute and the lookup are the two things every rendering mode has to supply.
 NT-4312 owns the other half: resolving attribution from the XDA source map and
@@ -65,8 +73,10 @@ The facts below were checked in the code rather than assumed.
   - Elements are reused only when node ids stay stable. We found no guarantee that
     the editor keeps them stable.
 - **The web runtime has no destroy or dispose method.** `reset()` clears the
-  profile (`packages/web/src/contentful-experiences.ts:129-135`). Tracking has its
-  own lifecycle: `refresh`, `endActive`, and `destroy`.
+  profile. Tracking has its own lifecycle: the session's `refresh()` and `stop()`.
+  `stop()` sends the final events for in-progress views and hovers, then tears
+  tracking down. It releases the runtime's session slot at once, so a new session
+  can start before those final events settle.
 
 ## Decision
 
@@ -119,12 +129,12 @@ the rendered plan in the browser supplies the id → attribution lookup.**
      view or hover is ever reported under two entities, but a view or hover in
      progress on that element is dropped without its final event
      (`packages/web/src/interaction-tracking.test.ts`).
-   - Before tearing tracking down, the owner calls `endActive()` so that views and
-     hovers in progress send their final events.
+   - To tear tracking down, the owner calls the session's `stop()`, which sends the
+     final events for views and hovers in progress.
 
-6. **There is one tracking instance per page.** The lookup merges every plan
-   rendered on the page. Ids are only unique within a plan, so two plans that share
-   a node id would share attribution. Today no path renders more than one plan per
+6. **There is one tracking session per page.** The runtime allows one session at a
+   time, and the lookup merges every plan rendered on the page. Ids are only unique
+   within a plan, so two plans that share a node id would share attribution. Today no path renders more than one plan per
    page, so this risk is accepted and documented rather than designed around now.
    See the open questions.
 
