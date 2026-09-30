@@ -51,19 +51,17 @@ Pass a profile id and events with a by-ID fetch to let XDA evaluate personalizat
 ```ts
 const plan = await request.fetchExperience({
   experienceId,
-  extensions: {
-    personalization: {
-      profileId,
-      events: [
-        experiences.eventBuilder.buildIdentify({ userId }),
-        experiences.eventBuilder.buildPageView(),
-      ],
-    },
+  personalization: {
+    profileId,
+    events: [
+      experiences.eventBuilder.buildIdentify({ userId }),
+      experiences.eventBuilder.buildPageView(),
+    ],
   },
 });
 ```
 
-Personalization is request data rather than request-context state. Supplying `extensions` switches the XDA call to POST. Add `sourceMap: {}` beside `personalization` when both extensions are needed. Enabling or disabling automatic optimization behavior is outside this contract.
+Personalization is request data rather than request-context state. Supplying it switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. Enabling or disabling automatic optimization behavior is outside this contract.
 
 ## Precedence
 

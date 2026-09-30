@@ -73,12 +73,14 @@ describe('ContentfulExperiences', () => {
     await runtime.fetchExperience({
       experienceId: 'exp',
       locale: 'de-DE',
-      extensions: { personalization, sourceMap: {} },
+      personalization,
+      extensions: { sourceMap: {} },
     });
     expect(mockFetchExperience).toHaveBeenCalledWith(
       expect.objectContaining({
         locale: 'de-DE',
-        extensions: { personalization, sourceMap: {} },
+        personalization,
+        extensions: { sourceMap: {} },
       }),
       expect.objectContaining({ client: expect.anything() }),
       expect.objectContaining({ config: { components: {} } })

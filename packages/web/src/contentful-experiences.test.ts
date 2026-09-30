@@ -100,23 +100,21 @@ describe('Web ContentfulExperiences', () => {
     });
   });
 
-  it('forwards personalization extensions with Web event context', async () => {
+  it('forwards personalization with Web event context', async () => {
     const runtime = createRuntime();
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [], viewports: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
-    const extensions = {
-      personalization: {
-        profileId: 'profile-1',
-        events: [page],
-      },
+    const personalization = {
+      profileId: 'profile-1',
+      events: [page],
     };
 
-    await runtime.fetchExperience({ experienceId: 'personalized', extensions });
+    await runtime.fetchExperience({ experienceId: 'personalized', personalization });
 
     expect(page.channel).toBe('web');
-    expect(fetch).toHaveBeenCalledWith({ experienceId: 'personalized', extensions });
+    expect(fetch).toHaveBeenCalledWith({ experienceId: 'personalized', personalization });
   });
 
   it('keeps mutable locale state isolated between instances', () => {

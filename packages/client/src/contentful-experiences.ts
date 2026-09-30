@@ -12,6 +12,7 @@ import {
   fetchExperience,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
+  type PersonalizationOptions,
 } from './fetch-experience.js';
 import type { CreateClientOptions } from './create-client.js';
 import { PREVIEW_HOST } from './hosts.js';
@@ -33,6 +34,7 @@ export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'li
 export type RuntimeFetchExperienceOptions = {
   experienceId: string;
   locale?: string;
+  personalization?: PersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
 };
@@ -140,6 +142,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
         environmentId: this.environmentId,
         experienceId: options.experienceId,
         locale: options.locale ?? this.locale,
+        personalization: options.personalization,
         extensions: options.extensions,
       },
       {

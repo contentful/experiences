@@ -46,16 +46,14 @@ Preview here means a direct, by-ID CPA fetch through the shared runtime. It is n
 
 ## Personalization
 
-Pass a profile id and browser-built events through the XDA personalization extension:
+Pass a profile id and browser-built events through the first-class personalization option:
 
 ```ts
 const plan = await experiences.fetchExperience({
   experienceId,
-  extensions: {
-    personalization: {
-      profileId,
-      events: [experiences.eventBuilder.buildPageView()],
-    },
+  personalization: {
+    profileId,
+    events: [experiences.eventBuilder.buildPageView()],
   },
 });
 ```

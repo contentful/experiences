@@ -131,12 +131,12 @@ describe('Node ContentfulExperiences', () => {
       profileId: 'profile-1',
       events: [runtime.eventBuilder.buildPageView(), runtime.eventBuilder.buildPageView()],
     };
-    await request.fetchExperience({ experienceId: 'experience', extensions: { personalization } });
+    await request.fetchExperience({ experienceId: 'experience', personalization });
     await request.fetchByDestinationNode({ destinationId: 'destination', nodeId: 'node' });
     await request.fetchByDestinationPath({ destinationId: 'destination', path: '/path' });
 
     expect(fetchExperience).toHaveBeenCalledWith(
-      { experienceId: 'experience', locale: 'es-ES', extensions: { personalization } },
+      { experienceId: 'experience', locale: 'es-ES', personalization },
       { metadata: { request: true }, debug: undefined, initialViewportId: undefined }
     );
     expect(byNode).toHaveBeenCalledWith(

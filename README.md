@@ -740,11 +740,11 @@ Async. Fetches an Experience from the Experience Delivery API and resolves it in
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                  | Purpose                                                                                                                                                    |
-| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, extensions? }`      | Which Experience to fetch, including XDA extensions such as source maps and personalization. Future digital-property identifiers widen this type.          |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
-| `resolveOptions`    | `{ config, metadata?, debug?, initialViewportId? }`                   | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
+| Arg                 | Type                                                                               | Purpose                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, personalization?, extensions? }` | Which Experience to fetch, including first-class personalization and additional XDA extensions. Future digital-property identifiers widen this type.       |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`              | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
+| `resolveOptions`    | `{ config, metadata?, debug?, initialViewportId? }`                                | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
 
 All three of `metadata`, `debug`, and `initialViewportId` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 
@@ -798,7 +798,7 @@ const plan = await fetchExperience(
 plan.sourceMap; // ExperienceSourceMap | undefined
 ```
 
-The SDK selects the POST operation, extracts the returned source map, and forwards it to `resolveExperience`. The same `extensions` object can also carry personalization, so both capabilities compose without separate flags.
+The SDK selects the POST operation, extracts the returned source map, and forwards it to `resolveExperience`. Source maps also compose with the top-level `personalization` option in the same request.
 
 Two things to know before switching it on:
 

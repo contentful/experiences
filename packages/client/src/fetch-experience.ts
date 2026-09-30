@@ -12,8 +12,17 @@ import {
   type ExperienceResponse,
 } from './to-experience-payload.js';
 
-export type ExperienceRequestExtensions =
+type DeliveryExperienceRequestExtensions =
   ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensions;
+
+export type PersonalizationOptions = NonNullable<
+  DeliveryExperienceRequestExtensions['personalization']
+>;
+
+export type ExperienceRequestExtensions = Omit<
+  DeliveryExperienceRequestExtensions,
+  'personalization'
+>;
 
 export type ByIdExperienceOptions = {
   spaceId: string;
@@ -21,8 +30,12 @@ export type ByIdExperienceOptions = {
   experienceId: string;
   locale?: string;
   /**
-   * XDA request extensions such as source maps and personalization. Supplying
-   * this object switches the request to POST.
+   * Profile and events used by XDA to personalize the resolved Experience.
+   */
+  personalization?: PersonalizationOptions;
+  /**
+   * Additional XDA request extensions such as source maps. Supplying a defined
+   * extension switches the request to POST.
    */
   extensions?: ExperienceRequestExtensions;
 };
@@ -196,13 +209,16 @@ export async function fetchExperience(
     );
   }
 
-  const { spaceId, environmentId, experienceId, locale, extensions } = experienceOptions;
+  const { spaceId, environmentId, experienceId, locale, personalization, extensions } =
+    experienceOptions;
 
   log.log('fetching experience', {
     spaceId,
     environmentId,
     experienceId,
     locale,
+    // avoiding log any personalization sensitive data
+    personalization: personalization !== undefined,
     extensions,
   });
 
@@ -225,20 +241,32 @@ async function fetchByExperienceId(
   client: ContentfulViewDeliveryClient,
   options: ByIdExperienceOptions
 ): Promise<ExperienceResponse> {
-  const { spaceId, environmentId, experienceId, locale, extensions } = options;
+  const { spaceId, environmentId, experienceId, locale, personalization, extensions } = options;
+  const requestExtensions: DeliveryExperienceRequestExtensions = {
+    ...extensions,
+    ...(personalization === undefined ? {} : { personalization }),
+  };
 
   try {
+    // Both methods hit the same endpoint, but only the POST operation accepts
+    // extensions in its request body. Keep the cacheable GET when there are no
+    // extensions to evaluate.
+    // The generated delivery client owns the alpha-feature header on both
+    // paths, including when the caller supplied the client instance.
+    //
     // Await inside the try so rejected requests are normalized below.
-    if (extensions === undefined) {
-      return await client.experience.get(spaceId, environmentId, experienceId, { locale });
+    if (hasRequestExtensions(requestExtensions)) {
+      return await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
+        locale,
+        extensions: requestExtensions,
+      });
     }
 
-    return await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
-      locale,
-      extensions,
-    });
+    return await client.experience.get(spaceId, environmentId, experienceId, { locale });
   } catch (err) {
-    // Preserve expected 404 control flow for framework routers.
+    // Preserve expected 404 control flow for framework routers. Other failures
+    // are wrapped with stable SDK context instead of exposing transport-specific
+    // error shapes.
     if (err instanceof ContentfulViewDelivery.NotFoundError) {
       throw err;
     }
@@ -310,4 +338,13 @@ async function fetchByDestination(
     debug,
     initialViewportId,
   });
+}
+
+function hasRequestExtensions(
+  extensions: DeliveryExperienceRequestExtensions | undefined
+): extensions is DeliveryExperienceRequestExtensions {
+  return (
+    extensions !== undefined &&
+    Object.values(extensions).some((extension) => extension !== undefined)
+  );
 }

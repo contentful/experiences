@@ -394,6 +394,20 @@ describe('fetchExperience — source map', () => {
     expect(mockGetWithOverrides).not.toHaveBeenCalled();
   });
 
+  it.each([{}, { sourceMap: undefined }])(
+    'uses the plain GET when no extension value is defined',
+    async (extensions) => {
+      await fetchExperience(
+        { ...experienceOptions, extensions },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockGetWithOverrides).not.toHaveBeenCalled();
+    }
+  );
+
   it('routes to getWithOverrides with the sourceMap extension when asked', async () => {
     await fetchExperience(
       { ...experienceOptions, locale: 'en-US', extensions: { sourceMap: {} } },
@@ -485,7 +499,7 @@ describe('fetchExperience — personalization', () => {
 
   it('routes to getWithOverrides with the personalization extension', async () => {
     await fetchExperience(
-      { ...experienceOptions, locale: 'en-US', extensions: { personalization } },
+      { ...experienceOptions, locale: 'en-US', personalization },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -499,7 +513,7 @@ describe('fetchExperience — personalization', () => {
 
   it('forwards personalization and source-map extensions together', async () => {
     await fetchExperience(
-      { ...experienceOptions, extensions: { personalization, sourceMap: {} } },
+      { ...experienceOptions, personalization, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
