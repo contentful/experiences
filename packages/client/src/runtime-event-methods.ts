@@ -1,12 +1,12 @@
 import type {
-  ExperienceApiClient as OptimizationExperienceApiClient,
-  InsightsApiClient as OptimizationInsightsApiClient,
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
 } from '@contentful/optimization-api-client';
 import type {
-  ExperienceEvent as OptimizationExperienceEvent,
-  InsightsEvent as OptimizationInsightsEvent,
-  OptimizationData as OptimizationApiData,
-  PartialProfile as OptimizationPartialProfile,
+  ExperienceEvent as PersonalizationEvent,
+  InsightsEvent as AnalyticsEvent,
+  OptimizationData as EventOptimizationData,
+  PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 
 import type EventBuilder from './event-builder.js';
@@ -20,25 +20,24 @@ import type {
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
 } from './event-builder.js';
-export type EventProfile = OptimizationPartialProfile;
-export type EventOptimizationData = OptimizationApiData;
+export type { EventOptimizationData, EventProfile };
 
-export type ExperienceEventMethod = 'identify' | 'page' | 'track';
-export type InsightsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
+export type PersonalizationEventMethod = 'identify' | 'page' | 'track';
+export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
 
 /** The Optimization API surface used by the shared runtime. */
 export interface RuntimeOptimizationApiClient {
-  readonly experience: Pick<OptimizationExperienceApiClient, 'upsertProfile'>;
-  readonly insights: Pick<OptimizationInsightsApiClient, 'sendBatchEvents'>;
+  readonly personalization: Pick<PersonalizationApiClient, 'upsertProfile'>;
+  readonly analytics: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
 }
 
 /** Internal strategy used by a runtime to commit or stage built events. */
 export interface RuntimeEventDispatch {
-  experience(
-    event: OptimizationExperienceEvent,
+  personalization(
+    event: PersonalizationEvent,
     profile: EventProfile | undefined
   ): Promise<EventOptimizationData>;
-  insights(event: OptimizationInsightsEvent, profile: EventProfile): Promise<boolean>;
+  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<boolean>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
@@ -54,9 +53,9 @@ export interface RuntimeEventBindings {
 /**
  * Event-triggering surface shared by the public Node and Web runtimes.
  * Profile-producing calls are not serialized; await them before another
- * profile-producing or Insights call on the same bound runtime. In Node
- * handoff mode an Insights `true` means accepted into the handoff journal,
- * not delivered to the Insights transport.
+ * profile-producing or Analytics call on the same bound runtime. In Node
+ * handoff mode an Analytics `true` means accepted into the handoff journal,
+ * not delivered to the Analytics transport.
  */
 export interface RuntimeEventMethods {
   readonly profile: EventProfile | undefined;
@@ -69,11 +68,11 @@ export interface RuntimeEventMethods {
   trackFlagView(args: FlagViewBuilderArgs): Promise<boolean>;
 }
 
-/** Thrown when an Insights event is triggered before a profile is available. */
+/** Thrown when an Analytics event is triggered before a profile is available. */
 export class EventProfileRequiredError extends Error {
-  readonly method: InsightsEventMethod;
+  readonly method: AnalyticsEventMethod;
 
-  constructor(method: InsightsEventMethod) {
+  constructor(method: AnalyticsEventMethod) {
     super(
       `${method}() requires a current event profile. Supply an initial profile or await identify(), page(), or track() first.`
     );
@@ -94,40 +93,44 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async identify(args: IdentifyBuilderArgs): Promise<EventOptimizationData> {
-    return this.sendExperienceEvent(this.eventBuilder.buildIdentify(this.withEventContext(args)));
+    return this.sendPersonalizationEvent(
+      this.eventBuilder.buildIdentify(this.withEventContext(args))
+    );
   }
 
   async page(args: PageViewBuilderArgs = {}): Promise<EventOptimizationData> {
-    return this.sendExperienceEvent(this.eventBuilder.buildPageView(this.withEventContext(args)));
+    return this.sendPersonalizationEvent(
+      this.eventBuilder.buildPageView(this.withEventContext(args))
+    );
   }
 
   async track(args: TrackBuilderArgs): Promise<EventOptimizationData> {
-    return this.sendExperienceEvent(this.eventBuilder.buildTrack(this.withEventContext(args)));
+    return this.sendPersonalizationEvent(this.eventBuilder.buildTrack(this.withEventContext(args)));
   }
 
   async trackView(args: ViewBuilderArgs): Promise<boolean> {
-    return this.sendInsightsEvent(
+    return this.sendAnalyticsEvent(
       'trackView',
       this.eventBuilder.buildView(this.withEventContext(args))
     );
   }
 
   async trackClick(args: ClickBuilderArgs): Promise<boolean> {
-    return this.sendInsightsEvent(
+    return this.sendAnalyticsEvent(
       'trackClick',
       this.eventBuilder.buildClick(this.withEventContext(args))
     );
   }
 
   async trackHover(args: HoverBuilderArgs): Promise<boolean> {
-    return this.sendInsightsEvent(
+    return this.sendAnalyticsEvent(
       'trackHover',
       this.eventBuilder.buildHover(this.withEventContext(args))
     );
   }
 
   async trackFlagView(args: FlagViewBuilderArgs): Promise<boolean> {
-    return this.sendInsightsEvent(
+    return this.sendAnalyticsEvent(
       'trackFlagView',
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
@@ -137,9 +140,7 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     return { ...this.bindings.getEventContext?.(), ...args } as TArgs;
   }
 
-  private withConsent<TEvent extends OptimizationExperienceEvent | OptimizationInsightsEvent>(
-    event: TEvent
-  ): TEvent {
+  private withConsent<TEvent extends PersonalizationEvent | AnalyticsEvent>(event: TEvent): TEvent {
     const consent = this.bindings.getConsent?.();
     if (consent === undefined) return event;
 
@@ -152,36 +153,36 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     } as TEvent;
   }
 
-  private async sendExperienceEvent(
-    event: OptimizationExperienceEvent
+  private async sendPersonalizationEvent(
+    event: PersonalizationEvent
   ): Promise<EventOptimizationData> {
     const eventWithConsent = this.withConsent(event);
     const profileRevision = this.bindings.getProfileRevision?.();
-    const data = await this.dispatch.experience(eventWithConsent, this.profile);
+    const data = await this.dispatch.personalization(eventWithConsent, this.profile);
     if (profileRevision === undefined || this.bindings.getProfileRevision?.() === profileRevision) {
       this.bindings.setProfile(data.profile);
     }
     return data;
   }
 
-  private async sendInsightsEvent(
-    method: InsightsEventMethod,
-    event: OptimizationInsightsEvent
+  private async sendAnalyticsEvent(
+    method: AnalyticsEventMethod,
+    event: AnalyticsEvent
   ): Promise<boolean> {
     const profile = this.profile;
     if (profile === undefined) throw new EventProfileRequiredError(method);
-    return this.dispatch.insights(this.withConsent(event), profile);
+    return this.dispatch.analytics(this.withConsent(event), profile);
   }
 }
 
 function createDirectEventDispatch(api: RuntimeOptimizationApiClient): RuntimeEventDispatch {
   return {
-    experience: (event, profile) =>
-      api.experience.upsertProfile(
+    personalization: (event, profile) =>
+      api.personalization.upsertProfile(
         { profileId: profile?.id, events: [event] },
         { locale: event.context.locale }
       ),
-    insights: (event, profile) => api.insights.sendBatchEvents([{ profile, events: [event] }]),
+    analytics: (event, profile) => api.analytics.sendBatchEvents([{ profile, events: [event] }]),
   };
 }
 

@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRuntimeOptimizationClient } from './create-optimization-client.js';
 
 vi.mock('@contentful/optimization-api-client', () => ({
-  ApiClient: vi.fn().mockImplementation((options) => ({ options })),
+  ApiClient: vi.fn().mockImplementation((options) => ({
+    options,
+    experience: { upsertProfile: vi.fn() },
+    insights: { sendBatchEvents: vi.fn() },
+  })),
 }));
 
 describe('createRuntimeOptimizationClient', () => {
@@ -12,9 +16,9 @@ describe('createRuntimeOptimizationClient', () => {
     const client = createRuntimeOptimizationClient({
       spaceId: 'space',
       environmentId: 'staging',
-      experienceBaseUrl: 'https://experience.example',
-      insightsBaseUrl: 'https://insights.example',
-      enabledFeatures: ['location'],
+      personalizationBaseUrl: 'https://personalization.example',
+      analyticsBaseUrl: 'https://analytics.example',
+      personalizationEnabledFeatures: ['location'],
       fetchOptions: { retries: 3 },
     });
 
@@ -23,11 +27,14 @@ describe('createRuntimeOptimizationClient', () => {
       environment: 'staging',
       fetchOptions: { retries: 3 },
       experience: {
-        baseUrl: 'https://experience.example',
+        baseUrl: 'https://personalization.example',
         enabledFeatures: ['location'],
       },
-      insights: { baseUrl: 'https://insights.example' },
+      insights: { baseUrl: 'https://analytics.example' },
     });
-    expect(client).toBeDefined();
+    expect(client).toEqual({
+      personalization: expect.objectContaining({ upsertProfile: expect.any(Function) }),
+      analytics: expect.objectContaining({ sendBatchEvents: expect.any(Function) }),
+    });
   });
 });

@@ -18,9 +18,9 @@ function createHandoff(): RuntimeEventHandoff {
     environmentId: 'master',
     initialProfileId: 'profile-1',
     events: [
-      { transport: 'experience', event: builder.buildPageView() },
+      { transport: 'personalization', event: builder.buildPageView() },
       {
-        transport: 'insights',
+        transport: 'analytics',
         event: builder.buildClick({ entityId: 'hero', entityKind: 'InlineComponent' }),
       },
     ],
@@ -49,7 +49,7 @@ describe('parseRuntimeEventHandoff', () => {
         initialPageRouteKey: undefined,
         events: [handoff.events[1]],
       })
-    ).toThrow('Insights events require');
+    ).toThrow('Analytics events require');
   });
 
   it('rejects malformed events and handoffs beyond the private response cap', () => {
@@ -59,7 +59,7 @@ describe('parseRuntimeEventHandoff', () => {
       parseRuntimeEventHandoff({
         ...handoff,
         initialPageRouteKey: undefined,
-        events: [{ transport: 'experience', event: { type: 'page' } }],
+        events: [{ transport: 'personalization', event: { type: 'page' } }],
       })
     ).toThrow();
     expect(() =>

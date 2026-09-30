@@ -1,15 +1,16 @@
 import {
   ApiClient as OptimizationApiClient,
   type ApiClientConfig as OptimizationApiClientConfig,
-  type ExperienceApiClientConfig as OptimizationExperienceApiClientConfig,
-  type InsightsApiClientConfig as OptimizationInsightsApiClientConfig,
+  type ExperienceApiClientConfig as PersonalizationApiClientConfig,
+  type InsightsApiClientConfig as AnalyticsApiClientConfig,
 } from '@contentful/optimization-api-client';
+import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
 /** Stable configuration for the runtime-owned Optimization API client. */
 export type RuntimeOptimizationConfig = {
-  experienceBaseUrl?: OptimizationExperienceApiClientConfig['baseUrl'];
-  insightsBaseUrl?: OptimizationInsightsApiClientConfig['baseUrl'];
-  enabledFeatures?: OptimizationExperienceApiClientConfig['enabledFeatures'];
+  personalizationBaseUrl?: PersonalizationApiClientConfig['baseUrl'];
+  analyticsBaseUrl?: AnalyticsApiClientConfig['baseUrl'];
+  personalizationEnabledFeatures?: PersonalizationApiClientConfig['enabledFeatures'];
   fetchOptions?: OptimizationApiClientConfig['fetchOptions'];
 };
 
@@ -21,19 +22,24 @@ type CreateRuntimeOptimizationClientOptions = RuntimeOptimizationConfig & {
 export function createRuntimeOptimizationClient({
   spaceId,
   environmentId,
-  experienceBaseUrl,
-  insightsBaseUrl,
-  enabledFeatures,
+  personalizationBaseUrl,
+  analyticsBaseUrl,
+  personalizationEnabledFeatures,
   fetchOptions,
-}: CreateRuntimeOptimizationClientOptions): OptimizationApiClient {
-  return new OptimizationApiClient({
+}: CreateRuntimeOptimizationClientOptions): RuntimeOptimizationApiClient {
+  const client = new OptimizationApiClient({
     spaceId,
     environment: environmentId,
     fetchOptions,
     experience: {
-      baseUrl: experienceBaseUrl,
-      enabledFeatures,
+      baseUrl: personalizationBaseUrl,
+      enabledFeatures: personalizationEnabledFeatures,
     },
-    insights: { baseUrl: insightsBaseUrl },
+    insights: { baseUrl: analyticsBaseUrl },
   });
+
+  return {
+    personalization: client.experience,
+    analytics: client.insights,
+  };
 }

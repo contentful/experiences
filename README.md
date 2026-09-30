@@ -152,8 +152,8 @@ Session is active.
 ## Event tracking
 
 The public Node and Web SDKs provide direct event methods. `identify`, `page`,
-and `track` send through the Optimization Experience API. `trackView`,
-`trackClick`, `trackHover`, and `trackFlagView` send through the Insights API.
+and `track` send through the Personalization API. `trackView`, `trackClick`,
+`trackHover`, and `trackFlagView` send through the Analytics API.
 
 Runtime constructors accept `RuntimeDeliveryClientOptions` for `delivery` and,
 optionally, `preview`; they construct and own the Delivery, Preview, and
@@ -176,7 +176,7 @@ policy remain the application’s responsibility. The narrowly scoped paired
 replay protocol below is the only deferred-delivery path.
 
 Calls are not serialized. Await `identify`, `page`, or `track` before starting
-another profile-producing or Insights call on the same runtime or request
+another profile-producing or Analytics call on the same runtime or request
 facade.
 
 Web event context is read from the browser and can include URL, query, referrer,
@@ -192,23 +192,28 @@ and are suitable for server-only execution. Only Node's `forRequest()` context
 can select `eventDelivery: 'handoff'`, for an integration that passes that same
 request's events to `@contentful/experiences-web`. Web has no delivery mode.
 
-In handoff mode, await every call. Successful `identify`, `page`, and `track`
-calls are cumulatively evaluated by the Experience API with `preflight: true`
-and staged rather than committed. Insights calls (`trackView`, `trackClick`,
-`trackHover`, and `trackFlagView`) stage without transport; `true` means the
-event was accepted into the handoff, not delivered. After all calls settle,
-call `createEventHandoff({ initialPageRouteKey })` exactly once. It finalizes
-the journal and prevents later event calls; a second call throws. In `commit`
-mode it returns `undefined`. A handoff-mode request profile is preflight output,
-not committed browser state.
+In handoff mode, `previewInitialPersonalization()` is the efficient initial-page
+path: it preflights an ordered `identify` / `track` prefix plus one final `page`
+as a single Personalization API batch and stages the exact generated events. The
+individual `identify`, `page`, and `track` methods remain available and
+cumulatively preflight the journal once per call. Analytics calls (`trackView`,
+`trackClick`, `trackHover`, and `trackFlagView`) stage without transport; `true`
+means the event was accepted into the handoff, not delivered. After all calls
+settle, call `createEventHandoff({ initialPageRouteKey })` exactly once. It
+finalizes the journal and prevents later event calls; a second call throws. In
+`commit` mode it returns `undefined`. A handoff-mode request profile is
+preflight output, not committed browser state.
 
 Pass the handoff as `eventHandoff` when constructing the Web runtime, instead
-of `profile` (the two are mutually exclusive). Web validates the payload and
-scope before eagerly replaying the ordered events. Each committed Experience
-response supplies the profile for later entries, and ordinary Web calls wait at
-this barrier. `whenEventHandoffCommitted()` resolves only when replay succeeds.
-An adapter may suppress its initial browser `page` only when that fulfilled
-receipt's `initialPageRouteKey` equals its current route key.
+of `profile` (the two are mutually exclusive), and pass the browser's current
+route identity as `eventHandoffRouteKey`. A page-bearing journal replays only
+when its server and browser route keys are both present and equal; otherwise
+Web skips the complete journal and resolves an empty receipt so the application
+can send its ordinary browser page. Compatible adjacent Personalization entries
+are committed as one batch, while locale changes and Analytics entries preserve
+ordering boundaries. Ordinary Web calls wait while replay is pending. A failed
+replay rejects `whenEventHandoffCommitted()` but releases later direct calls,
+allowing an ordinary page fallback.
 
 ```ts
 import { ContentfulExperiences as WebContentfulExperiences } from '@contentful/experiences-web';
@@ -220,8 +225,9 @@ const request = experiences.forRequest({
   eventContext: { page: serverPageProperties },
 });
 
-await request.page();
-await request.track({ event: 'experience_rendered' });
+await request.previewInitialPersonalization({
+  events: [{ type: 'track', event: 'experience_rendered' }],
+});
 const eventHandoff = request.createEventHandoff({ initialPageRouteKey: routeKey });
 // Serialize eventHandoff safely into this user's private, no-store response.
 
@@ -232,9 +238,14 @@ const web = new WebContentfulExperiences({
   resolverConfig: experienceConfig,
   delivery: { host: 'https://application.example/experience-proxy' },
   eventHandoff,
+  eventHandoffRouteKey: routeKey,
 });
-const receipt = await web.whenEventHandoffCommitted();
-const initialPageWasReplayed = receipt.initialPageRouteKey === routeKey;
+try {
+  const receipt = await web.whenEventHandoffCommitted();
+  if (receipt.initialPageRouteKey !== routeKey) await web.page();
+} catch {
+  await web.page();
+}
 ```
 
 The handoff contains the exact generated event bodies and is browser-visible.
@@ -243,11 +254,12 @@ secrets or server-only traits, and never put it in a shared cache, log, or
 persistent store. The runtime enforces an internal 64 KiB serialized-payload
 cap.
 
-Replay stops on the first failed event. Earlier events can already have been
-committed, there is no automatic retry, and the protocol does not provide a
-distributed exactly-once guarantee; retrying the whole handoff can duplicate
-events committed before the failure. No framework adapter or example is wired
-to this contract yet; it remains independent from Live Preview.
+Replay stops on the first failed batch or Analytics entry. Earlier entries can
+already have been committed, there is no automatic retry, and the protocol does
+not provide a distributed exactly-once guarantee; retrying the whole handoff can
+duplicate events committed before the failure. Later direct Web calls remain
+available for fallback. No framework adapter or example is wired to this
+contract yet; it remains independent from Live Preview.
 
 ---
 

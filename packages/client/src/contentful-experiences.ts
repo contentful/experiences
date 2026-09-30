@@ -93,7 +93,7 @@ export type ContentfulExperiencesConfig = {
   delivery: RuntimeDeliveryClientOptions;
   /** Optional configuration for the runtime-owned Content Preview API client. */
   preview?: RuntimeDeliveryClientOptions;
-  /** Overrides for the runtime-owned Experience and Insights event transport. */
+  /** Overrides for the runtime-owned Personalization and Analytics event transport. */
   optimization?: RuntimeOptimizationConfig;
   resolveDefaults?: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
   eventBuilder: RuntimeEventBuilderConfig;

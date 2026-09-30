@@ -59,9 +59,9 @@ describe('ContentfulExperiences', () => {
       resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       optimization: {
-        experienceBaseUrl: 'https://experience.example',
-        insightsBaseUrl: 'https://insights.example',
-        enabledFeatures: ['location'],
+        personalizationBaseUrl: 'https://personalization.example',
+        analyticsBaseUrl: 'https://analytics.example',
+        personalizationEnabledFeatures: ['location'],
         fetchOptions: { retries: 3 },
       },
       eventBuilder: { channel: 'server' },
@@ -72,10 +72,10 @@ describe('ContentfulExperiences', () => {
       environment: 'staging',
       fetchOptions: { retries: 3 },
       experience: {
-        baseUrl: 'https://experience.example',
+        baseUrl: 'https://personalization.example',
         enabledFeatures: ['location'],
       },
-      insights: { baseUrl: 'https://insights.example' },
+      insights: { baseUrl: 'https://analytics.example' },
     });
   });
 

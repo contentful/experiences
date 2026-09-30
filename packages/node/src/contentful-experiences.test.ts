@@ -34,10 +34,10 @@ function createEventRuntime() {
     delivery: { accessToken: 'delivery-token' },
   });
   const upsertProfile = vi
-    .spyOn(runtime.optimizationApiForTest.experience, 'upsertProfile')
+    .spyOn(runtime.optimizationApiForTest.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
   const sendBatchEvents = vi
-    .spyOn(runtime.optimizationApiForTest.insights, 'sendBatchEvents')
+    .spyOn(runtime.optimizationApiForTest.analytics, 'sendBatchEvents')
     .mockResolvedValue(true);
 
   return { runtime, sendBatchEvents, upsertProfile };
@@ -177,7 +177,7 @@ describe('Node ContentfulExperiences', () => {
     );
   });
 
-  it('retains profile updates within its request facade and delegates experience events', async () => {
+  it('retains profile updates within its request facade and delegates Personalization events', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
 
@@ -191,7 +191,7 @@ describe('Node ContentfulExperiences', () => {
     expect(request.createEventHandoff()).toBeUndefined();
   });
 
-  it('requires a request-local profile before delegating Insights events', async () => {
+  it('requires a request-local profile before delegating Analytics events', async () => {
     const { runtime, sendBatchEvents } = createEventRuntime();
     const request = runtime.forRequest();
 
@@ -290,7 +290,7 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'it-IT' });
   });
 
-  it('stages handoff events in order without sending Insights, then finalizes a JSON-safe snapshot', async () => {
+  it('stages handoff events in order without sending Analytics, then finalizes a JSON-safe snapshot', async () => {
     const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({
       eventDelivery: 'handoff',
@@ -322,14 +322,80 @@ describe('Node ContentfulExperiences', () => {
     );
     expect(sendBatchEvents).not.toHaveBeenCalled();
     expect(handoff?.events.map(({ transport, event }) => [transport, event.type])).toEqual([
-      ['experience', 'page'],
-      ['experience', 'track'],
-      ['insights', 'exo_node_click'],
+      ['personalization', 'page'],
+      ['personalization', 'track'],
+      ['analytics', 'exo_node_click'],
     ]);
     expect(handoff?.initialPageRouteKey).toBe('/products');
     expect(parseRuntimeEventHandoff(JSON.parse(JSON.stringify(handoff)))).toEqual(handoff);
     expect(() => request.createEventHandoff()).toThrow('already been created');
     await expect(request.track({ event: 'after-handoff' })).rejects.toThrow('finalized');
+  });
+
+  it('previews and stages an initial Personalization batch in one request', async () => {
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    const request = runtime.forRequest({
+      eventConsent: false,
+      eventContext: { userAgent: 'server-agent' },
+      eventDelivery: 'handoff',
+      profile: { id: 'initial-profile' },
+    });
+
+    const data = await request.previewInitialPersonalization({
+      events: [
+        { type: 'identify', userId: 'user-1' },
+        { type: 'track', event: 'experience_rendered' },
+      ],
+      page: { properties: { url: 'https://example.test/products' } },
+    });
+
+    expect(upsertProfile).toHaveBeenCalledOnce();
+    expect(upsertProfile).toHaveBeenCalledWith(
+      {
+        profileId: 'initial-profile',
+        events: [
+          expect.objectContaining({ type: 'identify' }),
+          expect.objectContaining({ type: 'track' }),
+          expect.objectContaining({ type: 'page' }),
+        ],
+      },
+      { locale: 'en-US', preflight: true }
+    );
+    for (const event of upsertProfile.mock.calls[0]![0].events) {
+      expect(event.context).toMatchObject({
+        gdpr: { isConsentGiven: false },
+        userAgent: 'server-agent',
+      });
+    }
+    expect(data.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+
+    const handoff = request.createEventHandoff({ initialPageRouteKey: '/products' });
+    expect(handoff?.events.map(({ transport, event }) => [transport, event.type])).toEqual([
+      ['personalization', 'identify'],
+      ['personalization', 'track'],
+      ['personalization', 'page'],
+    ]);
+  });
+
+  it('requires handoff mode for an initial Personalization batch', async () => {
+    const { runtime } = createEventRuntime();
+
+    await expect(runtime.forRequest().previewInitialPersonalization()).rejects.toThrow(
+      "requires eventDelivery: 'handoff'"
+    );
+  });
+
+  it('requires a route key when a finalized handoff contains a page', async () => {
+    const { runtime } = createEventRuntime();
+    const request = runtime.forRequest({ eventDelivery: 'handoff' });
+
+    await request.page();
+
+    expect(() => request.createEventHandoff()).toThrow(
+      'Page-bearing event handoffs require initialPageRouteKey'
+    );
   });
 
   it('rejects overlapping handoff events so cumulative preflight order stays deterministic', async () => {
@@ -350,7 +416,7 @@ describe('Node ContentfulExperiences', () => {
     await pending;
   });
 
-  it('does not retain an Experience event when its preflight fails', async () => {
+  it('does not retain a Personalization event when its preflight fails', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     upsertProfile.mockRejectedValueOnce(new Error('preflight failed'));
     const request = runtime.forRequest({ eventDelivery: 'handoff' });

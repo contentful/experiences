@@ -1,9 +1,9 @@
 import {
-  ExperienceEvent as OptimizationExperienceEventSchema,
-  InsightsEvent as OptimizationInsightsEventSchema,
+  ExperienceEvent as PersonalizationEventSchema,
+  InsightsEvent as AnalyticsEventSchema,
   parseWithFriendlyError as parseOptimizationSchema,
-  type ExperienceEvent as OptimizationExperienceEvent,
-  type InsightsEvent as OptimizationInsightsEvent,
+  type ExperienceEvent as PersonalizationEvent,
+  type InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import * as z from 'zod/mini';
 
@@ -19,12 +19,12 @@ const RuntimeEventHandoffSchema = z.object({
   events: z.array(
     z.discriminatedUnion('transport', [
       z.object({
-        transport: z.literal('experience'),
-        event: OptimizationExperienceEventSchema,
+        transport: z.literal('personalization'),
+        event: PersonalizationEventSchema,
       }),
       z.object({
-        transport: z.literal('insights'),
-        event: OptimizationInsightsEventSchema,
+        transport: z.literal('analytics'),
+        event: AnalyticsEventSchema,
       }),
     ])
   ),
@@ -35,8 +35,8 @@ const RuntimeEventHandoffSchema = z.object({
 export type RuntimeServerEventDelivery = 'commit' | 'handoff';
 
 export type RuntimeEventHandoffEvent =
-  | { readonly transport: 'experience'; readonly event: OptimizationExperienceEvent }
-  | { readonly transport: 'insights'; readonly event: OptimizationInsightsEvent };
+  | { readonly transport: 'personalization'; readonly event: PersonalizationEvent }
+  | { readonly transport: 'analytics'; readonly event: AnalyticsEvent };
 
 /** Plain JSON passed from one Node request to its paired Web runtime. */
 export interface RuntimeEventHandoff {
@@ -78,18 +78,20 @@ export function parseRuntimeEventHandoff(input: unknown): RuntimeEventHandoff {
 
   if (
     handoff.initialPageRouteKey !== undefined &&
-    !handoff.events.some((entry) => entry.transport === 'experience' && entry.event.type === 'page')
+    !handoff.events.some(
+      (entry) => entry.transport === 'personalization' && entry.event.type === 'page'
+    )
   ) {
     throw new TypeError('Runtime event handoff initial page requires a staged page event');
   }
 
   let hasProfile = handoff.initialProfileId !== undefined;
   for (const entry of handoff.events) {
-    if (entry.transport === 'experience') {
+    if (entry.transport === 'personalization') {
       hasProfile = true;
     } else if (!hasProfile) {
       throw new TypeError(
-        'Runtime event handoff Insights events require an initial or preceding Experience profile'
+        'Runtime event handoff Analytics events require an initial or preceding Personalization profile'
       );
     }
   }

@@ -26,11 +26,14 @@ type WebEventStateConfig =
       /** Volatile browser event profile. Mutually exclusive with eventHandoff. */
       profile?: EventProfile;
       eventHandoff?: never;
+      eventHandoffRouteKey?: never;
     }
   | {
       profile?: never;
-      /** Validated server journal that this browser runtime commits eagerly once. */
-      eventHandoff?: RuntimeEventHandoff;
+      /** Validated server journal that this browser runtime commits at most once. */
+      eventHandoff: RuntimeEventHandoff;
+      /** Current browser route identity used to admit a page-bearing handoff. */
+      eventHandoffRouteKey: string;
     };
 
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> &
@@ -51,7 +54,6 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   #profile: EventProfile | undefined;
   #profileRevision = 0;
   #eventHandoffPending = false;
-  #eventHandoffSucceeded = true;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
   readonly identify: WebEventMethods['identify'] = (...args) =>
@@ -70,7 +72,8 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args));
 
   constructor(config: ExperiencesWebConfig) {
-    const { app, browserContext, profile, eventHandoff, ...clientConfig } = config;
+    const { app, browserContext, profile, eventHandoff, eventHandoffRouteKey, ...clientConfig } =
+      config;
     super({
       ...clientConfig,
       eventBuilder: {
@@ -94,7 +97,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       },
       getProfileRevision: () => this.#profileRevision,
     });
-    this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff);
+    this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
     // Replay is eager. Mark a rejection as observed even when an application has
     // not attached its barrier handler yet; callers still receive the original
     // rejected promise from whenEventHandoffCommitted().
@@ -110,8 +113,8 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   }
 
   /**
-   * Resolves after the complete optional server handoff has committed. Adapters
-   * use the successful receipt to decide whether to suppress their initial page.
+   * Resolves after the optional server handoff commits or is skipped for route
+   * incompatibility. A transport failure rejects without blocking later calls.
    */
   whenEventHandoffCommitted(): Promise<RuntimeEventHandoffReceipt> {
     return this.#eventHandoffPromise;
@@ -132,15 +135,19 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   }
 
   #afterEventHandoff<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.#eventHandoffSucceeded) {
-      return operation();
-    }
-    return this.#eventHandoffPromise.then(() => operation());
+    if (!this.#eventHandoffPending) return operation();
+    return this.#eventHandoffPromise.then(operation, operation);
   }
 
-  #startEventHandoff(input: RuntimeEventHandoff | undefined): Promise<RuntimeEventHandoffReceipt> {
+  #startEventHandoff(
+    input: RuntimeEventHandoff | undefined,
+    currentRouteKey: string | undefined
+  ): Promise<RuntimeEventHandoffReceipt> {
     if (input === undefined) {
       return Promise.resolve({});
+    }
+    if (currentRouteKey === undefined) {
+      throw new TypeError('ExperiencesWebConfig eventHandoff requires eventHandoffRouteKey');
     }
 
     const handoff = parseRuntimeEventHandoff(input);
@@ -148,8 +155,17 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       throw new TypeError('Runtime event handoff does not match this space or environment');
     }
 
+    const hasPage = handoff.events.some(
+      (entry) => entry.transport === 'personalization' && entry.event.type === 'page'
+    );
+    if (
+      hasPage &&
+      (handoff.initialPageRouteKey === undefined || handoff.initialPageRouteKey !== currentRouteKey)
+    ) {
+      return Promise.resolve({});
+    }
+
     this.#eventHandoffPending = true;
-    this.#eventHandoffSucceeded = false;
     return this.#replayEventHandoff(handoff);
   }
 
@@ -158,28 +174,38 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       let profile: EventProfile | undefined =
         handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
       this.#profile = profile;
-      for (const staged of handoff.events) {
-        if (staged.transport === 'experience') {
-          const result = await this.optimizationApi.experience.upsertProfile(
-            { profileId: profile?.id, events: [staged.event] },
-            { locale: staged.event.context.locale }
+      for (let index = 0; index < handoff.events.length;) {
+        const staged = handoff.events[index]!;
+        if (staged.transport === 'personalization') {
+          const locale = staged.event.context.locale;
+          const events = [staged.event];
+          index += 1;
+          while (index < handoff.events.length) {
+            const next = handoff.events[index]!;
+            if (next.transport !== 'personalization' || next.event.context.locale !== locale) break;
+            events.push(next.event);
+            index += 1;
+          }
+          const result = await this.optimizationApi.personalization.upsertProfile(
+            { profileId: profile?.id, events },
+            { locale }
           );
           profile = result.profile;
           this.#profile = profile;
         } else {
+          index += 1;
           if (profile === undefined) {
-            throw new Error('Runtime event handoff Insights replay requires a committed profile');
+            throw new Error('Runtime event handoff Analytics replay requires a committed profile');
           }
-          const committed = await this.optimizationApi.insights.sendBatchEvents([
+          const committed = await this.optimizationApi.analytics.sendBatchEvents([
             { profile, events: [staged.event] },
           ]);
           if (!committed) {
-            throw new Error('Runtime event handoff Insights replay was not committed');
+            throw new Error('Runtime event handoff Analytics replay was not committed');
           }
         }
       }
 
-      this.#eventHandoffSucceeded = true;
       return {
         ...(handoff.initialPageRouteKey === undefined
           ? {}

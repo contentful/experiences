@@ -37,8 +37,8 @@ function createFixture(
   const upsertProfile = vi.fn().mockResolvedValue(optimizationData('profile-from-api'));
   const sendBatchEvents = vi.fn().mockResolvedValue(options.sendResult ?? true);
   const api: RuntimeOptimizationApiClient = {
-    experience: { upsertProfile },
-    insights: { sendBatchEvents },
+    personalization: { upsertProfile },
+    analytics: { sendBatchEvents },
   };
   const eventBuilder = new EventBuilder({
     channel: 'server',
@@ -62,7 +62,7 @@ function createFixture(
 }
 
 describe('RuntimeEventMethods', () => {
-  it('sends profile-producing events through Experience and retains the returned profile', async () => {
+  it('sends profile-producing events through Personalization and retains the returned profile', async () => {
     const { methods, upsertProfile } = createFixture({ consent: true });
 
     await expect(methods.page()).resolves.toMatchObject({
@@ -111,7 +111,7 @@ describe('RuntimeEventMethods', () => {
     expect(methods.profile).toEqual({ id: 'profile-from-api' });
   });
 
-  it('sends each interaction immediately through Insights and preserves false outcomes', async () => {
+  it('sends each interaction immediately through Analytics and preserves false outcomes', async () => {
     const { methods, sendBatchEvents } = createFixture({
       profile: { id: 'profile-1' },
       sendResult: false,
@@ -137,7 +137,7 @@ describe('RuntimeEventMethods', () => {
     }
   });
 
-  it('requires a profile for Insights events without calling the transport', async () => {
+  it('requires a profile for Analytics events without calling the transport', async () => {
     const { methods, sendBatchEvents } = createFixture();
 
     await expect(methods.trackClick(interaction)).rejects.toMatchObject({
@@ -158,8 +158,8 @@ describe('RuntimeEventMethods', () => {
 
   it('supports a runtime-owned dispatch strategy without using the direct transports', async () => {
     const dispatch: RuntimeEventDispatch = {
-      experience: vi.fn().mockResolvedValue(optimizationData('profile-from-dispatch')),
-      insights: vi.fn().mockResolvedValue(true),
+      personalization: vi.fn().mockResolvedValue(optimizationData('profile-from-dispatch')),
+      analytics: vi.fn().mockResolvedValue(true),
     };
     const { methods, sendBatchEvents, upsertProfile } = createFixture({
       consent: true,
@@ -170,14 +170,14 @@ describe('RuntimeEventMethods', () => {
     await methods.page();
     await methods.trackClick(interaction);
 
-    expect(dispatch.experience).toHaveBeenCalledWith(
+    expect(dispatch.personalization).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'page',
         context: expect.objectContaining({ gdpr: { isConsentGiven: true } }),
       }),
       { id: 'initial-profile' }
     );
-    expect(dispatch.insights).toHaveBeenCalledWith(
+    expect(dispatch.analytics).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'exo_node_click' }),
       { id: 'profile-from-dispatch' }
     );

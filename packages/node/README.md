@@ -87,25 +87,28 @@ await experienceRequest.trackClick({
 });
 ```
 
-`identify`, `page`, and `track` update the request profile from the Optimization API response.
-`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Insights events and require a
+`identify`, `page`, and `track` update the request profile from the Personalization API response.
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
 current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 `eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
 There is no request event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Insights call on the same request facade.
+starting another profile-producing or Analytics call on the same request facade.
 
 ### Replay handoff for framework adapters
 
 Only a Node request chooses delivery. Omit `eventDelivery` (or use `'commit'`)
 for direct server events; `createEventHandoff()` then returns `undefined`. Use
 `'handoff'` only when the paired browser runtime will receive this request's
-events. Await every event call: successful Experience calls are cumulatively
-preflighted and Insights calls stage without transport (`true` means accepted).
-Finalize once with `createEventHandoff({ initialPageRouteKey })`; later event
-calls and a second finalization throw. Preflight profile data is not committed
-browser state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
-for response transport, browser bootstrap, and page suppression.
+events. Prefer `previewInitialPersonalization()` for the initial sequence: it sends
+an ordered `identify` / `track` prefix plus one final `page` in a single
+preflight request. Individual Personalization methods remain cumulatively
+preflighted, and Analytics calls stage without transport (`true` means accepted).
+A page-bearing journal requires `initialPageRouteKey` when finalized. Finalize
+once with `createEventHandoff({ initialPageRouteKey })`; later event calls and a
+second finalization throw. Preflight profile data is not committed browser
+state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
+for response transport, browser route admission, and page fallback.
 
 ## Precedence
 
@@ -160,9 +163,10 @@ distinct from Preview Session live updates, which are owned by
 `@contentful/experiences-live-preview`.
 
 The runtime owns its Optimization API client. Configure trusted custom
-`experienceBaseUrl` or `insightsBaseUrl` endpoints through the constructor's
-`optimization` options; those endpoints receive complete event and profile
-payloads, so use only trusted HTTPS origins outside explicit local development.
+`personalizationBaseUrl` or `analyticsBaseUrl` endpoints through the
+constructor's `optimization` options; those endpoints receive complete event
+and profile payloads, so use only trusted HTTPS origins outside explicit local
+development.
 
 ## Errors
 

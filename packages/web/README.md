@@ -51,7 +51,7 @@ delivery: {
 
 Optional custom Optimization endpoints receive complete event, profile, and
 browser-context payloads. The runtime constructs and owns the Optimization
-client; configure its Experience and Insights endpoints through `optimization`.
+client; configure its Personalization and Analytics endpoints through `optimization`.
 Treat custom endpoints as sensitive-data destinations and use only trusted HTTPS
 origins outside explicit local development.
 
@@ -111,7 +111,7 @@ const experiences = new ContentfulExperiences({
 The Web runtime provides direct event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile when creating the runtime, or identify a profile before sending
-Insights events. Experience event responses can supply a profile to the runtime,
+Analytics events. Personalization event responses can supply a profile to the runtime,
 but profile state is volatile: this package does not generate identifiers
 locally, persist them, or restore them after a reload.
 Call `reset()` at logout, consent withdrawal, or another browser session
@@ -138,15 +138,18 @@ Each call reads the current locale and browser context, so SPA navigation and
 provider annotates the event context; it does not gate sending. Redact page and
 user-agent data with the providers above before triggering events.
 There is no browser event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Insights call on the same runtime.
+starting another profile-producing or Analytics call on the same runtime.
 
 ## Server event handoff
 
 Pass a request's Node-produced `eventHandoff` to the Web runtime to commit its
 ordered events in the browser. `eventHandoff` and an initial `profile` are
-mutually exclusive. Web has no delivery mode: it validates the handoff and
-Contentful scope before one eager replay, chains profiles from Experience
-responses, and makes ordinary event methods wait.
+mutually exclusive. Supply the current browser route identity as the required
+`eventHandoffRouteKey`. A page-bearing journal commits only when that value
+matches the handoff's `initialPageRouteKey`; a missing server marker or mismatch
+skips the complete journal. Compatible adjacent Personalization entries share one
+API request, while locale changes and Analytics entries remain ordering
+boundaries.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -155,17 +158,23 @@ const experiences = new ContentfulExperiences({
   resolverConfig,
   delivery,
   eventHandoff,
+  eventHandoffRouteKey: currentRouteKey,
 });
 
-const receipt = await experiences.whenEventHandoffCommitted();
-const skipInitialPage = receipt.initialPageRouteKey === currentRouteKey;
+try {
+  const receipt = await experiences.whenEventHandoffCommitted();
+  if (receipt.initialPageRouteKey !== currentRouteKey) await experiences.page();
+} catch {
+  await experiences.page();
+}
 ```
 
-The receipt resolves only after successful replay. Suppress an adapter's
-initial client `page` only when its `initialPageRouteKey` matches the hydrated
-route; a missing key, mismatch, or rejected receipt does not authorize it.
-Replay can partially commit and has no automatic retry or distributed
-exactly-once guarantee. The handoff is browser-visible; use escaped
+The receipt resolves with the matched route only after successful replay. A
+missing server marker or mismatch resolves an empty receipt without replay. A
+transport failure rejects the receipt but releases later direct event calls,
+so the application can send its ordinary browser page. Replay can partially
+commit and has no automatic retry or distributed exactly-once guarantee. The
+handoff is browser-visible; use escaped
 serialization in a private, no-store response and do not cache, log, or persist
 it. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
 

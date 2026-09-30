@@ -8,6 +8,8 @@ import {
   type EventBuilderConfig,
   type EventOptimizationData,
   type EventProfile,
+  type IdentifyBuilderArgs,
+  type PageViewBuilderArgs,
   type RuntimeFetchByDestinationNodeOptions,
   type RuntimeFetchByDestinationPathOptions,
   type RuntimeFetchExperienceOptions,
@@ -16,6 +18,7 @@ import {
   type RuntimeEventHandoff,
   type RuntimeResolveOptions,
   type RuntimeServerEventDelivery,
+  type TrackBuilderArgs,
   type RuntimeEventHandoffEvent,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-client';
@@ -47,6 +50,17 @@ export type ExperiencesNodeRequestContext = {
    * `handoff` only when a paired Web runtime will commit this request's journal.
    */
   eventDelivery?: RuntimeServerEventDelivery;
+};
+
+/** Ordered Personalization command accepted before the initial page preview. */
+export type InitialPersonalizationPreviewCommand =
+  | ({ readonly type: 'identify' } & Pick<IdentifyBuilderArgs, 'userId' | 'traits'>)
+  | ({ readonly type: 'track' } & Pick<TrackBuilderArgs, 'event' | 'properties'>);
+
+/** One-batch Personalization preview that always appends an initial page event. */
+export type InitialPersonalizationPreviewOptions = {
+  readonly events?: readonly InitialPersonalizationPreviewCommand[];
+  readonly page?: Pick<PageViewBuilderArgs, 'properties'>;
 };
 
 type NodeEventMethods = Pick<
@@ -85,6 +99,13 @@ export interface ExperiencesNodeRequest {
   trackHover: NodeEventMethods['trackHover'];
   trackFlagView: NodeEventMethods['trackFlagView'];
   /**
+   * Preflights and stages an ordered identify/track prefix plus one final page
+   * in a single Personalization request. Available only in handoff mode.
+   */
+  previewInitialPersonalization(
+    options?: InitialPersonalizationPreviewOptions
+  ): Promise<EventOptimizationData>;
+  /**
    * Finalizes the request's handoff journal after all event calls have settled.
    * Returns undefined in commit mode and prohibits later event calls in handoff mode.
    */
@@ -110,7 +131,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       this,
       context,
       (profileId, events, locale) =>
-        this.optimizationApi.experience.upsertProfile(
+        this.optimizationApi.personalization.upsertProfile(
           { profileId, events: [...events] },
           { locale, preflight: true }
         ),
@@ -135,7 +156,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   constructor(
     private readonly runtime: ContentfulExperiences,
     private readonly context: ExperiencesNodeRequestContext,
-    preflightExperienceEvents: PreflightExperienceEvents,
+    preflightPersonalizationEvents: PreflightPersonalizationEvents,
     createEventMethods: (
       bindings: RuntimeEventBindings,
       dispatch?: EventHandoffCollector
@@ -153,7 +174,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
             runtime.spaceId,
             runtime.environmentId,
             context.profile?.id,
-            preflightExperienceEvents
+            preflightPersonalizationEvents
           )
         : undefined;
 
@@ -179,6 +200,42 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     this.trackClick = methods.trackClick.bind(methods);
     this.trackHover = methods.trackHover.bind(methods);
     this.trackFlagView = methods.trackFlagView.bind(methods);
+  }
+
+  async previewInitialPersonalization(
+    options: InitialPersonalizationPreviewOptions = {}
+  ): Promise<EventOptimizationData> {
+    if (this.#handoff === undefined) {
+      throw new Error("previewInitialPersonalization() requires eventDelivery: 'handoff'");
+    }
+
+    const events: RuntimePersonalizationHandoffEvent['event'][] = [];
+    for (const command of options.events ?? []) {
+      if (command.type === 'identify') {
+        const { type: _, ...args } = command;
+        events.push(
+          this.withRequestEventConsent(
+            this.runtime.eventBuilder.buildIdentify(this.withRequestEventContext(args))
+          )
+        );
+      } else {
+        const { type: _, ...args } = command;
+        events.push(
+          this.withRequestEventConsent(
+            this.runtime.eventBuilder.buildTrack(this.withRequestEventContext(args))
+          )
+        );
+      }
+    }
+    events.push(
+      this.withRequestEventConsent(
+        this.runtime.eventBuilder.buildPageView(this.withRequestEventContext(options.page ?? {}))
+      )
+    );
+
+    const data = await this.#handoff.personalizationBatch(events);
+    this.#profile = data.profile;
+    return data;
   }
 
   get profile(): EventProfile | undefined {
@@ -230,12 +287,39 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       mergeResolveOptions(this.context.resolveOptions, resolveOptions)
     );
   }
+
+  private withRequestEventContext<TArgs extends object>(
+    args: TArgs
+  ): TArgs & UniversalEventBuilderArgs {
+    return {
+      ...this.context.eventContext,
+      ...(this.context.locale === undefined ? {} : { locale: this.context.locale }),
+      ...args,
+    };
+  }
+
+  private withRequestEventConsent<TEvent extends RuntimePersonalizationHandoffEvent['event']>(
+    event: TEvent
+  ): TEvent {
+    if (this.context.eventConsent === undefined) return event;
+
+    return {
+      ...event,
+      context: {
+        ...event.context,
+        gdpr: { ...event.context.gdpr, isConsentGiven: this.context.eventConsent },
+      },
+    } as TEvent;
+  }
 }
 
-type RuntimeExperienceHandoffEvent = Extract<RuntimeEventHandoffEvent, { transport: 'experience' }>;
-type PreflightExperienceEvents = (
+type RuntimePersonalizationHandoffEvent = Extract<
+  RuntimeEventHandoffEvent,
+  { transport: 'personalization' }
+>;
+type PreflightPersonalizationEvents = (
   profileId: string | undefined,
-  events: readonly RuntimeExperienceHandoffEvent['event'][],
+  events: readonly RuntimePersonalizationHandoffEvent['event'][],
   locale: string
 ) => Promise<EventOptimizationData>;
 
@@ -243,39 +327,51 @@ class EventHandoffCollector {
   #finalized = false;
   #pending = false;
   readonly #events: RuntimeEventHandoffEvent[] = [];
-  readonly #experienceEvents: RuntimeExperienceHandoffEvent['event'][] = [];
+  readonly #personalizationEvents: RuntimePersonalizationHandoffEvent['event'][] = [];
 
   constructor(
     private readonly spaceId: string,
     private readonly environmentId: string,
     private readonly profileId: string | undefined,
-    private readonly preflightExperienceEvents: PreflightExperienceEvents
+    private readonly preflightPersonalizationEvents: PreflightPersonalizationEvents
   ) {}
 
-  async experience(event: RuntimeExperienceHandoffEvent['event']) {
+  async personalization(event: RuntimePersonalizationHandoffEvent['event']) {
+    return this.personalizationBatch([event]);
+  }
+
+  async personalizationBatch(events: readonly RuntimePersonalizationHandoffEvent['event'][]) {
     this.assertAvailable();
-    const candidate = [...this.#events, { transport: 'experience' as const, event }];
+    if (events.length === 0) {
+      throw new TypeError('Personalization preview batches cannot be empty');
+    }
+    const locale = events[0]!.context.locale;
+    if (events.some((event) => event.context.locale !== locale)) {
+      throw new TypeError('Personalization preview batches require one locale');
+    }
+    const staged = events.map((event) => ({ transport: 'personalization' as const, event }));
+    const candidate = [...this.#events, ...staged];
     assertRuntimeEventHandoffSize(this.candidate(candidate));
     this.#pending = true;
     try {
-      const data = await this.preflightExperienceEvents(
+      const data = await this.preflightPersonalizationEvents(
         this.profileId,
-        [...this.#experienceEvents, event],
-        event.context.locale
+        [...this.#personalizationEvents, ...events],
+        locale
       );
-      this.#events.push({ transport: 'experience', event });
-      this.#experienceEvents.push(event);
+      this.#events.push(...staged);
+      this.#personalizationEvents.push(...events);
       return data;
     } finally {
       this.#pending = false;
     }
   }
 
-  async insights(event: Extract<RuntimeEventHandoffEvent, { transport: 'insights' }>['event']) {
+  async analytics(event: Extract<RuntimeEventHandoffEvent, { transport: 'analytics' }>['event']) {
     this.assertAvailable();
-    const candidate = [...this.#events, { transport: 'insights' as const, event }];
+    const candidate = [...this.#events, { transport: 'analytics' as const, event }];
     assertRuntimeEventHandoffSize(this.candidate(candidate));
-    this.#events.push({ transport: 'insights', event });
+    this.#events.push({ transport: 'analytics', event });
     return true;
   }
 
@@ -285,11 +381,12 @@ class EventHandoffCollector {
       throw new Error('Cannot create an event handoff while staged events are pending');
     }
     const hasPage = this.#events.some(
-      (entry) => entry.transport === 'experience' && entry.event.type === 'page'
+      (entry) => entry.transport === 'personalization' && entry.event.type === 'page'
     );
-    const handoff = parseRuntimeEventHandoff(
-      this.candidate(this.#events, hasPage ? initialPageRouteKey : undefined)
-    );
+    if (hasPage && initialPageRouteKey === undefined) {
+      throw new TypeError('Page-bearing event handoffs require initialPageRouteKey');
+    }
+    const handoff = parseRuntimeEventHandoff(this.candidate(this.#events, initialPageRouteKey));
     this.#finalized = true;
     return handoff;
   }

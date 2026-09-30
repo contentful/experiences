@@ -31,8 +31,8 @@ export { EventProfileRequiredError } from './runtime-event-methods.js';
 export type {
   EventOptimizationData,
   EventProfile,
-  ExperienceEventMethod,
-  InsightsEventMethod,
+  AnalyticsEventMethod,
+  PersonalizationEventMethod,
   RuntimeEventBindings,
   RuntimeEventMethods,
 } from './runtime-event-methods.js';
