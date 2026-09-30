@@ -740,11 +740,11 @@ Async. Fetches an Experience from the Experience Delivery API and resolves it in
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                  | Purpose                                                                                                                                                    |
-| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, withSourceMap? }`   | Which Experience to fetch, and what to fetch alongside it. Future digital-property identifiers widen this type.                                            |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
-| `resolveOptions`    | `{ config, metadata?, debug?, initialViewportId? }`                   | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
+| Arg                 | Type                                                                               | Purpose                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, personalization?, extensions? }` | Which Experience to fetch, including first-class personalization and additional XDA extensions. Future digital-property identifiers widen this type.       |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`              | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
+| `resolveOptions`    | `{ config, metadata?, debug?, initialViewportId? }`                                | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
 
 All three of `metadata`, `debug`, and `initialViewportId` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 
@@ -784,13 +784,13 @@ try {
 }
 ```
 
-### Content source maps (`withSourceMap`)
+### Content source maps
 
-Set `withSourceMap: true` in `experienceOptions` to fetch the content source map alongside the experience. It lands on `plan.sourceMap`:
+Set `extensions.sourceMap` in `experienceOptions` to fetch the content source map alongside the experience. It lands on `plan.sourceMap`:
 
 ```ts
 const plan = await fetchExperience(
-  { spaceId, environmentId, experienceId: slug, withSourceMap: true },
+  { spaceId, environmentId, experienceId: slug, extensions: { sourceMap: {} } },
   { accessToken: process.env.CDA_TOKEN! },
   { config: experienceConfig }
 );
@@ -798,7 +798,7 @@ const plan = await fetchExperience(
 plan.sourceMap; // ExperienceSourceMap | undefined
 ```
 
-That is the whole opt-in. Previously this meant hand-building an `extensions: { sourceMap: {} }` request body, calling the right client method yourself, digging the map back out of `extensions` on the response, and re-plumbing it into `resolveExperience`.
+The SDK selects the POST operation, extracts the returned source map, and forwards it to `resolveExperience`. Source maps also compose with the top-level `personalization` option in the same request.
 
 Two things to know before switching it on:
 

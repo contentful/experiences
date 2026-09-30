@@ -44,6 +44,22 @@ The generated delivery client must be able to reach the selected endpoint from t
 
 Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
 
+## Personalization
+
+Pass a profile id and browser-built events through the first-class personalization option:
+
+```ts
+const plan = await experiences.fetchExperience({
+  experienceId,
+  personalization: {
+    profileId,
+    events: [experiences.eventBuilder.buildPageView()],
+  },
+});
+```
+
+Events built by the Web runtime use the `web` channel and the current browser context. The runtime does not retain profile state or send events separately; the application owns the profile id and supplies it on each personalized fetch.
+
 ## Browser-safe configuration
 
 Resolver configuration runs in the browser. Keep `resolveData`, `resolveToken`, and component configuration free of server-only imports, secrets, and privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.

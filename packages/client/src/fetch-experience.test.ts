@@ -4,6 +4,7 @@ import {
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
 import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
+import EventBuilder from './event-builder.js';
 import { fetchExperience } from './fetch-experience.js';
 
 const {
@@ -109,6 +110,11 @@ const experienceOptions = {
 const resolveOptions = {
   config: { components: {} },
 };
+
+const eventBuilder = new EventBuilder({
+  channel: 'server',
+  library: { name: 'test', version: '1.0.0' },
+});
 
 describe('fetchExperience', () => {
   beforeEach(() => {
@@ -388,9 +394,23 @@ describe('fetchExperience — source map', () => {
     expect(mockGetWithOverrides).not.toHaveBeenCalled();
   });
 
+  it.each([{}, { sourceMap: undefined }])(
+    'uses the plain GET when no extension value is defined',
+    async (extensions) => {
+      await fetchExperience(
+        { ...experienceOptions, extensions },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockGetWithOverrides).not.toHaveBeenCalled();
+    }
+  );
+
   it('routes to getWithOverrides with the sourceMap extension when asked', async () => {
     await fetchExperience(
-      { ...experienceOptions, locale: 'en-US', withSourceMap: true },
+      { ...experienceOptions, locale: 'en-US', extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -406,7 +426,7 @@ describe('fetchExperience — source map', () => {
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
     await fetchExperience(
-      { ...experienceOptions, withSourceMap: true },
+      { ...experienceOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -418,7 +438,7 @@ describe('fetchExperience — source map', () => {
     );
   });
 
-  it('forwards no source map when the flag is off, even if the response carries one', async () => {
+  it('forwards no source map when the extension was not requested', async () => {
     // Guards against a stray `extensions.sourceMap` leaking onto the plan unasked.
     mockGet.mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
@@ -437,7 +457,7 @@ describe('fetchExperience — source map', () => {
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
     await fetchExperience(
-      { ...experienceOptions, withSourceMap: true },
+      { ...experienceOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -453,7 +473,7 @@ describe('fetchExperience — source map', () => {
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
     await fetchExperience(
-      { ...experienceOptions, withSourceMap: true },
+      { ...experienceOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -461,6 +481,50 @@ describe('fetchExperience — source map', () => {
     const [payloadArg] = vi.mocked(resolveExperience).mock.calls[0]!;
     expect(payloadArg.nodes).toEqual(mockPayload.nodes);
     expect(payloadArg.viewports).toEqual(mockPayload.viewports);
+  });
+});
+
+describe('fetchExperience — personalization', () => {
+  const pageEvent = eventBuilder.buildPageView();
+  const personalization = {
+    profileId: 'profile-1',
+    events: [pageEvent],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue(mockPayload);
+    mockGetWithOverrides.mockResolvedValue(mockPayload);
+  });
+
+  it('routes to getWithOverrides with the personalization extension', async () => {
+    await fetchExperience(
+      { ...experienceOptions, locale: 'en-US', personalization },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+      locale: 'en-US',
+      extensions: { personalization },
+    });
+  });
+
+  it('forwards personalization and source-map extensions together', async () => {
+    await fetchExperience(
+      { ...experienceOptions, personalization, extensions: { sourceMap: {} } },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+      locale: undefined,
+      extensions: {
+        personalization,
+        sourceMap: {},
+      },
+    });
   });
 });
 
@@ -584,12 +648,12 @@ describe('fetchExperience — destinationId + nodeId', () => {
     expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
   });
 
-  it('rejects withSourceMap on destination-shaped options at compile time', () => {
-    // @ts-expect-error — withSourceMap is not a member of ByDestinationNodeIdExperienceOptions,
+  it('rejects extensions on destination-shaped options at compile time', () => {
+    // @ts-expect-error — extensions is not a member of ByDestinationNodeIdExperienceOptions,
     // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
     // required destinationId/nodeId aren't part of that member either — a real compile error.
     void fetchExperience(
-      { ...destinationOptions, withSourceMap: true },
+      { ...destinationOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -717,12 +781,12 @@ describe('fetchExperience — destinationId + path', () => {
     expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
   });
 
-  it('rejects withSourceMap on destination-shaped options at compile time', () => {
-    // @ts-expect-error — withSourceMap is not a member of ByDestinationPathExperienceOptions,
+  it('rejects extensions on destination-shaped options at compile time', () => {
+    // @ts-expect-error — extensions is not a member of ByDestinationPathExperienceOptions,
     // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
     // required destinationId/path aren't part of that member either — a real compile error.
     void fetchExperience(
-      { ...destinationOptions, withSourceMap: true },
+      { ...destinationOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
     );

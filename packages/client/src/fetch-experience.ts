@@ -12,20 +12,32 @@ import {
   type ExperienceResponse,
 } from './to-experience-payload.js';
 
+type DeliveryExperienceRequestExtensions =
+  ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensions;
+
+export type PersonalizationOptions = NonNullable<
+  DeliveryExperienceRequestExtensions['personalization']
+>;
+
+export type ExperienceRequestExtensions = Omit<
+  DeliveryExperienceRequestExtensions,
+  'personalization'
+>;
+
 export type ByIdExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
   locale?: string;
   /**
-   * Fetch the content source map alongside the experience, onto
-   * `PortableRenderPlan.sourceMap`. Defaults to `false` because the map is large.
-   *
-   * Switches the request from `GET` to `POST` (the opt-in is a request-body
-   * field, only accepted by `getWithOverrides`), so it is not CDN-cacheable.
-   * Query params, auth, and the response shape are unchanged.
+   * Profile and events used by XDA to personalize the resolved Experience.
    */
-  withSourceMap?: boolean;
+  personalization?: PersonalizationOptions;
+  /**
+   * Additional XDA request extensions such as source maps. Supplying a defined
+   * extension switches the request to POST.
+   */
+  extensions?: ExperienceRequestExtensions;
 };
 
 /**
@@ -197,36 +209,64 @@ export async function fetchExperience(
     );
   }
 
-  const { spaceId, environmentId, experienceId, locale, withSourceMap } = experienceOptions;
+  const { spaceId, environmentId, experienceId, locale, personalization, extensions } =
+    experienceOptions;
 
   log.log('fetching experience', {
     spaceId,
     environmentId,
     experienceId,
     locale,
-    withSourceMap: Boolean(withSourceMap),
+    // avoiding log any personalization sensitive data
+    personalization: personalization !== undefined,
+    extensions,
   });
 
-  // Typed as the union of both operations' responses — they declare the same
-  // union, but which one runs depends on `withSourceMap` below.
-  let response: ExperienceResponse;
+  const response = await fetchByExperienceId(client, experienceOptions);
+
+  const payload = toExperiencePayload(response);
+  const sourceMap = extensions?.sourceMap !== undefined ? readSourceMap(response) : undefined;
+
+  log.lazy('received raw payload', () => payload);
+
+  return resolveExperience(payload, config, {
+    metadata,
+    debug,
+    initialViewportId,
+    sourceMap,
+  });
+}
+
+async function fetchByExperienceId(
+  client: ContentfulViewDeliveryClient,
+  options: ByIdExperienceOptions
+): Promise<ExperienceResponse> {
+  const { spaceId, environmentId, experienceId, locale, personalization, extensions } = options;
+  const requestExtensions: DeliveryExperienceRequestExtensions = {
+    ...extensions,
+    ...(personalization === undefined ? {} : { personalization }),
+  };
+
   try {
-    // Both methods hit the same endpoint; only the POST accepts a body, and
-    // `extensions` (the source-map opt-in) lives there. Otherwise identical.
-    // The alpha-feature header is sent by the delivery client itself since
-    // 1.0.0-dev.7, so a caller-supplied `{ client }` is covered too.
-    response = withSourceMap
-      ? await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
-          locale,
-          extensions: { sourceMap: {} },
-        })
-      : await client.experience.get(spaceId, environmentId, experienceId, { locale });
+    // Both methods hit the same endpoint, but only the POST operation accepts
+    // extensions in its request body. Keep the cacheable GET when there are no
+    // extensions to evaluate.
+    // The generated delivery client owns the alpha-feature header on both
+    // paths, including when the caller supplied the client instance.
+    //
+    // Await inside the try so rejected requests are normalized below.
+    if (hasRequestExtensions(requestExtensions)) {
+      return await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
+        locale,
+        extensions: requestExtensions,
+      });
+    }
+
+    return await client.experience.get(spaceId, environmentId, experienceId, { locale });
   } catch (err) {
-    // `NotFoundError` is a distinguishable, expected outcome (draft/unpublished/
-    // wrong id) — callers already route it to their framework's 404 idiom, so
-    // it passes through as-is. Everything else (network failure, bad/expired
-    // token, a 5xx) is unexpected and gets wrapped in an actionable error
-    // instead of leaking whatever shape the delivery client happened to throw.
+    // Preserve expected 404 control flow for framework routers. Other failures
+    // are wrapped with stable SDK context instead of exposing transport-specific
+    // error shapes.
     if (err instanceof ContentfulViewDelivery.NotFoundError) {
       throw err;
     }
@@ -238,19 +278,6 @@ export async function fetchExperience(
       { spaceId, environmentId, experienceId, cause: err }
     );
   }
-
-  const payload = toExperiencePayload(response);
-  const sourceMap = withSourceMap ? readSourceMap(response) : undefined;
-
-  log.lazy('received raw payload', () => payload);
-  if (withSourceMap && !sourceMap) log.log('source map requested but not returned');
-
-  return resolveExperience(payload, config, {
-    metadata,
-    debug,
-    initialViewportId,
-    sourceMap,
-  });
 }
 
 /**
@@ -311,4 +338,13 @@ async function fetchByDestination(
     debug,
     initialViewportId,
   });
+}
+
+function hasRequestExtensions(
+  extensions: DeliveryExperienceRequestExtensions | undefined
+): extensions is DeliveryExperienceRequestExtensions {
+  return (
+    extensions !== undefined &&
+    Object.values(extensions).some((extension) => extension !== undefined)
+  );
 }
