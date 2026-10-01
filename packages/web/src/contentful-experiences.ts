@@ -1,5 +1,4 @@
 import {
-  ANONYMOUS_ID_KEY,
   ContentfulExperiences as ClientContentfulExperiences,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
@@ -15,6 +14,7 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import LocalStore from './storage/local-store.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
@@ -55,8 +55,7 @@ type WebEventMethods = Pick<
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends ClientContentfulExperiences {
   #locale: string | undefined;
-  #profile: EventProfile | undefined;
-  #profileRevision = 0;
+  readonly #store = new LocalStore();
   #eventHandoffPending = false;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
@@ -93,13 +92,13 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
-    this.#setProfile(profile ?? readStoredProfile());
+    if (profile !== undefined) this.#store.profile = profile;
     this.#eventMethods = this.createEventMethods({
-      getProfile: () => this.#profile,
+      getProfile: () => this.#store.profile,
       setProfile: (nextProfile) => {
-        this.#setProfile(nextProfile);
+        this.#store.profile = nextProfile;
       },
-      getProfileRevision: () => this.#profileRevision,
+      getProfileRevision: () => this.#store.profileRevision,
     });
     this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
     // Replay is eager. Mark a rejection as observed even when an application has
@@ -113,7 +112,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   }
 
   get profile(): EventProfile | undefined {
-    return this.#profile;
+    return this.#store.profile;
   }
 
   /**
@@ -133,8 +132,8 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     options: RuntimeFetchExperienceOptions,
     resolveOptions?: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
-    const profileRevision = this.#profileRevision;
-    const profileId = options.personalization?.profileId ?? this.#profile?.id;
+    const profileRevision = this.#store.profileRevision;
+    const profileId = options.personalization?.profileId ?? this.#store.profile?.id;
     const plan = await super.fetchExperience(
       profileId === undefined
         ? options
@@ -144,12 +143,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
           },
       resolveOptions
     );
-    const returnedProfileId = plan.personalization?.profileId;
-    if (returnedProfileId !== undefined && this.#profileRevision === profileRevision) {
-      this.#setProfile(
-        this.#profile?.id === returnedProfileId ? this.#profile : { id: returnedProfileId }
-      );
-    }
+    this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
     return plan;
   }
 
@@ -158,8 +152,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     if (this.#eventHandoffPending) {
       throw new Error('Cannot reset while an event handoff is pending');
     }
-    this.#setProfile(undefined);
-    this.#profileRevision += 1;
+    this.#store.reset();
   }
 
   #afterEventHandoff<T>(operation: () => Promise<T>): Promise<T> {
@@ -201,7 +194,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     try {
       let profile: EventProfile | undefined =
         handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
-      this.#setProfile(profile);
+      this.#store.profile = profile;
       for (let index = 0; index < handoff.events.length;) {
         const staged = handoff.events[index]!;
         if (staged.transport === 'personalization') {
@@ -219,7 +212,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
             { locale }
           );
           profile = result.profile;
-          this.#setProfile(profile);
+          this.#store.profile = profile;
         } else {
           index += 1;
           if (profile === undefined) {
@@ -242,30 +235,5 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     } finally {
       this.#eventHandoffPending = false;
     }
-  }
-
-  #setProfile(profile: EventProfile | undefined): void {
-    this.#profile = profile;
-    writeStoredProfileId(profile?.id);
-  }
-}
-
-function readStoredProfile(): EventProfile | undefined {
-  try {
-    if (typeof window === 'undefined') return undefined;
-    const id = window.localStorage.getItem(ANONYMOUS_ID_KEY);
-    return id ? { id } : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function writeStoredProfileId(id: string | undefined): void {
-  try {
-    if (typeof window === 'undefined') return;
-    if (id === undefined) window.localStorage.removeItem(ANONYMOUS_ID_KEY);
-    else window.localStorage.setItem(ANONYMOUS_ID_KEY, id);
-  } catch {
-    // LocalStorage is best-effort and may be unavailable in restricted browsers.
   }
 }

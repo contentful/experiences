@@ -6,5 +6,5 @@
  */
 export const ANONYMOUS_ID_COOKIE = 'ctfl-opt-aid';
 
-/** @internal LocalStorage key for the anonymous/profile id. */
-export const ANONYMOUS_ID_KEY = '__ctfl_opt_anonymous_id__';
+/** @internal LocalStorage key for the persisted profile. */
+export const PROFILE_CACHE_KEY = '__ctfl_opt_profile__';

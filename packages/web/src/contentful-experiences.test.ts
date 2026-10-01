@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import {
-  ANONYMOUS_ID_KEY,
   ContentfulExperiences as ClientContentfulExperiences,
   EventBuilder,
   EventProfileRequiredError,
+  PROFILE_CACHE_KEY,
+  type EventProfile,
   type RuntimeEventHandoff,
 } from '@contentful/experiences-client';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
@@ -31,7 +32,10 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
   } as ExperiencesWebConfig);
 }
 
-function mockOptimization(runtime: TestContentfulExperiences, profile = { id: 'updated-profile' }) {
+function mockOptimization(
+  runtime: TestContentfulExperiences,
+  profile: EventProfile = { id: 'updated-profile' }
+) {
   return {
     upsertProfile: vi
       .spyOn(runtime.optimization.personalization, 'upsertProfile')
@@ -175,8 +179,13 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it('restores the persisted profile id and passes it to fetchExperience', async () => {
-    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'stored-profile');
+  it('restores the persisted profile and passes its id to fetchExperience', async () => {
+    const storedProfile = {
+      id: 'stored-profile',
+      audiences: ['developers'],
+      traits: { plan: 'pro' },
+    };
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(storedProfile));
     const runtime = createRuntime();
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
@@ -184,7 +193,7 @@ describe('Web ContentfulExperiences', () => {
 
     await runtime.fetchExperience({ experienceId: 'personalized' });
 
-    expect(runtime.profile).toEqual({ id: 'stored-profile' });
+    expect(runtime.profile).toEqual(storedProfile);
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
@@ -194,8 +203,9 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it('persists profile ids and preserves an explicit fetchExperience profile id', async () => {
-    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
+  it('persists the profile and preserves an explicit fetchExperience profile id', async () => {
+    const profile = { id: 'browser-profile', traits: { plan: 'pro' } };
+    const runtime = createRuntime({ profile });
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [], viewports: [] } as never);
@@ -205,7 +215,7 @@ describe('Web ContentfulExperiences', () => {
       personalization: { profileId: 'explicit-profile' },
     });
 
-    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('browser-profile');
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
@@ -215,7 +225,7 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it('persists the profile id returned by XDA on the render plan', async () => {
+  it('persists a minimal profile returned by XDA on the render plan', async () => {
     const runtime = createRuntime();
     vi.spyOn(ClientContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       nodes: [],
@@ -226,16 +236,18 @@ describe('Web ContentfulExperiences', () => {
     await runtime.fetchExperience({ experienceId: 'personalized' });
 
     expect(runtime.profile).toEqual({ id: 'xda-profile' });
-    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('xda-profile');
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
+      id: 'xda-profile',
+    });
   });
 
-  it('clears the persisted profile id on reset', () => {
+  it('clears the persisted profile on reset', () => {
     const runtime = createRuntime({ profile: { id: 'browser-profile' } });
 
     runtime.reset();
 
     expect(runtime.profile).toBeUndefined();
-    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
   it('continues when LocalStorage is unavailable', () => {
@@ -246,7 +258,9 @@ describe('Web ContentfulExperiences', () => {
       throw new Error('storage blocked');
     });
 
-    expect(() => createRuntime({ profile: { id: 'browser-profile' } })).not.toThrow();
+    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
+
+    expect(runtime.profile).toEqual({ id: 'browser-profile' });
   });
 
   it('keeps mutable locale state isolated between instances', () => {
@@ -257,6 +271,16 @@ describe('Web ContentfulExperiences', () => {
 
     expect(english.eventBuilder.buildTrack({ event: 'english' }).context.locale).toBe('de-DE');
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
+  });
+
+  it('keeps live profile state isolated between instances', () => {
+    const first = createRuntime({ profile: { id: 'first-profile' } });
+    const second = createRuntime({ profile: { id: 'second-profile' } });
+
+    first.reset();
+
+    expect(first.profile).toBeUndefined();
+    expect(second.profile).toEqual({ id: 'second-profile' });
   });
 
   it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
@@ -560,11 +584,12 @@ describe('Web ContentfulExperiences', () => {
     ]);
   });
 
-  it('updates and persists the profile id from Personalization events', async () => {
+  it('updates and persists the complete profile from Personalization events', async () => {
     const runtime = createRuntime({
       profile: { id: 'initial-profile' },
     });
-    const optimization = mockOptimization(runtime);
+    const updatedProfile = { id: 'updated-profile', traits: { plan: 'pro' } };
+    const optimization = mockOptimization(runtime, updatedProfile);
 
     const track = runtime.track({ event: 'started' });
     expect(optimization.upsertProfile).toHaveBeenCalledOnce();
@@ -574,8 +599,8 @@ describe('Web ContentfulExperiences', () => {
       expect.objectContaining({ profileId: 'initial-profile' }),
       { locale: 'en-US' }
     );
-    expect(runtime.profile).toEqual({ id: 'updated-profile' });
-    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('updated-profile');
+    expect(runtime.profile).toEqual(updatedProfile);
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(updatedProfile);
   });
 
   it('requires a profile for Analytics events', async () => {
