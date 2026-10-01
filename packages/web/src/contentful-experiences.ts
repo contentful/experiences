@@ -10,6 +10,11 @@ import {
 } from '@contentful/experiences-client';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
+import {
+  createInteractionTracking,
+  type InteractionTracking,
+  type InteractionTrackingOptions,
+} from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
@@ -48,12 +53,20 @@ type WebEventMethods = Pick<
   'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
+export type InteractionTrackingStartOptions = InteractionTrackingOptions;
+
+export interface InteractionTrackingSession {
+  refresh(): void;
+  stop(): Promise<void>;
+}
+
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends ClientContentfulExperiences {
   #locale: string | undefined;
   #profile: EventProfile | undefined;
   #profileRevision = 0;
   #eventHandoffPending = false;
+  #interactionTracking: InteractionTracking | undefined;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
   readonly identify: WebEventMethods['identify'] = (...args) =>
@@ -132,6 +145,33 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     }
     this.#profile = undefined;
     this.#profileRevision += 1;
+  }
+
+  startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
+    if (this.#interactionTracking) {
+      throw new Error('Interaction tracking is already running; stop it before starting again');
+    }
+    const tracking = createInteractionTracking(this, options);
+    this.#interactionTracking = tracking;
+
+    let stopping: Promise<void> | undefined;
+    return {
+      refresh: () => {
+        if (this.#interactionTracking === tracking) tracking.refresh();
+      },
+      stop: () => {
+        if (stopping) return stopping;
+        // Everything but the sends is synchronous: `endActive()` ends in-progress
+        // views and hovers before its first await, so the session can be torn
+        // down and its slot released at once, and only the final events are
+        // still in flight when a new session starts.
+        if (this.#interactionTracking === tracking) this.#interactionTracking = undefined;
+        const flushed = tracking.endActive();
+        tracking.destroy();
+        stopping = flushed;
+        return stopping;
+      },
+    };
   }
 
   #afterEventHandoff<T>(operation: () => Promise<T>): Promise<T> {

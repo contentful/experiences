@@ -14,6 +14,12 @@
         "default": "./dist/index.js"
       }
     },
+    "./tracking-attributes": {
+      "import": {
+        "types": "./dist/tracking-attributes.d.ts",
+        "default": "./dist/tracking-attributes.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
