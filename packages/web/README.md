@@ -71,7 +71,7 @@ const plan = await experiences.fetchExperience({
 });
 ```
 
-Events built by the Web runtime use the `web` channel and the current browser context. The runtime does not retain profile state or send events separately; the application owns the profile id and supplies it on each personalized fetch.
+Events built by the Web runtime use the `web` channel and the current browser context. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
 
 ## Browser-safe configuration
 
@@ -111,12 +111,12 @@ const experiences = new ContentfulExperiences({
 The Web runtime provides direct event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile when creating the runtime, or identify a profile before sending
-Analytics events. Personalization event responses can supply a profile to the runtime,
-but profile state is volatile: this package does not generate identifiers
-locally, persist them, or restore them after a reload.
+Analytics events. Personalization event responses supply a complete profile to
+the runtime, while XDA responses can supply its id. The current profile is
+persisted and restored from LocalStorage.
 Call `reset()` at logout, consent withdrawal, or another browser session
-boundary. The next `identify`, `page`, or `track` call establishes the next
-volatile profile.
+boundary. The next `identify`, `page`, or `track` call establishes and persists
+the next profile.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -190,8 +190,8 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No profile persistence, offline queues, beacon/lifecycle delivery, consent
-  gating, or automatic event tracking.
+- No event persistence, offline queues, beacon/lifecycle
+  delivery, consent gating, or automatic event tracking.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.
 
 ## Architecture boundary

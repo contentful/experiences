@@ -1009,6 +1009,23 @@ describe('resolveExperience — render context carried on the plan', () => {
 
     expect(plan.sourceMap).toBe(sourceMap);
   });
+
+  it('carries the XDA personalization profile id onto the plan', async () => {
+    const experience = payload();
+    experience.extensions = {
+      personalization: { profile: { id: 'profile-id' } },
+    };
+
+    const plan = await resolveExperience(experience, emptyConfig);
+
+    expect(plan.personalization).toEqual({ profileId: 'profile-id' });
+  });
+
+  it('omits personalization when XDA did not return a profile id', async () => {
+    const plan = await resolveExperience(payload(), emptyConfig);
+
+    expect('personalization' in plan).toBe(false);
+  });
 });
 
 describe('resolveExperience — diagnostics', () => {

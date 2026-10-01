@@ -9,6 +9,7 @@ export type {
 export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-info.js';
 
 export {
+  ANONYMOUS_ID_COOKIE,
   ContentfulViewDelivery,
   DELIVERY_HOST,
   DestinationPreviewNotSupportedError,

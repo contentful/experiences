@@ -12,7 +12,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus an in-memory-only event profile. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
 
@@ -165,12 +165,15 @@ upstream authentication.
 
 On Node, call event methods only from the `forRequest()` facade. The profile and
 event context are request-local, volatile values; do not put them on the
-process-long SDK instance. On the Web, the SDK keeps its event profile only in
-memory. Reloading the page discards it; call `reset()` at logout, consent
-withdrawal, or another browser visitor boundary.
+process-long SDK instance. On the Web, the SDK persists the current profile in
+LocalStorage and automatically supplies its id to later personalized fetches
+and the complete profile to events. A profile id returned by XDA is carried on
+`plan.personalization.profileId` and persisted by the Web runtime. Call
+`reset()` at logout, consent withdrawal, or another browser
+visitor boundary.
 
 The default direct-delivery path sends an event at its call site. The SDK does
-not provide a general event queue, durable persistence, consent gate, beacon or
+not provide a general event queue, event persistence, consent gate, beacon or
 page-lifecycle delivery, or automatic renderer tracking. Consent and tracking
 policy remain the application’s responsibility. The narrowly scoped paired
 replay protocol below is the only deferred-delivery path.

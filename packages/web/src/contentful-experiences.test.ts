@@ -4,6 +4,8 @@ import {
   ContentfulExperiences as ClientContentfulExperiences,
   EventBuilder,
   EventProfileRequiredError,
+  PROFILE_CACHE_KEY,
+  type EventProfile,
   type RuntimeEventHandoff,
 } from '@contentful/experiences-client';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
@@ -30,7 +32,10 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
   } as ExperiencesWebConfig);
 }
 
-function mockOptimization(runtime: TestContentfulExperiences, profile = { id: 'updated-profile' }) {
+function mockOptimization(
+  runtime: TestContentfulExperiences,
+  profile: EventProfile = { id: 'updated-profile' }
+) {
   return {
     upsertProfile: vi
       .spyOn(runtime.optimization.personalization, 'upsertProfile')
@@ -72,6 +77,7 @@ function createHandoffEvents() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.localStorage.clear();
   window.history.replaceState({}, '', '/');
   document.title = '';
 });
@@ -142,11 +148,15 @@ describe('Web ContentfulExperiences', () => {
     await runtime.fetchExperience({ experienceId: 'default' });
     await runtime.fetchExperience({ experienceId: 'per-call', locale: 'fr-FR' });
 
-    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' });
-    expect(fetch).toHaveBeenNthCalledWith(2, {
-      experienceId: 'per-call',
-      locale: 'fr-FR',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, undefined);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      {
+        experienceId: 'per-call',
+        locale: 'fr-FR',
+      },
+      undefined
+    );
   });
 
   it('forwards personalization with Web event context', async () => {
@@ -163,7 +173,94 @@ describe('Web ContentfulExperiences', () => {
     await runtime.fetchExperience({ experienceId: 'personalized', personalization });
 
     expect(page.channel).toBe('web');
-    expect(fetch).toHaveBeenCalledWith({ experienceId: 'personalized', personalization });
+    expect(fetch).toHaveBeenCalledWith(
+      { experienceId: 'personalized', personalization },
+      undefined
+    );
+  });
+
+  it('restores the persisted profile and passes its id to fetchExperience', async () => {
+    const storedProfile = {
+      id: 'stored-profile',
+      audiences: ['developers'],
+      traits: { plan: 'pro' },
+    };
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(storedProfile));
+    const runtime = createRuntime();
+    const fetch = vi
+      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+
+    await runtime.fetchExperience({ experienceId: 'personalized' });
+
+    expect(runtime.profile).toEqual(storedProfile);
+    expect(fetch).toHaveBeenCalledWith(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'stored-profile' },
+      },
+      undefined
+    );
+  });
+
+  it('persists the profile and preserves an explicit fetchExperience profile id', async () => {
+    const profile = { id: 'browser-profile', traits: { plan: 'pro' } };
+    const runtime = createRuntime({ profile });
+    const fetch = vi
+      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+
+    await runtime.fetchExperience({
+      experienceId: 'personalized',
+      personalization: { profileId: 'explicit-profile' },
+    });
+
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
+    expect(fetch).toHaveBeenCalledWith(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'explicit-profile' },
+      },
+      undefined
+    );
+  });
+
+  it('persists a minimal profile returned by XDA on the render plan', async () => {
+    const runtime = createRuntime();
+    vi.spyOn(ClientContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
+      nodes: [],
+      viewports: [],
+      personalization: { profileId: 'xda-profile' },
+    } as never);
+
+    await runtime.fetchExperience({ experienceId: 'personalized' });
+
+    expect(runtime.profile).toEqual({ id: 'xda-profile' });
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
+      id: 'xda-profile',
+    });
+  });
+
+  it('clears the persisted profile on reset', () => {
+    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
+
+    runtime.reset();
+
+    expect(runtime.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('continues when LocalStorage is unavailable', () => {
+    vi.spyOn(window.Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+    vi.spyOn(window.Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
+
+    expect(runtime.profile).toEqual({ id: 'browser-profile' });
   });
 
   it('keeps mutable locale state isolated between instances', () => {
@@ -174,6 +271,16 @@ describe('Web ContentfulExperiences', () => {
 
     expect(english.eventBuilder.buildTrack({ event: 'english' }).context.locale).toBe('de-DE');
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
+  });
+
+  it('keeps live profile state isolated between instances', () => {
+    const first = createRuntime({ profile: { id: 'first-profile' } });
+    const second = createRuntime({ profile: { id: 'second-profile' } });
+
+    first.reset();
+
+    expect(first.profile).toBeUndefined();
+    expect(second.profile).toEqual({ id: 'second-profile' });
   });
 
   it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
@@ -212,7 +319,7 @@ describe('Web ContentfulExperiences', () => {
 
     await runtime.fetchExperience(options);
 
-    expect(fetch).toHaveBeenCalledWith(options);
+    expect(fetch).toHaveBeenCalledWith(options, undefined);
   });
 
   it('returns an immediate empty receipt when no event handoff is supplied', async () => {
@@ -477,11 +584,12 @@ describe('Web ContentfulExperiences', () => {
     ]);
   });
 
-  it('keeps the event profile in memory and updates it from Personalization events', async () => {
+  it('updates and persists the complete profile from Personalization events', async () => {
     const runtime = createRuntime({
       profile: { id: 'initial-profile' },
     });
-    const optimization = mockOptimization(runtime);
+    const updatedProfile = { id: 'updated-profile', traits: { plan: 'pro' } };
+    const optimization = mockOptimization(runtime, updatedProfile);
 
     const track = runtime.track({ event: 'started' });
     expect(optimization.upsertProfile).toHaveBeenCalledOnce();
@@ -491,10 +599,11 @@ describe('Web ContentfulExperiences', () => {
       expect.objectContaining({ profileId: 'initial-profile' }),
       { locale: 'en-US' }
     );
-    expect(runtime.profile).toEqual({ id: 'updated-profile' });
+    expect(runtime.profile).toEqual(updatedProfile);
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(updatedProfile);
   });
 
-  it('requires a volatile profile for Analytics events', async () => {
+  it('requires a profile for Analytics events', async () => {
     const runtime = createRuntime();
     mockOptimization(runtime);
 
@@ -503,7 +612,7 @@ describe('Web ContentfulExperiences', () => {
     ).rejects.toBeInstanceOf(EventProfileRequiredError);
   });
 
-  it('resets the volatile profile before establishing a new one', async () => {
+  it('resets the profile before establishing a new one', async () => {
     const runtime = createRuntime({
       profile: { id: 'first-profile' },
     });
