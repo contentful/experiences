@@ -23,18 +23,3 @@ export const toInteractionArgs = (attribution: TrackingAttribution): TrackingAtt
   parentExperienceId: attribution.parentExperienceId,
   entryIds: attribution.entryIds,
 });
-
-export async function sendSafely(
-  method: string,
-  attribution: TrackingAttribution,
-  send: () => Promise<unknown>
-): Promise<void> {
-  try {
-    await send();
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    console.warn(
-      `[@contentful/experiences] ${method} failed for entity "${attribution.entityId}": ${reason}`
-    );
-  }
-}

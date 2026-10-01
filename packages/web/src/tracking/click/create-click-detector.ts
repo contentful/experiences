@@ -5,7 +5,6 @@ import {
   type InteractionDetector,
   isFragment,
   type ResolveElementAttribution,
-  sendSafely,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -72,7 +71,10 @@ export function createClickDetector(
     const attribution = resolveAttribution(trackedElement);
     if (!attribution || !isFragment(attribution)) return;
 
-    void sendSafely('trackClick', attribution, () => trackClick(toInteractionArgs(attribution)));
+    // Unlike views and hovers, no observer wraps this send, so catch here.
+    trackClick(toInteractionArgs(attribution)).catch((error: unknown) => {
+      console.error('[@contentful/experiences] Error in click tracking:', error);
+    });
   };
 
   return {

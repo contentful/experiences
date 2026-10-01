@@ -4,7 +4,6 @@ import { createTimedDetector } from '../create-timed-detector.js';
 import {
   type InteractionDetector,
   type ResolveElementAttribution,
-  sendSafely,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -24,13 +23,12 @@ export function createViewDetector(
     isSupported: () => typeof IntersectionObserver !== 'undefined',
     isEligible: () => true,
     createObserver: (callback) => new ElementViewObserver(callback, options),
-    track: (attribution, info) =>
-      sendSafely('trackView', attribution, () =>
-        trackView({
-          ...toInteractionArgs(attribution),
-          viewId: info.viewId,
-          viewDurationMs: Math.max(0, Math.round(info.totalVisibleMs)),
-        })
-      ),
+    track: async (attribution, info) => {
+      await trackView({
+        ...toInteractionArgs(attribution),
+        viewId: info.viewId,
+        viewDurationMs: Math.max(0, Math.round(info.totalVisibleMs)),
+      });
+    },
   });
 }

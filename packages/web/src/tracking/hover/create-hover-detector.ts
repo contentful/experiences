@@ -5,7 +5,6 @@ import {
   type InteractionDetector,
   isFragment,
   type ResolveElementAttribution,
-  sendSafely,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -19,13 +18,12 @@ export function createHoverDetector(
     resolveAttribution,
     isEligible: isFragment,
     createObserver: (callback) => new ElementHoverObserver(callback),
-    track: (attribution, info) =>
-      sendSafely('trackHover', attribution, () =>
-        trackHover({
-          ...toInteractionArgs(attribution),
-          hoverId: info.hoverId,
-          hoverDurationMs: Math.max(0, Math.round(info.totalHoverMs)),
-        })
-      ),
+    track: async (attribution, info) => {
+      await trackHover({
+        ...toInteractionArgs(attribution),
+        hoverId: info.hoverId,
+        hoverDurationMs: Math.max(0, Math.round(info.totalHoverMs)),
+      });
+    },
   });
 }

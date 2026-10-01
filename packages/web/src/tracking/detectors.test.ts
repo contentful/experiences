@@ -109,9 +109,9 @@ describe('createViewDetector', () => {
     }).not.toThrow();
   });
 
-  it('warns rather than throws when trackView rejects', async () => {
+  it('logs rather than throws when trackView rejects', async () => {
     const io = installIOPolyfill();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const trackView = vi.fn().mockRejectedValue(new Error('no profile'));
     const element = makeElement();
     const detector = createViewDetector(trackView, lookup(new Map([[element, FRAGMENT]])));
@@ -121,8 +121,9 @@ describe('createViewDetector', () => {
     io.getLast().trigger(element, true);
     await advance(1000);
 
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('trackView failed for entity "hero"')
+    expect(error).toHaveBeenCalledWith(
+      '[@contentful/experiences] Error in element view callback:',
+      expect.objectContaining({ message: 'no profile' })
     );
   });
 });
@@ -186,6 +187,23 @@ describe('createClickDetector', () => {
 
     expect(trackClick).toHaveBeenCalledTimes(1);
     expect(trackClick.mock.calls[0]![0]).toMatchObject({ entityId: 'hero', variantIndex: 1 });
+  });
+
+  it('logs rather than throws when trackClick rejects', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fragment = makeElement();
+    const button = document.createElement('button');
+    fragment.append(button);
+    const { trackClick } = setup([[fragment, FRAGMENT]]);
+    trackClick.mockRejectedValue(new Error('no profile'));
+
+    click(button);
+    await advance(0);
+
+    expect(error).toHaveBeenCalledWith(
+      '[@contentful/experiences] Error in click tracking:',
+      expect.objectContaining({ message: 'no profile' })
+    );
   });
 
   it("sends only attribution fields, dropping extra properties on the caller's object", () => {
