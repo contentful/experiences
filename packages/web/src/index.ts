@@ -7,6 +7,7 @@ export type {
 export { EXPERIENCES_WEB_SDK_NAME, EXPERIENCES_WEB_SDK_VERSION } from './sdk-info.js';
 
 export {
+  ANONYMOUS_ID_COOKIE,
   ContentfulViewDelivery,
   DELIVERY_HOST,
   ExperienceFetchError,

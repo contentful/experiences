@@ -1,4 +1,5 @@
 import {
+  ANONYMOUS_ID_KEY,
   ContentfulExperiences as ClientContentfulExperiences,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
@@ -7,7 +8,10 @@ import {
   type RuntimeEventHandoff,
   type RuntimeEventHandoffReceipt,
   type RuntimeEventMethods,
+  type RuntimeFetchExperienceOptions,
+  type RuntimeResolveOptions,
 } from '@contentful/experiences-client';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
@@ -23,7 +27,7 @@ export type BrowserEventContextProviders = Pick<
  */
 type WebEventStateConfig =
   | {
-      /** Volatile browser event profile. Mutually exclusive with eventHandoff. */
+      /** Initial browser event profile. Mutually exclusive with eventHandoff. */
       profile?: EventProfile;
       eventHandoff?: never;
       eventHandoffRouteKey?: never;
@@ -89,11 +93,11 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
-    this.#profile = profile;
+    this.#setProfile(profile ?? readStoredProfile());
     this.#eventMethods = this.createEventMethods({
       getProfile: () => this.#profile,
       setProfile: (nextProfile) => {
-        this.#profile = nextProfile;
+        this.#setProfile(nextProfile);
       },
       getProfileRevision: () => this.#profileRevision,
     });
@@ -125,12 +129,36 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     this.#locale = locale;
   }
 
-  /** Clears volatile event state when the active browser profile changes. */
+  override async fetchExperience(
+    options: RuntimeFetchExperienceOptions,
+    resolveOptions?: RuntimeResolveOptions
+  ): Promise<PortableRenderPlan> {
+    const profileRevision = this.#profileRevision;
+    const profileId = options.personalization?.profileId ?? this.#profile?.id;
+    const plan = await super.fetchExperience(
+      profileId === undefined
+        ? options
+        : {
+            ...options,
+            personalization: { ...options.personalization, profileId },
+          },
+      resolveOptions
+    );
+    const returnedProfileId = plan.personalization?.profileId;
+    if (returnedProfileId !== undefined && this.#profileRevision === profileRevision) {
+      this.#setProfile(
+        this.#profile?.id === returnedProfileId ? this.#profile : { id: returnedProfileId }
+      );
+    }
+    return plan;
+  }
+
+  /** Clears browser profile state and its persisted id. */
   reset(): void {
     if (this.#eventHandoffPending) {
       throw new Error('Cannot reset while an event handoff is pending');
     }
-    this.#profile = undefined;
+    this.#setProfile(undefined);
     this.#profileRevision += 1;
   }
 
@@ -173,7 +201,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     try {
       let profile: EventProfile | undefined =
         handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
-      this.#profile = profile;
+      this.#setProfile(profile);
       for (let index = 0; index < handoff.events.length;) {
         const staged = handoff.events[index]!;
         if (staged.transport === 'personalization') {
@@ -191,7 +219,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
             { locale }
           );
           profile = result.profile;
-          this.#profile = profile;
+          this.#setProfile(profile);
         } else {
           index += 1;
           if (profile === undefined) {
@@ -214,5 +242,30 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     } finally {
       this.#eventHandoffPending = false;
     }
+  }
+
+  #setProfile(profile: EventProfile | undefined): void {
+    this.#profile = profile;
+    writeStoredProfileId(profile?.id);
+  }
+}
+
+function readStoredProfile(): EventProfile | undefined {
+  try {
+    if (typeof window === 'undefined') return undefined;
+    const id = window.localStorage.getItem(ANONYMOUS_ID_KEY);
+    return id ? { id } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredProfileId(id: string | undefined): void {
+  try {
+    if (typeof window === 'undefined') return;
+    if (id === undefined) window.localStorage.removeItem(ANONYMOUS_ID_KEY);
+    else window.localStorage.setItem(ANONYMOUS_ID_KEY, id);
+  } catch {
+    // LocalStorage is best-effort and may be unavailable in restricted browsers.
   }
 }

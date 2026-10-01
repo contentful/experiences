@@ -504,5 +504,9 @@ export async function resolveExperience(
     debug: experience.debug,
   };
   if (options.sourceMap !== undefined) plan.sourceMap = options.sourceMap;
+  const profileId = isPlainPayload && payload.extensions?.personalization?.profile?.id;
+  if (profileId) {
+    plan.personalization = { profileId };
+  }
   return plan;
 }
