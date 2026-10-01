@@ -75,19 +75,18 @@ describe('fetchPreviewSession', () => {
     });
   });
 
-  it('accepts an Experience response without viewports', async () => {
-    const payloadWithoutViewports = {
+  it('accepts an Experience response without nodes or viewports', async () => {
+    const payloadWithoutCollections = {
       sys: { type: 'Experience' },
-      nodes: [],
     };
-    mockClient.fetch.mockResolvedValue(response(payloadWithoutViewports));
+    mockClient.fetch.mockResolvedValue(response(payloadWithoutCollections));
 
     await expect(
       fetchPreviewSession(experienceOptions, { previewToken: 'preview-token' }, resolveOptions)
     ).resolves.toBe(mockPlan);
 
     expect(mockResolveExperience).toHaveBeenCalledWith(
-      payloadWithoutViewports,
+      payloadWithoutCollections,
       resolveOptions.config,
       {
         metadata: resolveOptions.metadata,
