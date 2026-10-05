@@ -7,7 +7,10 @@ import {
   type RuntimeEventHandoff,
   type RuntimeEventHandoffReceipt,
   type RuntimeEventMethods,
+  type RuntimeFetchExperienceOptions,
+  type RuntimeResolveOptions,
 } from '@contentful/experiences-client';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import {
@@ -16,6 +19,7 @@ import {
   type InteractionTrackingOptions,
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import LocalStore from './storage/local-store.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
@@ -28,7 +32,7 @@ export type BrowserEventContextProviders = Pick<
  */
 type WebEventStateConfig =
   | {
-      /** Volatile browser event profile. Mutually exclusive with eventHandoff. */
+      /** Initial browser event profile. Mutually exclusive with eventHandoff. */
       profile?: EventProfile;
       eventHandoff?: never;
       eventHandoffRouteKey?: never;
@@ -63,8 +67,7 @@ export interface InteractionTrackingSession {
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends ClientContentfulExperiences {
   #locale: string | undefined;
-  #profile: EventProfile | undefined;
-  #profileRevision = 0;
+  readonly #store = new LocalStore();
   #eventHandoffPending = false;
   #interactionTracking: InteractionTracking | undefined;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
@@ -102,13 +105,13 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
       throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
-    this.#profile = profile;
+    if (profile !== undefined) this.#store.profile = profile;
     this.#eventMethods = this.createEventMethods({
-      getProfile: () => this.#profile,
+      getProfile: () => this.#store.profile,
       setProfile: (nextProfile) => {
-        this.#profile = nextProfile;
+        this.#store.profile = nextProfile;
       },
-      getProfileRevision: () => this.#profileRevision,
+      getProfileRevision: () => this.#store.profileRevision,
     });
     this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
     // Replay is eager. Mark a rejection as observed even when an application has
@@ -122,7 +125,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
   }
 
   get profile(): EventProfile | undefined {
-    return this.#profile;
+    return this.#store.profile;
   }
 
   /**
@@ -138,13 +141,31 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     this.#locale = locale;
   }
 
-  /** Clears volatile event state when the active browser profile changes. */
+  override async fetchExperience(
+    options: RuntimeFetchExperienceOptions,
+    resolveOptions?: RuntimeResolveOptions
+  ): Promise<PortableRenderPlan> {
+    const profileRevision = this.#store.profileRevision;
+    const profileId = options.personalization?.profileId ?? this.#store.profile?.id;
+    const plan = await super.fetchExperience(
+      profileId === undefined
+        ? options
+        : {
+            ...options,
+            personalization: { ...options.personalization, profileId },
+          },
+      resolveOptions
+    );
+    this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
+    return plan;
+  }
+
+  /** Clears browser profile state and its persisted id. */
   reset(): void {
     if (this.#eventHandoffPending) {
       throw new Error('Cannot reset while an event handoff is pending');
     }
-    this.#profile = undefined;
-    this.#profileRevision += 1;
+    this.#store.reset();
   }
 
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
@@ -213,7 +234,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
     try {
       let profile: EventProfile | undefined =
         handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
-      this.#profile = profile;
+      this.#store.profile = profile;
       for (let index = 0; index < handoff.events.length;) {
         const staged = handoff.events[index]!;
         if (staged.transport === 'personalization') {
@@ -231,7 +252,7 @@ export class ContentfulExperiences extends ClientContentfulExperiences {
             { locale }
           );
           profile = result.profile;
-          this.#profile = profile;
+          this.#store.profile = profile;
         } else {
           index += 1;
           if (profile === undefined) {

@@ -156,6 +156,7 @@ export {
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {
+  ANONYMOUS_ID_COOKIE,
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,

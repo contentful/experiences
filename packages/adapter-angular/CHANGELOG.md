@@ -1,3 +1,16 @@
+## 0.4.1 (2026-10-01)
+
+### 🚀 Features
+
+- persist web personalization profile ID ([#213](https://github.com/contentful/experiences/pull/213))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.4.1
+- Updated client to 0.7.1
+- Updated design to 0.10.1
+- Updated core to 0.10.1
+
 ## 0.4.0 (2026-09-30)
 
 ### 🧱 Updated Dependencies

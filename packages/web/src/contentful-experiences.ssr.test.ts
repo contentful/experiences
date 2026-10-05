@@ -17,6 +17,22 @@ describe('Web public entry on the server', () => {
     });
     expect(web.getUserAgent()).toBeUndefined();
   });
+
+  it('retains live profile state when browser persistence is unavailable', async () => {
+    const { ContentfulExperiences } = await import('./index.js');
+    const runtime = new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      resolverConfig: { components: {} },
+      delivery: { accessToken: 'delivery-token' },
+      profile: { id: 'server-render-profile' },
+    });
+
+    expect(runtime.profile).toEqual({ id: 'server-render-profile' });
+
+    runtime.reset();
+    expect(runtime.profile).toBeUndefined();
+  });
 });
 
 describe('Web interaction tracking on the server', () => {

@@ -2,13 +2,13 @@ import type {
   ExperienceApiClient as PersonalizationApiClient,
   InsightsApiClient as AnalyticsApiClient,
 } from '@contentful/optimization-api-client';
-import type {
-  ExperienceEvent as PersonalizationEvent,
-  InsightsEvent as AnalyticsEvent,
-  OptimizationData as EventOptimizationData,
-  PartialProfile as EventProfile,
+import {
+  PartialProfile as EventProfileSchema,
+  type ExperienceEvent as PersonalizationEvent,
+  type InsightsEvent as AnalyticsEvent,
+  type OptimizationData as EventOptimizationData,
+  type PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
-
 import type EventBuilder from './event-builder.js';
 import type {
   ClickBuilderArgs,
@@ -20,6 +20,9 @@ import type {
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
 } from './event-builder.js';
+
+/** Runtime schema for profiles retained by public runtime leaves. */
+export { EventProfileSchema };
 export type { EventOptimizationData, EventProfile };
 
 export type PersonalizationEventMethod = 'identify' | 'page' | 'track';

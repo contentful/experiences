@@ -216,6 +216,22 @@ export interface ExperienceSourceMap {
 }
 
 /**
+ * XDA response extensions consumed by the SDK. Kept as a structural subset of
+ * `HydratedExperienceViewExtensions` so Core remains dependency-free.
+ */
+export interface ExperienceExtensions {
+  personalization?: {
+    /** Optional here so hand-authored and partial payloads remain accepted. */
+    profile?: {
+      id?: string;
+    };
+    experiences?: unknown[];
+    changes?: unknown[];
+  };
+  sourceMap?: ExperienceSourceMap;
+}
+
+/**
  * Top-level Experience payload as returned by the Experience Delivery API
  * (`HydratedExperienceView` from `@contentful/experience-delivery`).
  *
@@ -233,7 +249,7 @@ export interface ExperiencePayload {
   viewports?: ViewportDef[];
   nodes: ExperienceNode[];
   errors?: unknown[];
-  extensions?: unknown;
+  extensions?: ExperienceExtensions;
   sys?: ExperienceSys;
 }
 
@@ -344,6 +360,11 @@ export interface PortableRenderPlan {
   debug: boolean;
   /** Present only when the fetch requested the `sourceMap` extension. */
   sourceMap?: ExperienceSourceMap;
+  /** Present when XDA returned personalization state for this Experience. */
+  personalization?: {
+    /** Profile id to use for subsequent personalized requests. */
+    profileId: string;
+  };
   /**
    * Resolve-time diagnostics collected while building this plan — malformed
    * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an
