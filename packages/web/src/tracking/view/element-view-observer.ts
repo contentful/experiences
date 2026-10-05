@@ -1,7 +1,7 @@
 /*
  * Behavior:
  * - Fires one start callback (`attempts: 1`) once an element has been
- *   continuously ≥`DEFAULTS.RATIO` visible for `DEFAULTS.DWELL_MS`.
+ *   continuously any part visible for `DEFAULTS.DWELL_MS`.
  * - Emits one final callback (`attempts: 2`, same `viewId`) with the total
  *   visible duration when that qualified view ends.
  * - Ends view sessions when the page is hidden and starts a fresh session on
@@ -58,7 +58,7 @@ export class ElementViewObserver {
     this.io = new IntersectionObserver((entries) => this.onIntersect(entries), {
       root: this.opts.root ?? null,
       rootMargin: this.opts.rootMargin,
-      threshold: [0, DEFAULTS.RATIO],
+      threshold: 0,
     });
     this.sourceController = new ElementViewSourceController(this.io, this.opts, {
       onDropped: (state) => this.finalizeDroppedState(state),
@@ -164,10 +164,7 @@ export class ElementViewObserver {
       for (const state of states) {
         if (state.done) continue;
 
-        const intersectsThreshold =
-          entry.isIntersecting && entry.intersectionRatio >= DEFAULTS.RATIO;
-
-        if (intersectsThreshold) {
+        if (entry.isIntersecting) {
           this.onIntersecting(state, now);
         } else {
           this.onVisibilityEnd(state, now);

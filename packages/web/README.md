@@ -175,9 +175,9 @@ await session.stop();
 - **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
   Fragments only. Nothing else is tracked: a lookup result with any other
   `entityKind`, such as an inline Fragment or Component, is ignored.
-- A view counts after one second at least 10% visible. A hover counts after one
-  second. Each is reported when it qualifies and again with its final duration,
-  under the same `viewId` or `hoverId`.
+- A view counts after one second with any part of the element visible. A hover
+  counts after one second. Each is reported when it qualifies and again with
+  its final duration, under the same `viewId` or `hoverId`.
 - A click counts on links, buttons, form controls, `[role="button"]`,
   `[role="link"]`, and elements with an `onclick` handler. It is attributed to the
   nearest tracked element. Add `data-ctfl-clickable="true"`

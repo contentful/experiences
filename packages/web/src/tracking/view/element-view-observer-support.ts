@@ -2,7 +2,6 @@ import { createElementRef, type Timer } from '../observer-support.js';
 
 export const DEFAULTS = {
   DWELL_MS: 1000,
-  RATIO: 0.1,
   SWEEP_INTERVAL_MS: 30000,
 } as const;
 

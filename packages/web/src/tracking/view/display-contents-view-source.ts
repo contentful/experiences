@@ -1,7 +1,7 @@
 import { TRACKING_NODE_ATTRIBUTE } from '../../tracking-attributes.js';
 import { CAN_ADD_LISTENERS } from '../observer-support.js';
 
-import { DEFAULTS, type ElementState } from './element-view-observer-support.js';
+import type { ElementState } from './element-view-observer-support.js';
 
 interface MarginValue {
   readonly unit: '%' | 'px';
@@ -196,7 +196,7 @@ const resolveClipRect = (element: Element, options: VirtualVisibilityOptions): C
   return clip;
 };
 
-/** Whether at least `DEFAULTS.RATIO` of the element's rendered contents is visible. */
+/** Whether any part of the element's rendered contents is visible. */
 export const measureVirtualVisibility = (
   element: Element,
   options: VirtualVisibilityOptions
@@ -214,16 +214,11 @@ export const measureVirtualVisibility = (
   if (rects.length === 0) return false;
 
   const clip = resolveClipRect(element, options);
-  let totalArea = 0;
-  let visibleArea = 0;
 
-  rects.forEach((rect) => {
+  return rects.some((rect) => {
     const area = rect.width * rect.height;
-    if (area <= 0) return;
+    if (area <= 0) return false;
 
-    totalArea += area;
-    visibleArea += rectArea(intersectRects(toRect(rect), clip));
+    return rectArea(intersectRects(toRect(rect), clip)) > 0;
   });
-
-  return totalArea > 0 && visibleArea / totalArea >= DEFAULTS.RATIO;
 };

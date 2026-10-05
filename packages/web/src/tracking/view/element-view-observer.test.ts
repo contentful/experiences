@@ -70,15 +70,26 @@ describe('ElementViewObserver', () => {
     });
   });
 
-  it('ignores intersections below the visibility ratio', async () => {
+  it('ignores a non-intersecting entry regardless of its ratio', async () => {
     const element = makeElement();
     const cb = vi.fn<Callback>().mockResolvedValue(undefined);
     new ElementViewObserver(cb).observe(element);
 
-    io.getLast().trigger(element, true, 0.05);
+    io.getLast().trigger(element, false, 0.05);
     await advance(2000);
 
     expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('qualifies on any part of the element being visible', async () => {
+    const element = makeElement();
+    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+    new ElementViewObserver(cb).observe(element);
+
+    io.getLast().trigger(element, true, 0.01);
+    await advance(1000);
+
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it('does not accumulate dwell across separate visibility sessions', async () => {
