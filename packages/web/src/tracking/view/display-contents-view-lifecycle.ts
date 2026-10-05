@@ -1,11 +1,3 @@
-/*
- * Keeps `display: contents` observations current: a MutationObserver
- * re-resolves an element's observation source when its subtree or styling
- * changes, and virtual measurements re-run on scroll and resize. Ported from
- * the Optimization Web SDK
- * (`web-sdk/src/entry-tracking/events/view/displayContentsViewLifecycle.ts`).
- */
-
 import { CAN_ADD_LISTENERS, derefElement, HAS_MUTATION_OBSERVER } from '../observer-support.js';
 
 import type { ElementState } from './element-view-observer-support.js';
