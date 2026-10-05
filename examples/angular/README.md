@@ -53,11 +53,32 @@ npm run preview                        # http://localhost:4000/landing
 
 ### Query parameters
 
-| Param           | Effect                                                                                     |
-| --------------- | ------------------------------------------------------------------------------------------ |
-| `?preview=true` | Fetches from the Preview API using `CPA_TOKEN` (see below)                                 |
-| `?debug=true`   | Turns on the resolver's debug output; reaches components as `injectExperience().debug`     |
-| `?locale=de-DE` | Passed to `fetchExperience` **and** into `metadata`, where `card`'s `resolveData` reads it |
+| Param                   | Effect                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| `?preview=true`         | Fetches from the Preview API using `CPA_TOKEN` (see below)                                 |
+| `?debug=true`           | Turns on the resolver's debug output; reaches components as `injectExperience().debug`     |
+| `?personalization=true` | Sends a page event so XDA can select a matching Optimization Variant (see below)           |
+| `?locale=de-DE`         | Passed to `fetchExperience` **and** into `metadata`, where `card`'s `resolveData` reads it |
+
+### Optional: personalization
+
+After running the bootstrap, create an active Personalization Optimization in
+Contentful:
+
+1. Create a Developers audience whose page campaign name is `developers`.
+2. Add the `landing` Experience and map that audience to the
+   `Landing (developers)` Optimization Variant.
+3. Open
+   `http://localhost:4200/landing?personalization=true&utm_campaign=developers&debug=true`.
+
+The server builds a server-channel page event with `EventBuilder` and sends it in
+`fetchExperience`'s first-class `personalization` option. That switches the XDA
+request to POST, so Contentful can evaluate the visitor against the configured
+Audience and hydrate the developer hero before server rendering. Without
+`?personalization=true` the request is unchanged.
+
+The example intentionally does not implement durable profile storage or consent
+policy; production applications must own those concerns.
 
 ### Optional: preview mode
 

@@ -169,6 +169,19 @@ export type ExperienceFixture = {
   slots: { content: ExperienceNode[] };
 };
 
+// --- Personalization ---------------------------------------------------------
+
+export type ExperiencePersonalizationFixture = {
+  experienceId: string;
+  targetNodeId: string;
+  bindingParameterId: string;
+  entry: EntryFixture;
+  variant: {
+    name: string;
+    description: string;
+  };
+};
+
 export type ExperienceNode = InlineExperienceFragmentNode | ContainerNode;
 
 // An InlineExperienceFragment node has its content sourced from a DataAssembly binding.

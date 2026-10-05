@@ -46,6 +46,26 @@ npm run dev
 
 Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
+### Optional: personalization
+
+After running the bootstrap, create an active Personalization Optimization in
+Contentful:
+
+1. Create a Developers audience whose page campaign name is `developers`.
+2. Add the `landing` Experience and map that audience to the
+   `Landing (developers)` Optimization Variant.
+3. Open
+   `http://localhost:3000/landing?personalization=true&utm_campaign=developers&debug=true`.
+
+The route builds a server-channel page event with `EventBuilder` and sends it in
+`fetchExperience`'s first-class `personalization` option. That switches the XDA
+request to POST, lets Contentful evaluate the visitor against the configured
+Audience, and hydrates the selected developer hero before server rendering.
+
+The example only sends personalization data when `personalization=true` is
+explicitly present. It intentionally does not implement durable profile storage
+or consent policy; production applications must own those concerns.
+
 ### Optional: preview mode
 
 Append `?preview=true` to any experience URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
@@ -78,11 +98,12 @@ The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are bo
 
 One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, debug mode, and per-page metadata are all wired up as `searchParams`.
 
-| Try it locally                                                  | Source                                         | Config                                                                           |
-| --------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
-| `http://localhost:3000/landing`                                 | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx)                       |
-| `http://localhost:3000/landing?debug=true&locale=en-US`         | same route                                     | same config                                                                      |
-| `http://localhost:3000/landing?preview_session_id=<session-id>` | same route                                     | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
+| Try it locally                                                                          | Source                                         | Config                                                                           |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
+| `http://localhost:3000/landing`                                                         | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx)                       |
+| `http://localhost:3000/landing?debug=true&locale=en-US`                                 | same route                                     | same config                                                                      |
+| `http://localhost:3000/landing?personalization=true&utm_campaign=developers&debug=true` | same route                                     | personalized page event plus SDK debug output                                    |
+| `http://localhost:3000/landing?preview_session_id=<session-id>`                         | same route                                     | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
 
 The route in one glance:
 

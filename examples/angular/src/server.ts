@@ -15,6 +15,7 @@ import {
 import express from 'express';
 
 import { experienceConfig } from './app/lib/experience-config.js';
+import { buildPagePersonalization } from './app/lib/personalization.js';
 import type { ExperienceRouteData } from './app/lib/experience-route-data.js';
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +62,8 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const debug = debugParam === 'true' || debugParam === '1';
   const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
   const locale = url.searchParams.get('locale') ?? 'en-US';
+  const personalizationParam = url.searchParams.get('personalization');
+  const personalizationEnabled = personalizationParam === 'true' || personalizationParam === '1';
   const environmentId = process.env['ENVIRONMENT_ID'] || 'master';
   const previewToken = process.env['CPA_TOKEN'];
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
@@ -68,6 +71,22 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const previewMode = preview === 'true' || preview === '1' || livePreview;
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
+
+  // Only send a page event when `?personalization=true` is explicitly present.
+  const personalization = personalizationEnabled
+    ? buildPagePersonalization({
+        origin: url.origin,
+        path: url.pathname,
+        locale,
+        referrer: req.headers['referer'] ?? '',
+        searchParams: Object.fromEntries(
+          [...new Set(url.searchParams.keys())].map((key) => {
+            const values = url.searchParams.getAll(key);
+            return [key, values.length === 1 ? values[0] : values];
+          })
+        ),
+      })
+    : undefined;
 
   try {
     const resolveOptions = {
@@ -87,6 +106,7 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
             environmentId,
             experienceId: slug,
             locale,
+            personalization,
           },
           {
             accessToken,

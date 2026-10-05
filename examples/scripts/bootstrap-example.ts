@@ -13,6 +13,7 @@
  *   7. DataAssemblies           (create + publish, with cross-fixture ids resolved)
  *   8. Link DAs to Components   (append DA links to composed Components, republish them)
  *   9. Experience               (create + publish, with dataAssembly + entry refs resolved)
+ *      + Optimization Variant   (developer-focused personalized hero)
  *
  * Idempotent per resource: if a resource with the fixture's id already exists,
  * skip it. Re-running against a half-seeded env picks up where a previous run
@@ -24,6 +25,7 @@
  *   npm run bootstrap
  */
 /* eslint-disable no-console */
+/* global fetch, RequestInit, Response */
 import { createClient, type PlainClientAPI } from 'contentful-management';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -41,6 +43,7 @@ import {
   dataAssemblies,
   dataAssemblyComponentLinks,
   experience,
+  personalization,
   type AssetFixture,
   type EntryFixture,
   type ContentTypeFixture,
@@ -49,6 +52,7 @@ import {
   type DataAssemblyFixture,
   type DesignTokenFixture,
   type ExperienceFixture,
+  type ExperiencePersonalizationFixture,
   type ExperienceNode,
   type TempId,
 } from './fixture/index.js';
@@ -146,6 +150,17 @@ async function cmaFetch(path: string, init: RequestInit = {}): Promise<Response>
       ...(init.headers ?? {}),
     },
   });
+}
+
+async function cmaJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await cmaFetch(path, init);
+  if (!response.ok) {
+    throw new Error(
+      `${init.method ?? 'GET'} ${path} failed (${response.status}): ${await response.text()}`
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
 }
 
 // --- Resource seeders --------------------------------------------------------
@@ -633,13 +648,108 @@ async function seedExperience(fixture: ExperienceFixture) {
   if (isPublished) {
     log(`  ✓ Experience "${fixture.id}" already published`);
   } else {
-    await cma.experience.publish(
-      { experienceId: upserted.sys.id, version: upserted.sys.version },
-      { add: ['en-US'] }
-    );
+    await cma.experience.publish({
+      experienceId: upserted.sys.id,
+      version: upserted.sys.version,
+    });
     log(`  ✓ Experience "${fixture.id}" published`);
   }
   return experienceId;
+}
+
+type OptimizationVariant = {
+  sys: {
+    variant: string;
+    version: number;
+    publishedVersion?: number;
+  };
+  name: string;
+};
+
+function createPersonalizedSlots(
+  slots: Record<string, unknown[]>,
+  fixture: ExperiencePersonalizationFixture
+): Record<string, unknown[]> {
+  const clone = JSON.parse(JSON.stringify(slots)) as Record<string, unknown[]>;
+  let replaced = false;
+
+  const visit = (nodes: unknown[]) => {
+    for (const value of nodes) {
+      const node = value as Record<string, unknown>;
+      if (node.id === fixture.targetNodeId) {
+        const bindings = node.contentBindings as
+          { parameters?: Record<string, unknown> } | undefined;
+        if (!bindings?.parameters?.[fixture.bindingParameterId]) {
+          throw new Error(
+            `Node "${fixture.targetNodeId}" has no "${fixture.bindingParameterId}" binding`
+          );
+        }
+        bindings.parameters[fixture.bindingParameterId] = {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Entry',
+            urn: entryUrn(resolveId(fixture.entry.tempId)),
+          },
+        };
+        replaced = true;
+      }
+      for (const children of Object.values((node.slots as Record<string, unknown[]>) ?? {})) {
+        visit(children);
+      }
+    }
+  };
+
+  for (const nodes of Object.values(clone)) visit(nodes);
+  if (!replaced) {
+    throw new Error(`Could not find node "${fixture.targetNodeId}" in the base Experience`);
+  }
+  return clone;
+}
+
+async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture) {
+  const base = await cma.experience.get({ experienceId: fixture.experienceId });
+  const path = `/experiences/${fixture.experienceId}/optimization_variants`;
+  const collection = await cmaJson<{ items: OptimizationVariant[] }>(path);
+  const existing = collection.items.find(
+    (item) => item.sys.variant !== 'default' && item.name === fixture.variant.name
+  );
+  const variantBody = {
+    name: fixture.variant.name,
+    description: fixture.variant.description,
+    viewports: base.viewports,
+    designProperties: base.designProperties ?? {},
+    contentBindings: base.contentBindings,
+    metadata: base.metadata ?? { tags: [], concepts: [] },
+    slots: createPersonalizedSlots((base.slots ?? {}) as Record<string, unknown[]>, fixture),
+  };
+
+  const variant = existing
+    ? await cmaJson<OptimizationVariant>(`${path}/${existing.sys.variant}`, {
+        method: 'PUT',
+        headers: { 'X-Contentful-Version': String(existing.sys.version) },
+        // The update endpoint rejects experienceTemplate as an unrecognized
+        // key. A variant's template is immutable after creation.
+        body: JSON.stringify(variantBody),
+      })
+    : await cmaJson<OptimizationVariant>(path, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...variantBody,
+          // Required by the create endpoint only.
+          experienceTemplate: base.sys.experienceTemplate,
+        }),
+      });
+  log(`  ✓ Optimization Variant "${fixture.variant.name}" ${existing ? 'updated' : 'created'}`);
+
+  if (variant.sys.publishedVersion !== variant.sys.version) {
+    await cmaJson(`${path}/${variant.sys.variant}/published`, {
+      method: 'PUT',
+      headers: { 'X-Contentful-Version': String(variant.sys.version) },
+    });
+    log(`  ✓ Optimization Variant "${fixture.variant.name}" published`);
+  } else {
+    log(`  ✓ Optimization Variant "${fixture.variant.name}" already published`);
+  }
 }
 
 // --- Orchestrator ------------------------------------------------------------
@@ -655,6 +765,7 @@ async function main() {
 
   step('Step 3/9 — Entries');
   for (const e of entries) await seedEntry(e);
+  await seedEntry(personalization.entry);
 
   step('Step 4/9 — Design tokens');
   for (const t of designTokens) await seedDesignToken(t);
@@ -673,6 +784,7 @@ async function main() {
 
   step('Step 9/9 — Experience');
   const experienceId = await seedExperience(experience);
+  await seedOptimizationVariant(personalization);
 
   log(`\n✅ Done.\n`);
   log(`   Experience id: ${experienceId}`);

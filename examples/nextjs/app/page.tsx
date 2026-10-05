@@ -34,6 +34,15 @@ export default function HomePage() {
         </Link>
       </p>
 
+      <p>
+        <Link
+          href="/landing?personalization=true&utm_campaign=developers&debug=true"
+          style={{ ...linkStyle, background: '#0f766e' }}
+        >
+          View the personalized developer experience
+        </Link>
+      </p>
+
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
         <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
         default. Replace it in the URL with any other Experience id from your space. Append{' '}

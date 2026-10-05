@@ -14,6 +14,14 @@
       View the demo experience
     </a>
   </p>
+  <p>
+    <a
+      href="/landing?personalization=true&utm_campaign=developers&debug=true"
+      style="display: inline-block; padding: 10px 16px; border-radius: 8px; background: #0f766e; color: #ffffff; text-decoration: none; font-weight: 500;"
+    >
+      View the personalized developer experience
+    </a>
+  </p>
   <p style="color: #9ca3af; font-size: 13px; margin-top: 24px; margin-bottom: 0;">
     <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
     default. Replace it in the URL with any other Experience id from your space. Append
