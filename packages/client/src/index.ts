@@ -18,6 +18,13 @@ export type { RuntimeOptimizationConfig } from './create-optimization-client.js'
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { fetchExperience } from './fetch-experience.js';
+export { fetchDestinationSitemap } from './fetch-destination-sitemap.js';
+export type {
+  FetchDestinationSitemapOptions,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
+  DestinationSitemapResult,
+} from './fetch-destination-sitemap.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   ContentfulExperiencesConfig,
