@@ -44,9 +44,7 @@ export function resolveDeliveryClient(
 
   const { accessToken, previewToken, preview, host } = clientOptions;
   if (preview && !previewToken) {
-    throw new Error(
-      `${callerName}() called with preview: true but no previewToken was provided`
-    );
+    throw new Error(`${callerName}() called with preview: true but no previewToken was provided`);
   }
   const resolvedHost = host ?? (preview ? PREVIEW_HOST : undefined);
   const client = createClient({
