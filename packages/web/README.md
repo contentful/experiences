@@ -140,6 +140,63 @@ user-agent data with the providers above before triggering events.
 There is no browser event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same runtime.
 
+## Interaction tracking
+
+> **Experimental.** `startInteractionTracking()` and its option and session types
+> may change or be removed without a major version bump. It is a lower layer for a
+> planned configured root that will start tracking and supply attribution itself.
+
+The runtime can track views, hovers, and clicks on rendered Experiences and
+Fragments automatically. Mark the outermost element of each tracked Experience or
+Fragment with its node id, then start a tracking session with a lookup from node
+id to attribution:
+
+```tsx
+import { getTrackingAttributes } from '@contentful/experiences-web/tracking-attributes';
+
+function Hero({ nodeId, title }) {
+  return <section {...getTrackingAttributes(nodeId)}>{title}</section>;
+}
+```
+
+```ts
+const session = experiences.startInteractionTracking({
+  resolveAttribution: (nodeId) => attributions[nodeId],
+});
+
+// After the data behind `attributions` changes, e.g. a new plan:
+session.refresh();
+
+// Before teardown (unmount, route change): sends the final events for
+// in-progress views and hovers, then stops.
+await session.stop();
+```
+
+- **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
+  Fragments only. Nothing else is tracked: a lookup result with any other
+  `entityKind`, such as an inline Fragment or Component, is ignored.
+- A view counts after one second with any part of the element visible. A hover
+  counts after one second. Each is reported when it qualifies and again with
+  its final duration, under the same `viewId` or `hoverId`.
+- A click counts on links, buttons, form controls, `[role="button"]`,
+  `[role="link"]`, and elements with an `onclick` handler. It is attributed to the
+  nearest tracked element. Add `data-ctfl-clickable="true"`
+  (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
+- Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
+  profile and wait for a pending event handoff like any other call. A rejected
+  call is logged as a warning and does not stop tracking.
+- The attribute carries only the node id. Attribution never goes into the DOM.
+- A node without an id cannot be tracked.
+- `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
+  so server-rendered components can import it.
+- `startInteractionTracking` does nothing outside a browser. One session runs per
+  runtime at a time. `stop()` frees it immediately, so a new session can start
+  from a React effect whose cleanup cannot await; the stopped session finishes
+  sending its final events in the background.
+
+See the [rendering-modes ADR](../../docs/ADRs/2026-09-30-interaction-tracking-across-rendering-modes.md)
+for where the attribution lookup comes from under SSR, CSR, and Server Components.
+
 ## Server event handoff
 
 Pass a request's Node-produced `eventHandoff` to the Web runtime to commit its
@@ -190,8 +247,11 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No event persistence, offline queues, beacon/lifecycle
-  delivery, consent gating, or automatic event tracking.
+- No event persistence, offline queues, beacon/lifecycle delivery, or consent
+  gating. Automatic interaction tracking sends through the ordinary event
+  methods, so it has the same limits.
+- No framework adapter marks tracked elements yet; components do it with
+  `getTrackingAttributes`.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.
 
 ## Architecture boundary

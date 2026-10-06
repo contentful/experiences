@@ -34,3 +34,19 @@ describe('Web public entry on the server', () => {
     expect(runtime.profile).toBeUndefined();
   });
 });
+
+describe('Web interaction tracking on the server', () => {
+  it('starts and stops as a no-op without a DOM', async () => {
+    const { ContentfulExperiences } = await import('./index.js');
+    const runtime = new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      resolverConfig: { components: {} },
+      delivery: { accessToken: 'delivery-token' },
+    });
+
+    const session = runtime.startInteractionTracking({ resolveAttribution: () => undefined });
+    session.refresh();
+    await expect(session.stop()).resolves.toBeUndefined();
+  });
+});

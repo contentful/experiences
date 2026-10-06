@@ -3,7 +3,11 @@ export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   BrowserEventContextProviders,
   ExperiencesWebConfig,
+  InteractionTrackingSession,
+  InteractionTrackingStartOptions,
 } from './contentful-experiences.js';
+export type { TrackedEntityKind, TrackingAttribution } from './tracking/attribution.js';
+export type { ElementViewObserverOptions as ViewTrackingOptions } from './tracking/view/element-view-observer-support.js';
 export { EXPERIENCES_WEB_SDK_NAME, EXPERIENCES_WEB_SDK_VERSION } from './sdk-info.js';
 
 export {
