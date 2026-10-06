@@ -1,3 +1,18 @@
+## 0.3.0 (2026-10-06)
+
+### 🚀 Features
+
+- ⚠️  add web interaction tracking ([#212](https://github.com/contentful/experiences/pull/212))
+
+### ⚠️  Breaking Changes
+
+- add web interaction tracking  ([#212](https://github.com/contentful/experiences/pull/212))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.8.0
+- Updated core to 0.11.0
+
 ## 0.2.1 (2026-10-01)
 
 ### 🚀 Features
