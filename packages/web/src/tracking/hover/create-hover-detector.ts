@@ -17,6 +17,8 @@ export function createHoverDetector(
   return createTimedDetector<ElementHoverCallbackInfo>({
     resolveAttribution,
     isEligible: isFragment,
+    sessionId: (info) => info.hoverId,
+    isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementHoverObserver(callback),
     track: async (attribution, info) => {
       await trackHover({

@@ -22,6 +22,8 @@ export function createViewDetector(
     resolveAttribution,
     isSupported: () => typeof IntersectionObserver !== 'undefined',
     isEligible: () => true,
+    sessionId: (info) => info.viewId,
+    isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementViewObserver(callback, options),
     track: async (attribution, info) => {
       await trackView({

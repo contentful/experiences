@@ -13,6 +13,8 @@ interface CreateTimedDetectorOptions<TInfo> {
   resolveAttribution: ResolveElementAttribution;
   isSupported?: () => boolean;
   isEligible: (attribution: TrackingAttribution) => boolean;
+  sessionId: (info: TInfo) => string;
+  isFinal: (info: TInfo) => boolean;
   createObserver: (callback: (element: Element, info: TInfo) => Promise<void>) => TimedObserver;
   track: (attribution: TrackingAttribution, info: TInfo) => Promise<void>;
 }
@@ -21,14 +23,28 @@ export function createTimedDetector<TInfo>({
   resolveAttribution,
   isSupported = () => true,
   isEligible,
+  sessionId,
+  isFinal,
   createObserver,
   track,
 }: CreateTimedDetectorOptions<TInfo>): InteractionDetector {
   const elements = new Set<Element>();
   let observer: TimedObserver | undefined;
 
+  const attributionBySession = new Map<string, TrackingAttribution>();
+
   const callback = async (element: Element, info: TInfo): Promise<void> => {
-    const attribution = resolveAttribution(element);
+    const id = sessionId(info);
+    let attribution: TrackingAttribution | undefined;
+
+    if (isFinal(info)) {
+      attribution = attributionBySession.get(id) ?? resolveAttribution(element);
+      attributionBySession.delete(id);
+    } else {
+      attribution = resolveAttribution(element);
+      if (attribution) attributionBySession.set(id, attribution);
+    }
+
     if (!attribution || !isEligible(attribution)) return;
     await track(attribution, info);
   };

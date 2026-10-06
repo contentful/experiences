@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   advance,
+  deferred,
   installIOPolyfill,
   makeElement,
   setDocumentVisibility,
@@ -126,6 +127,42 @@ describe('createViewDetector', () => {
       expect.objectContaining({ message: 'no profile' })
     );
   });
+
+  it('keeps the final event attributed to the entity that qualified, even when a slow send delays it past a refresh()', async () => {
+    const io = installIOPolyfill();
+    const qualifying = deferred<boolean>();
+    const trackView = vi
+      .fn()
+      .mockImplementationOnce(() => qualifying.promise)
+      .mockResolvedValue(true);
+    const element = makeElement();
+    const attributions = new Map([[element, { ...FRAGMENT, entityId: 'A' }]]);
+    const detector = createViewDetector(trackView, lookup(attributions));
+    detector.onElementAdded(element);
+    detector.start();
+
+    // A becomes visible and qualifies; its send stays pending.
+    io.getLast().trigger(element, true);
+    await advance(1000);
+    expect(trackView).toHaveBeenCalledTimes(1);
+
+    // A leaves view; the final callback queues behind the pending send.
+    io.getLast().trigger(element, false);
+    await advance(0);
+
+    // The same element now resolves to a different entity, as `refresh()`
+    // would apply after re-resolving attribution for the same DOM.
+    attributions.set(element, { ...FRAGMENT, entityId: 'B' });
+
+    // The qualifying send completes, letting the queued final callback run.
+    qualifying.resolve(true);
+    await advance(0);
+
+    expect(trackView).toHaveBeenCalledTimes(2);
+    const [first, second] = trackView.mock.calls.map(([args]) => args);
+    expect(first).toMatchObject({ entityId: 'A' });
+    expect(second).toMatchObject({ entityId: 'A', viewId: first.viewId });
+  });
 });
 
 describe('createHoverDetector', () => {
@@ -165,6 +202,36 @@ describe('createHoverDetector', () => {
     await hover(element, 1500);
 
     expect(trackHover).not.toHaveBeenCalled();
+  });
+
+  it('keeps the final event attributed to the entity that qualified, even when a slow send delays it past a refresh()', async () => {
+    const qualifying = deferred<boolean>();
+    const trackHover = vi
+      .fn()
+      .mockImplementationOnce(() => qualifying.promise)
+      .mockResolvedValue(true);
+    const element = makeElement();
+    const attributions = new Map([[element, { ...FRAGMENT, entityId: 'A' }]]);
+    const detector = createHoverDetector(trackHover, lookup(attributions));
+    detector.onElementAdded(element);
+    detector.start();
+
+    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await advance(1000);
+    expect(trackHover).toHaveBeenCalledTimes(1);
+
+    element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    await advance(0);
+
+    attributions.set(element, { ...FRAGMENT, entityId: 'B' });
+
+    qualifying.resolve(true);
+    await advance(0);
+
+    expect(trackHover).toHaveBeenCalledTimes(2);
+    const [first, second] = trackHover.mock.calls.map(([args]) => args);
+    expect(first).toMatchObject({ entityId: 'A' });
+    expect(second).toMatchObject({ entityId: 'A', hoverId: first.hoverId });
   });
 });
 
