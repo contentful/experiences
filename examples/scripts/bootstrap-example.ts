@@ -527,6 +527,8 @@ async function linkDataAssembliesToComponents() {
 }
 
 // Walk fixture nodes and swap tempIds for real ids in contentBindings.
+// Parameter bindings use the canonical `{ $literal: ResourceLink }` notation;
+// the bare ResourceLink form is deprecated.
 function resolveNode(node: ExperienceNode): unknown {
   const out: Record<string, unknown> = {
     id: node.id,
@@ -549,10 +551,12 @@ function resolveNode(node: ExperienceNode): unknown {
     const parameters: Record<string, unknown> = {};
     for (const [pid, ref] of Object.entries(node.contentBindings.parameters)) {
       parameters[pid] = {
-        sys: {
-          type: 'ResourceLink',
-          linkType: 'Contentful:Entry',
-          urn: entryUrn(resolveId(ref.$entryTempId)),
+        $literal: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Entry',
+            urn: entryUrn(resolveId(ref.$entryTempId)),
+          },
         },
       };
     }
