@@ -5,6 +5,7 @@
  * viewport (see `resolveExperience` below).
  */
 
+import { resolveAttribution } from './attribution.js';
 import { createDebugLogger, type DebugLogger } from './debug-logger.js';
 import type {
   DesignPropValue,
@@ -81,8 +82,12 @@ export interface ResolveExperienceOptions {
    * viewport. Defaults to viewport[0] when unset or unknown.
    */
   initialViewportId?: string;
-  /** Carried onto the plan as-is. Omit for no source map. */
-  sourceMap?: ExperienceSourceMap;
+  /**
+   * Source map carried onto the plan. An explicit map wins over
+   * `payload.extensions.sourceMap`; `null` means "no map" and ignores the
+   * payload's. Omit to use the payload's map, if it carries one.
+   */
+  sourceMap?: ExperienceSourceMap | null;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -503,7 +508,14 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
-  if (options.sourceMap !== undefined) plan.sourceMap = options.sourceMap;
+  // `??` can't express this: an explicit `null` must beat the payload's map.
+  const payloadSourceMap = isPlainPayload ? payload.extensions?.sourceMap : undefined;
+  const sourceMap = options.sourceMap === undefined ? payloadSourceMap : options.sourceMap;
+  if (sourceMap) {
+    plan.sourceMap = sourceMap;
+    const attribution = resolveAttribution(sourceMap, nodes, log);
+    if (attribution) plan.attribution = attribution;
+  }
   const profileId = isPlainPayload && payload.extensions?.personalization?.profile?.id;
   if (profileId) {
     plan.personalization = { profileId };
