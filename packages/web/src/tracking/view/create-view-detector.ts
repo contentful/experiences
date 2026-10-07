@@ -21,7 +21,6 @@ export function createViewDetector(
   return createTimedDetector<ElementViewCallbackInfo>({
     resolveAttribution,
     isSupported: () => typeof IntersectionObserver !== 'undefined',
-    isEligible: () => true,
     isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementViewObserver(callback, options),
     track: async (attribution, info) => {

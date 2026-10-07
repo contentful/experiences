@@ -19,7 +19,6 @@ import {
   clearFireTimer,
   createElementRef,
   derefElement,
-  firstLiveMember,
   type Interval,
   isPageVisible,
   NOW,
@@ -40,20 +39,11 @@ export interface ElementHoverCallbackInfo {
   readonly hoverId: string;
   /** `1` when the hover first qualifies (dwell reached), `2` when it ends. */
   readonly attempts: number;
-  readonly data?: unknown;
 }
 
-export type ElementHoverCallback = (
-  element: Element,
-  info: ElementHoverCallbackInfo
-) => void | Promise<void>;
-
-export interface ElementHoverElementOptions {
-  readonly data?: unknown;
-}
+export type ElementHoverCallback = (info: ElementHoverCallbackInfo) => void | Promise<void>;
 
 interface ElementState extends WeakRefState {
-  data?: unknown;
   done: boolean;
   isHovered: boolean;
   enterHandler: (event: Event) => void;
@@ -69,7 +59,6 @@ interface HoverSession {
   fireTimer: Timer | null;
   hoverId: string | null;
   hoverSince: number | null;
-  isHovered: boolean;
 }
 
 const createHoverId = (): string => crypto.randomUUID();
@@ -96,7 +85,6 @@ export class ElementHoverObserver {
     fireTimer: null,
     hoverId: null,
     hoverSince: null,
-    isHovered: false,
   };
   private cleanupVisibilityListener?: () => void;
   private sweepInterval: Interval | null = null;
@@ -107,19 +95,14 @@ export class ElementHoverObserver {
     );
   }
 
-  observe(element: Element, options?: ElementHoverElementOptions): void {
-    const state = this.states.get(element);
+  observe(element: Element): void {
+    if (this.states.has(element)) return;
 
-    if (!state) {
-      const nextState = this.createState(element, options);
-      this.states.set(element, nextState);
-      this.activeStates.add(nextState);
-      ElementHoverObserver.attachHoverListeners(element, nextState);
-      this.ensureSweeper();
-      return;
-    }
-
-    state.data = options?.data;
+    const state = this.createState(element);
+    this.states.set(element, state);
+    this.activeStates.add(state);
+    ElementHoverObserver.attachHoverListeners(element, state);
+    this.ensureSweeper();
   }
 
   /** Stops observing `element` without emitting a final callback — see `endActive`. */
@@ -166,10 +149,9 @@ export class ElementHoverObserver {
     await Promise.all(this.pendingCallbacks);
   }
 
-  private createState(element: Element, options?: ElementHoverElementOptions): ElementState {
+  private createState(element: Element): ElementState {
     const state: ElementState = {
       ...createElementRef(element),
-      data: options?.data,
       done: false,
       isHovered: false,
       enterHandler: () => undefined,
@@ -214,9 +196,8 @@ export class ElementHoverObserver {
     state.isHovered = true;
     const { session } = this;
     // A second member entered while the hover is already running.
-    if (session.isHovered) return;
+    if (session.hoverId !== null) return;
 
-    session.isHovered = true;
     session.accumulatedMs = 0;
     session.attempts = 0;
     session.hoverId = createHoverId();
@@ -268,7 +249,6 @@ export class ElementHoverObserver {
 
   private resetHoverCycle(): void {
     const { session } = this;
-    session.isHovered = false;
     session.accumulatedMs = 0;
     session.hoverSince = null;
     session.attempts = 0;
@@ -281,7 +261,6 @@ export class ElementHoverObserver {
     if (
       session.done ||
       session.fireTimer !== null ||
-      !session.isHovered ||
       !isPageVisible() ||
       session.hoverId === null
     ) {
@@ -291,7 +270,6 @@ export class ElementHoverObserver {
     session.fireTimer = setTimeout(() => {
       if (
         session.done ||
-        !session.isHovered ||
         !isPageVisible() ||
         session.hoverSince === null ||
         session.hoverId === null
@@ -306,12 +284,7 @@ export class ElementHoverObserver {
 
   private qualify(now: number): void {
     const { session } = this;
-    if (
-      session.done ||
-      !session.isHovered ||
-      session.hoverId === null ||
-      session.hoverSince === null
-    ) {
+    if (session.done || session.hoverId === null || session.hoverSince === null) {
       return;
     }
 
@@ -323,7 +296,7 @@ export class ElementHoverObserver {
 
   private endHoverCycle(now: number): void {
     const { session } = this;
-    if (session.done || !session.isHovered || session.hoverId === null) return;
+    if (session.done || session.hoverId === null) return;
 
     if (session.hoverSince !== null) {
       session.accumulatedMs = Math.max(session.accumulatedMs, now - session.hoverSince);
@@ -344,14 +317,11 @@ export class ElementHoverObserver {
     totalHoverMs: number,
     attempts: number
   ): Promise<void> {
-    const member = firstLiveMember(this.activeStates);
-    const element = member && derefElement(member);
-    if (!member || !element) return;
+    if (this.activeStates.size === 0) return;
 
-    const { data } = member;
     const invoke = (): Promise<void> =>
       safeCallAsync(
-        () => this.callback(element, { totalHoverMs, hoverId, attempts, data }),
+        () => this.callback({ totalHoverMs, hoverId, attempts }),
         (error) => {
           console.error('[@contentful/experiences] Error in element hover callback:', error);
         }

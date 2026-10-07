@@ -10,6 +10,8 @@ import {
   setDocumentVisibility,
 } from '../test-fixtures/dom.js';
 
+import { TRACKING_SCOPES_ATTRIBUTE } from '../tracking-attributes.js';
+
 import type { TrackingAttribution } from './attribution.js';
 import { createClickDetector } from './click/create-click-detector.js';
 import { createHoverDetector } from './hover/create-hover-detector.js';
@@ -251,7 +253,10 @@ describe('createClickDetector', () => {
   const setup = (entries: [Element, TrackingAttribution][]) => {
     const trackClick = vi.fn().mockResolvedValue(true);
     const detector = createClickDetector(trackClick, lookup(new Map(entries)));
-    for (const [element] of entries) detector.onElementAdded(element, keyOf(element));
+    for (const [element] of entries) {
+      element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, keyOf(element));
+      detector.onElementAdded(element, keyOf(element));
+    }
     detector.start();
     return { trackClick, detector };
   };
@@ -396,6 +401,26 @@ describe('createClickDetector', () => {
     click(button);
 
     expect(trackClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps tracking an element handed over under two keys until both are removed', () => {
+    const fragment = makeElement();
+    const button = document.createElement('button');
+    fragment.append(button);
+    fragment.setAttribute(TRACKING_SCOPES_ATTRIBUTE, 'outer inner');
+    const trackClick = vi.fn().mockResolvedValue(true);
+    const detector = createClickDetector(trackClick, (key) => ({ ...FRAGMENT, entityId: key }));
+    detector.onElementAdded(fragment, 'outer');
+    detector.onElementAdded(fragment, 'inner');
+    detector.start();
+
+    detector.onElementRemoved(fragment, 'outer');
+    click(button);
+    expect(trackClick).toHaveBeenCalledTimes(1);
+
+    detector.onElementRemoved(fragment, 'inner');
+    click(button);
+    expect(trackClick).toHaveBeenCalledTimes(1);
   });
 
   it('stops attributing removed elements and listening after stop', () => {

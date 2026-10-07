@@ -1,6 +1,9 @@
 import type { ClickBuilderArgs } from '@contentful/experiences-client';
 
-import { TRACKING_CLICKABLE_ATTRIBUTE } from '../../tracking-attributes.js';
+import {
+  TRACKING_CLICKABLE_ATTRIBUTE,
+  TRACKING_SCOPES_ATTRIBUTE,
+} from '../../tracking-attributes.js';
 import {
   type InteractionDetector,
   isFragment,
@@ -34,8 +37,12 @@ export function createClickDetector(
   trackClick: (args: ClickBuilderArgs) => Promise<unknown>,
   resolveAttribution: ResolveScopeAttribution
 ): InteractionDetector {
-  /** Each tracked element with the scope occurrence keys it roots, outer to inner. */
-  const trackedElements = new Map<Element, Set<string>>();
+  /**
+   * Each tracked element with how many scope occurrence keys it was handed over
+   * under. The keys themselves are read from the element's attribute at click
+   * time: re-adding a key after a refresh must not change their outer-to-inner order.
+   */
+  const trackedElements = new Map<Element, number>();
   let listening = false;
 
   /** The nearest tracked element on the path, and whether the path is clickable. */
@@ -72,7 +79,8 @@ export function createClickDetector(
     // Clicks go to the innermost Fragment occurrence the nearest tracked element
     // roots; an Experience is view-only.
     let attribution: ReturnType<ResolveScopeAttribution>;
-    for (const key of trackedElements.get(trackedElement) ?? []) {
+    const keys = trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '';
+    for (const key of keys.split(/\s+/).filter(Boolean)) {
       const candidate = resolveAttribution(key);
       if (candidate && isFragment(candidate)) attribution = candidate;
     }
@@ -95,15 +103,14 @@ export function createClickDetector(
       listening = false;
       trackedElements.clear();
     },
-    onElementAdded(element, key) {
-      const keys = trackedElements.get(element) ?? new Set<string>();
-      keys.add(key);
-      trackedElements.set(element, keys);
+    onElementAdded(element) {
+      trackedElements.set(element, (trackedElements.get(element) ?? 0) + 1);
     },
-    onElementRemoved(element, key) {
-      const keys = trackedElements.get(element);
-      keys?.delete(key);
-      if (keys?.size === 0) trackedElements.delete(element);
+    onElementRemoved(element) {
+      const count = trackedElements.get(element);
+      if (count === undefined) return;
+      if (count > 1) trackedElements.set(element, count - 1);
+      else trackedElements.delete(element);
     },
   };
 }

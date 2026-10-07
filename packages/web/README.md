@@ -180,8 +180,8 @@ packages re-export it, and so does
 `@contentful/experiences-web/tracking-attributes`.
 
 - **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
-  Fragments only. Nothing else is tracked: a lookup result with any other
-  `entityKind`, such as an inline Fragment or Component, is ignored.
+  Fragments only. Nothing else is tracked: as a defensive runtime check, a
+  lookup result with any other `entityKind` is ignored.
 - Elements are grouped by scope occurrence. A Fragment rendered as several root
   elements is one view, hover, and click series. Two copies of the same Fragment
   are two, as long as something separates them: XDA gives both copies the same

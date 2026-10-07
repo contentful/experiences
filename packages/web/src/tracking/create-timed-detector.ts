@@ -12,7 +12,8 @@ interface TimedObserver {
 interface CreateTimedDetectorOptions<TInfo> {
   resolveAttribution: ResolveScopeAttribution;
   isSupported?: () => boolean;
-  isEligible: (attribution: TrackingAttribution) => boolean;
+  /** Defaults to every attribution being eligible. */
+  isEligible?: (attribution: TrackingAttribution) => boolean;
   /** Whether this callback ends the session its earlier callback started. */
   isFinal: (info: TInfo) => boolean;
   /**
@@ -20,7 +21,7 @@ interface CreateTimedDetectorOptions<TInfo> {
    * as a single session, so an occurrence spread over several elements reports
    * one series rather than one per element.
    */
-  createObserver: (callback: (element: Element, info: TInfo) => Promise<void>) => TimedObserver;
+  createObserver: (callback: (info: TInfo) => Promise<void>) => TimedObserver;
   track: (attribution: TrackingAttribution, info: TInfo) => Promise<void>;
 }
 
@@ -32,7 +33,7 @@ interface Group {
 export function createTimedDetector<TInfo>({
   resolveAttribution,
   isSupported = () => true,
-  isEligible,
+  isEligible = () => true,
   isFinal,
   createObserver,
   track,
@@ -45,7 +46,7 @@ export function createTimedDetector<TInfo>({
     // Its final event keeps the attribution that qualified it: a slow send can
     // delay the final past a `refresh()` that re-points this key.
     let qualified: TrackingAttribution | undefined;
-    const observer = createObserver(async (_element, info) => {
+    const observer = createObserver(async (info) => {
       let attribution: TrackingAttribution | undefined;
       if (isFinal(info)) {
         attribution = qualified ?? resolveAttribution(key);

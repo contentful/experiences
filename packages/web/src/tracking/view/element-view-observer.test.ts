@@ -13,10 +13,10 @@ import {
 import type { ElementViewCallbackInfo } from './element-view-observer-support.js';
 import { ElementViewObserver } from './element-view-observer.js';
 
-type Callback = (element: Element, info: ElementViewCallbackInfo) => Promise<void>;
+type Callback = (info: ElementViewCallbackInfo) => Promise<void>;
 
 const infoAt = (cb: ReturnType<typeof vi.fn<Callback>>, index: number): ElementViewCallbackInfo => {
-  const info = cb.mock.calls[index]?.[1];
+  const info = cb.mock.calls[index]?.[0];
   if (!info) throw new Error(`No callback at index ${index}`);
   return info;
 };
@@ -138,7 +138,6 @@ describe('ElementViewObserver', () => {
     await advance(1000);
 
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb.mock.calls[0]?.[0]).toBe(onScreen);
     expect(infoAt(cb, 0).totalVisibleMs).toBe(1000);
   });
 
@@ -162,17 +161,6 @@ describe('ElementViewObserver', () => {
 
     expect(cb).toHaveBeenCalledTimes(3);
     expect(infoAt(cb, 2).viewId).not.toBe(infoAt(cb, 0).viewId);
-  });
-
-  it('passes per-element data to the callback', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element, { data: { id: 'hero' } });
-
-    io.getLast().trigger(element, true);
-    await advance(1000);
-
-    expect(infoAt(cb, 0).data).toEqual({ id: 'hero' });
   });
 
   it('serializes the final callback after an in-flight start callback', async () => {
@@ -267,7 +255,6 @@ describe('ElementViewObserver', () => {
     await Promise.all([observer.endActive(), observer.endActive()]);
 
     expect(cb).toHaveBeenCalledTimes(2);
-    expect(cb.mock.calls.every(([target]) => target === qualified)).toBe(true);
     expect(infoAt(cb, 1).totalVisibleMs).toBe(2250);
   });
 
@@ -289,7 +276,6 @@ describe('ElementViewObserver', () => {
       await advance(1000);
 
       expect(cb).toHaveBeenCalledTimes(1);
-      expect(cb.mock.calls[0]?.[0]).toBe(wrapper);
     });
 
     it('measures visibility virtually when there are several rendered children', async () => {
@@ -310,7 +296,6 @@ describe('ElementViewObserver', () => {
       await advance(1020);
 
       expect(cb).toHaveBeenCalledTimes(1);
-      expect(cb.mock.calls[0]?.[0]).toBe(wrapper);
     });
 
     it('treats virtual contents as not visible where Range client rects are unavailable', async () => {
@@ -372,21 +357,19 @@ describe('ElementViewObserver', () => {
       });
     });
 
-    it('reports one view, through the first member, when several are visible at once', async () => {
+    it('reports one view when several are visible at once', async () => {
       const a = makeElement();
       const b = makeElement();
       const cb = vi.fn<Callback>().mockResolvedValue(undefined);
       const observer = shared(cb);
-      observer.observe(a, { data: 'a' });
-      observer.observe(b, { data: 'b' });
+      observer.observe(a);
+      observer.observe(b);
 
       io.getLast().trigger(a, true);
       io.getLast().trigger(b, true);
       await advance(1000);
 
       expect(cb).toHaveBeenCalledTimes(1);
-      expect(cb.mock.calls[0]?.[0]).toBe(a);
-      expect(infoAt(cb, 0).data).toBe('a');
     });
 
     it('endActive flushes the shared view once', async () => {
@@ -422,7 +405,6 @@ describe('ElementViewObserver', () => {
       await advance(500);
 
       expect(cb).toHaveBeenCalledTimes(1);
-      expect(cb.mock.calls[0]?.[0]).toBe(b);
     });
 
     it('ends a qualified view when the last visible member is unobserved but others remain', async () => {

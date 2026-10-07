@@ -2,8 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createInteractionTracking, TRACKING_SCOPES_ATTRIBUTE } from './interaction-tracking.js';
+import { createInteractionTracking } from './interaction-tracking.js';
 import { installIOPolyfill } from './test-fixtures/dom.js';
+import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
 
 import type { TrackingAttribution } from './tracking/attribution.js';
 
@@ -537,6 +538,24 @@ describe('createInteractionTracking — scope occurrences', () => {
     });
 
     click(button);
+
+    expect(events.trackClick).toHaveBeenCalledTimes(1);
+    expect(events.trackClick.mock.calls[0]![0].entityId).toBe('inner');
+    tracking.destroy();
+  });
+
+  it('keeps sending clicks to the innermost Fragment after refresh re-points an outer key', async () => {
+    const element = rooting('outer inner', 'button');
+    document.body.append(element);
+    const attributions: Record<string, TrackingAttribution> = {
+      outer: { ...HERO, entityId: 'outer' },
+      inner: { ...HERO, entityId: 'inner' },
+    };
+    const { events, tracking } = await setup(attributions);
+
+    attributions.outer = { ...HERO, entityId: 'outer-b' };
+    tracking.refresh();
+    click(element);
 
     expect(events.trackClick).toHaveBeenCalledTimes(1);
     expect(events.trackClick.mock.calls[0]![0].entityId).toBe('inner');

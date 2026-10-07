@@ -34,8 +34,6 @@ import { type InteractionDetector, toInteractionArgs } from './tracking/interact
 import { createViewDetector } from './tracking/view/create-view-detector.js';
 import type { ElementViewObserverOptions } from './tracking/view/element-view-observer-support.js';
 
-export { TRACKING_SCOPES_ATTRIBUTE };
-
 const SELECTOR = `[${TRACKING_SCOPES_ATTRIBUTE}]`;
 
 export interface InteractionTrackingOptions {
@@ -82,9 +80,10 @@ export function createInteractionTracking(
 
   const root = options.root ?? document;
 
-  // The single path detectors read attribution through, so the entity-kind rule
-  // cannot be bypassed: anything other than an Experience or Fragment is treated
-  // as "nothing to track" and its key is never observed.
+  // The single path detectors read attribution through. Plan attribution is
+  // typed Experience | Fragment, so this is a defensive runtime check for
+  // lookups that return another kind: that is treated as "nothing to track" and
+  // its key is never observed.
   const resolveKeyAttribution = (key: string): TrackingAttribution | undefined => {
     const attribution = options.resolveAttribution(key);
     return isTrackedEntity(attribution) ? attribution : undefined;

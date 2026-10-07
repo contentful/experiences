@@ -23,8 +23,6 @@ import {
 import {
   addVisibilityChangeListener,
   clearFireTimer,
-  derefElement,
-  firstLiveMember,
   type Interval,
   isPageVisible,
   NOW,
@@ -38,7 +36,6 @@ import {
   type EffectiveObserverOptions,
   type ElementState,
   type ElementViewCallback,
-  type ElementViewElementOptions,
   type ElementViewObserverOptions,
   initElementViewObserverOptions,
 } from './element-view-observer-support.js';
@@ -53,7 +50,6 @@ interface ViewSession {
   callbackChain: Promise<void> | null;
   done: boolean;
   fireTimer: Timer | null;
-  lastKnownVisible: boolean;
   viewId: string | null;
   visibleSince: number | null;
 }
@@ -73,7 +69,6 @@ export class ElementViewObserver {
     callbackChain: null,
     done: false,
     fireTimer: null,
-    lastKnownVisible: false,
     viewId: null,
     visibleSince: null,
   };
@@ -100,16 +95,14 @@ export class ElementViewObserver {
     );
   }
 
-  observe(element: Element, options?: ElementViewElementOptions): void {
+  observe(element: Element): void {
     let state = this.states.get(element);
 
     if (!state) {
-      state = createElementState(element, options);
+      state = createElementState(element);
       this.states.set(element, state);
       this.activeStates.add(state);
       this.ensureSweeper();
-    } else if (options) {
-      state.data = options.data;
     }
 
     this.sourceController.apply(state, false);
@@ -199,7 +192,6 @@ export class ElementViewObserver {
 
   private onIntersecting(state: ElementState, now: number): void {
     state.lastKnownVisible = true;
-    this.session.lastKnownVisible = true;
     this.startVisibilitySession(now);
   }
 
@@ -210,7 +202,6 @@ export class ElementViewObserver {
     // The session stays in view while any other member is.
     if (this.hasVisibleMember()) return;
 
-    this.session.lastKnownVisible = false;
     this.endVisibilitySession(now);
   }
 
@@ -226,22 +217,19 @@ export class ElementViewObserver {
    * session silently; losing the last visible member ends it normally.
    */
   private releaseMember(state: ElementState): void {
-    const { session } = this;
     const wasVisible = state.lastKnownVisible;
     state.lastKnownVisible = false;
 
     if (this.activeStates.size === 0) {
       this.resetVisibilitySession();
-      session.lastKnownVisible = false;
     } else if (wasVisible && !this.hasVisibleMember()) {
-      session.lastKnownVisible = false;
       this.endVisibilitySession(NOW());
     }
   }
 
   private startVisibilitySession(now: number): void {
     const { session } = this;
-    if (session.done || !session.lastKnownVisible || !isPageVisible() || session.viewId !== null) {
+    if (session.done || !this.hasVisibleMember() || !isPageVisible() || session.viewId !== null) {
       return;
     }
 
@@ -267,7 +255,7 @@ export class ElementViewObserver {
     if (
       session.done ||
       session.fireTimer !== null ||
-      !session.lastKnownVisible ||
+      !this.hasVisibleMember() ||
       !isPageVisible() ||
       session.viewId === null
     ) {
@@ -277,7 +265,7 @@ export class ElementViewObserver {
     session.fireTimer = setTimeout(() => {
       if (
         session.done ||
-        !session.lastKnownVisible ||
+        !this.hasVisibleMember() ||
         !isPageVisible() ||
         session.visibleSince === null ||
         session.viewId === null
@@ -323,14 +311,11 @@ export class ElementViewObserver {
     totalVisibleMs: number,
     attempts: number
   ): Promise<void> {
-    const member = firstLiveMember(this.activeStates);
-    const element = member && derefElement(member);
-    if (!member || !element) return;
+    if (this.activeStates.size === 0) return;
 
-    const { data } = member;
     const invoke = (): Promise<void> =>
       safeCallAsync(
-        () => this.callback(element, { totalVisibleMs, viewId, attempts, data }),
+        () => this.callback({ totalVisibleMs, viewId, attempts }),
         (error) => {
           console.error('[@contentful/experiences] Error in element view callback:', error);
         }

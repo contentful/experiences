@@ -12,21 +12,13 @@ export interface ElementViewCallbackInfo {
   readonly viewId: string;
   /** `1` when the view first qualifies (dwell reached), `2` when it ends. */
   readonly attempts: number;
-  readonly data?: unknown;
 }
 
-export type ElementViewCallback = (
-  element: Element,
-  info: ElementViewCallbackInfo
-) => void | Promise<void>;
+export type ElementViewCallback = (info: ElementViewCallbackInfo) => void | Promise<void>;
 
 export interface ElementViewObserverOptions {
   readonly root?: Element | Document | null;
   readonly rootMargin?: string;
-}
-
-export interface ElementViewElementOptions {
-  readonly data?: unknown;
 }
 
 export type EffectiveObserverOptions = Required<ElementViewObserverOptions>;
@@ -43,7 +35,6 @@ export interface ElementState {
   strongRef: Element | null;
   source: ElementViewSource;
   target: Element | null;
-  data?: unknown;
   done: boolean;
   lastKnownVisible: boolean;
 }
@@ -55,14 +46,10 @@ export const initElementViewObserverOptions = (
   rootMargin: options?.rootMargin ?? '0px',
 });
 
-export const createElementState = (
-  element: Element,
-  elementOptions?: ElementViewElementOptions
-): ElementState => ({
+export const createElementState = (element: Element): ElementState => ({
   ...createElementRef(element),
   source: 'element',
   target: null,
-  data: elementOptions?.data,
   done: false,
   lastKnownVisible: false,
 });
