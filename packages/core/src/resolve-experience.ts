@@ -84,10 +84,10 @@ export interface ResolveExperienceOptions {
   initialViewportId?: string;
   /**
    * Source map carried onto the plan. An explicit map wins over
-   * `payload.extensions.sourceMap`; `null` means "no map" and ignores the
-   * payload's. Omit to use the payload's map, if it carries one.
+   * `payload.extensions.sourceMap`. Omit to use the payload's map, if it
+   * carries one.
    */
-  sourceMap?: ExperienceSourceMap | null;
+  sourceMap?: ExperienceSourceMap;
 }
 
 const DEFAULT_EXPERIENCE: ExperienceContext = {
@@ -508,9 +508,8 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
-  // `??` can't express this: an explicit `null` must beat the payload's map.
-  const payloadSourceMap = isPlainPayload ? payload.extensions?.sourceMap : undefined;
-  const sourceMap = options.sourceMap === undefined ? payloadSourceMap : options.sourceMap;
+  const sourceMap =
+    options.sourceMap ?? (isPlainPayload ? payload.extensions?.sourceMap : undefined);
   if (sourceMap) {
     plan.sourceMap = sourceMap;
     const attribution = resolveAttribution(sourceMap, nodes, log);

@@ -324,7 +324,6 @@ describe('fetchExperience', () => {
       expect(resolveExperience).toHaveBeenCalledWith(mockPayload, resolveOptions.config, {
         metadata: { slug: 'home' },
         debug: true,
-        sourceMap: null,
       });
     });
 
@@ -423,7 +422,7 @@ describe('fetchExperience — source map', () => {
     });
   });
 
-  it('forwards the response source map to resolveExperience', async () => {
+  it('hands the resolver the response with its source map, for the payload fallback', async () => {
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
     await fetchExperience(
@@ -432,42 +431,9 @@ describe('fetchExperience — source map', () => {
       resolveOptions
     );
 
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: mockSourceMap })
-    );
-  });
-
-  it('forwards no source map when the extension was not requested', async () => {
-    // Guards against a stray `extensions.sourceMap` leaking onto the plan unasked.
-    mockGet.mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: null })
-    );
-  });
-
-  it('tolerates a requested source map the API did not return', async () => {
-    mockGetWithOverrides.mockResolvedValue({ ...mockPayload, extensions: {} });
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(
-      { ...experienceOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: null })
-    );
+    const [payloadArg, , optionsArg] = vi.mocked(resolveExperience).mock.calls[0]!;
+    expect(payloadArg.extensions?.sourceMap).toBe(mockSourceMap);
+    expect(optionsArg).not.toHaveProperty('sourceMap');
   });
 
   it('hands the resolver the experience payload, with the source map routed separately', async () => {
@@ -649,18 +615,6 @@ describe('fetchExperience — destinationId + nodeId', () => {
     expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
   });
 
-  it('passes sourceMap: null, since destination fetches never opt in', async () => {
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: null })
-    );
-  });
-
   it('rejects extensions on destination-shaped options at compile time', () => {
     // @ts-expect-error — extensions is not a member of ByDestinationNodeIdExperienceOptions,
     // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
@@ -792,18 +746,6 @@ describe('fetchExperience — destinationId + path', () => {
     expect(error.path).toBe('/products');
     expect(mockResolveByPath).not.toHaveBeenCalled();
     expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
-
-  it('passes sourceMap: null, since destination fetches never opt in', async () => {
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: null })
-    );
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {

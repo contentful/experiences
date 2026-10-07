@@ -423,6 +423,6 @@ function mergeResolveOptions(
     metadata: { ...request?.metadata, ...method?.metadata },
     debug: method?.debug ?? request?.debug,
     initialViewportId: method?.initialViewportId ?? request?.initialViewportId,
-    sourceMap: method?.sourceMap !== undefined ? method.sourceMap : request?.sourceMap,
+    sourceMap: method?.sourceMap ?? request?.sourceMap,
   };
 }

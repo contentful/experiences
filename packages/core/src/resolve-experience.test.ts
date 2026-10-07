@@ -1043,15 +1043,6 @@ describe('resolveExperience — render context carried on the plan', () => {
 
       expect(plan.sourceMap).toBe(explicit);
     });
-
-    it("treats null as no map, ignoring the payload's", async () => {
-      const experience = payload();
-      experience.extensions = { sourceMap: makeMap('payload') };
-
-      const plan = await resolveExperience(experience, emptyConfig, { sourceMap: null });
-
-      expect('sourceMap' in plan).toBe(false);
-    });
   });
 
   it('carries the XDA personalization profile id onto the plan', async () => {

@@ -6,7 +6,6 @@ import { createClient } from './create-delivery-client.js';
 import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
 import { PREVIEW_HOST } from './hosts.js';
 import {
-  readSourceMap,
   toExperiencePayload,
   toExperiencePayloadFromDestination,
   type ExperienceResponse,
@@ -225,16 +224,9 @@ export async function fetchExperience(
   const response = await fetchByExperienceId(client, experienceOptions);
 
   const payload = toExperiencePayload(response);
-  const sourceMap = extensions?.sourceMap !== undefined ? (readSourceMap(response) ?? null) : null;
-
   log.lazy('received raw payload', () => payload);
 
-  return resolveExperience(payload, config, {
-    metadata,
-    debug,
-    initialViewportId,
-    sourceMap,
-  });
+  return resolveExperience(payload, config, { metadata, debug, initialViewportId });
 }
 
 async function fetchByExperienceId(
@@ -333,13 +325,10 @@ async function fetchByDestination(
   const payload = toExperiencePayloadFromDestination(firstExperience.experience);
   log.lazy('received raw payload', () => payload);
 
-  // Destination requests send no extensions, so they never opt into a source
-  // map. `null` keeps the payload fallback from attributing one unasked.
   return resolveExperience(payload, config, {
     metadata,
     debug,
     initialViewportId,
-    sourceMap: null,
   });
 }
 

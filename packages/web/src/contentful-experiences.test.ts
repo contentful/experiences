@@ -159,7 +159,7 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it("keeps a raw payload's source map unless the call passes sourceMap: null", async () => {
+  it("keeps a raw payload's source map", async () => {
     const runtime = createRuntime();
     const sourceMap = {
       version: 1,
@@ -175,11 +175,9 @@ describe('Web ContentfulExperiences', () => {
     };
     const payload = { sys: { type: 'Experience' }, nodes: [], extensions: { sourceMap } } as never;
 
-    const kept = await runtime.resolveExperience(payload);
-    const dropped = await runtime.resolveExperience(payload, { sourceMap: null });
+    const plan = await runtime.resolveExperience(payload);
 
-    expect(kept.sourceMap).toEqual(sourceMap);
-    expect(dropped.sourceMap).toBeUndefined();
+    expect(plan.sourceMap).toEqual(sourceMap);
   });
 
   it('forwards personalization with Web event context', async () => {

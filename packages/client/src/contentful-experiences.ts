@@ -38,10 +38,10 @@ export type RuntimeResolveOptions = {
   initialViewportId?: string;
   /**
    * Source map for `resolveExperience`. Wins over the payload's own
-   * `extensions.sourceMap`; `null` drops it. Ignored by fetch methods, which
-   * always use the map from their own response.
+   * `extensions.sourceMap`. Not accepted by fetch methods, which use the map
+   * from their own response.
    */
-  sourceMap?: ExperienceSourceMap | null;
+  sourceMap?: ExperienceSourceMap;
 };
 
 /**
