@@ -24,8 +24,6 @@ import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
 import type { Config } from './types.js';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -55,7 +53,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('broken', { id: 'b' }),
           componentNode('contentful-button', { id: 'f', contentProperties: { label: 'sibling' } }),
@@ -80,7 +77,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: BrokenFixture } };
@@ -97,7 +93,6 @@ describe('NodeRenderEngine — component-render-error isolation', () => {
 
   it('honors a custom renderError override', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: BrokenFixture } };
@@ -114,7 +109,6 @@ describe('NodeRenderEngine — render-time diagnostics dedupe across re-syncs', 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -147,100 +141,7 @@ describe('NodeRenderEngine — render-time diagnostics dedupe across re-syncs', 
   });
 });
 
-describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
-  it('isolates a node whose design-token resolution starts throwing on the second sync — sibling unaffected, fallback shown, recovers if resolution succeeds again', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      // `selectResolvedDesign` only calls `resolveToken` at all when the
-      // active viewport differs from the fallback one — with a single
-      // viewport it always returns the (already fallback-resolved) design
-      // as-is. A second viewport, with `initialViewportId` below pointing at
-      // it, is what actually exercises the adapter's own resolveToken path.
-      const twoViewports = [
-        ...VIEWPORTS,
-        { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
-      ];
-      const payload: ExperiencePayload = {
-        viewports: twoViewports,
-        nodes: [
-          componentNode('contentful-button', {
-            id: 'b',
-            designProperties: { cfBackgroundColor: { type: 'DesignToken', value: 'color.brand' } },
-          }),
-          componentNode('contentful-button', {
-            id: 'f',
-            contentProperties: { label: 'sibling' },
-          }),
-        ],
-      };
-      // Deliberately no `resolveToken` passed to resolveExperience (core) —
-      // the raw DesignToken passes through to `designRaw`, so the adapter's
-      // *own* `config.resolveToken` (below) is what actually resolves it,
-      // exactly as it does live per active viewport.
-      const config: Config = {
-        components: { 'contentful-button': ButtonFixture },
-      };
-      const plan = await resolveExperience(payload, config);
-
-      let calls = 0;
-      const failingConfig: Config = {
-        ...config,
-        resolveToken: () => {
-          calls += 1;
-          if (calls > 1) throw new Error('token service unavailable');
-          return '#fff';
-        },
-      };
-
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
-      const fixture = TestBed.createComponent(ServerExperienceRendererComponent);
-      fixture.componentRef.setInput('experience', plan);
-      fixture.componentRef.setInput('config', failingConfig);
-      fixture.componentRef.setInput('debug', true);
-      fixture.componentRef.setInput('initialViewportId', 'mobile');
-
-      // First sync: resolveToken's first call succeeds — both nodes mount
-      // cleanly.
-      fixture.detectChanges();
-      expect((fixture.nativeElement as HTMLElement).innerHTML).not.toContain(
-        'data-experiences-render-error'
-      );
-
-      // Second sync, nothing about the node itself changed, but resolveToken
-      // now throws on read — this must isolate to the "b" node, not crash
-      // collect()'s whole loop.
-      fixture.componentRef.setInput('config', { ...failingConfig });
-      fixture.detectChanges();
-
-      const html = (fixture.nativeElement as HTMLElement).innerHTML;
-      expect(html).toContain('sibling');
-      expect(html).toContain('data-experiences-render-error="contentful-button"');
-      expect(html).toContain('token service unavailable');
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('token service unavailable'));
-
-      // Recovery: resolveToken stops throwing again (a fresh function, reset
-      // counter) — the fallback must come back down and the real component
-      // must remount, not stay stuck as the fallback forever.
-      let recoveredCalls = 0;
-      fixture.componentRef.setInput('config', {
-        ...config,
-        resolveToken: () => {
-          recoveredCalls += 1;
-          return '#000';
-        },
-      });
-      fixture.detectChanges();
-
-      const recoveredHtml = (fixture.nativeElement as HTMLElement).innerHTML;
-      expect(recoveredHtml).not.toContain('data-experiences-render-error');
-      expect(recoveredHtml).toContain('sibling');
-      expect(recoveredCalls).toBeGreaterThan(0);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
+describe('NodeRenderEngine — customer component errors on a later sync', () => {
   it('does not catch a throw from inside the customer component itself on a later pass (documented residual gap)', async () => {
     // Pins the limitation stated in createView's doc comment: a throw from
     // the *customer* component's own internals on a later CD pass never
@@ -268,7 +169,6 @@ describe('NodeRenderEngine — a resolution-time throw on a later sync', () => {
     }
 
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('later-throw', { id: 'b' })],
     };
     const config: Config = { components: { 'later-throw': LaterThrowFixture } };

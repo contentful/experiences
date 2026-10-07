@@ -21,8 +21,8 @@ export type { ResolveContext, ResolveToken };
  * analytics on `nodeId`, or rendering a raw-payload panel in preview.
  *
  * Design properties stay in their **raw discriminated form** here (the same
- * shape `ctx.design` carries inside `resolveData`). The viewport-cascaded,
- * token-resolved values are what `useDesignValues()` returns.
+ * shape `ctx.design` carries inside `resolveData`). Token-resolved values are
+ * what `useDesignValues()` returns.
  */
 export interface ContentfulComponent {
   componentId: string;
@@ -63,8 +63,7 @@ export interface ComponentConfig<Props extends object = Record<string, unknown>>
   defaults?: Partial<Props>;
   /**
    * Optional sync-or-async hook that derives final props from the raw
-   * Experience inputs. Runs once during `resolveExperience`, before render —
-   * does NOT re-fire on viewport changes.
+   * Experience inputs. Runs once during `resolveExperience`, before render.
    */
   resolveData?: (ctx: ResolveContext) => Partial<Props> | Promise<Partial<Props>>;
   /**
@@ -151,8 +150,8 @@ export interface Config {
   experienceTemplates?: ExperienceTemplates;
   /**
    * Resolves `DesignToken` values to runtime values before they reach a
-   * component. If omitted, they pass through unchanged. See `ResolveToken`
-   * in `@contentful/experiences-sdk-core` for the full contract.
+   * component. Unresolved tokens remain raw and produce a diagnostic. See
+   * `ResolveToken` in `@contentful/experiences-sdk-core` for the full contract.
    */
   resolveToken?: ResolveToken;
 }

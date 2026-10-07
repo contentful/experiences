@@ -29,7 +29,6 @@ export type PreviewSessionResolveOptions = {
   config: ResolverConfig;
   metadata?: Record<string, unknown>;
   debug?: boolean;
-  initialViewportId?: string;
 };
 
 /**
@@ -43,7 +42,7 @@ export async function fetchPreviewSession(
 ): Promise<PortableRenderPlan> {
   const { spaceId, environmentId, sessionId, resourceResolution } = previewSessionOptions;
   const { previewToken, host } = clientOptions;
-  const { config, metadata, debug, initialViewportId } = resolveOptions;
+  const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'live-preview');
   const client = createClient({
     accessToken: previewToken,
@@ -86,6 +85,5 @@ export async function fetchPreviewSession(
   return resolveExperience(payload, config, {
     metadata,
     debug,
-    initialViewportId,
   });
 }

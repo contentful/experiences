@@ -11,7 +11,6 @@ import type {
   ManualDesignValue,
   PortableRenderNode,
   PortableRenderPlan,
-  ValuesByViewport,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
@@ -21,18 +20,7 @@ import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 import { useDesignValues } from './use-design-values';
 
-const VIEWPORTS = [
-  { id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' },
-  { id: 'tablet', query: '<992px', displayName: 'Tablet', previewSize: '100%' },
-  { id: 'mobile', query: '<576px', displayName: 'Mobile', previewSize: '100%' },
-];
-
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
-
-const vbv = (values: Record<string, ManualDesignValue>): ValuesByViewport => ({
-  type: 'ValuesByViewport',
-  values,
-});
 
 const dt = (value: string) => ({ type: 'DesignToken' as const, value });
 
@@ -123,13 +111,12 @@ const config: Config = {
 };
 
 const payload: ExperiencePayload = {
-  viewports: VIEWPORTS,
   nodes: [
     componentNode('contentful-container', {
       id: 'page',
       contentProperties: {},
       designProperties: {
-        cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
+        cfPadding: m('40px'),
       },
       slots: {
         children: [
@@ -137,18 +124,14 @@ const payload: ExperiencePayload = {
             id: 'heading',
             contentProperties: { text: 'Build faster' },
             designProperties: {
-              cfFontSize: vbv({ desktop: m('32px'), mobile: m('20px') }),
+              cfFontSize: m('32px'),
             },
           }),
           componentNode('contentful-button', {
             id: 'btn',
             contentProperties: { label: 'Get started' },
             designProperties: {
-              cfBackgroundColor: vbv({
-                desktop: m('#4f39f6'),
-                tablet: m('#ff0000'),
-                mobile: m('#00aa00'),
-              }),
+              cfBackgroundColor: m('#4f39f6'),
             },
           }),
         ],
@@ -158,7 +141,7 @@ const payload: ExperiencePayload = {
 };
 
 describe('ServerExperienceRenderer', () => {
-  it('renders a nested experience with desktop-resolved design props by default', async () => {
+  it('renders a nested experience with design props', async () => {
     const plan = await resolveExperience(payload, config);
     const html = renderToStaticMarkup(
       <ServerExperienceRenderer experience={plan} config={config} />
@@ -169,27 +152,6 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('background:#4f39f6');
     expect(html).toContain('Build faster');
     expect(html).toContain('Get started');
-  });
-
-  it('honors initialViewportId when resolving design props', async () => {
-    const plan = await resolveExperience(payload, config);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />
-    );
-
-    expect(html).toContain('data-padding="12px"');
-    expect(html).toContain('font-size:20px');
-    expect(html).toContain('background:#00aa00');
-  });
-
-  it('cascades design values when the active viewport has none', async () => {
-    const plan = await resolveExperience(payload, config);
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="tablet" />
-    );
-
-    expect(html).toContain('font-size:32px'); // cascaded from desktop
-    expect(html).toContain('background:#ff0000'); // tablet-specific
   });
 
   it('renders null when plan is null/undefined', () => {
@@ -208,71 +170,15 @@ describe('ServerExperienceRenderer', () => {
       return null;
     };
     const captureConfig: Config = { components: { capture: Capture } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
+    const plan = await resolveExperience({ nodes: [componentNode('capture')] }, captureConfig);
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={captureConfig} />);
 
     expect(seen).toEqual([
       {
         debug: false,
         metadata: {},
-        viewports: VIEWPORTS,
-        activeViewport: VIEWPORTS[0],
-        activeViewportIndex: 0,
-        fallbackViewportIndex: 0,
       },
     ]);
-  });
-
-  it('exposes the active viewport on render context (defaults to viewport[0])', async () => {
-    let seen: Record<string, unknown> | null = null;
-    const Capture = () => {
-      seen = useExperience() as unknown as Record<string, unknown>;
-      return null;
-    };
-    const captureConfig: Config = { components: { capture: Capture } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={captureConfig} />);
-
-    expect(seen).not.toBeNull();
-    expect(seen!.activeViewportIndex).toBe(0);
-    // The render context gets its own copies of viewports / activeViewport
-    // (value-equal, not the same reference) so it shares no object identity
-    // with the plan arrays — otherwise React's RSC serializer can back-patch a
-    // shared reference into frozen props and throw.
-    expect(seen!.activeViewport).toStrictEqual(VIEWPORTS[0]);
-    expect(seen!.activeViewport).not.toBe(VIEWPORTS[0]);
-    expect(seen!.viewports).toStrictEqual(VIEWPORTS);
-    expect(seen!.viewports).not.toBe(VIEWPORTS);
-  });
-
-  it('honors initialViewportId when computing the active viewport', async () => {
-    let seen: Record<string, unknown> | null = null;
-    const Capture = () => {
-      seen = useExperience() as unknown as Record<string, unknown>;
-      return null;
-    };
-    const captureConfig: Config = { components: { capture: Capture } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
-    renderToStaticMarkup(
-      <ServerExperienceRenderer
-        experience={plan}
-        config={captureConfig}
-        initialViewportId="mobile"
-      />
-    );
-
-    expect(seen!.activeViewportIndex).toBe(2);
-    expect(seen!.activeViewport).toStrictEqual(VIEWPORTS[2]);
-    expect(seen!.activeViewport).not.toBe(VIEWPORTS[2]);
   });
 
   it('renders missing-component fallback in debug mode', () => {
@@ -283,8 +189,6 @@ describe('ServerExperienceRenderer', () => {
       },
     };
     const planWithMissing: PortableRenderPlan = {
-      viewports: VIEWPORTS,
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -323,10 +227,7 @@ describe('ServerExperienceRenderer', () => {
 
   it('auto-mounts DebugExperience only when debug is on', async () => {
     const captureConfig: Config = { components: { capture: () => null } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
+    const plan = await resolveExperience({ nodes: [componentNode('capture')] }, captureConfig);
 
     const off = renderToStaticMarkup(
       <ServerExperienceRenderer experience={plan} config={captureConfig} />
@@ -347,10 +248,7 @@ describe('ServerExperienceRenderer', () => {
       return null;
     };
     const captureConfig: Config = { components: { capture: Capture } };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('capture')] },
-      captureConfig
-    );
+    const plan = await resolveExperience({ nodes: [componentNode('capture')] }, captureConfig);
     renderToStaticMarkup(
       <ServerExperienceRenderer
         experience={plan}
@@ -377,7 +275,6 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', {
             id: 'i',
@@ -403,7 +300,6 @@ describe('ServerExperienceRenderer', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', {
             id: 'i',
@@ -428,8 +324,6 @@ describe('ServerExperienceRenderer', () => {
     };
     // Simulate a plan that already went through resolveExperience.
     const planWithResolved: PortableRenderPlan = {
-      viewports: VIEWPORTS,
-      fallbackViewportIndex: 0,
       metadata: {},
       debug: false,
       diagnostics: [],
@@ -468,7 +362,6 @@ describe('ServerExperienceRenderer', () => {
     };
     const tplPayload: ExperiencePayload = {
       sys: sysWithExperienceTemplate('page'),
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -499,7 +392,6 @@ describe('ServerExperienceRenderer', () => {
     const plan = await resolveExperience(
       {
         sys: sysWithExperienceTemplate('hero'),
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('item', { id: 'a', contentProperties: { value: 'one' } }),
           componentNode('item', { id: 'b', contentProperties: { value: 'two' } }),
@@ -518,7 +410,6 @@ describe('ServerExperienceRenderer', () => {
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     const cfg: Config = { components: { item: Item } };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('missing-experienceTemplate', {
           id: 'tpl',
@@ -565,7 +456,6 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     const cfg: Config = { components: { container: Container, item: Item } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('container', {
             id: 'c',
@@ -601,7 +491,6 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     const cfg: Config = { components: { container: Container, item: Item } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('container', {
             id: 'c',
@@ -630,7 +519,6 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     const cfg: Config = { components: { container: Container, item: Item } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('container', {
             id: 'c',
@@ -659,7 +547,6 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     const cfg: Config = { components: { bare: Bare } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [componentNode('bare', { id: 'b', contentProperties: { text: 'hi' } })],
       },
       cfg
@@ -673,7 +560,6 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     const Tpl = ({ content }: { content?: ReactNode[] }) => <main data-tpl>{content}</main>;
     const cfg: Config = { components: { item: Item }, experienceTemplates: { page: Tpl } };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -698,7 +584,6 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
     const cfg: Config = { components: { probe: Probe } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [componentNode('probe', { id: 'p', contentProperties: { text: 'hi' } })],
       },
       cfg
@@ -720,12 +605,11 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     const cfg: Config = { components: { button: Capture } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'btn-1',
             contentProperties: { label: 'Buy now' },
-            designProperties: { cfPadding: vbv({ desktop: m('40px') }) },
+            designProperties: { cfPadding: m('40px') },
           }),
         ],
       },
@@ -737,7 +621,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
       componentId: 'button',
       nodeId: 'btn-1',
       content: { label: 'Buy now' },
-      design: { cfPadding: vbv({ desktop: m('40px') }) }, // raw design property, NOT scalar
+      design: { cfPadding: m('40px') }, // raw design property, NOT scalar
       resolved: undefined,
     });
   });
@@ -753,10 +637,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
         item: { component: Capture, resolveData: () => ({ enriched: 'yes' }) },
       },
     };
-    const plan = await resolveExperience(
-      { viewports: VIEWPORTS, nodes: [componentNode('item', { id: 'i' })] },
-      cfg
-    );
+    const plan = await resolveExperience({ nodes: [componentNode('item', { id: 'i' })] }, cfg);
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     expect(captured!.resolved).toEqual({ enriched: 'yes' });
@@ -775,7 +656,6 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           experienceTemplateNode('page', {
             id: 'tpl',
@@ -818,7 +698,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -847,7 +726,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -870,7 +748,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     const cfg: Config = { components: { button: Button } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -899,7 +776,6 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
     };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -911,11 +787,7 @@ describe('ServerExperienceRenderer — resolveToken', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    // Render at a non-fallback viewport (mobile ≠ fallback index 0) so the
-    // adapter recomputes from the raw design and runs resolveToken itself.
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={cfg} initialViewportId="mobile" />
-    );
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-bg="#111827"');
   });
 });
@@ -930,7 +802,6 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
     const cfg: Config = { components: { probe: Probe } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('probe', {
             id: 'p',
@@ -957,7 +828,6 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
     const cfg: Config = { components: { probe: Probe } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('probe', {
             id: 'p',
@@ -985,7 +855,6 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
       experienceTemplates: { page: Tpl },
     };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -997,8 +866,7 @@ describe('ServerExperienceRenderer — design values auto-fill props', () => {
       ],
     };
     const plan = await resolveExperience(tplPayload, cfg);
-    // Rendered at the fallback viewport (default index 0), the adapter consumes
-    // the server-resolved design as-is.
+    // The renderer consumes the plan's pre-resolved design as-is.
     expect(templateNodeOf(plan!).props.design).toEqual({ cfBackground: '#111827' });
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(received).toHaveProperty('cfBackground', '#111827');
@@ -1018,7 +886,6 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('probe', {
             id: 'p',
@@ -1050,7 +917,6 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     const cfg: Config = { components: { probe: Probe } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [componentNode('probe', { id: 'p', designProperties: { cfPadding: m('24px') } })],
       },
       cfg
@@ -1059,7 +925,7 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     expect(typed).toEqual({ cfBackgroundColor: undefined, cfPadding: '24px' });
   });
 
-  it('honors the active viewport when called deep inside a node subtree', async () => {
+  it('returns design values when called deep inside a node subtree', async () => {
     let captured: Record<string, unknown> = {};
     const Probe = () => {
       captured = useDesignValues();
@@ -1068,22 +934,17 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     const cfg: Config = { components: { probe: Probe } };
     const plan = await resolveExperience(
       {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('probe', {
             id: 'p',
-            designProperties: {
-              cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }),
-            },
+            designProperties: { cfPadding: m('40px') },
           }),
         ],
       },
       cfg
     );
-    renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={cfg} initialViewportId="mobile" />
-    );
-    expect(captured).toEqual({ cfPadding: '12px' });
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+    expect(captured).toEqual({ cfPadding: '40px' });
   });
 
   it('returns {} when there is no design in scope', async () => {
@@ -1100,7 +961,6 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
       experienceTemplates: { page: Probe },
     };
     const tplPayload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -1124,58 +984,8 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
   });
 });
 
-describe('ServerExperienceRenderer — server pre-resolved design values', () => {
-  const Probe = () => {
-    const design = useDesignValues();
-    return <div data-padding={design.cfPadding as string} />;
-  };
-  const probeCfg: Config = { components: { probe: Probe } };
-
-  const probePayload: ExperiencePayload = {
-    viewports: VIEWPORTS,
-    nodes: [
-      componentNode('probe', {
-        id: 'p',
-        designProperties: { cfPadding: vbv({ desktop: m('40px'), mobile: m('12px') }) },
-      }),
-    ],
-  };
-
-  it('consumes props.design as-is when the active viewport equals the fallback', async () => {
-    const plan = await resolveExperience(probePayload, probeCfg, { initialViewportId: 'mobile' });
-    // Tamper the precomputed values with a sentinel the cascade could never produce.
-    plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="mobile" />
-    );
-    expect(html).toContain('data-padding="SENTINEL"');
-  });
-
-  it('recomputes from raw design properties when the active viewport differs from the fallback', async () => {
-    const plan = await resolveExperience(probePayload, probeCfg, { initialViewportId: 'mobile' });
-    plan.nodes[0]!.props.design = { cfPadding: 'SENTINEL' };
-    // Active viewport (desktop, idx 0) ≠ fallback (mobile, idx 2) → recompute.
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="desktop" />
-    );
-    expect(html).toContain('data-padding="40px"');
-    expect(html).not.toContain('SENTINEL');
-  });
-
-  it('recomputes when the active viewport differs from the default fallback (viewport[0])', async () => {
-    const plan = await resolveExperience(probePayload, probeCfg);
-    // No fallback configured → pre-resolved against viewport[0] (desktop, idx 0).
-    expect(plan.fallbackViewportIndex).toBe(0);
-    // Active viewport is mobile (idx 2) ≠ fallback (idx 0) → recompute to 12px.
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={probeCfg} initialViewportId="mobile" />
-    );
-    expect(html).toContain('data-padding="12px"');
-  });
-});
-
-describe('ServerExperienceRenderer — absent payload.viewports', () => {
-  it('renders flat design values when the payload has no viewports field', async () => {
+describe('ServerExperienceRenderer — design values', () => {
+  it('renders resolved design values', async () => {
     const Probe = () => {
       const design = useDesignValues();
       return <div data-padding={design.cfPadding as string} />;
@@ -1189,10 +999,9 @@ describe('ServerExperienceRenderer — absent payload.viewports', () => {
             designProperties: { cfPadding: m('40px') },
           }),
         ],
-      } as ExperiencePayload,
+      },
       cfg
     );
-    expect(plan.viewports).toEqual([]);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('data-padding="40px"');
   });
@@ -1254,7 +1063,6 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
   }
 
   const payload = (): ExperiencePayload => ({
-    viewports: VIEWPORTS,
     nodes: [componentNode('capture')],
   });
 
@@ -1315,43 +1123,10 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
     expect(seen[0]!.debug).toBe(true);
   });
 
-  it('publishes fallbackViewportIndex on the context, matching the other adapters', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
-
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
-
-    expect(seen[0]!.fallbackViewportIndex).toBe(1);
-  });
-
-  it('seeds the active viewport from the plan when no initialViewportId is passed', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
-
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
-
-    expect(seen[0]!.activeViewportIndex).toBe(1);
-    expect(seen[0]!.activeViewport).toEqual(VIEWPORTS[1]);
-  });
-
-  it('lets initialViewportId override the plan seed', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config, { initialViewportId: 'tablet' });
-
-    renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={config} initialViewportId="mobile" />
-    );
-
-    // Legal: the renderer recomputes design from `designRaw` for the new viewport.
-    expect(seen[0]!.activeViewportIndex).toBe(2);
-    expect(seen[0]!.fallbackViewportIndex).toBe(1);
-  });
-
   it('varies context per render by spreading the plan', async () => {
     // The plan is the only channel for `metadata` / `debug`, so a per-render
-    // change means deriving a new plan. Spreading is shallow, which matters:
-    // `viewports` and `nodes` keep their identity, so nothing downstream that
-    // watches those references churns.
+    // change means deriving a new plan. Spreading is shallow, so the nodes
+    // keep their identity.
     const { seen, config } = captureSetup();
     const plan = await resolveExperience(payload(), config, { metadata: { slug: 'home' } });
 
@@ -1364,17 +1139,7 @@ describe('ServerExperienceRenderer — render context carried on the plan', () =
 
     expect(seen[0]!.debug).toBe(true);
     expect(seen[0]!.metadata).toEqual({ slug: 'home', viewer: 'anon' });
-    expect(derived.viewports).toBe(plan.viewports);
     expect(derived.nodes).toBe(plan.nodes);
-  });
-
-  it('still falls back to viewport[0] when neither the plan nor the prop names one', async () => {
-    const { seen, config } = captureSetup();
-    const plan = await resolveExperience(payload(), config);
-
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={config} />);
-
-    expect(seen[0]!.activeViewportIndex).toBe(0);
   });
 
   it('renders the debug panel from the plan alone', async () => {

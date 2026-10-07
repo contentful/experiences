@@ -79,7 +79,7 @@ npm run dev                  # http://localhost:3000/<experience-id>
 ```
 packages/
 ├── core/            # @contentful/experiences-sdk-core   — runtime-neutral types + resolveExperience
-├── design/          # @contentful/experiences-design — pure viewport + design-value math
+├── design/          # @contentful/experiences-design — CSS-property helpers for adapter `toCss` utilities
 ├── client/          # @contentful/experiences-client — shared runtime + delivery integration
 ├── node/            # @contentful/experiences-node — request-scoped Node runtime
 ├── web/             # @contentful/experiences-web — stateful browser runtime

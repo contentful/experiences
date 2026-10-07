@@ -109,10 +109,9 @@ fails. The last valid `data` remains available.
 ### Renderers
 
 ```ts
-ServerExperienceRenderer; // RSC-friendly, active viewport seeded from initialViewportId
-ClientExperienceRenderer; // 'use client', subscribes to window.matchMedia, alias: ExperienceRenderer
+ServerExperienceRenderer; // RSC-friendly renderer
+ClientExperienceRenderer; // Client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
-useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely need it directly)
 ```
 
 ### Styling + runtime context (hooks)
@@ -120,13 +119,13 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 ```ts
 useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
-useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
+useExperience(); // RenderContext: debug, metadata
 useContentfulComponent(); // Raw payload for the enclosing node (or null)
 useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling from those props is the one recommended path. `useDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from those props is the one recommended path. `useDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -138,12 +137,10 @@ type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
 type PortableRenderPlan, PortableRenderNode, PortableRegistration,
-type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
-type ViewportDef, ExperienceContext, ResolveContext,
+type DesignPropValue, ManualDesignValue, DesignToken, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
-// From design (if you want to do your own viewport-aware resolution)
-getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
+// From design
 isCssProperty, toCssKey, CSS_PROPERTIES
 ```
 
@@ -232,7 +229,7 @@ export function Section({ children }: { children?: ReactNode[] }) {
 
 `children` is not special — it is simply the conventional name for the default slot. **Every** slot is merged into props under its own name, each as its own `ReactNode[]`, so a component with a `header` slot just declares `header?: ReactNode[]` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` prop.
 
-For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
 

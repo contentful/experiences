@@ -2,7 +2,7 @@
  * Public API surface for `@contentful/experiences-react`.
  *
  * Customers add ONLY this package to their app's dependencies. Everything
- * needed to render an Experience — types, the resolver, viewport utilities,
+ * needed to render an Experience — types, the resolver, design utilities,
  * the renderer components, the authoring helpers — is re-exported from here.
  * The internal `@contentful/experiences-sdk-core` and
  * `@contentful/experiences-design` packages are workspace-only implementation
@@ -31,9 +31,6 @@ export type { ComponentErrorProps } from './component-error';
 
 export { DebugExperience } from './debug-experience';
 export type { DebugExperienceProps } from './debug-experience';
-
-export { useActiveViewport } from './use-active-viewport';
-export type { UseActiveViewportResult } from './use-active-viewport';
 
 export type { DiagnosticReporter, RenderError, RenderUnknown } from './nodes-renderer';
 
@@ -130,20 +127,10 @@ export type {
   PortableRenderNode,
   PortableRenderPlan,
   ResolveContext,
-  ValuesByViewport,
-  ViewportDef,
 } from '@contentful/experiences-sdk-core';
 
 // ─── Design utilities (re-exported from design) ───────────────────────────
-export {
-  CSS_PROPERTIES,
-  getValueForViewport,
-  getViewportIndex,
-  isCssProperty,
-  resolveDesignProperties,
-  toCssKey,
-  toCssMediaQuery,
-} from '@contentful/experiences-design';
+export { CSS_PROPERTIES, isCssProperty, toCssKey } from '@contentful/experiences-design';
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {

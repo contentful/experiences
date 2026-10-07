@@ -9,7 +9,7 @@ import { DesignScope } from './node-scopes.js';
 const EMPTY = signal<Record<string, unknown>>({}).asReadonly();
 
 /**
- * Viewport-cascaded, token-resolved design values for the enclosing node.
+ * Token-resolved design values for the enclosing node.
  *
  * The renderer already assigns every design key the target component declares as
  * an input; this is for the rest — keys a component reads dynamically, or design

@@ -1,15 +1,9 @@
 <!--
- * Client Experience renderer. First paint matches the server renderer
- * (active viewport resolved from `initialViewportId`); after hydration,
- * `useActiveViewport` takes over via `window.matchMedia` and re-renders
- * when the viewport changes.
- *
- * Safe to render on the server: `useActiveViewport` no-ops outside the
- * browser, so SSR output matches `<ServerExperienceRenderer>` given the
- * same seed.
+ * Client Experience renderer. It renders the resolved plan directly, with no
+ * browser-only design-property work.
 -->
 <script lang="ts">
-  import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
+  import type { ExperienceContext } from '@contentful/experiences-sdk-core';
 
   import ComponentError from './ComponentError.svelte';
   import DebugExperience from './DebugExperience.svelte';
@@ -18,25 +12,15 @@
   import type { ClientExperienceRendererProps } from './component-props.js';
   import { setExperience } from './context.js';
   import type { RenderContext } from './types.js';
-  import { useActiveViewport } from './use-active-viewport.svelte.js';
 
   const DEFAULT_CONTEXT: ExperienceContext = {
     debug: false,
     metadata: {},
-    viewports: [],
-  };
-
-  const FALLBACK_VIEWPORT: ViewportDef = {
-    id: '_',
-    query: '*',
-    displayName: 'Default',
-    previewSize: '100%',
   };
 
   let {
     experience,
     config,
-    initialViewportId,
     metadata,
     debug,
     renderUnknown = MissingComponent,
@@ -70,15 +54,8 @@
     });
   }
 
-  const viewports = $derived(experience?.viewports ?? []);
-  // Seed from the plan so first paint matches the server renderer.
-  const seedViewportId = $derived(
-    initialViewportId ?? experience?.viewports[experience.fallbackViewportIndex]?.id
-  );
-  const tracker = useActiveViewport(viewports, seedViewportId);
-
   // A $state-backed mirror so descendants reading getExperience() stay
-  // reactive across viewport changes. The fields update in an $effect below.
+  // reactive when the plan or rendering options change.
   const liveContext = $state<RenderContext>({
     ...DEFAULT_CONTEXT,
     debug: debug ?? experience?.debug ?? false,
@@ -87,21 +64,12 @@
       ...(experience?.metadata ?? {}),
       ...(metadata ?? {}),
     },
-    viewports: experience?.viewports ?? [],
-    activeViewport: experience?.viewports[0] ?? FALLBACK_VIEWPORT,
-    activeViewportIndex: 0,
-    fallbackViewportIndex: experience?.fallbackViewportIndex ?? 0,
   });
 
   setExperience(liveContext);
 
   $effect(() => {
     if (!experience) return;
-    const idx = tracker.activeViewportIndex;
-    liveContext.viewports = experience.viewports;
-    liveContext.activeViewport = experience.viewports[idx] ?? FALLBACK_VIEWPORT;
-    liveContext.activeViewportIndex = idx;
-    liveContext.fallbackViewportIndex = experience.fallbackViewportIndex;
     liveContext.debug = resolvedDebug;
     liveContext.metadata = {
       ...DEFAULT_CONTEXT.metadata,

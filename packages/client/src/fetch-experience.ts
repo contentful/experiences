@@ -115,12 +115,6 @@ export type ResolveOptions = {
    * debug fallback). A single boolean across fetch + resolve + render.
    */
   debug?: boolean;
-  /**
-   * Per-request fallback viewport for server-side design pre-resolution. Pass
-   * the same id you seed the renderer's `initialViewportId` with (e.g. a
-   * User-Agent-derived viewport) so SSR paints correct design on first render.
-   */
-  initialViewportId?: string;
 };
 
 // TS overload signatures, not real redeclarations — base ESLint's no-redeclare doesn't know the
@@ -149,7 +143,7 @@ export async function fetchExperience(
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-  const { config, metadata, debug, initialViewportId } = resolveOptions;
+  const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
   if (
@@ -195,7 +189,7 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: nodeId },
       () => client.destination.resolveByNodeId(spaceId, destinationId, nodeId),
       log,
-      { config, metadata, debug, initialViewportId }
+      { config, metadata, debug }
     );
   }
 
@@ -205,7 +199,7 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: path },
       () => client.destination.resolveByPath(spaceId, destinationId, { path }),
       log,
-      { config, metadata, debug, initialViewportId }
+      { config, metadata, debug }
     );
   }
 
@@ -232,7 +226,6 @@ export async function fetchExperience(
   return resolveExperience(payload, config, {
     metadata,
     debug,
-    initialViewportId,
     sourceMap,
   });
 }
@@ -292,11 +285,10 @@ async function fetchByDestination(
     config: ResolverConfig;
     metadata: Record<string, unknown> | undefined;
     debug: boolean | undefined;
-    initialViewportId: string | undefined;
   }
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
   const { spaceId, destinationId, locator } = identity;
-  const { config, metadata, debug, initialViewportId } = resolveOptions;
+  const { config, metadata, debug } = resolveOptions;
 
   log.log('resolving destination experience', { spaceId, destinationId, locator });
 
@@ -336,7 +328,6 @@ async function fetchByDestination(
   return resolveExperience(payload, config, {
     metadata,
     debug,
-    initialViewportId,
   });
 }
 

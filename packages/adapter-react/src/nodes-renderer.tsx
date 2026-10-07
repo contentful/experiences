@@ -6,8 +6,7 @@
 
 import { Fragment, createElement, type ReactNode } from 'react';
 
-import type { PortableRenderNode, ViewportDef } from '@contentful/experiences-sdk-core';
-import { selectResolvedDesign } from '@contentful/experiences-design';
+import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import { ComponentErrorBoundary } from './component-error-boundary';
 import type { ComponentErrorProps } from './component-error';
@@ -38,17 +37,9 @@ export type RenderError = (props: ComponentErrorProps) => ReactNode;
  */
 export type DiagnosticReporter = (error: Error) => void;
 
-// Internal renderers take `viewports` + `activeViewportIndex`, not the whole
-// RenderContext object — the context is published once via ExperienceProvider,
-// and re-threading it as an element prop makes React's RSC serializer back-patch
-// a shared reference into frozen props ("Cannot assign to read only property").
 export interface NodesRendererProps {
   nodes: PortableRenderNode[];
   config: Config;
-  viewports: ViewportDef[];
-  activeViewportIndex: number;
-  /** Viewport index the server pre-resolved design against. */
-  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
@@ -57,9 +48,6 @@ export interface NodesRendererProps {
 export function NodesRenderer({
   nodes,
   config,
-  viewports,
-  activeViewportIndex,
-  fallbackViewportIndex,
   renderUnknown,
   renderError,
   onDiagnostic,
@@ -72,9 +60,6 @@ export function NodesRenderer({
           key={node.nodeId ?? index}
           node={node}
           config={config}
-          viewports={viewports}
-          activeViewportIndex={activeViewportIndex}
-          fallbackViewportIndex={fallbackViewportIndex}
           renderUnknown={renderUnknown}
           renderError={renderError}
           onDiagnostic={onDiagnostic}
@@ -87,9 +72,6 @@ export function NodesRenderer({
 interface NodeRendererProps {
   node: PortableRenderNode;
   config: Config;
-  viewports: ViewportDef[];
-  activeViewportIndex: number;
-  fallbackViewportIndex: number;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
@@ -98,9 +80,6 @@ interface NodeRendererProps {
 function NodeRenderer({
   node,
   config,
-  viewports,
-  activeViewportIndex,
-  fallbackViewportIndex,
   renderUnknown,
   renderError,
   onDiagnostic,
@@ -152,9 +131,6 @@ function NodeRenderer({
         key={child.nodeId ?? index}
         node={child}
         config={config}
-        viewports={viewports}
-        activeViewportIndex={activeViewportIndex}
-        fallbackViewportIndex={fallbackViewportIndex}
         renderUnknown={renderUnknown}
         renderError={renderError}
         onDiagnostic={onDiagnostic}
@@ -189,18 +165,7 @@ function NodeRenderer({
     ? normalizeExperienceTemplateRegistration(entry)
     : normalizeComponentRegistration(entry);
 
-  const { props: tokenResolvedDesign, unresolved } = selectResolvedDesign(
-    node.props,
-    viewports,
-    activeViewportIndex,
-    fallbackViewportIndex,
-    config.resolveToken
-  );
-  if (unresolved.length && typeof console !== 'undefined') {
-    console.warn(
-      `[@contentful/experiences-react] resolveToken returned undefined for token id(s) on ${kind} "${id}": ${unresolved.join(', ')}. useDesignValues() will omit those keys.`
-    );
-  }
+  const tokenResolvedDesign = node.props.design;
 
   // Merge precedence (last wins): defaults < design < content < resolveData < slots.
   const composed = {

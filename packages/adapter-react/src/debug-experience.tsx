@@ -1,7 +1,7 @@
 /*
  * First-party debug panel. Renders the resolved Experience plan as pretty
  * JSON so a customer can see exactly what the SDK interpreted from the payload
- * — node tree, registrations, resolved props, viewports.
+ * — node tree, registrations, and resolved props.
  *
  * Two ways to use it:
  *  - Auto-mounted by the renderers when `debug` is on (above the tree).
@@ -9,7 +9,7 @@
  *
  * v1 is just the JSON dump wrapped in a native <details> so it collapses
  * without any client JS (safe in server components). Room to grow into a
- * node-tree explorer, viewport indicator, and resolveData timing panel — kept
+ * node-tree explorer and resolveData timing panel — kept
  * deliberately small for now.
  *
  * No React hooks here on purpose: it must render in both server and client

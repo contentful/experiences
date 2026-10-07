@@ -6,9 +6,8 @@
  * everything below them in the element-injector tree can reach the render
  * context, the registry, and the unknown-component renderer.
  *
- * Why three independent sources rather than one object: connecting them
- * separately keeps a viewport change (which only touches `experience`) from
- * invalidating readers of `config` or `renderUnknown`.
+ * Why independent sources rather than one object: connecting them separately
+ * keeps each reader focused on the state it needs.
  *
  * Why getters rather than snapshots: a static `providers` array cannot see
  * instance inputs, and reading an input during construction is too early. A

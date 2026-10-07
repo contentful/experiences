@@ -11,16 +11,10 @@ import { experienceConfig } from '../lib/experience-config.js';
 /**
  * Renders the plan the Express layer already resolved.
  *
- * `[metadata]`, `[debug]` and `[initialViewportId]` are all optional — the plan
- * already carries what the fetch was given. They are bound here to make
- * the override path visible: `metadata` merges over the plan's, the other two
- * replace it. Binding the fetch's own viewport is a no-op; the input earns its
- * place when you want a different one. `[config]` is not optional; component
- * classes cannot survive `TransferState`.
- *
- * `<cf-server-experience>` resolves the active viewport once and never
- * reconsiders — swap it for `<cf-experience>` (`ClientExperienceRendererComponent`)
- * if you want design values to follow live `matchMedia` changes on resize.
+ * `[metadata]` and `[debug]` are optional — the plan already carries what the
+ * fetch was given. They are bound here to make the override path visible:
+ * `metadata` merges over the plan's while `debug` replaces it. `[config]` is
+ * not optional; component classes cannot survive `TransferState`.
  */
 @Component({
   selector: 'app-experience-page',
@@ -35,7 +29,6 @@ import { experienceConfig } from '../lib/experience-config.js';
         <cf-experience
           [experience]="livePreview.data()"
           [config]="config"
-          [initialViewportId]="initialViewportId"
           [metadata]="renderMetadata"
           [debug]="debug"
         />
@@ -43,7 +36,6 @@ import { experienceConfig } from '../lib/experience-config.js';
         <cf-server-experience
           [experience]="plan"
           [config]="config"
-          [initialViewportId]="initialViewportId"
           [metadata]="renderMetadata"
           [debug]="debug"
         />
@@ -71,7 +63,6 @@ export class ExperiencePageComponent {
   protected readonly experience = this.data?.experience ?? null;
   protected readonly slug = this.data?.slug ?? '';
   protected readonly debug = this.data?.debug ?? false;
-  protected readonly initialViewportId = this.data?.initialViewportId;
   protected readonly livePreviewEnabled = this.data?.livePreview ?? false;
   protected readonly previewSessionOptions = this.data?.previewSessionOptions;
   protected readonly renderMetadata = { ...this.data?.metadata, renderer: 'server' };
@@ -80,7 +71,6 @@ export class ExperiencePageComponent {
     initialPlan: this.experience ?? undefined,
     resolveOptions: {
       config: experienceConfig,
-      initialViewportId: this.initialViewportId,
       metadata: this.renderMetadata,
       debug: this.debug,
     },

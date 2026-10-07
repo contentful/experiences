@@ -29,8 +29,6 @@ import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
 import ContainerFixture from './test-fixtures/ContainerFixture.svelte';
 import ExperienceTemplateFixture from './test-fixtures/ExperienceTemplateFixture.svelte';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 const componentNode = (
   typeId: string,
   rest: Omit<ComponentNode, 'component'> = {}
@@ -85,7 +83,6 @@ const renderPlan = async (payload: ExperiencePayload) => {
 describe('NodesRenderer — SSR (server-compiled output)', () => {
   it('renders a component node’s slot children', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         componentNode('contentful-container', {
           id: 'container',
@@ -102,7 +99,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders a coded Experience Template node’s named `content` slot', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -122,7 +118,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders deeply nested slot children', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [
         experienceTemplateNode('page', {
           id: 'tpl',
@@ -147,7 +142,6 @@ describe('NodesRenderer — SSR (server-compiled output)', () => {
 
   it('renders a composite experience unwrapped', async () => {
     const html = await renderPlan({
-      viewports: VIEWPORTS,
       nodes: [button('Alone')],
     });
 
@@ -173,7 +167,6 @@ describe('NodesRenderer — SSR component-render-error (the documented gap)', ()
 
   it('has no recovery path under svelte/server — no graceful fallback markup is produced', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), button('sibling')],
     };
     const plan = await resolveExperience(payload, brokenConfig);

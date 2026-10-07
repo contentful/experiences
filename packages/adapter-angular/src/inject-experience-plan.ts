@@ -27,7 +27,6 @@ type ExperienceUpdateOptions = {
   config: ResolverConfig;
   metadata?: ResolveExperienceOptions['metadata'];
   debug?: ResolveExperienceOptions['debug'];
-  initialViewportId?: ResolveExperienceOptions['initialViewportId'];
   sourceMap?: ResolveExperienceOptions['sourceMap'];
 };
 
@@ -40,7 +39,6 @@ function areExperienceUpdateOptionsEqual(
     first.config === second.config &&
     first.metadata === second.metadata &&
     first.debug === second.debug &&
-    first.initialViewportId === second.initialViewportId &&
     first.sourceMap === second.sourceMap
   );
 }
@@ -53,14 +51,14 @@ export function injectExperiencePlan(
   const updateOptions = computed<ExperienceUpdateOptions>(
     () => {
       const { payload, resolveOptions } = getOptions();
-      const { config, metadata, debug, initialViewportId, sourceMap } = resolveOptions;
-      return { payload, config, metadata, debug, initialViewportId, sourceMap };
+      const { config, metadata, debug, sourceMap } = resolveOptions;
+      return { payload, config, metadata, debug, sourceMap };
     },
     { equal: areExperienceUpdateOptionsEqual }
   );
 
   effect((onCleanup) => {
-    const { payload, config, metadata, debug, initialViewportId, sourceMap } = updateOptions();
+    const { payload, config, metadata, debug, sourceMap } = updateOptions();
     if (payload === undefined) return;
 
     let isCurrent = true;
@@ -68,7 +66,7 @@ export function injectExperiencePlan(
       isCurrent = false;
     });
 
-    void resolveExperience(payload, config, { metadata, debug, initialViewportId, sourceMap })
+    void resolveExperience(payload, config, { metadata, debug, sourceMap })
       .then((nextPlan) => {
         if (isCurrent && nextPlan.diagnostics.length === 0) {
           currentPlan.set(nextPlan);
