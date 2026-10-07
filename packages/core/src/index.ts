@@ -9,3 +9,9 @@ export {
   getViewportIndex,
   resolveDesignProperties,
 } from './viewport.js';
+export {
+  getTrackingAttributes,
+  TRACKING_CLICKABLE_ATTRIBUTE,
+  TRACKING_SCOPES_ATTRIBUTE,
+} from './tracking-attributes.js';
+export type { TrackingAttributes } from './tracking-attributes.js';
