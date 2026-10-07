@@ -22,6 +22,7 @@ import type { Type } from '@angular/core';
 
 import type {
   DesignPropValue,
+  NodeAttribution,
   PortableRenderNode,
   RenderContext,
   ResolveContext,
@@ -49,6 +50,12 @@ export interface ContentfulComponent {
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
   /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
+  /**
    * Raw per-slot node arrays from the payload. Every slot is also passed as a
    * same-named `PortableRenderNode[]` input (`children` is not special); these
    * raw nodes are the same arrays, kept here for callers that reach a slot
@@ -68,6 +75,12 @@ export interface ContentfulExperienceTemplate {
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
+  /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
 }
 
 /** Render-time experience context, read with `injectExperience()`. Declared in core so all adapters share one shape. */

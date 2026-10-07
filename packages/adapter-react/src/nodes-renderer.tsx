@@ -231,6 +231,7 @@ function NodeRenderer({
       content: node.props.content,
       design: node.props.designRaw,
       resolved: node.props.resolved,
+      attribution: node.attribution,
     };
     return (
       <ContentfulExperienceTemplateProvider value={contentful}>
@@ -245,6 +246,7 @@ function NodeRenderer({
     content: node.props.content,
     design: node.props.designRaw,
     resolved: node.props.resolved,
+    attribution: node.attribution,
   };
   return <ContentfulComponentProvider value={contentful}>{element}</ContentfulComponentProvider>;
 }

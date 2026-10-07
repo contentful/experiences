@@ -742,6 +742,100 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     });
   });
 
+  it('exposes node attribution via useContentfulComponent(), as plain serializable data', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const Capture = () => {
+      captured = useContentfulComponent() as unknown as Record<string, unknown>;
+      return null;
+    };
+    const cfg: Config = { components: { button: Capture } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('button', { id: 'n' })] },
+      cfg,
+      {
+        sourceMap: {
+          version: 1,
+          variants: [{ type: 'personalization', id: 'default' }],
+          spaces: [],
+          environments: [],
+          locales: [],
+          entries: [],
+          assets: [],
+          layers: [
+            { kind: 'Experience', id: 'exp-a', variants: [0] },
+            { kind: 'Component', id: 'button' },
+          ],
+          dataAssemblies: [],
+          nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
+        },
+      }
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    const attribution = captured!.attribution as { scopes: Array<{ entityId: string }> };
+    expect(attribution.scopes.map((s) => s.entityId)).toEqual(['exp-a']);
+    // Exactly what the plan carries: the same value Svelte and Angular are held to.
+    expect(attribution).toEqual(plan.nodes[0]!.attribution);
+    // The provider value crosses the RSC boundary, so it must survive JSON.
+    expect(JSON.parse(JSON.stringify(attribution))).toEqual(attribution);
+  });
+
+  it.each([
+    ['a wrong version', { version: 99 }],
+    ['a missing layers table', { layers: undefined }],
+    ['a node with a nonsense chain', { nodes: { n: { layers: 'nope', scope: 0 } } }],
+  ])('still renders, with no attribution, for %s', async (_label, override) => {
+    let captured: Record<string, unknown> | null = null;
+    const Capture = () => {
+      captured = useContentfulComponent() as unknown as Record<string, unknown>;
+      return <p>rendered</p>;
+    };
+    const cfg: Config = { components: { button: Capture } };
+    const sourceMap = {
+      version: 1,
+      variants: [{ type: 'personalization', id: 'default' }],
+      spaces: [],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [
+        { kind: 'Experience', id: 'exp-a', variants: [0] },
+        { kind: 'Component', id: 'button' },
+      ],
+      dataAssemblies: [],
+      nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
+      ...override,
+    };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('button', { id: 'n' })] },
+      cfg,
+      { sourceMap: sourceMap as never }
+    );
+
+    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(html).toContain('rendered');
+    expect(captured!.attribution).toBeUndefined();
+    expect(plan.diagnostics).toEqual([]);
+  });
+
+  it('has no attribution when the plan carries no source map', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const Capture = () => {
+      captured = useContentfulComponent() as unknown as Record<string, unknown>;
+      return null;
+    };
+    const cfg: Config = { components: { button: Capture } };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [componentNode('button', { id: 'n' })] },
+      cfg
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    expect(captured!.attribution).toBeUndefined();
+  });
+
   it('contentful.resolved carries the resolveData return value', async () => {
     let captured: Record<string, unknown> | null = null;
     const Capture = () => {
@@ -760,6 +854,43 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     expect(captured!.resolved).toEqual({ enriched: 'yes' });
+  });
+
+  it('exposes attribution via useContentfulExperienceTemplate()', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const CaptureTpl = () => {
+      captured = useContentfulExperienceTemplate() as unknown as Record<string, unknown>;
+      return null;
+    };
+    const cfg: Config = {
+      components: {},
+      experienceTemplates: { page: CaptureTpl },
+    };
+    const plan = await resolveExperience(
+      { viewports: VIEWPORTS, nodes: [experienceTemplateNode('page', { id: 'tpl' })] },
+      cfg,
+      {
+        sourceMap: {
+          version: 1,
+          variants: [{ type: 'personalization', id: 'default' }],
+          spaces: [],
+          environments: [],
+          locales: [],
+          entries: [],
+          assets: [],
+          layers: [
+            { kind: 'Experience', id: 'exp-a', variants: [0] },
+            { kind: 'ExperienceTemplate', id: 'page' },
+          ],
+          dataAssemblies: [],
+          nodes: { tpl: { layers: [1, 0], scope: 0, contentProperties: [] } },
+        },
+      }
+    );
+    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
+
+    const attribution = captured!.attribution as { scopes: Array<{ entityId: string }> };
+    expect(attribution.scopes.map((s) => s.entityId)).toEqual(['exp-a']);
   });
 
   it('exposes experienceTemplateId/content/design/resolved via useContentfulExperienceTemplate()', async () => {

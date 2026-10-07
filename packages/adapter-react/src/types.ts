@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import type {
   DesignPropValue,
+  NodeAttribution,
   RenderContext,
   ResolveContext,
   ResolveToken,
@@ -30,6 +31,12 @@ export interface ContentfulComponent {
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
+  /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
 }
 
 /**
@@ -43,6 +50,12 @@ export interface ContentfulExperienceTemplate {
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
+  /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
 }
 
 /** Render-time experience context, read with `useExperience()`. Declared in core so all adapters share one shape. */
