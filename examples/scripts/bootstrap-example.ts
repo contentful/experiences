@@ -648,10 +648,10 @@ async function seedExperience(fixture: ExperienceFixture) {
   if (isPublished) {
     log(`  ✓ Experience "${fixture.id}" already published`);
   } else {
-    await cma.experience.publish({
-      experienceId: upserted.sys.id,
-      version: upserted.sys.version,
-    });
+    await cma.experience.publish(
+      { experienceId: upserted.sys.id, version: upserted.sys.version },
+      { add: ['en-US'] }
+    );
     log(`  ✓ Experience "${fixture.id}" published`);
   }
   return experienceId;
@@ -706,7 +706,7 @@ function createPersonalizedSlots(
   return clone;
 }
 
-async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture) {
+async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture): Promise<string> {
   const base = await cma.experience.get({ experienceId: fixture.experienceId });
   const path = `/experiences/${fixture.experienceId}/optimization_variants`;
   const collection = await cmaJson<{ items: OptimizationVariant[] }>(path);
@@ -760,6 +760,96 @@ async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture
   } else {
     log(`  ✓ Optimization Variant "${fixture.variant.name}" already published`);
   }
+  return variant.sys.variant;
+}
+
+type PersonalizationEntry = { sys: { version: number; publishedVersion?: number } };
+
+/** Create or update + publish one Personalization app entry (nt_audience / nt_experience). */
+async function upsertPersonalizationEntry(
+  contentTypeId: string,
+  entryId: string,
+  fields: Record<string, unknown>
+) {
+  const path = `/entries/${entryId}`;
+  const current = await cmaFetch(path);
+  let entry: PersonalizationEntry;
+  if (current.status === 404) {
+    entry = await cmaJson<PersonalizationEntry>(path, {
+      method: 'PUT',
+      headers: { 'X-Contentful-Content-Type': contentTypeId },
+      body: JSON.stringify({ fields }),
+    });
+  } else if (current.ok) {
+    const existing = (await current.json()) as PersonalizationEntry;
+    entry = await cmaJson<PersonalizationEntry>(path, {
+      method: 'PUT',
+      headers: { 'X-Contentful-Version': String(existing.sys.version) },
+      body: JSON.stringify({ fields }),
+    });
+  } else {
+    throw new Error(`GET ${path} failed (${current.status}): ${await current.text()}`);
+  }
+  await cmaJson(`${path}/published`, {
+    method: 'PUT',
+    headers: { 'X-Contentful-Version': String(entry.sys.version) },
+  });
+}
+
+/**
+ * Activates the personalized variant: an Audience matching the campaign URL and
+ * an Optimization that swaps the baseline Experience for the variant. Rewriting
+ * the Optimization every run keeps its variant id in sync, so recreating the
+ * variant cannot leave the mapping pointing at a deleted id.
+ */
+async function seedOptimization(fixture: ExperiencePersonalizationFixture, variantId: string) {
+  const { audience, optimization } = fixture;
+  const en = <T>(value: T) => ({ 'en-US': value });
+
+  await upsertPersonalizationEntry('nt_audience', audience.entryId, {
+    nt_name: en(audience.name),
+    nt_audience_id: en(audience.entryId),
+    nt_metadata: en({ type: 'origin' }),
+    nt_rules: en({
+      any: [
+        {
+          all: [
+            {
+              type: 'location',
+              count: '1',
+              key: 'continent',
+              operator: 'equal',
+              value: audience.continent,
+              conditions: [],
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  log(`  ✓ Audience "${audience.name}" upserted + published`);
+
+  await upsertPersonalizationEntry('nt_experience', optimization.entryId, {
+    nt_name: en(optimization.name),
+    nt_type: en('nt_personalization'),
+    nt_experience_id: en(optimization.optimizationId),
+    nt_metadata: en({ type: 'origin' }),
+    nt_audience: en({ sys: { type: 'Link', linkType: 'Entry', id: audience.entryId } }),
+    nt_config: en({
+      sticky: false,
+      traffic: 1,
+      // [baseline, variant]: send every matching visitor to the variant.
+      distribution: [0, 1],
+      components: [
+        {
+          type: 'ExperienceReplacement',
+          baseline: { id: 'default', entityId: fixture.experienceId },
+          variants: [{ id: variantId, entityId: fixture.experienceId }],
+        },
+      ],
+    }),
+  });
+  log(`  ✓ Optimization "${optimization.name}" → variant ${variantId} upserted + published`);
 }
 
 // --- Orchestrator ------------------------------------------------------------
@@ -794,7 +884,8 @@ async function main() {
 
   step('Step 9/9 — Experience');
   const experienceId = await seedExperience(experience);
-  await seedOptimizationVariant(personalization);
+  const variantId = await seedOptimizationVariant(personalization);
+  await seedOptimization(personalization, variantId);
 
   log(`\n✅ Done.\n`);
   log(`   Experience id: ${experienceId}`);

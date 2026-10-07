@@ -48,4 +48,14 @@ export const personalization: ExperiencePersonalizationFixture = {
     name: 'Landing (developers)',
     description: 'Personalized landing variant for developer-oriented visitors',
   },
+  audience: {
+    entryId: 'demo-audience-developers',
+    name: 'Developers (EU visitors)',
+    continent: 'EU',
+  },
+  optimization: {
+    entryId: 'demo-optimization-developers',
+    optimizationId: '6f1b6a52-3c1e-4d0e-9d54-5a7a6d2f0a11',
+    name: 'Landing (developers) — EU',
+  },
 };

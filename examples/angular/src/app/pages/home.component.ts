@@ -13,22 +13,20 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         <code>&#64;contentful/experiences-angular</code> from an
         <code>&#64;angular/ssr</code> server.
       </p>
-      <p>
-        <a
-          href="/landing"
-          style="display: inline-block; padding: 10px 16px; border-radius: 8px; background: #4f39f6; color: #ffffff; text-decoration: none; font-weight: 500;"
+      <form action="/landing" method="get">
+        <p>
+          <label style="display: flex; align-items: center; gap: 8px; color: #374151;">
+            <input type="checkbox" name="personalization" value="true" />
+            Personalization (send a page event as an EU visitor)
+          </label>
+        </p>
+        <button
+          type="submit"
+          style="padding: 10px 16px; border: 0; border-radius: 8px; background: #4f39f6; color: #ffffff; font-size: 16px; font-weight: 500; cursor: pointer;"
         >
           View the demo experience
-        </a>
-      </p>
-      <p>
-        <a
-          href="/landing?personalization=true&amp;utm_campaign=developers&amp;debug=true"
-          style="display: inline-block; padding: 10px 16px; border-radius: 8px; background: #0f766e; color: #ffffff; text-decoration: none; font-weight: 500;"
-        >
-          View the personalized developer experience
-        </a>
-      </p>
+        </button>
+      </form>
       <p style="color: #9ca3af; font-size: 13px; margin-top: 24px; margin-bottom: 0;">
         <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
         default. Replace it in the URL with any other Experience id from your space. Append

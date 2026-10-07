@@ -28,25 +28,27 @@ The script prints the resulting experienceId at the end — paste it into the ex
 
 The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant. It provisions:
 
-| Step | Resource type      | Count | Notes                                                                                   |
-| ---- | ------------------ | ----- | --------------------------------------------------------------------------------------- |
-| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                              |
-| 2    | Asset              | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space |
-| 3    | Entry              | 4     | Base hero + personalized hero + 2 card `promotion` entries                              |
-| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by Components                          |
-| 5    | Component          | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card        |
-| 6    | ExperienceTemplate | 1     | `page` (passthrough)                                                                    |
-| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)     |
-| 8    | (linkage)          | 2     | Append DA links to hero-plain and card Components, republish                            |
-| 9    | Experience         | 1 + 1 | `landing` plus its nested `Landing (developers)` Optimization Variant                   |
+| Step | Resource type      | Count | Notes                                                                                    |
+| ---- | ------------------ | ----- | ---------------------------------------------------------------------------------------- |
+| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                               |
+| 2    | Asset              | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space  |
+| 3    | Entry              | 4     | Base hero + personalized hero + 2 card `promotion` entries                               |
+| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by Components                           |
+| 5    | Component          | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card         |
+| 6    | ExperienceTemplate | 1     | `page` (passthrough)                                                                     |
+| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)      |
+| 8    | (linkage)          | 2     | Append DA links to hero-plain and card Components, republish                             |
+| 9    | Experience         | 1 + 3 | `landing`, its nested `Landing (developers)` variant, an EU audience and an Optimization |
 
 Each step is idempotent: if a resource with the fixture's id already exists, that step is skipped. Re-running against a half-seeded env picks up where a previous run left off.
 
-The bootstrap does not create an Audience or activate an Optimization. Configure
-those in Contentful Personalization, mapping an Audience whose campaign name is
-`developers` to `Landing (developers)`. The Next.js example sends that campaign
-in its page event when opened with
-`?personalization=true&utm_campaign=developers&debug=true`.
+Step 9 also seeds the Personalization entries that activate the variant: an
+`nt_audience` for EU visitors (`demo-audience-developers`) and an
+`nt_experience` Optimization (`demo-optimization-developers`) that replaces the
+`landing` baseline with `Landing (developers)` for that audience. Both are
+rewritten on every run, so the Optimization always points at the variant's
+current id. The example apps send an EU location in their page event when opened
+with `?personalization=true`; without it they render the base experience.
 
 The nested variant is idempotent too: the script finds it by its stable name,
 updates it in place, and publishes the latest version.

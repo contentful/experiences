@@ -40,20 +40,26 @@ Visit `http://localhost:5173/landing`. `landing` is the Experience id the bootst
 
 ### Optional: personalization
 
-After running the bootstrap, create an active Personalization Optimization in
-Contentful:
+The bootstrap seeds everything needed: the `Landing (developers)` Optimization
+Variant, an EU audience (`demo-audience-developers`), and an Optimization
+(`demo-optimization-developers`) that serves the variant to that audience.
+Nothing has to be configured in Contentful by hand.
 
-1. Create a Developers audience whose page campaign name is `developers`.
-2. Add the `landing` Experience and map that audience to the
-   `Landing (developers)` Optimization Variant.
-3. Open
-   `http://localhost:5173/landing?personalization=true&utm_campaign=developers&debug=true`.
+Tick **Personalization** on the home page, or open
+`http://localhost:5173/landing?personalization=true`, to see the developer
+hero. Without the flag you get the base hero.
 
-The server builds a server-channel page event with `EventBuilder` and sends it in
-`fetchExperience`'s first-class `personalization` option. That switches the XDA
-request to POST, so Contentful can evaluate the visitor against the configured
-Audience and hydrate the developer hero before server rendering. Without
-`?personalization=true` the request is unchanged.
+With `?personalization=true` the server builds a server-channel page event with
+`EventBuilder`, stamps an EU location on it, and sends it in `fetchExperience`'s
+first-class `personalization` option. That switches the XDA request to POST, so
+Contentful evaluates the visitor against the audience and hydrates the selected
+hero before server rendering. Without the flag no event is sent and the request
+is unchanged.
+
+XDA takes the visitor's location from the event, not the request IP, and
+defaults to San Francisco (US) when none is sent. The example therefore sends
+Berlin to land in the EU audience; a real app would derive the location from its
+own geo-IP source.
 
 The example intentionally does not implement durable profile storage or consent
 policy; production applications must own those concerns.
