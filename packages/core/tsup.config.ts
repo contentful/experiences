@@ -7,7 +7,6 @@ export default defineConfig({
     '!src/**/*.test.ts',
     '!src/**/*.test.tsx',
     '!src/**/*.fixtures.ts',
-    '!src/**/*.probe-fixture.ts',
   ],
   format: ['esm'],
   dts: true,

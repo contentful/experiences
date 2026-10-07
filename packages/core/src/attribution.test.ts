@@ -5,7 +5,7 @@ import {
   FRAGMENT_SOURCE_MAP,
   LANDING_SOURCE_MAP,
 } from './attribution.fixtures';
-import { REPEATED_FRAGMENT_PAYLOAD } from './attribution.probe-fixture';
+import { REPEATED_FRAGMENT_PAYLOAD } from './attribution-probe.fixtures';
 import { resolveExperience } from './resolve-experience';
 import type {
   ExperienceNode,
@@ -454,6 +454,27 @@ describe('scope attribution', () => {
       const sourceMap = mapWith([da], { a: ['ok'], b: ['ghost'], c: ['missing'], d: 'nope' });
 
       expect(await entryIdsOf(sourceMap)).toEqual(['e0']);
+    });
+
+    it('keeps attribution, without entry ids, when the map has no dataAssemblies array', async () => {
+      const sourceMap = mapWith([], { a: ['ok'] }, { dataAssemblies: undefined });
+
+      const plan = await resolve([node('n')], sourceMap);
+
+      expect(plan.diagnostics).toEqual([]);
+      expect(plan.nodes[0]!.attribution!.scopes[0]).toMatchObject({ entityId: 'exp' });
+      expect(plan.nodes[0]!.attribution).not.toHaveProperty('entryIds');
+    });
+
+    it('keeps attribution, without entry ids, when the map has no entries array', async () => {
+      const da = { return: { ok: entry(0) } };
+      const sourceMap = mapWith([da], { a: ['ok'] }, { entries: undefined });
+
+      const plan = await resolve([node('n')], sourceMap);
+
+      expect(plan.diagnostics).toEqual([]);
+      expect(plan.nodes[0]!.attribution!.scopes[0]).toMatchObject({ entityId: 'exp' });
+      expect(plan.nodes[0]!.attribution).not.toHaveProperty('entryIds');
     });
 
     it('leaves entryIds off a node bound to nothing', async () => {
