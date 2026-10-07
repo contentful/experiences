@@ -56,10 +56,11 @@ Contentful evaluates the visitor against the audience and hydrates the selected
 hero before server rendering. Without the flag no event is sent and the request
 is unchanged.
 
-XDA takes the visitor's location from the event, not the request IP, and
-defaults to San Francisco (US) when none is sent. The example therefore sends
-Berlin to land in the EU audience; a real app would derive the location from its
-own geo-IP source.
+This is a simulation, not geo-targeting: XDA takes the visitor's location from
+the event (not the request IP) and defaults to San Francisco (US) when none is
+sent. The example sends Berlin whenever the box is ticked, so every tester sees
+the same result regardless of where they are. A real app would send the
+visitor's actual location.
 
 The example intentionally does not implement durable profile storage or consent
 policy; production applications must own those concerns.

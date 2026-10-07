@@ -10,7 +10,7 @@
     <p>
       <label style="display: flex; align-items: center; gap: 8px; color: #374151;">
         <input type="checkbox" name="personalization" value="true" />
-        Personalization (send a page event as an EU visitor)
+        Personalization (simulates an EU visitor)
       </label>
     </p>
     <button
