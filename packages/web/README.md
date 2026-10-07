@@ -210,8 +210,11 @@ packages re-export it, and so does
   from a React effect whose cleanup cannot await; the stopped session finishes
   sending its final events in the background.
 
-See the [rendering-modes ADR](../../docs/ADRs/2026-09-30-interaction-tracking-across-rendering-modes.md)
-for where the attribution lookup comes from under SSR, CSR, and Server Components.
+The lookup is `plan.attribution.scopes`. Wherever the plan reaches the browser
+(client rendering, SvelteKit page data, Angular `TransferState`, React's
+`ClientExperienceRenderer`) build `resolveAttribution` from it. React's
+`ServerExperienceRenderer` keeps the plan on the server, so pass
+`plan.attribution.scopes` as a prop to the client component that starts tracking.
 
 ## Server event handoff
 
