@@ -26,6 +26,7 @@ export type {
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
   RuntimeEventBuilderConfig,
+  RuntimeFetchResolveOptions,
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';

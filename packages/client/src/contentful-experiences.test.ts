@@ -112,6 +112,7 @@ describe('ContentfulExperiences', () => {
         metadata: { site: 'main', shared: 'call' },
         debug: true,
         initialViewportId: undefined,
+        sourceMap: undefined,
       }
     );
     const personalization = {

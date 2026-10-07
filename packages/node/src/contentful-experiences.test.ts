@@ -119,6 +119,22 @@ describe('Node ContentfulExperiences', () => {
     });
   });
 
+  it('forwards an explicit or null sourceMap, letting the method value win', async () => {
+    const runtime = createRuntime();
+    const resolveExperience = vi
+      .spyOn(runtime, 'resolveExperience')
+      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+    const map = { version: 1 } as never;
+    const request = runtime.forRequest({ resolveOptions: { sourceMap: map } });
+    const payload = { sys: { type: 'Experience' }, nodes: [] } as never;
+
+    await request.resolveExperience(payload);
+    await request.resolveExperience(payload, { sourceMap: null });
+
+    expect(resolveExperience.mock.calls[0]?.[1]).toMatchObject({ sourceMap: map });
+    expect(resolveExperience.mock.calls[1]?.[1]).toMatchObject({ sourceMap: null });
+  });
+
   it('passes merged request options through the Client runtime defaults', async () => {
     const runtime = createRuntime();
     const request = runtime.forRequest({

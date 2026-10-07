@@ -1010,6 +1010,50 @@ describe('resolveExperience — render context carried on the plan', () => {
     expect(plan.sourceMap).toBe(sourceMap);
   });
 
+  describe('source map precedence', () => {
+    const makeMap = (space: string) => ({
+      version: 1,
+      variants: [],
+      spaces: [space],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [],
+      dataAssemblies: [],
+      nodes: {},
+    });
+
+    it("falls back to the payload's extensions.sourceMap", async () => {
+      const payloadMap = makeMap('payload');
+      const experience = payload();
+      experience.extensions = { sourceMap: payloadMap };
+
+      const plan = await resolveExperience(experience, emptyConfig);
+
+      expect(plan.sourceMap).toBe(payloadMap);
+    });
+
+    it("prefers an explicit map over the payload's", async () => {
+      const explicit = makeMap('explicit');
+      const experience = payload();
+      experience.extensions = { sourceMap: makeMap('payload') };
+
+      const plan = await resolveExperience(experience, emptyConfig, { sourceMap: explicit });
+
+      expect(plan.sourceMap).toBe(explicit);
+    });
+
+    it("treats null as no map, ignoring the payload's", async () => {
+      const experience = payload();
+      experience.extensions = { sourceMap: makeMap('payload') };
+
+      const plan = await resolveExperience(experience, emptyConfig, { sourceMap: null });
+
+      expect('sourceMap' in plan).toBe(false);
+    });
+  });
+
   it('carries the XDA personalization profile id onto the plan', async () => {
     const experience = payload();
     experience.extensions = {

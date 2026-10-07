@@ -324,6 +324,7 @@ describe('fetchExperience', () => {
       expect(resolveExperience).toHaveBeenCalledWith(mockPayload, resolveOptions.config, {
         metadata: { slug: 'home' },
         debug: true,
+        sourceMap: null,
       });
     });
 
@@ -448,7 +449,7 @@ describe('fetchExperience — source map', () => {
     expect(resolveExperience).toHaveBeenCalledWith(
       expect.anything(),
       resolveOptions.config,
-      expect.objectContaining({ sourceMap: undefined })
+      expect.objectContaining({ sourceMap: null })
     );
   });
 
@@ -465,7 +466,7 @@ describe('fetchExperience — source map', () => {
     expect(resolveExperience).toHaveBeenCalledWith(
       expect.anything(),
       resolveOptions.config,
-      expect.objectContaining({ sourceMap: undefined })
+      expect.objectContaining({ sourceMap: null })
     );
   });
 
@@ -648,6 +649,18 @@ describe('fetchExperience — destinationId + nodeId', () => {
     expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
   });
 
+  it('passes sourceMap: null, since destination fetches never opt in', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      expect.anything(),
+      resolveOptions.config,
+      expect.objectContaining({ sourceMap: null })
+    );
+  });
+
   it('rejects extensions on destination-shaped options at compile time', () => {
     // @ts-expect-error — extensions is not a member of ByDestinationNodeIdExperienceOptions,
     // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
@@ -779,6 +792,18 @@ describe('fetchExperience — destinationId + path', () => {
     expect(error.path).toBe('/products');
     expect(mockResolveByPath).not.toHaveBeenCalled();
     expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+  });
+
+  it('passes sourceMap: null, since destination fetches never opt in', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+
+    await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(resolveExperience).toHaveBeenCalledWith(
+      expect.anything(),
+      resolveOptions.config,
+      expect.objectContaining({ sourceMap: null })
+    );
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {

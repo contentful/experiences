@@ -225,7 +225,7 @@ export async function fetchExperience(
   const response = await fetchByExperienceId(client, experienceOptions);
 
   const payload = toExperiencePayload(response);
-  const sourceMap = extensions?.sourceMap !== undefined ? readSourceMap(response) : undefined;
+  const sourceMap = extensions?.sourceMap !== undefined ? (readSourceMap(response) ?? null) : null;
 
   log.lazy('received raw payload', () => payload);
 
@@ -333,10 +333,13 @@ async function fetchByDestination(
   const payload = toExperiencePayloadFromDestination(firstExperience.experience);
   log.lazy('received raw payload', () => payload);
 
+  // Destination requests send no extensions, so they never opt into a source
+  // map. `null` keeps the payload fallback from attributing one unasked.
   return resolveExperience(payload, config, {
     metadata,
     debug,
     initialViewportId,
+    sourceMap: null,
   });
 }
 

@@ -159,6 +159,29 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
+  it("keeps a raw payload's source map unless the call passes sourceMap: null", async () => {
+    const runtime = createRuntime();
+    const sourceMap = {
+      version: 1,
+      variants: [],
+      spaces: [],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [],
+      dataAssemblies: [],
+      nodes: {},
+    };
+    const payload = { sys: { type: 'Experience' }, nodes: [], extensions: { sourceMap } } as never;
+
+    const kept = await runtime.resolveExperience(payload);
+    const dropped = await runtime.resolveExperience(payload, { sourceMap: null });
+
+    expect(kept.sourceMap).toEqual(sourceMap);
+    expect(dropped.sourceMap).toBeUndefined();
+  });
+
   it('forwards personalization with Web event context', async () => {
     const runtime = createRuntime();
     const fetch = vi
