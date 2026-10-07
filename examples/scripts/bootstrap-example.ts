@@ -710,9 +710,19 @@ async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture
   const base = await cma.experience.get({ experienceId: fixture.experienceId });
   const path = `/experiences/${fixture.experienceId}/optimization_variants`;
   const collection = await cmaJson<{ items: OptimizationVariant[] }>(path);
-  const existing = collection.items.find(
+  const matches = collection.items.filter(
     (item) => item.sys.variant !== 'default' && item.name === fixture.variant.name
   );
+  // Updating "the first match" could silently rewrite a variant this script
+  // never created, so refuse to guess when the name is ambiguous.
+  if (matches.length > 1) {
+    throw new Error(
+      `Found ${matches.length} Optimization Variants named "${fixture.variant.name}" ` +
+        `(${matches.map((item) => item.sys.variant).join(', ')}). ` +
+        'Delete or rename the extras, then re-run.'
+    );
+  }
+  const [existing] = matches;
   const variantBody = {
     name: fixture.variant.name,
     description: fixture.variant.description,
