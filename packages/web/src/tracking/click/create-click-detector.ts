@@ -4,7 +4,7 @@ import { TRACKING_CLICKABLE_ATTRIBUTE } from '../../tracking-attributes.js';
 import {
   type InteractionDetector,
   isFragment,
-  type ResolveElementAttribution,
+  type ResolveScopeAttribution,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -32,9 +32,10 @@ const toEventTargetElement = (event: Event): Element | undefined => {
 
 export function createClickDetector(
   trackClick: (args: ClickBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveElementAttribution
+  resolveAttribution: ResolveScopeAttribution
 ): InteractionDetector {
-  const trackedElements = new Set<Element>();
+  /** Each tracked element with the scope occurrence keys it roots, outer to inner. */
+  const trackedElements = new Map<Element, Set<string>>();
   let listening = false;
 
   /** The nearest tracked element on the path, and whether the path is clickable. */
@@ -68,8 +69,14 @@ export function createClickDetector(
     const { trackedElement, hasClickablePath } = resolveClickContext(eventTarget);
     if (!trackedElement || !hasClickablePath) return;
 
-    const attribution = resolveAttribution(trackedElement);
-    if (!attribution || !isFragment(attribution)) return;
+    // Clicks go to the innermost Fragment occurrence the nearest tracked element
+    // roots; an Experience is view-only.
+    let attribution: ReturnType<ResolveScopeAttribution>;
+    for (const key of trackedElements.get(trackedElement) ?? []) {
+      const candidate = resolveAttribution(key);
+      if (candidate && isFragment(candidate)) attribution = candidate;
+    }
+    if (!attribution) return;
 
     // Unlike views and hovers, no observer wraps this send, so catch here.
     trackClick(toInteractionArgs(attribution)).catch((error: unknown) => {
@@ -88,11 +95,15 @@ export function createClickDetector(
       listening = false;
       trackedElements.clear();
     },
-    onElementAdded(element) {
-      trackedElements.add(element);
+    onElementAdded(element, key) {
+      const keys = trackedElements.get(element) ?? new Set<string>();
+      keys.add(key);
+      trackedElements.set(element, keys);
     },
-    onElementRemoved(element) {
-      trackedElements.delete(element);
+    onElementRemoved(element, key) {
+      const keys = trackedElements.get(element);
+      keys?.delete(key);
+      if (keys?.size === 0) trackedElements.delete(element);
     },
   };
 }

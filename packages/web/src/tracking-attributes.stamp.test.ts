@@ -12,7 +12,9 @@ afterEach(() => {
 describe('tracking attributes with the runtime', () => {
   it('marks elements the runtime discovers, and opts non-interactive content into clicks', () => {
     const fragment = document.createElement('div');
-    for (const [name, value] of Object.entries(getTrackingAttributes('node:hero'))) {
+    for (const [name, value] of Object.entries(
+      getTrackingAttributes({ roots: [{ key: 'node:hero' }] })
+    )) {
       fragment.setAttribute(name, value);
     }
     const card = document.createElement('div');

@@ -6,27 +6,26 @@
  *   hover duration when that qualified hover ends.
  * - Ends hovers when the page is hidden; a fresh pointer entry is needed after.
  * - Ignores touch pointers — touch has no hover.
- * - Serializes the start and final callbacks per element.
+ * - Serializes the start and final callbacks.
+ * - Treats every observed element as a member of ONE hover: it runs while any
+ *   member is hovered and ends when the last one is left, under one hoverId.
  * - Sweeps orphan/disconnected element state to avoid leaks.
  */
 
-import {
-  ensureSweeper,
-  finalizeDroppedState,
-  stopSweeper,
-  sweepOrphans,
-} from '../observer-lifecycle.js';
+import { chainCallback, ensureSweeper, stopSweeper, sweepOrphans } from '../observer-lifecycle.js';
 import {
   addVisibilityChangeListener,
   CAN_ADD_LISTENERS,
   clearFireTimer,
   createElementRef,
   derefElement,
+  firstLiveMember,
   type Interval,
   isPageVisible,
   NOW,
   safeCallAsync,
   type Timer,
+  type WeakRefState,
 } from '../observer-support.js';
 
 export const DEFAULTS = {
@@ -53,20 +52,24 @@ export interface ElementHoverElementOptions {
   readonly data?: unknown;
 }
 
-interface ElementState {
-  ref: WeakRef<Element> | null;
-  strongRef: Element | null;
+interface ElementState extends WeakRefState {
   data?: unknown;
-  accumulatedMs: number;
-  hoverSince: number | null;
-  fireTimer: Timer | null;
-  attempts: number;
-  hoverId: string | null;
   done: boolean;
   isHovered: boolean;
-  callbackChain: Promise<void> | null;
   enterHandler: (event: Event) => void;
   leaveHandler: (event: Event) => void;
+}
+
+/** The hover all observed elements are members of. */
+interface HoverSession {
+  accumulatedMs: number;
+  attempts: number;
+  callbackChain: Promise<void> | null;
+  done: boolean;
+  fireTimer: Timer | null;
+  hoverId: string | null;
+  hoverSince: number | null;
+  isHovered: boolean;
 }
 
 const createHoverId = (): string => crypto.randomUUID();
@@ -85,6 +88,16 @@ export class ElementHoverObserver {
   private readonly states = new WeakMap<Element, ElementState>();
   private readonly activeStates = new Set<ElementState>();
   private readonly pendingCallbacks = new Set<Promise<void>>();
+  private readonly session: HoverSession = {
+    accumulatedMs: 0,
+    attempts: 0,
+    callbackChain: null,
+    done: false,
+    fireTimer: null,
+    hoverId: null,
+    hoverSince: null,
+    isHovered: false,
+  };
   private cleanupVisibilityListener?: () => void;
   private sweepInterval: Interval | null = null;
 
@@ -115,13 +128,13 @@ export class ElementHoverObserver {
     if (!state) return;
 
     ElementHoverObserver.detachHoverListeners(element, state);
-    clearFireTimer(state);
     state.done = true;
     this.activeStates.delete(state);
 
     if (state.strongRef === element) state.strongRef = null;
 
     this.states.delete(element);
+    this.releaseMember(state);
     this.maybeStopSweeper();
   }
 
@@ -130,12 +143,14 @@ export class ElementHoverObserver {
       const element = derefElement(state);
       if (element) ElementHoverObserver.detachHoverListeners(element, state);
 
-      clearFireTimer(state);
       state.done = true;
       state.strongRef = null;
     }
 
     this.activeStates.clear();
+
+    clearFireTimer(this.session);
+    this.session.done = true;
 
     this.cleanupVisibilityListener?.();
     this.cleanupVisibilityListener = undefined;
@@ -143,13 +158,10 @@ export class ElementHoverObserver {
     this.stopSweeper();
   }
 
-  /** Ends every active hover, emitting final callbacks for qualified ones, and awaits them. */
+  /** Ends the active hover, emitting a final callback if it qualified, and awaits it. */
   async endActive(): Promise<void> {
-    const now = NOW();
-
-    for (const state of this.activeStates) {
-      this.endHoverCycle(state, now);
-    }
+    this.endHoverCycle(NOW());
+    for (const state of this.activeStates) state.isHovered = false;
 
     await Promise.all(this.pendingCallbacks);
   }
@@ -158,14 +170,8 @@ export class ElementHoverObserver {
     const state: ElementState = {
       ...createElementRef(element),
       data: options?.data,
-      accumulatedMs: 0,
-      hoverSince: null,
-      fireTimer: null,
-      attempts: 0,
-      hoverId: null,
       done: false,
       isHovered: false,
-      callbackChain: null,
       enterHandler: () => undefined,
       leaveHandler: () => undefined,
     };
@@ -206,108 +212,143 @@ export class ElementHoverObserver {
     }
 
     state.isHovered = true;
-    state.accumulatedMs = 0;
-    state.attempts = 0;
-    state.hoverId = createHoverId();
-    state.hoverSince = NOW();
-    clearFireTimer(state);
-    this.scheduleQualification(state);
+    const { session } = this;
+    // A second member entered while the hover is already running.
+    if (session.isHovered) return;
+
+    session.isHovered = true;
+    session.accumulatedMs = 0;
+    session.attempts = 0;
+    session.hoverId = createHoverId();
+    session.hoverSince = NOW();
+    clearFireTimer(session);
+    this.scheduleQualification();
   }
 
   private onHoverEnd(state: ElementState, event: Event): void {
     if (state.done || !state.isHovered || !isNaturalHoverEvent(event)) return;
 
-    this.endHoverCycle(state, NOW());
+    state.isHovered = false;
+    // The hover runs until the last hovered member is left.
+    if (this.hasHoveredMember()) return;
+
+    this.endHoverCycle(NOW());
+  }
+
+  private hasHoveredMember(): boolean {
+    for (const member of this.activeStates) {
+      if (!member.done && member.isHovered) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Brings the hover in line after a member left. No members left drops it
+   * silently; losing the last hovered member ends it normally.
+   */
+  private releaseMember(state: ElementState): void {
+    const wasHovered = state.isHovered;
+    state.isHovered = false;
+
+    if (this.activeStates.size === 0) {
+      this.resetHoverCycle();
+    } else if (wasHovered && !this.hasHoveredMember()) {
+      this.endHoverCycle(NOW());
+    }
   }
 
   private onPageVisibilityChange(isVisible: boolean): void {
     if (!isVisible) {
-      const now = NOW();
-      for (const state of this.activeStates) {
-        this.endHoverCycle(state, now);
-      }
+      this.endHoverCycle(NOW());
+      for (const state of this.activeStates) state.isHovered = false;
     }
 
     this.sweepOrphans();
   }
 
-  private static resetHoverCycle(state: ElementState): void {
-    state.isHovered = false;
-    state.accumulatedMs = 0;
-    state.hoverSince = null;
-    state.attempts = 0;
-    state.hoverId = null;
-    clearFireTimer(state);
+  private resetHoverCycle(): void {
+    const { session } = this;
+    session.isHovered = false;
+    session.accumulatedMs = 0;
+    session.hoverSince = null;
+    session.attempts = 0;
+    session.hoverId = null;
+    clearFireTimer(session);
   }
 
-  private scheduleQualification(state: ElementState): void {
+  private scheduleQualification(): void {
+    const { session } = this;
     if (
-      state.done ||
-      state.fireTimer !== null ||
-      !state.isHovered ||
+      session.done ||
+      session.fireTimer !== null ||
+      !session.isHovered ||
       !isPageVisible() ||
-      state.hoverId === null
+      session.hoverId === null
     ) {
       return;
     }
 
-    state.fireTimer = setTimeout(() => {
+    session.fireTimer = setTimeout(() => {
       if (
-        state.done ||
-        !state.isHovered ||
+        session.done ||
+        !session.isHovered ||
         !isPageVisible() ||
-        state.hoverSince === null ||
-        state.hoverId === null
+        session.hoverSince === null ||
+        session.hoverId === null
       ) {
-        clearFireTimer(state);
+        clearFireTimer(session);
         return;
       }
 
-      this.qualify(state, NOW());
+      this.qualify(NOW());
     }, DEFAULTS.DWELL_MS);
   }
 
-  private qualify(state: ElementState, now: number): void {
-    if (state.done || !state.isHovered || state.hoverId === null || state.hoverSince === null) {
+  private qualify(now: number): void {
+    const { session } = this;
+    if (
+      session.done ||
+      !session.isHovered ||
+      session.hoverId === null ||
+      session.hoverSince === null
+    ) {
       return;
     }
 
-    clearFireTimer(state);
-    state.attempts = 1;
-    state.accumulatedMs = Math.max(0, now - state.hoverSince);
-    void this.queueCallback(state, state.hoverId, state.accumulatedMs, state.attempts);
+    clearFireTimer(session);
+    session.attempts = 1;
+    session.accumulatedMs = Math.max(0, now - session.hoverSince);
+    void this.queueCallback(session.hoverId, session.accumulatedMs, session.attempts);
   }
 
-  private endHoverCycle(state: ElementState, now: number): void {
-    if (state.done || !state.isHovered || state.hoverId === null) return;
+  private endHoverCycle(now: number): void {
+    const { session } = this;
+    if (session.done || !session.isHovered || session.hoverId === null) return;
 
-    if (state.hoverSince !== null) {
-      state.accumulatedMs = Math.max(state.accumulatedMs, now - state.hoverSince);
+    if (session.hoverSince !== null) {
+      session.accumulatedMs = Math.max(session.accumulatedMs, now - session.hoverSince);
     }
 
-    const { hoverId, accumulatedMs: totalHoverMs } = state;
-    const qualified = state.attempts > 0;
+    const { hoverId, accumulatedMs: totalHoverMs } = session;
+    const qualified = session.attempts > 0;
 
-    ElementHoverObserver.resetHoverCycle(state);
+    this.resetHoverCycle();
 
     if (qualified) {
-      void this.queueCallback(state, hoverId, totalHoverMs, 2);
+      void this.queueCallback(hoverId, totalHoverMs, 2);
     }
   }
 
   private async queueCallback(
-    state: ElementState,
     hoverId: string,
     totalHoverMs: number,
     attempts: number
   ): Promise<void> {
-    const element = derefElement(state);
-    if (!element) {
-      this.finalizeDroppedState(state);
-      return;
-    }
+    const member = firstLiveMember(this.activeStates);
+    const element = member && derefElement(member);
+    if (!member || !element) return;
 
-    const { data } = state;
+    const { data } = member;
     const invoke = (): Promise<void> =>
       safeCallAsync(
         () => this.callback(element, { totalHoverMs, hoverId, attempts, data }),
@@ -315,21 +356,7 @@ export class ElementHoverObserver {
           console.error('[@contentful/experiences] Error in element hover callback:', error);
         }
       );
-    const pending = state.callbackChain ? state.callbackChain.then(invoke) : invoke();
-
-    state.callbackChain = pending;
-    this.pendingCallbacks.add(pending);
-    void pending.then(() => {
-      if (state.callbackChain === pending) state.callbackChain = null;
-      this.pendingCallbacks.delete(pending);
-    });
-
-    await pending;
-  }
-
-  private finalizeDroppedState(state: ElementState): void {
-    finalizeDroppedState(state, { activeStates: this.activeStates, states: this.states });
-    this.maybeStopSweeper();
+    await chainCallback(this.session, invoke, this.pendingCallbacks);
   }
 
   private ensureSweeper(): void {

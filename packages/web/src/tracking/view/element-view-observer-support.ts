@@ -1,4 +1,4 @@
-import { createElementRef, type Timer } from '../observer-support.js';
+import { createElementRef } from '../observer-support.js';
 
 export const DEFAULTS = {
   DWELL_MS: 1000,
@@ -44,14 +44,8 @@ export interface ElementState {
   source: ElementViewSource;
   target: Element | null;
   data?: unknown;
-  accumulatedMs: number;
-  visibleSince: number | null;
-  fireTimer: Timer | null;
-  attempts: number;
-  viewId: string | null;
   done: boolean;
   lastKnownVisible: boolean;
-  callbackChain: Promise<void> | null;
 }
 
 export const initElementViewObserverOptions = (
@@ -69,12 +63,6 @@ export const createElementState = (
   source: 'element',
   target: null,
   data: elementOptions?.data,
-  accumulatedMs: 0,
-  visibleSince: null,
-  fireTimer: null,
-  attempts: 0,
-  viewId: null,
   done: false,
   lastKnownVisible: false,
-  callbackChain: null,
 });

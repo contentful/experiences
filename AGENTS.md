@@ -89,9 +89,12 @@ use the Personalization API, while `trackView`, `trackClick`,
 events, persist event data durably, gate on consent, use
 beacon/lifecycle delivery, or integrate event delivery with Live Preview. The Web
 runtime's `startInteractionTracking()` tracks views, hovers, and clicks on
-elements carrying `data-ctfl-node-id` (contract on the
-`@contentful/experiences-web/tracking-attributes` subpath) and sends through the
-same direct methods; no adapter stamps that attribute yet. Preview fetches remain ordinary manual
+elements carrying `data-ctfl-scopes` (a space-separated list of scope occurrence
+keys, resolved through `plan.attribution.scopes`) and sends through the same
+direct methods. `getTrackingAttributes` lives in core and is re-exported by every
+adapter and by the `@contentful/experiences-web/tracking-attributes` subpath; no
+adapter stamps the attribute for you, so components spread it onto their
+outermost element. Preview fetches remain ordinary manual
 event-call contexts: a manually invoked event method still sends while preview
 is active.
 

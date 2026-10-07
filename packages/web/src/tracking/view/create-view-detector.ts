@@ -3,7 +3,7 @@ import type { ViewBuilderArgs } from '@contentful/experiences-client';
 import { createTimedDetector } from '../create-timed-detector.js';
 import {
   type InteractionDetector,
-  type ResolveElementAttribution,
+  type ResolveScopeAttribution,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -15,14 +15,13 @@ import { ElementViewObserver } from './element-view-observer.js';
 
 export function createViewDetector(
   trackView: (args: ViewBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveElementAttribution,
+  resolveAttribution: ResolveScopeAttribution,
   options?: ElementViewObserverOptions
 ): InteractionDetector {
   return createTimedDetector<ElementViewCallbackInfo>({
     resolveAttribution,
     isSupported: () => typeof IntersectionObserver !== 'undefined',
     isEligible: () => true,
-    sessionId: (info) => info.viewId,
     isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementViewObserver(callback, options),
     track: async (attribution, info) => {

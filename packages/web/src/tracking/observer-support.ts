@@ -100,3 +100,13 @@ export async function safeCallAsync(
     }
   }
 }
+
+/** The first state whose element is still alive, in insertion order. */
+export const firstLiveMember = <T extends WeakRefState & { done: boolean }>(
+  states: Iterable<T>
+): T | null => {
+  for (const member of states) {
+    if (!member.done && derefElement(member)) return member;
+  }
+  return null;
+};

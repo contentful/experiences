@@ -223,4 +223,116 @@ describe('ElementHoverObserver', () => {
     expect(cb.mock.calls.every(([target]) => target === qualified)).toBe(true);
     expect(infoAt(cb, 1).totalHoverMs).toBe(1700);
   });
+
+  describe('sharedSession', () => {
+    const shared = (cb: ReturnType<typeof vi.fn<Callback>>) => new ElementHoverObserver(cb);
+
+    it('stays hovered while any member is, under one hoverId', async () => {
+      const a = makeElement();
+      const b = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = shared(cb);
+      observer.observe(a);
+      observer.observe(b);
+
+      enter(a);
+      await advance(400);
+      enter(b);
+      await advance(100);
+      leave(a);
+      await advance(500);
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(infoAt(cb, 0)).toMatchObject({ attempts: 1, totalHoverMs: 1000 });
+
+      await advance(300);
+      leave(b);
+      await advance(0);
+
+      expect(cb).toHaveBeenCalledTimes(2);
+      expect(infoAt(cb, 1)).toMatchObject({
+        attempts: 2,
+        hoverId: infoAt(cb, 0).hoverId,
+        totalHoverMs: 1300,
+      });
+    });
+
+    it('does not restart when a second member is entered mid-hover', async () => {
+      const a = makeElement();
+      const b = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = shared(cb);
+      observer.observe(a);
+      observer.observe(b);
+
+      enter(a);
+      await advance(900);
+      enter(b);
+      await advance(100);
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb.mock.calls[0]?.[0]).toBe(a);
+    });
+
+    it('ignores touch pointers', async () => {
+      const a = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      shared(cb).observe(a);
+
+      enter(a, 'touch');
+      await advance(2000);
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('endActive flushes the shared hover once', async () => {
+      const a = makeElement();
+      const b = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = shared(cb);
+      observer.observe(a);
+      observer.observe(b);
+
+      enter(a);
+      enter(b);
+      await advance(1250);
+      await observer.endActive();
+
+      expect(cb).toHaveBeenCalledTimes(2);
+      expect(infoAt(cb, 1)).toMatchObject({ attempts: 2, totalHoverMs: 1250 });
+    });
+
+    it('keeps the hover when one of two hovered members is unobserved', async () => {
+      const a = makeElement();
+      const b = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = shared(cb);
+      observer.observe(a);
+      observer.observe(b);
+
+      enter(a);
+      enter(b);
+      await advance(500);
+      observer.unobserve(a);
+      await advance(500);
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb.mock.calls[0]?.[0]).toBe(b);
+    });
+
+    it('drops the hover silently when the last member is unobserved', async () => {
+      const a = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = shared(cb);
+      observer.observe(a);
+
+      enter(a);
+      await advance(500);
+      observer.unobserve(a);
+      await advance(20_000);
+
+      expect(cb).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
 });

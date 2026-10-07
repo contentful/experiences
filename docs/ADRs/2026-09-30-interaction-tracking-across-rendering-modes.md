@@ -16,10 +16,12 @@ The tracking side is built in `packages/web`, ported from the Optimization Web S
 entry tracking:
 
 - `createInteractionTracking` (`packages/web/src/interaction-tracking.ts`) finds
-  elements carrying `data-ctfl-node-id`, with an initial scan plus a
-  `MutationObserver`, and hands them to the view, hover, and click detectors.
-- The attribute holds only a node id. Detectors turn it into attribution by calling
-  a caller-supplied `resolveAttribution(nodeId)` when an event fires.
+  elements carrying `data-ctfl-scopes`, with an initial scan plus a
+  `MutationObserver`, and hands them to the view, hover, and click detectors once
+  per key.
+- The attribute holds only opaque scope occurrence keys. Detectors turn a key into
+  attribution by calling a caller-supplied `resolveAttribution(key)` when an event
+  fires.
 - `createInteractionTracking` itself is internal. The public entry point is the Web
   runtime's `startInteractionTracking({ resolveAttribution, … })`, which wires it to
   the instance's `trackView`, `trackHover`, and `trackClick` and returns a session
@@ -80,16 +82,17 @@ The facts below were checked in the code rather than assumed.
 
 ## Decision
 
-**Tracking is a browser-only layer keyed by `data-ctfl-node-id`, which holds the
-node's `nodeId`. The rendered markup carries only that opaque key. Whatever owns
-the rendered plan in the browser supplies the id → attribution lookup.**
+**Tracking is a browser-only layer keyed by `data-ctfl-scopes`, which lists the
+scope occurrence keys an element roots. The rendered markup carries only those
+opaque keys. The plan's `attribution.scopes` is the key → attribution lookup.**
 
 1. **The attribute is the same on the server and in the browser.**
-   - It is derived from `nodeId`, which both renders already have, so it cannot
-     cause a hydration mismatch.
-   - It goes only on the outermost element of each Experience or Fragment
-     instance, through the NT-4312 accessor.
-   - A node without an id cannot be tracked. Generating ids is out of scope: the
+   - It is derived from the node's `attribution.roots`, which both renders already
+     have, so it cannot cause a hydration mismatch.
+   - It goes only on the outermost element of each node, built with
+     `getTrackingAttributes(contentful.attribution)` from the component context
+     accessor. A node in the middle of a scope gets nothing.
+   - A node without an id has no attribution and cannot be tracked. Generating ids is out of scope: the
      SDK deliberately never generates them, and a generated id would have to be
      identical on the server and in the browser.
 
@@ -98,10 +101,9 @@ the rendered plan in the browser supplies the id → attribution lookup.**
      `ClientExperienceRenderer`:** the plan is already in the browser, so the
      lookup is built from it. Nothing extra needs to be sent.
    - **React `ServerExperienceRenderer`:** the plan stays on the server. The server
-     sends a small serializable map from id to attribution, with one entry per
-     Experience or Fragment instance, as a prop of the client component that owns
-     tracking. The map depends only on the lookup contract, not on how NT-4312
-     shapes its accessors.
+     sends `plan.attribution.scopes`, which is already a small serializable map
+     with one entry per scope occurrence, as a prop of the client component that
+     owns tracking.
    - **Not the event handoff.** Its schema is events-only, and its 64 KiB cap is
      shared with event bodies. It is also meant for private, uncached responses,
      while tracking needs to work on cacheable pages too.
@@ -175,3 +177,29 @@ the rendered plan in the browser supplies the id → attribution lookup.**
   the page-level map, at the cost of tying tracking to the accessor's shape.
 - **Impressions.** The consumer DX proposal lists impression events separately from
   views. Whether they are in scope for NT-3535 is undecided.
+
+## Addendum: grouping by scope occurrence (NT-4312)
+
+The first version keyed one element to one node id and tracked per element, as the
+Optimization Web SDK does. NT-4312 needs more than that: one element can sit in
+several scopes (an Experience and a Fragment), and several root elements can make up
+one Fragment occurrence. So:
+
+- The attribute lists occurrence keys, and detectors group elements by key. All
+  elements of one occurrence share a single session, so they produce one `viewId` or
+  `hoverId`, and two occurrences of the same Fragment produce two, provided
+  something separates them. Probed on a live space (2026-10-05), XDA gives two
+  copies of one persisted Fragment the same layer row and the same node ids, so
+  the occurrence key is positional and copies placed directly next to each other
+  merge into one occurrence. Telling them apart needs XDA to emit a distinct
+  node id or an occurrence id per usage.
+- A view is open while any element of the occurrence has a visible pixel. A hover is
+  open until the pointer has left all of them.
+- A click goes to the innermost Fragment occurrence of the nearest tracked element. An
+  Experience is view-only.
+- This departs from `optimization`, which tracks per element. Grouping is forced by
+  the requirement to keep Fragment occurrences distinct and to let one Fragment
+  have several roots.
+- `NT-3535`'s attribute (`data-ctfl-node-id`) was never released, so it was replaced
+  rather than deprecated. `getTrackingAttributes` moved from `web` into `core` so the
+  adapters can re-export it without depending on `web`.

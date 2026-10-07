@@ -6,11 +6,15 @@
  *   visible duration when that qualified view ends.
  * - Ends view sessions when the page is hidden and starts a fresh session on
  *   return, for elements still in view.
- * - Serializes the start and final callbacks per element.
+ * - Serializes the start and final callbacks.
+ * - Treats every observed element as a member of ONE session: it is in view
+ *   while any member is, and start/final callbacks (one viewId) are serialized
+ *   across the whole group.
  * - Sweeps orphan/disconnected element state to avoid leaks.
  */
 
 import {
+  chainCallback,
   ensureSweeper,
   finalizeDroppedState,
   stopSweeper,
@@ -20,10 +24,12 @@ import {
   addVisibilityChangeListener,
   clearFireTimer,
   derefElement,
+  firstLiveMember,
   type Interval,
   isPageVisible,
   NOW,
   safeCallAsync,
+  type Timer,
 } from '../observer-support.js';
 
 import {
@@ -40,6 +46,18 @@ import { ElementViewSourceController } from './element-view-source-controller.js
 
 const createViewId = (): string => crypto.randomUUID();
 
+/** The view all observed elements are members of. */
+interface ViewSession {
+  accumulatedMs: number;
+  attempts: number;
+  callbackChain: Promise<void> | null;
+  done: boolean;
+  fireTimer: Timer | null;
+  lastKnownVisible: boolean;
+  viewId: string | null;
+  visibleSince: number | null;
+}
+
 export class ElementViewObserver {
   private readonly opts: EffectiveObserverOptions;
   private readonly io: IntersectionObserver;
@@ -49,6 +67,16 @@ export class ElementViewObserver {
   private readonly pendingCallbacks = new Set<Promise<void>>();
   private cleanupVisibilityListener?: () => void;
   private sweepInterval: Interval | null = null;
+  private readonly session: ViewSession = {
+    accumulatedMs: 0,
+    attempts: 0,
+    callbackChain: null,
+    done: false,
+    fireTimer: null,
+    lastKnownVisible: false,
+    viewId: null,
+    visibleSince: null,
+  };
 
   constructor(
     private readonly callback: ElementViewCallback,
@@ -96,13 +124,13 @@ export class ElementViewObserver {
     }
 
     this.sourceController.remove(state);
-    clearFireTimer(state);
     state.done = true;
     this.activeStates.delete(state);
 
     if (state.strongRef === element) state.strongRef = null;
 
     this.states.delete(element);
+    this.releaseMember(state);
     this.maybeStopSweeper();
   }
 
@@ -111,7 +139,6 @@ export class ElementViewObserver {
     this.sourceController.disconnect();
 
     for (const state of this.activeStates) {
-      clearFireTimer(state);
       state.done = true;
       state.strongRef = null;
       state.target = null;
@@ -119,19 +146,18 @@ export class ElementViewObserver {
 
     this.activeStates.clear();
 
+    clearFireTimer(this.session);
+    this.session.done = true;
+
     this.cleanupVisibilityListener?.();
     this.cleanupVisibilityListener = undefined;
 
     this.stopSweeper();
   }
 
-  /** Ends every active view session, emitting final callbacks for qualified ones, and awaits them. */
+  /** Ends the active view session, emitting a final callback if it qualified, and awaits it. */
   async endActive(): Promise<void> {
-    const now = NOW();
-
-    for (const state of this.activeStates) {
-      this.endVisibilitySession(state, now);
-    }
+    this.endVisibilitySession(NOW());
 
     await Promise.all(this.pendingCallbacks);
   }
@@ -139,14 +165,10 @@ export class ElementViewObserver {
   private onPageVisibilityChange(isVisible: boolean): void {
     const now = NOW();
 
-    for (const state of this.activeStates) {
-      if (state.done) continue;
-
-      if (isVisible) {
-        this.startVisibilitySession(state, now);
-      } else {
-        this.endVisibilitySession(state, now);
-      }
+    if (isVisible) {
+      this.startVisibilitySession(now);
+    } else {
+      this.endVisibilitySession(now);
     }
 
     if (isVisible) this.sourceController.requestVirtualMeasurement();
@@ -177,103 +199,135 @@ export class ElementViewObserver {
 
   private onIntersecting(state: ElementState, now: number): void {
     state.lastKnownVisible = true;
-    this.startVisibilitySession(state, now);
+    this.session.lastKnownVisible = true;
+    this.startVisibilitySession(now);
   }
 
   private onVisibilityEnd(state: ElementState, now: number): void {
     if (!state.lastKnownVisible) return;
 
     state.lastKnownVisible = false;
-    this.endVisibilitySession(state, now);
+    // The session stays in view while any other member is.
+    if (this.hasVisibleMember()) return;
+
+    this.session.lastKnownVisible = false;
+    this.endVisibilitySession(now);
   }
 
-  private startVisibilitySession(state: ElementState, now: number): void {
-    if (state.done || !state.lastKnownVisible || !isPageVisible() || state.viewId !== null) {
+  private hasVisibleMember(): boolean {
+    for (const member of this.activeStates) {
+      if (!member.done && member.lastKnownVisible) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Brings the session in line after a member left. No members left drops the
+   * session silently; losing the last visible member ends it normally.
+   */
+  private releaseMember(state: ElementState): void {
+    const { session } = this;
+    const wasVisible = state.lastKnownVisible;
+    state.lastKnownVisible = false;
+
+    if (this.activeStates.size === 0) {
+      this.resetVisibilitySession();
+      session.lastKnownVisible = false;
+    } else if (wasVisible && !this.hasVisibleMember()) {
+      session.lastKnownVisible = false;
+      this.endVisibilitySession(NOW());
+    }
+  }
+
+  private startVisibilitySession(now: number): void {
+    const { session } = this;
+    if (session.done || !session.lastKnownVisible || !isPageVisible() || session.viewId !== null) {
       return;
     }
 
-    state.accumulatedMs = 0;
-    state.attempts = 0;
-    state.viewId = createViewId();
-    state.visibleSince = now;
-    clearFireTimer(state);
-    this.scheduleQualification(state);
+    session.accumulatedMs = 0;
+    session.attempts = 0;
+    session.viewId = createViewId();
+    session.visibleSince = now;
+    clearFireTimer(session);
+    this.scheduleQualification();
   }
 
-  private static resetVisibilitySession(state: ElementState): void {
-    state.accumulatedMs = 0;
-    state.visibleSince = null;
-    state.attempts = 0;
-    state.viewId = null;
-    clearFireTimer(state);
+  private resetVisibilitySession(): void {
+    const { session } = this;
+    session.accumulatedMs = 0;
+    session.visibleSince = null;
+    session.attempts = 0;
+    session.viewId = null;
+    clearFireTimer(session);
   }
 
-  private scheduleQualification(state: ElementState): void {
+  private scheduleQualification(): void {
+    const { session } = this;
     if (
-      state.done ||
-      state.fireTimer !== null ||
-      !state.lastKnownVisible ||
+      session.done ||
+      session.fireTimer !== null ||
+      !session.lastKnownVisible ||
       !isPageVisible() ||
-      state.viewId === null
+      session.viewId === null
     ) {
       return;
     }
 
-    state.fireTimer = setTimeout(() => {
+    session.fireTimer = setTimeout(() => {
       if (
-        state.done ||
-        !state.lastKnownVisible ||
+        session.done ||
+        !session.lastKnownVisible ||
         !isPageVisible() ||
-        state.visibleSince === null ||
-        state.viewId === null
+        session.visibleSince === null ||
+        session.viewId === null
       ) {
-        clearFireTimer(state);
+        clearFireTimer(session);
         return;
       }
 
-      this.qualify(state, NOW());
+      this.qualify(NOW());
     }, DEFAULTS.DWELL_MS);
   }
 
-  private qualify(state: ElementState, now: number): void {
-    if (state.done || state.viewId === null || state.visibleSince === null) return;
+  private qualify(now: number): void {
+    const { session } = this;
+    if (session.done || session.viewId === null || session.visibleSince === null) return;
 
-    clearFireTimer(state);
-    state.attempts = 1;
-    state.accumulatedMs = Math.max(0, now - state.visibleSince);
-    void this.queueCallback(state, state.viewId, state.accumulatedMs, state.attempts);
+    clearFireTimer(session);
+    session.attempts = 1;
+    session.accumulatedMs = Math.max(0, now - session.visibleSince);
+    void this.queueCallback(session.viewId, session.accumulatedMs, session.attempts);
   }
 
-  private endVisibilitySession(state: ElementState, now: number): void {
-    if (state.done || state.viewId === null) return;
+  private endVisibilitySession(now: number): void {
+    const { session } = this;
+    if (session.done || session.viewId === null) return;
 
-    if (state.visibleSince !== null) {
-      state.accumulatedMs = Math.max(state.accumulatedMs, now - state.visibleSince);
+    if (session.visibleSince !== null) {
+      session.accumulatedMs = Math.max(session.accumulatedMs, now - session.visibleSince);
     }
 
-    const { viewId, accumulatedMs: totalVisibleMs } = state;
-    const qualified = state.attempts > 0;
+    const { viewId, accumulatedMs: totalVisibleMs } = session;
+    const qualified = session.attempts > 0;
 
-    ElementViewObserver.resetVisibilitySession(state);
+    this.resetVisibilitySession();
 
     if (qualified) {
-      void this.queueCallback(state, viewId, totalVisibleMs, 2);
+      void this.queueCallback(viewId, totalVisibleMs, 2);
     }
   }
 
   private async queueCallback(
-    state: ElementState,
     viewId: string,
     totalVisibleMs: number,
     attempts: number
   ): Promise<void> {
-    const element = derefElement(state);
-    if (!element) {
-      this.finalizeDroppedState(state);
-      return;
-    }
+    const member = firstLiveMember(this.activeStates);
+    const element = member && derefElement(member);
+    if (!member || !element) return;
 
-    const { data } = state;
+    const { data } = member;
     const invoke = (): Promise<void> =>
       safeCallAsync(
         () => this.callback(element, { totalVisibleMs, viewId, attempts, data }),
@@ -281,21 +335,13 @@ export class ElementViewObserver {
           console.error('[@contentful/experiences] Error in element view callback:', error);
         }
       );
-    const pending = state.callbackChain ? state.callbackChain.then(invoke) : invoke();
-
-    state.callbackChain = pending;
-    this.pendingCallbacks.add(pending);
-    void pending.then(() => {
-      if (state.callbackChain === pending) state.callbackChain = null;
-      this.pendingCallbacks.delete(pending);
-    });
-
-    await pending;
+    await chainCallback(this.session, invoke, this.pendingCallbacks);
   }
 
   private finalizeDroppedState(state: ElementState): void {
     this.sourceController.remove(state);
     finalizeDroppedState(state, { activeStates: this.activeStates, states: this.states });
+    this.releaseMember(state);
     this.maybeStopSweeper();
   }
 

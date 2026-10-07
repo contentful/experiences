@@ -1,6 +1,6 @@
 import type { TrackingAttribution } from './attribution.js';
 
-import type { InteractionDetector, ResolveElementAttribution } from './interaction-detector.js';
+import type { InteractionDetector, ResolveScopeAttribution } from './interaction-detector.js';
 
 interface TimedObserver {
   observe(element: Element): void;
@@ -10,66 +10,90 @@ interface TimedObserver {
 }
 
 interface CreateTimedDetectorOptions<TInfo> {
-  resolveAttribution: ResolveElementAttribution;
+  resolveAttribution: ResolveScopeAttribution;
   isSupported?: () => boolean;
   isEligible: (attribution: TrackingAttribution) => boolean;
-  sessionId: (info: TInfo) => string;
+  /** Whether this callback ends the session its earlier callback started. */
   isFinal: (info: TInfo) => boolean;
+  /**
+   * One observer per scope occurrence. It must treat everything observed by it
+   * as a single session, so an occurrence spread over several elements reports
+   * one series rather than one per element.
+   */
   createObserver: (callback: (element: Element, info: TInfo) => Promise<void>) => TimedObserver;
   track: (attribution: TrackingAttribution, info: TInfo) => Promise<void>;
+}
+
+interface Group {
+  readonly elements: Set<Element>;
+  observer?: TimedObserver;
 }
 
 export function createTimedDetector<TInfo>({
   resolveAttribution,
   isSupported = () => true,
   isEligible,
-  sessionId,
   isFinal,
   createObserver,
   track,
 }: CreateTimedDetectorOptions<TInfo>): InteractionDetector {
-  const elements = new Set<Element>();
-  let observer: TimedObserver | undefined;
+  const groups = new Map<string, Group>();
+  let started = false;
 
-  const attributionBySession = new Map<string, TrackingAttribution>();
-
-  const callback = async (element: Element, info: TInfo): Promise<void> => {
-    const id = sessionId(info);
-    let attribution: TrackingAttribution | undefined;
-
-    if (isFinal(info)) {
-      attribution = attributionBySession.get(id) ?? resolveAttribution(element);
-      attributionBySession.delete(id);
-    } else {
-      attribution = resolveAttribution(element);
-      if (attribution) attributionBySession.set(id, attribution);
-    }
-
-    if (!attribution || !isEligible(attribution)) return;
-    await track(attribution, info);
+  const startGroup = (key: string, group: Group): void => {
+    // A group's callbacks are serialised, so one session is in flight at a time.
+    // Its final event keeps the attribution that qualified it: a slow send can
+    // delay the final past a `refresh()` that re-points this key.
+    let qualified: TrackingAttribution | undefined;
+    const observer = createObserver(async (_element, info) => {
+      let attribution: TrackingAttribution | undefined;
+      if (isFinal(info)) {
+        attribution = qualified ?? resolveAttribution(key);
+        qualified = undefined;
+      } else {
+        attribution = resolveAttribution(key);
+        qualified = attribution;
+      }
+      if (!attribution || !isEligible(attribution)) return;
+      await track(attribution, info);
+    });
+    group.observer = observer;
+    for (const element of group.elements) observer.observe(element);
   };
 
   return {
     start() {
-      if (observer || !isSupported()) return;
-      observer = createObserver(callback);
-      for (const element of elements) observer.observe(element);
+      if (started || !isSupported()) return;
+      started = true;
+      for (const [key, group] of groups) startGroup(key, group);
     },
     stop() {
-      observer?.disconnect();
-      observer = undefined;
-      elements.clear();
+      for (const group of groups.values()) group.observer?.disconnect();
+      groups.clear();
+      started = false;
     },
-    onElementAdded(element) {
-      elements.add(element);
-      observer?.observe(element);
+    onElementAdded(element, key) {
+      let group = groups.get(key);
+      if (!group) {
+        group = { elements: new Set() };
+        groups.set(key, group);
+      }
+      group.elements.add(element);
+      if (group.observer) group.observer.observe(element);
+      else if (started) startGroup(key, group);
     },
-    onElementRemoved(element) {
-      elements.delete(element);
-      observer?.unobserve(element);
+    onElementRemoved(element, key) {
+      const group = groups.get(key);
+      if (!group) return;
+      group.elements.delete(element);
+      group.observer?.unobserve(element);
+      if (group.elements.size > 0) return;
+      // The occurrence has no elements left: drop its session without a final event.
+      group.observer?.disconnect();
+      groups.delete(key);
     },
     async endActive() {
-      await observer?.endActive();
+      await Promise.all([...groups.values()].map((group) => group.observer?.endActive()));
     },
   };
 }
