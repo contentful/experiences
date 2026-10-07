@@ -121,8 +121,9 @@ useActiveViewport; // Hook used inside ClientExperienceRenderer (you'll rarely n
 useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata, viewports, activeViewport
-useContentfulComponent(); // Raw payload for the enclosing node (or null)
+useContentfulComponent(); // Raw payload for the enclosing node (or null), including `attribution`
 useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
+getTrackingAttributes(attribution); // Props to spread on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 

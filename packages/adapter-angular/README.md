@@ -159,8 +159,9 @@ All four are `inject()`-based: call them from a field initializer or a construct
 injectDesignValues<T>(); // Signal of the resolved design record that auto-fills inputs
 toCss(design, options?); // Turns a design record into a plain style object for [ngStyle]
 injectExperience(); // Signal<RenderContext>: debug, metadata, viewports, activeViewport
-injectContentfulComponent(); // Signal of the raw payload for the enclosing node (or undefined)
+injectContentfulComponent(); // Signal of the raw payload for the enclosing node (or undefined), including `attribution`
 injectContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
+getTrackingAttributes(attribution); // Attributes to bind on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 

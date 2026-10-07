@@ -935,6 +935,21 @@ Two things to know before switching it on:
 - **The map is large.** It carries per-node field provenance for every entry, asset, and layer in the experience. That is why it is opt-in rather than always fetched, and why `plan.sourceMap` is `undefined` by default.
 - **The request becomes a `POST`.** The source-map opt-in is a request-body field, and the delivery API only accepts a body on its `getWithOverrides` operation. Everything else — query parameters, tokens, headers, and the response shape — is identical, but a `POST` is not CDN-cacheable the way the plain `GET` is.
 
+#### Attribution
+
+When a plan carries a usable source map, the SDK resolves which reportable scopes each node belongs to: the Experience, and any persisted Fragment it sits in. Inline fragments are walked through and never reported. The result is plain serializable data:
+
+- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'Fragment'`), and the optional `entityKindId`, `parentExperienceId`, `optimizationId`, `variantId`, `variantIndex` and `entryIds`. The baseline variant omits the three variant fields rather than inventing them. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
+- `node.attribution` lists every scope the node belongs to (`scopes`, outer to inner), the ones it is a top-level node of (`roots`), and the entries its own content is bound to (`entryIds`).
+
+Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.
+
+Live Preview plans carry attribution only if the preview-session endpoints return a source map, which the SDK does not request today.
+
+#### Which map wins
+
+`resolveExperience` reads the map from, in order: `options.sourceMap`, then `payload.extensions.sourceMap`, then none. Pass `sourceMap: null` to drop a map the payload carries. `fetchExperience` always passes the map from its own response, or `null` when the request did not opt in, so a stray map never reaches the plan unasked. The runtime `resolveExperience(payload, { sourceMap })` accepts the same override.
+
 `ExperienceSourceMap` types the scalar fields and leaves the collections as `unknown[]`: the SDK passes the map through without interpreting it, and the core package carries no dependency on the delivery client. When you need the full nested shape, narrow it:
 
 ```ts
@@ -1025,11 +1040,11 @@ await client.experience.get(
 
 Async. Walks the payload, classifies properties, runs every component's `resolveData` in parallel, and returns a `PortableRenderPlan` ready to hand to a renderer.
 
-| Param     | Type                                                                                                 | Required | Default | Description                                                                                                                                                                                                                                                                                                                                         |
-| --------- | ---------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)                         | yes      | n/a     | The Experience payload to resolve.                                                                                                                                                                                                                                                                                                                  |
-| `config`  | `Config`, `{ components, experienceTemplates? }` from `defineComponent` / `defineExperienceTemplate` | yes      | n/a     | Your component + experience-template registry.                                                                                                                                                                                                                                                                                                      |
-| `opts`    | `{ metadata?; debug?; initialViewportId?; sourceMap? }`                                              | no       | `{}`    | `metadata` (default `{}`) is exposed to every `resolveData` as `ctx.experience.metadata`. `debug` (default `false`) logs the resolution steps and per-node `resolveData` timings, and threads through as `ctx.experience.debug`. `initialViewportId` picks the viewport design is pre-resolved against. `sourceMap` is carried onto the plan as-is. |
+| Param     | Type                                                                                                 | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payload` | `ExperiencePayload`, an XDA response (or any structurally-compatible object)                         | yes      | n/a     | The Experience payload to resolve.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `config`  | `Config`, `{ components, experienceTemplates? }` from `defineComponent` / `defineExperienceTemplate` | yes      | n/a     | Your component + experience-template registry.                                                                                                                                                                                                                                                                                                                                                                        |
+| `opts`    | `{ metadata?; debug?; initialViewportId?; sourceMap? }`                                              | no       | `{}`    | `metadata` (default `{}`) is exposed to every `resolveData` as `ctx.experience.metadata`. `debug` (default `false`) logs the resolution steps and per-node `resolveData` timings, and threads through as `ctx.experience.debug`. `initialViewportId` picks the viewport design is pre-resolved against. `sourceMap` is carried onto the plan; it wins over `payload.extensions.sourceMap`, and `null` drops that one. |
 
 `metadata`, `debug`, and the resolved fallback viewport index are all written onto the returned plan, which is what lets the renderer read them instead of taking them as props.
 
@@ -1143,13 +1158,14 @@ Use it for:
 
 Components see `ContentfulComponent`:
 
-| Field         | Type                                   | Description                                                                                 |
-| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `componentId` | `string`                               | The id from `component.sys.urn`'s last slash-segment.                                       |
-| `nodeId`      | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
-| `content`     | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
-| `design`      | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                |
-| `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
+| Field         | Type                                   | Description                                                                                      |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `componentId` | `string`                               | The id from `component.sys.urn`'s last slash-segment.                                            |
+| `nodeId`      | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.                 |
+| `content`     | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                          |
+| `design`      | `Record<string, DesignPropValue>`      | Design properties in their raw form (not viewport-resolved).                                     |
+| `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered.      |
+| `attribution` | `NodeAttribution \| undefined`         | The reportable scopes this node belongs to. `undefined` unless the fetch requested a source map. |
 
 Experience Templates see `ContentfulExperienceTemplate`, the same shape but with `experienceTemplateId` instead of `componentId` — a coded Experience Template is an ordinary node, so it carries a `nodeId` too.
 
