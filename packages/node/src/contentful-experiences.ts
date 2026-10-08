@@ -16,6 +16,7 @@ import {
   type RuntimeEventMethods,
   type RuntimeEventBindings,
   type RuntimeEventHandoff,
+  type RuntimeFetchResolveOptions,
   type RuntimeResolveOptions,
   type RuntimeServerEventDelivery,
   type TrackBuilderArgs,
@@ -81,15 +82,15 @@ export interface ExperiencesNodeRequest {
   ): Promise<PortableRenderPlan>;
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   identify: NodeEventMethods['identify'];
   page: NodeEventMethods['page'];
@@ -260,7 +261,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     return this.runtime.fetchExperience(
       { ...options, locale: options.locale ?? this.locale },
@@ -270,7 +271,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.runtime.fetchByDestinationNode(
       options,
@@ -280,7 +281,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.runtime.fetchByDestinationPath(
       options,
@@ -421,5 +422,6 @@ function mergeResolveOptions(
   return {
     metadata: { ...request?.metadata, ...method?.metadata },
     debug: method?.debug ?? request?.debug,
+    sourceMap: method?.sourceMap ?? request?.sourceMap,
   };
 }

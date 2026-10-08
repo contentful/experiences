@@ -6,7 +6,6 @@ import { assertDestinationPreviewSupported } from './destination-guards.js';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
 import {
-  readSourceMap,
   toExperiencePayload,
   toExperiencePayloadFromDestination,
   type ExperienceResponse,
@@ -175,15 +174,9 @@ export async function fetchExperience(
   const response = await fetchByExperienceId(client, experienceOptions);
 
   const payload = toExperiencePayload(response);
-  const sourceMap = extensions?.sourceMap !== undefined ? readSourceMap(response) : undefined;
-
   log.lazy('received raw payload', () => payload);
 
-  return resolveExperience(payload, config, {
-    metadata,
-    debug,
-    sourceMap,
-  });
+  return resolveExperience(payload, config, { metadata, debug });
 }
 
 async function fetchByExperienceId(
