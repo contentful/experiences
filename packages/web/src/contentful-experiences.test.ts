@@ -6,11 +6,12 @@ import {
   PROFILE_CACHE_KEY,
   type EventProfile,
 } from '@contentful/experiences-runtime';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import { seedConsent } from './test-fixtures/consent.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   get optimization(): typeof this.optimizationApi {
@@ -45,6 +46,11 @@ function mockOptimization(
       .mockResolvedValue(true),
   };
 }
+
+// A returning visitor who has already opted in to events and persistence.
+beforeEach(() => {
+  seedConsent({ events: true, persistence: true });
+});
 
 afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
@@ -455,7 +461,7 @@ describe('Web ContentfulExperiences', () => {
     expect(upsertProfile.mock.calls[2]?.[1]).toEqual({ locale: 'de-DE' });
   });
 
-  it('uses the latest redacted browser context, locale, and consent metadata', async () => {
+  it('uses the latest redacted browser context and locale, with consent from the runtime', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
       profile: { id: 'visitor' },
@@ -469,15 +475,21 @@ describe('Web ContentfulExperiences', () => {
           url: `${window.location.origin}${window.location.pathname}`,
         }),
         getUserAgent: () => 'redacted-agent',
-        getConsent: () => false,
       },
     });
+    runtime.consent({ events: false, persistence: false });
     const optimization = mockOptimization(runtime, { id: 'visitor' });
 
     window.history.replaceState({}, '', '/latest?secret=omit');
     document.title = 'Latest page';
     runtime.setLocale('de-DE');
 
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).resolves.toBe(false);
+    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
+
+    runtime.consent({ events: true });
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
     ).resolves.toBe(true);
@@ -489,7 +501,7 @@ describe('Web ContentfulExperiences', () => {
           expect.objectContaining({
             context: expect.objectContaining({
               locale: 'de-DE',
-              gdpr: { isConsentGiven: false },
+              gdpr: { isConsentGiven: true },
               page: expect.objectContaining({ path: '/latest', query: {} }),
               userAgent: 'redacted-agent',
             }),
@@ -497,6 +509,54 @@ describe('Web ContentfulExperiences', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('Web ContentfulExperiences consent', () => {
+  it('treats a boolean as both axes and an object as independent axes', () => {
+    const runtime = createRuntime();
+
+    runtime.consent(true);
+    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+
+    runtime.consent({ persistence: false });
+    expect(runtime.consentState).toEqual({ events: true, persistence: false });
+
+    runtime.consent(false);
+    expect(runtime.consentState).toEqual({ events: false, persistence: false });
+  });
+
+  it('applies defaults only to axes the visitor has not decided', () => {
+    seedConsent({ events: false });
+
+    const runtime = createRuntime({ defaults: { consent: true, persistenceConsent: true } });
+
+    expect(runtime.consentState).toEqual({ events: false, persistence: true });
+  });
+
+  it('reports blocked events to onEventBlocked and drops them', async () => {
+    window.localStorage.clear();
+    const onEventBlocked = vi.fn();
+    const runtime = createRuntime({ onEventBlocked, profile: { id: 'visitor' } });
+    const optimization = mockOptimization(runtime, { id: 'visitor' });
+
+    await expect(runtime.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
+
+    expect(optimization.upsertProfile).not.toHaveBeenCalled();
+    expect(onEventBlocked).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'consent', method: 'track' })
+    );
+  });
+
+  it('does not replay a blocked event after consent is granted', async () => {
+    window.localStorage.clear();
+    const runtime = createRuntime({ profile: { id: 'visitor' } });
+    const optimization = mockOptimization(runtime, { id: 'visitor' });
+
+    await runtime.track({ event: 'blocked' });
+    runtime.consent(true);
+
+    expect(optimization.upsertProfile).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,10 @@
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   PersonalizationDelivery,
+  type AllowedEventType,
+  type BlockedEvent,
+  type ConsentInput,
+  type ConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventEmissionResult,
@@ -13,6 +17,7 @@ import {
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
+  toConsentState,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
@@ -30,7 +35,7 @@ import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
   EventBuilderConfig,
-  'getPageProperties' | 'getUserAgent' | 'getConsent'
+  'getPageProperties' | 'getUserAgent'
 >;
 
 /**
@@ -41,6 +46,15 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
   locale?: string;
   app?: EventBuilderConfig['app'];
   browserContext?: BrowserEventContextProviders;
+  /** Event types emitted while event consent is not granted. Defaults to identify and page. */
+  allowedEventTypes?: readonly AllowedEventType[];
+  /** Called when consent drops an event. Blocked events are never replayed. */
+  onEventBlocked?: (event: BlockedEvent) => void;
+  /**
+   * Consent applied at startup. Configured values take precedence over a stored
+   * decision, and `consent` is also the default for `persistenceConsent`.
+   */
+  defaults?: { consent?: boolean; persistenceConsent?: boolean };
 };
 
 export interface CurrentPageOptions {
@@ -118,7 +132,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackFlagView(...args);
 
   constructor(config: ExperiencesWebConfig) {
-    const { app, browserContext, profile, ...clientConfig } = config;
+    const {
+      app,
+      browserContext,
+      allowedEventTypes,
+      onEventBlocked,
+      defaults,
+      profile,
+      ...clientConfig
+    } = config;
     const singletonOwner = acquireWebSingleton();
     try {
       super({
@@ -129,7 +151,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           library: DEFAULT_EVENT_CONTEXT_LIBRARY,
           getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
           getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
-          getConsent: browserContext?.getConsent,
         },
       });
     } catch (error) {
@@ -140,6 +161,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     let delivery: PersonalizationDelivery | undefined;
     try {
       this.#locale = clientConfig.locale;
+      this.#store.applyConsentDefaults({
+        events: defaults?.consent,
+        persistence: defaults?.persistenceConsent,
+      });
       if (profile !== undefined) this.#store.profile = profile;
       this.#delivery = delivery = new PersonalizationDelivery({
         api: this.optimizationApi.personalization,
@@ -164,6 +189,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             this.#setAdoptedProfileId(undefined);
           },
           getProfileRevision: () => this.#store.profileRevision,
+          getConsent: () => this.#store.consent,
+          allowedEventTypes,
+          onEventBlocked,
         },
         {
           personalization: (event) => this.#delivery.send(event),
@@ -201,6 +229,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   get profile(): EventProfile | undefined {
     return this.#store.profile;
+  }
+
+  /** Current consent decisions. Undecided values are treated as not granted. */
+  get consentState(): Readonly<ConsentState> {
+    return this.#store.consent;
+  }
+
+  /**
+   * Sets consent for this browser. `true` or `false` sets event and persistence
+   * consent together; an object updates either independently. Decisions are stored
+   * in LocalStorage, always, so they survive reloads. Denying persistence removes
+   * the stored profile but keeps it in memory for the current session.
+   */
+  consent(input: ConsentInput): void {
+    this.#store.updateConsent(toConsentState(input));
   }
 
   /** Latest ordinary or prepared Personalization HTTP state. */

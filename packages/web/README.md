@@ -126,7 +126,7 @@ The Web runtime provides event methods: `identify`, `page`, `track`,
 initial profile when creating the runtime, or identify a profile before sending
 Analytics events. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
-persisted and restored from LocalStorage.
+persisted and restored from LocalStorage once persistence consent is granted.
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response
 establishes and persists the next profile. `destroy()` stops owned listeners and
@@ -140,10 +140,10 @@ visitor session.
 const experiences = new ContentfulExperiences({
   // delivery and resolver configuration...
   profile: { id: 'visitor-123' },
-  browserContext: {
-    getConsent: () => consentStore.hasAnalyticsConsent(),
-  },
 });
+
+// From your consent banner. Undecided is treated as not granted.
+experiences.consent(true); // or consent({ events: true, persistence: false })
 
 const result = await experiences.track({
   event: 'cta_clicked',
@@ -160,7 +160,7 @@ Each call reads the current locale and browser context, so SPA navigation and
 locale overrides affect event bodies only. Ordinary Personalization sends use the
 current SDK locale, including when flushing offline events. Prepared replay uses
 the server's captured transport locale, including an absent locale, independently
-of the browser's current locale. The consent provider annotates the event context; it does not gate sending. Redact page and
+of the browser's current locale. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
 prepared work. Offline ordinary calls are accepted into an in-memory queue until
@@ -170,9 +170,35 @@ completion. Read `personalizationDeliveryState` for the latest request status
 (`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
-The queue is not durable and does not gate on consent. Analytics methods continue
+The queue is not durable. Analytics methods continue
 to send directly and require a profile or
 an adopted continuation ID.
+
+### Consent
+
+`consent(true | false | { events?, persistence? })` records the visitor's
+decisions, and `consentState` reads them. A boolean sets both axes; an object
+updates either independently. Undecided is treated as not granted. This mirrors
+the Optimization SDK's consent model.
+
+- **Event consent.** Until `events` is `true`, only event types in
+  `allowedEventTypes` (default `identify` and `page`) are sent. Selectors are the
+  Optimization names: `identify`, `page`, `track`, `component` (views),
+  `component_click`, `component_hover`, and `flag` (flag views only; `component`
+  also admits them). A blocked Personalization call resolves
+  `{ accepted: false }`; a blocked Analytics call resolves `false`.
+  `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
+  replayed after consent is granted, and reported to `onEventBlocked`.
+- **Persistence consent.** The profile is written to LocalStorage only when
+  `persistence` is `true`. `false` removes the stored profile but keeps the
+  in-memory one; undecided neither restores nor clears it.
+- **Startup defaults.** `defaults: { consent, persistenceConsent }` seeds axes the
+  visitor has not decided. A stored decision always wins.
+- **Consent itself** is always stored in LocalStorage, so a visitor's choice
+  survives reloads. It is global to the runtime, not per call.
+
+Personalization methods (`identify`, `page`, `track`) resolve
+`{ accepted, data? }`, where `data` is the Personalization response.
 
 ## Interaction tracking
 

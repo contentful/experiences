@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
+import { seedConsent } from './test-fixtures/consent.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
 
-function node() {
+function node(policy: { allowedEventTypes?: readonly ('identify' | 'page' | 'track')[] } = {}) {
   const sdk = new NodeExperiences({
+    ...policy,
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'de-DE',
@@ -41,6 +43,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+// Consent is not what these tests are about: the browser is a visitor who has opted in.
+beforeEach(() => {
+  seedConsent({ events: true, persistence: true });
+});
+
 afterEach(() => {
   for (const sdk of active) sdk.destroy();
   active.clear();
@@ -70,6 +77,7 @@ describe('paired Node preparation and Web delivery', () => {
       const request = server.forRequest({
         locale: requestLocale,
         eventContext: { locale: 'it-IT' },
+        consent: true,
       });
       expect(request.locale).toBe(transportLocale);
       const prepared = await request.prepareRequestHandoff({
@@ -111,12 +119,14 @@ describe('paired Node preparation and Web delivery', () => {
       .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
       .mockReturnValueOnce(firstDelivery.promise as never)
       .mockReturnValueOnce(secondDelivery.promise as never);
-    const server = node();
+    // Event consent is denied, but the prepared types are allow-listed, so the batch is
+    // prepared and its events keep the denied flag through the replay.
+    const server = node({ allowedEventTypes: ['identify', 'track', 'page'] });
     const request = server.forRequest({
       locale: 'de-DE',
       profile: { id: 'known-profile' },
       eventContext: { userAgent: 'server-agent' },
-      eventConsent: false,
+      consent: { events: false },
     });
     const prepared = await request.prepareRequestHandoff({
       routeKey: '/products?sort=popular',
@@ -177,7 +187,9 @@ describe('paired Node preparation and Web delivery', () => {
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
     const server = node();
-    const prepared = await server.forRequest().prepareRequestHandoff({ routeKey: '/new' });
+    const prepared = await server
+      .forRequest({ consent: true })
+      .prepareRequestHandoff({ routeKey: '/new' });
 
     expect(prepared.handoff.profileId).toBe('issued-profile');
     expect(upsert.mock.calls[0]?.[0].profileId).toBeUndefined();
@@ -207,7 +219,7 @@ describe('paired Node preparation and Web delivery', () => {
       .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
     const server = node();
     const prepared = await server
-      .forRequest({ profile: { id: 'known-profile' }, eventConsent: true })
+      .forRequest({ profile: { id: 'known-profile' }, consent: true })
       .prepareRequestHandoff({
         routeKey: '/original',
         initialEvents: [{ type: 'track', event: 'prepared' }],
@@ -248,7 +260,7 @@ describe('paired Node preparation and Web delivery', () => {
         .mockReturnValueOnce(firstDelivery.promise as never)
         .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
       const server = node();
-      const request = server.forRequest({ profile: { id: 'known-profile' } });
+      const request = server.forRequest({ profile: { id: 'known-profile' }, consent: true });
       const full = await request.prepareRequestHandoff({
         routeKey: '/full',
         initialEvents: Array.from({ length: 99 }, () => ({

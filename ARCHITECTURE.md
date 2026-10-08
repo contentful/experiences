@@ -157,10 +157,13 @@ and later visits remain trackable. Admission can precede HTTP completion and
 retry can duplicate a request whose first result was ambiguous. Ordinary
 online Personalization and Analytics calls remain direct; offline ordinary
 Personalization calls use the same in-memory queue. There is no durable event
-persistence, SDK consent permission gate, beacon/lifecycle delivery, or Live
-Preview event integration. Node `eventConsent` and Web `getConsent` provide
-GDPR metadata only. The separate consent and persistence workstream will
-supply later policy. No adapter or example is yet wired to the paired handoff.
+persistence, beacon/lifecycle delivery, or Live Preview event integration.
+Events are consent-gated: consent is `{ events, persistence }`, undecided means
+not granted, and until event consent is granted only `allowedEventTypes` are
+sent. Web holds consent globally and stores it in LocalStorage; Node scopes it
+to one `forRequest()` facade. Node gates a prepared handoff as a unit, because
+the browser replays the batch whole. No adapter or example is yet wired to the
+paired handoff.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
 The current generated XDA client has no noncommitting preflight option for

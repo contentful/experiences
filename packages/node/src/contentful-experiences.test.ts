@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences } from './contentful-experiences.js';
+import {
+  ContentfulExperiences,
+  type ExperiencesNodeConfig,
+  type ExperiencesNodeRequestContext,
+} from './contentful-experiences.js';
 import {
   EventProfileRequiredError,
   parseExperiencesHandoff,
@@ -34,14 +38,24 @@ function createRuntime() {
 }
 
 class TestContentfulExperiences extends ContentfulExperiences {
+  // Most tests exercise delivery, so grant event consent unless a test says otherwise.
+  override forRequest(context: ExperiencesNodeRequestContext = {}) {
+    const hasConsent = context.consent !== undefined || context.eventConsent !== undefined;
+    if (hasConsent) return super.forRequest(context);
+    return super.forRequest({ ...context, consent: { events: true } });
+  }
+
   get optimizationApiForTest() {
     return this.optimizationApi;
   }
 }
 
-function createEventRuntime() {
+function createEventRuntime(
+  policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}
+) {
   const runtime = trackRuntime(
     new TestContentfulExperiences({
+      ...policy,
       spaceId: 'space',
       environmentId: 'environment',
       locale: 'en-US',
@@ -303,12 +317,14 @@ describe('Node ContentfulExperiences', () => {
   });
 
   it('keeps concurrent event profiles and context isolated, with locale precedence and consent', async () => {
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime({
+      allowedEventTypes: ['track'],
+    });
     const german = runtime.forRequest({
       locale: 'de-DE',
       profile: { id: 'german-profile' },
       eventContext: { locale: 'context-locale', userAgent: 'german-agent' },
-      eventConsent: false,
+      consent: { events: false },
     });
     const french = runtime.forRequest({
       locale: 'fr-FR',
@@ -352,20 +368,8 @@ describe('Node ContentfulExperiences', () => {
       }),
       { locale: 'fr-FR' }
     );
-    expect(sendBatchEvents).toHaveBeenCalledWith([
-      expect.objectContaining({
-        profile: { id: 'german-profile' },
-        events: [
-          expect.objectContaining({
-            context: expect.objectContaining({
-              locale: 'de-DE',
-              userAgent: 'german-agent',
-              gdpr: { isConsentGiven: false },
-            }),
-          }),
-        ],
-      }),
-    ]);
+    // German denied event consent and only allows `track`, so its click never leaves the request.
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(sendBatchEvents).toHaveBeenCalledWith([
       expect.objectContaining({
         profile: { id: 'french-profile' },
@@ -393,7 +397,10 @@ describe('Node ContentfulExperiences', () => {
   });
 
   it('prepares one ordered, exact Personalization replay with request context and known identity', async () => {
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    // This test is about ordering and context, not consent: allow every prepared type.
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime({
+      allowedEventTypes: ['identify', 'track', 'page'],
+    });
     const request = runtime.forRequest({
       locale: 'de-DE',
       profile: { id: 'initial-profile' },
@@ -643,5 +650,116 @@ describe('Node ContentfulExperiences', () => {
     await pending;
 
     expect(request.profile).toEqual({ id: 'updated-profile' });
+  });
+
+  describe('consent', () => {
+    it('sets both axes from a boolean and exposes canPersistProfile', () => {
+      const { runtime } = createEventRuntime();
+
+      expect(runtime.forRequest({ consent: true }).canPersistProfile).toBe(true);
+      expect(runtime.forRequest({ consent: false }).canPersistProfile).toBe(false);
+      expect(runtime.forRequest({ consent: { events: true } }).canPersistProfile).toBe(false);
+      expect(
+        runtime.forRequest({ consent: { events: false, persistence: true } }).canPersistProfile
+      ).toBe(true);
+    });
+
+    it('blocks everything but allowedEventTypes and reports it to onEventBlocked', async () => {
+      const onEventBlocked = vi.fn();
+      const { runtime, upsertProfile } = createEventRuntime({ onEventBlocked });
+      const request = runtime.forRequest({ consent: { events: false }, profile: { id: 'p' } });
+
+      await expect(request.page()).resolves.toMatchObject({ accepted: true });
+      await expect(request.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
+
+      expect(upsertProfile).toHaveBeenCalledTimes(1);
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'track' })
+      );
+    });
+
+    it('does not share consent between requests', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const granted = runtime.forRequest({ consent: true, profile: { id: 'a' } });
+      const denied = runtime.forRequest({ consent: false, profile: { id: 'b' } });
+
+      await granted.track({ event: 'viewed' });
+      await denied.track({ event: 'viewed' });
+
+      expect(upsertProfile).toHaveBeenCalledTimes(1);
+    });
+
+    describe('prepared handoff batches', () => {
+      const initialEvents = [{ type: 'track' as const, event: 'opened' }];
+
+      it('prepares no replay under strict opt-in, and sends nothing', async () => {
+        const onEventBlocked = vi.fn();
+        const { runtime, upsertProfile } = createEventRuntime({
+          allowedEventTypes: [],
+          onEventBlocked,
+        });
+        const request = runtime.forRequest({ consent: false });
+
+        const result = await request.prepareRequestHandoff({ routeKey: '/home' });
+
+        expect(result.handoff.replay).toBeUndefined();
+        expect(result.data).toBeUndefined();
+        expect(upsertProfile).not.toHaveBeenCalled();
+        expect(onEventBlocked).toHaveBeenCalledWith(
+          expect.objectContaining({ reason: 'consent', method: 'page' })
+        );
+      });
+
+      it('admits a page-only batch by default, since page is allow-listed', async () => {
+        const { runtime, upsertProfile } = createEventRuntime();
+        const request = runtime.forRequest({ consent: false });
+
+        const result = await request.prepareRequestHandoff({ routeKey: '/home' });
+
+        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
+        expect(upsertProfile).toHaveBeenCalledOnce();
+      });
+
+      it('drops the whole batch when any event is not admitted, and reports each one', async () => {
+        const onEventBlocked = vi.fn();
+        const { runtime, upsertProfile } = createEventRuntime({ onEventBlocked });
+        const request = runtime.forRequest({ consent: { events: false } });
+
+        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
+
+        // `track` is not allow-listed, so the batch cannot be replayed as prepared.
+        expect(result.handoff.replay).toBeUndefined();
+        expect(upsertProfile).not.toHaveBeenCalled();
+        expect(onEventBlocked).toHaveBeenCalledTimes(1);
+        expect(onEventBlocked).toHaveBeenCalledWith(
+          expect.objectContaining({ reason: 'consent', method: 'track' })
+        );
+      });
+
+      it('admits the whole batch once event consent is granted', async () => {
+        const { runtime } = createEventRuntime();
+        const request = runtime.forRequest({ consent: { events: true } });
+
+        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
+
+        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['track', 'page']);
+      });
+
+      it('stamps the prepared events with the request event consent', async () => {
+        const { runtime } = createEventRuntime();
+        const granted = await runtime
+          .forRequest({ consent: { events: true } })
+          .prepareRequestHandoff({ routeKey: '/home', initialEvents });
+        const undecided = await runtime
+          .forRequest({ consent: { persistence: true } })
+          .prepareRequestHandoff({ routeKey: '/home' });
+
+        const flags = (
+          events: readonly { context: { gdpr?: { isConsentGiven?: boolean } } }[] = []
+        ) => events.map((event) => event.context.gdpr?.isConsentGiven);
+        expect(flags(granted.handoff.replay?.events)).toEqual([true, true]);
+        expect(flags(undecided.handoff.replay?.events)).toEqual([false]);
+      });
+    });
   });
 });

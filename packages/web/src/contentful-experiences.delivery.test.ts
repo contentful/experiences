@@ -6,9 +6,10 @@ import {
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
+import { seedConsent } from './test-fixtures/consent.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   admit(
@@ -49,6 +50,11 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+// Consent is not what these tests are about: run as a visitor who has opted in.
+beforeEach(() => {
+  seedConsent({ events: true, persistence: true });
+});
 
 afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
