@@ -113,8 +113,8 @@ The Web runtime provides direct event methods: `identify`, `page`, `track`,
 initial profile when creating the runtime, or identify a profile before sending
 Analytics events. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
-persisted and restored from LocalStorage.
-Call `reset()` at logout, consent withdrawal, or another browser session
+persisted and restored from LocalStorage once persistence consent is granted.
+Call `reset()` at logout or another browser session
 boundary. The next `identify`, `page`, or `track` call establishes and persists
 the next profile.
 
@@ -122,10 +122,10 @@ the next profile.
 const experiences = new ContentfulExperiences({
   // delivery and resolver configuration...
   profile: { id: 'visitor-123' },
-  browserContext: {
-    getConsent: () => consentStore.hasAnalyticsConsent(),
-  },
 });
+
+// From your consent banner. Undecided is treated as not granted.
+experiences.consent(true); // or consent({ events: true, persistence: false })
 
 await experiences.track({ event: 'cta_clicked', properties: { placement: 'hero' } });
 
@@ -134,9 +134,35 @@ experiences.reset();
 ```
 
 Each call reads the current locale and browser context, so SPA navigation and
-`setLocale()` changes are reflected without recreating the runtime. The consent
-provider annotates the event context; it does not gate sending. Redact page and
+`setLocale()` changes are reflected without recreating the runtime. Redact page and
 user-agent data with the providers above before triggering events.
+
+### Consent
+
+`consent(true | false | { events?, persistence? })` records the visitor's
+decisions, and `consentState` reads them. A boolean sets both axes; an object
+updates either independently. Undecided is treated as not granted. This mirrors
+the Optimization SDK's consent model.
+
+- **Event consent.** Until `events` is `true`, only event types in
+  `allowedEventTypes` (default `identify` and `page`) are sent. Selectors are the
+  Optimization names: `identify`, `page`, `track`, `component` (views),
+  `component_click`, `component_hover`, and `flag` (flag views only; `component`
+  also admits them). A blocked Personalization call resolves
+  `{ accepted: false }`; a blocked Analytics call resolves `false`.
+  `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
+  replayed after consent is granted, and reported to `onEventBlocked`.
+- **Persistence consent.** The profile is written to LocalStorage only when
+  `persistence` is `true`. `false` removes the stored profile but keeps the
+  in-memory one; undecided neither restores nor clears it.
+- **Startup defaults.** `defaults: { consent, persistenceConsent }` seeds axes the
+  visitor has not decided. A stored decision always wins.
+- **Consent itself** is always stored in LocalStorage, so a visitor's choice
+  survives reloads. It is global to the runtime, not per call.
+
+Personalization methods (`identify`, `page`, `track`) resolve
+`{ accepted, data? }`, where `data` is the Personalization response.
+
 There is no browser event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same runtime.
 

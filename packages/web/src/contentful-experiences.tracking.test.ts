@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { EventBuilder } from '@contentful/experiences-runtime';
+import { CONSENT_CACHE_KEY, EventBuilder } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,6 +38,10 @@ const click = (element: Element): void => {
 };
 
 beforeEach(() => {
+  window.localStorage.setItem(
+    CONSENT_CACHE_KEY,
+    JSON.stringify({ events: true, persistence: true })
+  );
   vi.useFakeTimers();
   vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
   setDocumentVisibility('visible');

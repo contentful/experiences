@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences } from './contentful-experiences.js';
+import {
+  ContentfulExperiences,
+  type ExperiencesNodeConfig,
+  type ExperiencesNodeRequestContext,
+} from './contentful-experiences.js';
 import {
   EventProfileRequiredError,
   parseRuntimeEventHandoff,
@@ -20,13 +24,23 @@ function createRuntime() {
 }
 
 class TestContentfulExperiences extends ContentfulExperiences {
+  // Most tests exercise delivery, so grant event consent unless a test says otherwise.
+  override forRequest(context: ExperiencesNodeRequestContext = {}) {
+    const hasConsent = context.consent !== undefined || context.eventConsent !== undefined;
+    if (hasConsent) return super.forRequest(context);
+    return super.forRequest({ ...context, consent: { events: true } });
+  }
+
   get optimizationApiForTest() {
     return this.optimizationApi;
   }
 }
 
-function createEventRuntime() {
+function createEventRuntime(
+  policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}
+) {
   const runtime = new TestContentfulExperiences({
+    ...policy,
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
@@ -200,12 +214,14 @@ describe('Node ContentfulExperiences', () => {
   });
 
   it('keeps concurrent event profiles and context isolated, with locale precedence and consent', async () => {
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime({
+      allowedEventTypes: ['track'],
+    });
     const german = runtime.forRequest({
       locale: 'de-DE',
       profile: { id: 'german-profile' },
       eventContext: { locale: 'context-locale', userAgent: 'german-agent' },
-      eventConsent: false,
+      consent: { events: false },
     });
     const french = runtime.forRequest({
       locale: 'fr-FR',
@@ -249,20 +265,8 @@ describe('Node ContentfulExperiences', () => {
       }),
       { locale: 'fr-FR' }
     );
-    expect(sendBatchEvents).toHaveBeenCalledWith([
-      expect.objectContaining({
-        profile: { id: 'german-profile' },
-        events: [
-          expect.objectContaining({
-            context: expect.objectContaining({
-              locale: 'de-DE',
-              userAgent: 'german-agent',
-              gdpr: { isConsentGiven: false },
-            }),
-          }),
-        ],
-      }),
-    ]);
+    // German denied event consent and only allows `track`, so its click never leaves the request.
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(sendBatchEvents).toHaveBeenCalledWith([
       expect.objectContaining({
         profile: { id: 'french-profile' },
@@ -331,7 +335,9 @@ describe('Node ContentfulExperiences', () => {
   });
 
   it('previews and stages an initial Personalization batch in one request', async () => {
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime({
+      allowedEventTypes: ['identify', 'track', 'page'],
+    });
     const request = runtime.forRequest({
       eventConsent: false,
       eventContext: { userAgent: 'server-agent' },
@@ -339,7 +345,7 @@ describe('Node ContentfulExperiences', () => {
       profile: { id: 'initial-profile' },
     });
 
-    const data = await request.previewInitialPersonalization({
+    const result = await request.previewInitialPersonalization({
       events: [
         { type: 'identify', userId: 'user-1' },
         { type: 'track', event: 'experience_rendered' },
@@ -365,7 +371,7 @@ describe('Node ContentfulExperiences', () => {
         userAgent: 'server-agent',
       });
     }
-    expect(data.profile).toEqual({ id: 'updated-profile' });
+    expect(result).toMatchObject({ accepted: true, data: { profile: { id: 'updated-profile' } } });
     expect(request.profile).toEqual({ id: 'updated-profile' });
     expect(sendBatchEvents).not.toHaveBeenCalled();
 
@@ -444,5 +450,51 @@ describe('Node ContentfulExperiences', () => {
     expect(() => runtime.forRequest({ eventDelivery: 'browser' } as never)).toThrow(
       'Unsupported server event delivery mode'
     );
+  });
+
+  describe('consent', () => {
+    it('sets both axes from a boolean and exposes canPersistProfile', () => {
+      const { runtime } = createEventRuntime();
+
+      expect(runtime.forRequest({ consent: true }).canPersistProfile).toBe(true);
+      expect(runtime.forRequest({ consent: false }).canPersistProfile).toBe(false);
+      expect(runtime.forRequest({ consent: { events: true } }).canPersistProfile).toBe(false);
+      expect(
+        runtime.forRequest({ consent: { events: false, persistence: true } }).canPersistProfile
+      ).toBe(true);
+    });
+
+    it('blocks everything but allowedEventTypes and reports it to onEventBlocked', async () => {
+      const onEventBlocked = vi.fn();
+      const { runtime, upsertProfile } = createEventRuntime({ onEventBlocked });
+      const request = runtime.forRequest({ consent: { events: false }, profile: { id: 'p' } });
+
+      await expect(request.page()).resolves.toMatchObject({ accepted: true });
+      await expect(request.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
+
+      expect(upsertProfile).toHaveBeenCalledTimes(1);
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'track' })
+      );
+    });
+
+    it('does not share consent between requests', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const granted = runtime.forRequest({ consent: true, profile: { id: 'a' } });
+      const denied = runtime.forRequest({ consent: false, profile: { id: 'b' } });
+
+      await granted.track({ event: 'viewed' });
+      await denied.track({ event: 'viewed' });
+
+      expect(upsertProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a preview batch entirely under strict opt-in', async () => {
+      const { runtime, upsertProfile } = createEventRuntime({ allowedEventTypes: [] });
+      const request = runtime.forRequest({ consent: false, eventDelivery: 'handoff' });
+
+      await expect(request.previewInitialPersonalization()).resolves.toEqual({ accepted: false });
+      expect(upsertProfile).not.toHaveBeenCalled();
+    });
   });
 });

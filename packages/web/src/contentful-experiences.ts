@@ -1,5 +1,10 @@
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
+  type AllowedEventType,
+  type BlockedEvent,
+  type ConsentInput,
+  type ConsentState,
+  toConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventProfile,
@@ -24,7 +29,7 @@ import LocalStore from './storage/local-store.js';
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
   EventBuilderConfig,
-  'getPageProperties' | 'getUserAgent' | 'getConsent'
+  'getPageProperties' | 'getUserAgent'
 >;
 
 /**
@@ -50,6 +55,15 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
     locale?: string;
     app?: EventBuilderConfig['app'];
     browserContext?: BrowserEventContextProviders;
+    /** Event types emitted while event consent is not granted. Defaults to identify and page. */
+    allowedEventTypes?: readonly AllowedEventType[];
+    /** Called when consent drops an event. Blocked events are never replayed. */
+    onEventBlocked?: (event: BlockedEvent) => void;
+    /**
+     * Consent applied at startup for axes the visitor has not decided yet. A
+     * stored decision always takes precedence.
+     */
+    defaults?: { consent?: boolean; persistenceConsent?: boolean };
   };
 
 type WebEventMethods = Pick<
@@ -88,8 +102,17 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args));
 
   constructor(config: ExperiencesWebConfig) {
-    const { app, browserContext, profile, eventHandoff, eventHandoffRouteKey, ...clientConfig } =
-      config;
+    const {
+      app,
+      browserContext,
+      allowedEventTypes,
+      onEventBlocked,
+      defaults,
+      profile,
+      eventHandoff,
+      eventHandoffRouteKey,
+      ...clientConfig
+    } = config;
     super({
       ...clientConfig,
       eventBuilder: {
@@ -98,13 +121,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         library: DEFAULT_EVENT_CONTEXT_LIBRARY,
         getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
-        getConsent: browserContext?.getConsent,
       },
     });
     if (profile !== undefined && eventHandoff !== undefined) {
       throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
+    this.#store.applyConsentDefaults({
+      events: defaults?.consent,
+      persistence: defaults?.persistenceConsent,
+    });
     if (profile !== undefined) this.#store.profile = profile;
     this.#eventMethods = this.createEventMethods({
       getProfile: () => this.#store.profile,
@@ -112,6 +138,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         this.#store.profile = nextProfile;
       },
       getProfileRevision: () => this.#store.profileRevision,
+      getConsent: () => this.#store.consent,
+      allowedEventTypes,
+      onEventBlocked,
     });
     this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
     // Replay is eager. Mark a rejection as observed even when an application has
@@ -126,6 +155,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   get profile(): EventProfile | undefined {
     return this.#store.profile;
+  }
+
+  /** Current consent decisions. Undecided values are treated as not granted. */
+  get consentState(): Readonly<ConsentState> {
+    return this.#store.consent;
+  }
+
+  /**
+   * Sets consent for this browser. `true` or `false` sets event and persistence
+   * consent together; an object updates either independently. Decisions are stored
+   * in LocalStorage, always, so they survive reloads. Denying persistence removes
+   * the stored profile but keeps it in memory for the current session.
+   */
+  consent(input: ConsentInput): void {
+    this.#store.updateConsent(toConsentState(input));
   }
 
   /**

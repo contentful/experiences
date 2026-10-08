@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { PROFILE_CACHE_KEY } from '@contentful/experiences-runtime';
+import { CONSENT_CACHE_KEY, PROFILE_CACHE_KEY } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import LocalStore from './local-store.js';
@@ -10,6 +10,7 @@ describe('LocalStore', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ persistence: true }));
     store = new LocalStore();
   });
 
@@ -125,5 +126,94 @@ describe('LocalStore', () => {
     store.setCache('test-key', { ok: true });
 
     expect(window.localStorage.getItem('test-key')).toBe('{"ok":true}');
+  });
+});
+
+describe('LocalStore consent', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('keeps the profile in memory only until persistence consent is granted', () => {
+    const store = new LocalStore();
+
+    store.profile = { id: 'visitor' };
+
+    expect(store.profile).toEqual({ id: 'visitor' });
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+
+    store.updateConsent({ persistence: true });
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({ id: 'visitor' });
+  });
+
+  it('removes the stored profile but keeps the in-memory one when persistence is denied', () => {
+    const store = new LocalStore();
+    store.updateConsent({ persistence: true });
+    store.profile = { id: 'visitor' };
+
+    store.updateConsent({ persistence: false });
+
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+    expect(store.profile).toEqual({ id: 'visitor' });
+  });
+
+  it('persists consent itself and restores it with the profile on the next load', () => {
+    const first = new LocalStore();
+    first.updateConsent({ events: true, persistence: true });
+    first.profile = { id: 'visitor' };
+
+    const second = new LocalStore();
+
+    expect(second.consent).toEqual({ events: true, persistence: true });
+    expect(second.profile).toEqual({ id: 'visitor' });
+  });
+
+  it('does not restore, but keeps, a stored profile while persistence is undecided', () => {
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'stored' }));
+
+    expect(new LocalStore().profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
+  });
+
+  it('removes a stored profile on load when persistence was denied', () => {
+    window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ persistence: false }));
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'stale' }));
+
+    expect(new LocalStore().profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+});
+
+describe('LocalStore consent defaults', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('seeds undecided axes without writing them to storage', () => {
+    const store = new LocalStore();
+
+    store.applyConsentDefaults({ events: true, persistence: false });
+
+    expect(store.consent).toEqual({ events: true, persistence: false });
+    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBeNull();
+  });
+
+  it('never overrides a stored visitor decision', () => {
+    window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+    const store = new LocalStore();
+
+    store.applyConsentDefaults({ events: true, persistence: true });
+
+    expect(store.consent).toEqual({ events: false, persistence: true });
+  });
+
+  it('restores a stored profile when defaults grant persistence', () => {
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const store = new LocalStore();
+    expect(store.profile).toBeUndefined();
+
+    store.applyConsentDefaults({ persistence: true });
+
+    expect(store.profile).toEqual({ id: 'visitor' });
   });
 });

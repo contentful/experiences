@@ -9,6 +9,13 @@ import {
   type OptimizationData as EventOptimizationData,
   type PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
+import {
+  type AllowedEventType,
+  type BlockedEvent,
+  type ConsentState,
+  type EventMethod,
+  hasEventConsent,
+} from './consent.js';
 import type EventBuilder from './event-builder.js';
 import type {
   ClickBuilderArgs,
@@ -24,6 +31,14 @@ import type {
 /** Runtime schema for profiles retained by public runtime leaves. */
 export { EventProfileSchema };
 export type { EventOptimizationData, EventProfile };
+
+/**
+ * Result of a Personalization method. `{ accepted: false }` means consent blocked
+ * the event before it reached the API; `{ accepted: true, data }` carries the response.
+ */
+export type EventEmissionResult =
+  | { readonly accepted: false; readonly data?: never }
+  | { readonly accepted: true; readonly data: EventOptimizationData };
 
 export type PersonalizationEventMethod = 'identify' | 'page' | 'track';
 export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
@@ -50,21 +65,27 @@ export interface RuntimeEventBindings {
   /** Changes when an external session boundary must invalidate an in-flight profile response. */
   getProfileRevision?: () => number;
   getEventContext?: () => UniversalEventBuilderArgs;
-  getConsent?: () => boolean | undefined;
+  /** Current event consent; an undecided state gates events to `allowedEventTypes`. */
+  getConsent?: () => ConsentState | undefined;
+  /** Event types emitted while event consent is not granted. Defaults to identify and page. */
+  allowedEventTypes?: readonly AllowedEventType[];
+  /** Called when consent drops an event. Errors thrown here are swallowed. */
+  onEventBlocked?: (event: BlockedEvent) => void;
 }
 
 /**
  * Event-triggering surface shared by the public Node and Web runtimes.
  * Profile-producing calls are not serialized; await them before another
- * profile-producing or Analytics call on the same bound runtime. In Node
+ * profile-producing or Analytics call on the same bound runtime. A Personalization
+ * call blocked by consent resolves `{ accepted: false }`; a blocked Analytics call resolves `false`. In Node
  * handoff mode an Analytics `true` means accepted into the handoff journal,
  * not delivered to the Analytics transport.
  */
 export interface RuntimeEventMethods {
   readonly profile: EventProfile | undefined;
-  identify(args: IdentifyBuilderArgs): Promise<EventOptimizationData>;
-  page(args?: PageViewBuilderArgs): Promise<EventOptimizationData>;
-  track(args: TrackBuilderArgs): Promise<EventOptimizationData>;
+  identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
+  page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
+  track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
   trackView(args: ViewBuilderArgs): Promise<boolean>;
   trackClick(args: ClickBuilderArgs): Promise<boolean>;
   trackHover(args: HoverBuilderArgs): Promise<boolean>;
@@ -95,46 +116,44 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     return this.bindings.getProfile();
   }
 
-  async identify(args: IdentifyBuilderArgs): Promise<EventOptimizationData> {
-    return this.sendPersonalizationEvent(
+  async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
+    return this.sendPersonalizationEvent('identify', args, () =>
       this.eventBuilder.buildIdentify(this.withEventContext(args))
     );
   }
 
-  async page(args: PageViewBuilderArgs = {}): Promise<EventOptimizationData> {
-    return this.sendPersonalizationEvent(
+  async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
+    return this.sendPersonalizationEvent('page', args, () =>
       this.eventBuilder.buildPageView(this.withEventContext(args))
     );
   }
 
-  async track(args: TrackBuilderArgs): Promise<EventOptimizationData> {
-    return this.sendPersonalizationEvent(this.eventBuilder.buildTrack(this.withEventContext(args)));
+  async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
+    return this.sendPersonalizationEvent('track', args, () =>
+      this.eventBuilder.buildTrack(this.withEventContext(args))
+    );
   }
 
   async trackView(args: ViewBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent(
-      'trackView',
+    return this.sendAnalyticsEvent('trackView', args, () =>
       this.eventBuilder.buildView(this.withEventContext(args))
     );
   }
 
   async trackClick(args: ClickBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent(
-      'trackClick',
+    return this.sendAnalyticsEvent('trackClick', args, () =>
       this.eventBuilder.buildClick(this.withEventContext(args))
     );
   }
 
   async trackHover(args: HoverBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent(
-      'trackHover',
+    return this.sendAnalyticsEvent('trackHover', args, () =>
       this.eventBuilder.buildHover(this.withEventContext(args))
     );
   }
 
   async trackFlagView(args: FlagViewBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent(
-      'trackFlagView',
+    return this.sendAnalyticsEvent('trackFlagView', args, () =>
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
   }
@@ -151,30 +170,50 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
       ...event,
       context: {
         ...event.context,
-        gdpr: { ...event.context.gdpr, isConsentGiven: consent },
+        gdpr: { ...event.context.gdpr, isConsentGiven: consent.events === true },
       },
     } as TEvent;
   }
 
+  /** Whether `method` may emit; reports a blocked event to `onEventBlocked` otherwise. */
+  private admit(method: EventMethod, args: readonly unknown[]): boolean {
+    const { getConsent, allowedEventTypes, onEventBlocked } = this.bindings;
+    if (getConsent === undefined || hasEventConsent(method, getConsent(), allowedEventTypes)) {
+      return true;
+    }
+    try {
+      onEventBlocked?.({ reason: 'consent', method, args });
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
+    }
+    return false;
+  }
+
   private async sendPersonalizationEvent(
-    event: PersonalizationEvent
-  ): Promise<EventOptimizationData> {
-    const eventWithConsent = this.withConsent(event);
+    method: PersonalizationEventMethod,
+    args: unknown,
+    build: () => PersonalizationEvent
+  ): Promise<EventEmissionResult> {
+    if (!this.admit(method, [args])) return { accepted: false };
+
+    const eventWithConsent = this.withConsent(build());
     const profileRevision = this.bindings.getProfileRevision?.();
     const data = await this.dispatch.personalization(eventWithConsent, this.profile);
     if (profileRevision === undefined || this.bindings.getProfileRevision?.() === profileRevision) {
       this.bindings.setProfile(data.profile);
     }
-    return data;
+    return { accepted: true, data };
   }
 
   private async sendAnalyticsEvent(
     method: AnalyticsEventMethod,
-    event: AnalyticsEvent
+    args: unknown,
+    build: () => AnalyticsEvent
   ): Promise<boolean> {
+    if (!this.admit(method, [args])) return false;
     const profile = this.profile;
     if (profile === undefined) throw new EventProfileRequiredError(method);
-    return this.dispatch.analytics(this.withConsent(event), profile);
+    return this.dispatch.analytics(this.withConsent(build()), profile);
   }
 }
 

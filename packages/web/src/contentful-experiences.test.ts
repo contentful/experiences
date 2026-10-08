@@ -4,12 +4,13 @@ import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   EventBuilder,
   EventProfileRequiredError,
+  CONSENT_CACHE_KEY,
   PROFILE_CACHE_KEY,
   type EventProfile,
   type RuntimeEventHandoff,
 } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
@@ -74,6 +75,14 @@ function createHandoffEvents() {
     ] satisfies RuntimeEventHandoff['events'],
   };
 }
+
+// A returning visitor who has already opted in to events and persistence.
+beforeEach(() => {
+  window.localStorage.setItem(
+    CONSENT_CACHE_KEY,
+    JSON.stringify({ events: true, persistence: true })
+  );
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -463,7 +472,8 @@ describe('Web ContentfulExperiences', () => {
       expect(analytics).not.toHaveBeenCalled();
 
       await expect(runtime.page({ properties: { path: '/client' } })).resolves.toMatchObject({
-        profile: { id: 'ordinary-profile' },
+        accepted: true,
+        data: { profile: { id: 'ordinary-profile' } },
       });
       expect(upsert).toHaveBeenCalledOnce();
     }
@@ -542,7 +552,8 @@ describe('Web ContentfulExperiences', () => {
 
     await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow('offline');
     await expect(runtime.page({ properties: { path: '/fallback' } })).resolves.toMatchObject({
-      profile: { id: 'fallback-profile' },
+      accepted: true,
+      data: { profile: { id: 'fallback-profile' } },
     });
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(analytics).not.toHaveBeenCalled();
@@ -650,7 +661,7 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'updated-profile' });
   });
 
-  it('uses the latest redacted browser context, locale, and consent without gating events', async () => {
+  it('uses the latest redacted browser context and locale, with consent from the runtime', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
       profile: { id: 'visitor' },
@@ -664,15 +675,21 @@ describe('Web ContentfulExperiences', () => {
           url: `${window.location.origin}${window.location.pathname}`,
         }),
         getUserAgent: () => 'redacted-agent',
-        getConsent: () => false,
       },
     });
+    runtime.consent({ events: false, persistence: false });
     const optimization = mockOptimization(runtime, { id: 'visitor' });
 
     window.history.replaceState({}, '', '/latest?secret=omit');
     document.title = 'Latest page';
     runtime.setLocale('de-DE');
 
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).resolves.toBe(false);
+    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
+
+    runtime.consent({ events: true });
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
     ).resolves.toBe(true);
@@ -684,7 +701,7 @@ describe('Web ContentfulExperiences', () => {
           expect.objectContaining({
             context: expect.objectContaining({
               locale: 'de-DE',
-              gdpr: { isConsentGiven: false },
+              gdpr: { isConsentGiven: true },
               page: expect.objectContaining({ path: '/latest', query: {} }),
               userAgent: 'redacted-agent',
             }),
@@ -692,6 +709,54 @@ describe('Web ContentfulExperiences', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('Web ContentfulExperiences consent', () => {
+  it('treats a boolean as both axes and an object as independent axes', () => {
+    const runtime = createRuntime();
+
+    runtime.consent(true);
+    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+
+    runtime.consent({ persistence: false });
+    expect(runtime.consentState).toEqual({ events: true, persistence: false });
+
+    runtime.consent(false);
+    expect(runtime.consentState).toEqual({ events: false, persistence: false });
+  });
+
+  it('applies defaults only to axes the visitor has not decided', () => {
+    window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+
+    const runtime = createRuntime({ defaults: { consent: true, persistenceConsent: true } });
+
+    expect(runtime.consentState).toEqual({ events: false, persistence: true });
+  });
+
+  it('reports blocked events to onEventBlocked and drops them', async () => {
+    window.localStorage.clear();
+    const onEventBlocked = vi.fn();
+    const runtime = createRuntime({ onEventBlocked, profile: { id: 'visitor' } });
+    const optimization = mockOptimization(runtime, { id: 'visitor' });
+
+    await expect(runtime.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
+
+    expect(optimization.upsertProfile).not.toHaveBeenCalled();
+    expect(onEventBlocked).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'consent', method: 'track' })
+    );
+  });
+
+  it('does not replay a blocked event after consent is granted', async () => {
+    window.localStorage.clear();
+    const runtime = createRuntime({ profile: { id: 'visitor' } });
+    const optimization = mockOptimization(runtime, { id: 'visitor' });
+
+    await runtime.track({ event: 'blocked' });
+    runtime.consent(true);
+
+    expect(optimization.upsertProfile).not.toHaveBeenCalled();
   });
 });
 

@@ -173,9 +173,10 @@ and the complete profile to events. A profile id returned by XDA is carried on
 visitor boundary.
 
 The default direct-delivery path sends an event at its call site. The SDK does
-not provide a general event queue, event persistence, consent gate, or beacon or
-page-lifecycle delivery. Consent and tracking policy remain the application’s
-responsibility. The Web runtime can track views, hovers, and clicks on rendered
+not provide a general event queue, event persistence, or beacon or
+page-lifecycle delivery. Event and persistence consent are gated by the SDK
+(`consent()` on Web, `consent` per request on Node); the application decides
+when to grant them. The Web runtime can track views, hovers, and clicks on rendered
 Experiences and Fragments automatically with `startInteractionTracking()`; those
 events go through the same direct methods (see the
 [Web SDK README](./packages/web/README.md#interaction-tracking)). No framework

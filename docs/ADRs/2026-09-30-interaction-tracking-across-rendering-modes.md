@@ -157,9 +157,9 @@ the rendered plan in the browser supplies the id → attribution lookup.**
   through the normal `trackView` and `trackHover` calls. Getting them delivered
   reliably is left to the event queue and beacon work in
   [NT-4154](https://contentful.atlassian.net/browse/NT-4154).
-- **Consent:** nothing is gated on consent yet. That is
-  [NT-4151](https://contentful.atlassian.net/browse/NT-4151), which follows this
-  work.
+- **Consent:** tracked events go through the same consent gate as manual calls
+  ([NT-4151](https://contentful.atlassian.net/browse/NT-4151)). Until event
+  consent is granted, views, hovers, and clicks are dropped.
 
 ## Open questions
 

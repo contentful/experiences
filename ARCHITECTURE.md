@@ -156,7 +156,7 @@ custom-endpoint and direct by-ID CPA preview capabilities.
 Both leaves trigger events directly. `identify`, `page`, and `track` target the
 Personalization API; `trackView`, `trackClick`, `trackHover`, and
 `trackFlagView` target the Analytics API. The SDK deliberately has no event
-queue, durable persistence, consent gate, beacon/lifecycle delivery, automatic
+queue, durable persistence, beacon/lifecycle delivery, automatic
 renderer tracking, or Live Preview event integration. A manual event call still
 sends while a direct CPA preview fetch is active. The exception is an explicit,
 request-scoped Node handoff for a paired browser integration: it is a one-shot

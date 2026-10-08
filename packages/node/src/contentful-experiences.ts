@@ -4,6 +4,13 @@ import {
   assertRuntimeEventHandoffSize,
   parseRuntimeEventHandoff,
   RUNTIME_EVENT_HANDOFF_VERSION,
+  type AllowedEventType,
+  type BlockedEvent,
+  type ConsentInput,
+  type ConsentState,
+  type EventEmissionResult,
+  hasEventConsent,
+  toConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventOptimizationData,
@@ -33,7 +40,13 @@ import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
  */
 export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder'> & {
   app?: EventBuilderConfig['app'];
+  /** Event types emitted while event consent is not granted. Defaults to identify and page. */
+  allowedEventTypes?: readonly AllowedEventType[];
+  /** Called when consent drops an event. Blocked events are never replayed. */
+  onEventBlocked?: (event: BlockedEvent) => void;
 };
+
+type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'>;
 
 /** Context that is scoped to one incoming Node request. */
 export type ExperiencesNodeRequestContext = {
@@ -43,7 +56,13 @@ export type ExperiencesNodeRequestContext = {
   profile?: EventProfile;
   /** Request-derived event context, such as page and user-agent information. */
   eventContext?: UniversalEventBuilderArgs;
-  /** Request-derived consent value used when an event does not supply one. */
+  /**
+   * Request-scoped consent: `true` or `false` sets event and persistence consent
+   * together, an object sets either independently. Never shared across requests
+   * and never persisted; undecided is treated as not granted.
+   */
+  consent?: ConsentInput;
+  /** @deprecated Use `consent.events`. Ignored when `consent.events` is set. */
   eventConsent?: boolean;
   /**
    * Server-only event delivery choice. Defaults to direct `commit`; use
@@ -104,7 +123,9 @@ export interface ExperiencesNodeRequest {
    */
   previewInitialPersonalization(
     options?: InitialPersonalizationPreviewOptions
-  ): Promise<EventOptimizationData>;
+  ): Promise<EventEmissionResult>;
+  /** Whether the host application may persist this request's profile id. */
+  readonly canPersistProfile: boolean;
   /**
    * Finalizes the request's handoff journal after all event calls have settled.
    * Returns undefined in commit mode and prohibits later event calls in handoff mode.
@@ -114,8 +135,10 @@ export interface ExperiencesNodeRequest {
 
 /** A Node-oriented runtime whose mutable request state is isolated by forRequest(). */
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
+  readonly #consentPolicy: ConsentPolicy;
+
   constructor(config: ExperiencesNodeConfig) {
-    const { app, ...clientConfig } = config;
+    const { app, allowedEventTypes, onEventBlocked, ...clientConfig } = config;
     super({
       ...clientConfig,
       eventBuilder: {
@@ -124,6 +147,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         library: DEFAULT_EVENT_CONTEXT_LIBRARY,
       },
     });
+    this.#consentPolicy = { allowedEventTypes, onEventBlocked };
   }
 
   forRequest(context: ExperiencesNodeRequestContext = {}): ExperiencesNodeRequest {
@@ -135,7 +159,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           { profileId, events: [...events] },
           { locale, preflight: true }
         ),
-      (bindings, dispatch) => this.createEventMethods(bindings, dispatch)
+      (bindings, dispatch) => this.createEventMethods(bindings, dispatch),
+      this.#consentPolicy
     );
   }
 }
@@ -143,7 +168,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 class RequestBoundExperiences implements ExperiencesNodeRequest {
   readonly locale: string | undefined;
   #profile: EventProfile | undefined;
+  readonly #consent: ConsentState;
   readonly #handoff: EventHandoffCollector | undefined;
+  readonly canPersistProfile: boolean;
 
   readonly identify: NodeEventMethods['identify'];
   readonly page: NodeEventMethods['page'];
@@ -160,10 +187,14 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     createEventMethods: (
       bindings: RuntimeEventBindings,
       dispatch?: EventHandoffCollector
-    ) => RuntimeEventMethods
+    ) => RuntimeEventMethods,
+    private readonly consentPolicy: ConsentPolicy
   ) {
     this.locale = context.locale ?? runtime.locale;
     this.#profile = context.profile;
+    const requested = toConsentState(context.consent ?? {});
+    this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
+    this.canPersistProfile = this.#consent.persistence === true;
     const eventDelivery = context.eventDelivery ?? 'commit';
     if (eventDelivery !== 'commit' && eventDelivery !== 'handoff') {
       throw new TypeError(`Unsupported server event delivery mode: ${String(eventDelivery)}`);
@@ -188,7 +219,9 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
           ...context.eventContext,
           ...(context.locale === undefined ? {} : { locale: context.locale }),
         }),
-        getConsent: () => context.eventConsent,
+        getConsent: () => this.#consent,
+        allowedEventTypes: consentPolicy.allowedEventTypes,
+        onEventBlocked: consentPolicy.onEventBlocked,
       },
       this.#handoff
     );
@@ -204,7 +237,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   async previewInitialPersonalization(
     options: InitialPersonalizationPreviewOptions = {}
-  ): Promise<EventOptimizationData> {
+  ): Promise<EventEmissionResult> {
     if (this.#handoff === undefined) {
       throw new Error("previewInitialPersonalization() requires eventDelivery: 'handoff'");
     }
@@ -213,6 +246,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     for (const command of options.events ?? []) {
       if (command.type === 'identify') {
         const { type: _, ...args } = command;
+        if (!this.admit('identify', args)) continue;
         events.push(
           this.withRequestEventConsent(
             this.runtime.eventBuilder.buildIdentify(this.withRequestEventContext(args))
@@ -220,6 +254,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
         );
       } else {
         const { type: _, ...args } = command;
+        if (!this.admit('track', args)) continue;
         events.push(
           this.withRequestEventConsent(
             this.runtime.eventBuilder.buildTrack(this.withRequestEventContext(args))
@@ -227,15 +262,19 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
         );
       }
     }
-    events.push(
-      this.withRequestEventConsent(
-        this.runtime.eventBuilder.buildPageView(this.withRequestEventContext(options.page ?? {}))
-      )
-    );
+    const page = options.page ?? {};
+    if (this.admit('page', page)) {
+      events.push(
+        this.withRequestEventConsent(
+          this.runtime.eventBuilder.buildPageView(this.withRequestEventContext(page))
+        )
+      );
+    }
+    if (events.length === 0) return { accepted: false };
 
     const data = await this.#handoff.personalizationBatch(events);
     this.#profile = data.profile;
-    return data;
+    return { accepted: true, data };
   }
 
   get profile(): EventProfile | undefined {
@@ -288,6 +327,17 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     );
   }
 
+  private admit(method: 'identify' | 'track' | 'page', args: unknown): boolean {
+    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
+    if (hasEventConsent(method, this.#consent, allowedEventTypes)) return true;
+    try {
+      onEventBlocked?.({ reason: 'consent', method, args: [args] });
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
+    }
+    return false;
+  }
+
   private withRequestEventContext<TArgs extends object>(
     args: TArgs
   ): TArgs & UniversalEventBuilderArgs {
@@ -301,13 +351,11 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   private withRequestEventConsent<TEvent extends RuntimePersonalizationHandoffEvent['event']>(
     event: TEvent
   ): TEvent {
-    if (this.context.eventConsent === undefined) return event;
-
     return {
       ...event,
       context: {
         ...event.context,
-        gdpr: { ...event.context.gdpr, isConsentGiven: this.context.eventConsent },
+        gdpr: { ...event.context.gdpr, isConsentGiven: this.#consent.events === true },
       },
     } as TEvent;
   }

@@ -73,7 +73,7 @@ const experienceRequest = experiences.forRequest({
   locale: requestLocale,
   profile: currentProfile,
   eventContext: { page: pageProperties, userAgent },
-  eventConsent: hasAnalyticsConsent,
+  consent: { events: hasAnalyticsConsent },
 });
 
 await experienceRequest.identify({ userId });
@@ -90,7 +90,15 @@ await experienceRequest.trackClick({
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
 current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
-`eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
+`consent.events` gates sending and sets `context.gdpr.isConsentGiven`. Until it is `true`, only
+`allowedEventTypes` (default `identify` and `page`) are sent; a blocked Personalization call
+resolves `{ accepted: false }` and a blocked Analytics call resolves `false`. Blocked events are
+dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configure
+`allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
+consent itself is per request. A boolean `consent` sets event and persistence consent together.
+Consent is scoped to the request facade and is never shared across requests or persisted.
+Check `request.canPersistProfile` before storing the profile id. `eventConsent` is a deprecated
+alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
 

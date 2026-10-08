@@ -1,4 +1,19 @@
 export { ANONYMOUS_ID_COOKIE, PROFILE_CACHE_KEY } from './constants.js';
+export {
+  CONSENT_CACHE_KEY,
+  DEFAULT_ALLOWED_EVENT_TYPES,
+  hasEventConsent,
+  parseConsentState,
+  toConsentState,
+} from './consent.js';
+export type {
+  AllowedEventType,
+  BlockedEvent,
+  ConsentInput,
+  ConsentState,
+  EventMethod,
+  EventType,
+} from './consent.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   ContentfulExperiencesConfig,
@@ -15,6 +30,7 @@ export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
 export type {
+  EventEmissionResult,
   EventOptimizationData,
   EventProfile,
   AnalyticsEventMethod,
