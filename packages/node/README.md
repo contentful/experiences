@@ -35,7 +35,6 @@ const request = experiences.forRequest({
   locale: requestLocale,
   resolveOptions: {
     metadata: { requestId },
-    initialViewportId: viewportId,
   },
 });
 
@@ -119,7 +118,6 @@ For settings that occur at more than one scope, later scope wins:
 | `locale` for an experience fetch | constructor fallback → `forRequest()` context → `fetchExperience()` options                                   |
 | `metadata`                       | constructor defaults → `forRequest({ resolveOptions })` → method `resolveOptions`; objects are shallow-merged |
 | `debug`                          | constructor default → request `resolveOptions` → method `resolveOptions`                                      |
-| `initialViewportId`              | request `resolveOptions` → method `resolveOptions`                                                            |
 
 `false` remains meaningful for `debug`: the SDK uses nullish fallback rather than truthiness.
 
@@ -149,7 +147,7 @@ if ('redirect' in result) {
 }
 ```
 
-Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata, debug, and viewport selection.
+Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata and debug.
 
 The runtime owns its Delivery and Preview clients. Configure each with an
 `accessToken`, or configure a tokenless trusted proxy by supplying an explicit

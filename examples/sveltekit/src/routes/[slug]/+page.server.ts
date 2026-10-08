@@ -6,17 +6,15 @@ import {
   fetchPreviewSession,
 } from '@contentful/experiences-svelte';
 import { env } from '$env/dynamic/private';
-import { detectViewportFromUserAgent } from '$lib/detect-viewport.js';
 import { experienceConfig } from '$lib/experience-config.js';
 
 import type { PageServerLoad } from './$types.js';
 
-export const load: PageServerLoad = async ({ params, url, request }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
   const preview = url.searchParams.get('preview');
   const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
   const previewToken = env.CPA_TOKEN;
   const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
-  const initialViewportId = detectViewportFromUserAgent(request.headers.get('user-agent') ?? '');
   const metadata = { slug: params.slug };
 
   // `$env/dynamic/private` types every var as `string | undefined`, because it
@@ -40,7 +38,6 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       config: experienceConfig,
       metadata,
       debug,
-      initialViewportId,
     };
     const experience = livePreview
       ? await fetchPreviewSession(
@@ -68,7 +65,6 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
       previewSessionOptions,
       debug,
       metadata,
-      initialViewportId,
     };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Experience not found');

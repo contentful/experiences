@@ -27,7 +27,7 @@ export interface UseExperiencePlanResult {
 export function useExperiencePlan(options: UseExperiencePlanOptions): UseExperiencePlanResult {
   const { payload, initialPlan, resolveOptions } = options;
   const [plan, setPlan] = useState<PortableRenderPlan | undefined>(initialPlan);
-  const { config, metadata, debug, initialViewportId, sourceMap } = resolveOptions;
+  const { config, metadata, debug, sourceMap } = resolveOptions;
 
   useEffect(() => {
     let isCurrent = true;
@@ -38,7 +38,7 @@ export function useExperiencePlan(options: UseExperiencePlanOptions): UseExperie
       };
     }
 
-    void resolveExperience(payload, config, { metadata, debug, initialViewportId, sourceMap })
+    void resolveExperience(payload, config, { metadata, debug, sourceMap })
       .then((nextPlan) => {
         if (isCurrent && nextPlan.diagnostics.length === 0) {
           setPlan(nextPlan);
@@ -51,7 +51,7 @@ export function useExperiencePlan(options: UseExperiencePlanOptions): UseExperie
     return () => {
       isCurrent = false;
     };
-  }, [payload, config, metadata, debug, initialViewportId, sourceMap]);
+  }, [payload, config, metadata, debug, sourceMap]);
 
   return { data: plan };
 }

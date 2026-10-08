@@ -35,8 +35,6 @@ import type { Config } from './types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -78,10 +76,7 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
   it('malformed-payload: a non-array nodes field', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const plan = await resolveExperience(
-        { viewports: VIEWPORTS, nodes: 'not-an-array' } as never,
-        { components: {} }
-      );
+      const plan = await resolveExperience({ nodes: 'not-an-array' } as never, { components: {} });
       const html = renderToStaticMarkup(
         <ServerExperienceRenderer experience={plan} config={{ components: {} }} debug />
       );
@@ -96,7 +91,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('contentful-container', {
             id: 'page',
@@ -120,7 +114,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [{ pattern: {} } as unknown as ComponentNode, componentNode('button', { id: 'b' })],
       };
       const config: Config = { components: { button: Button } };
@@ -139,7 +132,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('button', { id: 'b' })],
       };
       const config: Config = {
@@ -170,7 +162,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',
@@ -195,7 +186,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -214,7 +204,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           {
             experienceTemplate: {
@@ -246,7 +235,6 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };

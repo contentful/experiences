@@ -11,7 +11,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: experiences
-  description: Renderer SDK suite for Contentful Experience Orchestration (ExO) — framework adapters, runtime-neutral resolver, design-token + viewport utilities.
+  description: Renderer SDK suite for Contentful Experience Orchestration (ExO) — framework adapters, runtime-neutral resolver, and design-token utilities.
   annotations:
     github.com/project-slug: contentful/experiences
   tags:

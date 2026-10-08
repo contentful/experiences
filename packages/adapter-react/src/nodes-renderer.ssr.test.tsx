@@ -33,8 +33,6 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -79,7 +77,6 @@ function renderToStreamedHtml(element: React.ReactElement): Promise<string> {
 describe('ServerExperienceRenderer — component-render-error under Fizz (renderToPipeableStream)', () => {
   it('isolates the failing node — sibling still renders, no crash', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
     };
     const config: Config = { components: { broken: Broken, fine: Fine } };
@@ -95,7 +92,6 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
 
   it('emits the debug fallback markup as the Suspense recovery content when debug is on', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: Broken } };
@@ -111,7 +107,6 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
@@ -133,7 +128,6 @@ describe('ServerExperienceRenderer — component-render-error under Fizz (render
 describe('ServerExperienceRenderer — component-render-error under the legacy renderToStaticMarkup', () => {
   it('degrades gracefully too — fallback renders, sibling isolated, no crash', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
     };
     const config: Config = { components: { broken: Broken, fine: Fine } };
@@ -153,7 +147,6 @@ describe('ServerExperienceRenderer — component-render-error under the legacy r
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };

@@ -7,9 +7,9 @@ adapters. This package has no runtime dependencies.
 
 ## What lives here
 
-- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableRegistration`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken` / `ValuesByViewport`), `ViewportDef`, `ExperienceContext`, `ResolveContext`.
-- **`resolveExperience(payload, config, opts)`** — single async entry that walks an XDA payload, classifies content vs. design properties, captures slots, runs any component-declared `resolveData` hooks in parallel, and emits a runtime-neutral `PortableRenderPlan` ready for any framework adapter to render. Every node in the payload becomes a `PortableRenderNode`; `registration.kind` records whether the adapter should resolve its id against `config.components` or `config.experienceTemplates`. A coded Experience Template is an ordinary node — `payload.sys.experienceTemplate` is never read.
-- **Diagnostics and design support** — `createDebugLogger`, plus the viewport and design-resolution helpers (`applyTokenResolver`, `getValueForViewport`, `getViewportIndex`, and `resolveDesignProperties`).
+- **Types** — `PortableRenderPlan`, `PortableRenderNode`, `PortableRegistration`, `ExperiencePayload`, `ExperienceNode`, the discriminated `DesignPropValue` union (`ManualDesignValue` / `DesignToken`), `ExperienceContext`, `ResolveContext`.
+- **`resolveExperience(payload, config, opts)`** — single async entry that walks an XDA payload, classifies content vs. design properties, resolves design values and tokens, captures slots, runs any component-declared `resolveData` hooks in parallel, and emits a runtime-neutral `PortableRenderPlan` ready for any framework adapter to render. Every node in the payload becomes a `PortableRenderNode`; `registration.kind` records whether the adapter should resolve its id against `config.components` or `config.experienceTemplates`. A coded Experience Template is an ordinary node — `payload.sys.experienceTemplate` is never read.
+- **Diagnostics and design support** — `createDebugLogger`, `resolveDesignProperties`, and `applyTokenResolver`.
 
 Delivery transport and event construction do not belong here. They are owned by
 Client, keeping this package usable in any runtime without pulling in a delivery

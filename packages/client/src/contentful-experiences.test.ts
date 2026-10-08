@@ -15,8 +15,8 @@ const {
       return mockOptimizationClient;
     }),
     mockCreateRuntimeDeliveryClient: vi.fn((source) => ({ source })),
-    mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
-    mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [], viewports: [] }),
+    mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [] }),
+    mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
   };
 });
 
@@ -111,7 +111,6 @@ describe('ContentfulExperiences', () => {
       {
         metadata: { site: 'main', shared: 'call' },
         debug: true,
-        initialViewportId: undefined,
         sourceMap: undefined,
       }
     );

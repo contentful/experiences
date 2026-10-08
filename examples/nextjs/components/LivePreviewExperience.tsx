@@ -12,7 +12,6 @@ import { experienceConfig } from '@/lib/experience-config';
 interface LivePreviewExperienceProps {
   initialPlan: PortableRenderPlan;
   previewSessionOptions?: PreviewSessionOptions;
-  initialViewportId?: string;
   metadata?: Record<string, unknown>;
   debug?: boolean;
 }
@@ -20,7 +19,6 @@ interface LivePreviewExperienceProps {
 export function LivePreviewExperience({
   initialPlan,
   previewSessionOptions,
-  initialViewportId,
   metadata,
   debug,
 }: LivePreviewExperienceProps) {
@@ -29,7 +27,6 @@ export function LivePreviewExperience({
     initialPlan,
     resolveOptions: {
       config: experienceConfig,
-      initialViewportId,
       metadata,
       debug,
     },
@@ -43,7 +40,6 @@ export function LivePreviewExperience({
       <ClientExperienceRenderer
         experience={livePreview.data}
         config={experienceConfig}
-        initialViewportId={initialViewportId}
         metadata={metadata}
         debug={debug}
       />

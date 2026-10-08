@@ -20,7 +20,7 @@ import { Injectable, type Signal, computed, signal } from '@angular/core';
 import type { ContentfulComponent, ContentfulExperienceTemplate } from './types.js';
 
 /**
- * Viewport-cascaded, token-resolved design values for the enclosing node.
+ * Token-resolved design values for the enclosing node.
  * Provided on every rendered node, so `injectDesignValues()` always reads the
  * nearest one.
  */

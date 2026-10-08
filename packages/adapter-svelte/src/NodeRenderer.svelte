@@ -12,7 +12,6 @@
   import type { Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
-  import { selectResolvedDesign } from '@contentful/experiences-design';
 
   import {
     setContentfulComponent,
@@ -58,7 +57,7 @@
   const isExperienceTemplate = kind === 'experienceTemplate';
 
   // Any reactive re-run of this component's `$derived`/`{@const}` blocks
-  // (e.g. an ancestor's viewport change) would otherwise re-report the same
+  // would otherwise re-report the same
   // diagnostic every time — matches Angular's `lastDiagnostics` guard in
   // NodeRenderEngine and React's equivalent in NodeRenderer. `reported` is a
   // plain (non-reactive) binding, stable for this component instance's
@@ -129,21 +128,7 @@
     setContentfulComponent(contentful);
   }
 
-  const tokenResolvedDesign = $derived.by(() => {
-    const { props, unresolved } = selectResolvedDesign(
-      node.props,
-      experience.viewports,
-      experience.activeViewportIndex,
-      experience.fallbackViewportIndex,
-      config.resolveToken
-    );
-    if (unresolved.length && typeof console !== 'undefined') {
-      console.warn(
-        `[@contentful/experiences-svelte] resolveToken returned undefined for token id(s) on ${kind} "${id}": ${unresolved.join(', ')}. getDesignValues() will omit those keys.`
-      );
-    }
-    return props;
-  });
+  const tokenResolvedDesign = $derived(node.props.design);
 
   setResolvedDesign(() => tokenResolvedDesign);
 

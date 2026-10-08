@@ -3,12 +3,7 @@ export { resolveExperience } from './resolve-experience.js';
 export type { ResolverConfig, ResolveExperienceOptions } from './resolve-experience.js';
 export { createDebugLogger } from './debug-logger.js';
 export type { DebugLogger } from './debug-logger.js';
-export {
-  applyTokenResolver,
-  getValueForViewport,
-  getViewportIndex,
-  resolveDesignProperties,
-} from './viewport.js';
+export { applyTokenResolver, resolveDesignProperties } from './design-properties.js';
 export {
   getTrackingAttributes,
   TRACKING_CLICKABLE_ATTRIBUTE,

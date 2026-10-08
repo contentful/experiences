@@ -7,9 +7,8 @@ A SvelteKit 2 + Svelte 5 app demonstrating `@contentful/experiences-svelte` rend
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-svelte`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-svelte`.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
-- **Hydration-safe viewport seeding**: User-Agent parsed on the server in `+page.server.ts`, passed as `initialViewportId`.
 - **Styling from design props**: resolved design auto-fills each component's `$props()` by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract.
-- **One escape-hatch demo**: `Card.svelte` styles itself from props like the rest, but its nested `CardCta.svelte` — not a registered component, so it has no props of its own — reads the card's design with `getDesignValues()` inside a `$derived` (reactive across viewport changes). That's the case props can't cover.
+- **One escape-hatch demo**: `Card.svelte` styles itself from props like the rest, but its nested `CardCta.svelte` — not a registered component, so it has no props of its own — reads the card's design with `getDesignValues()` inside a `$derived`. That's the case props can't cover.
 - **Design tokens**: `experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
 - **Component registration**: bare Svelte components for the common case, `defineComponent({ component, ... })` when a component needs `defaults` or `resolveData`.
 
@@ -82,7 +81,6 @@ examples/sveltekit/
 │       │   ├── RichText.svelte
 │       │   ├── Section.svelte  # renders its `children` slot
 │       │   └── Text.svelte
-│       ├── detect-viewport.ts
 │       └── experience-config.ts    # integration layer (maps components + experience templates into experienceConfig)
 ├── svelte.config.js
 ├── vite.config.ts

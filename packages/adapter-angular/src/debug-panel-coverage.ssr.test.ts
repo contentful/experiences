@@ -28,8 +28,6 @@ import { ServerExperienceRendererComponent } from './server-experience-renderer.
 import { ButtonFixture } from './test-fixtures/button.fixture.js';
 import type { Config } from './types.js';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -61,7 +59,6 @@ describe('debug panel — true SSR coverage of a resolve-time diagnostic', () =>
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('button', {
             id: 'b',

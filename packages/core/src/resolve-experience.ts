@@ -1,8 +1,7 @@
 /*
  * Turns an XDA Experience payload into a runtime-neutral PortableRenderPlan.
  * Walks nodes recursively, splits content + design props, runs any registered
- * `resolveData` hooks in parallel, and pre-resolves design against a fallback
- * viewport (see `resolveExperience` below).
+ * `resolveData` hooks in parallel, and resolves design values for the renderer.
  */
 
 import { resolveAttribution } from './attribution.js';
@@ -18,9 +17,8 @@ import type {
   PortableRenderPlan,
   ResolveContext,
   ResolveToken,
-  ViewportDef,
 } from './types.js';
-import { applyTokenResolver, getViewportIndex, resolveDesignProperties } from './viewport.js';
+import { applyTokenResolver, resolveDesignProperties } from './design-properties.js';
 
 /**
  * Structural type the resolver walker depends on. Matches the React /
@@ -42,11 +40,6 @@ export interface ResolverConfig {
    * caller re-supplying it. Used during server-side pre-resolution.
    */
   resolveToken?: ResolveToken;
-  /**
-   * Default fallback viewport for server-side design pre-resolution. When unset
-   * (and not overridden by `initialViewportId`), defaults to viewport[0].
-   */
-  fallbackViewportId?: string;
 }
 
 function getResolver(
@@ -76,13 +69,6 @@ export interface ResolveExperienceOptions {
    */
   debug?: boolean;
   /**
-   * Per-request override for the design pre-resolution fallback viewport. Wins
-   * over `config.fallbackViewportId` — pass a request-time value (e.g. a
-   * User-Agent-detected viewport) so SSR targets the device's expected
-   * viewport. Defaults to viewport[0] when unset or unknown.
-   */
-  initialViewportId?: string;
-  /**
    * Source map carried onto the plan. An explicit map wins over
    * `payload.extensions.sourceMap`. Omit to use the payload's map, if it
    * carries one.
@@ -93,7 +79,6 @@ export interface ResolveExperienceOptions {
 const DEFAULT_EXPERIENCE: ExperienceContext = {
   debug: false,
   metadata: {},
-  viewports: [],
 };
 
 /**
@@ -108,7 +93,7 @@ function lookupEntry(config: ResolverConfig, registration: PortableRegistration)
 }
 
 /**
- * Extract the flat id (component or experienceTemplate) from its
+ * Extract the id (component or experienceTemplate) from its
  * `ResourceLink` URN. Real URN shapes:
  *   crn:contentful:::experience:spaces/$self/environments/$self/components/<id>
  *   crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/<id>
@@ -289,7 +274,7 @@ function buildNode(
     registration,
     props: {
       content: { ...(node.contentProperties ?? {}) },
-      // Resolved flat values are written by the pre-resolution pass below.
+      // Resolved design values are written by the pre-resolution pass below.
       design: {},
       designRaw: { ...(node.designProperties ?? {}) } as Record<string, DesignPropValue>,
     },
@@ -302,16 +287,12 @@ function buildNode(
   return built;
 }
 
-// Cascade a node's raw design to the fallback viewport and resolve tokens.
-// Returns the flat resolved map plus any token ids left unresolved (dropped).
+// Resolve a node's raw design values and tokens.
 function preResolveDesignProperties(
   design: Record<string, DesignPropValue>,
-  viewports: ViewportDef[],
-  fallbackViewportIndex: number,
   resolveToken: ResolveToken | undefined
 ): { props: Record<string, unknown>; unresolved: string[] } {
-  const cascaded = resolveDesignProperties(design, viewports, fallbackViewportIndex);
-  return applyTokenResolver(cascaded, resolveToken);
+  return applyTokenResolver(resolveDesignProperties(design), resolveToken);
 }
 
 // Warn when resolveToken left tokens unresolved, so pass-through keys are diagnosable.
@@ -336,21 +317,14 @@ function warnUnresolvedTokens(
   }
 }
 
-// Depth-first pre-resolve for a node and its slot children.
+// Depth-first token resolution for a node and its slot children.
 function preResolveNodeTree(
   node: PortableRenderNode,
-  viewports: ViewportDef[],
-  fallbackViewportIndex: number,
   resolveToken: ResolveToken | undefined,
   log: DebugLogger,
   diagnostics: Error[]
 ): void {
-  const { props, unresolved } = preResolveDesignProperties(
-    node.props.designRaw,
-    viewports,
-    fallbackViewportIndex,
-    resolveToken
-  );
+  const { props, unresolved } = preResolveDesignProperties(node.props.designRaw, resolveToken);
   node.props.design = props;
   warnUnresolvedTokens(
     `${node.registration.kind}:${node.registration.id}`,
@@ -360,7 +334,7 @@ function preResolveNodeTree(
   );
   for (const children of Object.values(node.slots)) {
     for (const child of children) {
-      preResolveNodeTree(child, viewports, fallbackViewportIndex, resolveToken, log, diagnostics);
+      preResolveNodeTree(child, resolveToken, log, diagnostics);
     }
   }
 }
@@ -391,12 +365,12 @@ export async function resolveExperience(
   // we're already inside a `payload.nodes` access. Guard the whole payload
   // first so we degrade to an empty experience instead of throwing a raw
   // TypeError, and report exactly one diagnostic rather than double-counting
-  // once we also run `nodes`/`viewports` through `ensureArray`.
+  // once we also run `nodes` through `ensureArray`.
   const isPlainPayload = payload !== null && typeof payload === 'object';
   if (!isPlainPayload) {
     const message =
       `Experience payload is ${payload === null ? 'null' : typeof payload}, not an object; ` +
-      `treating it as an empty experience (no nodes, no viewports) instead of throwing. This ` +
+      `treating it as an empty experience (no nodes) instead of throwing. This ` +
       `usually means the fetch or transform pipeline handed resolveExperience a missing or ` +
       `malformed payload — check what produced it.`;
     if (typeof console !== 'undefined') {
@@ -408,14 +382,6 @@ export async function resolveExperience(
   const payloadNodes = isPlainPayload
     ? ensureArray<ExperienceNode>(payload.nodes, 'nodes', log, diagnostics)
     : [];
-  // `viewports` is being removed from the API, so its absence is expected, not
-  // malformed — only warn via `ensureArray` when the field is present but not
-  // an array. Otherwise default to `[]` silently.
-  const viewports =
-    isPlainPayload && payload.viewports !== undefined
-      ? ensureArray<ViewportDef>(payload.viewports, 'viewports', log, diagnostics)
-      : [];
-
   // Pass 1: walk the payload into the IR. Collect refs to nodes that need
   // resolveData so pass 2 can run them in parallel without re-walking.
   const nodeRefs: PortableRenderNode[] = [];
@@ -423,15 +389,12 @@ export async function resolveExperience(
   log.log(`built ${nodes.length} top-level node(s); ${nodeRefs.length} declare resolveData`);
 
   // Pass 2: run every node's resolveData hook in parallel.
-  // `viewports` is always sourced from the payload — the viewport list is fact,
-  // not opinion, so it can't be overridden by the caller.
   const experience: ExperienceContext = {
     debug: options.debug ?? DEFAULT_EXPERIENCE.debug,
     metadata: {
       ...DEFAULT_EXPERIENCE.metadata,
       ...(options.metadata ?? {}),
     },
-    viewports,
   };
 
   const tasks: Array<Promise<void>> = [];
@@ -480,30 +443,15 @@ export async function resolveExperience(
     await log.time(`${tasks.length} resolveData hook(s)`, () => Promise.all(tasks));
   }
 
-  // Pre-resolve design against the fallback viewport so SSR paints correct
-  // values on first render. Fallback is initialViewportId, else
-  // config.fallbackViewportId, else viewport[0].
-  const fallbackViewportId = options.initialViewportId ?? config.fallbackViewportId;
-  const fallbackViewportIndex = getViewportIndex(viewports, fallbackViewportId);
   for (const node of nodes) {
-    preResolveNodeTree(
-      node,
-      viewports,
-      fallbackViewportIndex,
-      config.resolveToken,
-      log,
-      diagnostics
-    );
+    preResolveNodeTree(node, config.resolveToken, log, diagnostics);
   }
-  log.log(`pre-resolved design against fallback viewport index ${fallbackViewportIndex}`);
+  log.log('resolved design properties');
 
   // Reuse `experience.metadata` rather than re-merging, so resolvers and the
-  // renderer read the same object. `viewports` is the guarded local, not
-  // `payload.viewports` — a malformed payload degrades to an empty list.
+  // renderer read the same object.
   const plan: PortableRenderPlan = {
-    viewports,
     nodes,
-    fallbackViewportIndex,
     diagnostics,
     metadata: experience.metadata,
     debug: experience.debug,

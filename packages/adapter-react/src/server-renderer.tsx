@@ -1,16 +1,10 @@
 /*
- * Server-safe Experience renderer. Resolves the active viewport once from
- * `initialViewportId` and renders without any reactive subscription.
+ * Server-safe Experience renderer. It renders the resolved plan directly.
  */
 
 import type { ReactNode } from 'react';
 
-import type {
-  ExperienceContext,
-  PortableRenderPlan,
-  ViewportDef,
-} from '@contentful/experiences-sdk-core';
-import { getViewportIndex } from '@contentful/experiences-design';
+import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { ComponentError } from './component-error';
 import { DebugExperience } from './debug-experience';
@@ -22,25 +16,11 @@ import type { Config, RenderContext } from './types';
 const DEFAULT_CONTEXT: ExperienceContext = {
   debug: false,
   metadata: {},
-  viewports: [],
-};
-
-// Keeps `activeViewport` non-null when a payload declares no viewports.
-const FALLBACK_VIEWPORT: ViewportDef = {
-  id: '_',
-  query: '*',
-  displayName: 'Default',
-  previewSize: '100%',
 };
 
 export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
-  /**
-   * Viewport to render for, typically derived from the request's User-Agent.
-   * Defaults to the viewport the plan was pre-resolved against.
-   */
-  initialViewportId?: string;
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**
@@ -59,7 +39,6 @@ export interface ServerExperienceRendererProps {
 export function ServerExperienceRenderer({
   experience,
   config,
-  initialViewportId,
   metadata,
   debug,
   renderUnknown = MissingComponent,
@@ -69,26 +48,10 @@ export function ServerExperienceRenderer({
 
   // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
   const resolvedDebug = debug ?? experience.debug;
-  // Default to the pre-resolved viewport so first paint needs no recompute.
-  const activeViewportIndex =
-    initialViewportId === undefined
-      ? experience.fallbackViewportIndex
-      : getViewportIndex(experience.viewports, initialViewportId);
-
-  // Copy viewports/activeViewport so the context (serialized + frozen by RSC)
-  // shares no object identity with the plan arrays the renderers read below —
-  // a shared reference makes Flight back-patch into frozen props and throw.
-  const contextViewports = experience.viewports.map((v) => ({ ...v }));
-  const activeViewport = { ...(experience.viewports[activeViewportIndex] ?? FALLBACK_VIEWPORT) };
-
   const renderContext: RenderContext = {
     ...DEFAULT_CONTEXT,
     debug: resolvedDebug,
     metadata: { ...DEFAULT_CONTEXT.metadata, ...experience.metadata, ...(metadata ?? {}) },
-    viewports: contextViewports,
-    activeViewport,
-    activeViewportIndex,
-    fallbackViewportIndex: experience.fallbackViewportIndex,
   };
 
   // Render-time diagnostics (unregistered id, a component that threw),
@@ -116,9 +79,6 @@ export function ServerExperienceRenderer({
     <NodesRenderer
       nodes={experience.nodes}
       config={config}
-      viewports={experience.viewports}
-      activeViewportIndex={activeViewportIndex}
-      fallbackViewportIndex={experience.fallbackViewportIndex}
       renderUnknown={renderUnknown}
       renderError={renderError}
       onDiagnostic={onDiagnostic}

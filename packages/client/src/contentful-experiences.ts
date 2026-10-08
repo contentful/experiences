@@ -35,7 +35,6 @@ import {
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
   debug?: boolean;
-  initialViewportId?: string;
   /**
    * Source map for `resolveExperience`. Wins over the payload's own
    * `extensions.sourceMap`. Not accepted by fetch methods, which use the map
@@ -223,7 +222,6 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return {
       metadata: { ...this.#resolveDefaults.metadata, ...options?.metadata },
       debug: options?.debug ?? this.#resolveDefaults.debug,
-      initialViewportId: options?.initialViewportId,
       sourceMap: options?.sourceMap,
     };
   }

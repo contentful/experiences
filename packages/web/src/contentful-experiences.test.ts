@@ -139,7 +139,7 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime();
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
 
     runtime.setLocale('de-DE');
     expect(runtime.locale).toBe('de-DE');
@@ -184,7 +184,7 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime();
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
     const personalization = {
       profileId: 'profile-1',
@@ -210,7 +210,7 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime();
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience({ experienceId: 'personalized' });
 
@@ -229,7 +229,7 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime({ profile });
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience({
       experienceId: 'personalized',
@@ -250,7 +250,6 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime();
     vi.spyOn(ClientContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       nodes: [],
-      viewports: [],
       personalization: { profileId: 'xda-profile' },
     } as never);
 
@@ -336,7 +335,7 @@ describe('Web ContentfulExperiences', () => {
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
       .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience(options);
 

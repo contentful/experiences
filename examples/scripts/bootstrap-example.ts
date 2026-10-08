@@ -307,7 +307,6 @@ async function seedComponent(fixture: ComponentFixture) {
     sys: { id: componentId, type: 'Component' },
     name: fixture.name,
     description: fixture.description ?? '',
-    viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
       required: p.required ?? false,
@@ -345,7 +344,6 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
   const experienceTemplateBody = {
     name: fixture.name,
     description: fixture.description ?? '',
-    viewports: [{ id: '_', query: '*', displayName: 'All Sizes', previewSize: '100%' }],
     contentProperties: (fixture.contentProperties ?? []).map((p) => ({
       ...p,
       required: p.required ?? false,
@@ -512,7 +510,6 @@ async function linkDataAssembliesToComponents() {
       sys: { id: componentId, type: 'Component', version: current.sys.version },
       name: current.name,
       description: current.description,
-      viewports: current.viewports,
       contentProperties: current.contentProperties,
       designProperties: current.designProperties,
       slots: current.slots,
@@ -527,6 +524,8 @@ async function linkDataAssembliesToComponents() {
 }
 
 // Walk fixture nodes and swap tempIds for real ids in contentBindings.
+// Parameter bindings use the canonical `{ $literal: ResourceLink }` notation;
+// the bare ResourceLink form is deprecated.
 function resolveNode(node: ExperienceNode): unknown {
   const out: Record<string, unknown> = {
     id: node.id,
@@ -549,10 +548,12 @@ function resolveNode(node: ExperienceNode): unknown {
     const parameters: Record<string, unknown> = {};
     for (const [pid, ref] of Object.entries(node.contentBindings.parameters)) {
       parameters[pid] = {
-        sys: {
-          type: 'ResourceLink',
-          linkType: 'Contentful:Entry',
-          urn: entryUrn(resolveId(ref.$entryTempId)),
+        $literal: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Entry',
+            urn: entryUrn(resolveId(ref.$entryTempId)),
+          },
         },
       };
     }
@@ -606,7 +607,6 @@ async function seedExperience(fixture: ExperienceFixture) {
   const commonBody = {
     name: fixture.name,
     description: fixture.description ?? '',
-    viewports: fixture.viewports,
     designProperties: {},
     metadata: { tags: [], concepts: [] },
     slots,

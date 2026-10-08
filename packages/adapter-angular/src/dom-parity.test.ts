@@ -41,8 +41,6 @@ import { HeadingFixture } from './test-fixtures/heading.fixture.js';
 import { render } from './test-fixtures/render-harness.js';
 import type { Config } from './types.js';
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -65,7 +63,6 @@ function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = 
 const WRAPPER_SELECTORS = ['cf-nodes', 'cf-node', 'cf-component-node', 'cf-node-host'];
 
 const payload: ExperiencePayload = {
-  viewports: VIEWPORTS,
   nodes: [
     componentNode('contentful-container', {
       id: 'c',

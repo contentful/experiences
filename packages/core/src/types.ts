@@ -4,12 +4,6 @@
  * every `resolveData` hook as `ctx.experience`. Never spread onto component
  * props — components receive only the props they declare.
  *
- * `viewports` (the *list*) is here so customer resolvers can inspect what
- * viewports an Experience declares (e.g. "is there a mobile viewport?").
- * The *active* viewport is render-time only and lives on the framework
- * adapter's RenderContext — exposing it here would mean async resolvers
- * re-fire on every viewport change, which would be a footgun.
- *
  * `debug` is the single observability switch. When on it: emits verbose logs
  * from `resolveExperience` and `fetchExperience`; renders the visible
  * missing-component box (see the adapters' `MissingComponent`); and turns the
@@ -27,66 +21,17 @@ export interface ExperienceContext {
    * crosses server/client boundaries.
    */
   metadata: Record<string, unknown>;
-  /**
-   * @deprecated Viewports are being removed from the Experiences APIs. Design
-   * property values arrive flat. Will not be removed before 2026-10-06.
-   */
-  viewports: ViewportDef[];
 }
 
-/**
- * `ExperienceContext` plus the viewport state that only exists at render time.
- *
- * Declared here, not per-adapter: it is plain data, so every adapter re-exports
- * this same type and a field added here reaches all three at once.
- */
-export interface RenderContext extends ExperienceContext {
-  /**
-   * @deprecated Viewport state is being removed from the Experiences APIs.
-   * Will not be removed before 2026-10-06.
-   */
-  activeViewport: ViewportDef;
-  /**
-   * @deprecated Viewport state is being removed from the Experiences APIs.
-   * Will not be removed before 2026-10-06.
-   */
-  activeViewportIndex: number;
-  /**
-   * @deprecated Viewport state is being removed from the Experiences APIs.
-   * Will not be removed before 2026-10-06.
-   */
-  fallbackViewportIndex: number;
-}
-
-/**
- * One viewport definition from a delivered Experience. The `query` is the
- * Contentful media-query DSL ("*" | "<992px" | ">1200px"), not raw CSS.
- *
- * The first viewport in the list is conventionally the wildcard ("*") that
- * always matches. The viewport order encodes the cascade direction —
- * desktop-first (descending) or mobile-first (ascending).
- */
-/**
- * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action is needed: design property values arrive flat. Will not be
- * removed before 2026-10-06.
- */
-export interface ViewportDef {
-  id: string;
-  query: string;
-  displayName: string;
-  previewSize: string;
-}
+/** Render-time context is the same plain data supplied to `resolveData`. */
+export type RenderContext = ExperienceContext;
 
 /**
  * Discriminated design-property value as it arrives from XDA. v1 accepts:
- *  - ManualDesignValue: an explicit scalar (no viewport involved).
- *  - ValuesByViewport: a viewport-keyed map where each entry is itself a
- *                      ManualDesignValue or DesignToken.
- *  - DesignToken: a token reference, passed through to customer components
- *                 as-is for v1. Resolution lands in the future tokens package.
+ *  - ManualDesignValue: an explicit scalar.
+ *  - DesignToken: a token reference resolved while building the render plan.
  */
-export type DesignPropValue = ManualDesignValue | DesignToken | ValuesByViewport;
+export type DesignPropValue = ManualDesignValue | DesignToken;
 
 export interface ManualDesignValue {
   type: 'ManualDesignValue';
@@ -100,20 +45,10 @@ export interface DesignToken {
 
 /**
  * Turns a `DesignToken` into a runtime value. `ref.value` is the
- * customer-defined token id; returning `undefined` means "not resolvable" and
- * the adapter drops the key (with a warning). Sync only — it runs at render time.
+ * customer-defined token id; returning `undefined` retains the raw token and
+ * records a diagnostic. Sync only — it runs while building the render plan.
  */
 export type ResolveToken = (ref: DesignToken) => unknown;
-
-/**
- * @deprecated Viewports are being removed from the Experiences APIs. No
- * customer action is needed: design property values arrive flat. Will not be
- * removed before 2026-10-06.
- */
-export interface ValuesByViewport {
-  type: 'ValuesByViewport';
-  values: Record<string, ManualDesignValue | DesignToken>;
-}
 
 /**
  * Resource-link reference to a registered Component. The `urn` carries
@@ -242,11 +177,6 @@ export interface ExperienceExtensions {
  * `@contentful/experience-delivery` sends on every request.
  */
 export interface ExperiencePayload {
-  /**
-   * @deprecated Absent once the API stops sending `viewports`. `resolveExperience`
-   * defaults to `[]` when this is missing. Will not be removed before 2026-10-06.
-   */
-  viewports?: ViewportDef[];
   nodes: ExperienceNode[];
   errors?: unknown[];
   extensions?: ExperienceExtensions;
@@ -255,9 +185,7 @@ export interface ExperiencePayload {
 
 /**
  * Per-node context handed to a component's `resolveData` resolver. Carries
- * the raw content + design props from the payload (design properties are NOT
- * pre-resolved against a viewport — viewport resolution stays a render-time
- * concern so client viewport changes don't re-trigger async resolvers).
+ * the raw content + design props from the payload.
  */
 export interface ResolveContext {
   content: Record<string, unknown>;
@@ -287,19 +215,16 @@ export interface PortableRegistration {
  * that lets non-React adapters (Angular, SwiftUI, Compose) consume the same
  * interpretation.
  *
- * Design props preserve the discriminated value shape as they arrived. Adapters
- * unwrap to plain scalars at render time, given an active viewport.
- * (DesignToken values pass through unwrapped — customer components decide
- * how to resolve them in v1.)
+ * Design props preserve the discriminated value shape as they arrived. Token
+ * resolution happens when the plan is built, before any framework renderer
+ * reads the values.
  *
  * `props.resolved` is populated by `resolveExperience` from any
  * customer-supplied `resolveData` resolver and merged into the final props
  * after content + design but before slot props.
  *
- * `props.design` is the server pre-resolution of design against the plan's
- * fallback viewport; the raw per-viewport form stays on `props.designRaw` so
- * the client can re-resolve when the active viewport differs. See the fields
- * below.
+ * `props.design` contains values ready for the renderer; `props.designRaw`
+ * preserves the source values for `resolveData` and payload context helpers.
  */
 export interface PortableRenderNode {
   /**
@@ -316,13 +241,10 @@ export interface PortableRenderNode {
   registration: PortableRegistration;
   props: {
     content: Record<string, unknown>;
-    /** Flat, viewport-cascaded, token-resolved design values (server-side). */
+    /** Token-resolved design values. */
     design: Record<string, unknown>;
     resolved?: Record<string, unknown>;
-    /**
-     * @deprecated Design property values are becoming flat. Will not be
-     * removed before 2026-10-06.
-     */
+    /** Design-property envelopes as delivered by XDA. */
     designRaw: Record<string, DesignPropValue>;
   };
   /**
@@ -379,17 +301,7 @@ export interface PlanAttribution {
  * is no plan-level template concept — see `PortableRegistration`.
  */
 export interface PortableRenderPlan {
-  /**
-   * @deprecated Viewports are being removed from the Experiences APIs. Design
-   * property values arrive flat. Will not be removed before 2026-10-06.
-   */
-  viewports: ViewportDef[];
   nodes: PortableRenderNode[];
-  /**
-   * @deprecated Viewport state is being removed from the Experiences APIs.
-   * Will not be removed before 2026-10-06.
-   */
-  fallbackViewportIndex: number;
   /**
    * The `metadata` the resolve step ran with, so the renderer does not need it
    * passed again. The renderer's `metadata` prop merges over this. `{}` when

@@ -46,7 +46,6 @@ import {
   signal,
 } from '@angular/core';
 
-import { selectResolvedDesign } from '@contentful/experiences-design';
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import { ExperienceScope } from './experience-scope.js';
@@ -66,10 +65,8 @@ import {
  *
  * `bindable` is the set of merged keys this node may ever expose, computed from
  * the *raw* payload rather than from `props`. It has to be stable across
- * viewport switches: token resolution can drop a key (see `selectResolvedDesign`
- * and the `resolveToken` warning below), and a bound-key list that shrank on a
- * viewport change would force the view to be rebuilt, destroying whatever state
- * the customer component was holding.
+ * plan updates: a bound-key list that shrank would force the view to be rebuilt,
+ * destroying whatever state the customer component was holding.
  */
 type Resolution =
   | {
@@ -128,8 +125,7 @@ function toSlotInputs(node: PortableRenderNode): {
 
 /**
  * Note `design` reads from `props.designRaw`, not `props.design`: the raw record
- * keeps every viewport's value, so a customer component doing its own cascade
- * math has the full picture. `injectDesignValues()` is the resolved view.
+ * preserves token references while `injectDesignValues()` exposes resolved values.
  */
 function toContentfulComponent(node: PortableRenderNode): ContentfulComponent {
   return {
@@ -154,33 +150,15 @@ function toContentfulExperienceTemplate(node: PortableRenderNode): ContentfulExp
   };
 }
 
-/** Viewport-cascaded, token-resolved design values for one node. */
-function resolveDesign(
-  node: PortableRenderNode,
-  experienceScope: ExperienceScope
-): Record<string, unknown> {
-  const experience = experienceScope.experience();
-  const { props, unresolved } = selectResolvedDesign(
-    node.props,
-    experience.viewports,
-    experience.activeViewportIndex,
-    experience.fallbackViewportIndex,
-    experienceScope.config().resolveToken
-  );
-  if (unresolved.length && typeof console !== 'undefined') {
-    const { kind, id } = node.registration;
-    console.warn(
-      `[@contentful/experiences-angular] resolveToken returned undefined for token id(s) on ${kind} "${id}": ${unresolved.join(', ')}. injectDesignValues() will omit those keys.`
-    );
-  }
-  return props;
+/** Token-resolved design values for one node. */
+function resolveDesign(node: PortableRenderNode): Record<string, unknown> {
+  return node.props.design;
 }
 
 /**
  * Every key the merge could produce, from sources that do not depend on the
- * active viewport. Both `design` (resolved for the fallback viewport) and
- * `designRaw` (every viewport) contribute, because token resolution may omit
- * keys from the former.
+ * active plan. Both resolved and raw design contribute because token resolution
+ * may preserve an unresolved token reference.
  *
  * A key in this set that the merge does not currently produce is bound as
  * `undefined` — a small, deliberate divergence from React and Svelte, where
@@ -192,7 +170,6 @@ function bindableKeys(node: PortableRenderNode, defaults: object | undefined): s
   const sources: Array<object | undefined> = [
     defaults,
     node.props.design,
-    node.props.designRaw,
     node.props.content,
     node.props.resolved,
     node.slots,
@@ -630,7 +607,7 @@ export class NodeRenderEngine {
 
   private createUnit(node: PortableRenderNode, parentInjector: Injector): Unit {
     const nodeSignal = signal(node);
-    const design = computed(() => resolveDesign(nodeSignal(), this.experienceScope));
+    const design = computed(() => resolveDesign(nodeSignal()));
     const resolution = computed(() => resolveNode(nodeSignal(), this.experienceScope, design()));
 
     // Constructed and connected before `createComponent` runs, so an
@@ -670,8 +647,8 @@ export class NodeRenderEngine {
 
   /**
    * Change-detection-integrated, unlike a one-shot `setInput` record: each
-   * binding re-reads the merged props when the node, the active viewport or a
-   * design token changes, and marks the (likely `OnPush`) customer component
+   * binding re-reads the merged props when the node or a design token changes,
+   * and marks the (likely `OnPush`) customer component
    * dirty only when its own value did.
    */
   private bindings(unit: Unit, keys: readonly string[]): Binding[] {

@@ -166,7 +166,6 @@ export type ExperienceFixture = {
   name: string;
   description?: string;
   experienceTemplateId: string;
-  viewports: Array<{ id: string; query: string; displayName: string; previewSize: string }>;
   slots: { content: ExperienceNode[] };
 };
 
@@ -177,7 +176,7 @@ export type InlineExperienceFragmentNode = {
   id: string;
   nodeType: 'InlineExperienceFragment';
   componentId: string;
-  designProperties?: Record<string, ViewportValue>;
+  designProperties?: Record<string, DesignValue>;
   contentBindings: {
     dataAssemblyTempId: TempId;
     parameters: Record<string, { $entryTempId: TempId }>;
@@ -190,13 +189,10 @@ export type ContainerNode = {
   id: string;
   nodeType: 'InlineExperienceFragment';
   componentId: string;
-  contentProperties?: Record<string, ViewportValue>;
-  designProperties?: Record<string, ViewportValue>;
+  contentProperties?: Record<string, DesignValue>;
+  designProperties?: Record<string, DesignValue>;
   slots?: Record<string, ExperienceNode[]>;
 };
-
-// A design/content property value is keyed by viewport id ('_' = default).
-export type ViewportValue = Record<string, DesignValue>;
 
 export type DesignValue =
   | { type: 'ManualDesignValue'; value: string | number | boolean | null }

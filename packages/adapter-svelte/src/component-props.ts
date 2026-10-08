@@ -20,7 +20,6 @@ import type { Config } from './types.js';
 export interface ServerExperienceRendererProps {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
-  initialViewportId?: string;
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
   metadata?: Record<string, unknown>;
   /**

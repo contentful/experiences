@@ -6,8 +6,8 @@ import { fetchPreviewSession } from './fetch-preview-session.js';
 const { mockClient, mockCreateClient, mockPlan, mockResolveExperience } = vi.hoisted(() => ({
   mockClient: { fetch: vi.fn() },
   mockCreateClient: vi.fn(),
-  mockPlan: { viewports: [], nodes: [] },
-  mockResolveExperience: vi.fn().mockResolvedValue({ viewports: [], nodes: [] }),
+  mockPlan: { nodes: [] },
+  mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
 }));
 
 vi.mock('@contentful/experiences-client', async (importOriginal) => ({
@@ -35,12 +35,10 @@ const resolveOptions = {
   config: { components: {} },
   metadata: { slug: 'home' },
   debug: true,
-  initialViewportId: 'desktop',
 };
 
 const payload = {
   sys: { type: 'Experience' },
-  viewports: [],
   nodes: [],
 };
 
@@ -71,28 +69,31 @@ describe('fetchPreviewSession', () => {
     expect(mockResolveExperience).toHaveBeenCalledWith(payload, resolveOptions.config, {
       metadata: resolveOptions.metadata,
       debug: resolveOptions.debug,
-      initialViewportId: resolveOptions.initialViewportId,
     });
   });
 
-  it('accepts an Experience response without viewports', async () => {
-    const payloadWithoutViewports = {
+  it('accepts an Experience response with design properties', async () => {
+    const designPropertiesPayload = {
       sys: { type: 'Experience' },
-      nodes: [],
+      nodes: [
+        {
+          component: { sys: { urn: 'crn:contentful:::experience:components/hero' } },
+          designProperties: { width: { type: 'ManualDesignValue', value: '100%' } },
+        },
+      ],
     };
-    mockClient.fetch.mockResolvedValue(response(payloadWithoutViewports));
+    mockClient.fetch.mockResolvedValue(response(designPropertiesPayload));
 
     await expect(
       fetchPreviewSession(experienceOptions, { previewToken: 'preview-token' }, resolveOptions)
     ).resolves.toBe(mockPlan);
 
     expect(mockResolveExperience).toHaveBeenCalledWith(
-      payloadWithoutViewports,
+      designPropertiesPayload,
       resolveOptions.config,
       {
         metadata: resolveOptions.metadata,
         debug: resolveOptions.debug,
-        initialViewportId: resolveOptions.initialViewportId,
       }
     );
   });
@@ -158,7 +159,7 @@ describe('fetchPreviewSession', () => {
 
   it.each([
     new globalThis.Response('not json'),
-    response({ sys: { type: 'ExperienceFragment' }, viewports: [], nodes: [] }),
+    response({ sys: { type: 'ExperienceFragment' }, nodes: [] }),
   ])('rejects a malformed Experience response', async (invalidResponse) => {
     mockClient.fetch.mockResolvedValue(invalidResponse);
 

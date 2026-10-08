@@ -136,13 +136,12 @@ connection fails. The last valid `data` remains available.
 Every renderer is standalone; add it to your own component's `imports`.
 
 ```ts
-ServerExperienceRenderer; // <cf-server-experience>  SSR-safe; active viewport seeded from initialViewportId
-ClientExperienceRenderer; // <cf-experience>         Subscribes to window.matchMedia
+ServerExperienceRenderer; // <cf-server-experience>  SSR-safe renderer
+ClientExperienceRenderer; // <cf-experience>         Client renderer
 MissingComponent; // <cf-missing-component>  Default fallback for unregistered component types
 NodesRenderer; // *cfNodes                Renders a slot's raw nodes (see Slot children)
 NodeRenderer; // *cfNode                 Renders one node; NodesRenderer loops over it
 DebugExperience; // <cf-debug-experience>   Auto-mounted by the renderers when debug is set
-injectActiveViewport; // Signal-backed viewport index; you'll rarely need it directly
 injectLivePreviewExperience; // Signal-backed raw Experience payload
 injectExperiencePlan; // Signal-backed PortableRenderPlan
 ```
@@ -158,14 +157,14 @@ All four are `inject()`-based: call them from a field initializer or a construct
 ```ts
 injectDesignValues<T>(); // Signal of the resolved design record that auto-fills inputs
 toCss(design, options?); // Turns a design record into a plain style object for [ngStyle]
-injectExperience(); // Signal<RenderContext>: debug, metadata, viewports, activeViewport
+injectExperience(); // Signal<RenderContext>: debug, metadata
 injectContentfulComponent(); // Signal of the raw payload for the enclosing node (or undefined), including `attribution`
 injectContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 getTrackingAttributes(attribution); // Attributes to bind on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per design key you style with is the one recommended path — and in Angular it is also what makes the key arrive, since binding an undeclared input is an error. `injectDesignValues()` returns the same record as a `Signal`, as an escape hatch and as the way to read keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values are **auto-filled onto your component's inputs** by key, alongside content. Declaring an `@Input()` per design key you style with is the one recommended path — and in Angular it is also what makes the key arrive, since binding an undeclared input is an error. `injectDesignValues()` returns the same record as a `Signal`, as an escape hatch and as the way to read keys your component didn't declare, which are **dropped** rather than passed (see [Parity table](#parity-table)). Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -178,8 +177,7 @@ type RenderContext, RenderUnknown, ResolveToken, SlotNodes,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
 type ComponentRef, ExperienceTemplateRef, ExperienceSys,
 type PortableRenderPlan, PortableRenderNode, PortableRegistration,
-type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
-type ViewportDef, ExperienceContext, ResolveContext,
+type DesignPropValue, ManualDesignValue, DesignToken, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
 // From live preview and the Angular adapter
@@ -188,8 +186,7 @@ type InjectLivePreviewExperienceOptions, InjectLivePreviewExperienceResult,
 type ExperiencePlanResolveOptions, InjectExperiencePlanOptions,
 type InjectExperiencePlanResult
 
-// From design (if you want to do your own viewport-aware resolution)
-getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
+// From design
 isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
@@ -338,7 +335,7 @@ The same nodes are also on the payload at `injectContentfulComponent()().slots` 
 
 ## Parity table
 
-Everything below is a deliberate divergence from React and Svelte, forced by an Angular primitive. Semantics — merge precedence, the viewport cascade, degradation behaviour, context walk-up — are identical across all three adapters and covered by the same ported test suite.
+Everything below is a deliberate divergence from React and Svelte, forced by an Angular primitive. Semantics — merge precedence, degradation behaviour, and context walk-up — are identical across all three adapters and covered by the same ported test suite.
 
 | Concern                                          | React                                                                                        | Svelte                                                       | Angular                                                                          | Why                                                                                                                                                                                       |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -351,7 +348,6 @@ Everything below is a deliberate divergence from React and Svelte, forced by an 
 | Reading dropped keys                             | n/a                                                                                          | n/a                                                          | `injectDesignValues()`                                                           | The full resolved design record is always available regardless of declared inputs.                                                                                                        |
 | Component inputs                                 | props                                                                                        | `$props()`                                                   | `@Input()` setter → `signal`                                                     | Signal `input()` is AOT-only; a JIT consumer reports zero declared inputs, which would break `reflectComponentType` filtering.                                                            |
 | Input naming                                     | any                                                                                          | any                                                          | setter takes the payload key; the readable signal needs a distinct name          | A class cannot declare a field and an accessor under one name, and under `useDefineForClassFields: false` the field initializer would assign straight through the setter.                 |
-| `injectActiveViewport` args                      | values                                                                                       | values                                                       | **getters** (`() => viewports`)                                                  | An injection context runs before inputs are bound. Every `Signal` is already a getter, so passing one works unchanged.                                                                    |
 | Missing-component warning                        | effect                                                                                       | effect                                                       | `ngOnInit`                                                                       | So the diagnostic also fires during server rendering.                                                                                                                                     |
 | Prop-shape types                                 | inferred                                                                                     | separate `*.ts` per component                                | not needed                                                                       | Angular components are `.ts`, so `tsc --noEmit` already resolves them.                                                                                                                    |
 | Style helper output                              | `CSSProperties`                                                                              | plain record                                                 | plain record for `[ngStyle]`                                                     | Scalar-only, same as Svelte.                                                                                                                                                              |
@@ -360,7 +356,7 @@ Everything below is a deliberate divergence from React and Svelte, forced by an 
 
 **Not** a divergence: the DOM around slot children. React renders them through a fragment, Svelte through no element, and Angular through structural directives — no adapter element in any of the three. Dispatch deliberately does not use components, because an Angular component always has a host element and no configuration removes it; `display: contents` would hide such a wrapper from layout but not from `> .card`, `:nth-child(n)`, or the sibling combinators.
 
-For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
 

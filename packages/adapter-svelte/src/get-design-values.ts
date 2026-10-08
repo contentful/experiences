@@ -1,9 +1,9 @@
 import { getResolvedDesign } from './context.js';
 
 /**
- * Read the current node's resolved design values (viewport-cascaded +
- * token-resolved). Returns `{}` when there's no design in scope. Read it
- * inside a `$derived` to stay current across viewport changes.
+ * Read the current node's token-resolved design values. Returns `{}` when
+ * there's no design in scope. Read it inside a `$derived` to stay current
+ * across plan changes.
  *
  * Pass a type argument to shape the bag:
  *

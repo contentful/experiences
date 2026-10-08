@@ -23,8 +23,6 @@ import type { Config } from './types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
-
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
     component: {
@@ -85,7 +83,6 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
       };
       const config: Config = { components: { broken: Broken, fine: Fine } };
@@ -113,7 +110,6 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: Broken } };
@@ -130,7 +126,6 @@ describe('ClientExperienceRenderer — component-render-error, client-side catch
 
   it('honors a custom renderError override', async () => {
     const payload: ExperiencePayload = {
-      viewports: VIEWPORTS,
       nodes: [componentNode('broken', { id: 'b' })],
     };
     const config: Config = { components: { broken: Broken } };
@@ -153,7 +148,6 @@ describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -161,7 +155,7 @@ describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-
 
       await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
       // Force NodeRenderer to re-execute its function body without any real
-      // new occurrence — an ancestor re-render (a viewport change, an
+      // new occurrence — an ancestor re-render (an
       // unrelated parent state update) does the same thing in production.
       act(() => {
         root!.render(<ClientExperienceRenderer experience={plan} config={config} debug />);

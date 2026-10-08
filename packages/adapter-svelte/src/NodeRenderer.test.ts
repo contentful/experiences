@@ -5,7 +5,7 @@
  * for that documented, proven gap. Both `ServerExperienceRenderer` and
  * `ClientExperienceRenderer` share the same `NodesRenderer`/`NodeRenderer`
  * boundary code, so both are exercised — the distinction between the two
- * components is about viewport-tracking reactivity, not error handling.
+ * components is about client-side reactivity, not error handling.
  */
 import { render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
@@ -26,8 +26,6 @@ import type { Config } from './types.js';
 
 import BrokenFixture from './test-fixtures/BrokenFixture.svelte';
 import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
-
-const VIEWPORTS = [{ id: 'desktop', query: '*', displayName: 'Desktop', previewSize: '100%' }];
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -50,7 +48,6 @@ describe.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [
           componentNode('broken', { id: 'b' }),
           componentNode('contentful-button', { id: 'f', contentProperties: { label: 'sibling' } }),
@@ -93,7 +90,6 @@ describe.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('broken', { id: 'b' })],
       };
       const config: Config = { components: { broken: BrokenFixture } };
@@ -116,7 +112,6 @@ describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const payload: ExperiencePayload = {
-        viewports: VIEWPORTS,
         nodes: [componentNode('missing', { id: 'm' })],
       };
       const config: Config = { components: {} };
@@ -127,7 +122,7 @@ describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-
       });
 
       // Force NodeRenderer's reactive blocks to re-run without any real new
-      // occurrence — an ancestor re-render (a viewport change, an unrelated
+      // occurrence — an ancestor re-render (an unrelated
       // parent update) does the same thing in production.
       await rerender({ experience: plan, config, debug: true } as never);
 

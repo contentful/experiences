@@ -81,7 +81,7 @@ Locale is mutable browser state. Update it with `setLocale()` rather than sharin
 
 ## Context providers and redaction
 
-The default event context is read lazily and includes the current URL, path, query parameters, search, hash, referrer, title, viewport dimensions, and User-Agent. SPA navigation is therefore reflected without reconstructing the SDK. These values can contain sensitive data.
+The default event context is read lazily and includes the current URL, path, query parameters, search, hash, referrer, title, browser window dimensions, and User-Agent. SPA navigation is therefore reflected without reconstructing the SDK. These values can contain sensitive data.
 
 Calling an event method sends these default values to the Optimization service.
 If URLs, query parameters, referrers, or User-Agent values are not approved for

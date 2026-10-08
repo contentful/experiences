@@ -22,14 +22,6 @@ const payload = (title: string): ExperiencePayload => ({
     },
   ],
   sys: { type: 'Experience' },
-  viewports: [
-    {
-      displayName: 'Default',
-      id: 'default',
-      previewSize: '1024px',
-      query: '*',
-    },
-  ],
 });
 
 const message = (type: string, data: unknown): string => JSON.stringify({ data, type });
@@ -208,14 +200,13 @@ describe('createLivePreviewClient', () => {
     unsubscribe();
   });
 
-  it('returns the raw data from a next message without viewports', async () => {
+  it('returns the raw data from a subsequent message', async () => {
     setBrowser();
     const source = createLivePreviewClient(sourceOptions('session-id'));
     const listener = vi.fn();
     const unsubscribe = source.subscribe(listener);
     const socket = sockets[0];
     const expected = payload('hello');
-    delete expected.viewports;
 
     socket?.emitMessage(message('next', expected));
     await waitForSnapshot(source);
