@@ -13,8 +13,8 @@ import {
 } from '@contentful/optimization-api-client/api-schemas';
 import type { ScopeAttribution } from '@contentful/experiences-sdk-core';
 
+import { fetchExperience } from '@contentful/experiences-client';
 import EventBuilder, { type InteractionBuilderArgsBase } from './event-builder.js';
-import { fetchExperience } from './fetch-experience.js';
 
 const urn = (id: string) =>
   `crn:contentful:::experience:spaces/$self/environments/$self/components/${id}`;
