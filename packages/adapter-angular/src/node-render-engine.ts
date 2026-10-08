@@ -134,6 +134,7 @@ function toContentfulComponent(node: PortableRenderNode): ContentfulComponent {
     content: node.props.content,
     design: node.props.designRaw,
     resolved: node.props.resolved,
+    attribution: node.attribution,
     slots: node.slots,
   };
 }
@@ -145,6 +146,7 @@ function toContentfulExperienceTemplate(node: PortableRenderNode): ContentfulExp
     content: node.props.content,
     design: node.props.designRaw,
     resolved: node.props.resolved,
+    attribution: node.attribution,
   };
 }
 
