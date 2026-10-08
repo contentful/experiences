@@ -1141,13 +1141,14 @@ Use it for:
 
 Components see `ContentfulComponent`:
 
-| Field         | Type                                   | Description                                                                                 |
-| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `componentId` | `string`                               | The id from `component.sys.urn`'s last slash-segment.                                       |
-| `nodeId`      | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.            |
-| `content`     | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                     |
-| `design`      | `Record<string, DesignPropValue>`      | Design-property envelopes exactly as the payload delivered them.                            |
-| `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered. |
+| Field         | Type                                   | Description                                                                                      |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `componentId` | `string`                               | The id from `component.sys.urn`'s last slash-segment.                                            |
+| `nodeId`      | `string \| undefined`                  | Pass-through of `node.id` from the payload when supplied; `undefined` otherwise.                 |
+| `content`     | `Record<string, unknown>`              | Editorial values exactly as the payload delivered them.                                          |
+| `design`      | `Record<string, DesignPropValue>`      | Design-property envelopes exactly as the payload delivered them.                                 |
+| `resolved`    | `Record<string, unknown> \| undefined` | Return value of the component's `resolveData` hook. `undefined` when no hook is registered.      |
+| `attribution` | `NodeAttribution \| undefined`         | The reportable scopes this node belongs to. `undefined` unless the fetch requested a source map. |
 
 Experience Templates see `ContentfulExperienceTemplate`, the same shape but with `experienceTemplateId` instead of `componentId` — a coded Experience Template is an ordinary node, so it carries a `nodeId` too.
 
