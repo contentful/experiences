@@ -1,4 +1,4 @@
-import { createElementRef, type Timer } from '../observer-support.js';
+import { createElementRef } from '../observer-support.js';
 
 export const DEFAULTS = {
   DWELL_MS: 1000,
@@ -12,21 +12,13 @@ export interface ElementViewCallbackInfo {
   readonly viewId: string;
   /** `1` when the view first qualifies (dwell reached), `2` when it ends. */
   readonly attempts: number;
-  readonly data?: unknown;
 }
 
-export type ElementViewCallback = (
-  element: Element,
-  info: ElementViewCallbackInfo
-) => void | Promise<void>;
+export type ElementViewCallback = (info: ElementViewCallbackInfo) => void | Promise<void>;
 
 export interface ElementViewObserverOptions {
   readonly root?: Element | Document | null;
   readonly rootMargin?: string;
-}
-
-export interface ElementViewElementOptions {
-  readonly data?: unknown;
 }
 
 export type EffectiveObserverOptions = Required<ElementViewObserverOptions>;
@@ -43,15 +35,8 @@ export interface ElementState {
   strongRef: Element | null;
   source: ElementViewSource;
   target: Element | null;
-  data?: unknown;
-  accumulatedMs: number;
-  visibleSince: number | null;
-  fireTimer: Timer | null;
-  attempts: number;
-  viewId: string | null;
   done: boolean;
   lastKnownVisible: boolean;
-  callbackChain: Promise<void> | null;
 }
 
 export const initElementViewObserverOptions = (
@@ -61,20 +46,10 @@ export const initElementViewObserverOptions = (
   rootMargin: options?.rootMargin ?? '0px',
 });
 
-export const createElementState = (
-  element: Element,
-  elementOptions?: ElementViewElementOptions
-): ElementState => ({
+export const createElementState = (element: Element): ElementState => ({
   ...createElementRef(element),
   source: 'element',
   target: null,
-  data: elementOptions?.data,
-  accumulatedMs: 0,
-  visibleSince: null,
-  fireTimer: null,
-  attempts: 0,
-  viewId: null,
   done: false,
   lastKnownVisible: false,
-  callbackChain: null,
 });

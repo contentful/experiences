@@ -4,7 +4,7 @@ import { createTimedDetector } from '../create-timed-detector.js';
 import {
   type InteractionDetector,
   isFragment,
-  type ResolveElementAttribution,
+  type ResolveScopeAttribution,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -12,12 +12,11 @@ import { type ElementHoverCallbackInfo, ElementHoverObserver } from './element-h
 
 export function createHoverDetector(
   trackHover: (args: HoverBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveElementAttribution
+  resolveAttribution: ResolveScopeAttribution
 ): InteractionDetector {
   return createTimedDetector<ElementHoverCallbackInfo>({
     resolveAttribution,
     isEligible: isFragment,
-    sessionId: (info) => info.hoverId,
     isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementHoverObserver(callback),
     track: async (attribution, info) => {

@@ -122,6 +122,7 @@ toCss(design, options?); // Turns a design record into CSSProperties, keeping on
 useExperience(); // RenderContext: debug, metadata
 useContentfulComponent(); // Raw payload for the enclosing node (or null), including `attribution`
 useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
+getTrackingAttributes(attribution); // Props to spread on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 

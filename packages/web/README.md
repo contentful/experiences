@@ -147,24 +147,25 @@ starting another profile-producing or Analytics call on the same runtime.
 > planned configured root that will start tracking and supply attribution itself.
 
 The runtime can track views, hovers, and clicks on rendered Experiences and
-Fragments automatically. Mark the outermost element of each tracked Experience or
-Fragment with its node id, then start a tracking session with a lookup from node
-id to attribution:
+Fragments automatically. Fetch with `extensions: { sourceMap: {} }`, mark the
+outermost element of each node with the scopes it roots, then start a tracking
+session with a lookup from scope key to attribution:
 
 ```tsx
-import { getTrackingAttributes } from '@contentful/experiences-web/tracking-attributes';
+import { getTrackingAttributes, useContentfulComponent } from '@contentful/experiences-react';
 
-function Hero({ nodeId, title }) {
-  return <section {...getTrackingAttributes(nodeId)}>{title}</section>;
+function Hero({ title }) {
+  const contentful = useContentfulComponent();
+  return <section {...getTrackingAttributes(contentful?.attribution)}>{title}</section>;
 }
 ```
 
 ```ts
 const session = experiences.startInteractionTracking({
-  resolveAttribution: (nodeId) => attributions[nodeId],
+  resolveAttribution: (key) => plan.attribution?.scopes[key],
 });
 
-// After the data behind `attributions` changes, e.g. a new plan:
+// After the data behind the lookup changes, e.g. a new plan:
 session.refresh();
 
 // Before teardown (unmount, route change): sends the final events for
@@ -172,30 +173,48 @@ session.refresh();
 await session.stop();
 ```
 
+`getTrackingAttributes` adds `data-ctfl-scopes`, listing the key of every
+Experience or Fragment occurrence the node is a top-level node of. It renders
+nothing for a node in the middle of a scope. The React, Svelte, and Angular
+packages re-export it, and so does
+`@contentful/experiences-web/tracking-attributes`.
+
 - **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
-  Fragments only. Nothing else is tracked: a lookup result with any other
-  `entityKind`, such as an inline Fragment or Component, is ignored.
-- A view counts after one second with any part of the element visible. A hover
-  counts after one second. Each is reported when it qualifies and again with
-  its final duration, under the same `viewId` or `hoverId`.
+  Fragments only. Nothing else is tracked: as a defensive runtime check, a
+  lookup result with any other `entityKind` is ignored.
+- Elements are grouped by scope occurrence. A Fragment rendered as several root
+  elements is one view, hover, and click series. Two copies of the same Fragment
+  are two, as long as something separates them: XDA gives both copies the same
+  layer row and the same node ids, so copies placed directly next to each other
+  cannot be told apart and report as one. A node inside both an Experience and a Fragment reports to both,
+  under the kind rules above. The occurrence key is opaque: only
+  `plan.attribution.scopes` can resolve it.
+- A view counts after one second with any part of any of the occurrence's
+  elements visible, and ends when none are. A hover counts after one second and
+  ends when the pointer has left all of them. Each is reported when it qualifies
+  and again with its final duration, under the same `viewId` or `hoverId`.
 - A click counts on links, buttons, form controls, `[role="button"]`,
   `[role="link"]`, and elements with an `onclick` handler. It is attributed to the
-  nearest tracked element. Add `data-ctfl-clickable="true"`
+  innermost Fragment occurrence of the nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
   profile and wait for a pending event handoff like any other call. A rejected
   call is logged as a warning and does not stop tracking.
-- The attribute carries only the node id. Attribution never goes into the DOM.
-- A node without an id cannot be tracked.
-- `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
-  so server-rendered components can import it.
+- The attribute carries only opaque scope keys. Attribution never goes into the DOM.
+- A node without an id cannot be tracked, and neither can a plan fetched without
+  a source map.
+- `getTrackingAttributes` has no browser dependencies, so server-rendered
+  components can call it.
 - `startInteractionTracking` does nothing outside a browser. One session runs per
   runtime at a time. `stop()` frees it immediately, so a new session can start
   from a React effect whose cleanup cannot await; the stopped session finishes
   sending its final events in the background.
 
-See the [rendering-modes ADR](../../docs/ADRs/2026-09-30-interaction-tracking-across-rendering-modes.md)
-for where the attribution lookup comes from under SSR, CSR, and Server Components.
+The lookup is `plan.attribution.scopes`. Wherever the plan reaches the browser
+(client rendering, SvelteKit page data, Angular `TransferState`, React's
+`ClientExperienceRenderer`) build `resolveAttribution` from it. React's
+`ServerExperienceRenderer` keeps the plan on the server, so pass
+`plan.attribution.scopes` as a prop to the client component that starts tracking.
 
 ## Server event handoff
 
@@ -250,8 +269,10 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 - No event persistence, offline queues, beacon/lifecycle delivery, or consent
   gating. Automatic interaction tracking sends through the ordinary event
   methods, so it has the same limits.
-- No framework adapter marks tracked elements yet; components do it with
-  `getTrackingAttributes`.
+- No framework adapter stamps tracked elements for you; components spread
+  `getTrackingAttributes` onto their outermost element.
+- Live Preview plans carry no source map unless the preview-session endpoints
+  return one, so they have no attribution.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.
 
 ## Architecture boundary

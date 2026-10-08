@@ -1,10 +1,13 @@
 import type { ClickBuilderArgs } from '@contentful/experiences-runtime';
 
-import { TRACKING_CLICKABLE_ATTRIBUTE } from '../../tracking-attributes.js';
+import {
+  TRACKING_CLICKABLE_ATTRIBUTE,
+  TRACKING_SCOPES_ATTRIBUTE,
+} from '../../tracking-attributes.js';
 import {
   type InteractionDetector,
   isFragment,
-  type ResolveElementAttribution,
+  type ResolveScopeAttribution,
   toInteractionArgs,
 } from '../interaction-detector.js';
 
@@ -32,9 +35,14 @@ const toEventTargetElement = (event: Event): Element | undefined => {
 
 export function createClickDetector(
   trackClick: (args: ClickBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveElementAttribution
+  resolveAttribution: ResolveScopeAttribution
 ): InteractionDetector {
-  const trackedElements = new Set<Element>();
+  /**
+   * Each tracked element with how many scope occurrence keys it was handed over
+   * under. The keys themselves are read from the element's attribute at click
+   * time: re-adding a key after a refresh must not change their outer-to-inner order.
+   */
+  const trackedElements = new Map<Element, number>();
   let listening = false;
 
   /** The nearest tracked element on the path, and whether the path is clickable. */
@@ -68,8 +76,15 @@ export function createClickDetector(
     const { trackedElement, hasClickablePath } = resolveClickContext(eventTarget);
     if (!trackedElement || !hasClickablePath) return;
 
-    const attribution = resolveAttribution(trackedElement);
-    if (!attribution || !isFragment(attribution)) return;
+    // Clicks go to the innermost Fragment occurrence the nearest tracked element
+    // roots; an Experience is view-only.
+    let attribution: ReturnType<ResolveScopeAttribution>;
+    const keys = trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '';
+    for (const key of keys.split(/\s+/).filter(Boolean)) {
+      const candidate = resolveAttribution(key);
+      if (candidate && isFragment(candidate)) attribution = candidate;
+    }
+    if (!attribution) return;
 
     // Unlike views and hovers, no observer wraps this send, so catch here.
     trackClick(toInteractionArgs(attribution)).catch((error: unknown) => {
@@ -89,10 +104,13 @@ export function createClickDetector(
       trackedElements.clear();
     },
     onElementAdded(element) {
-      trackedElements.add(element);
+      trackedElements.set(element, (trackedElements.get(element) ?? 0) + 1);
     },
     onElementRemoved(element) {
-      trackedElements.delete(element);
+      const count = trackedElements.get(element);
+      if (count === undefined) return;
+      if (count > 1) trackedElements.set(element, count - 1);
+      else trackedElements.delete(element);
     },
   };
 }
