@@ -73,9 +73,8 @@ export function ResolvedDesignProvider({
 }
 
 /**
- * Read the current Experience runtime context — viewports, the active
- * viewport, the `debug` flag, and free-form metadata. Throws when called
- * outside any Experience renderer subtree.
+ * Read the current Experience runtime context — the `debug` flag and
+ * free-form metadata. Throws when called outside any Experience renderer subtree.
  */
 export function useExperience(): RenderContext {
   const ctx = useContext(ExperienceContext);
@@ -107,8 +106,8 @@ export function useContentfulExperienceTemplate(): ContentfulExperienceTemplate 
 
 /**
  * Read the design values the renderer already resolved for the enclosing
- * node or experience template — viewport-cascaded and token-resolved, the same
- * bag that feeds the component's props. Returns `null` outside a rendered
+ * node or experience template — token-resolved, the same bag that feeds the
+ * component's props. Returns `null` outside a rendered
  * node / experience template, which `useDesignValues` treats as "nothing to read."
  */
 export function useResolvedDesign(): Record<string, unknown> | null {

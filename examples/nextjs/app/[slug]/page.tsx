@@ -1,4 +1,3 @@
-import { headers } from 'next/headers';
 import {
   ServerExperienceRenderer,
   fetchExperience,
@@ -6,7 +5,6 @@ import {
 } from '@contentful/experiences-react';
 
 import { LivePreviewExperience } from '@/components/LivePreviewExperience';
-import { detectViewportFromUserAgent } from '@/lib/detect-viewport';
 import { experienceConfig } from '@/lib/experience-config';
 
 interface PageProps {
@@ -30,14 +28,10 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
 
-  const userAgent = (await headers()).get('user-agent') ?? '';
-  const initialViewportId = detectViewportFromUserAgent(userAgent);
-
   const resolveOptions = {
     config: experienceConfig,
     metadata: { slug: experienceId, locale },
     debug,
-    initialViewportId,
   };
   const experience = livePreview
     ? await fetchPreviewSession(
@@ -60,21 +54,14 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
         resolveOptions
       );
 
-  // All three render props are optional — the plan already carries what
-  // the fetch was given. Shown here to make the override path visible:
-  // `metadata` merges over the plan's (so the component sees `slug`, `locale`
-  // *and* `renderer`), while `debug` and `initialViewportId` replace it.
-  //
-  // Passing the same `initialViewportId` the fetch used is a no-op, since the
-  // renderer already defaults to the viewport design was pre-resolved against.
-  // It earns its place when you want a *different* viewport — a preview pane
-  // rendering one plan at two widths, say.
+  // Both render props are optional — the plan already carries what the fetch
+  // was given. They are shown here to make the override path visible:
+  // `metadata` merges over the plan's, while `debug` replaces it.
   if (livePreview) {
     return (
       <LivePreviewExperience
         initialPlan={experience}
         previewSessionOptions={previewSessionOptions}
-        initialViewportId={initialViewportId}
         metadata={{ slug: experienceId, locale }}
         debug={debug}
       />
@@ -85,7 +72,6 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
     <ServerExperienceRenderer
       experience={experience}
       config={experienceConfig}
-      initialViewportId={initialViewportId}
       metadata={{ renderer: 'server' }}
       debug={debug}
     />

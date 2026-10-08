@@ -14,7 +14,6 @@ import {
 } from '@contentful/experiences-angular';
 import express from 'express';
 
-import { detectViewportFromUserAgent } from './app/lib/detect-viewport.js';
 import { experienceConfig } from './app/lib/experience-config.js';
 import type { ExperienceRouteData } from './app/lib/experience-route-data.js';
 
@@ -67,7 +66,6 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
-  const initialViewportId = detectViewportFromUserAgent(req.headers['user-agent'] ?? '');
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
@@ -76,7 +74,6 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
       config: experienceConfig,
       metadata,
       debug,
-      initialViewportId,
     };
     const experience = livePreview
       ? await fetchPreviewSession(
@@ -99,14 +96,13 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
           resolveOptions
         );
 
-    // The plan carries all of these. `debug` and `initialViewportId` are relayed
-    // as well only so the page can demonstrate the renderer's override inputs.
+    // The plan carries these values. `debug` is relayed so the page can
+    // demonstrate the renderer's override input.
     return {
       slug,
       metadata,
       experience,
       debug,
-      initialViewportId,
       livePreview,
       previewSessionOptions,
       notFound: false,
@@ -118,7 +114,6 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
         metadata,
         experience: null,
         debug,
-        initialViewportId,
         livePreview,
         previewSessionOptions,
         notFound: true,

@@ -98,23 +98,21 @@ describe('Node ContentfulExperiences', () => {
     const runtime = createRuntime();
     const resolveExperience = vi
       .spyOn(runtime, 'resolveExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
     const request = runtime.forRequest({
       resolveOptions: {
         debug: true,
-        initialViewportId: 'tablet',
         metadata: { request: 'value', shared: 'request' },
       },
     });
 
     await request.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
-      { debug: false, initialViewportId: 'phone', metadata: { method: 'value', shared: 'method' } }
+      { debug: false, metadata: { method: 'value', shared: 'method' } }
     );
 
     expect(resolveExperience).toHaveBeenCalledWith(expect.anything(), {
       debug: false,
-      initialViewportId: 'phone',
       metadata: { request: 'value', method: 'value', shared: 'method' },
     });
   });
@@ -143,10 +141,10 @@ describe('Node ContentfulExperiences', () => {
     const runtime = createRuntime();
     const fetchExperience = vi
       .spyOn(runtime, 'fetchExperience')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
     const byNode = vi
       .spyOn(runtime, 'fetchByDestinationNode')
-      .mockResolvedValue({ nodes: [], viewports: [] } as never);
+      .mockResolvedValue({ nodes: [] } as never);
     const byPath = vi
       .spyOn(runtime, 'fetchByDestinationPath')
       .mockResolvedValue({ redirect: { path: '/next' } });
@@ -165,15 +163,15 @@ describe('Node ContentfulExperiences', () => {
 
     expect(fetchExperience).toHaveBeenCalledWith(
       { experienceId: 'experience', locale: 'es-ES', personalization },
-      { metadata: { request: true }, debug: undefined, initialViewportId: undefined }
+      { metadata: { request: true }, debug: undefined }
     );
     expect(byNode).toHaveBeenCalledWith(
       { destinationId: 'destination', nodeId: 'node' },
-      { metadata: { request: true }, debug: undefined, initialViewportId: undefined }
+      { metadata: { request: true }, debug: undefined }
     );
     expect(byPath).toHaveBeenCalledWith(
       { destinationId: 'destination', path: '/path' },
-      { metadata: { request: true }, debug: undefined, initialViewportId: undefined }
+      { metadata: { request: true }, debug: undefined }
     );
   });
 

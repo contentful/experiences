@@ -62,12 +62,11 @@ cross-package edges.
   (public)           │                │               │         │
                      └───────────┬────┴───────────────┴─────────┘
                                  │
-  layer 2                     design           client ──▶ @contentful/experience-delivery
-  (internal)                    │                │    ├─▶ @contentful/optimization-api-client
-                                └───────────┬────┘    ├─▶ es-toolkit
-                                            │         └─▶ zod
-  layer 1                                  core
-  (internal)                       (zero dependencies)
+  layer 2       design (independent)        client ──┬─▶ @contentful/experience-delivery
+  (internal)                                           ├─▶ @contentful/optimization-api-client
+                                                       ├─▶ es-toolkit
+  layer 1                               core ◀────────┘
+  (internal)                       (zero dependencies)   └─▶ zod
 ```
 
 Each adapter also depends on `core` **directly**, not only through `design` and
@@ -76,7 +75,7 @@ Each adapter also depends on `core` **directly**, not only through `design` and
 | Nx project        | Directory                  | npm name                               | Depends on                                                            | Public? |
 | ----------------- | -------------------------- | -------------------------------------- | --------------------------------------------------------------------- | ------- |
 | `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | — (nothing)                                                           | no      |
-| `design`          | `packages/design`          | `@contentful/experiences-design`       | `core`                                                                | no      |
+| `design`          | `packages/design`          | `@contentful/experiences-design`       | — (nothing)                                                           | no      |
 | `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, delivery client, optimization API client, `es-toolkit`, `zod` | no      |
 | `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`                                                      | yes     |
 | `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`                                                      | yes     |
@@ -96,26 +95,20 @@ identifiers** (`packages/adapter-react` / `adapter-react` /
 `package.json#name`. Git tags use the Nx project name (`design@0.7.8`), so the
 Nx name is what appears in release history.
 
-**Internal dependency versions are exact, not ranges** — `packages/design`
-declares `"@contentful/experiences-sdk-core": "0.7.8"`. Those pins are
+**Internal dependency versions are exact, not ranges.** Those pins are
 machine-written on every release, not hand-maintained; see
 [the versioning ADR](./docs/ADRs/2026-08-25-independent-package-versioning-with-nx-release.md).
 During local development they are irrelevant: npm workspaces symlink
 `packages/*` into the root `node_modules`, so every import resolves to the
 sibling working copy regardless of the declared version.
 
-### The design → core edge
+### Design-property boundaries
 
-`packages/design` imports values from `core`, not only types:
-`packages/design/src/select-resolved-design.ts` calls `applyTokenResolver` and
-`resolveDesignProperties`, which is why `core` sits under `dependencies` in that
-manifest. `packages/design/src/viewport.ts` additionally re-exports those same
-four helpers verbatim; its header comment records why — the cascade and
-token-resolution helpers moved into `core` so the resolve pipeline could
-pre-resolve design server-side, and `design` kept re-exporting them to leave its
-own public API unchanged. So `core` and `design` expose some identical symbol
-names, and the adapters re-export the `design` copy
-(`packages/adapter-react/src/index.ts`).
+`core` owns design-property and token resolution while building a render
+plan. `packages/design` is independent and contains only the CSS-property
+recognition helpers (`CSS_PROPERTIES`, `isCssProperty`, and `toCssKey`) used by
+the adapters' `toCss` utilities. The adapters re-export both sets of supported
+utilities from their public entry points.
 
 ### The delivery-client edge
 
@@ -133,7 +126,7 @@ zero dependencies, which is the invariant every future adapter inherits.
 ### Core, Client, Node SDK, and Live Preview responsibilities
 
 `core` is genuinely dependency-free: it contains payload and render-plan types,
-`resolveExperience`, diagnostics, and viewport/design-resolution helpers. It
+`resolveExperience`, diagnostics, and design-resolution helpers. It
 does not own delivery transport, event construction, or connection state.
 
 `client` owns delivery integration, conversion, free fetch functions, direct
@@ -380,7 +373,8 @@ bump from them, so a message that escapes the hook silently changes what ships.
 | Change                                                                                                  | Touch                                                                          |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Payload shape / resolve semantics                                                                       | `packages/core`                                                                |
-| Viewport or design-value math                                                                           | `packages/design`                                                              |
+| Design-value resolution                                                                                 | `packages/core`                                                                |
+| CSS property-name helpers                                                                               | `packages/design`                                                              |
 | Delivery, auth, hosts                                                                                   | `packages/client`                                                              |
 | Node request facade, request-local fetch/resolve/destination defaults, and event context                | `packages/node`                                                                |
 | Web browser locale, context providers, in-memory event profile, and shared-runtime fetch/resolve/events | `packages/web`                                                                 |

@@ -107,11 +107,10 @@ fails. The last valid `data` remains available.
 ### Renderers
 
 ```ts
-ServerExperienceRenderer; // SSR-safe; active viewport seeded from initialViewportId
-ClientExperienceRenderer; // Subscribes to window.matchMedia via runes
+ServerExperienceRenderer; // SSR-safe renderer
+ClientExperienceRenderer; // Client renderer
 MissingComponent; // Default fallback for unregistered component types
 NodesRenderer; // Exposed so you can re-render a slot's raw nodes yourself (see Slot children)
-useActiveViewport; // Rune-backed reactive object; you'll rarely need it directly
 ```
 
 ### Styling + runtime context (helpers)
@@ -119,13 +118,13 @@ useActiveViewport; // Rune-backed reactive object; you'll rarely need it directl
 ```ts
 getDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props; read in a $derived to stay reactive
 toCss(design, options?); // Turns a design record into a plain style object, keeping only real CSS keys
-getExperience(); // RenderContext: debug, metadata, viewports, activeViewport
+getExperience(); // RenderContext: debug, metadata
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined)
 getContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
 
-Resolved design values (viewport-cascaded + token-resolved server-side) are **auto-filled onto your component's props** by key, alongside content. Styling from `$props()` is the one recommended path. `getDesignValues()` exposes the same record (read it in a `$derived` to stay reactive) as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from `$props()` is the one recommended path. `getDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -137,12 +136,10 @@ type ContentfulComponent, ContentfulExperienceTemplate,
 type RenderContext, ResolveToken,
 type ExperiencePayload, ExperienceNode, ComponentNode, ExperienceTemplateNode,
 type PortableRenderPlan, PortableRenderNode, PortableRegistration,
-type DesignPropValue, ManualDesignValue, DesignToken, ValuesByViewport,
-type ViewportDef, ExperienceContext, ResolveContext,
+type DesignPropValue, ManualDesignValue, DesignToken, ExperienceContext, ResolveContext,
 type ResolverConfig, ResolveExperienceOptions
 
-// From design (if you want to do your own viewport-aware resolution)
-getValueForViewport, getViewportIndex, resolveDesignProperties, toCssMediaQuery,
+// From design
 isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
@@ -244,7 +241,7 @@ Every slot arrives as a prop named after the slot, holding an **array of Snippet
 
 If you'd rather render a slot's raw nodes yourself, they are still on the payload at `getContentfulComponent().slots` (a `Record<string, PortableRenderNode[]>`) — hand them to `NodesRenderer`.
 
-For the full getting-started walkthrough, the merge-precedence rules, viewport handling, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
 

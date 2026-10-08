@@ -7,7 +7,6 @@ An Angular 20 + `@angular/ssr` app demonstrating `@contentful/experiences-angula
 - **Server-side fetch and resolve** via `fetchExperience` re-exported from `@contentful/experiences-angular`, which proves the fetch and resolver pipeline is genuinely framework-agnostic.
 - **SSR rendering** with `<cf-server-experience>` (`ServerExperienceRendererComponent`).
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `injectLivePreview` applies Preview Session updates in the browser.
-- **Hydration-safe viewport seeding**: User-Agent parsed on the server in `src/server.ts`, passed as `initialViewportId`.
 - **Styling from design inputs**: resolved design auto-fills each component's declared `@Input()`s by key, and every component here declares the design keys it consumes and styles from them. That is the recommended styling contract — and in Angular, declaring the input is also what makes the key arrive.
 - **One escape-hatch demo**: `card.component.ts` styles itself from its inputs like the rest, but the nested `card-cta.component.ts` — not a registered component, so it has no inputs auto-filled — reads the card's design with `injectDesignValues()` inside a `computed()`. That's the case inputs can't cover.
 - **Design tokens**: `app/lib/experience-config.ts` wires a `resolveToken` mapping token ids to CSS values.
@@ -113,7 +112,6 @@ examples/angular/
 │       │   └── text.component.ts
 │       └── lib/
 │           ├── design-tokens.ts            # token id → CSS value map, consumed by resolveToken
-│           ├── detect-viewport.ts
 │           ├── experience-config.ts        # integration layer (components + experience templates + resolveToken)
 │           └── experience-route-data.ts    # the shape passed server → client
 ├── angular.json
@@ -144,8 +142,6 @@ Identical in shape to the Next.js and SvelteKit examples:
 
 - `"outputMode": "server"` is **required**. Without it `@angular/build` takes its legacy server code path, which never injects the app-engine manifest, and every request fails with `Angular app engine manifest is not set.` Setting it also makes `prerender` inapplicable — the builder warns that the option "is not considered" — so there is no `prerender` key here.
 - `"security": { "allowedHosts": [...] }` gates `@angular/ssr`'s SSRF protection. A request whose `Host` header isn't allowlisted is **not** rejected — it silently deopts to client-side rendering, so the symptom is an empty SSR document rather than an error. **Deployments must add their own hostname.** Matching is on hostname only (the port is ignored) and `*.example.com` suffix wildcards are supported.
-
-**`<cf-server-experience>` resolves the viewport once.** It seeds from `initialViewportId` and never consults `matchMedia`, which keeps SSR and hydration in agreement. If you want design values to follow live viewport changes on resize, swap it for `<cf-experience>` (`ClientExperienceRendererComponent`) in `pages/experience-page.component.ts`.
 
 ### A note on `Section`, where the two reference examples disagree
 

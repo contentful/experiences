@@ -73,7 +73,7 @@ const experienceTemplates: ExperienceTemplates = {
 
 // Resolves opaque token ids (`size.xl`, `color.text`) to their underlying
 // values — the SDK doesn't know what a token id means, only you do. Returning
-// undefined drops the key.
+// undefined retains the raw token and records a diagnostic.
 const resolveToken: ResolveToken = (token) => designTokens[token.value];
 
 export const experienceConfig: Config = { components, experienceTemplates, resolveToken };

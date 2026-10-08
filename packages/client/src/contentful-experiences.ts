@@ -34,7 +34,6 @@ import {
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
   debug?: boolean;
-  initialViewportId?: string;
 };
 
 export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'library'> & {
@@ -210,7 +209,6 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return {
       metadata: { ...this.#resolveDefaults.metadata, ...options?.metadata },
       debug: options?.debug ?? this.#resolveDefaults.debug,
-      initialViewportId: options?.initialViewportId,
     };
   }
 }

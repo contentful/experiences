@@ -7,23 +7,11 @@
  * something a customer should build on.
  */
 
-import type { ExperienceContext, ViewportDef } from '@contentful/experiences-sdk-core';
+import type { ExperienceContext } from '@contentful/experiences-sdk-core';
 
 import type { Config } from './types.js';
 
-export const DEFAULT_CONTEXT: ExperienceContext = { debug: false, metadata: {}, viewports: [] };
-
-/**
- * Stands in when there is no experience to read viewports from, so descendants
- * always see a viewport rather than having to branch on `undefined`. `query: '*'`
- * matches everything, mirroring what real single-viewport payloads ship today.
- */
-export const FALLBACK_VIEWPORT: ViewportDef = {
-  id: '_',
-  query: '*',
-  displayName: 'Default',
-  previewSize: '100%',
-};
+export const DEFAULT_CONTEXT: ExperienceContext = { debug: false, metadata: {} };
 
 /**
  * Read only in the window between a renderer's construction and Angular binding
