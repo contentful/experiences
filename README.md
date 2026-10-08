@@ -929,11 +929,22 @@ Two things to know before switching it on:
 - **The map is large.** It carries per-node field provenance for every entry, asset, and layer in the experience. That is why it is opt-in rather than always fetched, and why `plan.sourceMap` is `undefined` by default.
 - **The request becomes a `POST`.** The source-map opt-in is a request-body field, and the delivery API only accepts a body on its `getWithOverrides` operation. Everything else — query parameters, tokens, headers, and the response shape — is identical, but a `POST` is not CDN-cacheable the way the plain `GET` is.
 
+#### Attribution
+
+When a plan carries a usable source map, the SDK resolves which reportable scopes each node belongs to: the Experience, and any persisted Fragment it sits in. Inline fragments are walked through and never reported. The result is plain serializable data:
+
+- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'Fragment'`), and the optional `entityKindId`, `parentExperienceId`, `optimizationId`, `variantId`, `variantIndex` and `entryIds`. The baseline variant omits the three variant fields rather than inventing them. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
+- `node.attribution` lists every scope the node belongs to (`scopes`, outer to inner), the ones it is a top-level node of (`roots`), and the entries its own content is bound to (`entryIds`).
+
+Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.
+
+Live Preview plans carry attribution only if the preview-session endpoints return a source map, which the SDK does not request today.
+
 #### Which map wins
 
 `resolveExperience` reads the map from, in order: `options.sourceMap`, then `payload.extensions.sourceMap`, then none. `fetchExperience` uses the map on its own response, which is there only when the request opts in with `extensions: { sourceMap: {} }`. The runtime `resolveExperience(payload, { sourceMap })` accepts the same override.
 
-`ExperienceSourceMap` types the scalar fields and leaves the collections as `unknown[]`: the SDK passes the map through without interpreting it, and the core package carries no dependency on the delivery client. When you need the full nested shape, narrow it:
+`ExperienceSourceMap` types the scalar fields and leaves the collections as `unknown[]`: the SDK reads only the parts it needs for attribution, and the core package carries no dependency on the delivery client. When you need the full nested shape, narrow it:
 
 ```ts
 import type { ContentfulViewDelivery } from '@contentful/experiences-react';
