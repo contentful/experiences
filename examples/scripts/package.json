@@ -6,6 +6,7 @@
   "description": "Bootstrap scripts for the customer-facing example apps",
   "scripts": {
     "bootstrap": "tsx bootstrap-example.ts",
+    "teardown": "tsx teardown-example.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

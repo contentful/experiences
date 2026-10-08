@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 const linkStyle = {
   display: 'inline-block',
   padding: '10px 16px',
@@ -28,11 +26,17 @@ export default function HomePage() {
         <code>@contentful/experiences-react</code> in a Next.js App Router server component.
       </p>
 
-      <p>
-        <Link href="/landing" style={linkStyle}>
+      <form action="/landing" method="get">
+        <p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#374151' }}>
+            <input type="checkbox" name="personalization" value="true" />
+            Personalization (simulates an EU visitor)
+          </label>
+        </p>
+        <button type="submit" style={{ ...linkStyle, border: 0, cursor: 'pointer', fontSize: 16 }}>
           View the demo experience
-        </Link>
-      </p>
+        </button>
+      </form>
 
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
         <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
