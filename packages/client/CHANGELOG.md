@@ -1,3 +1,9 @@
+## 0.9.1 (2026-10-08)
+
+### 🚀 Features
+
+- add fetchDestinationSitemap for paginated route listing [AIS-569] ([#218](https://github.com/contentful/experiences/pull/218))
+
 ## 0.9.0 (2026-10-08)
 
 ### 🚀 Features
