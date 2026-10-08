@@ -726,7 +726,6 @@ async function seedOptimizationVariant(fixture: ExperiencePersonalizationFixture
   const variantBody = {
     name: fixture.variant.name,
     description: fixture.variant.description,
-    viewports: base.viewports,
     designProperties: base.designProperties ?? {},
     contentBindings: base.contentBindings,
     metadata: base.metadata ?? { tags: [], concepts: [] },
