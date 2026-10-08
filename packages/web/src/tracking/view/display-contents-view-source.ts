@@ -1,4 +1,4 @@
-import { TRACKING_NODE_ATTRIBUTE } from '../../tracking-attributes.js';
+import { TRACKING_SCOPES_ATTRIBUTE } from '../../tracking-attributes.js';
 import { CAN_ADD_LISTENERS } from '../observer-support.js';
 
 import type { ElementState } from './element-view-observer-support.js';
@@ -54,7 +54,7 @@ export const isDisplayContentsElement = (element: Element): boolean =>
 
 /** A nested tracked node is measured by its own observation, not its parent's. */
 const isNestedTrackedElement = (element: Element): boolean =>
-  element.hasAttribute(TRACKING_NODE_ATTRIBUTE);
+  element.hasAttribute(TRACKING_SCOPES_ATTRIBUTE);
 
 const hasVisibleText = (node: ChildNode): boolean =>
   node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim();

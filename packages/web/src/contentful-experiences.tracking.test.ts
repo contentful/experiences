@@ -29,7 +29,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
 
 function render(nodeId: string, tag = 'div'): HTMLElement {
   const element = document.createElement(tag);
-  for (const [name, value] of Object.entries(getTrackingAttributes(nodeId))) {
+  for (const [name, value] of Object.entries(getTrackingAttributes({ roots: [{ key: nodeId }] }))) {
     element.setAttribute(name, value);
   }
   document.body.append(element);
@@ -82,7 +82,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     const session = runtime.startInteractionTracking({
       resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
     });
-    io.getLast().trigger(page, true);
+    io.trigger(page, true);
     await advance(1400);
     await session.stop();
 
@@ -129,7 +129,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     // Mount → unmount → mount, as React StrictMode or a dependency change does.
     const first = runtime.startInteractionTracking(options);
-    io.getLast().trigger(page, true);
+    io.trigger(page, true);
     await advance(1200);
     void first.stop();
     const second = runtime.startInteractionTracking(options);
@@ -156,7 +156,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     const options = { resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId] };
 
     const first = runtime.startInteractionTracking(options);
-    io.getLast().trigger(page, true);
+    io.trigger(page, true);
     await advance(1000);
     finishSend();
     await advance(200);

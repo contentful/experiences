@@ -10,6 +10,8 @@ import {
   setDocumentVisibility,
 } from '../test-fixtures/dom.js';
 
+import { TRACKING_SCOPES_ATTRIBUTE } from '../tracking-attributes.js';
+
 import type { TrackingAttribution } from './attribution.js';
 import { createClickDetector } from './click/create-click-detector.js';
 import { createHoverDetector } from './hover/create-hover-detector.js';
@@ -24,8 +26,19 @@ const FRAGMENT: TrackingAttribution = {
   variantIndex: 1,
 };
 
-/** Resolves attribution from a per-test element → attribution map. */
-const lookup = (map: Map<Element, TrackingAttribution>) => (element: Element) => map.get(element);
+/** One scope occurrence key per element, so a test can treat an element as its own occurrence. */
+const keys = new Map<Element, string>();
+const keyOf = (element: Element): string => {
+  let key = keys.get(element);
+  if (!key) keys.set(element, (key = `s${keys.size}`));
+  return key;
+};
+
+/** Resolves attribution from a per-test element → attribution map, through each element's key. */
+const lookup = (map: Map<Element, TrackingAttribution>) => (key: string) => {
+  for (const [element, attribution] of map) if (keyOf(element) === key) return attribution;
+  return undefined;
+};
 
 const click = (target: Node): void => {
   target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -38,6 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  keys.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -50,7 +64,7 @@ describe('createViewDetector', () => {
     const trackView = vi.fn().mockResolvedValue(true);
     const element = makeElement();
     const detector = createViewDetector(trackView, lookup(new Map([[element, EXPERIENCE]])));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     io.getLast().trigger(element, true);
@@ -74,7 +88,7 @@ describe('createViewDetector', () => {
     const element = makeElement();
     const detector = createViewDetector(trackView, lookup(new Map([[element, FRAGMENT]])));
 
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
     expect(io.getLast().observed.has(element)).toBe(true);
     detector.stop();
@@ -88,7 +102,7 @@ describe('createViewDetector', () => {
     const element = makeElement();
     const attributions = new Map([[element, FRAGMENT]]);
     const detector = createViewDetector(trackView, lookup(attributions));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     attributions.clear();
@@ -104,7 +118,7 @@ describe('createViewDetector', () => {
     const detector = createViewDetector(vi.fn(), lookup(new Map([[element, FRAGMENT]])));
 
     expect(() => {
-      detector.onElementAdded(element);
+      detector.onElementAdded(element, keyOf(element));
       detector.start();
       detector.stop();
     }).not.toThrow();
@@ -116,7 +130,7 @@ describe('createViewDetector', () => {
     const trackView = vi.fn().mockRejectedValue(new Error('no profile'));
     const element = makeElement();
     const detector = createViewDetector(trackView, lookup(new Map([[element, FRAGMENT]])));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     io.getLast().trigger(element, true);
@@ -138,7 +152,7 @@ describe('createViewDetector', () => {
     const element = makeElement();
     const attributions = new Map([[element, { ...FRAGMENT, entityId: 'A' }]]);
     const detector = createViewDetector(trackView, lookup(attributions));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     // A becomes visible and qualifies; its send stays pending.
@@ -150,8 +164,8 @@ describe('createViewDetector', () => {
     io.getLast().trigger(element, false);
     await advance(0);
 
-    // The same element now resolves to a different entity, as `refresh()`
-    // would apply after re-resolving attribution for the same DOM.
+    // The same key now resolves to a different entity, as `refresh()` would
+    // apply after re-resolving attribution for the same DOM.
     attributions.set(element, { ...FRAGMENT, entityId: 'B' });
 
     // The qualifying send completes, letting the queued final callback run.
@@ -177,7 +191,7 @@ describe('createHoverDetector', () => {
     const trackHover = vi.fn().mockResolvedValue(true);
     const element = makeElement();
     const detector = createHoverDetector(trackHover, lookup(new Map([[element, FRAGMENT]])));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     await hover(element, 1200);
@@ -196,7 +210,7 @@ describe('createHoverDetector', () => {
     const trackHover = vi.fn().mockResolvedValue(true);
     const element = makeElement();
     const detector = createHoverDetector(trackHover, lookup(new Map([[element, EXPERIENCE]])));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     await hover(element, 1500);
@@ -213,7 +227,7 @@ describe('createHoverDetector', () => {
     const element = makeElement();
     const attributions = new Map([[element, { ...FRAGMENT, entityId: 'A' }]]);
     const detector = createHoverDetector(trackHover, lookup(attributions));
-    detector.onElementAdded(element);
+    detector.onElementAdded(element, keyOf(element));
     detector.start();
 
     element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
@@ -239,7 +253,10 @@ describe('createClickDetector', () => {
   const setup = (entries: [Element, TrackingAttribution][]) => {
     const trackClick = vi.fn().mockResolvedValue(true);
     const detector = createClickDetector(trackClick, lookup(new Map(entries)));
-    for (const [element] of entries) detector.onElementAdded(element);
+    for (const [element] of entries) {
+      element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, keyOf(element));
+      detector.onElementAdded(element, keyOf(element));
+    }
     detector.start();
     return { trackClick, detector };
   };
@@ -386,15 +403,35 @@ describe('createClickDetector', () => {
     expect(trackClick).not.toHaveBeenCalled();
   });
 
+  it('keeps tracking an element handed over under two keys until both are removed', () => {
+    const fragment = makeElement();
+    const button = document.createElement('button');
+    fragment.append(button);
+    fragment.setAttribute(TRACKING_SCOPES_ATTRIBUTE, 'outer inner');
+    const trackClick = vi.fn().mockResolvedValue(true);
+    const detector = createClickDetector(trackClick, (key) => ({ ...FRAGMENT, entityId: key }));
+    detector.onElementAdded(fragment, 'outer');
+    detector.onElementAdded(fragment, 'inner');
+    detector.start();
+
+    detector.onElementRemoved(fragment, 'outer');
+    click(button);
+    expect(trackClick).toHaveBeenCalledTimes(1);
+
+    detector.onElementRemoved(fragment, 'inner');
+    click(button);
+    expect(trackClick).toHaveBeenCalledTimes(1);
+  });
+
   it('stops attributing removed elements and listening after stop', () => {
     const fragment = makeElement();
     const button = document.createElement('button');
     fragment.append(button);
     const { trackClick, detector } = setup([[fragment, FRAGMENT]]);
 
-    detector.onElementRemoved(fragment);
+    detector.onElementRemoved(fragment, keyOf(fragment));
     click(button);
-    detector.onElementAdded(fragment);
+    detector.onElementAdded(fragment, keyOf(fragment));
     detector.stop();
     click(button);
 

@@ -59,7 +59,11 @@ export class FakeIntersectionObserver implements IntersectionObserver {
 }
 
 /** Replaces the global IntersectionObserver; undo with `vi.unstubAllGlobals()`. */
-export function installIOPolyfill(): { getLast: () => FakeIntersectionObserver } {
+export function installIOPolyfill(): {
+  getLast: () => FakeIntersectionObserver;
+  /** Triggers `target` on every observer watching it: each scope occurrence owns one. */
+  trigger: (target: Element, isIntersecting: boolean) => void;
+} {
   const instances: FakeIntersectionObserver[] = [];
 
   class Polyfilled extends FakeIntersectionObserver {
@@ -76,6 +80,9 @@ export function installIOPolyfill(): { getLast: () => FakeIntersectionObserver }
       const last = instances.at(-1);
       if (!last) throw new Error('IntersectionObserver polyfill instance not found');
       return last;
+    },
+    trigger: (target, isIntersecting) => {
+      for (const instance of instances) instance.trigger(target, isIntersecting);
     },
   };
 }
