@@ -1,3 +1,5 @@
+import { headers } from 'next/headers';
+
 import {
   ServerExperienceRenderer,
   fetchExperience,
@@ -6,6 +8,7 @@ import {
 
 import { LivePreviewExperience } from '@/components/LivePreviewExperience';
 import { experienceConfig } from '@/lib/experience-config';
+import { buildPagePersonalization } from '@/lib/personalization';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -18,6 +21,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
 
   const preview = typeof sp.preview === 'string' ? sp.preview : undefined;
   const debug = sp.debug === 'true' || sp.debug === '1';
+  const personalizationEnabled = sp.personalization === 'true' || sp.personalization === '1';
   const locale = typeof sp.locale === 'string' ? sp.locale : 'en-US';
   const sessionId = typeof sp.preview_session_id === 'string' ? sp.preview_session_id : undefined;
   const spaceId = process.env.SPACE_ID ?? '';
@@ -27,6 +31,19 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
+
+  const requestHeaders = await headers();
+  const forwardedProto = requestHeaders.get('x-forwarded-proto') ?? 'http';
+  const host = requestHeaders.get('host') ?? 'localhost:3000';
+  const personalization = personalizationEnabled
+    ? buildPagePersonalization({
+        origin: `${forwardedProto}://${host}`,
+        path: `/${experienceId}`,
+        locale,
+        referrer: requestHeaders.get('referer') ?? '',
+        searchParams: sp,
+      })
+    : undefined;
 
   const resolveOptions = {
     config: experienceConfig,
@@ -45,6 +62,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
           environmentId,
           experienceId,
           locale,
+          personalization,
         },
         {
           accessToken,

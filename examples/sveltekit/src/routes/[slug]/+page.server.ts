@@ -7,15 +7,19 @@ import {
 } from '@contentful/experiences-svelte';
 import { env } from '$env/dynamic/private';
 import { experienceConfig } from '$lib/experience-config.js';
+import { buildPagePersonalization } from '$lib/server/personalization.js';
 
 import type { PageServerLoad } from './$types.js';
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, request }) => {
   const preview = url.searchParams.get('preview');
   const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
   const previewToken = env.CPA_TOKEN;
   const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
   const metadata = { slug: params.slug };
+  const personalizationParam = url.searchParams.get('personalization');
+  const personalizationEnabled = personalizationParam === 'true' || personalizationParam === '1';
+  const locale = url.searchParams.get('locale') ?? 'en-US';
 
   // `$env/dynamic/private` types every var as `string | undefined`, because it
   // reads the real environment at runtime. Fail with something actionable
@@ -32,6 +36,22 @@ export const load: PageServerLoad = async ({ params, url }) => {
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
+
+  // Only send a page event when `?personalization=true` is explicitly present.
+  const personalization = personalizationEnabled
+    ? buildPagePersonalization({
+        origin: url.origin,
+        path: url.pathname,
+        locale,
+        referrer: request.headers.get('referer') ?? '',
+        searchParams: Object.fromEntries(
+          [...new Set(url.searchParams.keys())].map((key) => {
+            const values = url.searchParams.getAll(key);
+            return [key, values.length === 1 ? values[0] : values];
+          })
+        ),
+      })
+    : undefined;
 
   try {
     const resolveOptions = {
@@ -50,6 +70,8 @@ export const load: PageServerLoad = async ({ params, url }) => {
             spaceId,
             environmentId,
             experienceId: params.slug,
+            locale,
+            personalization,
           },
           {
             accessToken,

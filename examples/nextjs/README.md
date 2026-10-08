@@ -46,6 +46,33 @@ npm run dev
 
 Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
+### Optional: personalization
+
+The bootstrap seeds everything needed: the `Landing (developers)` Optimization
+Variant, an EU audience (`demo-audience-developers`), and an Optimization
+(`demo-optimization-developers`) that serves the variant to that audience.
+Nothing has to be configured in Contentful by hand.
+
+Tick **Personalization** on the home page, or open
+`http://localhost:3000/landing?personalization=true`, to see the developer
+hero. Without the flag you get the base hero.
+
+With `?personalization=true` the server builds a server-channel page event with
+`EventBuilder`, stamps an EU location on it, and sends it in `fetchExperience`'s
+first-class `personalization` option. That switches the XDA request to POST, so
+Contentful evaluates the visitor against the audience and hydrates the selected
+hero before server rendering. Without the flag no event is sent and the request
+is unchanged.
+
+This is a simulation, not geo-targeting: XDA takes the visitor's location from
+the event (not the request IP) and defaults to San Francisco (US) when none is
+sent. The example sends Berlin whenever the box is ticked, so every tester sees
+the same result regardless of where they are. A real app would send the
+visitor's actual location.
+
+The example intentionally does not implement durable profile storage or consent
+policy; production applications must own those concerns.
+
 ### Optional: preview mode
 
 Append `?preview=true` to any experience URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
@@ -82,6 +109,7 @@ One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<Ser
 | --------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
 | `http://localhost:3000/landing`                                 | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx)                       |
 | `http://localhost:3000/landing?debug=true&locale=en-US`         | same route                                     | same config                                                                      |
+| `http://localhost:3000/landing?personalization=true&debug=true` | same route                                     | personalized page event plus SDK debug output                                    |
 | `http://localhost:3000/landing?preview_session_id=<session-id>` | same route                                     | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
 
 The route in one glance:
