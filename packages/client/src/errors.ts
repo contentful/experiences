@@ -38,11 +38,12 @@ export class ExperienceFetchError extends Error {
 }
 
 /**
- * Thrown by `fetchExperience` when `clientOptions.preview` is `true` and
- * `experienceOptions` is destination-shaped (`destinationId` + `nodeId` or
- * `destinationId` + `path`). The Destinations Delivery API has no preview
- * host or preview-token support yet, so this guards against silently hitting the
- * production host with a preview token it doesn't accept.
+ * Thrown by `fetchExperience` and `fetchDestinationSitemap` when
+ * `clientOptions.preview` is `true` for a destination-shaped call
+ * (`destinationId` + `nodeId`/`path`, or a sitemap fetch). The Destinations
+ * Delivery API has no preview host or preview-token support yet, so this
+ * guards against silently hitting the production host with a preview token
+ * it doesn't accept.
  *
  * This is a bridge, not a permanent design: revisit once the platform ships
  * preview support for destinations.
