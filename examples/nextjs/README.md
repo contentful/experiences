@@ -73,6 +73,26 @@ visitor's actual location.
 The example intentionally does not implement durable profile storage or consent
 policy; production applications must own those concerns.
 
+### Optional: consent
+
+Every page shows a **Consent demo** panel (bottom right). It creates an
+`@contentful/experiences-web` runtime in the browser and lets you watch consent
+gating work:
+
+- **Accept all / Reject all / Events only** call `consent(true | false | { events, persistence })`.
+- **page (allowed)** and **track (gated)** fire real events. With consent undecided,
+  `page` is sent (it is in the default `allowedEventTypes`) and `track` resolves
+  `{ accepted: false }` and appears under _Blocked events_.
+- The panel shows the profile in memory next to the profile in LocalStorage. With
+  _Events only_, events are sent but the profile is never written to storage.
+- Reload the page: both consent choices are restored, because they are stored in
+  LocalStorage the same way the profile is.
+
+The panel needs three browser-visible variables in `.env.local`:
+`NEXT_PUBLIC_SPACE_ID`, `NEXT_PUBLIC_ENVIRONMENT_ID` and `NEXT_PUBLIC_CDA_TOKEN`.
+Use a token that is safe to expose. The panel only sends events and never fetches
+an Experience.
+
 ### Optional: preview mode
 
 Append `?preview=true` to any experience URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
