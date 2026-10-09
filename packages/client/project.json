@@ -23,14 +23,6 @@
         "cwd": "packages/client",
         "command": "vitest run"
       }
-    },
-    "verify-release-artifact": {
-      "cache": false,
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/client",
-        "command": "node --input-type=module -e \"import { readFile } from 'node:fs/promises'; const manifest = JSON.parse(await readFile('package.json', 'utf8')); const { DEFAULT_EVENT_CONTEXT_LIBRARY } = await import('./dist/sdk-info.js'); if (DEFAULT_EVENT_CONTEXT_LIBRARY.version !== manifest.version) throw new Error('Default event context library version ' + DEFAULT_EVENT_CONTEXT_LIBRARY.version + ' does not match package version ' + manifest.version);\""
-      }
     }
   }
 }

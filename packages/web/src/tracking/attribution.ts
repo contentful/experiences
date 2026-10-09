@@ -1,4 +1,4 @@
-import type { ClickBuilderArgs } from '@contentful/experiences-client';
+import type { ClickBuilderArgs } from '@contentful/experiences-runtime';
 
 export type TrackedEntityKind = Extract<ClickBuilderArgs['entityKind'], 'Experience' | 'Fragment'>;
 

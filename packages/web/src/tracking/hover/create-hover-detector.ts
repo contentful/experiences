@@ -1,4 +1,4 @@
-import type { HoverBuilderArgs } from '@contentful/experiences-client';
+import type { HoverBuilderArgs } from '@contentful/experiences-runtime';
 
 import { createTimedDetector } from '../create-timed-detector.js';
 import {

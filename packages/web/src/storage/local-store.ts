@@ -2,7 +2,7 @@ import {
   EventProfileSchema,
   PROFILE_CACHE_KEY,
   type EventProfile,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 
 type SafeParser<T> = {
   safeParse(value: unknown): { success: true; data: T } | { success: false };

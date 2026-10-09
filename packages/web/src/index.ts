@@ -11,11 +11,9 @@ export type { ElementViewObserverOptions as ViewTrackingOptions } from './tracki
 export { EXPERIENCES_WEB_SDK_NAME, EXPERIENCES_WEB_SDK_VERSION } from './sdk-info.js';
 
 export {
-  ANONYMOUS_ID_COOKIE,
   ContentfulViewDelivery,
   DELIVERY_HOST,
   ExperienceFetchError,
-  EventProfileRequiredError,
   NotFoundError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
@@ -23,6 +21,9 @@ export type {
   DestinationRedirectResult,
   ExperienceRequestExtensions,
   PersonalizationOptions,
+} from '@contentful/experiences-client';
+export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
+export type {
   EventOptimizationData,
   EventProfile,
   ClickBuilderArgs,
@@ -42,7 +43,7 @@ export type {
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 export type {
   ExperiencePayload,
   PortableRenderPlan,

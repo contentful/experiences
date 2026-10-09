@@ -193,7 +193,7 @@ page, user-agent, consent, or other request-sensitive event state.
 
 ## Architecture boundary
 
-This package is a public Node-specific leaf over the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. Client stays runtime-neutral and stateless with respect to request and browser state: its shared runtime retains only stable configuration, reusable delivery and Optimization transports, and a base `EventBuilder` configured with an explicit platform channel. The Node SDK binds event behavior and volatile profile state to each request facade. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
+This package is a public Node-specific leaf over the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime retains only stable configuration, reusable Delivery and Optimization transports, and a base `EventBuilder` configured with an explicit platform channel. Client supplies the generated Delivery boundary and free fetch functions. The Node SDK binds event behavior and volatile profile state to each request facade. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
 
 ## License
 

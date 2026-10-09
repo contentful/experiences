@@ -4,8 +4,7 @@ import {
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
 import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
-import EventBuilder from './event-builder.js';
-import { fetchExperience } from './fetch-experience.js';
+import { fetchExperience, type PersonalizationOptions } from './fetch-experience.js';
 
 const {
   mockGet,
@@ -108,10 +107,19 @@ const resolveOptions = {
   config: { components: {} },
 };
 
-const eventBuilder = new EventBuilder({
-  channel: 'server',
-  library: { name: 'test', version: '1.0.0' },
-});
+const personalization = {
+  profileId: 'profile-1',
+  events: [
+    {
+      type: 'page',
+      channel: 'server',
+      context: { library: { name: 'test', version: '1.0.0' } },
+      messageId: 'page-message-1',
+      timestamp: '2026-10-09T00:00:00.000Z',
+      properties: { path: '/', query: {}, referrer: '', search: '', url: '/' },
+    },
+  ],
+} satisfies PersonalizationOptions;
 
 describe('fetchExperience', () => {
   beforeEach(() => {
@@ -481,12 +489,6 @@ describe('fetchExperience — source map', () => {
 });
 
 describe('fetchExperience — personalization', () => {
-  const pageEvent = eventBuilder.buildPageView();
-  const personalization = {
-    profileId: 'profile-1',
-    events: [pageEvent],
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue(mockPayload);

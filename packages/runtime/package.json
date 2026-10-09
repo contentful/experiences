@@ -1,7 +1,7 @@
 {
-  "name": "@contentful/experiences-node",
-  "version": "0.5.1",
-  "description": "Node.js SDK for Contentful Experiences",
+  "name": "@contentful/experiences-runtime",
+  "version": "0.0.0",
+  "description": "Shared runtime and event construction for Contentful Experiences",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,8 +18,7 @@
   },
   "files": [
     "dist",
-    "README.md",
-    "CHANGELOG.md"
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -27,11 +26,13 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/contentful/experiences.git",
-    "directory": "packages/node"
+    "directory": "packages/runtime"
   },
   "dependencies": {
     "@contentful/experiences-client": "0.9.1",
-    "@contentful/experiences-runtime": "0.0.0",
-    "@contentful/experiences-sdk-core": "0.12.0"
+    "@contentful/experiences-sdk-core": "0.12.0",
+    "@contentful/optimization-api-client": "^2.0.1",
+    "es-toolkit": "^1.46.0",
+    "zod": "^4.3.6"
   }
 }

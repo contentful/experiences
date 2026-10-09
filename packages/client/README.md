@@ -2,97 +2,11 @@
 
 > **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated experience delivery client — so that `@contentful/experiences-sdk-core` stays dependency-free and framework adapters that don't need network access don't pull it in transitively. It also owns the lower-layer shared `ContentfulExperiences` runtime for the public Node and Web SDKs and event construction.
-
-`ContentfulExperiences` is intentionally not re-exported by framework adapters
-and is not a new application-facing adapter API. The existing free functions
-remain supported for adapter and application integration.
+Isolates `@contentful/experience-delivery` — the generated Experience Delivery client — and owns the free fetch functions, payload conversion, delivery errors, and XDA-derived request types. The shared runtime and complete `EventBuilder` live in `@contentful/experiences-runtime`, which depends on this package. Client does not build events or depend on Runtime. The existing free functions remain supported for adapter and application integration.
 
 ---
 
 ## What's in here
-
-### Shared lower-layer runtime
-
-`ContentfulExperiences` is an internal shared runtime contract for the public
-Node/Web SDKs. Construct it with a space, environment, resolver configuration,
-a delivery configuration, and an `eventBuilder` config with an explicit
-`channel`; optionally provide a preview configuration. It constructs and retains
-those clients, merges configured resolve defaults with per-call options, and
-exposes `resolveExperience` and by-id/destination `fetchExperience` methods.
-Calling `fetchExperience` with `preview: true` requires preview configuration.
-
-The runtime-owned Delivery and Preview clients support two security models. For
-direct API access, provide an `accessToken`; it may be a supplier and is sent to
-the selected endpoint. For a trusted application proxy that adds the upstream
-token itself, omit `accessToken` and provide an explicit `host`; the runtime
-disables generated bearer authentication. `environmentId` is the Contentful
-environment identifier passed to by-ID requests, not the generated delivery
-client's optional endpoint-valued `environment`. Endpoint precedence is
-explicit `host`, then generated-client `environment`, then the delivery or
-preview default.
-
-Direct browser tokens are credentials but are intentionally browser-visible
-when an application's scope and CORS policy permit that model. Proxy mode keeps
-the upstream token server-side. In either mode, treat custom endpoints as
-trusted configuration.
-
-The optional preview client enables direct CPA fetches by Experience ID through
-the same shared runtime. It is separate from `@contentful/experiences-live-preview`,
-which owns Preview Session HTTP loading, WebSocket subscription, and update state.
-Destination operations continue to use the delivery client.
-
-The runtime constructs and owns one `EventBuilder` and one Optimization API
-client. The caller supplies the event channel, while the runtime retains this
-SDK's default library identity and the runtime locale unless overridden. This
-package owns event construction and direct transport for the lower layer,
-rather than Core. It exposes a protected binding point used by the public Node
-and Web leaves; Client itself does not retain a mutable event profile.
-
-By default the Optimization client uses the runtime's `spaceId` and maps its
-Contentful `environmentId` to the Optimization client's `environment` option.
-This is the same Contentful environment identifier passed to by-ID delivery
-requests, not the generated delivery client's endpoint-valued `environment`
-setting. The optional `optimization` configuration can provide API-specific
-endpoint, feature, and fetch overrides; the runtime always constructs and owns
-the Optimization client. Custom Optimization base URLs receive complete event
-and profile payloads, so treat them as sensitive-data destinations and use only
-trusted HTTPS origins outside explicit local development.
-
-The bound event methods normally send immediately: `identify`, `page`, and
-`track` upsert a profile through the Personalization API; view, click, hover,
-and flag-view events send a one-event batch through Analytics. Queues, durable
-profile persistence, consent gating, lifecycle/beacon delivery, automatic
-interaction tracking, and Live Preview integration are intentionally absent.
-The Node leaf additionally has a request-scoped, one-shot handoff journal for
-paired browser replay; it is not an SDK queue or persistence mechanism. Because
-calls are not serialized, callers must await profile-producing calls before
-starting another profile-producing or Analytics call on the same bound runtime.
-
-### Server-to-browser event handoff contract
-
-`RuntimeEventHandoff` is the internal replay payload between Node and Web. Node
-alone chooses direct `commit` or paired-browser `handoff` delivery per request.
-The handoff holds a version, Contentful scope, optional initial profile, ordered
-Personalization/Analytics event bodies, and an optional initial-page route key. Its
-internal serialized-payload cap is 64 KiB. Node can preflight the initial
-Personalization sequence as one batch; individual Personalization methods remain
-cumulative and Analytics methods stage without transport. Web validates the
-payload, admits page-bearing journals only for a matching browser route,
-batches compatible adjacent Personalization entries, preserves locale and Analytics
-ordering boundaries, and chains each resulting profile.
-
-The payload is browser-visible sensitive data. Application integration must use
-escaped serialization in a private, no-store response and exclude secrets and
-server-only traits. Do not cache, log, or persist it. Replay may partially
-commit, has no automatic retry or distributed exactly-once guarantee, and is
-independent from Live Preview. A failed replay rejects its receipt but releases
-later direct Web calls. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
-
-This package's direct dependencies are the generated delivery client,
-`@contentful/optimization-api-client` (event schemas, logger, and transport), `es-toolkit`
-(event-property merging), and `zod` (event argument schemas), in addition to
-Core. None of those dependencies are introduced into Core.
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 

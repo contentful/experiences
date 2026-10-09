@@ -1,4 +1,4 @@
-import type { ViewBuilderArgs } from '@contentful/experiences-client';
+import type { ViewBuilderArgs } from '@contentful/experiences-runtime';
 
 import { createTimedDetector } from '../create-timed-detector.js';
 import {

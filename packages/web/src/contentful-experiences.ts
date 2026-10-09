@@ -1,5 +1,5 @@
 import {
-  ContentfulExperiences as ClientContentfulExperiences,
+  ContentfulExperiences as RuntimeContentfulExperiences,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventProfile,
@@ -9,7 +9,7 @@ import {
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeResolveOptions,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
@@ -65,7 +65,7 @@ export interface InteractionTrackingSession {
 }
 
 /** Browser runtime with mutable application locale and live event context. */
-export class ContentfulExperiences extends ClientContentfulExperiences {
+export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #locale: string | undefined;
   readonly #store = new LocalStore();
   #eventHandoffPending = false;

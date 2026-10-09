@@ -4,7 +4,7 @@ import { ContentfulExperiences } from './contentful-experiences.js';
 import {
   EventProfileRequiredError,
   parseRuntimeEventHandoff,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 function createRuntime() {

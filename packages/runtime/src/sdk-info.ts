@@ -11,7 +11,7 @@ export const DEFAULT_EVENT_CONTEXT_LIBRARY = {
   name:
     typeof __DEFAULT_EVENT_CONTEXT_LIBRARY_NAME__ === 'string'
       ? __DEFAULT_EVENT_CONTEXT_LIBRARY_NAME__
-      : '@contentful/experiences-client',
+      : '@contentful/experiences-runtime',
   version:
     typeof __DEFAULT_EVENT_CONTEXT_LIBRARY_VERSION__ === 'string'
       ? __DEFAULT_EVENT_CONTEXT_LIBRARY_VERSION__
