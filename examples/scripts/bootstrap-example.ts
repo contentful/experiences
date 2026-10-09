@@ -332,6 +332,9 @@ async function seedComponent(fixture: ComponentFixture) {
       required: false,
       validations: [],
     })),
+    // Fixture components are coded: they have no tree. XMA rejects an omitted
+    // componentTree, so send `null` explicitly.
+    componentTree: null,
   } as never);
   await cma.component.publish({
     componentId,
@@ -354,7 +357,11 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
     required: false,
     validations: [],
   }));
-  const desiredTree = fixture.componentTree ?? [];
+  // `null` means "coded": the Experience Template has no tree. XMA rejects an
+  // omitted or `undefined` componentTree, so send `null` explicitly.
+  const desiredTree = fixture.componentTree ?? null;
+  const desiredImpl =
+    desiredTree === null ? 'Contentful:CodedImplementation' : 'Contentful:ComposedImplementation';
 
   const experienceTemplateBody = {
     name: fixture.name,
@@ -366,16 +373,16 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
     designProperties: fixture.designProperties ?? [],
     slots: desiredSlots,
     componentTree: desiredTree,
-    // Composed (not Coded) — a Coded Experience Template requires an empty
-    // componentTree. The `page` Experience Template has a Slot node in its
-    // tree, so it must be composed.
+    // The annotation must match the tree: a Coded Experience Template has
+    // `componentTree: null`, a Composed one has an array. The `page`
+    // Experience Template has a Slot node in its tree, so it is composed.
     metadata: {
       tags: [],
       annotations: {
         Template: [
           {
             sys: {
-              id: 'Contentful:ComposedImplementation',
+              id: desiredImpl,
               type: 'Link',
               linkType: 'Annotation',
             },
@@ -405,7 +412,10 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
     !!existing.sys.publishedVersion && existing.sys.publishedVersion === existing.sys.version;
   if (isPublished) {
     // Compare desired vs. current to decide if we still need to write.
-    const currentTree = JSON.stringify(existing.componentTree ?? []);
+    // Normalise a stored `undefined` to `null` so it compares equal to the
+    // desired value. Must stay in sync with `desiredTree` above, otherwise the
+    // script rewrites and republishes on every run.
+    const currentTree = JSON.stringify(existing.componentTree ?? null);
     const desiredTreeJson = JSON.stringify(desiredTree);
     const currentSlotIds = (existing.slots ?? []).map((s) => s.id).sort();
     const desiredSlotIds = desiredSlots.map((s) => s.id).sort();
@@ -416,7 +426,6 @@ async function seedExperienceTemplate(fixture: ExperienceTemplateFixture) {
       .map((a) => a.sys.id)
       .sort()
       .join(',');
-    const desiredImpl = 'Contentful:ComposedImplementation';
     if (
       currentTree === desiredTreeJson &&
       JSON.stringify(currentSlotIds) === JSON.stringify(desiredSlotIds) &&
