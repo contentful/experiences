@@ -3,7 +3,7 @@ import type { ExperiencePayload } from './types.js';
 export const REPEATED_FRAGMENT_PAYLOAD = {
   sys: {
     type: 'Experience',
-    id: 'nt4312-probe-20261005',
+    id: 'experience1',
   },
   nodes: [
     {
@@ -14,7 +14,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
           urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Section',
         },
       },
-      id: 'Mksv7-QC',
+      id: 'node1',
       contentProperties: {},
       designProperties: {},
       slots: {
@@ -27,7 +27,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
                 urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Text',
               },
             },
-            id: 'BsXMMRwA',
+            id: 'node2',
             contentProperties: {},
             designProperties: {},
             slots: {},
@@ -43,7 +43,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
           urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Section',
         },
       },
-      id: 'Mksv7-QC',
+      id: 'node1',
       contentProperties: {},
       designProperties: {},
       slots: {
@@ -56,7 +56,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
                 urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Text',
               },
             },
-            id: 'BsXMMRwA',
+            id: 'node2',
             contentProperties: {},
             designProperties: {},
             slots: {},
@@ -82,7 +82,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
       layers: [
         {
           kind: 'Experience',
-          id: 'nt4312-probe-20261005',
+          id: 'experience1',
           variants: [0],
         },
         {
@@ -95,7 +95,7 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
         },
         {
           kind: 'ExperienceFragment',
-          id: 'nt4312-probe-fragment',
+          id: 'fragment1',
           variants: [0],
         },
         {
@@ -117,12 +117,12 @@ export const REPEATED_FRAGMENT_PAYLOAD = {
       ],
       dataAssemblies: [],
       nodes: {
-        'Mksv7-QC': {
+        node1: {
           layers: [4, 3, 2, 1, 0],
           scope: 3,
           contentProperties: [],
         },
-        BsXMMRwA: {
+        node2: {
           layers: [7, 6, 5, 4, 3, 2, 1, 0],
           scope: 6,
           contentProperties: [],
