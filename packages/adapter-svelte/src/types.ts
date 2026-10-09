@@ -2,6 +2,7 @@ import type { Component } from 'svelte';
 
 import type {
   DesignPropValue,
+  NodeAttribution,
   RenderContext,
   ResolveContext,
   ResolveToken,
@@ -28,6 +29,12 @@ export interface ContentfulComponent {
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
   /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
+  /**
    * Raw per-slot node arrays from the payload. Every slot is also rendered
    * automatically and passed as a same-named `Snippet[]` prop (`children` is
    * not special); these raw nodes are here for callers that want to render a
@@ -47,6 +54,12 @@ export interface ContentfulExperienceTemplate {
   content: Record<string, unknown>;
   design: Record<string, DesignPropValue>;
   resolved?: Record<string, unknown>;
+  /**
+   * Reportable scopes this node belongs to (Experience, persisted Fragment),
+   * resolved from the source map. Absent unless the fetch opted into
+   * `extensions.sourceMap` and the node has an id. Plain, serializable data.
+   */
+  attribution?: NodeAttribution;
 }
 
 /** Render-time experience context, read with `getExperience()`. Declared in core so all adapters share one shape. */

@@ -120,7 +120,7 @@ MissingComponent; // Default fallback for unregistered component types
 useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
 toCss(design, options?); // Turns a design record into CSSProperties, keeping only real CSS keys
 useExperience(); // RenderContext: debug, metadata
-useContentfulComponent(); // Raw payload for the enclosing node (or null)
+useContentfulComponent(); // Raw payload for the enclosing node (or null), including `attribution`
 useContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
 type ToCssOptions;
 ```
