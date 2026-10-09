@@ -160,6 +160,7 @@ toCss(design, options?); // Turns a design record into a plain style object for 
 injectExperience(); // Signal<RenderContext>: debug, metadata
 injectContentfulComponent(); // Signal of the raw payload for the enclosing node (or undefined), including `attribution`
 injectContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
+getTrackingAttributes(attribution); // Attributes to bind on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 

@@ -101,6 +101,12 @@ export type {
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
 export { resolveExperience } from '@contentful/experiences-sdk-core';
+export {
+  getTrackingAttributes,
+  TRACKING_CLICKABLE_ATTRIBUTE,
+  TRACKING_SCOPES_ATTRIBUTE,
+} from '@contentful/experiences-sdk-core';
+export type { TrackingAttributes } from '@contentful/experiences-sdk-core';
 export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
 // ─── Event builder (re-exported from runtime) ─────────────────────────────

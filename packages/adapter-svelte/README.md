@@ -121,6 +121,7 @@ toCss(design, options?); // Turns a design record into a plain style object, kee
 getExperience(); // RenderContext: debug, metadata
 getContentfulComponent(); // Raw payload for the enclosing node (or undefined), including `attribution`
 getContentfulExperienceTemplate(); // Same, for an enclosing coded Experience Template node
+getTrackingAttributes(attribution); // Attributes to spread on a node's outermost element for interaction tracking
 type ToCssOptions;
 ```
 
