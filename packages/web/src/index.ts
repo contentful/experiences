@@ -39,6 +39,7 @@ export type {
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
   RuntimeFetchExperienceOptions,
+  RuntimeFetchResolveOptions,
   RuntimeResolveOptions,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,

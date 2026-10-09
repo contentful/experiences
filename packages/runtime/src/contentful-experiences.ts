@@ -9,6 +9,7 @@ import {
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
 import type {
   ExperiencePayload,
+  ExperienceSourceMap,
   PortableRenderPlan,
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
@@ -34,7 +35,19 @@ import {
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
   debug?: boolean;
+  /**
+   * Source map for `resolveExperience`. Wins over the payload's own
+   * `extensions.sourceMap`. Not accepted by fetch methods, which use the map
+   * from their own response.
+   */
+  sourceMap?: ExperienceSourceMap;
 };
+
+/**
+ * Resolve options for the fetch methods. A fetch takes its source map from its
+ * own response, so `sourceMap` is not accepted here.
+ */
+export type RuntimeFetchResolveOptions = Omit<RuntimeResolveOptions, 'sourceMap'>;
 
 export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'library'> & {
   channel: EventBuilderConfig['channel'];
@@ -71,15 +84,15 @@ export interface ExperienceRuntime {
   ): Promise<PortableRenderPlan>;
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
 }
 
@@ -158,7 +171,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
 
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     if (options.preview === true && this.#previewClient === undefined) {
       throw new Error(
@@ -185,7 +198,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
 
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, nodeId: options.nodeId },
@@ -196,7 +209,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
 
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions?: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, path: options.path },
@@ -209,6 +222,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return {
       metadata: { ...this.#resolveDefaults.metadata, ...options?.metadata },
       debug: options?.debug ?? this.#resolveDefaults.debug,
+      sourceMap: options?.sourceMap,
     };
   }
 }
