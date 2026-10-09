@@ -11,7 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@contentful/experiences-svelte": "*"
+    "@contentful/experiences-svelte": "*",
+    "@contentful/experiences-web": "*"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^3.3.0",

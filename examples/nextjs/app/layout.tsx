@@ -20,7 +20,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         }}
       >
         {children}
-        <ConsentPanel />
+        <ConsentPanel
+          spaceId={process.env.SPACE_ID ?? ''}
+          environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
+          accessToken={process.env.CDA_TOKEN ?? ''}
+        />
       </body>
     </html>
   );
