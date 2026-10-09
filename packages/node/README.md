@@ -119,10 +119,9 @@ browser-visible sensitive data: use escaped serialization in a private,
 no-store response, and do not log or persist it.
 
 Ordinary `identify`, `page`, `track`, and Analytics calls remain direct server
-events and do not join a handoff journal. The Web SDK still consumes the old
-constructor journal during this phased change; its replacement hydration API
-is not yet implemented, so this new handoff is not yet a complete Node-to-Web
-integration.
+events and do not join the prepared batch. The Web SDK accepts this handoff
+through `hydrateAndTrackCurrentPage(handoff, { routeKey })` on an existing browser
+instance. Its admission result does not wait for Personalization HTTP delivery.
 
 ## Precedence
 

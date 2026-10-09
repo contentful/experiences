@@ -6,10 +6,9 @@ import {
   type EventEmissionResult,
   type EventProfile,
   type ExperiencesHandoff,
+  type PageViewBuilderArgs,
   type PersonalizationDeliveryState,
-  parseRuntimeEventHandoff,
-  type RuntimeEventHandoff,
-  type RuntimeEventHandoffReceipt,
+  parseExperiencesHandoff,
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeResolveOptions,
@@ -34,27 +33,42 @@ export type BrowserEventContextProviders = Pick<
 /**
  * Long-lived, browser-oriented SDK configuration.
  */
-type WebEventStateConfig =
-  | {
-      /** Initial browser event profile. Mutually exclusive with eventHandoff. */
-      profile?: EventProfile;
-      eventHandoff?: never;
-      eventHandoffRouteKey?: never;
-    }
-  | {
-      profile?: never;
-      /** Validated server journal that this browser runtime commits at most once. */
-      eventHandoff: RuntimeEventHandoff;
-      /** Current browser route identity used to admit a page-bearing handoff. */
-      eventHandoffRouteKey: string;
-    };
+export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
+  profile?: EventProfile;
+  locale?: string;
+  app?: EventBuilderConfig['app'];
+  browserContext?: BrowserEventContextProviders;
+};
 
-export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> &
-  WebEventStateConfig & {
-    locale?: string;
-    app?: EventBuilderConfig['app'];
-    browserContext?: BrowserEventContextProviders;
+export interface CurrentPageOptions {
+  /** Application-owned pathname and search string. */
+  readonly routeKey: string;
+  readonly buildPayload: (metadata: {
+    isInitialEmission: boolean;
+  }) => PageViewBuilderArgs | undefined;
+}
+
+export interface HydrateAndTrackCurrentPageOptions extends Omit<
+  CurrentPageOptions,
+  'buildPayload'
+> {
+  readonly buildPayload?: CurrentPageOptions['buildPayload'];
+}
+
+interface HandoffInitialization {
+  readonly key: string | ExperiencesHandoff;
+  readonly routeKey: string;
+  readonly isCurrent: () => boolean;
+  provisionalIdentity?: {
+    readonly selected: string | undefined;
+    readonly previous: string | undefined;
+    readonly profileRevision: number;
   };
+  identityAdoptedForAttempt?: boolean;
+  identityReady?: Promise<string | undefined>;
+  hydration?: Promise<void>;
+  delivery?: Promise<EventEmissionResult>;
+}
 
 type WebEventMethods = Pick<
   RuntimeEventMethods,
@@ -73,13 +87,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #locale: string | undefined;
   readonly #store = new LocalStore();
   readonly #delivery: PersonalizationDelivery;
-  #eventHandoffPending = false;
   #interactionTracking: InteractionTracking | undefined;
   #adoptedProfileId: string | undefined;
+  #identityRevision = 0;
+  #currentInitialization: HandoffInitialization | undefined;
+  #acceptedCurrentPage: { routeKey: string } | undefined;
+  #inFlightCurrentPage: { routeKey: string } | undefined;
   #generation = 0;
   #destroyed = false;
   #online = globalThis.navigator?.onLine !== false;
-  readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
   readonly #handleOnline = (): void => {
     this.#online = true;
@@ -90,31 +106,20 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#online = false;
   };
   readonly identify: WebEventMethods['identify'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.identify(...args), { accepted: false });
-  readonly page: WebEventMethods['page'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.page(...args), { accepted: false });
-  readonly track: WebEventMethods['track'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.track(...args), { accepted: false });
+    this.#eventMethods.identify(...args);
+  readonly page: WebEventMethods['page'] = (...args) => this.#eventMethods.page(...args);
+  readonly track: WebEventMethods['track'] = (...args) => this.#eventMethods.track(...args);
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
-    this.#destroyed
-      ? Promise.resolve(false)
-      : this.#afterEventHandoff(() => this.#eventMethods.trackView(...args), false);
+    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackView(...args);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
-    this.#destroyed
-      ? Promise.resolve(false)
-      : this.#afterEventHandoff(() => this.#eventMethods.trackClick(...args), false);
+    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackClick(...args);
   readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
-    this.#destroyed
-      ? Promise.resolve(false)
-      : this.#afterEventHandoff(() => this.#eventMethods.trackHover(...args), false);
+    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackHover(...args);
   readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
-    this.#destroyed
-      ? Promise.resolve(false)
-      : this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args), false);
+    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackFlagView(...args);
 
   constructor(config: ExperiencesWebConfig) {
-    const { app, browserContext, profile, eventHandoff, eventHandoffRouteKey, ...clientConfig } =
-      config;
+    const { app, browserContext, profile, ...clientConfig } = config;
     super({
       ...clientConfig,
       eventBuilder: {
@@ -128,11 +133,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     });
     let delivery: PersonalizationDelivery | undefined;
     try {
-      if (profile !== undefined && eventHandoff !== undefined) {
-        throw new TypeError(
-          'ExperiencesWebConfig accepts either profile or eventHandoff, not both'
-        );
-      }
       this.#locale = clientConfig.locale;
       if (profile !== undefined) this.#store.profile = profile;
       this.#delivery = delivery = new PersonalizationDelivery({
@@ -143,7 +143,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         publishQueuedData: (data) => {
           if (this.#destroyed) return;
           this.#store.profile = data.profile;
-          this.#adoptedProfileId = undefined;
+          this.#setAdoptedProfileId(undefined);
         },
       });
       this.#eventMethods = this.createEventMethods(
@@ -153,7 +153,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             (this.#adoptedProfileId === undefined ? undefined : { id: this.#adoptedProfileId }),
           setProfile: (nextProfile) => {
             this.#store.profile = nextProfile;
-            this.#adoptedProfileId = undefined;
+            this.#setAdoptedProfileId(undefined);
           },
           getProfileRevision: () => this.#store.profileRevision,
         },
@@ -165,11 +165,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             ]),
         }
       );
-      this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
-      // Replay is eager. Mark a rejection as observed even when an application has
-      // not attached its barrier handler yet; callers still receive the original
-      // rejected promise from whenEventHandoffCommitted().
-      void this.#eventHandoffPromise.catch(() => undefined);
       if (typeof window !== 'undefined') {
         window.addEventListener('online', this.#handleOnline);
         window.addEventListener('offline', this.#handleOffline);
@@ -198,14 +193,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return this.#delivery.state;
   }
 
-  /**
-   * Resolves after the optional server handoff commits or is skipped for route
-   * incompatibility. A transport failure rejects without blocking later calls.
-   */
-  whenEventHandoffCommitted(): Promise<RuntimeEventHandoffReceipt> {
-    return this.#eventHandoffPromise;
-  }
-
   /** Changes the default locale used by subsequent events and fetches. */
   setLocale(locale: string | undefined): void {
     this.#locale = locale;
@@ -216,7 +203,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     resolveOptions?: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (
+      this.#currentInitialization?.identityReady !== undefined ||
+      this.#currentInitialization?.hydration !== undefined
+    ) {
+      await this.#awaitCurrentHandoffIdentity();
+      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    }
     const profileRevision = this.#store.profileRevision;
+    const identityRevision = this.#identityRevision;
     const profileId =
       options.personalization?.profileId ?? this.#store.profile?.id ?? this.#adoptedProfileId;
     const plan = await super.fetchExperience(
@@ -228,7 +223,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           },
       resolveOptions
     );
-    if (!this.#destroyed && options.preview !== true) {
+    if (
+      !this.#destroyed &&
+      options.preview !== true &&
+      this.#identityRevision === identityRevision
+    ) {
       this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
     }
     return plan;
@@ -238,8 +237,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   reset(): void {
     if (this.#destroyed) return;
     this.#generation += 1;
-    this.#eventHandoffPending = false;
-    this.#adoptedProfileId = undefined;
+    this.#currentInitialization = undefined;
+    this.#acceptedCurrentPage = undefined;
+    this.#inFlightCurrentPage = undefined;
+    this.#setAdoptedProfileId(undefined);
     this.#delivery.reset();
     this.#store.reset();
   }
@@ -249,7 +250,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#generation += 1;
-    this.#eventHandoffPending = false;
+    this.#currentInitialization = undefined;
+    this.#acceptedCurrentPage = undefined;
+    this.#inFlightCurrentPage = undefined;
+    this.#setAdoptedProfileId(undefined);
     try {
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', this.#handleOnline);
@@ -291,106 +295,226 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     };
   }
 
-  #afterEventHandoff<T>(operation: () => Promise<T>, staleResult: T): Promise<T> {
-    if (!this.#eventHandoffPending) return operation();
-    const generation = this.#generation;
-    const proceed = (): T | Promise<T> =>
-      this.#destroyed || this.#generation !== generation ? staleResult : operation();
-    return this.#eventHandoffPromise.then(proceed, proceed);
+  /** Adopt a validated handoff's profile state without sending its page. */
+  async hydrateHandoffState(
+    handoff: ExperiencesHandoff,
+    { routeKey }: { readonly routeKey: string }
+  ): Promise<void> {
+    if (this.#destroyed) return;
+    this.#requireRouteKey(routeKey);
+    const parsed = parseExperiencesHandoff(handoff, this);
+    const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
+    await this.#hydrateHandoffState(parsed, initialization);
   }
 
-  /** Internal Phase 4 admission seam used by the imperative handoff lifecycle in Phase 5. */
+  /** Deduplicate accepted page emissions for the current route. Manual page() stays direct. */
+  async trackCurrentPage({
+    routeKey,
+    buildPayload,
+  }: CurrentPageOptions): Promise<EventEmissionResult> {
+    if (this.#destroyed) return { accepted: false };
+    this.#requireRouteKey(routeKey);
+    this.#clearHandoffInitialization(routeKey);
+    if (
+      this.#acceptedCurrentPage?.routeKey === routeKey ||
+      this.#inFlightCurrentPage?.routeKey === routeKey
+    ) {
+      return { accepted: false };
+    }
+
+    const inFlight = { routeKey };
+    this.#inFlightCurrentPage = inFlight;
+    try {
+      const result = await this.page(
+        buildPayload({ isInitialEmission: this.#acceptedCurrentPage === undefined }) ?? {}
+      );
+      if (result.accepted && !this.#destroyed && this.#inFlightCurrentPage === inFlight) {
+        this.#acceptedCurrentPage = { routeKey };
+      }
+      return result;
+    } finally {
+      if (this.#inFlightCurrentPage === inFlight) this.#inFlightCurrentPage = undefined;
+    }
+  }
+
+  /** Hydrate the current render and admit its matching prepared page once. */
+  async hydrateAndTrackCurrentPage(
+    handoff: ExperiencesHandoff,
+    { routeKey, buildPayload }: HydrateAndTrackCurrentPageOptions
+  ): Promise<EventEmissionResult> {
+    if (this.#destroyed) return { accepted: false };
+    this.#requireRouteKey(routeKey);
+    const parsed = parseExperiencesHandoff(handoff, this);
+    const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
+    if (initialization.delivery !== undefined) return await initialization.delivery;
+
+    // Join identity adoption before the optional state hydration, without waiting
+    // for queued HTTP delivery. Superseded work never publishes its provisional ID.
+    const identityReady = Promise.resolve().then(() =>
+      initialization.isCurrent() ? this.#adoptHandoffIdentity(parsed, initialization) : undefined
+    );
+    initialization.identityReady = identityReady;
+    const attempt = identityReady.then(async (targetId): Promise<EventEmissionResult> => {
+      if (!initialization.isCurrent()) return { accepted: false };
+      initialization.identityAdoptedForAttempt = true;
+      await this.#hydrateHandoffState(parsed, initialization);
+      if (!initialization.isCurrent()) return { accepted: false };
+
+      if (parsed.replay?.routeKey !== routeKey) {
+        return await this.trackCurrentPage({
+          routeKey,
+          buildPayload: buildPayload ?? (() => ({})),
+        });
+      }
+
+      const result = await this.sendPreparedExperienceEvents(
+        parsed.replay.events,
+        targetId,
+        parsed.replay.locale
+      );
+      if (result.accepted && initialization.isCurrent()) {
+        this.#acceptedCurrentPage = { routeKey };
+      }
+      return result;
+    });
+    const delivery = attempt.then(
+      (result) => {
+        if (!result.accepted && initialization.delivery === delivery) {
+          initialization.delivery = undefined;
+        }
+        return result;
+      },
+      (error: unknown) => {
+        if (initialization.delivery === delivery) initialization.delivery = undefined;
+        throw error;
+      }
+    );
+    initialization.delivery = delivery;
+    return await delivery;
+  }
+
+  /** Queue one already-selected prepared target without waiting for HTTP delivery. */
   protected sendPreparedExperienceEvents(
     events: NonNullable<ExperiencesHandoff['replay']>['events'],
     profileId?: string,
     locale?: string
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
-    const targetId = this.#store.profile?.id ?? this.#adoptedProfileId ?? profileId;
-    const result = this.#delivery.sendPrepared(events, { profileId: targetId, locale });
-    if (result.accepted && this.#store.profile === undefined) this.#adoptedProfileId = targetId;
+    const result = this.#delivery.sendPrepared(events, { profileId, locale });
+    if (result.accepted && this.#store.profile === undefined) {
+      this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId);
+    }
     return Promise.resolve(result);
   }
 
-  #startEventHandoff(
-    input: RuntimeEventHandoff | undefined,
-    currentRouteKey: string | undefined
-  ): Promise<RuntimeEventHandoffReceipt> {
-    if (input === undefined) {
-      return Promise.resolve({});
+  #requireRouteKey(routeKey: string): void {
+    if (!routeKey.startsWith('/')) {
+      throw new TypeError('Current page requires a pathname/search route key');
     }
-    if (currentRouteKey === undefined) {
-      throw new TypeError('ExperiencesWebConfig eventHandoff requires eventHandoffRouteKey');
-    }
-
-    const handoff = parseRuntimeEventHandoff(input);
-    if (handoff.spaceId !== this.spaceId || handoff.environmentId !== this.environmentId) {
-      throw new TypeError('Runtime event handoff does not match this space or environment');
-    }
-
-    const hasPage = handoff.events.some(
-      (entry) => entry.transport === 'personalization' && entry.event.type === 'page'
-    );
-    if (
-      hasPage &&
-      (handoff.initialPageRouteKey === undefined || handoff.initialPageRouteKey !== currentRouteKey)
-    ) {
-      return Promise.resolve({});
-    }
-
-    this.#eventHandoffPending = true;
-    return this.#replayEventHandoff(handoff);
   }
 
-  async #replayEventHandoff(handoff: RuntimeEventHandoff): Promise<RuntimeEventHandoffReceipt> {
-    const generation = this.#generation;
-    const isCurrent = (): boolean => !this.#destroyed && this.#generation === generation;
-    try {
-      let profile: EventProfile | undefined =
-        handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
-      this.#store.profile = profile;
-      for (let index = 0; index < handoff.events.length;) {
-        if (!isCurrent()) return {};
-        const staged = handoff.events[index]!;
-        if (staged.transport === 'personalization') {
-          const locale = staged.event.context.locale;
-          const events = [staged.event];
-          index += 1;
-          while (index < handoff.events.length) {
-            const next = handoff.events[index]!;
-            if (next.transport !== 'personalization' || next.event.context.locale !== locale) break;
-            events.push(next.event);
-            index += 1;
-          }
-          const result = await this.optimizationApi.personalization.upsertProfile(
-            { profileId: profile?.id, events },
-            { locale }
-          );
-          if (!isCurrent()) return {};
-          profile = result.profile;
-          this.#store.profile = profile;
-        } else {
-          index += 1;
-          if (profile === undefined) {
-            throw new Error('Runtime event handoff Analytics replay requires a committed profile');
-          }
-          const committed = await this.optimizationApi.analytics.sendBatchEvents([
-            { profile, events: [staged.event] },
-          ]);
-          if (!isCurrent()) return {};
-          if (!committed) {
-            throw new Error('Runtime event handoff Analytics replay was not committed');
-          }
-        }
-      }
+  #getHandoffInitialization(
+    input: ExperiencesHandoff,
+    parsed: ExperiencesHandoff,
+    routeKey: string
+  ): HandoffInitialization {
+    const key = parsed.replay?.events.at(-1)?.messageId ?? input;
+    const current = this.#currentInitialization;
+    if (current?.routeKey === routeKey && current.key === key) return current;
+    if (current !== undefined) this.#discardProvisionalIdentity(current);
 
-      return {
-        ...(handoff.initialPageRouteKey === undefined
-          ? {}
-          : { initialPageRouteKey: handoff.initialPageRouteKey }),
-      };
-    } finally {
-      if (isCurrent()) this.#eventHandoffPending = false;
+    const generation = this.#generation;
+    const initialization: HandoffInitialization = {
+      key,
+      routeKey,
+      isCurrent: () =>
+        !this.#destroyed &&
+        this.#generation === generation &&
+        this.#currentInitialization === initialization,
+    };
+    this.#currentInitialization = initialization;
+    return initialization;
+  }
+
+  #clearHandoffInitialization(routeKey?: string): void {
+    if (routeKey !== undefined && this.#currentInitialization?.routeKey === routeKey) return;
+    if (this.#currentInitialization !== undefined) {
+      this.#discardProvisionalIdentity(this.#currentInitialization);
     }
+    this.#currentInitialization = undefined;
+  }
+
+  #discardProvisionalIdentity(initialization: HandoffInitialization): void {
+    // An initialization superseded before its attempt begins never owns the
+    // continuation; restore the identity that preceded its provisional choice.
+    const provisional = initialization.provisionalIdentity;
+    if (
+      initialization.identityAdoptedForAttempt ||
+      provisional === undefined ||
+      this.#store.profileRevision !== provisional.profileRevision ||
+      this.#adoptedProfileId !== provisional.selected
+    ) {
+      return;
+    }
+    this.#setAdoptedProfileId(provisional.previous);
+  }
+
+  async #awaitCurrentHandoffIdentity(): Promise<void> {
+    while (true) {
+      const initialization = this.#currentInitialization;
+      if (initialization === undefined || !initialization.isCurrent()) return;
+      const pending = initialization.identityReady ?? initialization.hydration;
+      if (pending === undefined) return;
+      await pending;
+      if (this.#currentInitialization === initialization) return;
+    }
+  }
+
+  #hydrateHandoffState(
+    handoff: ExperiencesHandoff,
+    initialization: HandoffInitialization
+  ): Promise<void> {
+    if (handoff.replay !== undefined && handoff.replay.routeKey !== initialization.routeKey) {
+      return Promise.resolve();
+    }
+    if (initialization.hydration !== undefined) return initialization.hydration;
+
+    const profileRevision = this.#store.profileRevision;
+    const hydration = Promise.resolve().then(() => {
+      if (!initialization.isCurrent() || this.#store.profileRevision !== profileRevision) return;
+      // Cacheable profileless state never changes browser profile continuity.
+      if (
+        handoff.cache.scope === 'private-request' &&
+        handoff.state !== undefined &&
+        Object.hasOwn(handoff.state, 'profile')
+      ) {
+        this.#store.profile = handoff.state.profile;
+      }
+    });
+    initialization.hydration = hydration.catch((error: unknown) => {
+      initialization.hydration = undefined;
+      throw error;
+    });
+    return initialization.hydration;
+  }
+
+  #adoptHandoffIdentity(
+    handoff: ExperiencesHandoff,
+    initialization: HandoffInitialization
+  ): string | undefined {
+    const profileId = this.#store.profile?.id ?? this.#adoptedProfileId ?? handoff.profileId;
+    initialization.provisionalIdentity = {
+      selected: profileId,
+      previous: this.#adoptedProfileId,
+      profileRevision: this.#store.profileRevision,
+    };
+    this.#setAdoptedProfileId(profileId);
+    return profileId;
+  }
+
+  #setAdoptedProfileId(profileId: string | undefined): void {
+    if (this.#adoptedProfileId === profileId) return;
+    this.#adoptedProfileId = profileId;
+    this.#identityRevision += 1;
   }
 }

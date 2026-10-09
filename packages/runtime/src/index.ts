@@ -47,14 +47,3 @@ export type {
   RuntimeEventBindings,
   RuntimeEventMethods,
 } from './runtime-event-methods.js';
-export {
-  assertRuntimeEventHandoffSize,
-  parseRuntimeEventHandoff,
-  RUNTIME_EVENT_HANDOFF_VERSION,
-} from './runtime-event-handoff.js';
-export type {
-  RuntimeEventHandoff,
-  RuntimeEventHandoffEvent,
-  RuntimeEventHandoffReceipt,
-  RuntimeServerEventDelivery,
-} from './runtime-event-handoff.js';

@@ -225,7 +225,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     await session.stop();
   });
 
-  it('holds tracked events behind a pending event handoff', async () => {
+  it('attributes tracked clicks to an adopted continuation while delivery is pending', async () => {
     vi.useRealTimers();
     const builder = new EventBuilder({
       channel: 'server',
@@ -240,16 +240,19 @@ describe('ContentfulExperiences interaction tracking', () => {
     const sendBatchEvents = vi
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
-    const runtime = createRuntime({
-      eventHandoff: {
-        version: 1,
-        spaceId: 'space',
-        environmentId: 'environment',
-        events: [{ transport: 'personalization', event: builder.buildPageView() }],
-        initialPageRouteKey: '/',
-      },
-      eventHandoffRouteKey: '/',
-    });
+    const runtime = createRuntime();
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+          profileId: 'server-profile',
+          replay: { routeKey: '/', events: [builder.buildPageView()] },
+        },
+        { routeKey: '/' }
+      )
+    ).resolves.toEqual({ accepted: true });
     const hero = render('node:hero', 'button');
 
     const session = runtime.startInteractionTracking({
@@ -257,18 +260,14 @@ describe('ContentfulExperiences interaction tracking', () => {
       resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
     });
     click(hero);
-    await Promise.resolve();
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-
-    finishReplay({ profile: { id: 'committed-profile' } });
-    await runtime.whenEventHandoffCommitted();
     await vi.waitFor(() => expect(sendBatchEvents).toHaveBeenCalledOnce());
 
     const [[batch]] = sendBatchEvents.mock.calls as unknown as [
       [[{ profile: { id: string }; events: { type: string }[] }]],
     ];
-    expect(batch[0]!.profile.id).toBe('committed-profile');
+    expect(batch[0]!.profile.id).toBe('server-profile');
     expect(batch[0]!.events[0]!.type).toBe('exo_node_click');
+    finishReplay({ profile: { id: 'committed-profile' } });
     await session.stop();
   });
 });

@@ -142,9 +142,18 @@ describe('Web prepared Personalization delivery', () => {
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime({ id: 'browser-profile' });
 
-    await expect(runtime.admit(prepared(runtime), 'server-profile')).resolves.toEqual({
-      accepted: true,
-    });
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+          profileId: 'server-profile',
+          replay: { routeKey: '/first', events: prepared(runtime) },
+        },
+        { routeKey: '/first' }
+      )
+    ).resolves.toEqual({ accepted: true });
     expect(upsert.mock.calls[0]?.[0].profileId).toBe('browser-profile');
   });
 
@@ -159,12 +168,30 @@ describe('Web prepared Personalization delivery', () => {
       .mockResolvedValue(true);
     const runtime = createRuntime();
 
-    await expect(runtime.admit(prepared(runtime), 'first-profile')).resolves.toEqual({
-      accepted: true,
-    });
-    await expect(runtime.admit(prepared(runtime), 'second-profile')).resolves.toEqual({
-      accepted: true,
-    });
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+          profileId: 'first-profile',
+          replay: { routeKey: '/first', events: prepared(runtime) },
+        },
+        { routeKey: '/first' }
+      )
+    ).resolves.toEqual({ accepted: true });
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+          profileId: 'second-profile',
+          replay: { routeKey: '/second', events: prepared(runtime) },
+        },
+        { routeKey: '/second' }
+      )
+    ).resolves.toEqual({ accepted: true });
     expect(upsert).toHaveBeenCalledTimes(1);
 
     await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(

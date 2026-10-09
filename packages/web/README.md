@@ -196,8 +196,9 @@ await session.stop();
   nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
-  profile and wait for a pending event handoff like any other call. A rejected
-  call is logged as a warning and does not stop tracking.
+  current profile or an adopted handoff continuation ID. They do not wait for
+  prepared Personalization HTTP delivery. A rejected call is logged as a
+  warning and does not stop tracking.
 - The attribute carries only the node id. Attribution never goes into the DOM.
 - A node without an id cannot be tracked.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
@@ -212,17 +213,9 @@ for where the attribution lookup comes from under SSR, CSR, and Server Component
 
 ## Server event handoff
 
-The legacy Web constructor still accepts a `RuntimeEventHandoff` journal and
-commits its ordered events in the browser. It does not accept the new
-`ExperiencesHandoff` returned by Node's `prepareRequestHandoff()`; the paired
-browser hydration path is not available at this intermediate checkpoint.
-`eventHandoff` and an initial `profile` are
-mutually exclusive. Supply the current browser route identity as the required
-`eventHandoffRouteKey`. A page-bearing journal commits only when that value
-matches the handoff's `initialPageRouteKey`; a missing server marker or mismatch
-skips the complete journal. Compatible adjacent Personalization entries share one
-API request, while locale changes and Analytics entries remain ordering
-boundaries.
+Create one browser runtime, then pass the `ExperiencesHandoff` prepared by Node
+to `hydrateAndTrackCurrentPage`. Supply the visible pathname plus search as the
+route key; the SDK does not read a router. Construction never sends a handoff.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -230,26 +223,35 @@ const experiences = new ContentfulExperiences({
   environmentId,
   resolverConfig,
   delivery,
-  eventHandoff,
-  eventHandoffRouteKey: currentRouteKey,
 });
 
-try {
-  const receipt = await experiences.whenEventHandoffCommitted();
-  if (receipt.initialPageRouteKey !== currentRouteKey) await experiences.page();
-} catch {
-  await experiences.page();
-}
+const result = await experiences.hydrateAndTrackCurrentPage(handoff, {
+  routeKey: '/products?category=chairs',
+});
+// result.accepted means the prepared batch entered the queue, not that HTTP completed.
 ```
 
-The receipt resolves with the matched route only after successful replay. A
-missing server marker or mismatch resolves an empty receipt without replay. A
-transport failure rejects the receipt but releases later direct event calls,
-so the application can send its ordinary browser page. Replay can partially
-commit and has no automatic retry or distributed exactly-once guarantee. The
-handoff is browser-visible; use escaped
-serialization in a private, no-store response and do not cache, log, or persist
-it. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
+The SDK validates space, environment, cache safety, and event structure before
+adopting state or sending. A matching prepared replay is admitted once for the
+current initialization; serialized copies with the same final page event ID
+join it. A later handoff or return visit can track again. When the replay route
+does not match, the SDK skips its evaluated state and events and tracks an
+ordinary page for the supplied route. If admission is refused, it sends no
+replacement page; a later explicit call can reassess. Ordinary online event
+calls and Analytics do not wait behind queued prepared delivery.
+
+Use `hydrateHandoffState(handoff, { routeKey })` when state must be adopted before
+page tracking. It joins a later `hydrateAndTrackCurrentPage` call for the same
+current initialization. A profileless public or static handoff leaves the
+current browser profile intact. Use `trackCurrentPage({ routeKey, buildPayload })`
+for ordinary route tracking; its callback receives `isInitialEmission`. Manual
+`page()` calls remain direct and are not deduplicated.
+
+An admitted continuation ID remains in memory for early event attribution
+until a real API profile arrives. Handoff bodies are browser-visible sensitive
+data: escape their serialization into private, no-store responses, and never
+cache, log, or persist them. Queue retries cannot guarantee exactly-once
+delivery.
 
 ## SSR import safety
 

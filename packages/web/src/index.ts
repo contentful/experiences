@@ -2,7 +2,9 @@ export { getPageProperties, getUserAgent } from './browser-event-context.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   BrowserEventContextProviders,
+  CurrentPageOptions,
   ExperiencesWebConfig,
+  HydrateAndTrackCurrentPageOptions,
   InteractionTrackingSession,
   InteractionTrackingStartOptions,
 } from './contentful-experiences.js';
@@ -24,8 +26,10 @@ export type {
 } from '@contentful/experiences-client';
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
 export type {
+  EventEmissionResult,
   EventOptimizationData,
   EventProfile,
+  ExperiencesHandoff,
   PersonalizationDeliveryState,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
@@ -33,8 +37,6 @@ export type {
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
   RuntimeEventMethods,
-  RuntimeEventHandoff,
-  RuntimeEventHandoffReceipt,
   RuntimeOptimizationConfig,
   RuntimeDeliveryClientOptions,
   RuntimeFetchByDestinationNodeOptions,
