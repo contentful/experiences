@@ -219,26 +219,6 @@ describe('scope attribution', () => {
     log.mockRestore();
   });
 
-  it('accepts the RFC kind names as well as the live ones', async () => {
-    const sourceMap = {
-      ...FRAGMENT_SOURCE_MAP,
-      layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) => {
-        if (i === 1) return { kind: 'Template', id: 'page' };
-        if (i === 3) return { ...(layer as object), kind: 'Fragment' };
-        if (i === 4) return { kind: 'ComponentType', id: 'demo-hero' };
-        return layer;
-      }),
-    };
-
-    const plan = await resolve([node('node2-1')], sourceMap);
-
-    expect(plan.nodes[0]!.attribution!.scopes.map((s) => s.entityKind)).toEqual([
-      'Experience',
-      'Fragment',
-    ]);
-    expect(plan.nodes[0]!.attribution!.scopes[1]!.entityKindId).toBe('demo-hero');
-  });
-
   it('skips a node with no id, and a node missing from the map', async () => {
     const plan = await resolve([node(undefined), node('not-in-map')], LANDING_SOURCE_MAP);
 

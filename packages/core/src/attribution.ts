@@ -1,16 +1,3 @@
-/*
- * Resolves which reportable scopes (an Experience, or a persisted Fragment)
- * each rendered node belongs to, from the XDA source map.
- *
- * `sourceMap.nodes[id].layers` is the node's ancestor chain, leaf-to-root, as
- * indexes into `sourceMap.layers`. Inline fragments are walked through and
- * never reported. Everything here is tolerant of a malformed map: an unusable
- * one yields no attribution and a debug-log line, never a diagnostic, because
- * `useExperiencePlan` drops any plan that carries diagnostics.
- *
- * Internal to core: `resolveExperience` is the only caller.
- */
-
 import type { DebugLogger } from './debug-logger.js';
 import type {
   ExperienceSourceMap,
@@ -23,122 +10,144 @@ import type {
 const SUPPORTED_VERSION = 1;
 
 type EntityKind = ScopeAttribution['entityKind'];
-
-// The RFC and the live API use different kind names; accept both.
-const REPORTABLE_KINDS: Record<string, EntityKind> = {
-  Experience: 'Experience',
-  ExperienceFragment: 'Fragment',
-  Fragment: 'Fragment',
-};
-
-const DEFINING_KINDS: Record<EntityKind, readonly string[]> = {
-  Experience: ['ExperienceTemplate', 'Template'],
-  Fragment: ['Component', 'ComponentType'],
-};
-
+type VariantFields = Pick<ScopeAttribution, 'optimizationId' | 'variantId' | 'variantIndex'>;
 type Rec = Record<string, unknown>;
+type PathSegment = string | number;
 
-function isRecord(value: unknown): value is Rec {
-  return typeof value === 'object' && value !== null;
-}
+const DEFINING_LAYER_KIND: Record<EntityKind, string> = {
+  Experience: 'ExperienceTemplate',
+  Fragment: 'Component',
+};
 
 function asRecord(value: unknown): Rec | undefined {
-  return isRecord(value) ? value : undefined;
+  return typeof value === 'object' && value !== null ? (value as Rec) : undefined;
 }
 
 function asIndex(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
-function isIntegerArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => Number.isInteger(item));
-}
-
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** A `sourceMap.layers` row, parsed once. `undefined` where the row is not an object. */
+function rowAt(rows: unknown[], ref: unknown): Rec | undefined {
+  const index = asIndex(ref);
+  return index === undefined ? undefined : asRecord(rows[index]);
+}
+
+function isPath(value: unknown): value is PathSegment[] {
+  return Array.isArray(value) && value.every((s) => typeof s === 'string' || Number.isInteger(s));
+}
+
 interface Layer {
   record: Rec;
-  kind?: string;
-  id?: string;
+  kind: string | undefined;
+  id: string | undefined;
 }
 
 function parseLayer(value: unknown): Layer | undefined {
   const record = asRecord(value);
   if (record === undefined) return undefined;
-  const layer: Layer = { record };
-  const kind = asString(record.kind);
-  const id = asString(record.id);
-  if (kind !== undefined) layer.kind = kind;
-  if (id !== undefined) layer.id = id;
-  return layer;
+  return { record, kind: asString(record.kind), id: asString(record.id) };
+}
+
+function scopeKind(layer: Layer): EntityKind | undefined {
+  if (layer.kind === 'Experience') return 'Experience';
+  if (layer.kind === 'ExperienceFragment') return 'Fragment';
+  return undefined;
 }
 
 interface Context {
   nodes: Rec;
   layers: (Layer | undefined)[];
   variants: unknown[];
-  /** Empty when the map has none: bound entries then simply go unreported. */
   entries: unknown[];
   dataAssemblies: unknown[];
   log: DebugLogger;
   scopes: Record<string, ScopeAttribution>;
-  /** Entries bound by nodes whose nearest reportable scope is the key. */
-  scopeEntries: Map<string, Set<string>>;
-  /** Entry ids reached by one binding, by assembly row and path: nodes often repeat them. */
+  scopeEntries: Map<ScopeAttribution, Set<string>>;
   bindingEntries: Map<string, readonly string[]>;
 }
 
-/** A reportable layer found on a node's chain. */
+function createContext(sourceMap: ExperienceSourceMap, log: DebugLogger): Context | undefined {
+  const map = asRecord(sourceMap);
+  if (map?.version !== SUPPORTED_VERSION) {
+    log.log(`ignoring source map: unsupported version ${String(map?.version)}`);
+    return undefined;
+  }
+  const nodes = asRecord(map.nodes);
+  if (!Array.isArray(map.layers) || !Array.isArray(map.variants) || nodes === undefined) {
+    log.log('ignoring source map: missing layers, variants or nodes');
+    return undefined;
+  }
+  return {
+    nodes,
+    layers: map.layers.map(parseLayer),
+    variants: map.variants,
+    entries: Array.isArray(map.entries) ? map.entries : [],
+    dataAssemblies: Array.isArray(map.dataAssemblies) ? map.dataAssemblies : [],
+    log,
+    scopes: {},
+    scopeEntries: new Map(),
+    bindingEntries: new Map(),
+  };
+}
+
 interface ChainScope {
   row: number;
   layer: Layer;
   entityId: string;
   kind: EntityKind;
-  /** The layer one step nearer the node, which may define this scope. */
-  definingLayer: Layer | undefined;
+  entityKindId: string | undefined;
 }
 
-function readChain(entry: Rec): number[] {
-  return isIntegerArray(entry.layers) ? entry.layers : [];
-}
-
-/** Reportable layers on a chain, outer to inner, each layer row once. */
 function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
-  const found: ChainScope[] = [];
-  const seen = new Set<number>();
-  for (let position = chain.length - 1; position >= 0; position--) {
-    const row = chain[position];
-    if (row === undefined || seen.has(row)) continue;
+  const outerFirst = [...chain].reverse();
+  const scopes: ChainScope[] = [];
+
+  for (const [position, row] of outerFirst.entries()) {
     const layer = ctx.layers[row];
-    const kind = layer?.kind === undefined ? undefined : REPORTABLE_KINDS[layer.kind];
-    if (layer === undefined || kind === undefined || layer.id === undefined) continue;
-    seen.add(row);
-    const definingRow = chain[position - 1];
-    const definingLayer = definingRow === undefined ? undefined : ctx.layers[definingRow];
-    found.push({ row, layer, entityId: layer.id, kind, definingLayer });
+    const kind = layer === undefined ? undefined : scopeKind(layer);
+    if (layer?.id === undefined || kind === undefined) continue;
+    if (scopes.some((scope) => scope.row === row)) continue;
+
+    const innerRow = outerFirst[position + 1];
+    const innerLayer = innerRow === undefined ? undefined : ctx.layers[innerRow];
+    const definesThisScope = innerLayer?.kind === DEFINING_LAYER_KIND[kind];
+
+    scopes.push({
+      row,
+      layer,
+      entityId: layer.id,
+      kind,
+      entityKindId: definesThisScope ? innerLayer?.id : undefined,
+    });
   }
-  return found;
+  return scopes;
 }
 
-/**
- * The one place that decides what identifies a rendered occurrence.
- *
- * XDA gives every copy of a persisted Fragment the same layer row and, measured
- * on a live space, the same node ids, so neither identifies an occurrence. The
- * key is therefore positional: the layer row, where the sibling list sits in
- * the tree, and the index the run of adjacent same-row siblings starts at.
- *
- * Limit: copies placed directly next to each other are one run and merge into
- * one occurrence, because the source map carries nothing that tells them apart.
- * Telling them apart needs XDA to emit a distinct node id or an occurrence id.
- *
- * Consumers treat the key as opaque.
- */
 function occurrenceKey(row: number, listPath: string, runStart: number): string {
   return `s${row}@${listPath}#${runStart}`;
+}
+
+function readVariant(ctx: Context, scope: ChainScope): VariantFields {
+  const refs = scope.layer.record.variants;
+  if (!Array.isArray(refs) || refs.length === 0) return {};
+  if (refs.length > 1) {
+    ctx.log.log(`layer "${scope.entityId}" lists ${refs.length} variants; using the first`);
+  }
+
+  const variant = rowAt(ctx.variants, refs[0]);
+  const optimizationId = asString(variant?.optimizationId);
+  const variantId = asString(variant?.variantId);
+  const variantIndex = variant?.variantIndex;
+
+  const fields: VariantFields = {};
+  if (optimizationId !== undefined) fields.optimizationId = optimizationId;
+  if (variantId !== undefined) fields.variantId = variantId;
+  if (typeof variantIndex === 'number') fields.variantIndex = variantIndex;
+  return fields;
 }
 
 function buildScope(
@@ -151,140 +160,97 @@ function buildScope(
     key,
     entityId: scope.entityId,
     entityKind: scope.kind,
+    ...readVariant(ctx, scope),
   };
-
-  // The defining layer only counts when its kind matches what this scope kind
-  // is defined by.
-  const { definingLayer } = scope;
-  if (
-    definingLayer?.kind !== undefined &&
-    definingLayer.id !== undefined &&
-    DEFINING_KINDS[scope.kind].includes(definingLayer.kind)
-  ) {
-    attribution.entityKindId = definingLayer.id;
+  if (scope.entityKindId !== undefined) {
+    attribution.entityKindId = scope.entityKindId;
   }
-
-  Object.assign(attribution, readVariant(ctx, scope.layer.record, scope.entityId));
-
   if (scope.kind === 'Fragment' && parentExperienceId !== undefined) {
     attribution.parentExperienceId = parentExperienceId;
   }
   return attribution;
 }
 
-/** `variants[layer.variants[0]]`. The baseline carries none of these fields. */
-function readVariant(
-  ctx: Context,
-  layer: Rec,
-  entityId: string
-): Pick<ScopeAttribution, 'optimizationId' | 'variantId' | 'variantIndex'> {
-  const refs = layer.variants;
-  if (!Array.isArray(refs) || refs.length === 0) return {};
-  if (refs.length > 1) {
-    ctx.log.log(`layer "${entityId}" lists ${refs.length} variants; using the first`);
-  }
-  const variantRow = asIndex(refs[0]);
-  const variant = variantRow === undefined ? undefined : asRecord(ctx.variants[variantRow]);
-  if (variant === undefined) return {};
-  const result: Pick<ScopeAttribution, 'optimizationId' | 'variantId' | 'variantIndex'> = {};
-  const optimizationId = asString(variant.optimizationId);
-  const variantId = asString(variant.variantId);
-  if (optimizationId !== undefined) result.optimizationId = optimizationId;
-  if (variantId !== undefined) result.variantId = variantId;
-  if (typeof variant.variantIndex === 'number') result.variantIndex = variant.variantIndex;
-  return result;
-}
+function entriesBoundAt(ctx: Context, assemblyRow: number, path: PathSegment[]): readonly string[] {
+  const cacheKey = `${assemblyRow}|${path.join('/')}`;
+  const cached = ctx.bindingEntries.get(cacheKey);
+  if (cached !== undefined) return cached;
 
-type PathSegment = string | number;
+  const found = new Set<string>();
+  const visited = new Set<string>();
 
-function isPath(value: unknown): value is PathSegment[] {
-  return Array.isArray(value) && value.every((s) => typeof s === 'string' || Number.isInteger(s));
-}
+  const followAssembly = (row: number, path: PathSegment[]): void => {
+    const visitKey = `${row}|${path.join('/')}`;
+    const assembly = asRecord(ctx.dataAssemblies[row]);
+    if (assembly === undefined || visited.has(visitKey)) return;
+    visited.add(visitKey);
+    walk(assembly.return, path);
+  };
 
-/**
- * Collect the entry ids under `value`, following `path` first. Mirrors the
- * RFC's traversal: an `entry` leaf is a terminal source, a `dataAssembly` leaf
- * continues in another row (through its optional `path`), `asset`, `literal`,
- * `value` and unknown leaves contribute nothing, and an object or array
- * reached with no path left has every child walked.
- */
-function collectEntries(
-  ctx: Context,
-  value: unknown,
-  path: PathSegment[],
-  out: Set<string>,
-  visited: Set<string>
-): void {
-  if (Array.isArray(value)) {
+  const walkLeaf = (leaf: Rec, path: PathSegment[]): void => {
+    if (leaf.type === 'entry') {
+      const entryId = asString(rowAt(ctx.entries, leaf.entry)?.id);
+      if (entryId !== undefined) found.add(entryId);
+    } else if (leaf.type === 'dataAssembly') {
+      const row = asIndex(leaf.dataAssembly);
+      const leafPath = isPath(leaf.path) ? leaf.path : [];
+      if (row !== undefined) followAssembly(row, [...leafPath, ...path]);
+    }
+  };
+
+  const walk = (value: unknown, path: PathSegment[]): void => {
     const [head, ...rest] = path;
-    if (head === undefined) {
-      for (const child of value) collectEntries(ctx, child, path, out, visited);
-    } else if (typeof head === 'number') {
-      collectEntries(ctx, value[head], rest, out, visited);
-    }
-    return;
-  }
-  const record = asRecord(value);
-  if (record === undefined) return;
 
-  if (typeof record.type === 'string') {
-    if (record.type === 'entry') {
-      const entryRow = asIndex(record.entry);
-      const entryId =
-        entryRow === undefined ? undefined : asString(asRecord(ctx.entries[entryRow])?.id);
-      if (entryId !== undefined) out.add(entryId);
-    } else if (record.type === 'dataAssembly') {
-      const index = asIndex(record.dataAssembly);
-      if (index === undefined) return;
-      const row = asRecord(ctx.dataAssemblies[index]);
-      const next = [...(isPath(record.path) ? record.path : []), ...path];
-      const visitKey = `${index}|${next.join('/')}`;
-      if (row === undefined || visited.has(visitKey)) return;
-      visited.add(visitKey);
-      collectEntries(ctx, row.return, next, out, visited);
+    if (Array.isArray(value)) {
+      if (head === undefined) value.forEach((child) => walk(child, []));
+      else if (typeof head === 'number') walk(value[head], rest);
+      return;
     }
-    return;
-  }
 
-  if (path.length === 0) {
-    for (const child of Object.values(record)) collectEntries(ctx, child, path, out, visited);
-  } else {
-    collectEntries(ctx, record[String(path[0])], path.slice(1), out, visited);
-  }
+    const record = asRecord(value);
+    if (record === undefined) return;
+    if (typeof record.type === 'string') walkLeaf(record, path);
+    else if (head === undefined) Object.values(record).forEach((child) => walk(child, []));
+    else walk(record[String(head)], rest);
+  };
+
+  followAssembly(assemblyRow, path);
+  const ids = [...found];
+  ctx.bindingEntries.set(cacheKey, ids);
+  return ids;
 }
 
-/** Entry ids bound by one node's `contentProperties`, in first-seen order. */
 function readNodeEntries(ctx: Context, entry: Rec): string[] {
-  const properties = entry.contentProperties;
-  if (!Array.isArray(properties)) return [];
-  const out = new Set<string>();
+  const properties: unknown[] = Array.isArray(entry.contentProperties)
+    ? entry.contentProperties
+    : [];
+  const ids = new Set<string>();
+
   for (const property of properties) {
     const item = asRecord(property);
-    if (item?.type !== 'dataAssembly') continue;
-    const assemblyIndex = asIndex(item.dataAssembly);
-    const bindings = asRecord(item.bindings);
-    if (assemblyIndex === undefined || bindings === undefined) continue;
-    for (const path of Object.values(bindings)) {
-      if (!isPath(path)) continue;
-      const cacheKey = `${assemblyIndex}|${path.join('/')}`;
-      let ids = ctx.bindingEntries.get(cacheKey);
-      if (ids === undefined) {
-        const found = new Set<string>();
-        const hop = { type: 'dataAssembly', dataAssembly: assemblyIndex, path };
-        collectEntries(ctx, hop, [], found, new Set());
-        ids = [...found];
-        ctx.bindingEntries.set(cacheKey, ids);
-      }
-      for (const id of ids) out.add(id);
+    const assemblyRow = asIndex(item?.dataAssembly);
+    const bindings = asRecord(item?.bindings);
+    if (item?.type !== 'dataAssembly' || assemblyRow === undefined || bindings === undefined) {
+      continue;
+    }
+    for (const path of Object.values(bindings).filter(isPath)) {
+      for (const id of entriesBoundAt(ctx, assemblyRow, path)) ids.add(id);
     }
   }
-  return [...out];
+  return [...ids];
 }
 
-/**
- * Attribute one node, returning the occurrence keys it is in by layer row, or
- * `undefined` when it has no source-map entry or nothing reportable on its chain.
- */
+function addScopeEntries(ctx: Context, scope: ScopeAttribution, entryIds: string[]): void {
+  const owned = ctx.scopeEntries.get(scope) ?? new Set<string>();
+  for (const id of entryIds) owned.add(id);
+  ctx.scopeEntries.set(scope, owned);
+}
+
+function readChain(entry: Rec): number[] {
+  const { layers } = entry;
+  return Array.isArray(layers) && layers.every(Number.isInteger) ? (layers as number[]) : [];
+}
+
 function attributeNode(
   ctx: Context,
   node: PortableRenderNode,
@@ -300,42 +266,32 @@ function attributeNode(
 
   const keys = new Map<number, string>();
   const attribution: NodeAttribution = { scopes: [], roots: [] };
-  // Scopes run outer to inner, so the last Experience seen encloses what follows.
   let parentExperienceId: string | undefined;
+  let nearest: ScopeAttribution | undefined;
+
   for (const scope of scopes) {
-    const inherited = parentKeys.get(scope.row);
-    // Not in the parent's occurrence: this node is a top-level node of the
-    // scope, continuing the previous sibling's run if it has one.
+    const isRoot = !parentKeys.has(scope.row);
     const key =
-      inherited ?? previousKeys.get(scope.row) ?? occurrenceKey(scope.row, listPath, index);
+      parentKeys.get(scope.row) ??
+      previousKeys.get(scope.row) ??
+      occurrenceKey(scope.row, listPath, index);
     keys.set(scope.row, key);
-    const built = (ctx.scopes[key] ??= buildScope(ctx, scope, key, parentExperienceId));
-    attribution.scopes.push(built);
-    if (inherited === undefined) attribution.roots.push(built);
+
+    nearest = ctx.scopes[key] ??= buildScope(ctx, scope, key, parentExperienceId);
+    attribution.scopes.push(nearest);
+    if (isRoot) attribution.roots.push(nearest);
     if (scope.kind === 'Experience') parentExperienceId = scope.entityId;
   }
+
   const entryIds = readNodeEntries(ctx, entry);
-  if (entryIds.length > 0) {
+  if (entryIds.length > 0 && nearest !== undefined) {
     attribution.entryIds = entryIds;
-    // Only the nearest reportable scope owns them, never the outer ones. Inline
-    // fragments are not scopes, so their entries roll up to the enclosing one,
-    // as the EXA-2167 example event does.
-    const nearest = attribution.scopes.at(-1)?.key;
-    if (nearest !== undefined) {
-      const owned = ctx.scopeEntries.get(nearest) ?? new Set<string>();
-      for (const id of entryIds) owned.add(id);
-      ctx.scopeEntries.set(nearest, owned);
-    }
+    addScopeEntries(ctx, nearest, entryIds);
   }
   node.attribution = attribution;
   return keys;
 }
 
-/**
- * Assign scopes to one sibling list, then recurse into each node's slots.
- * `parentKeys` maps layer row to the occurrence the parent is already in, and
- * `listPath` is where this list sits in the tree (empty at the root).
- */
 function assignSiblings(
   ctx: Context,
   siblings: PortableRenderNode[],
@@ -344,59 +300,28 @@ function assignSiblings(
 ): void {
   let previousKeys = new Map<number, string>();
   for (const [index, node] of siblings.entries()) {
-    const attributed = attributeNode(ctx, node, parentKeys, previousKeys, listPath, index);
-    previousKeys = attributed ?? new Map();
-    const keys = attributed ?? parentKeys;
+    const ownKeys = attributeNode(ctx, node, parentKeys, previousKeys, listPath, index);
+    previousKeys = ownKeys ?? new Map();
 
     for (const [slotName, children] of Object.entries(node.slots)) {
-      assignSiblings(ctx, children, keys, `${listPath}/${index}.${slotName}`);
+      assignSiblings(ctx, children, ownKeys ?? parentKeys, `${listPath}/${index}.${slotName}`);
     }
   }
 }
 
-/** Write each scope's collected entries onto the lookup. */
-function applyScopeEntries(ctx: Context): void {
-  for (const [key, ids] of ctx.scopeEntries) {
-    const scope = ctx.scopes[key];
-    if (scope !== undefined) scope.entryIds = [...ids];
-  }
-}
-
-/**
- * Attach `attribution` to every node that has a source-map entry, and return
- * the plan-level lookup. Returns `undefined`, leaving nodes untouched, when the
- * map is missing, the wrong version, or malformed.
- */
 export function resolveAttribution(
   sourceMap: ExperienceSourceMap | undefined,
   nodes: PortableRenderNode[],
   log: DebugLogger
 ): PlanAttribution | undefined {
   if (sourceMap === undefined) return undefined;
-  const map = asRecord(sourceMap);
-  if (map === undefined || map.version !== SUPPORTED_VERSION) {
-    log.log(`ignoring source map: unsupported version ${String(map?.version)}`);
-    return undefined;
-  }
-  const nodeRows = asRecord(map.nodes);
-  if (!Array.isArray(map.layers) || !Array.isArray(map.variants) || nodeRows === undefined) {
-    log.log('ignoring source map: missing layers, variants or nodes');
-    return undefined;
-  }
+  const ctx = createContext(sourceMap, log);
+  if (ctx === undefined) return undefined;
 
-  const ctx: Context = {
-    nodes: nodeRows,
-    layers: map.layers.map(parseLayer),
-    variants: map.variants,
-    entries: Array.isArray(map.entries) ? map.entries : [],
-    dataAssemblies: Array.isArray(map.dataAssemblies) ? map.dataAssemblies : [],
-    log,
-    scopes: {},
-    scopeEntries: new Map(),
-    bindingEntries: new Map(),
-  };
   assignSiblings(ctx, nodes, new Map());
-  applyScopeEntries(ctx);
-  for (const scope of Object.values(ctx.scopes)) Object.freeze(scope);
-  return Object.keys(ctx.scopes).length > 0 ? { scopes: ctx.scopes } : undefined;
+  for (const [scope, ids] of ctx.scopeEntries) scope.entryIds = [...ids];
+
+  const scopes = Object.values(ctx.scopes);
+  for (const scope of scopes) Object.freeze(scope);
+  return scopes.length > 0 ? { scopes: ctx.scopes } : undefined;
 }
