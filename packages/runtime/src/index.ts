@@ -15,6 +15,27 @@ export type { RuntimeOptimizationConfig } from './create-optimization-client.js'
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
+export {
+  buildPreparedEvents,
+  validatePreparedEvents,
+  withEventConsent,
+} from './prepared-events.js';
+export type { BuildPreparedEventsOptions, InitialPersonalizationEvent } from './prepared-events.js';
+export {
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
+  createExperiencesHandoff,
+  createRequestHandoffFromData,
+  getExperiencesCacheSafetyWarnings,
+  parseExperiencesHandoff,
+} from './experiences-handoff.js';
+export type {
+  ExperiencesCacheMetadata,
+  ExperiencesCacheSafetyWarning,
+  ExperiencesCacheSafetyWarningCode,
+  ExperiencesHandoff,
+  ExperiencesScope,
+} from './experiences-handoff.js';
 export type {
   EventOptimizationData,
   EventProfile,

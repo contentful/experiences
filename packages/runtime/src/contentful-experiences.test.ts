@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockApiClient,
@@ -32,6 +32,18 @@ vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 
+const runtimes: ContentfulExperiences[] = [];
+
+function createRuntime(config: ConstructorParameters<typeof ContentfulExperiences>[0]) {
+  const runtime = new ContentfulExperiences(config);
+  runtimes.push(runtime);
+  return runtime;
+}
+
+afterEach(() => {
+  for (const runtime of runtimes.splice(0)) runtime.destroy();
+});
+
 class DynamicLocaleExperiences extends ContentfulExperiences {
   currentLocale: string | undefined;
 
@@ -56,7 +68,7 @@ describe('ContentfulExperiences', () => {
   it('constructs Optimization transport from the runtime Contentful identifiers', () => {
     mockApiClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'staging',
       resolverConfig: { components: {} },
@@ -85,7 +97,7 @@ describe('ContentfulExperiences', () => {
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       locale: 'en-US',
@@ -144,7 +156,7 @@ describe('ContentfulExperiences', () => {
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
     mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
@@ -164,7 +176,8 @@ describe('ContentfulExperiences', () => {
       { client: preview },
       expect.anything()
     );
-    const withoutPreview = new ContentfulExperiences({
+    runtime.destroy();
+    const withoutPreview = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
@@ -179,7 +192,7 @@ describe('ContentfulExperiences', () => {
   it('preserves an explicit generated-client environment for preview clients', () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
@@ -203,7 +216,7 @@ describe('ContentfulExperiences', () => {
   it('gives an explicit host precedence over generated-client environment', () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       resolverConfig: { components: {} },
@@ -227,7 +240,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       locale: 'fr-FR',
@@ -246,6 +259,7 @@ describe('ContentfulExperiences', () => {
 
   it('reads locale dynamically for fetches and default EventBuilder locale', async () => {
     const runtime = new DynamicLocaleExperiences('en-US');
+    runtimes.push(runtime);
 
     runtime.currentLocale = 'de-DE';
     await runtime.fetchExperience({ experienceId: 'exp' });

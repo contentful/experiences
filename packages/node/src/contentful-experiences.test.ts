@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 import {
@@ -7,16 +7,30 @@ import {
 } from '@contentful/experiences-runtime';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
+const runtimes = new Set<ContentfulExperiences>();
+
+function trackRuntime<T extends ContentfulExperiences>(runtime: T): T {
+  runtimes.add(runtime);
+  return runtime;
+}
+
+afterEach(() => {
+  for (const runtime of runtimes) runtime.destroy();
+  runtimes.clear();
+});
+
 function createRuntime() {
-  return new ContentfulExperiences({
-    spaceId: 'space',
-    environmentId: 'environment',
-    locale: 'en-US',
-    resolverConfig: { components: {} },
-    delivery: { accessToken: 'delivery-token' },
-    resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
-    app: { name: 'site', version: '1.0.0' },
-  });
+  return trackRuntime(
+    new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      locale: 'en-US',
+      resolverConfig: { components: {} },
+      delivery: { accessToken: 'delivery-token' },
+      resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
+      app: { name: 'site', version: '1.0.0' },
+    })
+  );
 }
 
 class TestContentfulExperiences extends ContentfulExperiences {
@@ -26,13 +40,15 @@ class TestContentfulExperiences extends ContentfulExperiences {
 }
 
 function createEventRuntime() {
-  const runtime = new TestContentfulExperiences({
-    spaceId: 'space',
-    environmentId: 'environment',
-    locale: 'en-US',
-    resolverConfig: { components: {} },
-    delivery: { accessToken: 'delivery-token' },
-  });
+  const runtime = trackRuntime(
+    new TestContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      locale: 'en-US',
+      resolverConfig: { components: {} },
+      delivery: { accessToken: 'delivery-token' },
+    })
+  );
   const upsertProfile = vi
     .spyOn(runtime.optimizationApiForTest.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
@@ -44,6 +60,22 @@ function createEventRuntime() {
 }
 
 describe('Node ContentfulExperiences', () => {
+  it('rejects a second live SDK and allows replacement after destroy', () => {
+    const first = createRuntime();
+    const german = first.forRequest({ locale: 'de-DE' });
+    const french = first.forRequest({ locale: 'fr-FR' });
+
+    expect(german.locale).toBe('de-DE');
+    expect(french.locale).toBe('fr-FR');
+    expect(() => createRuntime()).toThrow();
+
+    first.destroy();
+    first.destroy();
+
+    const replacement = createRuntime();
+    expect(replacement.forRequest({ locale: 'es-ES' }).locale).toBe('es-ES');
+  });
+
   it('applies stable Node attribution and creates distinct request facades', () => {
     const runtime = createRuntime();
     const first = runtime.forRequest({ locale: 'de-DE' });

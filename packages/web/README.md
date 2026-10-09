@@ -4,6 +4,8 @@ The browser SDK for fetching and resolving [Contentful Experiences](https://www.
 
 > **Alpha.** This package is a lean browser runtime. Its API is still evolving.
 
+Only one live Experiences SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the shared Runtime owner lock.
+
 ## Install
 
 ```sh

@@ -14,14 +14,18 @@ const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
   'node:hero': { entityId: 'hero', entityKind: 'Fragment', parentExperienceId: 'landing' },
 };
 
+const runtimes = new Set<ContentfulExperiences>();
+
 function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
-  return new ContentfulExperiences({
+  const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);
+  runtimes.add(runtime);
+  return runtime;
 }
 
 function render(nodeId: string, tag = 'div'): HTMLElement {
@@ -44,6 +48,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const runtime of runtimes) runtime.destroy();
+  runtimes.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -166,15 +172,38 @@ describe('ContentfulExperiences interaction tracking', () => {
     await second.stop();
   });
 
-  it('keeps sessions isolated between runtime instances', async () => {
-    const a = createRuntime();
-    const b = createRuntime();
+  it('starts a tracking session on a replacement SDK after destroy', async () => {
+    const first = createRuntime();
     const options = { views: false, resolveAttribution: () => undefined } as const;
 
-    const sessionA = a.startInteractionTracking(options);
-    const sessionB = b.startInteractionTracking(options);
+    const session = first.startInteractionTracking(options);
+    await session.stop();
+    first.destroy();
 
-    await Promise.all([sessionA.stop(), sessionB.stop()]);
+    const replacement = createRuntime();
+    await replacement.startInteractionTracking(options).stop();
+  });
+
+  it('stops active interaction listeners before destroy releases singleton ownership', async () => {
+    const first = createRuntime();
+    const trackClick = vi.spyOn(first, 'trackClick').mockResolvedValue(true);
+    const hero = render('node:hero', 'button');
+
+    first.startInteractionTracking({
+      views: false,
+      resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+    });
+    click(hero);
+    expect(trackClick).toHaveBeenCalledOnce();
+
+    first.destroy();
+    click(hero);
+    expect(trackClick).toHaveBeenCalledOnce();
+
+    const replacement = createRuntime();
+    await replacement
+      .startInteractionTracking({ views: false, resolveAttribution: () => undefined })
+      .stop();
   });
 
   it('re-reads attribution on refresh', async () => {

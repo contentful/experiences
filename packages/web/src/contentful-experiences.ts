@@ -101,23 +101,30 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         getConsent: browserContext?.getConsent,
       },
     });
-    if (profile !== undefined && eventHandoff !== undefined) {
-      throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
+    try {
+      if (profile !== undefined && eventHandoff !== undefined) {
+        throw new TypeError(
+          'ExperiencesWebConfig accepts either profile or eventHandoff, not both'
+        );
+      }
+      this.#locale = clientConfig.locale;
+      if (profile !== undefined) this.#store.profile = profile;
+      this.#eventMethods = this.createEventMethods({
+        getProfile: () => this.#store.profile,
+        setProfile: (nextProfile) => {
+          this.#store.profile = nextProfile;
+        },
+        getProfileRevision: () => this.#store.profileRevision,
+      });
+      this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
+      // Replay is eager. Mark a rejection as observed even when an application has
+      // not attached its barrier handler yet; callers still receive the original
+      // rejected promise from whenEventHandoffCommitted().
+      void this.#eventHandoffPromise.catch(() => undefined);
+    } catch (error) {
+      super.destroy();
+      throw error;
     }
-    this.#locale = clientConfig.locale;
-    if (profile !== undefined) this.#store.profile = profile;
-    this.#eventMethods = this.createEventMethods({
-      getProfile: () => this.#store.profile,
-      setProfile: (nextProfile) => {
-        this.#store.profile = nextProfile;
-      },
-      getProfileRevision: () => this.#store.profileRevision,
-    });
-    this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
-    // Replay is eager. Mark a rejection as observed even when an application has
-    // not attached its barrier handler yet; callers still receive the original
-    // rejected promise from whenEventHandoffCommitted().
-    void this.#eventHandoffPromise.catch(() => undefined);
   }
 
   override get locale(): string | undefined {
@@ -166,6 +173,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       throw new Error('Cannot reset while an event handoff is pending');
     }
     this.#store.reset();
+  }
+
+  /** Stop browser-owned interaction observers before releasing SDK ownership. */
+  override destroy(): void {
+    try {
+      this.#interactionTracking?.destroy();
+      this.#interactionTracking = undefined;
+    } finally {
+      super.destroy();
+    }
   }
 
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {

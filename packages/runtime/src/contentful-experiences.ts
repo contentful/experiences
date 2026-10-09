@@ -31,6 +31,7 @@ import {
   type RuntimeEventMethods,
   type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
+import { acquireRuntimeSingleton, releaseRuntimeSingleton } from './runtime-singleton.js';
 
 export type RuntimeResolveOptions = {
   metadata?: Record<string, unknown>;
@@ -78,6 +79,7 @@ export interface ExperienceRuntime {
   readonly environmentId: string;
   readonly locale: string | undefined;
   readonly eventBuilder: EventBuilder;
+  destroy(): void;
   resolveExperience(
     payload: ExperiencePayload,
     resolveOptions?: RuntimeResolveOptions
@@ -122,29 +124,44 @@ export class ContentfulExperiences implements ExperienceRuntime {
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
   protected readonly optimizationApi: RuntimeOptimizationApiClient;
   readonly #resolveDefaults: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
+  readonly #singletonOwner: string;
+  #destroyed = false;
 
   constructor(config: ContentfulExperiencesConfig) {
-    this.spaceId = config.spaceId;
-    this.environmentId = config.environmentId;
-    this.#locale = config.locale;
-    this.#resolverConfig = config.resolverConfig;
-    this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
-    this.#previewClient =
-      config.preview === undefined
-        ? undefined
-        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
-    this.optimizationApi = createRuntimeOptimizationClient({
-      spaceId: config.spaceId,
-      environmentId: config.environmentId,
-      ...config.optimization,
-    });
-    this.#resolveDefaults = config.resolveDefaults ?? {};
+    this.#singletonOwner = acquireRuntimeSingleton();
+    try {
+      this.spaceId = config.spaceId;
+      this.environmentId = config.environmentId;
+      this.#locale = config.locale;
+      this.#resolverConfig = config.resolverConfig;
+      this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
+      this.#previewClient =
+        config.preview === undefined
+          ? undefined
+          : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
+      this.optimizationApi = createRuntimeOptimizationClient({
+        spaceId: config.spaceId,
+        environmentId: config.environmentId,
+        ...config.optimization,
+      });
+      this.#resolveDefaults = config.resolveDefaults ?? {};
 
-    this.eventBuilder = new EventBuilder({
-      ...config.eventBuilder,
-      library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library },
-      getLocale: config.eventBuilder.getLocale ?? (() => this.locale),
-    });
+      this.eventBuilder = new EventBuilder({
+        ...config.eventBuilder,
+        library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library },
+        getLocale: config.eventBuilder.getLocale ?? (() => this.locale),
+      });
+    } catch (error) {
+      releaseRuntimeSingleton(this.#singletonOwner);
+      throw error;
+    }
+  }
+
+  /** Release this SDK's singleton ownership. Leaf runtimes release owned resources first. */
+  destroy(): void {
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    releaseRuntimeSingleton(this.#singletonOwner);
   }
 
   get locale(): string | undefined {

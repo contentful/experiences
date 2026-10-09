@@ -1,4 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+let runtime: import('./contentful-experiences.js').ContentfulExperiences | undefined;
+
+afterEach(() => {
+  runtime?.destroy();
+  runtime = undefined;
+  vi.restoreAllMocks();
+});
 
 describe('Web public entry on the server', () => {
   it('imports without browser work and exposes safe context fallbacks', async () => {
@@ -20,7 +28,7 @@ describe('Web public entry on the server', () => {
 
   it('retains live profile state when browser persistence is unavailable', async () => {
     const { ContentfulExperiences } = await import('./index.js');
-    const runtime = new ContentfulExperiences({
+    runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
       resolverConfig: { components: {} },
@@ -38,7 +46,7 @@ describe('Web public entry on the server', () => {
 describe('Web interaction tracking on the server', () => {
   it('starts and stops as a no-op without a DOM', async () => {
     const { ContentfulExperiences } = await import('./index.js');
-    const runtime = new ContentfulExperiences({
+    runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
       resolverConfig: { components: {} },

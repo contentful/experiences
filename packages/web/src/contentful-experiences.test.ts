@@ -21,8 +21,10 @@ class TestContentfulExperiences extends ContentfulExperiences {
   }
 }
 
+const runtimes = new Set<ContentfulExperiences>();
+
 function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestContentfulExperiences {
-  return new TestContentfulExperiences({
+  const runtime = new TestContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
@@ -30,6 +32,8 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);
+  runtimes.add(runtime);
+  return runtime;
 }
 
 function mockOptimization(
@@ -76,6 +80,8 @@ function createHandoffEvents() {
 }
 
 afterEach(() => {
+  for (const runtime of runtimes) runtime.destroy();
+  runtimes.clear();
   vi.restoreAllMocks();
   window.localStorage.clear();
   window.history.replaceState({}, '', '/');
@@ -283,24 +289,34 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'browser-profile' });
   });
 
-  it('keeps mutable locale state isolated between instances', () => {
+  it('starts replacement locale state from its own configuration after destroy', () => {
     const english = createRuntime({ locale: 'en-US' });
-    const french = createRuntime({ locale: 'fr-FR' });
-
     english.setLocale('de-DE');
-
     expect(english.eventBuilder.buildTrack({ event: 'english' }).context.locale).toBe('de-DE');
+    english.destroy();
+
+    const french = createRuntime({ locale: 'fr-FR' });
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
   });
 
-  it('keeps live profile state isolated between instances', () => {
+  it('restores persisted profile state in a replacement instance', () => {
     const first = createRuntime({ profile: { id: 'first-profile' } });
-    const second = createRuntime({ profile: { id: 'second-profile' } });
-
     first.reset();
-
     expect(first.profile).toBeUndefined();
+    first.destroy();
+
+    const second = createRuntime({ profile: { id: 'second-profile' } });
     expect(second.profile).toEqual({ id: 'second-profile' });
+  });
+
+  it('rejects a second live SDK and permits replacement after idempotent destroy', () => {
+    const first = createRuntime();
+
+    expect(() => createRuntime()).toThrow();
+    first.destroy();
+    first.destroy();
+
+    expect(() => createRuntime()).not.toThrow();
   });
 
   it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
@@ -328,9 +344,10 @@ describe('Web ContentfulExperiences', () => {
       preview: true,
     };
 
-    expect(() => new ContentfulExperiences(hostConfig)).not.toThrow();
-    expect(() => new ContentfulExperiences(environmentConfig)).not.toThrow();
-    expect(() => new ContentfulExperiences(tokenlessProxyConfig)).not.toThrow();
+    for (const config of [hostConfig, environmentConfig, tokenlessProxyConfig]) {
+      const sdk = new ContentfulExperiences(config);
+      sdk.destroy();
+    }
     expect(options).toBeDefined();
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
@@ -545,6 +562,7 @@ describe('Web ContentfulExperiences', () => {
     ).toThrow('accepts either profile or eventHandoff');
     expect(upsert).not.toHaveBeenCalled();
     expect(analytics).not.toHaveBeenCalled();
+    expect(() => createRuntime()).not.toThrow();
   });
 
   it('rejects a failed receipt but releases later direct events', async () => {

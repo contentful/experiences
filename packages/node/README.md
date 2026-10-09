@@ -41,7 +41,7 @@ const request = experiences.forRequest({
 const plan = await request.fetchExperience({ experienceId });
 ```
 
-The singleton retains only stable SDK configuration and reusable delivery transports. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests.
+The singleton retains only stable SDK configuration and reusable delivery transports. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. A second live Experiences SDK instance in the same JavaScript runtime is rejected; call `destroy()` before replacing the SDK during teardown or hot reload. Request facades do not count as separate SDK instances.
 
 ## Personalization
 
