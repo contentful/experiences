@@ -78,6 +78,44 @@ export function hasEventConsent(
   }
 }
 
+/**
+ * Wire event types mapped to the method that emits them. Replayed handoffs and
+ * caller-built XDA events carry only the wire type, so the gate needs this to
+ * apply the same rules as a direct method call.
+ */
+const METHOD_BY_EVENT_TYPE: Readonly<Partial<Record<string, EventMethod>>> = {
+  identify: 'identify',
+  page: 'page',
+  track: 'track',
+  exo_node_view: 'trackView',
+  exo_node_click: 'trackClick',
+  exo_node_hover: 'trackHover',
+  component: 'trackFlagView',
+};
+
+/**
+ * The method that emits wire event `type`, or `undefined` for a type this SDK
+ * does not emit (for example `screen`, which only exists for caller-built events).
+ */
+export function methodForEventType(type: string): EventMethod | undefined {
+  return METHOD_BY_EVENT_TYPE[type];
+}
+
+/**
+ * Whether an already-built event of wire `type` may be emitted. Unknown types
+ * fail closed unless explicitly listed in `allowedEventTypes`.
+ */
+export function hasEventTypeConsent(
+  type: string,
+  consent: ConsentState | undefined,
+  allowedEventTypes: readonly AllowedEventType[] = DEFAULT_ALLOWED_EVENT_TYPES
+): boolean {
+  const method = methodForEventType(type);
+  if (method !== undefined) return hasEventConsent(method, consent, allowedEventTypes);
+  if (consent?.events === true) return true;
+  return allowedEventTypes.some((allowed) => allowed === type);
+}
+
 /** Parses a persisted consent value, ignoring anything malformed. */
 export function parseConsentState(value: unknown): ConsentState | undefined {
   if (typeof value !== 'object' || value === null) return undefined;

@@ -246,4 +246,80 @@ describe('ContentfulExperiences interaction tracking', () => {
     expect(batch[0]!.events[0]!.type).toBe('exo_node_click');
     await session.stop();
   });
+
+  describe('consent', () => {
+    function spyOnTransport(runtime: ContentfulExperiences) {
+      return vi
+        .spyOn(
+          (runtime as unknown as { optimizationApi: { analytics: InsightsApiClient } })
+            .optimizationApi.analytics,
+          'sendBatchEvents'
+        )
+        .mockResolvedValue(true);
+    }
+
+    it('drops clicks while event consent is denied and sends them once granted', async () => {
+      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      const onEventBlocked = vi.fn();
+      const runtime = createRuntime({ profile: { id: 'visitor' }, onEventBlocked });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+
+      const session = runtime.startInteractionTracking({
+        views: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      click(hero);
+      await advance(0);
+
+      expect(send).not.toHaveBeenCalled();
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackClick' })
+      );
+
+      runtime.consent({ events: true });
+      click(hero);
+      await advance(0);
+
+      expect(send).toHaveBeenCalledTimes(1);
+      await session.stop();
+    });
+
+    it('admits clicks under a click-only allow-list', async () => {
+      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      const runtime = createRuntime({
+        profile: { id: 'visitor' },
+        allowedEventTypes: ['component_click'],
+      });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+
+      const session = runtime.startInteractionTracking({
+        views: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      click(hero);
+      await advance(0);
+
+      expect(send).toHaveBeenCalledTimes(1);
+      await session.stop();
+    });
+
+    it('drops views and hovers while event consent is denied', async () => {
+      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      const io = installIOPolyfill();
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+
+      const session = runtime.startInteractionTracking({
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      io.getLast().trigger(page, true);
+      await advance(1400);
+      await session.stop();
+
+      expect(send).not.toHaveBeenCalled();
+    });
+  });
 });

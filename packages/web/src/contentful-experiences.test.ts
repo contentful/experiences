@@ -760,6 +760,114 @@ describe('Web ContentfulExperiences consent', () => {
   });
 });
 
+describe('Web ContentfulExperiences consent on pre-built events', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('drops caller-built fetchExperience events that consent does not admit', async () => {
+    const onEventBlocked = vi.fn();
+    const runtime = createRuntime({ onEventBlocked });
+    const fetch = vi
+      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const page = runtime.eventBuilder.buildPageView();
+    const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+    await runtime.fetchExperience({
+      experienceId: 'personalized',
+      personalization: { profileId: 'profile-1', events: [page, track] },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'profile-1', events: [page] },
+      },
+      undefined
+    );
+    expect(onEventBlocked).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'consent', method: 'track' })
+    );
+  });
+
+  it('forwards every caller-built event once event consent is granted', async () => {
+    const runtime = createRuntime();
+    runtime.consent({ events: true });
+    const fetch = vi
+      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+    await runtime.fetchExperience({
+      experienceId: 'personalized',
+      personalization: { events: [track] },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      { experienceId: 'personalized', personalization: { events: [track] } },
+      undefined
+    );
+  });
+
+  it('replays only the handoff events that consent admits', async () => {
+    const onEventBlocked = vi.fn();
+    const { page, track, click } = createHandoffEvents();
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'replayed' } } as never);
+    const analytics = vi
+      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .mockResolvedValue(true);
+    const runtime = createRuntime({
+      onEventBlocked,
+      eventHandoff: createHandoff(
+        [
+          { transport: 'personalization', event: page },
+          { transport: 'personalization', event: track },
+          { transport: 'analytics', event: click },
+        ],
+        { initialPageRouteKey: '/initial' }
+      ),
+      eventHandoffRouteKey: '/initial',
+    });
+
+    await runtime.whenEventHandoffCommitted();
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0]![0].events).toEqual([page]);
+    expect(analytics).not.toHaveBeenCalled();
+    expect(onEventBlocked).toHaveBeenCalledTimes(2);
+  });
+
+  it('replays the whole handoff once event consent is granted', async () => {
+    window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: true }));
+    const { page, track, click } = createHandoffEvents();
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'replayed' } } as never);
+    const analytics = vi
+      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .mockResolvedValue(true);
+    const runtime = createRuntime({
+      eventHandoff: createHandoff(
+        [
+          { transport: 'personalization', event: page },
+          { transport: 'personalization', event: track },
+          { transport: 'analytics', event: click },
+        ],
+        { initialPageRouteKey: '/initial' }
+      ),
+      eventHandoffRouteKey: '/initial',
+    });
+
+    await runtime.whenEventHandoffCommitted();
+
+    expect(upsert.mock.calls[0]![0].events).toEqual([page, track]);
+    expect(analytics).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('browser event context helpers', () => {
   it('returns dynamic browser values', () => {
     window.history.replaceState({}, '', '/context?one=1#hash');

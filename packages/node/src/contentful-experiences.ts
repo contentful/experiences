@@ -10,6 +10,8 @@ import {
   type ConsentState,
   type EventEmissionResult,
   hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
   toConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
@@ -302,7 +304,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions?: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
     return this.runtime.fetchExperience(
-      { ...options, locale: options.locale ?? this.locale },
+      { ...this.gatePersonalizationEvents(options), locale: options.locale ?? this.locale },
       mergeResolveOptions(this.context.resolveOptions, resolveOptions)
     );
   }
@@ -325,6 +327,31 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       options,
       mergeResolveOptions(this.context.resolveOptions, resolveOptions)
     );
+  }
+
+  /**
+   * Drops caller-built XDA events that this request's consent does not admit.
+   * The profile id still travels, since it is not an event.
+   */
+  private gatePersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): RuntimeFetchExperienceOptions {
+    const events = options.personalization?.events;
+    if (events === undefined) return options;
+
+    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
+    const admitted = events.filter((event) => {
+      if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
+      const method = methodForEventType(event.type);
+      if (method === undefined) return false;
+      try {
+        onEventBlocked?.({ reason: 'consent', method, args: [event] });
+      } catch {
+        // A failing diagnostic callback must not break event delivery.
+      }
+      return false;
+    });
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
   private admit(method: 'identify' | 'track' | 'page', args: unknown): boolean {

@@ -4,6 +4,8 @@ import {
   type BlockedEvent,
   type ConsentInput,
   type ConsentState,
+  hasEventTypeConsent,
+  methodForEventType,
   toConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
@@ -82,6 +84,8 @@ export interface InteractionTrackingSession {
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #locale: string | undefined;
   readonly #store = new LocalStore();
+  readonly #allowedEventTypes: readonly AllowedEventType[] | undefined;
+  readonly #onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
   #eventHandoffPending = false;
   #interactionTracking: InteractionTracking | undefined;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
@@ -127,6 +131,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       throw new TypeError('ExperiencesWebConfig accepts either profile or eventHandoff, not both');
     }
     this.#locale = clientConfig.locale;
+    this.#allowedEventTypes = allowedEventTypes;
+    this.#onEventBlocked = onEventBlocked;
     this.#store.applyConsentDefaults({
       events: defaults?.consent,
       persistence: defaults?.persistenceConsent,
@@ -190,13 +196,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     resolveOptions?: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
     const profileRevision = this.#store.profileRevision;
-    const profileId = options.personalization?.profileId ?? this.#store.profile?.id;
+    const gated = this.#gatePersonalizationEvents(options);
+    const profileId = gated.personalization?.profileId ?? this.#store.profile?.id;
     const plan = await super.fetchExperience(
       profileId === undefined
-        ? options
+        ? gated
         : {
-            ...options,
-            personalization: { ...options.personalization, profileId },
+            ...gated,
+            personalization: { ...gated.personalization, profileId },
           },
       resolveOptions
     );
@@ -237,6 +244,34 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         return stopping;
       },
     };
+  }
+
+  /** Whether an already-built event may be emitted; reports it to `onEventBlocked` otherwise. */
+  #admitEvent(event: { type: string }): boolean {
+    if (hasEventTypeConsent(event.type, this.#store.consent, this.#allowedEventTypes)) return true;
+    try {
+      const method = methodForEventType(event.type);
+      if (method !== undefined) {
+        this.#onEventBlocked?.({ reason: 'consent', method, args: [event] });
+      }
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
+    }
+    return false;
+  }
+
+  /**
+   * Drops caller-built XDA events that consent does not admit. The profile id
+   * still travels, since it is not an event.
+   */
+  #gatePersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): RuntimeFetchExperienceOptions {
+    const events = options.personalization?.events;
+    if (events === undefined) return options;
+
+    const admitted = events.filter((event) => this.#admitEvent(event));
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
   #afterEventHandoff<T>(operation: () => Promise<T>): Promise<T> {
@@ -281,6 +316,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#store.profile = profile;
       for (let index = 0; index < handoff.events.length;) {
         const staged = handoff.events[index]!;
+        if (!this.#admitEvent(staged.event)) {
+          index += 1;
+          continue;
+        }
         if (staged.transport === 'personalization') {
           const locale = staged.event.context.locale;
           const events = [staged.event];
@@ -288,8 +327,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           while (index < handoff.events.length) {
             const next = handoff.events[index]!;
             if (next.transport !== 'personalization' || next.event.context.locale !== locale) break;
-            events.push(next.event);
             index += 1;
+            if (this.#admitEvent(next.event)) {
+              events.push(next.event);
+            }
           }
           const result = await this.optimizationApi.personalization.upsertProfile(
             { profileId: profile?.id, events },

@@ -17,6 +17,12 @@ export {
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {
+  AllowedEventType,
+  BlockedEvent,
+  ConsentInput,
+  ConsentState,
+  EventEmissionResult,
+  EventMethod,
   DestinationRedirectResult,
   ExperienceRequestExtensions,
   PersonalizationOptions,
