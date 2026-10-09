@@ -769,7 +769,7 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     const onEventBlocked = vi.fn();
     const runtime = createRuntime({ onEventBlocked });
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
     const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
@@ -795,7 +795,7 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     const runtime = createRuntime();
     runtime.consent({ events: true });
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
 

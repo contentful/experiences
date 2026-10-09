@@ -17,18 +17,18 @@ export {
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {
-  AllowedEventType,
-  BlockedEvent,
-  ConsentInput,
-  ConsentState,
-  EventEmissionResult,
-  EventMethod,
   DestinationRedirectResult,
   ExperienceRequestExtensions,
   PersonalizationOptions,
 } from '@contentful/experiences-client';
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
 export type {
+  AllowedEventType,
+  BlockedEvent,
+  ConsentInput,
+  ConsentState,
+  EventEmissionResult,
+  EventMethod,
   EventOptimizationData,
   EventProfile,
   ClickBuilderArgs,
