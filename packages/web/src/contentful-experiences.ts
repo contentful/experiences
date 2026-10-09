@@ -1,8 +1,12 @@
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
+  PersonalizationDelivery,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
+  type EventEmissionResult,
   type EventProfile,
+  type ExperiencesHandoff,
+  type PersonalizationDeliveryState,
   parseRuntimeEventHandoff,
   type RuntimeEventHandoff,
   type RuntimeEventHandoffReceipt,
@@ -68,24 +72,45 @@ export interface InteractionTrackingSession {
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #locale: string | undefined;
   readonly #store = new LocalStore();
+  readonly #delivery: PersonalizationDelivery;
   #eventHandoffPending = false;
   #interactionTracking: InteractionTracking | undefined;
+  #adoptedProfileId: string | undefined;
+  #generation = 0;
+  #destroyed = false;
+  #online = globalThis.navigator?.onLine !== false;
   readonly #eventHandoffPromise: Promise<RuntimeEventHandoffReceipt>;
   readonly #eventMethods: RuntimeEventMethods;
+  readonly #handleOnline = (): void => {
+    this.#online = true;
+    this.#delivery.clearScheduledRetry();
+    void this.#delivery.flush({ force: true });
+  };
+  readonly #handleOffline = (): void => {
+    this.#online = false;
+  };
   readonly identify: WebEventMethods['identify'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.identify(...args));
+    this.#afterEventHandoff(() => this.#eventMethods.identify(...args), { accepted: false });
   readonly page: WebEventMethods['page'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.page(...args));
+    this.#afterEventHandoff(() => this.#eventMethods.page(...args), { accepted: false });
   readonly track: WebEventMethods['track'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.track(...args));
+    this.#afterEventHandoff(() => this.#eventMethods.track(...args), { accepted: false });
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.trackView(...args));
+    this.#destroyed
+      ? Promise.resolve(false)
+      : this.#afterEventHandoff(() => this.#eventMethods.trackView(...args), false);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.trackClick(...args));
+    this.#destroyed
+      ? Promise.resolve(false)
+      : this.#afterEventHandoff(() => this.#eventMethods.trackClick(...args), false);
   readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.trackHover(...args));
+    this.#destroyed
+      ? Promise.resolve(false)
+      : this.#afterEventHandoff(() => this.#eventMethods.trackHover(...args), false);
   readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
-    this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args));
+    this.#destroyed
+      ? Promise.resolve(false)
+      : this.#afterEventHandoff(() => this.#eventMethods.trackFlagView(...args), false);
 
   constructor(config: ExperiencesWebConfig) {
     const { app, browserContext, profile, eventHandoff, eventHandoffRouteKey, ...clientConfig } =
@@ -101,6 +126,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         getConsent: browserContext?.getConsent,
       },
     });
+    let delivery: PersonalizationDelivery | undefined;
     try {
       if (profile !== undefined && eventHandoff !== undefined) {
         throw new TypeError(
@@ -109,19 +135,51 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       }
       this.#locale = clientConfig.locale;
       if (profile !== undefined) this.#store.profile = profile;
-      this.#eventMethods = this.createEventMethods({
-        getProfile: () => this.#store.profile,
-        setProfile: (nextProfile) => {
-          this.#store.profile = nextProfile;
-        },
+      this.#delivery = delivery = new PersonalizationDelivery({
+        api: this.optimizationApi.personalization,
+        getProfileId: () => this.#store.profile?.id ?? this.#adoptedProfileId,
         getProfileRevision: () => this.#store.profileRevision,
+        getOnline: () => this.#online,
+        publishQueuedData: (data) => {
+          if (this.#destroyed) return;
+          this.#store.profile = data.profile;
+          this.#adoptedProfileId = undefined;
+        },
       });
+      this.#eventMethods = this.createEventMethods(
+        {
+          getProfile: () =>
+            this.#store.profile ??
+            (this.#adoptedProfileId === undefined ? undefined : { id: this.#adoptedProfileId }),
+          setProfile: (nextProfile) => {
+            this.#store.profile = nextProfile;
+            this.#adoptedProfileId = undefined;
+          },
+          getProfileRevision: () => this.#store.profileRevision,
+        },
+        {
+          personalization: (event) => this.#delivery.send(event),
+          analytics: (event, currentProfile) =>
+            this.optimizationApi.analytics.sendBatchEvents([
+              { profile: currentProfile, events: [event] },
+            ]),
+        }
+      );
       this.#eventHandoffPromise = this.#startEventHandoff(eventHandoff, eventHandoffRouteKey);
       // Replay is eager. Mark a rejection as observed even when an application has
       // not attached its barrier handler yet; callers still receive the original
       // rejected promise from whenEventHandoffCommitted().
       void this.#eventHandoffPromise.catch(() => undefined);
+      if (typeof window !== 'undefined') {
+        window.addEventListener('online', this.#handleOnline);
+        window.addEventListener('offline', this.#handleOffline);
+      }
     } catch (error) {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', this.#handleOnline);
+        window.removeEventListener('offline', this.#handleOffline);
+      }
+      delivery?.destroy();
       super.destroy();
       throw error;
     }
@@ -133,6 +191,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   get profile(): EventProfile | undefined {
     return this.#store.profile;
+  }
+
+  /** Latest ordinary or prepared Personalization HTTP state. */
+  get personalizationDeliveryState(): PersonalizationDeliveryState {
+    return this.#delivery.state;
   }
 
   /**
@@ -152,8 +215,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     options: RuntimeFetchExperienceOptions,
     resolveOptions?: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     const profileRevision = this.#store.profileRevision;
-    const profileId = options.personalization?.profileId ?? this.#store.profile?.id;
+    const profileId =
+      options.personalization?.profileId ?? this.#store.profile?.id ?? this.#adoptedProfileId;
     const plan = await super.fetchExperience(
       profileId === undefined
         ? options
@@ -163,21 +228,34 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           },
       resolveOptions
     );
-    this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
+    if (!this.#destroyed && options.preview !== true) {
+      this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
+    }
     return plan;
   }
 
   /** Clears browser profile state and its persisted id. */
   reset(): void {
-    if (this.#eventHandoffPending) {
-      throw new Error('Cannot reset while an event handoff is pending');
-    }
+    if (this.#destroyed) return;
+    this.#generation += 1;
+    this.#eventHandoffPending = false;
+    this.#adoptedProfileId = undefined;
+    this.#delivery.reset();
     this.#store.reset();
   }
 
   /** Stop browser-owned interaction observers before releasing SDK ownership. */
   override destroy(): void {
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    this.#generation += 1;
+    this.#eventHandoffPending = false;
     try {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', this.#handleOnline);
+        window.removeEventListener('offline', this.#handleOffline);
+      }
+      this.#delivery.destroy();
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;
     } finally {
@@ -186,6 +264,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (this.#interactionTracking) {
       throw new Error('Interaction tracking is already running; stop it before starting again');
     }
@@ -212,9 +291,25 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     };
   }
 
-  #afterEventHandoff<T>(operation: () => Promise<T>): Promise<T> {
+  #afterEventHandoff<T>(operation: () => Promise<T>, staleResult: T): Promise<T> {
     if (!this.#eventHandoffPending) return operation();
-    return this.#eventHandoffPromise.then(operation, operation);
+    const generation = this.#generation;
+    const proceed = (): T | Promise<T> =>
+      this.#destroyed || this.#generation !== generation ? staleResult : operation();
+    return this.#eventHandoffPromise.then(proceed, proceed);
+  }
+
+  /** Internal Phase 4 admission seam used by the imperative handoff lifecycle in Phase 5. */
+  protected sendPreparedExperienceEvents(
+    events: NonNullable<ExperiencesHandoff['replay']>['events'],
+    profileId?: string,
+    locale?: string
+  ): Promise<EventEmissionResult> {
+    if (this.#destroyed) return Promise.resolve({ accepted: false });
+    const targetId = this.#store.profile?.id ?? this.#adoptedProfileId ?? profileId;
+    const result = this.#delivery.sendPrepared(events, { profileId: targetId, locale });
+    if (result.accepted && this.#store.profile === undefined) this.#adoptedProfileId = targetId;
+    return Promise.resolve(result);
   }
 
   #startEventHandoff(
@@ -248,11 +343,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   async #replayEventHandoff(handoff: RuntimeEventHandoff): Promise<RuntimeEventHandoffReceipt> {
+    const generation = this.#generation;
+    const isCurrent = (): boolean => !this.#destroyed && this.#generation === generation;
     try {
       let profile: EventProfile | undefined =
         handoff.initialProfileId === undefined ? undefined : { id: handoff.initialProfileId };
       this.#store.profile = profile;
       for (let index = 0; index < handoff.events.length;) {
+        if (!isCurrent()) return {};
         const staged = handoff.events[index]!;
         if (staged.transport === 'personalization') {
           const locale = staged.event.context.locale;
@@ -268,6 +366,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             { profileId: profile?.id, events },
             { locale }
           );
+          if (!isCurrent()) return {};
           profile = result.profile;
           this.#store.profile = profile;
         } else {
@@ -278,6 +377,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           const committed = await this.optimizationApi.analytics.sendBatchEvents([
             { profile, events: [staged.event] },
           ]);
+          if (!isCurrent()) return {};
           if (!committed) {
             throw new Error('Runtime event handoff Analytics replay was not committed');
           }
@@ -290,7 +390,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           : { initialPageRouteKey: handoff.initialPageRouteKey }),
       };
     } finally {
-      this.#eventHandoffPending = false;
+      if (isCurrent()) this.#eventHandoffPending = false;
     }
   }
 }

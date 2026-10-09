@@ -16,6 +16,8 @@ export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
 export type { EventEmissionResult } from './event-emission-result.js';
+export { PersonalizationDelivery } from './personalization-delivery.js';
+export type { PersonalizationDeliveryState } from './personalization-delivery.js';
 export {
   buildPreparedEvents,
   validatePreparedEvents,

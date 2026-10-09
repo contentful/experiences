@@ -26,6 +26,7 @@ export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/expe
 export type {
   EventOptimizationData,
   EventProfile,
+  PersonalizationDeliveryState,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,

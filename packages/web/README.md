@@ -110,15 +110,16 @@ const experiences = new ContentfulExperiences({
 
 ## Events
 
-The Web runtime provides direct event methods: `identify`, `page`, `track`,
+The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile when creating the runtime, or identify a profile before sending
 Analytics events. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
 persisted and restored from LocalStorage.
-Call `reset()` at logout, consent withdrawal, or another browser session
-boundary. The next `identify`, `page`, or `track` call establishes and persists
-the next profile.
+Call `reset()` at logout or another browser session boundary. It clears queued
+Personalization work and the current profile; the next successful event response
+establishes and persists the next profile. `destroy()` stops owned listeners and
+timers and releases the singleton for replacement.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -129,7 +130,11 @@ const experiences = new ContentfulExperiences({
   },
 });
 
-await experiences.track({ event: 'cta_clicked', properties: { placement: 'hero' } });
+const result = await experiences.track({
+  event: 'cta_clicked',
+  properties: { placement: 'hero' },
+});
+// result.accepted is true for an admitted event; result.data may be absent while queued.
 
 // At logout or another visitor boundary:
 experiences.reset();
@@ -139,8 +144,14 @@ Each call reads the current locale and browser context, so SPA navigation and
 `setLocale()` changes are reflected without recreating the runtime. The consent
 provider annotates the event context; it does not gate sending. Redact page and
 user-agent data with the providers above before triggering events.
-There is no browser event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Analytics call on the same runtime.
+Ordinary online Personalization calls send directly and may overlap queued
+prepared work. Offline ordinary calls are accepted into an in-memory queue; a
+prepared batch is admitted whole or refused at capacity. Acceptance is not HTTP
+completion. Read `personalizationDeliveryState` for the latest request status
+(`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
+their original event bodies. The queue is not durable and does not gate on
+consent. Analytics methods continue to send directly and require a profile or
+an adopted continuation ID.
 
 ## Interaction tracking
 
@@ -201,8 +212,11 @@ for where the attribution lookup comes from under SSR, CSR, and Server Component
 
 ## Server event handoff
 
-Pass a request's Node-produced `eventHandoff` to the Web runtime to commit its
-ordered events in the browser. `eventHandoff` and an initial `profile` are
+The legacy Web constructor still accepts a `RuntimeEventHandoff` journal and
+commits its ordered events in the browser. It does not accept the new
+`ExperiencesHandoff` returned by Node's `prepareRequestHandoff()`; the paired
+browser hydration path is not available at this intermediate checkpoint.
+`eventHandoff` and an initial `profile` are
 mutually exclusive. Supply the current browser route identity as the required
 `eventHandoffRouteKey`. A page-bearing journal commits only when that value
 matches the handoff's `initialPageRouteKey`; a missing server marker or mismatch
@@ -249,9 +263,9 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No event persistence, offline queues, beacon/lifecycle delivery, or consent
-  gating. Automatic interaction tracking sends through the ordinary event
-  methods, so it has the same limits.
+- No durable event persistence, beacon/lifecycle delivery, or consent gating.
+  Personalization's offline queue is in memory only. Automatic interaction
+  tracking uses the direct Analytics methods.
 - No framework adapter marks tracked elements yet; components do it with
   `getTrackingAttributes`.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.

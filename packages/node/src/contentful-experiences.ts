@@ -156,9 +156,9 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getConsent: () => context.eventConsent,
     });
 
-    this.identify = async (args) => ({ accepted: true, data: await methods.identify(args) });
-    this.page = async (args = {}) => ({ accepted: true, data: await methods.page(args) });
-    this.track = async (args) => ({ accepted: true, data: await methods.track(args) });
+    this.identify = methods.identify.bind(methods);
+    this.page = methods.page.bind(methods);
+    this.track = methods.track.bind(methods);
     this.trackView = methods.trackView.bind(methods);
     this.trackClick = methods.trackClick.bind(methods);
     this.trackHover = methods.trackHover.bind(methods);

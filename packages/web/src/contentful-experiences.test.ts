@@ -501,7 +501,8 @@ describe('Web ContentfulExperiences', () => {
       expect(analytics).not.toHaveBeenCalled();
 
       await expect(runtime.page({ properties: { path: '/client' } })).resolves.toMatchObject({
-        profile: { id: 'ordinary-profile' },
+        accepted: true,
+        data: { profile: { id: 'ordinary-profile' } },
       });
       expect(upsert).toHaveBeenCalledOnce();
     }
@@ -515,7 +516,7 @@ describe('Web ContentfulExperiences', () => {
     ).toThrow('eventHandoff requires eventHandoffRouteKey');
   });
 
-  it('holds ordinary events behind a pending replay barrier and rejects reset while pending', async () => {
+  it('resets a pending legacy replay without restoring its profile or blocking later events', async () => {
     const { staged } = createHandoffEvents();
     let resolveReplay!: (value: unknown) => void;
     const replayResponse = new Promise((resolve) => {
@@ -530,15 +531,20 @@ describe('Web ContentfulExperiences', () => {
       eventHandoffRouteKey: '/initial',
     });
 
-    const ordinary = runtime.track({ event: 'after-handoff' });
     expect(upsert).toHaveBeenCalledOnce();
-    expect(() => runtime.reset()).toThrow('Cannot reset while an event handoff is pending');
-
-    resolveReplay({ profile: { id: 'committed-profile' } });
-    await ordinary;
-    expect(upsert).toHaveBeenCalledTimes(2);
+    const beforeReset = runtime.track({ event: 'before-reset' });
     runtime.reset();
     expect(runtime.profile).toBeUndefined();
+
+    const afterReset = runtime.track({ event: 'after-reset' });
+    await expect(afterReset).resolves.toMatchObject({ accepted: true });
+    expect(upsert).toHaveBeenCalledTimes(2);
+
+    resolveReplay({ profile: { id: 'committed-profile' } });
+    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
+    await expect(beforeReset).resolves.toEqual({ accepted: false });
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(runtime.profile).toEqual({ id: 'after-replay' });
   });
 
   it('rejects invalid versions and scope before event transport', () => {
@@ -581,7 +587,8 @@ describe('Web ContentfulExperiences', () => {
 
     await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow('offline');
     await expect(runtime.page({ properties: { path: '/fallback' } })).resolves.toMatchObject({
-      profile: { id: 'fallback-profile' },
+      accepted: true,
+      data: { profile: { id: 'fallback-profile' } },
     });
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(analytics).not.toHaveBeenCalled();
