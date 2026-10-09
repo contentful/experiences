@@ -222,3 +222,31 @@ export type ContainerNode = {
 export type DesignValue =
   | { type: 'ManualDesignValue'; value: string | number | boolean | null }
   | { type: 'DesignToken'; value: string };
+
+// --- Destinations ------------------------------------------------------------
+
+export type ChannelFixture = {
+  id: string;
+  name: string;
+  description: string;
+  properties: Array<{ name: string; id: string; type: 'String' | 'Boolean' | 'Number' }>;
+  nodeProperties: Array<{ name: string; type: 'String' | 'Boolean' | 'Number' | 'Path' }>;
+};
+
+export type DestinationNodeFixture = { id: string; path: string } & (
+  | { kind: 'folder'; parentNodeId?: string }
+  | { kind: 'experience'; experienceId: string; parentNodeId?: string }
+  | { kind: 'redirect'; redirectToNodeId: string; parentNodeId?: string }
+);
+
+export type DestinationFixture = {
+  channel: ChannelFixture;
+  // The Destination id is server-generated, so it is matched by `name` on re-runs.
+  destination: {
+    name: string;
+    description: string;
+    properties: Array<{ id: string; value: string | boolean | number }>;
+  };
+  // Order matters: a node's parent and redirect target must come before it.
+  nodes: DestinationNodeFixture[];
+};

@@ -28,6 +28,7 @@ import {
   components,
   contentTypes,
   personalization,
+  destination,
 } from './fixture/index.js';
 
 try {
@@ -50,7 +51,7 @@ const BASE = `https://api.contentful.com/spaces/${SPACE_ID}/environments/${ENVIR
 const MAX_PASSES = 4;
 
 const call = (path: string, init: RequestInit = {}): Promise<Response> =>
-  fetch(`${BASE}${path}`, {
+  fetch(path.startsWith('https://') ? path : `${BASE}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${CMA_TOKEN}`,
@@ -96,6 +97,25 @@ async function remove(path: string, label: string): Promise<boolean> {
   return true;
 }
 
+/** Destination ids are server-generated, so find the fixture's by name. */
+async function findDestinationId(): Promise<string | null> {
+  const res = await call('/destinations?limit=100');
+  if (!res.ok) return null;
+  const { items } = (await res.json()) as { items: Array<{ name: string; sys: { id: string } }> };
+  return items.find((d) => d.name === destination.destination.name)?.sys.id ?? null;
+}
+
+/** Channels are organization-scoped; read the org from the space. */
+async function channelPath(): Promise<string | null> {
+  const res = await fetch(`https://api.contentful.com/spaces/${SPACE_ID}`, {
+    headers: { Authorization: `Bearer ${CMA_TOKEN}` },
+  });
+  if (!res.ok) return null;
+  const { sys } = (await res.json()) as { sys: { organization?: { sys: { id: string } } } };
+  const orgId = sys.organization?.sys.id;
+  return orgId ? `/organizations/${orgId}/channels/${destination.channel.id}` : null;
+}
+
 async function findDataAssemblyIds(): Promise<string[]> {
   const res = await call('/data_assemblies?limit=100');
   if (!res.ok) return [];
@@ -126,6 +146,22 @@ async function main() {
   pending.set(`/entries/${optimization.entryId}`, `Optimization "${optimization.name}"`);
   pending.set(`/entries/${audience.entryId}`, `Audience "${audience.name}"`);
   for (const [path, label] of await variantTargets()) pending.set(path, label);
+  // Destination Nodes (children and redirects before their targets), then the
+  // Destination, then the Channel. They go before the Experience they serve.
+  const destinationId = await findDestinationId();
+  if (destinationId) {
+    for (const node of [...destination.nodes].reverse()) {
+      pending.set(
+        `/destinations/${destinationId}/nodes/${node.id}`,
+        `Destination Node "${node.id}"`
+      );
+    }
+    pending.set(`/destinations/${destinationId}`, `Destination "${destination.destination.name}"`);
+  }
+  const channel = await channelPath();
+  if (channel) {
+    pending.set(`https://api.contentful.com${channel}`, `Channel "${destination.channel.id}"`);
+  }
   pending.set(`/experiences/${experience.id}`, `Experience "${experience.id}"`);
   for (const t of experienceTemplates) {
     pending.set(`/experience_templates/${t.id}`, `Experience Template "${t.id}"`);
