@@ -28,10 +28,30 @@ const buttonStyle = {
   fontSize: 13,
 } as const;
 
+// A stand-in entity for the interaction buttons. Real tracked entities come from
+// the plan's attribution once it is rendered; see the note in the README.
+const demoEntity = {
+  entityId: 'demo-entity',
+  entityKind: 'Experience',
+  optimizationId: 'demo-optimization',
+  variantId: 'demo-variant',
+} as const;
+
 function describe(value: boolean | undefined): string {
   if (value === undefined) return 'undecided';
   if (value) return 'granted';
   return 'denied';
+}
+
+interface ConsentPanelProps {
+  spaceId: string;
+  environmentId: string;
+  /**
+   * The runtime needs a delivery token, but this panel never fetches an
+   * Experience. The server layout passes the example's existing `CDA_TOKEN`; it
+   * reaches the browser, so use a read-only delivery token.
+   */
+  accessToken: string;
 }
 
 /**
@@ -39,7 +59,7 @@ function describe(value: boolean | undefined): string {
  * are sent; persistence consent decides whether the profile is written to
  * LocalStorage. Both choices are stored in LocalStorage, so they survive a reload.
  */
-export function ConsentPanel() {
+export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPanelProps) {
   const runtime = useRef<ContentfulExperiences | undefined>(undefined);
   const [consent, setConsent] = useState<Consent>({});
   const [profileId, setProfileId] = useState<string | undefined>();
@@ -57,13 +77,10 @@ export function ConsentPanel() {
 
   useEffect(() => {
     const instance = new ContentfulExperiences({
-      spaceId: process.env.NEXT_PUBLIC_SPACE_ID ?? '',
-      environmentId: process.env.NEXT_PUBLIC_ENVIRONMENT_ID ?? 'master',
+      spaceId,
+      environmentId,
       resolverConfig: { components: {} },
-      // A delivery token is required by the runtime but this panel never fetches
-      // an Experience. Browser tokens are visible to visitors, so use one that is
-      // scoped for that.
-      delivery: { accessToken: process.env.NEXT_PUBLIC_CDA_TOKEN ?? 'unused' },
+      delivery: { accessToken },
       onEventBlocked: (event) => setBlocked((previous) => [event, ...previous].slice(0, 5)),
     });
     runtime.current = instance;
@@ -111,7 +128,7 @@ export function ConsentPanel() {
         </button>
       </div>
 
-      <p style={{ margin: '12px 0 4px' }}>Fire an event:</p>
+      <p style={{ margin: '12px 0 4px' }}>Personalization events:</p>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button style={buttonStyle} onClick={() => fire('page', () => runtime.current!.page())}>
           page (allowed)
@@ -121,6 +138,54 @@ export function ConsentPanel() {
           onClick={() => fire('track', () => runtime.current!.track({ event: 'demo_clicked' }))}
         >
           track (gated)
+        </button>
+      </div>
+
+      <p style={{ margin: '12px 0 4px' }}>Analytics events (need a profile: send page first):</p>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button
+          style={buttonStyle}
+          onClick={() =>
+            fire('trackView', () =>
+              runtime.current!.trackView({
+                ...demoEntity,
+                viewId: 'demo-view',
+                viewDurationMs: 1000,
+              })
+            )
+          }
+        >
+          view
+        </button>
+        <button
+          style={buttonStyle}
+          onClick={() => fire('trackClick', () => runtime.current!.trackClick(demoEntity))}
+        >
+          click
+        </button>
+        <button
+          style={buttonStyle}
+          onClick={() =>
+            fire('trackHover', () =>
+              runtime.current!.trackHover({
+                ...demoEntity,
+                hoverId: 'demo-hover',
+                hoverDurationMs: 1000,
+              })
+            )
+          }
+        >
+          hover
+        </button>
+        <button
+          style={buttonStyle}
+          onClick={() =>
+            fire('trackFlagView', () =>
+              runtime.current!.trackFlagView({ componentId: 'demo-flag' })
+            )
+          }
+        >
+          flag view
         </button>
       </div>
 

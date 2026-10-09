@@ -87,6 +87,32 @@ visitor's actual location.
 The example intentionally does not implement durable profile storage or consent
 policy; production applications must own those concerns.
 
+### Optional: consent
+
+Every page shows a **Consent demo** panel (bottom right), rendered by `AppComponent`. It creates an `@contentful/experiences-web` runtime in the browser, after the first render, and lets you watch consent gating work:
+
+- **Accept all / Reject all / Events only** call `consent(true | false | { events, persistence })`.
+- **page** and **track** are Personalization events. With consent undecided, `page` is
+  sent (it is in the default `allowedEventTypes`) and `track` resolves
+  `{ accepted: false }` and appears under _Blocked events_.
+- **view**, **click**, **hover** and **flag view** are Analytics events. They need a
+  profile, so send `page` first, and they are gated the same way.
+- The panel shows the profile in memory next to the profile in LocalStorage. With
+  _Events only_, events are sent but the profile is never written to storage.
+- Reload the page: both consent choices are restored, because they are stored in
+  LocalStorage the same way the profile is.
+
+The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. `server.ts` passes them on every request and `ConsentStore` relays them to the browser through `TransferState`. The delivery token
+reaches the browser, so use a read-only delivery token. The panel only sends events
+and never fetches an Experience.
+
+The interaction buttons send a fixed demo entity. The panel also starts
+`startInteractionTracking()`, but no rendered node is stamped for it yet, so views,
+hovers and clicks on the page are not tracked automatically. Stamping rendered nodes
+is waiting on the scope-based attribution in
+[#225](https://github.com/contentful/experiences/pull/225), which replaces
+`data-ctfl-node-id`.
+
 ### Optional: preview mode
 
 Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:4200/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.

@@ -75,23 +75,29 @@ policy; production applications must own those concerns.
 
 ### Optional: consent
 
-Every page shows a **Consent demo** panel (bottom right). It creates an
-`@contentful/experiences-web` runtime in the browser and lets you watch consent
-gating work:
+Every page shows a **Consent demo** panel (bottom right), rendered by `app/layout.tsx`. It creates an `@contentful/experiences-web` runtime in the browser and lets you watch consent gating work:
 
 - **Accept all / Reject all / Events only** call `consent(true | false | { events, persistence })`.
-- **page (allowed)** and **track (gated)** fire real events. With consent undecided,
-  `page` is sent (it is in the default `allowedEventTypes`) and `track` resolves
+- **page** and **track** are Personalization events. With consent undecided, `page` is
+  sent (it is in the default `allowedEventTypes`) and `track` resolves
   `{ accepted: false }` and appears under _Blocked events_.
+- **view**, **click**, **hover** and **flag view** are Analytics events. They need a
+  profile, so send `page` first, and they are gated the same way.
 - The panel shows the profile in memory next to the profile in LocalStorage. With
   _Events only_, events are sent but the profile is never written to storage.
 - Reload the page: both consent choices are restored, because they are stored in
   LocalStorage the same way the profile is.
 
-The panel needs three browser-visible variables in `.env.local`:
-`NEXT_PUBLIC_SPACE_ID`, `NEXT_PUBLIC_ENVIRONMENT_ID` and `NEXT_PUBLIC_CDA_TOKEN`.
-Use a token that is safe to expose. The panel only sends events and never fetches
-an Experience.
+The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. The server layout passes them to the client component. The delivery token
+reaches the browser, so use a read-only delivery token. The panel only sends events
+and never fetches an Experience.
+
+The interaction buttons send a fixed demo entity. The panel also starts
+`startInteractionTracking()`, but no rendered node is stamped for it yet, so views,
+hovers and clicks on the page are not tracked automatically. Stamping rendered nodes
+is waiting on the scope-based attribution in
+[#225](https://github.com/contentful/experiences/pull/225), which replaces
+`data-ctfl-node-id`.
 
 ### Optional: preview mode
 

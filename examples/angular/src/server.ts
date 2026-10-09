@@ -17,6 +17,7 @@ import express from 'express';
 
 import { experienceConfig } from './app/lib/experience-config.js';
 import { buildPagePersonalization } from './app/lib/personalization.js';
+import type { ConsentConfig } from './app/lib/consent-config.js';
 import type { ExperienceRouteData } from './app/lib/experience-route-data.js';
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
@@ -147,7 +148,13 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
 app.use(async (req, res, next) => {
   try {
     const context = await loadExperience(req);
-    const response = await angularApp.handle(req, context);
+    const consent: ConsentConfig = {
+      spaceId: process.env['SPACE_ID'] ?? '',
+      environmentId: process.env['ENVIRONMENT_ID'] || 'master',
+      accessToken: process.env['CDA_TOKEN'] ?? '',
+    };
+    // `consent` rides along on every request; the experience data only on slug routes.
+    const response = await angularApp.handle(req, { ...context, consent });
     if (!response) {
       next();
       return;
