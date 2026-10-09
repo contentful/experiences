@@ -60,7 +60,7 @@ const plan = await request.fetchExperience({
 });
 ```
 
-Personalization is request data rather than request-context state. Supplying it switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. Enabling or disabling automatic optimization behavior is outside this contract.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
 
 ## Request-scoped events
 
@@ -76,7 +76,8 @@ const experienceRequest = experiences.forRequest({
   eventConsent: hasAnalyticsConsent,
 });
 
-await experienceRequest.identify({ userId });
+const identified = await experienceRequest.identify({ userId });
+const evaluatedProfile = identified.accepted ? identified.data?.profile : undefined;
 // Persist experienceRequest.profile if your application stores profiles between requests.
 
 await experienceRequest.track({ event: 'checkout_started' });
@@ -86,7 +87,7 @@ await experienceRequest.trackClick({
 });
 ```
 
-`identify`, `page`, and `track` update the request profile from the Personalization API response.
+`identify`, `page`, and `track` send directly and return `{ accepted: true, data }` on success; transport errors reject. Their result type also permits accepted work without response data for a future queued sender. These calls update the request profile from the Personalization API response.
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
 current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
@@ -94,20 +95,34 @@ runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method'
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
 
-### Replay handoff for framework adapters
+### Prepare a browser handoff
 
-Only a Node request chooses delivery. Omit `eventDelivery` (or use `'commit'`)
-for direct server events; `createEventHandoff()` then returns `undefined`. Use
-`'handoff'` only when the paired browser runtime will receive this request's
-events. Prefer `previewInitialPersonalization()` for the initial sequence: it sends
-an ordered `identify` / `track` prefix plus one final `page` in a single
-preflight request. Individual Personalization methods remain cumulatively
-preflighted, and Analytics calls stage without transport (`true` means accepted).
-A page-bearing journal requires `initialPageRouteKey` when finalized. Finalize
-once with `createEventHandoff({ initialPageRouteKey })`; later event calls and a
-second finalization throw. Preflight profile data is not committed browser
-state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
-for response transport, browser route admission, and page fallback.
+Call `prepareRequestHandoff` on the request facade to build an ordered
+`identify` / `track` prefix and one final `page`. It previews the complete batch
+with `preflight: true` once, without committing events from Node:
+
+```ts
+const { handoff, data } = await experienceRequest.prepareRequestHandoff({
+  routeKey: '/products?category=chairs',
+  initialEvents: [{ type: 'track', event: 'experience_rendered' }],
+  page: { properties: { title: 'Chairs' } },
+});
+```
+
+The route key is the visible pathname plus search and must begin with `/`.
+Invalid input returns a private handoff without replay or preview data and logs
+a diagnostic. A failed preview retains the already-built replay with the same
+event IDs and omits `data`, so the caller can render a fallback. A successful
+preview updates only request-local evaluated profile state; its data and
+continuation ID do not mean those events were committed. The handoff is
+browser-visible sensitive data: use escaped serialization in a private,
+no-store response, and do not log or persist it.
+
+Ordinary `identify`, `page`, `track`, and Analytics calls remain direct server
+events and do not join a handoff journal. The Web SDK still consumes the old
+constructor journal during this phased change; its replacement hydration API
+is not yet implemented, so this new handoff is not yet a complete Node-to-Web
+integration.
 
 ## Precedence
 

@@ -15,6 +15,7 @@ export type { RuntimeOptimizationConfig } from './create-optimization-client.js'
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
+export type { EventEmissionResult } from './event-emission-result.js';
 export {
   buildPreparedEvents,
   validatePreparedEvents,

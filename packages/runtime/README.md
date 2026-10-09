@@ -22,7 +22,7 @@ See the [Node](../node/README.md), [Web](../web/README.md), and [root paired rep
 
 ## Shared handoff primitives
 
-Runtime also exports `ExperiencesHandoff`, `createExperiencesHandoff`, `parseExperiencesHandoff`, `buildPreparedEvents`, `validatePreparedEvents`, cache-safety diagnostics, and `createRequestHandoffFromData`. These are shared building blocks for the new request/browser handoff contract; the Node and Web SDKs still use their existing event journal until their replacement methods are implemented.
+Runtime also exports `ExperiencesHandoff`, `createExperiencesHandoff`, `parseExperiencesHandoff`, `buildPreparedEvents`, `validatePreparedEvents`, cache-safety diagnostics, and `createRequestHandoffFromData`. Node now uses these primitives for `prepareRequestHandoff()`. Web still uses its constructor journal until its replacement hydration method is implemented, so the new handoff is not yet a complete Node-to-Web flow.
 
 The new handoff carries its Contentful space and environment, cache scope, optional evaluated profile, optional continuation ID, and optional prepared Personalization replay. `buildPreparedEvents` captures event IDs, timestamps, request context, locale, and current GDPR metadata once without sending; `eventConsent` remains metadata, not a permission gate. A prepared replay has identify/track events followed by exactly one final page, with at most 200 events and 50 identify events. The parser validates untrusted data, optional receiving-runtime scope, cache safety, and replay order before a browser can use it. It does not send events or alter SDK state.
 

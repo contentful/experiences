@@ -3,8 +3,8 @@ export type {
   ExperiencesNodeConfig,
   ExperiencesNodeRequest,
   ExperiencesNodeRequestContext,
-  InitialPersonalizationPreviewCommand,
-  InitialPersonalizationPreviewOptions,
+  PrepareRequestHandoffOptions,
+  PrepareRequestHandoffResult,
 } from './contentful-experiences.js';
 export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-info.js';
 
@@ -24,15 +24,15 @@ export type {
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
 export type {
   EventOptimizationData,
+  EventEmissionResult,
   EventProfile,
+  ExperiencesHandoff,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  RuntimeEventMethods,
-  RuntimeEventHandoff,
-  RuntimeServerEventDelivery,
+  InitialPersonalizationEvent,
   RuntimeOptimizationConfig,
   RuntimeDeliveryClientOptions,
   RuntimeFetchByDestinationNodeOptions,
