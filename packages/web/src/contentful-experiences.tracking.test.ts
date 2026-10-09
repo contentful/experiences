@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { EventBuilder } from '@contentful/experiences-client';
+import { EventBuilder } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -8,15 +8,8 @@ export const NotFoundError = ContentfulViewDelivery.NotFoundError;
 // eslint-disable-next-line no-redeclare -- value + type share a name across separate TS namespaces, not a real redeclaration
 export type NotFoundError = InstanceType<typeof ContentfulViewDelivery.NotFoundError>;
 export { ExperienceFetchError, DestinationPreviewNotSupportedError } from './errors.js';
-export { ANONYMOUS_ID_COOKIE, PROFILE_CACHE_KEY } from './constants.js';
 export { createClient } from './create-delivery-client.js';
-export type {
-  CreateClientOptions,
-  RuntimeDeliveryClientOptions,
-} from './create-delivery-client.js';
-export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
-export { default as EventBuilder } from './event-builder.js';
-export * from './event-builder.js';
+export type { CreateClientOptions } from './create-delivery-client.js';
 export { fetchExperience } from './fetch-experience.js';
 export { fetchDestinationSitemap } from './fetch-destination-sitemap.js';
 export type {
@@ -25,36 +18,6 @@ export type {
   SitemapPathItem,
   DestinationSitemapResult,
 } from './fetch-destination-sitemap.js';
-export { ContentfulExperiences } from './contentful-experiences.js';
-export type {
-  ContentfulExperiencesConfig,
-  ExperienceRuntime,
-  RuntimeFetchExperienceOptions,
-  RuntimeFetchByDestinationNodeOptions,
-  RuntimeFetchByDestinationPathOptions,
-  RuntimeEventBuilderConfig,
-  RuntimeResolveOptions,
-} from './contentful-experiences.js';
-export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
-export type {
-  EventOptimizationData,
-  EventProfile,
-  AnalyticsEventMethod,
-  PersonalizationEventMethod,
-  RuntimeEventBindings,
-  RuntimeEventMethods,
-} from './runtime-event-methods.js';
-export {
-  assertRuntimeEventHandoffSize,
-  parseRuntimeEventHandoff,
-  RUNTIME_EVENT_HANDOFF_VERSION,
-} from './runtime-event-handoff.js';
-export type {
-  RuntimeEventHandoff,
-  RuntimeEventHandoffEvent,
-  RuntimeEventHandoffReceipt,
-  RuntimeServerEventDelivery,
-} from './runtime-event-handoff.js';
 export {
   readSourceMap,
   toExperiencePayload,

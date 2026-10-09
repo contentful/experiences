@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { PROFILE_CACHE_KEY } from '@contentful/experiences-client';
+import { PROFILE_CACHE_KEY } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import LocalStore from './local-store.js';

@@ -256,7 +256,7 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Architecture boundary
 
-`@contentful/experiences-web` is a public Web-specific sibling of `@contentful/experiences-node`. Both build on the internal `@contentful/experiences-client` and `@contentful/experiences-sdk-core` packages. The Web package owns browser state; the Node package owns request-local state. Neither package inherits the other's lifecycle semantics.
+`@contentful/experiences-web` is a public Web-specific sibling of `@contentful/experiences-node`. Both build on the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime owns shared event construction and orchestration; Client owns the generated Delivery boundary and free fetch functions. The Web package owns browser state; the Node package owns request-local state. Neither package inherits the other's lifecycle semantics.
 
 ## License
 

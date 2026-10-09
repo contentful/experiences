@@ -20,10 +20,13 @@ const {
   };
 });
 
-vi.mock('./create-delivery-client.js', () => ({
+vi.mock('./create-runtime-delivery-client.js', () => ({
   createRuntimeDeliveryClient: mockCreateRuntimeDeliveryClient,
 }));
-vi.mock('./fetch-experience.js', () => ({ fetchExperience: mockFetchExperience }));
+vi.mock('@contentful/experiences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@contentful/experiences-client')>()),
+  fetchExperience: mockFetchExperience,
+}));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
 vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient }));
 
@@ -233,7 +236,7 @@ describe('ContentfulExperiences', () => {
     });
     expect(runtime.eventBuilder.channel).toBe('web');
     expect(runtime.eventBuilder.library).toMatchObject({
-      name: '@contentful/experiences-client',
+      name: '@contentful/experiences-runtime',
       version: 'test',
     });
     expect(runtime.eventBuilder.getLocale()).toBe('de-DE');

@@ -109,8 +109,8 @@ export type {
 export { resolveExperience } from '@contentful/experiences-sdk-core';
 export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
-// ─── Event builder (re-exported from client) ──────────────────────────────
-export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-client';
+// ─── Event builder (re-exported from runtime) ─────────────────────────────
+export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-runtime';
 export type {
   ClickBuilderArgs,
   EventBuilderConfig,
@@ -122,7 +122,7 @@ export type {
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 
 // ─── Core IR + payload types (re-exported from render-core) ───────────────
 export type {
@@ -149,7 +149,6 @@ export { CSS_PROPERTIES, isCssProperty, toCssKey } from '@contentful/experiences
 
 // ─── Delivery client + fetchExperience ────────────────────────────────────
 export {
-  ANONYMOUS_ID_COOKIE,
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
@@ -163,6 +162,7 @@ export {
   toExperiencePayload,
   toExperiencePayloadFromDestination,
 } from '@contentful/experiences-client';
+export { ANONYMOUS_ID_COOKIE } from '@contentful/experiences-runtime';
 export type {
   ByDestinationNodeIdExperienceOptions,
   ByDestinationPathExperienceOptions,

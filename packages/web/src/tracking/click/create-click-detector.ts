@@ -1,4 +1,4 @@
-import type { ClickBuilderArgs } from '@contentful/experiences-client';
+import type { ClickBuilderArgs } from '@contentful/experiences-runtime';
 
 import { TRACKING_CLICKABLE_ATTRIBUTE } from '../../tracking-attributes.js';
 import {

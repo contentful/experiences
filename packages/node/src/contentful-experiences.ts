@@ -1,10 +1,10 @@
+import type { DestinationRedirectResult } from '@contentful/experiences-client';
 import {
-  ContentfulExperiences as ClientContentfulExperiences,
+  ContentfulExperiences as RuntimeContentfulExperiences,
   assertRuntimeEventHandoffSize,
   parseRuntimeEventHandoff,
   RUNTIME_EVENT_HANDOFF_VERSION,
   type ContentfulExperiencesConfig,
-  type DestinationRedirectResult,
   type EventBuilderConfig,
   type EventOptimizationData,
   type EventProfile,
@@ -21,7 +21,7 @@ import {
   type TrackBuilderArgs,
   type RuntimeEventHandoffEvent,
   type UniversalEventBuilderArgs,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
@@ -113,7 +113,7 @@ export interface ExperiencesNodeRequest {
 }
 
 /** A Node-oriented runtime whose mutable request state is isolated by forRequest(). */
-export class ContentfulExperiences extends ClientContentfulExperiences {
+export class ContentfulExperiences extends RuntimeContentfulExperiences {
   constructor(config: ExperiencesNodeConfig) {
     const { app, ...clientConfig } = config;
     super({

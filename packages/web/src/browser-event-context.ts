@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_PROPERTIES, type EventBuilderConfig } from '@contentful/experiences-client';
+import { DEFAULT_PAGE_PROPERTIES, type EventBuilderConfig } from '@contentful/experiences-runtime';
 
 type Page = ReturnType<NonNullable<EventBuilderConfig['getPageProperties']>>;
 

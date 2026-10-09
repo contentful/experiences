@@ -30,7 +30,7 @@ afterEach(() => {
 describe('EventBuilder', () => {
   it('uses an unbundled default event context library', () => {
     expect(DEFAULT_EVENT_CONTEXT_LIBRARY).toEqual({
-      name: '@contentful/experiences-client',
+      name: '@contentful/experiences-runtime',
       version: '0.0.0',
     });
   });

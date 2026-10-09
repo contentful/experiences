@@ -1,4 +1,11 @@
-import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
+import {
+  ContentfulViewDeliveryClient,
+  fetchExperience,
+  PREVIEW_HOST,
+  type DestinationRedirectResult,
+  type ExperienceRequestExtensions,
+  type PersonalizationOptions,
+} from '@contentful/experiences-client';
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
 import type {
   ExperiencePayload,
@@ -10,18 +17,11 @@ import type { EventBuilderConfig } from './event-builder.js';
 import {
   createRuntimeDeliveryClient,
   type RuntimeDeliveryClientOptions,
-} from './create-delivery-client.js';
-import {
-  fetchExperience,
-  type DestinationRedirectResult,
-  type ExperienceRequestExtensions,
-  type PersonalizationOptions,
-} from './fetch-experience.js';
+} from './create-runtime-delivery-client.js';
 import {
   createRuntimeOptimizationClient,
   type RuntimeOptimizationConfig,
 } from './create-optimization-client.js';
-import { PREVIEW_HOST } from './hosts.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import {
   createRuntimeEventMethods,
@@ -59,7 +59,7 @@ export type RuntimeFetchByDestinationPathOptions = {
   path: string;
 };
 
-/** Structural contract implemented by the Client runtime. */
+/** Structural contract implemented by the shared runtime. */
 export interface ExperienceRuntime {
   readonly spaceId: string;
   readonly environmentId: string;

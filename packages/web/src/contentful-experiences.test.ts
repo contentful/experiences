@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import {
-  ContentfulExperiences as ClientContentfulExperiences,
+  ContentfulExperiences as RuntimeContentfulExperiences,
   EventBuilder,
   EventProfileRequiredError,
   PROFILE_CACHE_KEY,
   type EventProfile,
   type RuntimeEventHandoff,
-} from '@contentful/experiences-client';
+} from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -138,7 +138,7 @@ describe('Web ContentfulExperiences', () => {
   it('uses mutable defaults while preserving a per-call locale', async () => {
     const runtime = createRuntime();
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
     runtime.setLocale('de-DE');
@@ -162,7 +162,7 @@ describe('Web ContentfulExperiences', () => {
   it('forwards personalization with Web event context', async () => {
     const runtime = createRuntime();
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
     const personalization = {
@@ -188,7 +188,7 @@ describe('Web ContentfulExperiences', () => {
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(storedProfile));
     const runtime = createRuntime();
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience({ experienceId: 'personalized' });
@@ -207,7 +207,7 @@ describe('Web ContentfulExperiences', () => {
     const profile = { id: 'browser-profile', traits: { plan: 'pro' } };
     const runtime = createRuntime({ profile });
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience({
@@ -227,7 +227,7 @@ describe('Web ContentfulExperiences', () => {
 
   it('persists a minimal profile returned by XDA on the render plan', async () => {
     const runtime = createRuntime();
-    vi.spyOn(ClientContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
+    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       nodes: [],
       personalization: { profileId: 'xda-profile' },
     } as never);
@@ -313,7 +313,7 @@ describe('Web ContentfulExperiences', () => {
     expect(options).toBeDefined();
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
-      .spyOn(ClientContentfulExperiences.prototype, 'fetchExperience')
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
     await runtime.fetchExperience(options);

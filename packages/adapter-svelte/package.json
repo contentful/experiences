@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@contentful/experiences-client": "0.9.1",
+    "@contentful/experiences-runtime": "0.0.0",
     "@contentful/experiences-sdk-core": "0.12.0",
     "@contentful/experiences-design": "0.12.0",
     "@contentful/experiences-live-preview": "0.6.1"

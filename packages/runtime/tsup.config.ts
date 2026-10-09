@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import packageJson from './package.json';
 
 export default defineConfig({
   entry: ['src/**/*.ts', '!src/**/*.test.ts'],
@@ -11,4 +12,10 @@ export default defineConfig({
   tsconfig: 'tsconfig.lib.json',
   bundle: false,
   external: [/^@contentful\//],
+  define: {
+    __DEFAULT_EVENT_CONTEXT_LIBRARY_NAME__: JSON.stringify(packageJson.name),
+    __DEFAULT_EVENT_CONTEXT_LIBRARY_VERSION__: JSON.stringify(
+      process.env.RELEASE_VERSION ?? packageJson.version
+    ),
+  },
 });
