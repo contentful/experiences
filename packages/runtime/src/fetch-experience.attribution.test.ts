@@ -1,9 +1,3 @@
-/*
- * End to end from a mocked delivery response: fetchExperience → plan →
- * EventBuilder. Only the delivery client is faked. Core is the real one, so this
- * pins that the attribution it resolves is accepted by the event builders and
- * validates against the Optimization ExO event schemas.
- */
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -29,7 +23,6 @@ const payload = {
   ],
 };
 
-// An Experience holding one selected-variant persisted Fragment.
 const sourceMap = {
   version: 1,
   variants: [
@@ -103,7 +96,6 @@ describe('fetchExperience → plan → EventBuilder', () => {
       entryIds: ['entry-1'],
     });
 
-    // The key is plan-local and only ever used for lookup: drop it from the event.
     const { key: _key, ...args } = fragment;
     const view = builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 });
     const click = builder.buildClick(args);
@@ -146,7 +138,6 @@ describe('fetchExperience → plan → EventBuilder', () => {
   });
 
   it('keeps ScopeAttribution structurally assignable to the event builder args', () => {
-    // Compile-time check: core cannot import client, so the two shapes must stay compatible.
     const scope: ScopeAttribution = { key: 's0', entityId: 'exp-1', entityKind: 'Experience' };
     const { key: _key, ...args } = scope;
     const asArgs: InteractionBuilderArgsBase = args;
