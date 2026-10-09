@@ -53,22 +53,22 @@ function find(nodes: PortableRenderNode[], nodeId: string): PortableRenderNode {
 
 describe('scope attribution', () => {
   it('attributes a personalized Experience with its variant fields', async () => {
-    const plan = await resolve([node('crazMajw'), node('UCFoGvoL')], EXPERIENCE_SOURCE_MAP);
+    const plan = await resolve([node('node1-1'), node('node1-2')], EXPERIENCE_SOURCE_MAP);
 
     const [scope] = plan.nodes[0]!.attribution!.scopes;
     expect(scope).toMatchObject({
-      entityId: '4U7LvmPRpVnyXZ99swrKDB',
+      entityId: 'experience1',
       entityKind: 'Experience',
       entityKindId: 'page',
-      variantId: '3931542a-c6fb-4bdf-a45c-7d45f70f3dff',
+      variantId: 'variant1',
       variantIndex: 1,
-      optimizationId: 'mtoballCkoExperienceP13n',
+      optimizationId: 'optimization1',
     });
     expect(scope).not.toHaveProperty('parentExperienceId');
   });
 
   it('puts sibling nodes of one Experience in a single occurrence', async () => {
-    const plan = await resolve([node('crazMajw'), node('UCFoGvoL')], EXPERIENCE_SOURCE_MAP);
+    const plan = await resolve([node('node1-1'), node('node1-2')], EXPERIENCE_SOURCE_MAP);
 
     const [a, b] = plan.nodes.map((n) => n.attribution!.scopes[0]!.key);
     expect(a).toBe(b);
@@ -76,30 +76,29 @@ describe('scope attribution', () => {
   });
 
   it('attributes a Fragment with its parent Experience, and puts the node in both scopes', async () => {
-    const plan = await resolve([node('gUzHp2GL')], FRAGMENT_SOURCE_MAP);
+    const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
     const { scopes, roots } = plan.nodes[0]!.attribution!;
     expect(scopes.map((s) => s.entityKind)).toEqual(['Experience', 'Fragment']);
     expect(scopes[1]).toMatchObject({
-      entityId: 'zvosZZZnhrV17KZNIzWqi',
+      entityId: 'fragment2',
       entityKind: 'Fragment',
-      entityKindId: 'mtoball-demo-hero',
-      variantId: 'bf07694c-a84d-4222-882c-b8e28f06213b',
+      entityKindId: 'demo-hero',
+      variantId: 'variant2',
       variantIndex: 1,
-      optimizationId: 'mtoballCkoFragmentExp',
-      parentExperienceId: '1wcc7mRucneXijoVZPZqxx',
+      optimizationId: 'optimization2',
+      parentExperienceId: 'experience2',
     });
-    // Both scopes begin at this node.
     expect(roots).toHaveLength(2);
   });
 
   it('omits variant fields for the baseline instead of inventing them', async () => {
-    const plan = await resolve([node('gUzHp2GL')], FRAGMENT_SOURCE_MAP);
+    const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
     const experience = plan.nodes[0]!.attribution!.scopes[0]!;
     expect(experience).toEqual({
       key: experience.key,
-      entityId: '1wcc7mRucneXijoVZPZqxx',
+      entityId: 'experience2',
       entityKind: 'Experience',
       entityKindId: 'page',
     });
@@ -107,14 +106,14 @@ describe('scope attribution', () => {
 
   it('walks through inline fragments without reporting them', async () => {
     const plan = await resolve(
-      [node('8wYTMvI6'), node('yYC7lNJo', { children: [node('wC4h4HTc')] })],
+      [node('node-3-1'), node('node-3-2', { children: [node('node-3-3')] })],
       LANDING_SOURCE_MAP
     );
 
     for (const scopes of [
       plan.nodes[0]!.attribution!.scopes,
       plan.nodes[1]!.attribution!.scopes,
-      find(plan.nodes, 'wC4h4HTc').attribution!.scopes,
+      find(plan.nodes, 'node-3-3').attribution!.scopes,
     ]) {
       expect(scopes.map((s) => s.entityId)).toEqual(['landing']);
     }
@@ -125,17 +124,15 @@ describe('scope attribution', () => {
 
   it('marks a nested node as inside its parent occurrence, not a root', async () => {
     const plan = await resolve(
-      [node('yYC7lNJo', { children: [node('wC4h4HTc')] })],
+      [node('node-3-2', { children: [node('node-3-3')] })],
       LANDING_SOURCE_MAP
     );
 
     expect(plan.nodes[0]!.attribution!.roots).toHaveLength(1);
-    expect(find(plan.nodes, 'wC4h4HTc').attribution!.roots).toEqual([]);
+    expect(find(plan.nodes, 'node-3-3').attribution!.roots).toEqual([]);
   });
 
   describe('two copies of one persisted Fragment (recorded from a live space)', () => {
-    // XDA gives both copies the same layer row AND the same node ids, so the map
-    // alone cannot tell them apart. Only position can.
     const fragmentKeys = (plan: { nodes: PortableRenderNode[] }) =>
       plan.nodes.map(
         (n) => n.attribution?.scopes.find((s) => s.entityKind === 'Fragment')?.key ?? null
@@ -154,7 +151,7 @@ describe('scope attribution', () => {
 
     it('keeps them distinct when another node sits between them, despite identical ids', async () => {
       const [first, second] = REPEATED_FRAGMENT_PAYLOAD.nodes;
-      // A sibling that belongs to no Fragment, inserted between the copies.
+
       const separator = node('separator');
       const sourceMap = {
         ...REPEATED_FRAGMENT_PAYLOAD.extensions!.sourceMap!,
@@ -198,7 +195,7 @@ describe('scope attribution', () => {
       ),
     };
 
-    const plan = await resolve([node('gUzHp2GL')], sourceMap);
+    const plan = await resolve([node('node2-1')], sourceMap);
 
     expect(plan.nodes[0]!.attribution!.scopes[1]).not.toHaveProperty('entityKindId');
   });
@@ -212,7 +209,7 @@ describe('scope attribution', () => {
     };
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const plan = await resolveExperience(payloadOf([node('gUzHp2GL')]), config, {
+    const plan = await resolveExperience(payloadOf([node('node2-1')]), config, {
       sourceMap: sourceMap as ExperienceSourceMap,
       debug: true,
     });
@@ -228,18 +225,18 @@ describe('scope attribution', () => {
       layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) => {
         if (i === 1) return { kind: 'Template', id: 'page' };
         if (i === 3) return { ...(layer as object), kind: 'Fragment' };
-        if (i === 4) return { kind: 'ComponentType', id: 'mtoball-demo-hero' };
+        if (i === 4) return { kind: 'ComponentType', id: 'demo-hero' };
         return layer;
       }),
     };
 
-    const plan = await resolve([node('gUzHp2GL')], sourceMap);
+    const plan = await resolve([node('node2-1')], sourceMap);
 
     expect(plan.nodes[0]!.attribution!.scopes.map((s) => s.entityKind)).toEqual([
       'Experience',
       'Fragment',
     ]);
-    expect(plan.nodes[0]!.attribution!.scopes[1]!.entityKindId).toBe('mtoball-demo-hero');
+    expect(plan.nodes[0]!.attribution!.scopes[1]!.entityKindId).toBe('demo-hero');
   });
 
   it('skips a node with no id, and a node missing from the map', async () => {
@@ -278,8 +275,8 @@ describe('scope attribution', () => {
   });
 
   it('clears attribution when the next resolve carries no map', async () => {
-    const withMap = await resolve([node('crazMajw')], EXPERIENCE_SOURCE_MAP);
-    const without = await resolveExperience(payloadOf([node('crazMajw')]), config);
+    const withMap = await resolve([node('node1-1')], EXPERIENCE_SOURCE_MAP);
+    const without = await resolveExperience(payloadOf([node('node1-1')]), config);
 
     expect(withMap.attribution).toBeDefined();
     expect(without.attribution).toBeUndefined();
@@ -287,7 +284,7 @@ describe('scope attribution', () => {
   });
 
   it('survives a JSON round trip', async () => {
-    const plan = await resolve([node('gUzHp2GL')], FRAGMENT_SOURCE_MAP);
+    const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
     expect(JSON.parse(JSON.stringify(plan.attribution))).toEqual(plan.attribution);
     expect(JSON.parse(JSON.stringify(plan.nodes[0]!.attribution))).toEqual(
@@ -296,7 +293,7 @@ describe('scope attribution', () => {
   });
 
   it('shares one frozen scope object per occurrence', async () => {
-    const plan = await resolve([node('crazMajw'), node('UCFoGvoL')], EXPERIENCE_SOURCE_MAP);
+    const plan = await resolve([node('node1-1'), node('node1-2')], EXPERIENCE_SOURCE_MAP);
 
     const [a, b] = plan.nodes.map((n) => n.attribution!.scopes[0]!);
     expect(a).toBe(b);
@@ -308,7 +305,6 @@ describe('scope attribution', () => {
     const entries = ['e0', 'e1', 'e2', 'e3'].map((id) => ({ space: 0, environment: 0, id }));
     const entry = (n: number) => ({ type: 'entry', entry: n, field: 'f', locale: 0 });
 
-    /** A one-node Experience whose only binding reads `path` from `dataAssemblies[0]`. */
     function mapWith(
       dataAssemblies: unknown[],
       bindings: Record<string, unknown>,
@@ -345,25 +341,25 @@ describe('scope attribution', () => {
     }
 
     it('reports the entries an Experience binds through its inline fragments', async () => {
-      const plan = await resolve([node('crazMajw'), node('UCFoGvoL')], EXPERIENCE_SOURCE_MAP);
+      const plan = await resolve([node('node1-1'), node('node1-2')], EXPERIENCE_SOURCE_MAP);
 
       const [scope] = plan.nodes[0]!.attribution!.scopes;
-      expect(scope!.entryIds).toEqual(['mtoballSmPersonalized', 'mtoballSmFragmentBaseline']);
+      expect(scope!.entryIds).toEqual(['personalized', 'baseline']);
       expect(plan.attribution!.scopes[scope!.key]!.entryIds).toEqual(scope!.entryIds);
-      expect(plan.nodes[0]!.attribution!.entryIds).toEqual(['mtoballSmPersonalized']);
+      expect(plan.nodes[0]!.attribution!.entryIds).toEqual(['personalized']);
     });
 
     it("keeps a persisted Fragment's entries off the enclosing Experience", async () => {
-      const plan = await resolve([node('gUzHp2GL')], FRAGMENT_SOURCE_MAP);
+      const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
       const [experience, fragment] = plan.nodes[0]!.attribution!.scopes;
-      expect(fragment!.entryIds).toEqual(['mtoballSmFragmentVariantB']);
+      expect(fragment!.entryIds).toEqual(['smFragmentVariantB']);
       expect(experience).not.toHaveProperty('entryIds');
     });
 
     it('unions the entries of a whole Experience', async () => {
       const plan = await resolve(
-        [node('8wYTMvI6'), node('yYC7lNJo', { children: [node('wC4h4HTc'), node('ulNQW8vo')] })],
+        [node('node-3-1'), node('node-3-2', { children: [node('node-3-3'), node('node-3-4')] })],
         LANDING_SOURCE_MAP
       );
 
@@ -478,11 +474,11 @@ describe('scope attribution', () => {
     });
 
     it('leaves entryIds off a node bound to nothing', async () => {
-      const plan = await resolve([node('8wYTMvI6'), node('yYC7lNJo')], LANDING_SOURCE_MAP);
+      const plan = await resolve([node('node-3-1'), node('node-3-2')], LANDING_SOURCE_MAP);
 
       expect(plan.nodes[0]!.attribution!.entryIds).toEqual(['demo-entry-hero']);
       expect(plan.nodes[1]!.attribution).not.toHaveProperty('entryIds');
-      // The scope still carries its sibling's entry.
+
       expect(plan.nodes[1]!.attribution!.scopes[0]!.entryIds).toEqual(['demo-entry-hero']);
     });
   });

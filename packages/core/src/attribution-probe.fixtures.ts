@@ -1,19 +1,3 @@
-/*
- * A live XDA response recorded on 2026-10-05 for the NT-4312 layer-row probe:
- * one published persisted Fragment placed twice, side by side, in the `content`
- * slot of an Experience (space aox0hhtsbl0l).
- *
- * What it shows, and why tests use it instead of hand-built maps:
- * - both copies point at the same `ExperienceFragment` layer row (3) with the
- *   same layer `id`;
- * - both copies carry the SAME node ids (`Mksv7-QC`, and `BsXMMRwA` inside), so
- *   the source map has 2 node entries for 4 rendered nodes. The Source Maps RFC
- *   says node ids are unique per usage; XDA does not deliver that for a repeated
- *   Fragment.
- *
- * Nothing in the map tells the two copies apart.
- */
-
 import type { ExperiencePayload } from './types.js';
 
 export const REPEATED_FRAGMENT_PAYLOAD = {

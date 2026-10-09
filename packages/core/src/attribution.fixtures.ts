@@ -1,9 +1,3 @@
-/*
- * Real XDA source maps recorded in EXA-2167 (Max Toball, 2026-09-29): a selected
- * Experience-personalization variant, a selected Fragment-experiment variant,
- * and a live capture of the nextjs example's /landing page with nothing active.
- */
-
 import type { ExperienceSourceMap } from './types.js';
 
 export const EXPERIENCE_SOURCE_MAP: ExperienceSourceMap = {
@@ -12,33 +6,33 @@ export const EXPERIENCE_SOURCE_MAP: ExperienceSourceMap = {
     { type: 'personalization', id: 'default' },
     {
       type: 'personalization',
-      id: '3931542a-c6fb-4bdf-a45c-7d45f70f3dff',
-      experienceId: '4U7LvmPRpVnyXZ99swrKDB',
-      optimizationId: 'mtoballCkoExperienceP13n',
-      variantId: '3931542a-c6fb-4bdf-a45c-7d45f70f3dff',
+      id: '1234',
+      experienceId: 'experience1',
+      optimizationId: 'optimization1',
+      variantId: 'variant1',
       variantIndex: 1,
     },
   ],
-  spaces: ['u32flu02kn1w'],
-  environments: ['mtoball'],
+  spaces: ['space1'],
+  environments: ['environment1'],
   locales: ['en-US'],
   entries: [
-    { space: 0, environment: 0, id: 'mtoballSmPersonalized' },
-    { space: 0, environment: 0, id: 'mtoballSmFragmentBaseline' },
+    { space: 0, environment: 0, id: 'personalized' },
+    { space: 0, environment: 0, id: 'baseline' },
   ],
   assets: [],
   layers: [
-    { kind: 'Experience', id: '4U7LvmPRpVnyXZ99swrKDB', variants: [1] },
+    { kind: 'Experience', id: 'experience1', variants: [1] },
     { kind: 'ExperienceTemplate', id: 'page' },
     { kind: 'Slot', id: 'content' },
-    { kind: 'InlineExperienceFragment', id: 'mtoball-personalized-hero', dataAssembly: 0 },
-    { kind: 'Component', id: 'mtoball-demo-intro' },
-    { kind: 'InlineExperienceFragment', id: 'mtoball-experiment-hero-inline', dataAssembly: 1 },
-    { kind: 'Component', id: 'mtoball-demo-hero' },
+    { kind: 'InlineExperienceFragment', id: 'personalized-hero', dataAssembly: 0 },
+    { kind: 'Component', id: 'demo-intro' },
+    { kind: 'InlineExperienceFragment', id: 'experiment-hero-inline', dataAssembly: 1 },
+    { kind: 'Component', id: 'demo-hero' },
   ],
   dataAssemblies: [
     {
-      id: '3x6nn7opWZmHZBgy7ksF9S',
+      id: 'assembly1',
       parameters: {
         title: { type: 'literal' },
         eyebrow: { type: 'literal' },
@@ -51,7 +45,7 @@ export const EXPERIENCE_SOURCE_MAP: ExperienceSourceMap = {
       },
     },
     {
-      id: '3x6nn7opWZmHZBgy7ksF9S',
+      id: 'assembly1',
       parameters: {
         title: { type: 'literal' },
         eyebrow: { type: 'literal' },
@@ -65,7 +59,7 @@ export const EXPERIENCE_SOURCE_MAP: ExperienceSourceMap = {
     },
   ],
   nodes: {
-    crazMajw: {
+    'node1-1': {
       layers: [4, 3, 2, 1, 0],
       scope: 3,
       contentProperties: [
@@ -76,7 +70,7 @@ export const EXPERIENCE_SOURCE_MAP: ExperienceSourceMap = {
         },
       ],
     },
-    UCFoGvoL: {
+    'node1-2': {
       layers: [6, 5, 2, 1, 0],
       scope: 5,
       contentProperties: [
@@ -96,27 +90,27 @@ export const FRAGMENT_SOURCE_MAP: ExperienceSourceMap = {
     { type: 'personalization', id: 'default' },
     {
       type: 'personalization',
-      id: 'bf07694c-a84d-4222-882c-b8e28f06213b',
-      optimizationId: 'mtoballCkoFragmentExp',
-      variantId: 'bf07694c-a84d-4222-882c-b8e28f06213b',
+      id: '2345',
+      optimizationId: 'optimization2',
+      variantId: 'variant2',
       variantIndex: 1,
     },
   ],
-  spaces: ['u32flu02kn1w'],
-  environments: ['mtoball'],
+  spaces: ['space1'],
+  environments: ['environment1'],
   locales: ['en-US'],
-  entries: [{ space: 0, environment: 0, id: 'mtoballSmFragmentVariantB' }],
+  entries: [{ space: 0, environment: 0, id: 'smFragmentVariantB' }],
   assets: [],
   layers: [
-    { kind: 'Experience', id: '1wcc7mRucneXijoVZPZqxx', variants: [0] },
+    { kind: 'Experience', id: 'experience2', variants: [0] },
     { kind: 'ExperienceTemplate', id: 'page' },
     { kind: 'Slot', id: 'content' },
-    { kind: 'ExperienceFragment', id: 'zvosZZZnhrV17KZNIzWqi', variants: [1], dataAssembly: 0 },
-    { kind: 'Component', id: 'mtoball-demo-hero' },
+    { kind: 'ExperienceFragment', id: 'fragment2', variants: [1], dataAssembly: 0 },
+    { kind: 'Component', id: 'demo-hero' },
   ],
   dataAssemblies: [
     {
-      id: '3x6nn7opWZmHZBgy7ksF9S',
+      id: 'assembly1',
       parameters: {
         title: { type: 'literal' },
         eyebrow: { type: 'literal' },
@@ -130,7 +124,7 @@ export const FRAGMENT_SOURCE_MAP: ExperienceSourceMap = {
     },
   ],
   nodes: {
-    gUzHp2GL: {
+    'node2-1': {
       layers: [4, 3, 2, 1, 0],
       scope: 3,
       contentProperties: [
@@ -148,7 +142,7 @@ export const FRAGMENT_SOURCE_MAP: ExperienceSourceMap = {
 export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
   version: 1,
   variants: [{ type: 'personalization', id: 'default' }],
-  spaces: ['aox0hhtsbl0l'],
+  spaces: ['space2'],
   environments: ['master'],
   locales: ['en-US'],
   entries: [
@@ -172,7 +166,7 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
   ],
   dataAssemblies: [
     {
-      id: '2OP0Lv8EzklGo1ZCaNxIuA',
+      id: 'assembly2',
       parameters: { promo: { type: 'entry', entry: 0 } },
       return: {
         image: { type: 'unknown' },
@@ -182,7 +176,7 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
       },
     },
     {
-      id: '5KLQMTSMK4sr0wQqr1nd9n',
+      id: 'assembly2',
       parameters: { promo: { type: 'entry', entry: 1 } },
       return: {
         image: { type: 'unknown' },
@@ -193,7 +187,7 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
       },
     },
     {
-      id: 'demo-card-guide-assembly',
+      id: 'assembly3',
       parameters: { promo: { type: 'entry', entry: 2 } },
       return: {
         image: { type: 'unknown' },
@@ -205,7 +199,7 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
     },
   ],
   nodes: {
-    '8wYTMvI6': {
+    'node-3-1': {
       layers: [4, 3, 2, 1, 0],
       scope: 3,
       contentProperties: [
@@ -221,8 +215,8 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
         },
       ],
     },
-    yYC7lNJo: { layers: [6, 5, 2, 1, 0], scope: 5, contentProperties: [] },
-    wC4h4HTc: {
+    'node-3-2': { layers: [6, 5, 2, 1, 0], scope: 5, contentProperties: [] },
+    'node-3-3': {
       layers: [9, 8, 7, 6, 5, 2, 1, 0],
       scope: 8,
       contentProperties: [
@@ -239,7 +233,7 @@ export const LANDING_SOURCE_MAP: ExperienceSourceMap = {
         },
       ],
     },
-    ulNQW8vo: {
+    'node-3-4': {
       layers: [10, 7, 6, 5, 2, 1, 0],
       scope: 10,
       contentProperties: [
