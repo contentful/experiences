@@ -5,6 +5,8 @@ const nextConfig = {
   // the SDK packages alongside this example.
   transpilePackages: [
     '@contentful/experiences-react',
+    '@contentful/experiences-web',
+    '@contentful/experiences-client',
     // Workspace-internal deps — Next still needs to compile their source
     // even though the customer's package.json only lists experiences-react.
     '@contentful/experiences-sdk-core',
