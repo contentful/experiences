@@ -109,7 +109,9 @@ dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configu
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.
 Consent is scoped to the request facade and is never shared across requests or persisted.
-Check `request.canPersistProfile` before storing the profile id. `eventConsent` is a deprecated
+Check `request.canPersistProfile` before storing the profile id. Events passed in
+`fetchExperience({ personalization: { events } })` are filtered by the same request
+consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 
 `prepareRequestHandoff()` is gated as a unit, because the browser replays the batch whole: it is

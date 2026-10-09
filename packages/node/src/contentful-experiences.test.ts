@@ -761,5 +761,48 @@ describe('Node ContentfulExperiences', () => {
         expect(flags(undecided.handoff.replay?.events)).toEqual([false]);
       });
     });
+
+    it('drops caller-built fetchExperience events that request consent does not admit', async () => {
+      const onEventBlocked = vi.fn();
+      const { runtime } = createEventRuntime({ onEventBlocked });
+      const fetchExperience = vi
+        .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const page = runtime.eventBuilder.buildPageView();
+      const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+      await runtime.forRequest({ consent: { events: false } }).fetchExperience(
+        {
+          experienceId: 'personalized',
+          personalization: { profileId: 'p', events: [page, track] },
+        },
+        { config: resolverConfig }
+      );
+
+      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({
+        profileId: 'p',
+        events: [page],
+      });
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'track' })
+      );
+    });
+
+    it('forwards every caller-built event when request consent is granted', async () => {
+      const { runtime } = createEventRuntime();
+      const fetchExperience = vi
+        .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+      await runtime
+        .forRequest({ consent: true })
+        .fetchExperience(
+          { experienceId: 'personalized', personalization: { events: [track] } },
+          { config: resolverConfig }
+        );
+
+      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({ events: [track] });
+    });
   });
 });

@@ -4,6 +4,8 @@ import {
   buildPreparedEvents,
   createExperiencesHandoff,
   hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
   toConsentState,
   type AllowedEventType,
   type BlockedEvent,
@@ -281,11 +283,12 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const profileRevision = this.#profileRevision;
-    const profileId = options.personalization?.profileId ?? this.#profile?.id;
+    const gated = this.gatePersonalizationEvents(options);
+    const profileId = gated.personalization?.profileId ?? this.#profile?.id;
     const resolvedOptions =
       profileId === undefined
-        ? options
-        : { ...options, personalization: { ...options.personalization, profileId } };
+        ? gated
+        : { ...gated, personalization: { ...gated.personalization, profileId } };
     const plan = await this.runtime.fetchExperience(
       { ...resolvedOptions, locale: options.locale ?? this.locale },
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
@@ -315,6 +318,31 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       options,
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
+  }
+
+  /**
+   * Drops caller-built XDA events that this request's consent does not admit. The
+   * profile id still travels, since it is not an event.
+   */
+  private gatePersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): RuntimeFetchExperienceOptions {
+    const events = options.personalization?.events;
+    if (events === undefined) return options;
+
+    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
+    const admitted = events.filter((event) => {
+      if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
+      const method = methodForEventType(event.type);
+      if (method === undefined) return false;
+      try {
+        onEventBlocked?.({ reason: 'consent', method, args: [event] });
+      } catch {
+        // A failing diagnostic callback must not break event delivery.
+      }
+      return false;
+    });
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
   /**

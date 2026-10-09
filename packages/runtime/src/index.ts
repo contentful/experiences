@@ -3,6 +3,8 @@ export {
   CONSENT_CACHE_KEY,
   DEFAULT_ALLOWED_EVENT_TYPES,
   hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
   parseConsentState,
   toConsentState,
 } from './consent.js';

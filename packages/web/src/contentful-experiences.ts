@@ -17,6 +17,8 @@ import {
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
+  hasEventTypeConsent,
+  methodForEventType,
   toConsentState,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
@@ -101,6 +103,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #locale: string | undefined;
   readonly #store = new LocalStore();
   readonly #delivery: PersonalizationDelivery;
+  readonly #allowedEventTypes: readonly AllowedEventType[] | undefined;
+  readonly #onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
   #interactionTracking: InteractionTracking | undefined;
   #adoptedProfileId: string | undefined;
   #identityRevision = 0;
@@ -161,6 +165,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     let delivery: PersonalizationDelivery | undefined;
     try {
       this.#locale = clientConfig.locale;
+      this.#allowedEventTypes = allowedEventTypes;
+      this.#onEventBlocked = onEventBlocked;
       this.#store.applyConsentDefaults({
         events: defaults?.consent,
         persistence: defaults?.persistenceConsent,
@@ -270,14 +276,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     }
     const profileRevision = this.#store.profileRevision;
     const identityRevision = this.#identityRevision;
+    const gated = this.#gatePersonalizationEvents(options);
     const profileId =
-      options.personalization?.profileId ?? this.#store.profile?.id ?? this.#adoptedProfileId;
+      gated.personalization?.profileId ?? this.#store.profile?.id ?? this.#adoptedProfileId;
     const plan = await super.fetchExperience(
       profileId === undefined
-        ? options
+        ? gated
         : {
-            ...options,
-            personalization: { ...options.personalization, profileId },
+            ...gated,
+            personalization: { ...gated.personalization, profileId },
           },
       resolveOptions
     );
@@ -452,6 +459,34 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId);
     }
     return Promise.resolve(result);
+  }
+
+  /** Whether an already-built event may be emitted; reports it to `onEventBlocked` otherwise. */
+  #admitEvent(event: { type: string }): boolean {
+    if (hasEventTypeConsent(event.type, this.#store.consent, this.#allowedEventTypes)) return true;
+    try {
+      const method = methodForEventType(event.type);
+      if (method !== undefined) {
+        this.#onEventBlocked?.({ reason: 'consent', method, args: [event] });
+      }
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
+    }
+    return false;
+  }
+
+  /**
+   * Drops caller-built XDA events that consent does not admit. The profile id
+   * still travels, since it is not an event.
+   */
+  #gatePersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): RuntimeFetchExperienceOptions {
+    const events = options.personalization?.events;
+    if (events === undefined) return options;
+
+    const admitted = events.filter((event) => this.#admitEvent(event));
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
   #requireRouteKey(routeKey: string): void {

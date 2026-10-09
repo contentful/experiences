@@ -23,6 +23,11 @@ export type {
 } from '@contentful/experiences-client';
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
 export type {
+  AllowedEventType,
+  BlockedEvent,
+  ConsentInput,
+  ConsentState,
+  EventMethod,
   EventOptimizationData,
   EventEmissionResult,
   EventProfile,

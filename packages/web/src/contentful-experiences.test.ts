@@ -560,6 +560,63 @@ describe('Web ContentfulExperiences consent', () => {
   });
 });
 
+describe('Web ContentfulExperiences consent on pre-built events', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('drops caller-built fetchExperience events that consent does not admit', async () => {
+    const onEventBlocked = vi.fn();
+    const runtime = createRuntime({ onEventBlocked });
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const page = runtime.eventBuilder.buildPageView();
+    const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+    await runtime.fetchExperience(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'profile-1', events: [page, track] },
+      },
+      { config: { components: {} } }
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'profile-1', events: [page] },
+      },
+      { config: { components: {} } }
+    );
+    expect(onEventBlocked).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'consent', method: 'track' })
+    );
+  });
+
+  it('forwards every caller-built event once event consent is granted', async () => {
+    const runtime = createRuntime();
+    runtime.consent({ events: true });
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+
+    await runtime.fetchExperience(
+      {
+        experienceId: 'personalized',
+        personalization: { events: [track] },
+      },
+      { config: { components: {} } }
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      { experienceId: 'personalized', personalization: { events: [track] } },
+      { config: { components: {} } }
+    );
+  });
+});
+
 describe('browser event context helpers', () => {
   it('returns dynamic browser values', () => {
     window.history.replaceState({}, '', '/context?one=1#hash');

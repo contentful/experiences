@@ -200,6 +200,18 @@ the Optimization SDK's consent model.
 Personalization methods (`identify`, `page`, `track`) resolve
 `{ accepted, data? }`, where `data` is the Personalization response.
 
+The same gate applies to events passed in
+`fetchExperience({ personalization: { events } })`: they are filtered before the
+request, and the `profileId` still travels.
+
+Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
+`trackClick`, `exo_node_hover` to `trackHover`, `component` to `trackFlagView`).
+A type this SDK never emits, such as `screen`, is admitted only if it is listed in
+`allowedEventTypes`, and a blocked one is not reported to `onEventBlocked`.
+
+This SDK does not write an anonymous-id cookie, so persistence consent gates
+LocalStorage only. Gate any cookie your application sets yourself.
+
 ## Interaction tracking
 
 > **Experimental.** `startInteractionTracking()` and its option and session types
