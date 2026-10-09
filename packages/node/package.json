@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-node",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Node.js SDK for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -30,8 +30,8 @@
     "directory": "packages/node"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.9.1",
-    "@contentful/experiences-runtime": "0.0.0",
-    "@contentful/experiences-sdk-core": "0.12.0"
+    "@contentful/experiences-client": "0.9.2",
+    "@contentful/experiences-runtime": "0.0.1",
+    "@contentful/experiences-sdk-core": "0.12.1"
   }
 }

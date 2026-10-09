@@ -1,3 +1,7 @@
+## 0.12.1 (2026-10-09)
+
+This was a version bump only for core to align it with other projects, there were no code changes.
+
 ## 0.12.0 (2026-10-08)
 
 ### 🚀 Features

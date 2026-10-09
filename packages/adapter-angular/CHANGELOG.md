@@ -1,3 +1,17 @@
+## 0.6.2 (2026-10-09)
+
+### 🚀 Features
+
+- **runtime:** extract shared runtime from client ([#228](https://github.com/contentful/experiences/pull/228))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.6.2
+- Updated runtime to 0.0.1
+- Updated client to 0.9.2
+- Updated design to 0.12.1
+- Updated core to 0.12.1
+
 ## 0.6.1 (2026-10-08)
 
 ### 🚀 Features
