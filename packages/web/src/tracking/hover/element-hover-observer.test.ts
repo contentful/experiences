@@ -261,6 +261,33 @@ describe('ElementHoverObserver', () => {
       expect(cb).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps one hover when the pointer crosses between touching members', async () => {
+      const a = makeElement();
+      const b = makeElement();
+      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+      const observer = new ElementHoverObserver(cb);
+      observer.observe(a);
+      observer.observe(b);
+
+      enter(a);
+      await advance(1000);
+      expect(cb).toHaveBeenCalledTimes(1);
+
+      // With no gap between them, a browser dispatches the leave on `a` before
+      // the enter on `b`, in the same task.
+      leave(a);
+      enter(b);
+      await advance(1000);
+
+      expect(cb).toHaveBeenCalledTimes(1);
+
+      leave(b);
+      await advance(0);
+
+      expect(cb).toHaveBeenCalledTimes(2);
+      expect(infoAt(cb, 1)).toMatchObject({ attempts: 2, hoverId: infoAt(cb, 0).hoverId });
+    });
+
     it('ignores touch pointers', async () => {
       const a = makeElement();
       const cb = vi.fn<Callback>().mockResolvedValue(undefined);

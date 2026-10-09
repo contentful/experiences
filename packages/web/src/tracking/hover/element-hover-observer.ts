@@ -88,6 +88,8 @@ export class ElementHoverObserver {
   };
   private cleanupVisibilityListener?: () => void;
   private sweepInterval: Interval | null = null;
+  /** The last hovered member was left; the hover ends next task unless another is entered. */
+  private pendingEnd: { timer: Timer; leftAt: number; left: ElementState } | null = null;
 
   constructor(private readonly callback: ElementHoverCallback) {
     this.cleanupVisibilityListener = addVisibilityChangeListener((isVisible) =>
@@ -133,6 +135,7 @@ export class ElementHoverObserver {
     this.activeStates.clear();
 
     clearFireTimer(this.session);
+    this.cancelPendingEnd();
     this.session.done = true;
 
     this.cleanupVisibilityListener?.();
@@ -143,7 +146,7 @@ export class ElementHoverObserver {
 
   /** Ends the active hover, emitting a final callback if it qualified, and awaits it. */
   async endActive(): Promise<void> {
-    this.endHoverCycle(NOW());
+    this.endHoverCycle(this.cancelPendingEnd() ?? NOW());
     for (const state of this.activeStates) state.isHovered = false;
 
     await Promise.all(this.pendingCallbacks);
@@ -194,6 +197,11 @@ export class ElementHoverObserver {
     }
 
     state.isHovered = true;
+    // The pointer moved straight into another member: the hover carries on.
+    // Re-entering the member just left is a new hover, so it ends the old one.
+    const reentered = this.pendingEnd?.left === state;
+    const leftAt = this.cancelPendingEnd();
+    if (reentered && leftAt !== null) this.endHoverCycle(leftAt);
     const { session } = this;
     // A second member entered while the hover is already running.
     if (session.hoverId !== null) return;
@@ -213,7 +221,29 @@ export class ElementHoverObserver {
     // The hover runs until the last hovered member is left.
     if (this.hasHoveredMember()) return;
 
-    this.endHoverCycle(NOW());
+    // Between touching members a browser dispatches the leave before the enter,
+    // so ending here would split one hover in two. Wait for the enter, if any.
+    this.scheduleEnd(state, NOW());
+  }
+
+  private scheduleEnd(left: ElementState, leftAt: number): void {
+    if (this.pendingEnd !== null) return;
+
+    const timer = setTimeout(() => {
+      this.pendingEnd = null;
+      if (!this.hasHoveredMember()) this.endHoverCycle(leftAt);
+    }, 0);
+    this.pendingEnd = { timer, leftAt, left };
+  }
+
+  /** Cancels a scheduled end and returns when the pointer left, if one was scheduled. */
+  private cancelPendingEnd(): number | null {
+    const pending = this.pendingEnd;
+    if (pending === null) return null;
+
+    clearTimeout(pending.timer);
+    this.pendingEnd = null;
+    return pending.leftAt;
   }
 
   private hasHoveredMember(): boolean {
@@ -234,13 +264,14 @@ export class ElementHoverObserver {
     if (this.activeStates.size === 0) {
       this.resetHoverCycle();
     } else if (wasHovered && !this.hasHoveredMember()) {
+      this.cancelPendingEnd();
       this.endHoverCycle(NOW());
     }
   }
 
   private onPageVisibilityChange(isVisible: boolean): void {
     if (!isVisible) {
-      this.endHoverCycle(NOW());
+      this.endHoverCycle(this.cancelPendingEnd() ?? NOW());
       for (const state of this.activeStates) state.isHovered = false;
     }
 
@@ -254,6 +285,7 @@ export class ElementHoverObserver {
     session.attempts = 0;
     session.hoverId = null;
     clearFireTimer(session);
+    this.cancelPendingEnd();
   }
 
   private scheduleQualification(): void {

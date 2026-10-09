@@ -458,6 +458,48 @@ describe('ElementViewObserver', () => {
       expect(infoAt(cb, 2).viewId).not.toBe(infoAt(cb, 0).viewId);
     });
 
+    it.each([
+      ['exit first', 'exit-first'],
+      ['enter first', 'enter-first'],
+    ] as const)(
+      'keeps one view when visibility moves between members in a single batch (%s)',
+      async (_name, order) => {
+        const a = makeElement();
+        const b = makeElement();
+        const cb = vi.fn<Callback>().mockResolvedValue(undefined);
+        const observer = shared(cb);
+        observer.observe(a);
+        observer.observe(b);
+
+        io.getLast().trigger(a, true);
+        await advance(1000);
+        expect(cb).toHaveBeenCalledTimes(1);
+
+        // A scroll jump: `a` leaves and `b` enters in the same callback.
+        io.getLast().triggerBatch(
+          order === 'exit-first'
+            ? [
+                [a, false],
+                [b, true],
+              ]
+            : [
+                [b, true],
+                [a, false],
+              ]
+        );
+        await advance(1000);
+
+        // The group never left view, so there is no final event and no new view.
+        expect(cb).toHaveBeenCalledTimes(1);
+
+        io.getLast().trigger(b, false);
+        await advance(0);
+
+        expect(cb).toHaveBeenCalledTimes(2);
+        expect(infoAt(cb, 1)).toMatchObject({ attempts: 2, viewId: infoAt(cb, 0).viewId });
+      }
+    );
+
     it('disconnect clears the shared timer', () => {
       const a = makeElement();
       const observer = shared(vi.fn<Callback>());

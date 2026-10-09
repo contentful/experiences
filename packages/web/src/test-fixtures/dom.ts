@@ -43,18 +43,29 @@ export class FakeIntersectionObserver implements IntersectionObserver {
   takeRecords = (): IntersectionObserverEntry[] => [];
 
   trigger(target: Element, isIntersecting: boolean, intersectionRatio = isIntersecting ? 1 : 0) {
-    if (!this.observed.has(target)) return;
-    this.cb([
-      {
-        target,
-        isIntersecting,
-        intersectionRatio,
-        time: 0,
-        boundingClientRect: EMPTY_RECT,
-        intersectionRect: EMPTY_RECT,
-        rootBounds: null,
-      },
-    ]);
+    this.triggerBatch([[target, isIntersecting, intersectionRatio]]);
+  }
+
+  /**
+   * Delivers several changes in one callback, in the given order, as a browser
+   * does when one scroll moves visibility between elements.
+   */
+  triggerBatch(changes: [target: Element, isIntersecting: boolean, intersectionRatio?: number][]) {
+    const entries = changes
+      .filter(([target]) => this.observed.has(target))
+      .map(
+        ([target, isIntersecting, intersectionRatio = isIntersecting ? 1 : 0]) =>
+          ({
+            target,
+            isIntersecting,
+            intersectionRatio,
+            time: 0,
+            boundingClientRect: EMPTY_RECT,
+            intersectionRect: EMPTY_RECT,
+            rootBounds: null,
+          }) as IntersectionObserverEntry
+      );
+    if (entries.length > 0) this.cb(entries);
   }
 }
 

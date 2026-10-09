@@ -172,17 +172,24 @@ export class ElementViewObserver {
   private onIntersect(entries: readonly IntersectionObserverEntry[]): void {
     const now = NOW();
 
-    for (const entry of entries) {
-      const states = this.sourceController.getStatesForTarget(entry.target);
-      if (!states) continue;
+    // One callback can move visibility from one member to another, in either
+    // order. Entering members are applied first so the group is not seen as out
+    // of view midway, which would end the view and start a second one.
+    for (const isIntersecting of [true, false]) {
+      for (const entry of entries) {
+        if (entry.isIntersecting !== isIntersecting) continue;
 
-      for (const state of states) {
-        if (state.done) continue;
+        const states = this.sourceController.getStatesForTarget(entry.target);
+        if (!states) continue;
 
-        if (entry.isIntersecting) {
-          this.onIntersecting(state, now);
-        } else {
-          this.onVisibilityEnd(state, now);
+        for (const state of states) {
+          if (state.done) continue;
+
+          if (isIntersecting) {
+            this.onIntersecting(state, now);
+          } else {
+            this.onVisibilityEnd(state, now);
+          }
         }
       }
     }
