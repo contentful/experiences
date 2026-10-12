@@ -165,7 +165,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     expect(f.upsertProfile.mock.calls[1]).toEqual([
       { profileId: 'profile-1', events: [ordinary] },
-      { locale: 'it-IT' },
+      { locale: undefined },
     ]);
     firstResponse.resolve(data('profile-1'));
     await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(3));

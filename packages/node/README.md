@@ -99,6 +99,9 @@ await experienceRequest.trackClick({
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
 current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
+Personalization request locale uses `forRequest({ locale })` with the constructor locale as
+fallback. An event's explicit locale changes its body only; it does not change content evaluation
+or the Personalization request locale.
 `eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
@@ -118,9 +121,11 @@ const { handoff, data } = await experienceRequest.prepareRequestHandoff({
 ```
 
 The route key is the visible pathname plus search and must begin with `/`.
-The prepared batch's transport locale follows the final page event, including
-an explicit `page.locale` override; the same locale is captured for browser
-replay. The SDK handoff limit is 100 total events including the final page,
+The prepared batch's transport locale uses the request locale, falling back to
+the constructor locale. The handoff captures this selection, including an absent
+locale, for browser replay. Explicit event locales such as `page.locale` remain
+in the event bodies and do not override the preparation or replay transport locale.
+The SDK handoff limit is 100 total events including the final page,
 with at most 50 identify events and only identify/track events before that page.
 Validation rejects an invalid or oversized batch before preflight; the SDK
 does not split or truncate it. A valid handoff can still be refused by the

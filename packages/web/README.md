@@ -156,8 +156,11 @@ experiences.reset();
 ```
 
 Each call reads the current locale and browser context, so SPA navigation and
-`setLocale()` changes are reflected without recreating the runtime. The consent
-provider annotates the event context; it does not gate sending. Redact page and
+`setLocale()` changes are reflected without recreating the runtime. Explicit event
+locale overrides affect event bodies only. Ordinary Personalization sends use the
+current SDK locale, including when flushing offline events. Prepared replay uses
+the server's captured transport locale, including an absent locale, independently
+of the browser's current locale. The consent provider annotates the event context; it does not gate sending. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
 prepared work. Offline ordinary calls are accepted into an in-memory queue until

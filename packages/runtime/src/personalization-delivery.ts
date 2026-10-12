@@ -28,6 +28,8 @@ interface PersonalizationDeliveryOptions {
   readonly getProfileId: () => string | undefined;
   readonly getProfileRevision: () => number;
   readonly getOnline: () => boolean;
+  /** Current content locale for ordinary sends; prepared batches retain their own locale. */
+  readonly getLocale?: () => string | undefined;
   readonly publishQueuedData: (data: OptimizationData) => void;
   /** Internal override for deterministic tests; Web uses the 100-event SDK handoff capacity. */
   readonly maxEvents?: number;
@@ -50,6 +52,7 @@ export class PersonalizationDelivery {
   readonly #getProfileId: PersonalizationDeliveryOptions['getProfileId'];
   readonly #getProfileRevision: PersonalizationDeliveryOptions['getProfileRevision'];
   readonly #getOnline: PersonalizationDeliveryOptions['getOnline'];
+  readonly #getLocale: PersonalizationDeliveryOptions['getLocale'];
   readonly #publishQueuedData: PersonalizationDeliveryOptions['publishQueuedData'];
   readonly #maxEvents: number;
   readonly #flushRuntime: PersonalizationFlushRuntime;
@@ -66,6 +69,7 @@ export class PersonalizationDelivery {
     this.#getProfileId = options.getProfileId;
     this.#getProfileRevision = options.getProfileRevision;
     this.#getOnline = options.getOnline;
+    this.#getLocale = options.getLocale;
     this.#publishQueuedData = options.publishQueuedData;
     this.#maxEvents = options.maxEvents ?? MAX_PREPARED_EVENTS;
     this.#flushRuntime = new PersonalizationFlushRuntime(
@@ -254,7 +258,7 @@ export class PersonalizationDelivery {
         events,
         profileId,
         request === undefined
-          ? { locale: events[0]?.context.locale }
+          ? { locale: this.#getLocale?.() }
           : { preflight: false, locale: request.locale }
       );
       if (!isCurrent()) return undefined;

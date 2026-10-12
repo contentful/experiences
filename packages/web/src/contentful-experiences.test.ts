@@ -434,6 +434,27 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'updated-profile' });
   });
 
+  it('uses the SDK locale for ordinary Personalization independently of event overrides', async () => {
+    const runtime = createRuntime({ locale: 'en-US' });
+    const { upsertProfile } = mockOptimization(runtime);
+    await runtime.identify({ userId: 'visitor', locale: 'fr-FR' });
+    expect(upsertProfile.mock.calls[0]?.[0].events[0]?.context.locale).toBe('fr-FR');
+    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US' });
+
+    window.dispatchEvent(new Event('offline'));
+    await runtime.track({ event: 'queued', locale: 'it-IT' });
+    expect(upsertProfile).toHaveBeenCalledTimes(1);
+    runtime.setLocale('de-DE');
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(upsertProfile).toHaveBeenCalledTimes(2));
+    expect(upsertProfile.mock.calls[1]?.[0].events[0]?.context.locale).toBe('it-IT');
+    expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'de-DE' });
+
+    await runtime.page({ locale: 'es-ES' });
+    expect(upsertProfile.mock.calls[2]?.[0].events[0]?.context.locale).toBe('es-ES');
+    expect(upsertProfile.mock.calls[2]?.[1]).toEqual({ locale: 'de-DE' });
+  });
+
   it('uses the latest redacted browser context, locale, and consent metadata', async () => {
     const runtime = createRuntime({
       locale: 'en-US',

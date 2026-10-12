@@ -1,6 +1,7 @@
 import {
   ExperienceEventArray,
   type ExperienceEvent,
+  type InsightsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import type EventBuilder from './event-builder.js';
 import type {
@@ -28,7 +29,7 @@ export interface BuildPreparedEventsOptions {
 }
 
 /** Change only GDPR metadata on an already-built event. */
-export function withEventConsent<TEvent extends ExperienceEvent>(
+export function withEventConsent<TEvent extends ExperienceEvent | InsightsEvent>(
   event: TEvent,
   isConsentGiven: boolean
 ): TEvent {

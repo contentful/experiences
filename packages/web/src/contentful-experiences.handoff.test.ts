@@ -310,70 +310,84 @@ describe('Web handoff and current-page lifecycle', () => {
     }
   );
 
-  it.each(['101 events', 'schema', 'order', 'empty', 'null event'] as const)(
-    'falls back once with retained identity for invalid prepared %s',
-    async (invalid) => {
-      const response = deferred<{ profile: { id: string } }>();
-      const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockReturnValue(response.promise as never);
-      const runtime = createRuntime();
-      const page = runtime.eventBuilder.buildPageView();
-      const events =
-        invalid === '101 events'
+  it.each([
+    '101 events',
+    '51 identifies',
+    'schema',
+    'event locale',
+    'order',
+    'empty',
+    'null event',
+  ] as const)('falls back once with retained identity for invalid prepared %s', async (invalid) => {
+    const response = deferred<{ profile: { id: string } }>();
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockReturnValue(response.promise as never);
+    const runtime = createRuntime();
+    const page = runtime.eventBuilder.buildPageView();
+    const events =
+      invalid === '101 events'
+        ? [
+            ...Array.from({ length: 100 }, () =>
+              runtime.eventBuilder.buildTrack({ event: 'oversized' })
+            ),
+            page,
+          ]
+        : invalid === '51 identifies'
           ? [
-              ...Array.from({ length: 100 }, () =>
-                runtime.eventBuilder.buildTrack({ event: 'oversized' })
+              ...Array.from({ length: 51 }, () =>
+                runtime.eventBuilder.buildIdentify({ userId: 'visitor' })
               ),
               page,
             ]
-          : invalid === 'schema'
-            ? [{ type: 'track' }, page]
-            : invalid === 'order'
-              ? [page, runtime.eventBuilder.buildTrack({ event: 'after-page' })]
-              : invalid === 'null event'
-                ? [null]
-                : [];
-      const input = handoff(runtime, '/invalid', {
-        replay: {
-          routeKey: '/invalid',
-          events: events as NonNullable<ExperiencesHandoff['replay']>['events'],
-        },
-      });
-      const buildPayload = vi.fn(() => ({ properties: { title: 'caller fallback' } }));
-      const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
-      const first = runtime.hydrateAndTrackCurrentPage(input, {
+          : invalid === 'event locale'
+            ? [{ ...page, context: { ...page.context, locale: 42 } }]
+            : invalid === 'schema'
+              ? [{ type: 'track' }, page]
+              : invalid === 'order'
+                ? [page, runtime.eventBuilder.buildTrack({ event: 'after-page' })]
+                : invalid === 'null event'
+                  ? [null]
+                  : [];
+    const input = handoff(runtime, '/invalid', {
+      replay: {
         routeKey: '/invalid',
-        buildPayload,
-      });
-      const copy =
-        invalid === 'empty' || invalid === 'null event'
-          ? input
-          : (JSON.parse(JSON.stringify(input)) as ExperiencesHandoff);
-      const second = runtime.hydrateAndTrackCurrentPage(copy, {
-        routeKey: '/invalid',
-        buildPayload,
-      });
-      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-      expect(send.mock.calls[0]?.[0]).toMatchObject({
-        profileId: 'server-profile',
-        events: [{ type: 'page', properties: { title: 'caller fallback' } }],
-      });
-      expect(send.mock.calls[0]?.[0].events).toHaveLength(1);
-      expect(events).not.toContainEqual(send.mock.calls[0]?.[0].events[0]);
-      expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
-      expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/invalid', buildPayload });
-      response.resolve({ profile: { id: 'committed-profile' } });
-      const result = await first;
-      expect(result).toEqual({ accepted: true, data: { profile: { id: 'committed-profile' } } });
-      expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
-      expect(await second).toBe(result);
-      expect(
-        await runtime.hydrateAndTrackCurrentPage(copy, { routeKey: '/invalid', buildPayload })
-      ).toBe(result);
-      expect(send).toHaveBeenCalledTimes(1);
-    }
-  );
+        events: events as NonNullable<ExperiencesHandoff['replay']>['events'],
+      },
+    });
+    const buildPayload = vi.fn(() => ({ properties: { title: 'caller fallback' } }));
+    const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
+    const first = runtime.hydrateAndTrackCurrentPage(input, {
+      routeKey: '/invalid',
+      buildPayload,
+    });
+    const copy =
+      invalid === 'empty' || invalid === 'null event'
+        ? input
+        : (JSON.parse(JSON.stringify(input)) as ExperiencesHandoff);
+    const second = runtime.hydrateAndTrackCurrentPage(copy, {
+      routeKey: '/invalid',
+      buildPayload,
+    });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0]?.[0]).toMatchObject({
+      profileId: 'server-profile',
+      events: [{ type: 'page', properties: { title: 'caller fallback' } }],
+    });
+    expect(send.mock.calls[0]?.[0].events).toHaveLength(1);
+    expect(events).not.toContainEqual(send.mock.calls[0]?.[0].events[0]);
+    expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
+    expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/invalid', buildPayload });
+    response.resolve({ profile: { id: 'committed-profile' } });
+    const result = await first;
+    expect(result).toEqual({ accepted: true, data: { profile: { id: 'committed-profile' } } });
+    expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
+    expect(await second).toBe(result);
+    expect(
+      await runtime.hydrateAndTrackCurrentPage(copy, { routeKey: '/invalid', buildPayload })
+    ).toBe(result);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
 
   it('returns ordinary route deduplication refusal after rejected replay', async () => {
     const send = vi

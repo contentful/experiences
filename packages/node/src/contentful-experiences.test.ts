@@ -336,7 +336,7 @@ describe('Node ContentfulExperiences', () => {
           }),
         ],
       }),
-      { locale: 'method-locale' }
+      { locale: 'de-DE' }
     );
     expect(upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -382,13 +382,14 @@ describe('Node ContentfulExperiences', () => {
     ]);
   });
 
-  it('uses event context locale when no request locale is supplied', async () => {
+  it('uses event context locale only in the body when no request locale is supplied', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ eventContext: { locale: 'it-IT' } });
 
     await request.track({ event: 'viewed' });
 
-    expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'it-IT' });
+    expect(upsertProfile.mock.calls[0]?.[0].events[0]?.context.locale).toBe('it-IT');
+    expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'en-US' });
   });
 
   it('prepares one ordered, exact Personalization replay with request context and known identity', async () => {
@@ -486,7 +487,7 @@ describe('Node ContentfulExperiences', () => {
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
 
-  it('uses an explicit final-page locale for both preparation and browser replay', async () => {
+  it('keeps an explicit final-page locale separate from preparation and replay transport', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ locale: 'de-DE' });
 
@@ -496,8 +497,8 @@ describe('Node ContentfulExperiences', () => {
     });
 
     expect(result.handoff.replay?.events.at(-1)?.context.locale).toBe('fr-FR');
-    expect(result.handoff.replay?.locale).toBe('fr-FR');
-    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'fr-FR', preflight: true });
+    expect(result.handoff.replay?.locale).toBe('de-DE');
+    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'de-DE', preflight: true });
   });
 
   it('returns no replay or preview and reports invalid route, event type, and batch limits', async () => {

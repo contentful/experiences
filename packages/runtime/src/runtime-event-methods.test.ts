@@ -53,6 +53,7 @@ function createFixture(
         profile = nextProfile;
       },
       getEventContext: () => ({ locale: 'de-DE' }),
+      getLocale: () => 'en-US',
       getConsent: () => options.consent,
     },
     options.dispatch
@@ -86,7 +87,7 @@ describe('RuntimeEventMethods', () => {
           }),
         ],
       },
-      { locale: 'de-DE' }
+      { locale: 'en-US' }
     );
     expect(upsertProfile).toHaveBeenNthCalledWith(
       2,
@@ -99,7 +100,7 @@ describe('RuntimeEventMethods', () => {
           }),
         ],
       }),
-      { locale: 'fr-FR' }
+      { locale: 'en-US' }
     );
     expect(upsertProfile).toHaveBeenNthCalledWith(
       3,
@@ -107,7 +108,7 @@ describe('RuntimeEventMethods', () => {
         profileId: 'profile-from-api',
         events: [expect.objectContaining({ type: 'track', event: 'checkout' })],
       }),
-      { locale: 'de-DE' }
+      { locale: 'en-US' }
     );
     expect(methods.profile).toEqual({ id: 'profile-from-api' });
   });

@@ -50,6 +50,57 @@ afterEach(() => {
 });
 
 describe('paired Node preparation and Web delivery', () => {
+  it.each([
+    { configuredLocale: 'en-US', requestLocale: 'de-DE', transportLocale: 'de-DE' },
+    { configuredLocale: 'de-DE', requestLocale: undefined, transportLocale: 'de-DE' },
+    { configuredLocale: undefined, requestLocale: undefined, transportLocale: undefined },
+  ])(
+    'separates event locales from request/content locale ($transportLocale) through replay',
+    async ({ configuredLocale, requestLocale, transportLocale }) => {
+      const upsert = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValue({ profile: { id: 'profile' } } as never);
+      const server = new NodeExperiences({
+        spaceId: 'space',
+        environmentId: 'environment',
+        locale: configuredLocale,
+        delivery: { accessToken: 'delivery-token' },
+      });
+      active.add(server);
+      const request = server.forRequest({
+        locale: requestLocale,
+        eventContext: { locale: 'it-IT' },
+      });
+      expect(request.locale).toBe(transportLocale);
+      const prepared = await request.prepareRequestHandoff({
+        routeKey: '/localized',
+        initialEvents: [{ type: 'track', event: 'opened', locale: 'es-ES' }],
+        page: { locale: 'fr-FR' },
+      });
+      expect(prepared.handoff.replay?.locale).toBe(transportLocale);
+      const events = prepared.handoff.replay?.events;
+      expect(events?.map(({ context }) => context.locale)).toEqual(['es-ES', 'fr-FR']);
+      expect(upsert.mock.calls[0]?.[1]).toEqual({ locale: transportLocale, preflight: true });
+
+      const browser = web();
+      browser.setLocale('nl-NL');
+      await expect(
+        browser.hydrateAndTrackCurrentPage(JSON.parse(JSON.stringify(prepared.handoff)), {
+          routeKey: '/localized',
+        })
+      ).resolves.toEqual({ accepted: true });
+      expect(upsert.mock.calls[1]?.[0].events).toEqual(events);
+      expect(upsert.mock.calls[1]?.[1]).toEqual({ locale: transportLocale, preflight: false });
+
+      await request.identify({ userId: 'visitor', locale: 'ja-JP' });
+      expect(upsert.mock.calls[2]?.[0].events[0]?.context.locale).toBe('ja-JP');
+      expect(upsert.mock.calls[2]?.[1]).toEqual({ locale: transportLocale });
+      await request.page();
+      expect(upsert.mock.calls[3]?.[0].events[0]?.context.locale).toBe(requestLocale ?? 'it-IT');
+      expect(upsert.mock.calls[3]?.[1]).toEqual({ locale: transportLocale });
+    }
+  );
+
   it('round trips one exact prepared batch and accepts it before a failed HTTP send retries', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);

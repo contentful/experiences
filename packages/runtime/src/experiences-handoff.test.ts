@@ -95,6 +95,11 @@ describe('Experiences handoff', () => {
       [],
       [null],
       [{ type: 'page' }],
+      [{ ...builder.buildPageView(), context: { locale: 42 } }],
+      [
+        ...Array.from({ length: 51 }, () => builder.buildIdentify({ userId: 'visitor' })),
+        builder.buildPageView(),
+      ],
       [builder.buildPageView(), builder.buildTrack({ event: 'after-page' })],
       [
         ...Array.from({ length: 100 }, () => builder.buildTrack({ event: 'oversized' })),

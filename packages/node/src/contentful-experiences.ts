@@ -60,7 +60,7 @@ type PreparedPersonalizationEvent = NonNullable<ExperiencesHandoff['replay']>['e
 type PreflightPersonalizationEvents = (
   profileId: string | undefined,
   events: readonly PreparedPersonalizationEvent[],
-  locale: string
+  locale: string | undefined
 ) => Promise<EventOptimizationData>;
 
 type NodePersonalizationMethods = {
@@ -153,6 +153,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getProfile: () => this.#profile,
       setProfile: (profile) => this.setProfile(profile),
       getProfileRevision: () => this.#profileRevision,
+      getLocale: () => this.locale,
       getEventContext: () => this.getRequestEventContext(),
       getConsent: () => context.eventConsent,
     });
@@ -203,20 +204,21 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       return { handoff };
     }
 
-    const locale = events.at(-1)?.context.locale ?? this.locale ?? 'en-US';
-    const preparedHandoff = createExperiencesHandoff({
+    const locale = this.locale;
+    // The envelope and batch have already been validated; retain the prepared bodies.
+    const preparedHandoff: ExperiencesHandoff = {
       ...handoff,
       replay: { routeKey, events, locale },
-    });
+    };
     const profileRevision = this.#profileRevision;
     try {
       const data = await this.preflightPersonalizationEvents(incomingProfileId, events, locale);
       if (this.#profileRevision === profileRevision) this.setProfile(data.profile);
       return {
-        handoff: createExperiencesHandoff({
+        handoff: {
           ...preparedHandoff,
           profileId: incomingProfileId ?? data.profile.id,
-        }),
+        },
         data,
       };
     } catch {

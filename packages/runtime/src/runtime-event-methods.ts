@@ -12,6 +12,7 @@ import {
 import type EventBuilder from './event-builder.js';
 import type { EventEmissionResult } from './event-emission-result.js';
 import { sendPersonalizationEvents } from './personalization-delivery.js';
+import { withEventConsent } from './prepared-events.js';
 import type {
   ClickBuilderArgs,
   FlagViewBuilderArgs,
@@ -52,6 +53,8 @@ export interface RuntimeEventBindings {
   /** Changes when an external session boundary must invalidate an in-flight profile response. */
   getProfileRevision?: () => number;
   getEventContext?: () => UniversalEventBuilderArgs;
+  /** Content/request locale for Personalization; event context does not override it. */
+  getLocale?: () => string | undefined;
   getConsent?: () => boolean | undefined;
 }
 
@@ -147,13 +150,7 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     const consent = this.bindings.getConsent?.();
     if (consent === undefined) return event;
 
-    return {
-      ...event,
-      context: {
-        ...event.context,
-        gdpr: { ...event.context.gdpr, isConsentGiven: consent },
-      },
-    } as TEvent;
+    return withEventConsent(event, consent);
   }
 
   private async sendPersonalizationEvent(
@@ -181,12 +178,15 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 }
 
-function createDirectEventDispatch(api: RuntimeOptimizationApiClient): RuntimeEventDispatch {
+function createDirectEventDispatch(
+  api: RuntimeOptimizationApiClient,
+  bindings: RuntimeEventBindings
+): RuntimeEventDispatch {
   return {
     personalization: async (event, profile) => ({
       accepted: true,
       data: await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
-        locale: event.context.locale,
+        locale: bindings.getLocale?.(),
       }),
     }),
     analytics: (event, profile) => api.analytics.sendBatchEvents([{ profile, events: [event] }]),
@@ -197,7 +197,7 @@ export function createRuntimeEventMethods(
   api: RuntimeOptimizationApiClient,
   eventBuilder: EventBuilder,
   bindings: RuntimeEventBindings,
-  dispatch: RuntimeEventDispatch = createDirectEventDispatch(api)
+  dispatch: RuntimeEventDispatch = createDirectEventDispatch(api, bindings)
 ): RuntimeEventMethods {
   return new BoundRuntimeEventMethods(eventBuilder, bindings, dispatch);
 }

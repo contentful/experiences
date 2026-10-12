@@ -16,6 +16,7 @@ import {
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
+import { AcceptedCurrentPageTracker } from './accepted-current-page-tracker.js';
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import {
   createInteractionTracking,
@@ -90,8 +91,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #adoptedProfileId: string | undefined;
   #identityRevision = 0;
   #currentInitialization: HandoffInitialization | undefined;
-  #acceptedCurrentPage: { routeKey: string } | undefined;
-  #inFlightCurrentPage: { routeKey: string } | undefined;
+  readonly #currentPage = new AcceptedCurrentPageTracker();
   #generation = 0;
   #destroyed = false;
   #online = globalThis.navigator?.onLine !== false;
@@ -146,6 +146,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         getProfileId: () => this.#store.profile?.id ?? this.#adoptedProfileId,
         getProfileRevision: () => this.#store.profileRevision,
         getOnline: () => this.#online,
+        getLocale: () => this.locale,
         publishQueuedData: (data) => {
           if (this.#destroyed) return;
           this.#store.profile = data.profile;
@@ -255,8 +256,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     }
     this.#generation += 1;
     this.#currentInitialization = undefined;
-    this.#acceptedCurrentPage = undefined;
-    this.#inFlightCurrentPage = undefined;
+    this.#currentPage.reset();
     this.#setAdoptedProfileId(undefined);
     this.#delivery.reset();
     this.#store.reset();
@@ -268,8 +268,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#destroyed = true;
     this.#generation += 1;
     this.#currentInitialization = undefined;
-    this.#acceptedCurrentPage = undefined;
-    this.#inFlightCurrentPage = undefined;
+    this.#currentPage.reset();
     try {
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', this.#handleOnline);
@@ -336,26 +335,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     if (this.#destroyed) return { accepted: false };
     this.#requireRouteKey(routeKey);
     this.#clearHandoffInitialization(routeKey);
-    if (
-      this.#acceptedCurrentPage?.routeKey === routeKey ||
-      this.#inFlightCurrentPage?.routeKey === routeKey
-    ) {
-      return { accepted: false };
-    }
-
-    const inFlight = { routeKey };
-    this.#inFlightCurrentPage = inFlight;
-    try {
-      const result = await this.page(
-        buildPayload({ isInitialEmission: this.#acceptedCurrentPage === undefined }) ?? {}
-      );
-      if (result.accepted && !this.#destroyed && this.#inFlightCurrentPage === inFlight) {
-        this.#acceptedCurrentPage = { routeKey };
-      }
-      return result;
-    } finally {
-      if (this.#inFlightCurrentPage === inFlight) this.#inFlightCurrentPage = undefined;
-    }
+    return await this.#currentPage.emitIfNeeded(routeKey, () =>
+      this.page(buildPayload({ isInitialEmission: !this.#currentPage.hasAccepted() }) ?? {})
+    );
   }
 
   /** Hydrate the current render and admit its matching prepared page once. */
@@ -388,7 +370,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           parsed.replay.locale
         );
         if (result.accepted) {
-          if (initialization.isCurrent()) this.#acceptedCurrentPage = { routeKey };
+          if (initialization.isCurrent()) this.#currentPage.markAccepted(routeKey);
           return result;
         }
       }

@@ -163,7 +163,12 @@ export class ContentfulExperiences implements ExperienceRuntime {
     bindings: RuntimeEventBindings,
     dispatch?: RuntimeEventDispatch
   ): RuntimeEventMethods {
-    return createRuntimeEventMethods(this.optimizationApi, this.eventBuilder, bindings, dispatch);
+    return createRuntimeEventMethods(
+      this.optimizationApi,
+      this.eventBuilder,
+      { getLocale: () => this.locale, ...bindings },
+      dispatch
+    );
   }
 
   resolveExperience(

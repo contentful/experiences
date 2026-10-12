@@ -1,5 +1,4 @@
 import {
-  ExperienceEventArray,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent,
 } from '@contentful/optimization-api-client/api-schemas';
@@ -33,6 +32,7 @@ export interface ExperiencesHandoff {
     readonly routeKey: string;
     /** Personalization events prepared once, ending in one page. */
     readonly events: readonly ExperienceEvent[];
+    /** Captured content/request locale for Personalization, independent of event context. */
     readonly locale?: string;
   };
 }
@@ -67,10 +67,6 @@ const ExperiencesHandoffEnvelopeSchema = z.object({
   state: z.optional(z.object({ profile: z.optional(EventProfileSchema) })),
   profileId: z.optional(z.string()),
   replay: z.optional(ReplayEnvelopeSchema),
-});
-
-const ExperiencesHandoffSchema = z.extend(ExperiencesHandoffEnvelopeSchema, {
-  replay: z.optional(z.extend(ReplayEnvelopeSchema, { events: ExperienceEventArray })),
 });
 
 type HandoffEnvelope = Omit<ExperiencesHandoff, 'replay'> & {
@@ -151,10 +147,13 @@ export function parseExperiencesHandoff(
   input: unknown,
   scope?: ExperiencesScope
 ): ExperiencesHandoff {
-  const handoff = parseOptimizationSchema(ExperiencesHandoffSchema, input);
-  validateHandoffEnvelope(handoff, scope);
-  if (handoff.replay !== undefined) validatePreparedEvents(handoff.replay.events);
-  return handoff;
+  const { replay, ...handoff } = parseExperiencesHandoffEnvelope(input, scope);
+  return {
+    ...handoff,
+    ...(replay === undefined
+      ? {}
+      : { replay: { ...replay, events: validatePreparedEvents(replay.events) } }),
+  };
 }
 
 /** Validate trusted producer data with the same contract as browser input. */
