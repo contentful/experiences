@@ -187,6 +187,52 @@ describe('scope attribution', () => {
     });
   });
 
+  describe('adjacent copies of a Fragment nested in different enclosing Fragments', () => {
+    const sourceMap = {
+      version: 1,
+      variants: [],
+      spaces: [],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [
+        { kind: 'Experience', id: 'experience' },
+        { kind: 'ExperienceFragment', id: 'fragmentA' },
+        { kind: 'ExperienceFragment', id: 'fragmentB' },
+        { kind: 'ExperienceFragment', id: 'fragmentC' },
+      ],
+      nodes: {
+        'a-c1': { layers: [3, 1, 0], contentProperties: [] },
+        'a-c2': { layers: [3, 1, 0], contentProperties: [] },
+        'b-c': { layers: [3, 2, 0], contentProperties: [] },
+      },
+    };
+
+    const keyOf = (plan: { nodes: PortableRenderNode[] }, nodeId: string, entityId: string) =>
+      find(plan.nodes, nodeId).attribution!.scopes.find((s) => s.entityId === entityId)!.key;
+
+    it('attributes each C separately, both still parented to the root Experience', async () => {
+      const plan = await resolve([node('a-c1'), node('b-c')], sourceMap);
+
+      expect(keyOf(plan, 'a-c1', 'fragmentC')).not.toBe(keyOf(plan, 'b-c', 'fragmentC'));
+      for (const nodeId of ['a-c1', 'b-c']) {
+        const c = find(plan.nodes, nodeId).attribution!.scopes.find(
+          (s) => s.entityId === 'fragmentC'
+        );
+        expect(c?.parentExperienceId).toBe('experience');
+      }
+      expect(keyOf(plan, 'a-c1', 'experience')).toBe(keyOf(plan, 'b-c', 'experience'));
+    });
+
+    it('still shares one C occurrence when the enclosing Fragment is the same', async () => {
+      const plan = await resolve([node('a-c1'), node('a-c2')], sourceMap);
+
+      expect(keyOf(plan, 'a-c1', 'fragmentC')).toBe(keyOf(plan, 'a-c2', 'fragmentC'));
+      expect(keyOf(plan, 'a-c1', 'fragmentA')).toBe(keyOf(plan, 'a-c2', 'fragmentA'));
+    });
+  });
+
   it('ignores a defining layer of the wrong kind', async () => {
     const sourceMap = {
       ...FRAGMENT_SOURCE_MAP,

@@ -269,12 +269,20 @@ function attributeNode(
   let parentExperienceId: string | undefined;
   let nearest: ScopeAttribution | undefined;
 
+  // A sibling's key is only reusable while every enclosing scope matches as well.
+  const previousScopes = previousKeys.entries();
+  let sameOccurrencePrefix = true;
+
   for (const scope of scopes) {
+    const previous = previousScopes.next().value;
+    sameOccurrencePrefix &&= previous?.[0] === scope.row;
+
     const isRoot = !parentKeys.has(scope.row);
-    const key =
+    const key: string =
       parentKeys.get(scope.row) ??
-      previousKeys.get(scope.row) ??
+      (sameOccurrencePrefix ? previous?.[1] : undefined) ??
       occurrenceKey(scope.row, listPath, index);
+    sameOccurrencePrefix &&= previous?.[1] === key;
     keys.set(scope.row, key);
 
     nearest = ctx.scopes[key] ??= buildScope(ctx, scope, key, parentExperienceId);
