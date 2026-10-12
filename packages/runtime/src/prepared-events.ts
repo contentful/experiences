@@ -10,7 +10,8 @@ import type {
   UniversalEventBuilderArgs,
 } from './event-builder.js';
 
-const MAX_PROFILE_EVENTS = 200;
+/** SDK handoff and browser queue capacity, not an API request limit. */
+export const MAX_PREPARED_EVENTS = 100;
 const MAX_IDENTIFY_EVENTS = 50;
 
 export type InitialPersonalizationEvent =
@@ -41,13 +42,13 @@ export function withEventConsent<TEvent extends ExperienceEvent>(
 export function validatePreparedEvents(events: readonly unknown[]): readonly ExperienceEvent[] {
   const validEvents = ExperienceEventArray.parse(events);
   if (
-    validEvents.length > MAX_PROFILE_EVENTS ||
+    validEvents.length > MAX_PREPARED_EVENTS ||
     validEvents.filter(({ type }) => type === 'identify').length > MAX_IDENTIFY_EVENTS ||
     validEvents.at(-1)?.type !== 'page' ||
     validEvents.slice(0, -1).some(({ type }) => type !== 'identify' && type !== 'track')
   ) {
     throw new TypeError(
-      'A handoff requires identify/track events followed by one page, within the single-profile request limits.'
+      'A handoff requires identify/track events followed by one page, within the SDK handoff limits.'
     );
   }
   return validEvents;

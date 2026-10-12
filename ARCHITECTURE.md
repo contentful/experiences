@@ -141,8 +141,8 @@ volatile event profile/context from crossing concurrent requests. `web` is a
 sibling public leaf, not a subclass of Node. It owns mutable browser locale,
 browser context providers, and a LocalStorage-persisted profile, and inherits
 the shared runtime's trusted custom-endpoint and direct by-ID CPA preview
-capabilities. The shared Runtime enforces one live Experiences SDK instance per
-JavaScript runtime.
+capabilities. Web enforces one live Experiences Web SDK instance per JavaScript
+runtime; the shared Runtime and Node SDK have no singleton restriction.
 
 Both leaves expose `identify`, `page`, and `track` through the Personalization
 API and interaction methods through Analytics. Node's ordinary methods send

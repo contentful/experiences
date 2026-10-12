@@ -23,19 +23,19 @@ describe('validatePreparedEvents', () => {
     expect(validatePreparedEvents([builder.buildPageView()])).toHaveLength(1);
   });
 
-  it('accepts the single-profile limits and rejects the next event', () => {
+  it('accepts the SDK handoff limits and rejects the next event', () => {
     const identify = builder.buildIdentify({ userId: 'visitor' });
     const track = builder.buildTrack({ event: 'opened' });
     const page = builder.buildPageView();
 
     expect(
-      validatePreparedEvents([...Array(50).fill(identify), ...Array(149).fill(track), page])
-    ).toHaveLength(200);
-    expect(() => validatePreparedEvents([...Array(200).fill(track), page])).toThrow(
-      'within the single-profile request limits'
+      validatePreparedEvents([...Array(50).fill(identify), ...Array(49).fill(track), page])
+    ).toHaveLength(100);
+    expect(() => validatePreparedEvents([...Array(100).fill(track), page])).toThrow(
+      'within the SDK handoff limits'
     );
     expect(() => validatePreparedEvents([...Array(51).fill(identify), page])).toThrow(
-      'within the single-profile request limits'
+      'within the SDK handoff limits'
     );
   });
 

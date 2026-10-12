@@ -23,6 +23,7 @@ import {
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import LocalStore from './storage/local-store.js';
+import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
@@ -84,6 +85,7 @@ export interface InteractionTrackingSession {
 
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
+  readonly #singletonOwner: string;
   #locale: string | undefined;
   readonly #store = new LocalStore();
   readonly #delivery: PersonalizationDelivery;
@@ -120,17 +122,24 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   constructor(config: ExperiencesWebConfig) {
     const { app, browserContext, profile, ...clientConfig } = config;
-    super({
-      ...clientConfig,
-      eventBuilder: {
-        app,
-        channel: 'web',
-        library: DEFAULT_EVENT_CONTEXT_LIBRARY,
-        getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
-        getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
-        getConsent: browserContext?.getConsent,
-      },
-    });
+    const singletonOwner = acquireWebSingleton();
+    try {
+      super({
+        ...clientConfig,
+        eventBuilder: {
+          app,
+          channel: 'web',
+          library: DEFAULT_EVENT_CONTEXT_LIBRARY,
+          getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
+          getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
+          getConsent: browserContext?.getConsent,
+        },
+      });
+    } catch (error) {
+      releaseWebSingleton(singletonOwner);
+      throw error;
+    }
+    this.#singletonOwner = singletonOwner;
     let delivery: PersonalizationDelivery | undefined;
     try {
       this.#locale = clientConfig.locale;
@@ -152,6 +161,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             this.#store.profile ??
             (this.#adoptedProfileId === undefined ? undefined : { id: this.#adoptedProfileId }),
           setProfile: (nextProfile) => {
+            if (this.#destroyed) return;
             this.#store.profile = nextProfile;
             this.#setAdoptedProfileId(undefined);
           },
@@ -174,8 +184,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         window.removeEventListener('online', this.#handleOnline);
         window.removeEventListener('offline', this.#handleOffline);
       }
-      delivery?.destroy();
-      super.destroy();
+      try {
+        delivery?.destroy();
+      } finally {
+        try {
+          super.destroy();
+        } finally {
+          releaseWebSingleton(this.#singletonOwner);
+        }
+      }
       throw error;
     }
   }
@@ -233,9 +250,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return plan;
   }
 
-  /** Clears browser profile state and its persisted id. */
+  /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
   reset(): void {
-    if (this.#destroyed) return;
+    if (this.#destroyed) {
+      this.#delivery.reset();
+      return;
+    }
     this.#generation += 1;
     this.#currentInitialization = undefined;
     this.#acceptedCurrentPage = undefined;
@@ -245,7 +265,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#store.reset();
   }
 
-  /** Stop browser-owned interaction observers before releasing SDK ownership. */
+  /** Stop browser-owned work before releasing SDK ownership. */
   override destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
@@ -253,17 +273,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#currentInitialization = undefined;
     this.#acceptedCurrentPage = undefined;
     this.#inFlightCurrentPage = undefined;
-    this.#setAdoptedProfileId(undefined);
     try {
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', this.#handleOnline);
         window.removeEventListener('offline', this.#handleOffline);
       }
       this.#delivery.destroy();
+      this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;
     } finally {
-      super.destroy();
+      try {
+        super.destroy();
+      } finally {
+        releaseWebSingleton(this.#singletonOwner);
+      }
     }
   }
 

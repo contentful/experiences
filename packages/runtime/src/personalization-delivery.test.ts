@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OptimizationData } from '@contentful/optimization-api-client/api-schemas';
+import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
@@ -104,14 +105,16 @@ describe('PersonalizationDelivery', () => {
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
   });
 
-  it('uses a 100-event default even though prepared validation permits 200', () => {
-    const f = fixture();
-    const oversized = [
-      ...Array(100).fill(builder.buildTrack({ event: 'opened' })),
-      builder.buildPageView(),
-    ];
-    expect(f.delivery.sendPrepared(oversized)).toEqual({ accepted: false });
-    expect(f.delivery.queuedEventCount).toBe(0);
+  it('admits 100 prepared events and rejects 101 at the shared limit', () => {
+    const f = fixture({ online: false });
+    const track = builder.buildTrack({ event: 'opened' });
+    expect(f.delivery.sendPrepared([...Array(99).fill(track), builder.buildPageView()])).toEqual({
+      accepted: true,
+    });
+    expect(f.delivery.sendPrepared([...Array(100).fill(track), builder.buildPageView()])).toEqual({
+      accepted: false,
+    });
+    expect(f.delivery.queuedEventCount).toBe(100);
     expect(f.upsertProfile).not.toHaveBeenCalled();
   });
 
@@ -159,35 +162,35 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
-  it('evicts a whole prepared head when an offline ordinary event overflows capacity', async () => {
+  it('refuses an offline ordinary event rather than evicting an accepted prepared batch', async () => {
     const f = fixture({ online: false, maxEvents: 2 });
     const head = prepared();
     expect(f.delivery.sendPrepared(head)).toEqual({ accepted: true });
     expect(f.upsertProfile).not.toHaveBeenCalled();
     const ordinary = builder.buildTrack({ event: 'offline' });
-    await expect(f.delivery.send(ordinary)).resolves.toEqual({ accepted: true });
-    expect(f.delivery.queuedEventCount).toBe(1);
+    await expect(f.delivery.send(ordinary)).resolves.toEqual({ accepted: false });
+    expect(f.delivery.queuedEventCount).toBe(2);
     f.setOnline(true);
     await f.delivery.flush();
     expect(f.upsertProfile).toHaveBeenCalledExactlyOnceWith(
-      { profileId: undefined, events: [ordinary] },
-      { locale: ordinary.context.locale }
+      { profileId: undefined, events: head },
+      { preflight: false, locale: undefined }
     );
   });
 
-  it('drops the oldest ordinary offline event while retaining newer ordinary events', async () => {
+  it('refuses a new ordinary event when accepted ordinary events fill the offline queue', async () => {
     const f = fixture({ online: false, maxEvents: 2 });
     const first = builder.buildTrack({ event: 'first' });
     const second = builder.buildTrack({ event: 'second' });
     const third = builder.buildTrack({ event: 'third' });
     await f.delivery.send(first);
     await f.delivery.send(second);
-    await f.delivery.send(third);
+    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: false });
 
     expect(f.delivery.queuedEventCount).toBe(2);
     f.setOnline(true);
     await f.delivery.flush();
-    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([second, third]);
+    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([first, second]);
   });
 
   it('reconciles an in-flight ordinary snapshot without dropping events appended during the request', async () => {
@@ -208,7 +211,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
-  it('keeps retry body, IDs, target, and empty-locale fallback stable after a failure', async () => {
+  it('keeps retry body, IDs, target, and absent locale stable after a failure', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const f = fixture({ profileId: 'original' });
@@ -221,7 +224,7 @@ describe('PersonalizationDelivery', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     expect(f.upsertProfile.mock.calls[1]).toEqual(firstCall);
-    expect(firstCall?.[1]).toEqual({ preflight: false, locale: '' });
+    expect(firstCall?.[1]).toEqual({ preflight: false, locale: undefined });
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
@@ -267,12 +270,106 @@ describe('PersonalizationDelivery', () => {
     f.delivery.destroy();
     expect(f.upsertProfile).toHaveBeenCalledExactlyOnceWith(
       { profileId: undefined, events },
-      { preflight: false, locale: '' }
+      { preflight: false, locale: undefined }
     );
     pending.resolve(data('late-profile'));
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
     expect(f.publishQueuedData).not.toHaveBeenCalled();
     expect(f.delivery.state).toEqual({ status: 'idle' });
+  });
+
+  it('attempts every queued batch in order on destroy and carries the response profile ID', async () => {
+    const firstResponse = deferred<OptimizationData>();
+    const f = fixture({ online: false });
+    f.upsertProfile.mockReturnValueOnce(firstResponse.promise);
+    const first = prepared('de-DE');
+    const second = prepared('fr-FR');
+    expect(f.delivery.sendPrepared(first, { locale: 'de-DE' })).toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared(second, { locale: 'fr-FR' })).toEqual({ accepted: true });
+
+    f.delivery.destroy();
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
+    await expect(f.delivery.send(builder.buildTrack({ event: 'late' }))).resolves.toEqual({
+      accepted: false,
+    });
+
+    firstResponse.resolve(data('continuation-id'));
+    await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
+    expect(f.upsertProfile.mock.calls[1]).toEqual([
+      { profileId: 'continuation-id', events: second },
+      { preflight: false, locale: 'fr-FR' },
+    ]);
+    await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
+    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.delivery.state).toEqual({ status: 'idle' });
+  });
+
+  it('continues an active flush on destroy without publishing late responses', async () => {
+    const firstResponse = deferred<OptimizationData>();
+    const f = fixture();
+    f.upsertProfile.mockReturnValueOnce(firstResponse.promise);
+    const first = prepared('de-DE');
+    const second = prepared('fr-FR');
+    expect(f.delivery.sendPrepared(first, { locale: 'de-DE' })).toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared(second, { locale: 'fr-FR' })).toEqual({ accepted: true });
+
+    f.delivery.destroy();
+    firstResponse.resolve(data('continuation-id'));
+    await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
+    expect(f.publishQueuedData).not.toHaveBeenCalled();
+  });
+
+  it('cancels the remaining destroy drain when reset follows destroy', async () => {
+    const firstResponse = deferred<OptimizationData>();
+    const f = fixture({ online: false });
+    f.upsertProfile.mockReturnValueOnce(firstResponse.promise);
+    expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
+
+    f.delivery.destroy();
+    const drain = f.delivery.flush();
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    f.delivery.reset();
+    expect(f.delivery.queuedEventCount).toBe(0);
+
+    firstResponse.resolve(data('late-profile'));
+    await drain;
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.delivery.state).toEqual({ status: 'idle' });
+    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
+  });
+
+  it('stops a failed destroy drain without retrying or publishing', async () => {
+    vi.useFakeTimers();
+    const f = fixture({ online: false });
+    f.upsertProfile.mockRejectedValueOnce(new Error('network'));
+    const ingest = vi.fn();
+    const sink = { name: 'personalization-delivery-test', ingest };
+    logger.addSink(sink);
+    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+
+    try {
+      f.delivery.destroy();
+      await vi.runAllTimersAsync();
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.delivery.queuedEventCount).toBe(0);
+      expect(f.delivery.state).toEqual({ status: 'idle' });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(ingest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'warn',
+          messages: expect.arrayContaining([
+            expect.stringContaining('Personalization queue flush request failed'),
+          ]),
+        })
+      );
+      expect(JSON.stringify(ingest.mock.calls)).not.toContain('opened');
+    } finally {
+      logger.removeSink(sink.name);
+    }
   });
 });

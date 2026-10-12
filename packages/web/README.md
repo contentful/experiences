@@ -4,7 +4,7 @@ The browser SDK for fetching and resolving [Contentful Experiences](https://www.
 
 > **Alpha.** This package is a lean browser runtime. Its API is still evolving.
 
-Only one live Experiences SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the shared Runtime owner lock.
+Only one live Experiences Web SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the Web owner lock. Experiences Web and Optimization Web are alternative product SDKs and are not supported together on one page. Applications must choose one; the SDKs do not coordinate with each other.
 
 ## Install
 
@@ -131,6 +131,10 @@ Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response
 establishes and persists the next profile. `destroy()` stops owned listeners and
 timers and releases the singleton for replacement.
+After `destroy()`, calling `reset()` can still cancel an unfinished drain from
+that instance. It does not clear LocalStorage at that point, because a replacement
+Web SDK may already own the stored profile. Reset before destroy when ending a
+visitor session.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -156,12 +160,15 @@ Each call reads the current locale and browser context, so SPA navigation and
 provider annotates the event context; it does not gate sending. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
-prepared work. Offline ordinary calls are accepted into an in-memory queue; a
-prepared batch is admitted whole or refused at capacity. Acceptance is not HTTP
+prepared work. Offline ordinary calls are accepted into an in-memory queue until
+capacity, then refused without evicting accepted work. A prepared batch is
+admitted whole or refused at capacity. Acceptance is not HTTP
 completion. Read `personalizationDeliveryState` for the latest request status
 (`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
-their original event bodies. The queue is not durable and does not gate on
-consent. Analytics methods continue to send directly and require a profile or
+their original event bodies. `destroy()` makes one best-effort attempt to drain
+queued batches in order, without a delivery guarantee after the runtime exits.
+The queue is not durable and does not gate on consent. Analytics methods continue
+to send directly and require a profile or
 an adopted continuation ID.
 
 ## Interaction tracking

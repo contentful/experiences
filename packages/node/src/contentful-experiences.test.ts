@@ -59,20 +59,19 @@ function createEventRuntime() {
 }
 
 describe('Node ContentfulExperiences', () => {
-  it('rejects a second live SDK and allows replacement after destroy', () => {
+  it('allows independent live SDK instances without requiring teardown', () => {
     const first = createRuntime();
     const german = first.forRequest({ locale: 'de-DE' });
     const french = first.forRequest({ locale: 'fr-FR' });
+    const second = createRuntime();
 
     expect(german.locale).toBe('de-DE');
     expect(french.locale).toBe('fr-FR');
-    expect(() => createRuntime()).toThrow();
+    expect(second.forRequest({ locale: 'es-ES' }).locale).toBe('es-ES');
 
     first.destroy();
     first.destroy();
-
-    const replacement = createRuntime();
-    expect(replacement.forRequest({ locale: 'es-ES' }).locale).toBe('es-ES');
+    expect(second.forRequest({ locale: 'it-IT' }).locale).toBe('it-IT');
   });
 
   it('applies stable Node attribution and creates distinct request facades', () => {

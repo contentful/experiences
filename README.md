@@ -153,8 +153,10 @@ Session is active.
 
 The public Node and Web SDKs expose `identify`, `page`, and `track` through the
 Personalization API. `trackView`, `trackClick`, `trackHover`, and `trackFlagView`
-use the Analytics API. One live Experiences SDK instance is supported per
-JavaScript runtime; call `destroy()` before constructing a replacement.
+use the Analytics API. Web supports one live Experiences Web SDK instance per
+JavaScript runtime; call `destroy()` before constructing a replacement. Node
+instances do not share that lock. Experiences Web and Optimization Web are
+alternative SDKs and are not supported together on one page.
 
 Runtime constructors take Delivery and optional Preview configuration and own
 their clients. A token may be a value or supplier. A tokenless trusted proxy
@@ -165,8 +167,10 @@ profile in LocalStorage, and offers `reset()` for logout or a new visitor
 session.
 
 Ordinary online Personalization calls send directly. Web accepts ordinary
-offline calls into an in-memory queue; Analytics remains direct. Queued work is
-not durable and does not provide exactly-once delivery. Node `eventConsent`
+offline calls into an in-memory queue; a new offline call is refused when the
+queue is full rather than evicting accepted work. Analytics remains direct.
+`destroy()` makes one best-effort attempt to drain queued batches in order, but
+queued work is not durable and does not provide exactly-once delivery. Node `eventConsent`
 and Web `browserContext.getConsent` add current GDPR metadata to events; they
 do not grant permission, block sending, or control persistence. The separate
 consent and persistence workstream will define that policy. Web's

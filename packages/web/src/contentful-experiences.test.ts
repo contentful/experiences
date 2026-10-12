@@ -297,6 +297,37 @@ describe('Web ContentfulExperiences', () => {
     expect(() => createRuntime()).not.toThrow();
   });
 
+  it('releases Web ownership when construction fails and does not lock the Runtime base', () => {
+    expect(
+      () =>
+        new ContentfulExperiences({
+          spaceId: 'space',
+          environmentId: 'environment',
+          delivery: {} as never,
+        })
+    ).toThrow('requires accessToken unless an explicit proxy host is provided');
+
+    const web = createRuntime();
+    const base = new RuntimeContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      delivery: { accessToken: 'delivery-token' },
+      eventBuilder: { channel: 'server' },
+    });
+    expect(base.spaceId).toBe(web.spaceId);
+    base.destroy();
+  });
+
+  it('releases Web ownership when leaf initialization fails', () => {
+    const addListener = vi.spyOn(window, 'addEventListener').mockImplementationOnce(() => {
+      throw new Error('listener setup failed');
+    });
+    expect(() => createRuntime()).toThrow('listener setup failed');
+    addListener.mockRestore();
+
+    expect(() => createRuntime()).not.toThrow();
+  });
+
   it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
     const baseConfig = {
       spaceId: 'space',

@@ -287,6 +287,45 @@ describe('Web prepared Personalization delivery', () => {
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
+  it('does not persist a late ordinary Personalization response after destroy', async () => {
+    const pending = deferred<{ profile: { id: string } }>();
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
+      pending.promise as never
+    );
+    const runtime = createRuntime();
+    const send = runtime.track({ event: 'in-flight' });
+
+    runtime.destroy();
+    pending.resolve({ profile: { id: 'late-profile' } });
+    await send;
+    expect(runtime.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('cancels an old destroy drain without clearing a replacement Web profile', async () => {
+    const pending = deferred<{ profile: { id: string } }>();
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockReturnValueOnce(pending.promise as never)
+      .mockResolvedValue({ profile: { id: 'later-profile' } } as never);
+    const oldRuntime = createRuntime();
+    await oldRuntime.admit(prepared(oldRuntime), undefined, 'de-DE');
+    await oldRuntime.admit(prepared(oldRuntime), undefined, 'fr-FR');
+    expect(upsert).toHaveBeenCalledTimes(1);
+
+    oldRuntime.destroy();
+    const replacement = createRuntime({ id: 'replacement-profile' });
+    oldRuntime.reset();
+    pending.resolve({ profile: { id: 'old-profile' } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(replacement.profile).toEqual({ id: 'replacement-profile' });
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
+      id: 'replacement-profile',
+    });
+  });
+
   it('does not send ordinary Analytics after destroy releases ownership', async () => {
     const analytics = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
     const runtime = createRuntime({ id: 'browser-profile' });

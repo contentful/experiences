@@ -8,7 +8,7 @@ The Node.js SDK for fetching and resolving [Contentful Experiences](https://www.
 npm install @contentful/experiences-node
 ```
 
-## Create one SDK instance, then bind every request
+## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.
 
@@ -40,7 +40,7 @@ const request = experiences.forRequest({
 const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
 ```
 
-The singleton retains only stable SDK configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one SDK can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. A second live Experiences SDK instance in the same JavaScript runtime is rejected; call `destroy()` before replacing the SDK during teardown or hot reload. Request facades do not count as separate SDK instances.
+An SDK instance retains only stable configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one instance can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. Multiple Node SDK instances can coexist; no teardown is required before constructing another. Each request facade belongs to its creating instance.
 
 ## Personalization
 
@@ -150,7 +150,7 @@ retained on the SDK or request facade.
 
 ## Delivery, preview, and destinations
 
-`fetchExperience({ experienceId }, { config: experienceConfig })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the singleton:
+`fetchExperience({ experienceId }, { config: experienceConfig })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the SDK instance:
 
 ```ts
 const draft = await request.fetchExperience(
@@ -162,7 +162,7 @@ const draft = await request.fetchExperience(
 );
 ```
 
-Preview is available only for by-id experience fetches. If the singleton has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
+Preview is available only for by-id experience fetches. If the SDK instance has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
 
 ```ts
 const result = await request.fetchByDestinationPath(
