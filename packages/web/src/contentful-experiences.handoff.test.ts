@@ -17,7 +17,6 @@ function createRuntime(profile?: { id: string }): ContentfulExperiences {
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...(profile === undefined ? {} : { profile }),
   });
@@ -318,7 +317,10 @@ describe('Web handoff and current-page lifecycle', () => {
       handoff(runtime, '/new', { profileId: 'new-continuation' }),
       { routeKey: '/new' }
     );
-    const currentFetch = runtime.fetchExperience({ experienceId: 'current' });
+    const currentFetch = runtime.fetchExperience(
+      { experienceId: 'current' },
+      { config: { components: {} } }
+    );
 
     await expect(old).resolves.toEqual({ accepted: false });
     await expect(current).resolves.toEqual({ accepted: true });
@@ -422,7 +424,10 @@ describe('Web handoff and current-page lifecycle', () => {
     const input = handoff(runtime, '/first');
 
     const hydrating = runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' });
-    const staleFetch = runtime.fetchExperience({ experienceId: 'old' });
+    const staleFetch = runtime.fetchExperience(
+      { experienceId: 'old' },
+      { config: { components: {} } }
+    );
     await vi.waitFor(() =>
       expect(fetch.mock.calls[0]?.[0]).toMatchObject({
         personalization: { profileId: 'server-profile' },
@@ -430,7 +435,10 @@ describe('Web handoff and current-page lifecycle', () => {
     );
     await hydrating;
     runtime.reset();
-    const currentFetch = runtime.fetchExperience({ experienceId: 'new' });
+    const currentFetch = runtime.fetchExperience(
+      { experienceId: 'new' },
+      { config: { components: {} } }
+    );
     await vi.waitFor(() => expect(fetch.mock.calls[1]?.[0]).toEqual({ experienceId: 'new' }));
     second.resolve({ nodes: [], personalization: { profileId: 'new-profile' } });
     await currentFetch;
@@ -452,12 +460,15 @@ describe('Web handoff and current-page lifecycle', () => {
     );
     const runtime = createRuntime();
 
-    const earlierFetch = runtime.fetchExperience({ experienceId: 'earlier' });
+    const earlierFetch = runtime.fetchExperience(
+      { experienceId: 'earlier' },
+      { config: { components: {} } }
+    );
     await runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/new'), { routeKey: '/new' });
     staleResponse.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });
     await earlierFetch;
     expect(runtime.profile).toBeUndefined();
-    await runtime.fetchExperience({ experienceId: 'current' });
+    await runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } });
     expect(fetch.mock.calls[1]?.[0]).toMatchObject({
       personalization: { profileId: 'server-profile' },
     });
@@ -482,7 +493,7 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('honors an in-memory own-property undefined profile clear without inventing a wire sentinel', async () => {
+  it('honors an in-memory explicit profile clear', async () => {
     const runtime = createRuntime({ id: 'browser-profile' });
     await runtime.hydrateHandoffState(
       {
@@ -528,7 +539,10 @@ describe('Web handoff and current-page lifecycle', () => {
     vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue(
       fetchedPlan as never
     );
-    const plan = await runtime.fetchExperience({ experienceId: 'first' });
+    const plan = await runtime.fetchExperience(
+      { experienceId: 'first' },
+      { config: { components: {} } }
+    );
     const input = handoff(runtime, '/first');
 
     await runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' });

@@ -31,7 +31,6 @@ describe('Web public entry on the server', () => {
     runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery-token' },
       profile: { id: 'server-render-profile' },
     });
@@ -49,7 +48,6 @@ describe('Web interaction tracking on the server', () => {
     runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery-token' },
     });
 

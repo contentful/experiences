@@ -194,11 +194,10 @@ and are not staged into this batch.
 ```ts
 import { ContentfulExperiences as NodeContentfulExperiences } from '@contentful/experiences-node';
 
-// Construct once for this server runtime; replace the registrations and token.
+// Construct once for this server runtime; supply the token for your environment.
 const experiences = new NodeContentfulExperiences({
   spaceId: 'your-space-id',
   environmentId: 'master',
-  resolverConfig: { components: {} },
   delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
 });
 
@@ -242,7 +241,6 @@ import {
 const web = new WebContentfulExperiences({
   spaceId: 'your-space-id',
   environmentId: 'master',
-  resolverConfig: { components: {} }, // use the same registrations as the server
   delivery: { host: 'https://application.example/experience-proxy' },
 });
 
@@ -252,6 +250,12 @@ async function applyHandoff(handoff: ExperiencesHandoff) {
   return result; // accepted means admitted, not delivered
 }
 ```
+
+Event-only handoff preparation and hydration need no component registry. When
+the same SDK fetches or resolves an Experience plan, pass that Experience's
+registration config in the call's resolve options, for example
+`web.fetchExperience({ experienceId }, { config: experienceConfig })`. Separate
+calls may use different configs on the same SDK instance.
 
 `hydrateHandoffState(handoff, { routeKey })` can seed state before tracking and
 joins a later paired call for the same current initialization.

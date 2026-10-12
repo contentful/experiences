@@ -18,7 +18,6 @@ import { ContentfulExperiences } from '@contentful/experiences-node';
 const experiences = new ContentfulExperiences({
   spaceId: process.env.CONTENTFUL_SPACE_ID!,
   environmentId: 'master',
-  resolverConfig: experienceConfig,
   delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
   preview: process.env.CONTENTFUL_PREVIEW_TOKEN
     ? { accessToken: process.env.CONTENTFUL_PREVIEW_TOKEN }
@@ -38,26 +37,29 @@ const request = experiences.forRequest({
   },
 });
 
-const plan = await request.fetchExperience({ experienceId });
+const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
 ```
 
-The singleton retains only stable SDK configuration and reusable delivery transports. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. A second live Experiences SDK instance in the same JavaScript runtime is rejected; call `destroy()` before replacing the SDK during teardown or hot reload. Request facades do not count as separate SDK instances.
+The singleton retains only stable SDK configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one SDK can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. A second live Experiences SDK instance in the same JavaScript runtime is rejected; call `destroy()` before replacing the SDK during teardown or hot reload. Request facades do not count as separate SDK instances.
 
 ## Personalization
 
 Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
 
 ```ts
-const plan = await request.fetchExperience({
-  experienceId,
-  personalization: {
-    profileId,
-    events: [
-      experiences.eventBuilder.buildIdentify({ userId }),
-      experiences.eventBuilder.buildPageView(),
-    ],
+const plan = await request.fetchExperience(
+  {
+    experienceId,
+    personalization: {
+      profileId,
+      events: [
+        experiences.eventBuilder.buildIdentify({ userId }),
+        experiences.eventBuilder.buildPageView(),
+      ],
+    },
   },
-});
+  { config: experienceConfig }
+);
 ```
 
 The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
@@ -143,25 +145,33 @@ For settings that occur at more than one scope, later scope wins:
 | `debug`                          | constructor default → request `resolveOptions` → method `resolveOptions`                                      |
 
 `false` remains meaningful for `debug`: the SDK uses nullish fallback rather than truthiness.
+The resolver `config` is required on each fetch or resolve call and is never
+retained on the SDK or request facade.
 
 ## Delivery, preview, and destinations
 
-`fetchExperience({ experienceId })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the singleton:
+`fetchExperience({ experienceId }, { config: experienceConfig })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the singleton:
 
 ```ts
-const draft = await request.fetchExperience({
-  experienceId,
-  preview: true,
-});
+const draft = await request.fetchExperience(
+  {
+    experienceId,
+    preview: true,
+  },
+  { config: experienceConfig }
+);
 ```
 
 Preview is available only for by-id experience fetches. If the singleton has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
 
 ```ts
-const result = await request.fetchByDestinationPath({
-  destinationId,
-  path: requestPath,
-});
+const result = await request.fetchByDestinationPath(
+  {
+    destinationId,
+    path: requestPath,
+  },
+  { config: experienceConfig }
+);
 
 if ('redirect' in result) {
   // Route using result.redirect.path.
@@ -197,7 +207,7 @@ development.
 import { NotFoundError } from '@contentful/experiences-node';
 
 try {
-  return await request.fetchExperience({ experienceId });
+  return await request.fetchExperience({ experienceId }, { config: experienceConfig });
 } catch (error) {
   if (error instanceof NotFoundError) {
     // Use the framework's not-found response.

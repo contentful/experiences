@@ -34,6 +34,7 @@ import {
 import { acquireRuntimeSingleton, releaseRuntimeSingleton } from './runtime-singleton.js';
 
 export type RuntimeResolveOptions = {
+  config: ResolverConfig;
   metadata?: Record<string, unknown>;
   debug?: boolean;
   /**
@@ -49,6 +50,8 @@ export type RuntimeResolveOptions = {
  * own response, so `sourceMap` is not accepted here.
  */
 export type RuntimeFetchResolveOptions = Omit<RuntimeResolveOptions, 'sourceMap'>;
+/** Metadata/debug may be shared, while registrations remain per resolution. */
+export type RuntimeResolveDefaults = Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
 
 export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'library'> & {
   channel: EventBuilderConfig['channel'];
@@ -82,19 +85,19 @@ export interface ExperienceRuntime {
   destroy(): void;
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions: RuntimeResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
 }
 
@@ -102,14 +105,13 @@ export type ContentfulExperiencesConfig = {
   spaceId: string;
   environmentId: string;
   locale?: string;
-  resolverConfig: ResolverConfig;
   /** Configuration for the runtime-owned Content Delivery API client. */
   delivery: RuntimeDeliveryClientOptions;
   /** Optional configuration for the runtime-owned Content Preview API client. */
   preview?: RuntimeDeliveryClientOptions;
   /** Overrides for the runtime-owned Personalization and Analytics event transport. */
   optimization?: RuntimeOptimizationConfig;
-  resolveDefaults?: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
+  resolveDefaults?: RuntimeResolveDefaults;
   eventBuilder: RuntimeEventBuilderConfig;
 };
 
@@ -119,11 +121,10 @@ export class ContentfulExperiences implements ExperienceRuntime {
   readonly eventBuilder: EventBuilder;
 
   readonly #locale: string | undefined;
-  readonly #resolverConfig: ResolverConfig;
   readonly #deliveryClient: ContentfulViewDeliveryClient;
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
   protected readonly optimizationApi: RuntimeOptimizationApiClient;
-  readonly #resolveDefaults: Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
+  readonly #resolveDefaults: RuntimeResolveDefaults;
   readonly #singletonOwner: string;
   #destroyed = false;
 
@@ -133,7 +134,6 @@ export class ContentfulExperiences implements ExperienceRuntime {
       this.spaceId = config.spaceId;
       this.environmentId = config.environmentId;
       this.#locale = config.locale;
-      this.#resolverConfig = config.resolverConfig;
       this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
       this.#previewClient =
         config.preview === undefined
@@ -177,24 +177,25 @@ export class ContentfulExperiences implements ExperienceRuntime {
 
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
     return resolveCoreExperience(
       payload,
-      this.#resolverConfig,
+      requireResolverConfig(resolveOptions),
       this.#mergeResolveOptions(resolveOptions)
     );
   }
 
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     if (options.preview === true && this.#previewClient === undefined) {
       throw new Error(
         'fetchExperience() called with preview: true but this runtime has no preview client'
       );
     }
+    const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
       {
         spaceId: this.spaceId,
@@ -209,45 +210,54 @@ export class ContentfulExperiences implements ExperienceRuntime {
           ? (this.#previewClient as ContentfulViewDeliveryClient)
           : this.#deliveryClient,
       },
-      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, nodeId: options.nodeId },
       { client: this.#deliveryClient },
-      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, path: options.path },
       { client: this.#deliveryClient },
-      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
-  #mergeResolveOptions(options: RuntimeResolveOptions | undefined): RuntimeResolveOptions {
+  #mergeResolveOptions(
+    options: RuntimeResolveOptions
+  ): RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'> {
     return {
       ...this.#mergeFetchResolveOptions(options),
-      sourceMap: options?.sourceMap,
+      sourceMap: options.sourceMap,
     };
   }
 
-  #mergeFetchResolveOptions(
-    options: RuntimeFetchResolveOptions | undefined
-  ): RuntimeFetchResolveOptions {
+  #mergeFetchResolveOptions(options: RuntimeFetchResolveOptions): RuntimeResolveDefaults {
     return {
-      metadata: { ...this.#resolveDefaults.metadata, ...options?.metadata },
-      debug: options?.debug ?? this.#resolveDefaults.debug,
+      metadata: { ...this.#resolveDefaults.metadata, ...options.metadata },
+      debug: options.debug ?? this.#resolveDefaults.debug,
     };
   }
+}
+
+function requireResolverConfig(options: RuntimeResolveOptions | undefined): ResolverConfig {
+  if (options?.config === undefined) {
+    throw new TypeError('A resolver config is required in resolveOptions.config');
+  }
+  return options.config;
 }

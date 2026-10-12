@@ -14,7 +14,6 @@ function node() {
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'de-DE',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
   });
   active.add(sdk);
@@ -26,7 +25,6 @@ function web() {
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
   });
   active.add(sdk);

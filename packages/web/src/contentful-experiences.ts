@@ -11,7 +11,7 @@ import {
   parseExperiencesHandoff,
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
-  type RuntimeResolveOptions,
+  type RuntimeFetchResolveOptions,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
@@ -200,7 +200,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   override async fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (

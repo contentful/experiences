@@ -27,7 +27,6 @@ function createRuntime(profile?: { id: string }) {
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...(profile === undefined ? {} : { profile }),
   });

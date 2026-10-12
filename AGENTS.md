@@ -73,7 +73,9 @@ supplier. It may be omitted only when an explicit trusted proxy `host` is
 configured: generated bearer auth is then disabled and that proxy owns upstream
 authentication. The runtime retains stable configuration and one base
 `EventBuilder` configured with an explicit platform channel; it never retains
-request-varying locale, resolve options, profile, or context. The public Node
+request-varying locale, resolver registrations, resolve options, profile, or
+context. A `config` registry is required on each fetch or resolve operation,
+while event-only operations need none. The public Node
 SDK extends that runtime with
 `ContentfulExperiences.forRequest()`, which creates a request-local facade for
 fetch, resolve, destination, and event operations. Node profile and event

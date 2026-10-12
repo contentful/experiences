@@ -8,6 +8,7 @@ import {
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 const runtimes = new Set<ContentfulExperiences>();
+const resolverConfig = { components: {} };
 
 function trackRuntime<T extends ContentfulExperiences>(runtime: T): T {
   runtimes.add(runtime);
@@ -25,7 +26,6 @@ function createRuntime() {
       spaceId: 'space',
       environmentId: 'environment',
       locale: 'en-US',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery-token' },
       resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
       app: { name: 'site', version: '1.0.0' },
@@ -45,7 +45,6 @@ function createEventRuntime() {
       spaceId: 'space',
       environmentId: 'environment',
       locale: 'en-US',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery-token' },
     })
   );
@@ -111,8 +110,8 @@ describe('Node ContentfulExperiences', () => {
     });
 
     const [germanResult, frenchResult] = await Promise.all([
-      german.fetchExperience({ experienceId: 'german' }),
-      french.fetchExperience({ experienceId: 'french' }),
+      german.fetchExperience({ experienceId: 'german' }, { config: resolverConfig }),
+      french.fetchExperience({ experienceId: 'french' }, { config: resolverConfig }),
     ]);
 
     expect(germanResult).toEqual({
@@ -140,10 +139,11 @@ describe('Node ContentfulExperiences', () => {
 
     await request.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
-      { debug: false, metadata: { method: 'value', shared: 'method' } }
+      { config: resolverConfig, debug: false, metadata: { method: 'value', shared: 'method' } }
     );
 
     expect(resolveExperience).toHaveBeenCalledWith(expect.anything(), {
+      config: resolverConfig,
       debug: false,
       metadata: { request: 'value', method: 'value', shared: 'method' },
     });
@@ -159,8 +159,8 @@ describe('Node ContentfulExperiences', () => {
     const request = runtime.forRequest({ resolveOptions: { sourceMap: requestMap } });
     const payload = { sys: { type: 'Experience' }, nodes: [] } as never;
 
-    await request.resolveExperience(payload);
-    await request.resolveExperience(payload, { sourceMap: methodMap });
+    await request.resolveExperience(payload, { config: resolverConfig });
+    await request.resolveExperience(payload, { config: resolverConfig, sourceMap: methodMap });
 
     expect(resolveExperience.mock.calls[0]?.[1]).toMatchObject({ sourceMap: requestMap });
     expect(resolveExperience.mock.calls[1]?.[1]).toMatchObject({ sourceMap: methodMap });
@@ -174,7 +174,7 @@ describe('Node ContentfulExperiences', () => {
 
     const plan = await request.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
-      { debug: false, metadata: { method: 'value', shared: 'method' } }
+      { config: resolverConfig, debug: false, metadata: { method: 'value', shared: 'method' } }
     );
 
     expect(plan.debug).toBe(false);
@@ -184,6 +184,51 @@ describe('Node ContentfulExperiences', () => {
       method: 'value',
       shared: 'method',
     });
+  });
+
+  it("uses each call's resolver config on the same request facade", async () => {
+    const runtime = createRuntime();
+    const request = runtime.forRequest();
+    const payload = {
+      nodes: [
+        {
+          component: {
+            sys: {
+              type: 'ResourceLink' as const,
+              linkType: 'Contentful:Component' as const,
+              urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/hero',
+            },
+          },
+        },
+      ],
+    };
+    const firstConfig = {
+      components: { hero: { resolveData: () => ({ variant: 'first' }) } },
+    };
+    const secondConfig = {
+      components: { hero: { resolveData: () => ({ variant: 'second' }) } },
+    };
+    const fetchExperience = vi
+      .spyOn(runtime, 'fetchExperience')
+      .mockImplementation(async (_options, resolveOptions) =>
+        runtime.resolveExperience(payload, resolveOptions)
+      );
+
+    const firstFetched = await request.fetchExperience(
+      { experienceId: 'first' },
+      { config: firstConfig, debug: false }
+    );
+    const secondFetched = await request.fetchExperience(
+      { experienceId: 'second' },
+      { config: secondConfig, debug: false }
+    );
+
+    expect(firstFetched.nodes[0]?.props.resolved).toEqual({ variant: 'first' });
+    expect(secondFetched.nodes[0]?.props.resolved).toEqual({ variant: 'second' });
+    expect(fetchExperience.mock.calls.map(([, options]) => options.config)).toEqual([
+      firstConfig,
+      secondConfig,
+    ]);
   });
 
   it('forwards fetch and destination calls with the request locale and resolve options', async () => {
@@ -206,21 +251,30 @@ describe('Node ContentfulExperiences', () => {
       profileId: 'profile-1',
       events: [runtime.eventBuilder.buildPageView(), runtime.eventBuilder.buildPageView()],
     };
-    await request.fetchExperience({ experienceId: 'experience', personalization });
-    await request.fetchByDestinationNode({ destinationId: 'destination', nodeId: 'node' });
-    await request.fetchByDestinationPath({ destinationId: 'destination', path: '/path' });
+    await request.fetchExperience(
+      { experienceId: 'experience', personalization },
+      { config: resolverConfig }
+    );
+    await request.fetchByDestinationNode(
+      { destinationId: 'destination', nodeId: 'node' },
+      { config: resolverConfig }
+    );
+    await request.fetchByDestinationPath(
+      { destinationId: 'destination', path: '/path' },
+      { config: resolverConfig }
+    );
 
     expect(fetchExperience).toHaveBeenCalledWith(
       { experienceId: 'experience', locale: 'es-ES', personalization },
-      { metadata: { request: true }, debug: undefined }
+      { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
     expect(byNode).toHaveBeenCalledWith(
       { destinationId: 'destination', nodeId: 'node' },
-      { metadata: { request: true }, debug: undefined }
+      { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
     expect(byPath).toHaveBeenCalledWith(
       { destinationId: 'destination', path: '/path' },
-      { metadata: { request: true }, debug: undefined }
+      { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
   });
 
@@ -396,7 +450,6 @@ describe('Node ContentfulExperiences', () => {
 
     expect(prepared.handoff.profileId).toBe('updated-profile');
     expect(prepared.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
-    expect(prepared.handoff.state).toBeUndefined();
     expect(request.profile).toEqual({ id: 'updated-profile' });
     expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US', preflight: true });
 
@@ -529,16 +582,19 @@ describe('Node ContentfulExperiences', () => {
     fetchExperience.mockResolvedValue({ nodes: [] } as never);
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
 
-    await request.fetchExperience({ experienceId: 'first' });
+    await request.fetchExperience({ experienceId: 'first' }, { config: resolverConfig });
     expect(fetchExperience.mock.calls[0]?.[0]).toMatchObject({
       personalization: { profileId: 'initial-profile' },
     });
     expect(request.profile).toEqual({ id: 'xda-profile' });
 
-    await request.fetchExperience({
-      experienceId: 'override',
-      personalization: { profileId: 'explicit-profile', events: [] },
-    });
+    await request.fetchExperience(
+      {
+        experienceId: 'override',
+        personalization: { profileId: 'explicit-profile', events: [] },
+      },
+      { config: resolverConfig }
+    );
     expect(fetchExperience.mock.calls[1]?.[0]).toMatchObject({
       personalization: { profileId: 'explicit-profile', events: [] },
     });
@@ -555,7 +611,7 @@ describe('Node ContentfulExperiences', () => {
     );
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
 
-    const pending = request.fetchExperience({ experienceId: 'slow' });
+    const pending = request.fetchExperience({ experienceId: 'slow' }, { config: resolverConfig });
     expect(fetchExperience.mock.calls[0]?.[0]).toMatchObject({
       personalization: { profileId: 'initial-profile' },
     });

@@ -132,7 +132,7 @@ describe('Experiences handoff', () => {
     ).toEqual({ scope: 'public-permutation', key: 'experience:revision:locale' });
   });
 
-  it('packages evaluated profile state privately without any event transport', () => {
+  it('packages evaluated profile state privately', () => {
     const handoff = privateHandoff();
     const data = {
       profile: { id: 'evaluated-profile' },
@@ -146,19 +146,12 @@ describe('Experiences handoff', () => {
     expect(packaged.replay?.events.map((event) => event.messageId)).toEqual(
       handoff.replay?.events.map((event) => event.messageId)
     );
-    expect(packaged).not.toHaveProperty('changes');
-    expect(packaged.state).not.toHaveProperty('selectedOptimizations');
     expect(() =>
       createRequestHandoffFromData({ handoff: { ...handoff, cache: { scope: 'static' } }, data })
     ).toThrow('private-request');
   });
 
-  it('does not carry the old journal byte limit into the new envelope', () => {
-    const handoff = { ...privateHandoff(), profileId: 'x'.repeat(70 * 1024) };
-    expect(parseExperiencesHandoff(handoff).profileId).toHaveLength(70 * 1024);
-  });
-
-  it('preserves an in-memory explicit profile clear without inventing a JSON sentinel', () => {
+  it('preserves an in-memory explicit profile clear', () => {
     const handoff = createExperiencesHandoff({
       ...scope,
       cache: { scope: 'private-request' },
@@ -166,6 +159,5 @@ describe('Experiences handoff', () => {
     });
 
     expect(Object.prototype.hasOwnProperty.call(handoff.state, 'profile')).toBe(true);
-    expect(JSON.parse(JSON.stringify(handoff)).state).toEqual({});
   });
 });

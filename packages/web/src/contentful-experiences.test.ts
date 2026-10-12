@@ -25,7 +25,6 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);
@@ -109,8 +108,10 @@ describe('Web ContentfulExperiences', () => {
     });
   });
 
-  it('uses mutable defaults while preserving a per-call locale', async () => {
+  it('uses mutable defaults while forwarding each per-call locale and resolver config', async () => {
     const runtime = createRuntime();
+    const defaultResolveOptions = { config: { components: {} } };
+    const frenchResolveOptions = { config: { components: {}, experienceTemplates: {} } };
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
@@ -119,17 +120,20 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.locale).toBe('de-DE');
     expect(runtime.eventBuilder.buildTrack({ event: 'locale' }).context.locale).toBe('de-DE');
 
-    await runtime.fetchExperience({ experienceId: 'default' });
-    await runtime.fetchExperience({ experienceId: 'per-call', locale: 'fr-FR' });
+    await runtime.fetchExperience({ experienceId: 'default' }, defaultResolveOptions);
+    await runtime.fetchExperience(
+      { experienceId: 'per-call', locale: 'fr-FR' },
+      frenchResolveOptions
+    );
 
-    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, undefined);
+    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, defaultResolveOptions);
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       {
         experienceId: 'per-call',
         locale: 'fr-FR',
       },
-      undefined
+      frenchResolveOptions
     );
   });
 
@@ -149,7 +153,7 @@ describe('Web ContentfulExperiences', () => {
     };
     const payload = { sys: { type: 'Experience' }, nodes: [], extensions: { sourceMap } } as never;
 
-    const plan = await runtime.resolveExperience(payload);
+    const plan = await runtime.resolveExperience(payload, { config: { components: {} } });
 
     expect(plan.sourceMap).toEqual(sourceMap);
   });
@@ -165,12 +169,15 @@ describe('Web ContentfulExperiences', () => {
       events: [page],
     };
 
-    await runtime.fetchExperience({ experienceId: 'personalized', personalization });
+    await runtime.fetchExperience(
+      { experienceId: 'personalized', personalization },
+      { config: { components: {} } }
+    );
 
     expect(page.channel).toBe('web');
     expect(fetch).toHaveBeenCalledWith(
       { experienceId: 'personalized', personalization },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -186,7 +193,7 @@ describe('Web ContentfulExperiences', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience({ experienceId: 'personalized' });
+    await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
 
     expect(runtime.profile).toEqual(storedProfile);
     expect(fetch).toHaveBeenCalledWith(
@@ -194,7 +201,7 @@ describe('Web ContentfulExperiences', () => {
         experienceId: 'personalized',
         personalization: { profileId: 'stored-profile' },
       },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -205,10 +212,13 @@ describe('Web ContentfulExperiences', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience({
-      experienceId: 'personalized',
-      personalization: { profileId: 'explicit-profile' },
-    });
+    await runtime.fetchExperience(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'explicit-profile' },
+      },
+      { config: { components: {} } }
+    );
 
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(fetch).toHaveBeenCalledWith(
@@ -216,7 +226,7 @@ describe('Web ContentfulExperiences', () => {
         experienceId: 'personalized',
         personalization: { profileId: 'explicit-profile' },
       },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -227,7 +237,7 @@ describe('Web ContentfulExperiences', () => {
       personalization: { profileId: 'xda-profile' },
     } as never);
 
-    await runtime.fetchExperience({ experienceId: 'personalized' });
+    await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
 
     expect(runtime.profile).toEqual({ id: 'xda-profile' });
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
@@ -291,7 +301,6 @@ describe('Web ContentfulExperiences', () => {
     const baseConfig = {
       spaceId: 'space',
       environmentId: 'environment',
-      resolverConfig: { components: {} },
     };
 
     const hostConfig = {
@@ -322,9 +331,9 @@ describe('Web ContentfulExperiences', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience(options);
+    await runtime.fetchExperience(options, { config: { components: {} } });
 
-    expect(fetch).toHaveBeenCalledWith(options, undefined);
+    expect(fetch).toHaveBeenCalledWith(options, { config: { components: {} } });
   });
 
   it('updates and persists the complete profile from Personalization events', async () => {
@@ -394,7 +403,7 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'updated-profile' });
   });
 
-  it('uses the latest redacted browser context, locale, and consent without gating events', async () => {
+  it('uses the latest redacted browser context, locale, and consent metadata', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
       profile: { id: 'visitor' },

@@ -26,15 +26,17 @@ import { ContentfulExperiences } from '@contentful/experiences-web';
 const experiences = new ContentfulExperiences({
   spaceId,
   environmentId: 'master',
-  resolverConfig,
   delivery: { accessToken: publicDeliveryToken },
   preview: { accessToken: publicPreviewToken }, // optional direct CPA client
   locale: 'en-US',
   app: { name: 'storefront', version: '1.0.0' },
 });
 
-const plan = await experiences.fetchExperience({ experienceId });
-const draft = await experiences.fetchExperience({ experienceId, preview: true });
+const plan = await experiences.fetchExperience({ experienceId }, { config: experienceConfig });
+const draft = await experiences.fetchExperience(
+  { experienceId, preview: true },
+  { config: experienceConfig }
+);
 
 experiences.setLocale('de-DE');
 ```
@@ -64,13 +66,16 @@ Preview here means a direct, by-ID CPA fetch through the shared runtime. It is n
 Pass a profile id and browser-built events through the first-class personalization option:
 
 ```ts
-const plan = await experiences.fetchExperience({
-  experienceId,
-  personalization: {
-    profileId,
-    events: [experiences.eventBuilder.buildPageView()],
+const plan = await experiences.fetchExperience(
+  {
+    experienceId,
+    personalization: {
+      profileId,
+      events: [experiences.eventBuilder.buildPageView()],
+    },
   },
-});
+  { config: experienceConfig }
+);
 ```
 
 Events built by the Web runtime use the `web` channel and the current browser context. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
@@ -83,7 +88,7 @@ adds no interim suppression.
 
 ## Browser-safe configuration
 
-Resolver configuration runs in the browser. Keep `resolveData`, `resolveToken`, and component configuration free of server-only imports, secrets, and privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
+Each browser fetch or resolve call receives its own `config`; event-only use does not need one. Keep `resolveData`, `resolveToken`, and component configuration browser-safe, without server-only imports, secrets, or privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
 
 Locale is mutable browser state. Update it with `setLocale()` rather than sharing a request-scoped Node facade; browser navigation, language selection, and concurrent renders then observe the current client-side locale without leaking server request state. An explicit per-call locale still wins for that fetch.
 
@@ -227,7 +232,6 @@ route key; the SDK does not read a router. Construction never sends a handoff.
 const experiences = new ContentfulExperiences({
   spaceId,
   environmentId,
-  resolverConfig,
   delivery,
 });
 

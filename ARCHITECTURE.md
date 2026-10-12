@@ -129,7 +129,9 @@ clients; a caller cannot inject a pre-built delivery client. `accessToken` can
 be the generated client's token supplier. It may be omitted only with an
 explicit proxy host, which disables generated bearer auth and must supply
 upstream auth itself. The shared runtime is stateless with respect to request
-and browser state and requires its platform caller to provide the event channel.
+and browser state, takes resolver registrations per fetch/resolve call, and
+requires its platform caller to provide the event channel. Event-only Node/Web
+construction does not need a component registry.
 
 `node` is the public Node-specific leaf over Runtime, Client, and Core. Its
 process-long SDK instance retains stable configuration and reusable delivery

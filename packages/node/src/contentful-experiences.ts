@@ -18,6 +18,7 @@ import {
   type RuntimeFetchByDestinationPathOptions,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
+  type RuntimeResolveDefaults,
   type RuntimeResolveOptions,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
@@ -34,7 +35,7 @@ export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuil
 /** Context scoped to one incoming Node request. */
 export type ExperiencesNodeRequestContext = {
   locale?: string;
-  resolveOptions?: RuntimeResolveOptions;
+  resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
   eventContext?: UniversalEventBuilderArgs;
   /** GDPR metadata on built events; this is not permission to send or persist. */
@@ -79,19 +80,19 @@ export interface ExperiencesNodeRequest extends NodePersonalizationMethods, Node
   readonly profile: EventProfile | undefined;
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions: RuntimeResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   prepareRequestHandoff(
     options: PrepareRequestHandoffOptions
@@ -228,7 +229,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions?: RuntimeResolveOptions
+    resolveOptions: RuntimeResolveOptions
   ): Promise<PortableRenderPlan> {
     return this.runtime.resolveExperience(
       payload,
@@ -238,7 +239,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   async fetchExperience(
     options: RuntimeFetchExperienceOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const profileRevision = this.#profileRevision;
     const profileId = options.personalization?.profileId ?? this.#profile?.id;
@@ -248,7 +249,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
         : { ...options, personalization: { ...options.personalization, profileId } };
     const plan = await this.runtime.fetchExperience(
       { ...resolvedOptions, locale: options.locale ?? this.locale },
-      mergeResolveOptions(this.context.resolveOptions, resolveOptions)
+      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
     const returnedProfileId = plan.personalization?.profileId;
     if (returnedProfileId !== undefined && this.#profileRevision === profileRevision) {
@@ -259,21 +260,21 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.runtime.fetchByDestinationNode(
       options,
-      mergeResolveOptions(this.context.resolveOptions, resolveOptions)
+      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
   }
 
   fetchByDestinationPath(
     options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions?: RuntimeFetchResolveOptions
+    resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.runtime.fetchByDestinationPath(
       options,
-      mergeResolveOptions(this.context.resolveOptions, resolveOptions)
+      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
   }
 
@@ -291,13 +292,24 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 }
 
 function mergeResolveOptions(
-  request: RuntimeResolveOptions | undefined,
-  method: RuntimeResolveOptions | undefined
-): RuntimeResolveOptions | undefined {
-  if (request === undefined && method === undefined) return undefined;
+  request: ExperiencesNodeRequestContext['resolveOptions'],
+  method: RuntimeResolveOptions
+): RuntimeResolveOptions {
   return {
+    config: method.config,
     metadata: { ...request?.metadata, ...method?.metadata },
     debug: method?.debug ?? request?.debug,
-    sourceMap: method?.sourceMap ?? request?.sourceMap,
+    sourceMap: method.sourceMap ?? request?.sourceMap,
+  };
+}
+
+function mergeFetchResolveOptions(
+  request: ExperiencesNodeRequestContext['resolveOptions'],
+  method: RuntimeFetchResolveOptions
+): RuntimeFetchResolveOptions {
+  return {
+    config: method.config,
+    metadata: { ...request?.metadata, ...method.metadata },
+    debug: method.debug ?? request?.debug,
   };
 }

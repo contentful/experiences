@@ -20,7 +20,6 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);

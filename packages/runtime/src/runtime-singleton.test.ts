@@ -7,7 +7,6 @@ function createRuntime() {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'master',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     eventBuilder: { channel: 'server' },
   });
@@ -37,7 +36,6 @@ describe('Experiences runtime singleton', () => {
         new ContentfulExperiences({
           spaceId: 'space',
           environmentId: 'master',
-          resolverConfig: { components: {} },
           delivery: {} as never,
           eventBuilder: { channel: 'server' },
         })

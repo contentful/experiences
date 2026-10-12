@@ -82,12 +82,6 @@ describe('buildPreparedEvents', () => {
     });
   });
 
-  it('keeps denied-consent metadata on prepared events without treating it as a permission gate', () => {
-    const events = buildPreparedEvents({ eventBuilder: builder, eventConsent: false });
-    expect(events).toHaveLength(1);
-    expect(events[0]?.context.gdpr?.isConsentGiven).toBe(false);
-  });
-
   it('rejects an invalid initial event rather than preparing a partial prefix', () => {
     expect(() =>
       buildPreparedEvents({

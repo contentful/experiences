@@ -8,6 +8,7 @@ export type {
   RuntimeFetchByDestinationPathOptions,
   RuntimeEventBuilderConfig,
   RuntimeFetchResolveOptions,
+  RuntimeResolveDefaults,
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
 export type { RuntimeDeliveryClientOptions } from './create-runtime-delivery-client.js';

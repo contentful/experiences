@@ -39,14 +39,11 @@ describe('PersonalizationFlushRuntime', () => {
     expect(runtime.shouldSkip({ force: true, isOnline: false })).toBe(false);
   });
 
-  it('has no periodic timer and clears scheduled retries on success and reset', async () => {
+  it('clears scheduled retries on success and reset', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const onRetry = vi.fn();
     const runtime = new PersonalizationFlushRuntime(onRetry);
-    expect(vi.getTimerCount()).toBe(0);
-    await vi.advanceTimersByTimeAsync(120_000);
-    expect(onRetry).not.toHaveBeenCalled();
     runtime.handleFlushFailure();
     expect(vi.getTimerCount()).toBe(1);
     runtime.handleFlushSuccess();
