@@ -195,7 +195,15 @@ the Optimization SDK's consent model.
 - **Startup defaults.** `defaults: { consent, persistenceConsent }` seeds axes the
   visitor has not decided. A stored decision always wins.
 - **Consent itself** is always stored in LocalStorage, so a visitor's choice
-  survives reloads. It is global to the runtime, not per call.
+  survives reloads. It is global to the runtime, not per call. It uses the
+  Optimization SDK's keys and encoding, so pages on one origin share a visitor's
+  decision whichever of the two SDKs they use, for example while migrating. The two
+  SDKs are still not supported together on one page. `__ctfl_opt_consent__` holds
+  `accepted` or `denied`
+  for event consent, and `__ctfl_opt_persistence_consent__` holds the same for
+  persistence consent. An absent key is undecided. Event consent `accepted` with no
+  persistence key counts as persistence `accepted`. A value this SDK does not
+  recognize is treated as undecided and left untouched.
 
 Personalization methods (`identify`, `page`, `track`) resolve
 `{ accepted, data? }`, where `data` is the Personalization response.

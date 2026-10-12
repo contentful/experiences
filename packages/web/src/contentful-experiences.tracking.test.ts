@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { CONSENT_CACHE_KEY, EventBuilder } from '@contentful/experiences-runtime';
+import { EventBuilder } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { seedConsent } from './test-fixtures/consent.js';
 import { advance, installIOPolyfill, setDocumentVisibility } from './test-fixtures/dom.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
@@ -41,10 +42,7 @@ const click = (element: Element): void => {
 };
 
 beforeEach(() => {
-  window.localStorage.setItem(
-    CONSENT_CACHE_KEY,
-    JSON.stringify({ events: true, persistence: true })
-  );
+  seedConsent({ events: true, persistence: true });
   vi.useFakeTimers();
   vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
   setDocumentVisibility('visible');
@@ -286,7 +284,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     }
 
     it('drops clicks while event consent is denied and sends them once granted', async () => {
-      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      seedConsent({ events: false });
       const onEventBlocked = vi.fn();
       const runtime = createRuntime({ profile: { id: 'visitor' }, onEventBlocked });
       const send = spyOnTransport(runtime);
@@ -313,7 +311,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     });
 
     it('admits clicks under a click-only allow-list', async () => {
-      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      seedConsent({ events: false });
       const runtime = createRuntime({
         profile: { id: 'visitor' },
         allowedEventTypes: ['component_click'],
@@ -333,7 +331,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     });
 
     it('drops views and hovers while event consent is denied', async () => {
-      window.localStorage.setItem(CONSENT_CACHE_KEY, JSON.stringify({ events: false }));
+      seedConsent({ events: false });
       const io = installIOPolyfill();
       const runtime = createRuntime({ profile: { id: 'visitor' } });
       const send = spyOnTransport(runtime);

@@ -1,9 +1,12 @@
 import {
   CONSENT_CACHE_KEY,
   type ConsentState,
+  decodeConsentStorageValue,
+  encodeConsentStorageValue,
   EventProfileSchema,
-  parseConsentState,
+  PERSISTENCE_CONSENT_CACHE_KEY,
   PROFILE_CACHE_KEY,
+  resolvePersistedPersistenceConsent,
   type EventProfile,
 } from '@contentful/experiences-runtime';
 
@@ -23,11 +26,9 @@ export default class LocalStore {
 
   constructor() {
     // Consent is always persisted so the visitor's choice survives reloads; only
-    // the profile is withheld from storage when persistence is denied.
-    this.#consent =
-      this.getCache(CONSENT_CACHE_KEY, {
-        safeParse: (v) => ({ success: true, data: parseConsentState(v) ?? {} }),
-      }) ?? {};
+    // the profile is withheld from storage when persistence is denied. It uses the
+    // Optimization SDK's keys and encoding, so both SDKs read each other's choice.
+    this.#consent = this.#readConsent();
     // Undecided persistence neither restores nor clears the stored profile, so a
     // later grant (a consent default or the visitor's choice) can still restore it.
     // Only an explicit denial removes it.
@@ -66,7 +67,7 @@ export default class LocalStore {
   /** Merge consent decisions, persist them, and drop the stored profile if persistence is denied. */
   updateConsent(next: ConsentState): void {
     this.#consent = { ...this.#consent, ...next };
-    this.setCache(CONSENT_CACHE_KEY, this.#consent);
+    this.#writeConsent();
     // The in-memory profile is kept; only its persisted copy follows the decision.
     this.#persistProfile();
   }
@@ -91,6 +92,37 @@ export default class LocalStore {
     this.#profile = profile;
     this.#persistProfile();
     this.#profileRevision += 1;
+  }
+
+  /** Reads both consent keys, treating anything unrecognized as undecided and leaving it untouched. */
+  #readConsent(): ConsentState {
+    const events = decodeConsentStorageValue(this.#readRaw(CONSENT_CACHE_KEY));
+    const persistence = resolvePersistedPersistenceConsent(
+      decodeConsentStorageValue(this.#readRaw(PERSISTENCE_CONSENT_CACHE_KEY)),
+      events
+    );
+    const state: ConsentState = {};
+    if (events !== undefined) state.events = events;
+    if (persistence !== undefined) state.persistence = persistence;
+    return state;
+  }
+
+  #writeConsent(): void {
+    this.setCache(CONSENT_CACHE_KEY, encodeConsentStorageValue(this.#consent.events));
+    this.setCache(
+      PERSISTENCE_CONSENT_CACHE_KEY,
+      encodeConsentStorageValue(this.#consent.persistence)
+    );
+  }
+
+  /** Reads a stored string as-is. Consent values are plain strings, not JSON. */
+  #readRaw(key: string): string | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
   }
 
   /** Writes the profile to storage only with persistence consent; otherwise removes any stored copy. */

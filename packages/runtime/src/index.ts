@@ -2,10 +2,13 @@ export { ANONYMOUS_ID_COOKIE, PROFILE_CACHE_KEY } from './constants.js';
 export {
   CONSENT_CACHE_KEY,
   DEFAULT_ALLOWED_EVENT_TYPES,
+  decodeConsentStorageValue,
+  encodeConsentStorageValue,
   hasEventConsent,
   hasEventTypeConsent,
   methodForEventType,
-  parseConsentState,
+  PERSISTENCE_CONSENT_CACHE_KEY,
+  resolvePersistedPersistenceConsent,
   toConsentState,
 } from './consent.js';
 export type {
@@ -13,6 +16,7 @@ export type {
   BlockedEvent,
   ConsentInput,
   ConsentState,
+  ConsentStorageValue,
   EventMethod,
   EventType,
 } from './consent.js';

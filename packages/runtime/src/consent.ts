@@ -3,8 +3,21 @@ import type {
   InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 
-/** LocalStorage key for the persisted consent state. @internal */
+/**
+ * LocalStorage key for persisted event consent. Shared with the Optimization SDK,
+ * so both read and write the same encoding (see {@link encodeConsentStorageValue}).
+ *
+ * @internal
+ */
 export const CONSENT_CACHE_KEY = '__ctfl_opt_consent__';
+
+/**
+ * LocalStorage key for persisted persistence consent. Shared with the
+ * Optimization SDK.
+ *
+ * @internal
+ */
+export const PERSISTENCE_CONSENT_CACHE_KEY = '__ctfl_opt_persistence_consent__';
 
 /** Wire event types the runtime can emit. */
 export type EventType = (PersonalizationEvent | AnalyticsEvent)['type'];
@@ -116,12 +129,37 @@ export function hasEventTypeConsent(
   return allowedEventTypes.some((allowed) => allowed === type);
 }
 
-/** Parses a persisted consent value, ignoring anything malformed. */
-export function parseConsentState(value: unknown): ConsentState | undefined {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const { events, persistence } = value as Record<string, unknown>;
-  const state: ConsentState = {};
-  if (typeof events === 'boolean') state.events = events;
-  if (typeof persistence === 'boolean') state.persistence = persistence;
-  return state;
+/** Stable value written to storage for one consent decision. */
+export type ConsentStorageValue = 'accepted' | 'denied';
+
+/**
+ * Encodes one consent decision for storage, matching the Optimization SDK.
+ * Undecided has no stored value.
+ */
+export function encodeConsentStorageValue(
+  consent: boolean | undefined
+): ConsentStorageValue | undefined {
+  if (consent === undefined) return undefined;
+  if (consent) return 'accepted';
+  return 'denied';
+}
+
+/** Decodes a stored consent value; absent or unrecognized values are undecided. */
+export function decodeConsentStorageValue(value: unknown): boolean | undefined {
+  if (value === 'accepted') return true;
+  if (value === 'denied') return false;
+  return undefined;
+}
+
+/**
+ * Resolves persisted persistence consent. A visitor who only ever accepted event
+ * consent (the legacy single-key format) is treated as having accepted persistence.
+ */
+export function resolvePersistedPersistenceConsent(
+  persistenceConsent: boolean | undefined,
+  consent: boolean | undefined
+): boolean | undefined {
+  if (persistenceConsent !== undefined) return persistenceConsent;
+  if (consent === true) return true;
+  return undefined;
 }
