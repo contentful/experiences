@@ -54,22 +54,32 @@ const CacheSchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('static'), key: z.optional(z.string()) }),
 ]);
 
-const ExperiencesHandoffSchema = z.object({
+const ReplayEnvelopeSchema = z.object({
+  routeKey: z.string(),
+  events: z.array(z.unknown()),
+  locale: z.optional(z.string()),
+});
+
+const ExperiencesHandoffEnvelopeSchema = z.object({
   spaceId: z.string(),
   environmentId: z.string(),
   cache: CacheSchema,
   state: z.optional(z.object({ profile: z.optional(EventProfileSchema) })),
   profileId: z.optional(z.string()),
-  replay: z.optional(
-    z.object({
-      routeKey: z.string(),
-      events: ExperienceEventArray,
-      locale: z.optional(z.string()),
-    })
-  ),
+  replay: z.optional(ReplayEnvelopeSchema),
 });
 
-function getPrivateHandoffPath(handoff: ExperiencesHandoff): readonly string[] | undefined {
+const ExperiencesHandoffSchema = z.extend(ExperiencesHandoffEnvelopeSchema, {
+  replay: z.optional(z.extend(ReplayEnvelopeSchema, { events: ExperienceEventArray })),
+});
+
+type HandoffEnvelope = Omit<ExperiencesHandoff, 'replay'> & {
+  readonly replay?: Omit<NonNullable<ExperiencesHandoff['replay']>, 'events'> & {
+    readonly events: readonly unknown[];
+  };
+};
+
+function getPrivateHandoffPath(handoff: HandoffEnvelope): readonly string[] | undefined {
   if (handoff.state?.profile !== undefined) return ['state', 'profile'];
   if (handoff.profileId !== undefined) return ['profileId'];
   if (handoff.replay !== undefined) return ['replay'];
@@ -78,7 +88,7 @@ function getPrivateHandoffPath(handoff: ExperiencesHandoff): readonly string[] |
 
 /** Advisory cache diagnostics; callers choose when to assert. */
 export function getExperiencesCacheSafetyWarnings(
-  handoff: ExperiencesHandoff
+  handoff: HandoffEnvelope
 ): readonly ExperiencesCacheSafetyWarning[] {
   const warnings: ExperiencesCacheSafetyWarning[] = [];
   const privatePath = getPrivateHandoffPath(handoff);
@@ -101,7 +111,7 @@ export function getExperiencesCacheSafetyWarnings(
 }
 
 /** Reject private data in public/static handoffs and a missing public key. */
-export function assertExperiencesCacheSafety(handoff: ExperiencesHandoff): void {
+export function assertExperiencesCacheSafety(handoff: HandoffEnvelope): void {
   const warnings = getExperiencesCacheSafetyWarnings(handoff);
   if (warnings.length !== 0) {
     throw new TypeError(warnings.map(({ message }) => message).join(' '));
@@ -110,7 +120,7 @@ export function assertExperiencesCacheSafety(handoff: ExperiencesHandoff): void 
 
 /** A handoff from another Contentful scope never mutates this runtime. */
 export function assertExperiencesHandoffScope(
-  handoff: ExperiencesHandoff,
+  handoff: ExperiencesScope,
   scope: ExperiencesScope
 ): void {
   if (handoff.spaceId !== scope.spaceId || handoff.environmentId !== scope.environmentId) {
@@ -118,20 +128,32 @@ export function assertExperiencesHandoffScope(
   }
 }
 
-/** Validate an untrusted handoff before any browser state change or transport. This is metadata validation, not HTTP cache enforcement. */
+function validateHandoffEnvelope(handoff: HandoffEnvelope, scope?: ExperiencesScope): void {
+  assertExperiencesCacheSafety(handoff);
+  if (scope !== undefined) assertExperiencesHandoffScope(handoff, scope);
+  if (handoff.replay !== undefined && !handoff.replay.routeKey.startsWith('/')) {
+    throw new TypeError('Experiences handoff requires a pathname/search route key');
+  }
+}
+
+/** @internal Browser replay consumption defers event validation to prepared admission. */
+export function parseExperiencesHandoffEnvelope(
+  input: unknown,
+  scope?: ExperiencesScope
+): HandoffEnvelope {
+  const handoff = parseOptimizationSchema(ExperiencesHandoffEnvelopeSchema, input);
+  validateHandoffEnvelope(handoff, scope);
+  return handoff;
+}
+
+/** Strictly validate an untrusted handoff, including prepared events. This is metadata validation, not HTTP cache enforcement. */
 export function parseExperiencesHandoff(
   input: unknown,
   scope?: ExperiencesScope
 ): ExperiencesHandoff {
   const handoff = parseOptimizationSchema(ExperiencesHandoffSchema, input);
-  assertExperiencesCacheSafety(handoff);
-  if (scope !== undefined) assertExperiencesHandoffScope(handoff, scope);
-  if (handoff.replay !== undefined) {
-    if (!handoff.replay.routeKey.startsWith('/')) {
-      throw new TypeError('Experiences handoff requires a pathname/search route key');
-    }
-    validatePreparedEvents(handoff.replay.events);
-  }
+  validateHandoffEnvelope(handoff, scope);
+  if (handoff.replay !== undefined) validatePreparedEvents(handoff.replay.events);
   return handoff;
 }
 

@@ -245,20 +245,26 @@ const experiences = new ContentfulExperiences({
 const result = await experiences.hydrateAndTrackCurrentPage(handoff, {
   routeKey: '/products?category=chairs',
 });
-// result.accepted means the prepared batch entered the queue, not that HTTP completed.
+// For accepted replay, result.accepted means queue admission, not HTTP completion.
 ```
 
-The SDK validates space, environment, cache safety, and event structure before
-adopting state or sending. A matching prepared replay is admitted once for the
+The SDK validates the handoff envelope, space, environment, and cache safety before
+adopting state or sending. Prepared event contents, count, and order are validated
+at admission. A matching prepared replay is admitted once for the
 current initialization; serialized copies with the same final page event ID
 join it. A later handoff or return visit can track again. When the replay route
 does not match, the SDK skips its evaluated state and events and tracks an
 ordinary page for the supplied route. Prepared batches have a fixed SDK limit of
 100 total events (including the final page), with at most 50 identify events.
 The entire batch must also fit the remaining in-memory queue capacity. If
-admission is refused, it sends no replacement page; a later explicit call can
-reassess. Ordinary online event
-calls and Analytics do not wait behind queued prepared delivery.
+admission is refused (including invalid prepared events), the current initialization
+quietly attempts one ordinary page through `trackCurrentPage()`, using the caller's
+`buildPayload` or the default page payload, and returns its result. This attempt
+retains adopted identity and applicable hydrated state and respects ordinary route
+deduplication, capacity, and lifecycle guards; it can also return `{ accepted: false }`.
+Supersession, reset, or destroy prevents a stale fallback. Once replay is accepted,
+a later HTTP failure keeps existing retry behavior and never triggers fallback.
+Ordinary online event calls and Analytics do not wait behind queued prepared delivery.
 
 Use `hydrateHandoffState(handoff, { routeKey })` when state must be adopted before
 page tracking. It joins a later `hydrateAndTrackCurrentPage` call for the same

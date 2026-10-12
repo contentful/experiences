@@ -232,8 +232,11 @@ admitted as one batch; the promise settles on **admission**, before HTTP
 completes. Repeated calls for the current handoff and route join that work.
 A different handoff or a later visit can track again. A route mismatch skips
 its evaluated state and replay, then follows ordinary current-page tracking.
-A refused prepared batch sends no replacement page; the caller can explicitly
-reassess it later.
+A rejected prepared batch (including invalid events or insufficient capacity)
+quietly falls back to one ordinary `trackCurrentPage()` attempt using the supplied
+`buildPayload`, or the default page payload. The operation returns that attempt's
+result and respects route deduplication, capacity, and lifecycle guards. An
+accepted replay never falls back because of a later HTTP failure.
 
 ```ts
 // Browser runtime, after reading the handoff from that response:

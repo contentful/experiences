@@ -9,6 +9,7 @@ import {
   type PageViewBuilderArgs,
   type PersonalizationDeliveryState,
   parseExperiencesHandoff,
+  parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
@@ -55,6 +56,8 @@ export interface HydrateAndTrackCurrentPageOptions extends Omit<
 > {
   readonly buildPayload?: CurrentPageOptions['buildPayload'];
 }
+
+type HandoffEnvelope = ReturnType<typeof parseExperiencesHandoffEnvelope>;
 
 interface HandoffInitialization {
   readonly key: string | ExperiencesHandoff;
@@ -362,7 +365,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return { accepted: false };
     this.#requireRouteKey(routeKey);
-    const parsed = parseExperiencesHandoff(handoff, this);
+    const parsed = parseExperiencesHandoffEnvelope(handoff, this);
     const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
     if (initialization.delivery !== undefined) return await initialization.delivery;
 
@@ -378,22 +381,23 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       await this.#hydrateHandoffState(parsed, initialization);
       if (!initialization.isCurrent()) return { accepted: false };
 
-      if (parsed.replay?.routeKey !== routeKey) {
-        return await this.trackCurrentPage({
-          routeKey,
-          buildPayload: buildPayload ?? (() => ({})),
-        });
+      if (parsed.replay?.routeKey === routeKey) {
+        const result = await this.sendPreparedExperienceEvents(
+          parsed.replay.events,
+          targetId,
+          parsed.replay.locale
+        );
+        if (result.accepted) {
+          if (initialization.isCurrent()) this.#acceptedCurrentPage = { routeKey };
+          return result;
+        }
       }
 
-      const result = await this.sendPreparedExperienceEvents(
-        parsed.replay.events,
-        targetId,
-        parsed.replay.locale
-      );
-      if (result.accepted && initialization.isCurrent()) {
-        this.#acceptedCurrentPage = { routeKey };
-      }
-      return result;
+      if (!initialization.isCurrent()) return { accepted: false };
+      return await this.trackCurrentPage({
+        routeKey,
+        buildPayload: buildPayload ?? (() => ({})),
+      });
     });
     const delivery = attempt.then(
       (result) => {
@@ -413,7 +417,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   /** Queue one already-selected prepared target without waiting for HTTP delivery. */
   protected sendPreparedExperienceEvents(
-    events: NonNullable<ExperiencesHandoff['replay']>['events'],
+    events: readonly unknown[],
     profileId?: string,
     locale?: string
   ): Promise<EventEmissionResult> {
@@ -433,10 +437,17 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   #getHandoffInitialization(
     input: ExperiencesHandoff,
-    parsed: ExperiencesHandoff,
+    parsed: HandoffEnvelope,
     routeKey: string
   ): HandoffInitialization {
-    const key = parsed.replay?.events.at(-1)?.messageId ?? input;
+    const finalEvent = parsed.replay?.events.at(-1);
+    const key =
+      typeof finalEvent === 'object' &&
+      finalEvent !== null &&
+      'messageId' in finalEvent &&
+      typeof finalEvent.messageId === 'string'
+        ? finalEvent.messageId
+        : input;
     const current = this.#currentInitialization;
     if (current?.routeKey === routeKey && current.key === key) return current;
 
@@ -470,7 +481,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   #hydrateHandoffState(
-    handoff: ExperiencesHandoff,
+    handoff: HandoffEnvelope,
     initialization: HandoffInitialization
   ): Promise<void> {
     if (handoff.replay !== undefined && handoff.replay.routeKey !== initialization.routeKey) {
@@ -497,7 +508,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return initialization.hydration;
   }
 
-  #adoptHandoffIdentity(handoff: ExperiencesHandoff): string | undefined {
+  #adoptHandoffIdentity(handoff: HandoffEnvelope): string | undefined {
     const profileId = this.#store.profile?.id ?? this.#adoptedProfileId ?? handoff.profileId;
     this.#setAdoptedProfileId(profileId);
     return profileId;

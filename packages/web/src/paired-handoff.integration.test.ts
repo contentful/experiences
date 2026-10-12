@@ -186,50 +186,86 @@ describe('paired Node preparation and Web delivery', () => {
     );
   });
 
-  it('refuses the entire next prepared batch at capacity, then reassesses it explicitly', async () => {
-    const firstDelivery = deferred<{ profile: { id: string } }>();
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
-      .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
-      .mockReturnValueOnce(firstDelivery.promise as never)
-      .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
-    const server = node();
-    const request = server.forRequest({ profile: { id: 'known-profile' } });
-    const full = await request.prepareRequestHandoff({
-      routeKey: '/full',
-      initialEvents: Array.from({ length: 99 }, () => ({ type: 'track' as const, event: 'bulk' })),
-    });
-    const next = await request.prepareRequestHandoff({
-      routeKey: '/next',
-      initialEvents: [{ type: 'track', event: 'next' }],
-    });
-    expect(full.handoff.replay?.events).toHaveLength(100);
-    expect(next.handoff.replay?.events).toHaveLength(2);
-    expect(upsert.mock.calls.map(([, options]) => options)).toEqual([
-      { locale: 'de-DE', preflight: true },
-      { locale: 'de-DE', preflight: true },
-    ]);
+  it.each([true, false])(
+    'uses ordinary fallback guards at prepared capacity when online is %s',
+    async (online) => {
+      const firstDelivery = deferred<{ profile: { id: string } }>();
+      const upsert = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
+        .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
+        .mockReturnValueOnce(firstDelivery.promise as never)
+        .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
+      const server = node();
+      const request = server.forRequest({ profile: { id: 'known-profile' } });
+      const full = await request.prepareRequestHandoff({
+        routeKey: '/full',
+        initialEvents: Array.from({ length: 99 }, () => ({
+          type: 'track' as const,
+          event: 'bulk',
+        })),
+      });
+      const next = await request.prepareRequestHandoff({
+        routeKey: '/next',
+        initialEvents: [{ type: 'track', event: 'next' }],
+      });
+      expect(full.handoff.replay?.events).toHaveLength(100);
+      expect(next.handoff.replay?.events).toHaveLength(2);
+      expect(upsert.mock.calls.map(([, options]) => options)).toEqual([
+        { locale: 'de-DE', preflight: true },
+        { locale: 'de-DE', preflight: true },
+      ]);
 
-    server.destroy();
-    const browser = web();
-    const fullHandoff = JSON.parse(JSON.stringify(full.handoff));
-    const nextHandoff = JSON.parse(JSON.stringify(next.handoff));
-    await expect(
-      browser.hydrateAndTrackCurrentPage(fullHandoff, { routeKey: '/full' })
-    ).resolves.toEqual({ accepted: true });
-    await expect(
-      browser.hydrateAndTrackCurrentPage(nextHandoff, { routeKey: '/next' })
-    ).resolves.toEqual({ accepted: false });
-    expect(upsert).toHaveBeenCalledTimes(3);
-    expect(upsert.mock.calls[2]?.[0].events).toEqual(full.handoff.replay?.events);
+      server.destroy();
+      const browser = web();
+      const fullHandoff = JSON.parse(JSON.stringify(full.handoff));
+      const nextHandoff = JSON.parse(JSON.stringify(next.handoff));
+      await expect(
+        browser.hydrateAndTrackCurrentPage(fullHandoff, { routeKey: '/full' })
+      ).resolves.toEqual({ accepted: true });
+      if (!online) window.dispatchEvent(new Event('offline'));
+      const buildPayload = vi.fn(() => ({ properties: { source: 'capacity-fallback' } }));
+      const result = await browser.hydrateAndTrackCurrentPage(nextHandoff, {
+        routeKey: '/next',
+        buildPayload,
+      });
+      expect(result).toEqual(
+        online
+          ? { accepted: true, data: { profile: { id: 'committed-profile' } } }
+          : { accepted: false }
+      );
+      expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: false });
+      expect(upsert).toHaveBeenCalledTimes(online ? 4 : 3);
+      expect(upsert.mock.calls[2]?.[0].events).toEqual(full.handoff.replay?.events);
+      if (online) {
+        const fallback = upsert.mock.calls[3];
+        expect(fallback?.[0]).toMatchObject({
+          profileId: 'known-profile',
+          events: [{ type: 'page', properties: { source: 'capacity-fallback' } }],
+        });
+        expect(fallback?.[0].events).toHaveLength(1);
+        expect(fallback?.[1]).toEqual({ locale: 'en-US' });
+        expect(next.handoff.replay?.events.map(({ messageId }) => messageId)).not.toContain(
+          fallback?.[0].events[0]?.messageId
+        );
+      }
 
-    firstDelivery.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() => expect(browser.personalizationDeliveryState.status).toBe('success'));
-    await expect(
-      browser.hydrateAndTrackCurrentPage(nextHandoff, { routeKey: '/next' })
-    ).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(4));
-    expect(upsert.mock.calls[3]?.[0].events).toEqual(next.handoff.replay?.events);
-  });
+      firstDelivery.resolve({ profile: { id: 'committed-profile' } });
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(browser.personalizationDeliveryState.status).toBe('success'));
+      const repeated = await browser.hydrateAndTrackCurrentPage(nextHandoff, {
+        routeKey: '/next',
+        buildPayload,
+      });
+      if (online) {
+        expect(repeated).toBe(result);
+        expect(buildPayload).toHaveBeenCalledTimes(1);
+      } else {
+        expect(repeated).toEqual({ accepted: true });
+        await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(4));
+        expect(upsert.mock.calls[3]?.[0].events).toEqual(next.handoff.replay?.events);
+      }
+      expect(upsert).toHaveBeenCalledTimes(4);
+    }
+  );
 });

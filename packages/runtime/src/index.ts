@@ -32,6 +32,7 @@ export {
   createRequestHandoffFromData,
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
+  parseExperiencesHandoffEnvelope,
 } from './experiences-handoff.js';
 export type {
   ExperiencesCacheMetadata,

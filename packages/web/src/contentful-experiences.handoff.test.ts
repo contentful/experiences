@@ -3,6 +3,7 @@
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   PROFILE_CACHE_KEY,
+  PersonalizationDelivery,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
 import { ExperienceApiClient } from '@contentful/optimization-api-client';
@@ -48,10 +49,12 @@ function handoff(
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((complete) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((complete, fail) => {
     resolve = complete;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 afterEach(() => {
@@ -215,43 +218,56 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(send).toHaveBeenCalledTimes(5);
   });
 
-  it('refuses a capacity-limited prepared batch without a substitute page, then reassesses', async () => {
-    const firstResponse = deferred<{ profile: { id: string } }>();
-    const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockReturnValueOnce(firstResponse.promise as never)
-      .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
-    const runtime = createRuntime({ id: 'browser-profile' });
-    const fullQueue = [
-      ...Array.from({ length: 99 }, () => runtime.eventBuilder.buildTrack({ event: 'bulk' })),
-      runtime.eventBuilder.buildPageView(),
-    ];
-    await runtime.hydrateAndTrackCurrentPage(
-      handoff(runtime, '/first', { replay: { routeKey: '/first', events: fullQueue } }),
-      { routeKey: '/first' }
-    );
-    const input = handoff(runtime, '/second');
+  it.each([99, 100])(
+    'falls back within ordinary capacity guards with %i queued events',
+    async (queuedCount) => {
+      const send = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
+      const runtime = createRuntime();
+      window.dispatchEvent(new Event('offline'));
+      for (let index = 0; index < queuedCount; index += 1) {
+        await expect(runtime.track({ event: `accepted-${index}` })).resolves.toEqual({
+          accepted: true,
+        });
+      }
+      const input = handoff(runtime, '/second');
+      const buildPayload = vi.fn(() => ({ properties: { title: 'ordinary fallback' } }));
+      const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
+      const result = await runtime.hydrateAndTrackCurrentPage(input, {
+        routeKey: '/second',
+        buildPayload,
+      });
+      expect(result).toEqual({ accepted: queuedCount === 99 });
+      expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
+      expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/second', buildPayload });
+      expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
+      expect(send).not.toHaveBeenCalled();
 
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/second' })
-    ).resolves.toEqual({
-      accepted: false,
-    });
-    expect(send).toHaveBeenCalledTimes(1);
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/second' })
-    ).resolves.toEqual({
-      accepted: false,
-    });
-    expect(send).toHaveBeenCalledTimes(1);
-    firstResponse.resolve({ profile: { id: 'browser-profile' } });
-    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/second' })
-    ).resolves.toEqual({ accepted: true });
-    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
-    expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
-  });
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
+      expect(send).toHaveBeenCalledTimes(1);
+      const request = send.mock.calls[0]?.[0];
+      expect(request?.profileId).toBe('server-profile');
+      expect(request?.events).toHaveLength(100);
+      expect(
+        request?.events
+          .slice(0, queuedCount)
+          .map((event) => (event.type === 'track' ? event.event : undefined))
+      ).toEqual(Array.from({ length: queuedCount }, (_, index) => `accepted-${index}`));
+      if (queuedCount === 99) {
+        expect(request?.events.at(-1)).toMatchObject({
+          type: 'page',
+          properties: { title: 'ordinary fallback' },
+        });
+      }
+      expect(
+        request?.events.some((event) =>
+          input.replay?.events.some((prepared) => prepared.messageId === event.messageId)
+        )
+      ).toBe(false);
+    }
+  );
 
   it.each(['identify', 'page', 'track'] as const)(
     'propagates a full offline queue rejection through public %s without losing prepared work',
@@ -294,31 +310,208 @@ describe('Web handoff and current-page lifecycle', () => {
     }
   );
 
-  it('rejects a 101-event handoff before identity, hydration, or partial admission', async () => {
+  it.each(['101 events', 'schema', 'order', 'empty', 'null event'] as const)(
+    'falls back once with retained identity for invalid prepared %s',
+    async (invalid) => {
+      const response = deferred<{ profile: { id: string } }>();
+      const send = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockReturnValue(response.promise as never);
+      const runtime = createRuntime();
+      const page = runtime.eventBuilder.buildPageView();
+      const events =
+        invalid === '101 events'
+          ? [
+              ...Array.from({ length: 100 }, () =>
+                runtime.eventBuilder.buildTrack({ event: 'oversized' })
+              ),
+              page,
+            ]
+          : invalid === 'schema'
+            ? [{ type: 'track' }, page]
+            : invalid === 'order'
+              ? [page, runtime.eventBuilder.buildTrack({ event: 'after-page' })]
+              : invalid === 'null event'
+                ? [null]
+                : [];
+      const input = handoff(runtime, '/invalid', {
+        replay: {
+          routeKey: '/invalid',
+          events: events as NonNullable<ExperiencesHandoff['replay']>['events'],
+        },
+      });
+      const buildPayload = vi.fn(() => ({ properties: { title: 'caller fallback' } }));
+      const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
+      const first = runtime.hydrateAndTrackCurrentPage(input, {
+        routeKey: '/invalid',
+        buildPayload,
+      });
+      const copy =
+        invalid === 'empty' || invalid === 'null event'
+          ? input
+          : (JSON.parse(JSON.stringify(input)) as ExperiencesHandoff);
+      const second = runtime.hydrateAndTrackCurrentPage(copy, {
+        routeKey: '/invalid',
+        buildPayload,
+      });
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+      expect(send.mock.calls[0]?.[0]).toMatchObject({
+        profileId: 'server-profile',
+        events: [{ type: 'page', properties: { title: 'caller fallback' } }],
+      });
+      expect(send.mock.calls[0]?.[0].events).toHaveLength(1);
+      expect(events).not.toContainEqual(send.mock.calls[0]?.[0].events[0]);
+      expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
+      expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/invalid', buildPayload });
+      response.resolve({ profile: { id: 'committed-profile' } });
+      const result = await first;
+      expect(result).toEqual({ accepted: true, data: { profile: { id: 'committed-profile' } } });
+      expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
+      expect(await second).toBe(result);
+      expect(
+        await runtime.hydrateAndTrackCurrentPage(copy, { routeKey: '/invalid', buildPayload })
+      ).toBe(result);
+      expect(send).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('returns ordinary route deduplication refusal after rejected replay', async () => {
     const send = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime();
-    const events = [
-      ...Array.from({ length: 100 }, () => runtime.eventBuilder.buildTrack({ event: 'oversized' })),
-      runtime.eventBuilder.buildPageView(),
-    ];
+    await runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
+    const buildPayload = vi.fn(() => ({}));
     await expect(
       runtime.hydrateAndTrackCurrentPage(
-        handoff(runtime, '/oversized', {
-          profileId: 'invalid-continuation',
-          state: { profile: { id: 'invalid-state' } },
-          replay: { routeKey: '/oversized', events },
+        handoff(runtime, '/first', {
+          replay: { routeKey: '/first', events: [] },
         }),
-        { routeKey: '/oversized' }
+        { routeKey: '/first', buildPayload }
       )
-    ).rejects.toThrow();
-    expect(runtime.profile).toBeUndefined();
-    expect(send).not.toHaveBeenCalled();
-    await runtime.page();
+    ).resolves.toEqual({ accepted: false });
+    expect(buildPayload).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0].profileId).toBeUndefined();
-    expect(send.mock.calls[0]?.[0].events).toHaveLength(1);
+  });
+
+  it('keeps state-only hydration strict and rejects invalid envelopes before fallback', async () => {
+    const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+    const runtime = createRuntime();
+    const input = handoff(runtime, '/first', {
+      state: { profile: { id: 'evaluated-profile' } },
+      replay: { routeKey: '/first', events: [] },
+    });
+    const buildPayload = vi.fn(() => ({}));
+    await expect(runtime.hydrateHandoffState(input, { routeKey: '/first' })).rejects.toThrow();
+    for (const invalid of [
+      { ...input, spaceId: 'other' },
+      { ...input, cache: { scope: 'static' as const } },
+      { ...input, replay: { routeKey: 'invalid', events: [] } },
+    ]) {
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(invalid, { routeKey: '/first', buildPayload })
+      ).rejects.toThrow();
+    }
+    expect(runtime.profile).toBeUndefined();
+    expect(buildPayload).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('hydrates applicable state before rejected replay falls back with the default page payload', async () => {
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'evaluated-profile' } } as never);
+    const runtime = createRuntime();
+    const input = handoff(runtime, '/first', {
+      state: { profile: { id: 'evaluated-profile' } },
+      replay: { routeKey: '/first', events: [] },
+    });
+    const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' })
+    ).resolves.toMatchObject({ accepted: true });
+    expect(runtime.profile?.id).toBe('evaluated-profile');
+    expect(send.mock.calls[0]?.[0]).toMatchObject({
+      profileId: 'evaluated-profile',
+      events: [{ type: 'page' }],
+    });
+    expect(ordinaryPage.mock.calls[0]?.[0].buildPayload({ isInitialEmission: true })).toEqual({});
+  });
+
+  it('does not hydrate mismatched state even when prepared events are invalid', async () => {
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
+    const runtime = createRuntime();
+    await runtime.hydrateAndTrackCurrentPage(
+      handoff(runtime, '/old', {
+        state: { profile: { id: 'stale-profile' } },
+        replay: { routeKey: '/old', events: [] },
+      }),
+      { routeKey: '/current' }
+    );
+    expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
+    expect(runtime.profile?.id).toBe('server-profile');
+  });
+
+  it.each(['supersession', 'reset', 'destroy'] as const)(
+    'prevents stale fallback when %s occurs after rejected admission',
+    async (action) => {
+      const send = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
+      const runtime = createRuntime();
+      const buildPayload = vi.fn(() => ({}));
+      const admission = vi
+        .spyOn(PersonalizationDelivery.prototype, 'sendPrepared')
+        .mockImplementationOnce(() => {
+          queueMicrotask(() => {
+            if (action === 'supersession') {
+              void runtime.hydrateHandoffState(handoff(runtime, '/new'), { routeKey: '/new' });
+            } else runtime[action]();
+          });
+          return { accepted: false };
+        });
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/old'), {
+          routeKey: '/old',
+          buildPayload,
+        })
+      ).resolves.toEqual({ accepted: false });
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(buildPayload).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      if (action === 'supersession') {
+        await runtime.page();
+        expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
+      }
+    }
+  );
+
+  it('keeps accepted replay and its retry after HTTP failure without a fallback page', async () => {
+    const response = deferred<{ profile: { id: string } }>();
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockReturnValueOnce(response.promise as never)
+      .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
+    const runtime = createRuntime();
+    const input = handoff(runtime, '/first');
+    const buildPayload = vi.fn(() => ({}));
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
+    ).resolves.toEqual({ accepted: true });
+    response.reject(new Error('HTTP failure'));
+    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('failed'));
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
+    ).resolves.toEqual({ accepted: true });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(buildPayload).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
+    expect(buildPayload).not.toHaveBeenCalled();
   });
 
   it('prevents superseded hydration and reset from publishing state', async () => {

@@ -7,6 +7,7 @@ import {
   createRequestHandoffFromData,
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
+  parseExperiencesHandoffEnvelope,
   type ExperiencesHandoff,
 } from './experiences-handoff.js';
 import type { EventOptimizationData } from './runtime-event-methods.js';
@@ -87,6 +88,43 @@ describe('Experiences handoff', () => {
     expect(() => parseExperiencesHandoff(oversized, scope)).toThrow(
       'within the SDK handoff limits'
     );
+  });
+
+  it('defers only prepared event validation for internal browser consumption', () => {
+    for (const events of [
+      [],
+      [null],
+      [{ type: 'page' }],
+      [builder.buildPageView(), builder.buildTrack({ event: 'after-page' })],
+      [
+        ...Array.from({ length: 100 }, () => builder.buildTrack({ event: 'oversized' })),
+        builder.buildPageView(),
+      ],
+    ]) {
+      const input = { ...privateHandoff(), replay: { routeKey: '/home', events } };
+      expect(parseExperiencesHandoffEnvelope(input, scope).replay?.events).toEqual(events);
+      expect(() => parseExperiencesHandoff(input, scope)).toThrow();
+      expect(() => createExperiencesHandoff(input as ExperiencesHandoff)).toThrow();
+    }
+  });
+
+  it('still rejects invalid envelopes, scope and cache safety in browser consumption', () => {
+    const input = { ...privateHandoff(), replay: { routeKey: '/home', events: [] } };
+    const invalid = [
+      { ...input, spaceId: 'other' },
+      { ...input, environmentId: 'other' },
+      { ...input, cache: { scope: 'static' } },
+      { ...input, cache: { scope: 'public-permutation', key: 'safe-key' } },
+      { ...scope, cache: { scope: 'public-permutation', key: ' ' } },
+      { ...input, state: { profile: { id: 42 } } },
+      { ...input, replay: { ...input.replay, routeKey: 'home' } },
+      { ...input, replay: { ...input.replay, locale: 42 } },
+      { ...input, replay: { routeKey: '/home' } },
+      { ...input, replay: { ...input.replay, events: null } },
+    ];
+    for (const handoff of invalid) {
+      expect(() => parseExperiencesHandoffEnvelope(handoff, scope)).toThrow();
+    }
   });
 
   it('rejects another space or environment before a consumer can adopt the handoff', () => {

@@ -97,7 +97,7 @@ export class PersonalizationDelivery {
 
   /** Admit an entire prepared batch without waiting for HTTP completion. */
   sendPrepared(
-    events: readonly ExperienceEvent[],
+    events: readonly unknown[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
     if (this.#token === undefined || this.#closing) return { accepted: false };
