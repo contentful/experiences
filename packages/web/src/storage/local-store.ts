@@ -44,24 +44,26 @@ export default class LocalStore {
   }
 
   /**
-   * Seed startup consent for axes the visitor has not already decided. A stored
-   * decision always wins, so a returning visitor's choice is never overwritten.
-   * Defaults are not a visitor decision, so they are not written to storage.
+   * Apply configured startup consent. Configured values take precedence over
+   * stored ones, and `defaults.events` is also the default for persistence when
+   * no persistence default is given, matching the Optimization SDK. Unset axes
+   * keep their stored value. The result is not written to storage here; storage
+   * changes only when the visitor decides through `updateConsent`.
    */
   applyConsentDefaults(defaults: ConsentState): void {
-    const seed: ConsentState = {};
-    if (this.#consent.events === undefined && defaults.events !== undefined) {
-      seed.events = defaults.events;
-    }
-    if (this.#consent.persistence === undefined && defaults.persistence !== undefined) {
-      seed.persistence = defaults.persistence;
-    }
-    if (Object.keys(seed).length === 0) return;
+    const events = defaults.events ?? this.#consent.events;
+    const persistence = defaults.persistence ?? defaults.events ?? this.#consent.persistence;
+    const next: ConsentState = {};
+    if (events !== undefined) next.events = events;
+    if (persistence !== undefined) next.persistence = persistence;
+    this.#consent = next;
 
-    this.#consent = { ...this.#consent, ...seed };
-    if (seed.persistence === true && this.#profile === undefined) {
+    // Restore only when the effective persistence consent allows it, so a default
+    // of `false` over a stored `accepted` stops restoring the stored profile.
+    if (persistence === true && this.#profile === undefined) {
       this.#profile = this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
     }
+    if (persistence !== true) this.#profile = undefined;
   }
 
   /** Merge consent decisions, persist them, and drop the stored profile if persistence is denied. */

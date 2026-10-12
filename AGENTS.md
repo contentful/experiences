@@ -122,8 +122,10 @@ Personalization call resolves `{ accepted: false }`, a blocked Analytics call
 resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
 never replayed. The same gate covers caller-built fetch events. Node gates a
 prepared handoff as a unit, since the browser replays the batch whole.
-Web persists consent, always, in LocalStorage and writes the profile only with
-persistence consent; Node scopes consent to one `forRequest()` facade and exposes
+Web persists consent, always, in LocalStorage (the Optimization SDK's keys and
+`accepted`/`denied` encoding, so both SDKs share one decision) and writes the profile
+only with persistence consent; configured startup defaults take precedence over
+stored decisions; Node scopes consent to one `forRequest()` facade and exposes
 `canPersistProfile`. This SDK writes no anonymous-id cookie, so persistence
 consent gates LocalStorage only.
 

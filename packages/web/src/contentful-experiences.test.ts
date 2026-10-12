@@ -526,12 +526,18 @@ describe('Web ContentfulExperiences consent', () => {
     expect(runtime.consentState).toEqual({ events: false, persistence: false });
   });
 
-  it('applies defaults only to axes the visitor has not decided', () => {
-    seedConsent({ events: false });
+  it('applies configured defaults over a stored decision, as the Optimization SDK does', () => {
+    seedConsent({ events: false, persistence: false });
 
     const runtime = createRuntime({ defaults: { consent: true, persistenceConsent: true } });
 
-    expect(runtime.consentState).toEqual({ events: false, persistence: true });
+    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+  });
+
+  it('uses defaults.consent as the persistence default', () => {
+    const runtime = createRuntime({ defaults: { consent: true } });
+
+    expect(runtime.consentState).toEqual({ events: true, persistence: true });
   });
 
   it('reports blocked events to onEventBlocked and drops them', async () => {
