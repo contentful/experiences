@@ -120,7 +120,11 @@ const { handoff, data } = await experienceRequest.prepareRequestHandoff({
 The route key is the visible pathname plus search and must begin with `/`.
 The prepared batch's transport locale follows the final page event, including
 an explicit `page.locale` override; the same locale is captured for browser
-replay.
+replay. The SDK handoff limit is 100 total events including the final page,
+with at most 50 identify events and only identify/track events before that page.
+Validation rejects an invalid or oversized batch before preflight; the SDK
+does not split or truncate it. A valid handoff can still be refused by the
+browser when the whole batch does not fit its remaining queue capacity.
 Invalid input returns a private handoff without replay or preview data and logs
 a diagnostic. A failed preview retains the already-built replay with the same
 event IDs and omits `data`, so the caller can render a fallback. A successful

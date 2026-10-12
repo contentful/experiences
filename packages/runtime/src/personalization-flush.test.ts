@@ -54,4 +54,16 @@ describe('PersonalizationFlushRuntime', () => {
     await vi.advanceTimersByTimeAsync(120_000);
     expect(onRetry).not.toHaveBeenCalled();
   });
+
+  it('allows a forced attempt during the retry delay while ordinary attempts wait', () => {
+    vi.useFakeTimers();
+    const runtime = new PersonalizationFlushRuntime(vi.fn());
+    runtime.markFlushStarted();
+    runtime.handleFlushFailure();
+    runtime.markFlushFinished();
+
+    expect(runtime.shouldSkip({ force: false, isOnline: true })).toBe(true);
+    expect(runtime.shouldSkip({ force: true, isOnline: false })).toBe(false);
+    runtime.reset();
+  });
 });

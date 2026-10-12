@@ -253,8 +253,11 @@ adopting state or sending. A matching prepared replay is admitted once for the
 current initialization; serialized copies with the same final page event ID
 join it. A later handoff or return visit can track again. When the replay route
 does not match, the SDK skips its evaluated state and events and tracks an
-ordinary page for the supplied route. If admission is refused, it sends no
-replacement page; a later explicit call can reassess. Ordinary online event
+ordinary page for the supplied route. Prepared batches have a fixed SDK limit of
+100 total events (including the final page), with at most 50 identify events.
+The entire batch must also fit the remaining in-memory queue capacity. If
+admission is refused, it sends no replacement page; a later explicit call can
+reassess. Ordinary online event
 calls and Analytics do not wait behind queued prepared delivery.
 
 Use `hydrateHandoffState(handoff, { routeKey })` when state must be adopted before
@@ -264,9 +267,19 @@ current browser profile intact. Use `trackCurrentPage({ routeKey, buildPayload }
 for ordinary route tracking; its callback receives `isInitialEmission`. Manual
 `page()` calls remain direct and are not deduplicated.
 
-An admitted continuation ID remains in memory for early event attribution
-until a real API profile arrives. A private handoff containing a profile,
-identity, or replay is browser-visible sensitive data: escape its
+At the start of a still-current initialization, the SDK selects and publishes
+continuation identity atomically. The live browser profile or an already adopted
+continuation takes precedence over the incoming handoff ID. An initialization
+superseded before it begins adopts nothing. Once published, the continuation
+remains available for events and later navigation until a legitimate profile
+update or an explicit reset/destroy boundary; navigation never rolls it back.
+Supersession suppresses pending hydration and replay, but leaves already accepted
+queue work intact. A concurrent `fetchExperience()` joins the current identity
+initialization boundary without waiting for replay HTTP. Evaluated profile-state
+hydration remains separate from the captured replay target.
+
+A private handoff containing a profile, identity, or replay is browser-visible
+sensitive data: escape its
 serialization into a private, no-store response, and never cache, log, or
 persist it. The application owns safe caching for profileless public/static
 handoffs and the rest of its rendered response. Queue retries cannot

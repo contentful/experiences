@@ -441,6 +441,29 @@ describe('Node ContentfulExperiences', () => {
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 
+  it('previews the full 100-event prepared batch with its exact replay bodies', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const request = runtime.forRequest({ locale: 'de-DE' });
+    const result = await request.prepareRequestHandoff({
+      routeKey: '/products',
+      initialEvents: Array.from({ length: 99 }, (_, index) => ({
+        type: 'track' as const,
+        event: `opened-${index}`,
+      })),
+    });
+
+    expect(upsertProfile).toHaveBeenCalledOnce();
+    const prepared = upsertProfile.mock.calls[0]![0].events;
+    expect(prepared).toHaveLength(100);
+    expect(prepared.at(-1)?.type).toBe('page');
+    expect(new Set(prepared.map(({ messageId }) => messageId)).size).toBe(100);
+    expect(prepared.every(({ context }) => context.locale === 'de-DE')).toBe(true);
+    expect(result.handoff.replay?.events).toEqual(prepared);
+    expect(
+      parseExperiencesHandoff(JSON.parse(JSON.stringify(result.handoff))).replay?.events
+    ).toEqual(prepared);
+  });
+
   it('uses the API-issued identity for a new profile and keeps later ordinary calls direct', async () => {
     const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest();
@@ -491,7 +514,7 @@ describe('Node ContentfulExperiences', () => {
         },
         {
           routeKey: '/products',
-          initialEvents: Array.from({ length: 200 }, () => ({ type: 'track', event: 'viewed' })),
+          initialEvents: Array.from({ length: 100 }, () => ({ type: 'track', event: 'viewed' })),
         },
       ];
       for (const options of invalid) {

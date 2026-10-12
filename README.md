@@ -265,9 +265,17 @@ calls may use different configs on the same SDK instance.
 joins a later paired call for the same current initialization.
 `trackCurrentPage({ routeKey, buildPayload })` handles ordinary navigation;
 its callback receives `isInitialEmission`. Manual `page()` remains direct and
-is not deduplicated. The active browser profile takes precedence over a handoff
-continuation ID. Before the Personalization response finishes, that adopted ID
-can attribute Analytics without being stored as a synthetic profile.
+is not deduplicated. At the beginning of a still-current initialization, the
+active browser profile or an already adopted continuation takes precedence over
+the incoming handoff ID. Selection and publication happen atomically. An
+initialization superseded before it begins adopts nothing; once published, its
+continuation is retained across navigation. Supersession still cancels pending
+hydration/replay and does not withdraw accepted queued work. Reset/destroy and
+legitimate profile updates retain their existing behavior. Before the
+Personalization response finishes, the adopted ID can attribute events without
+being stored as a synthetic profile. Concurrent `fetchExperience()` calls join
+identity initialization without waiting for replay HTTP; evaluated profile-state
+hydration remains distinct from the captured replay target.
 
 Handoffs containing event bodies are browser-visible private data. Escape JSON
 for the HTML context used by your framework, send it only in a private,

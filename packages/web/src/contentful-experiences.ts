@@ -60,12 +60,6 @@ interface HandoffInitialization {
   readonly key: string | ExperiencesHandoff;
   readonly routeKey: string;
   readonly isCurrent: () => boolean;
-  provisionalIdentity?: {
-    readonly selected: string | undefined;
-    readonly previous: string | undefined;
-    readonly profileRevision: number;
-  };
-  identityAdoptedForAttempt?: boolean;
   identityReady?: Promise<string | undefined>;
   hydration?: Promise<void>;
   delivery?: Promise<EventEmissionResult>;
@@ -372,15 +366,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
     if (initialization.delivery !== undefined) return await initialization.delivery;
 
-    // Join identity adoption before the optional state hydration, without waiting
-    // for queued HTTP delivery. Superseded work never publishes its provisional ID.
+    // Begin the current attempt by checking and publishing identity synchronously.
+    // Once visible to other operations, navigation retains this continuation.
+    // Fetches can join this boundary without waiting for hydration or replay HTTP.
     const identityReady = Promise.resolve().then(() =>
-      initialization.isCurrent() ? this.#adoptHandoffIdentity(parsed, initialization) : undefined
+      initialization.isCurrent() ? this.#adoptHandoffIdentity(parsed) : undefined
     );
     initialization.identityReady = identityReady;
     const attempt = identityReady.then(async (targetId): Promise<EventEmissionResult> => {
       if (!initialization.isCurrent()) return { accepted: false };
-      initialization.identityAdoptedForAttempt = true;
       await this.#hydrateHandoffState(parsed, initialization);
       if (!initialization.isCurrent()) return { accepted: false };
 
@@ -445,7 +439,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     const key = parsed.replay?.events.at(-1)?.messageId ?? input;
     const current = this.#currentInitialization;
     if (current?.routeKey === routeKey && current.key === key) return current;
-    if (current !== undefined) this.#discardProvisionalIdentity(current);
 
     const generation = this.#generation;
     const initialization: HandoffInitialization = {
@@ -462,25 +455,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
   #clearHandoffInitialization(routeKey?: string): void {
     if (routeKey !== undefined && this.#currentInitialization?.routeKey === routeKey) return;
-    if (this.#currentInitialization !== undefined) {
-      this.#discardProvisionalIdentity(this.#currentInitialization);
-    }
     this.#currentInitialization = undefined;
-  }
-
-  #discardProvisionalIdentity(initialization: HandoffInitialization): void {
-    // An initialization superseded before its attempt begins never owns the
-    // continuation; restore the identity that preceded its provisional choice.
-    const provisional = initialization.provisionalIdentity;
-    if (
-      initialization.identityAdoptedForAttempt ||
-      provisional === undefined ||
-      this.#store.profileRevision !== provisional.profileRevision ||
-      this.#adoptedProfileId !== provisional.selected
-    ) {
-      return;
-    }
-    this.#setAdoptedProfileId(provisional.previous);
   }
 
   async #awaitCurrentHandoffIdentity(): Promise<void> {
@@ -522,16 +497,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return initialization.hydration;
   }
 
-  #adoptHandoffIdentity(
-    handoff: ExperiencesHandoff,
-    initialization: HandoffInitialization
-  ): string | undefined {
+  #adoptHandoffIdentity(handoff: ExperiencesHandoff): string | undefined {
     const profileId = this.#store.profile?.id ?? this.#adoptedProfileId ?? handoff.profileId;
-    initialization.provisionalIdentity = {
-      selected: profileId,
-      previous: this.#adoptedProfileId,
-      profileRevision: this.#store.profileRevision,
-    };
     this.#setAdoptedProfileId(profileId);
     return profileId;
   }

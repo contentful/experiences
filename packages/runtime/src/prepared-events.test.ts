@@ -90,4 +90,26 @@ describe('buildPreparedEvents', () => {
       })
     ).toThrow('identify or track');
   });
+
+  it('accepts the exact producer limits and rejects either excess before returning a batch', () => {
+    const identify = { type: 'identify' as const, userId: 'visitor' };
+    const track = { type: 'track' as const, event: 'opened' };
+    const accepted = buildPreparedEvents({
+      eventBuilder: builder,
+      initialEvents: [...Array(50).fill(identify), ...Array(49).fill(track)],
+    });
+
+    expect(accepted).toHaveLength(100);
+    expect(accepted.filter(({ type }) => type === 'identify')).toHaveLength(50);
+    expect(accepted.at(-1)?.type).toBe('page');
+    expect(() =>
+      buildPreparedEvents({
+        eventBuilder: builder,
+        initialEvents: [...Array(51).fill(identify), ...Array(48).fill(track)],
+      })
+    ).toThrow('within the SDK handoff limits');
+    expect(() =>
+      buildPreparedEvents({ eventBuilder: builder, initialEvents: Array(100).fill(track) })
+    ).toThrow('within the SDK handoff limits');
+  });
 });

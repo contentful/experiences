@@ -118,6 +118,39 @@ describe('PersonalizationDelivery', () => {
     expect(f.upsertProfile).not.toHaveBeenCalled();
   });
 
+  it('keeps the prepared batch limit at 100 while honoring a larger queue capacity', async () => {
+    const f = fixture({ online: false, maxEvents: 250 });
+    const track = builder.buildTrack({ event: 'queued' });
+    const first = [...Array(99).fill(track), builder.buildPageView()];
+    expect(f.delivery.sendPrepared(first)).toEqual({ accepted: true });
+    await expect(f.delivery.send(track)).resolves.toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared([...Array(100).fill(track), builder.buildPageView()])).toEqual({
+      accepted: false,
+    });
+    expect(f.delivery.queuedEventCount).toBe(101);
+
+    f.setOnline(true);
+    await f.delivery.flush();
+    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual(first);
+    expect(f.upsertProfile.mock.calls[1]?.[0].events).toEqual([track]);
+  });
+
+  it('preserves the accepted FIFO batch when an ordinary event reaches default capacity', async () => {
+    const f = fixture({ online: false });
+    const track = builder.buildTrack({ event: 'queued' });
+    const accepted = [...Array(99).fill(track), builder.buildPageView()];
+    expect(f.delivery.sendPrepared(accepted)).toEqual({ accepted: true });
+    await expect(f.delivery.send(builder.buildTrack({ event: 'overflow' }))).resolves.toEqual({
+      accepted: false,
+    });
+    expect(f.delivery.queuedEventCount).toBe(100);
+
+    f.setOnline(true);
+    await f.delivery.flush();
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual(accepted);
+  });
+
   it('keeps distinct prepared batches ordered and lets an online ordinary event send directly', async () => {
     const firstResponse = deferred<OptimizationData>();
     const f = fixture({ profileId: 'profile-1' });
@@ -209,6 +242,77 @@ describe('PersonalizationDelivery', () => {
     await flush;
     expect(f.upsertProfile.mock.calls[1]?.[0].events).toEqual([second]);
     expect(f.delivery.queuedEventCount).toBe(0);
+  });
+
+  it('joins concurrent and forced flush calls to the active drain until its last batch settles', async () => {
+    const firstResponse = deferred<OptimizationData>();
+    const secondResponse = deferred<OptimizationData>();
+    const f = fixture({ online: false });
+    f.upsertProfile
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise);
+    expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
+    expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
+
+    const drain = f.delivery.flush({ force: true });
+    expect(f.delivery.flush()).toBe(drain);
+    expect(f.delivery.flush({ force: true })).toBe(drain);
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+
+    let settled = false;
+    void drain.then(() => {
+      settled = true;
+    });
+    firstResponse.resolve(data('continuation-id'));
+    await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
+    expect(settled).toBe(false);
+    expect(f.delivery.flush({ force: true })).toBe(drain);
+    secondResponse.resolve(data('continuation-id'));
+    await drain;
+    expect(settled).toBe(true);
+    expect(f.delivery.queuedEventCount).toBe(0);
+  });
+
+  it('settles a failed flush while its retry is still scheduled', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const f = fixture({ online: false });
+    f.upsertProfile.mockRejectedValueOnce(new Error('network'));
+    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+
+    await f.delivery.flush({ force: true });
+    expect(f.delivery.state).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(f.delivery.queuedEventCount).toBe(2);
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+    f.delivery.reset();
+  });
+
+  it('keeps a stale reset attempt from consuming or publishing replacement work', async () => {
+    const staleResponse = deferred<OptimizationData>();
+    const replacementResponse = deferred<OptimizationData>();
+    const f = fixture({ online: false });
+    f.upsertProfile
+      .mockReturnValueOnce(staleResponse.promise)
+      .mockReturnValueOnce(replacementResponse.promise);
+    expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
+    const staleDrain = f.delivery.flush({ force: true });
+    f.delivery.reset();
+
+    const replacement = prepared('fr-FR');
+    expect(f.delivery.sendPrepared(replacement)).toEqual({ accepted: true });
+    const replacementDrain = f.delivery.flush({ force: true });
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
+    staleResponse.resolve(data('stale-id'));
+    await staleDrain;
+    expect(f.delivery.queuedEventCount).toBe(replacement.length);
+    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.delivery.flush({ force: true })).toBe(replacementDrain);
+
+    replacementResponse.resolve(data('replacement-id'));
+    await replacementDrain;
+    expect(f.delivery.queuedEventCount).toBe(0);
+    expect(f.publishQueuedData).toHaveBeenCalledExactlyOnceWith(data('replacement-id'));
   });
 
   it('keeps retry body, IDs, target, and absent locale stable after a failure', async () => {

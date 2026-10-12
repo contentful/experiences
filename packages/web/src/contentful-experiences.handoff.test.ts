@@ -253,6 +253,74 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
   });
 
+  it.each(['identify', 'page', 'track'] as const)(
+    'propagates a full offline queue rejection through public %s without losing prepared work',
+    async (method) => {
+      const response = deferred<{ profile: { id: string } }>();
+      const send = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockReturnValue(response.promise as never);
+      const runtime = createRuntime({ id: 'browser-profile' });
+      window.dispatchEvent(new Event('offline'));
+      const events = [
+        ...Array.from({ length: 99 }, (_, index) =>
+          runtime.eventBuilder.buildTrack({ event: `accepted-${index}` })
+        ),
+        runtime.eventBuilder.buildPageView(),
+      ];
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(
+          handoff(runtime, '/full', { replay: { routeKey: '/full', events, locale: 'de-DE' } }),
+          { routeKey: '/full' }
+        )
+      ).resolves.toEqual({ accepted: true });
+      const rejected =
+        method === 'identify'
+          ? runtime.identify({ userId: 'rejected-user', traits: { rejected: true } })
+          : method === 'page'
+            ? runtime.page()
+            : runtime.track({ event: 'rejected' });
+      await expect(rejected).resolves.toEqual({ accepted: false });
+      expect(send).not.toHaveBeenCalled();
+      expect(runtime.profile).toEqual({ id: 'browser-profile' });
+
+      window.dispatchEvent(new Event('online'));
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith(
+        { profileId: 'browser-profile', events },
+        { preflight: false, locale: 'de-DE' }
+      );
+      response.resolve({ profile: { id: 'browser-profile' } });
+    }
+  );
+
+  it('rejects a 101-event handoff before identity, hydration, or partial admission', async () => {
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
+    const runtime = createRuntime();
+    const events = [
+      ...Array.from({ length: 100 }, () => runtime.eventBuilder.buildTrack({ event: 'oversized' })),
+      runtime.eventBuilder.buildPageView(),
+    ];
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        handoff(runtime, '/oversized', {
+          profileId: 'invalid-continuation',
+          state: { profile: { id: 'invalid-state' } },
+          replay: { routeKey: '/oversized', events },
+        }),
+        { routeKey: '/oversized' }
+      )
+    ).rejects.toThrow();
+    expect(runtime.profile).toBeUndefined();
+    expect(send).not.toHaveBeenCalled();
+    await runtime.page();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0].profileId).toBeUndefined();
+    expect(send.mock.calls[0]?.[0].events).toHaveLength(1);
+  });
+
   it('prevents superseded hydration and reset from publishing state', async () => {
     const runtime = createRuntime();
     const older = handoff(runtime, '/old', { state: { profile: { id: 'old-profile' } } });
@@ -298,7 +366,7 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(runtime.profile).toEqual({ id: 'new-profile' });
   });
 
-  it('drops a provisional continuation when superseded between identity and admission', async () => {
+  it('retains published identity when an ordinary event observes it before supersession', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
@@ -307,33 +375,40 @@ describe('Web handoff and current-page lifecycle', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const runtime = createRuntime();
+    const older = handoff(runtime, '/old', {
+      profileId: 'old-continuation',
+      state: { profile: { id: 'obsolete-evaluated-profile' } },
+    });
+    const newer = handoff(runtime, '/new', { profileId: 'new-continuation' });
+    const old = runtime.hydrateAndTrackCurrentPage(older, { routeKey: '/old' });
 
-    const old = runtime.hydrateAndTrackCurrentPage(
-      handoff(runtime, '/old', { profileId: 'old-continuation' }),
-      { routeKey: '/old' }
-    );
-    await Promise.resolve(); // Old identity is provisional; its admission has not run.
-    const current = runtime.hydrateAndTrackCurrentPage(
-      handoff(runtime, '/new', { profileId: 'new-continuation' }),
-      { routeKey: '/new' }
-    );
-    const currentFetch = runtime.fetchExperience(
-      { experienceId: 'current' },
-      { config: { components: {} } }
-    );
-
+    // Observe publication through an ordinary request at the initialization boundary,
+    // then navigate before pending hydration or replay admission can proceed.
+    const boundary = Promise.resolve().then(() => {
+      const ordinary = runtime.track({ event: 'between-routes' });
+      expect(send.mock.calls[0]?.[0].profileId).toBe('old-continuation');
+      expect(runtime.profile).toBeUndefined();
+      const current = runtime.hydrateAndTrackCurrentPage(newer, { routeKey: '/new' });
+      return { ordinary, current };
+    });
+    const { ordinary, current } = await boundary;
     await expect(old).resolves.toEqual({ accepted: false });
     await expect(current).resolves.toEqual({ accepted: true });
-    await currentFetch;
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0].profileId).toBe('new-continuation');
+    await runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } });
+    expect(runtime.profile).toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]?.[0]).toEqual({
+      profileId: 'old-continuation',
+      events: newer.replay?.events,
+    });
     expect(fetch.mock.calls[0]?.[0]).toMatchObject({
-      personalization: { profileId: 'new-continuation' },
+      personalization: { profileId: 'old-continuation' },
     });
     response.resolve({ profile: { id: 'committed-profile' } });
+    await ordinary;
   });
 
-  it('keeps an adopted continuation when a later route supersedes hydration', async () => {
+  it('retains published continuity when ordinary navigation cancels pending replay', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
@@ -343,17 +418,47 @@ describe('Web handoff and current-page lifecycle', () => {
       handoff(runtime, '/old', { profileId: 'adopted-continuation' }),
       { routeKey: '/old' }
     );
-    await Promise.resolve(); // Selection has run.
-    await Promise.resolve(); // The current attempt has begun hydration.
-    const current = runtime.hydrateAndTrackCurrentPage(
-      handoff(runtime, '/new', { profileId: 'later-server-id' }),
-      { routeKey: '/new' }
+    const current = Promise.resolve().then(() =>
+      runtime.trackCurrentPage({ routeKey: '/new', buildPayload: () => ({}) })
     );
 
     await expect(old).resolves.toEqual({ accepted: false });
-    await expect(current).resolves.toEqual({ accepted: true });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0].profileId).toBe('adopted-continuation');
+    response.resolve({ profile: { id: 'committed-profile' } });
+    await expect(current).resolves.toMatchObject({ accepted: true });
+  });
+
+  it('follows supersession while a fetch waits for initialization, without waiting for replay HTTP', async () => {
+    const response = deferred<{ profile: { id: string } }>();
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockReturnValue(response.promise as never);
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const runtime = createRuntime();
+    const old = runtime.hydrateAndTrackCurrentPage(
+      handoff(runtime, '/old', { profileId: 'obsolete-id' }),
+      { routeKey: '/old' }
+    );
+    const fetching = runtime.fetchExperience(
+      { experienceId: 'current' },
+      { config: { components: {} } }
+    );
+    const current = runtime.hydrateAndTrackCurrentPage(
+      handoff(runtime, '/new', { profileId: 'current-id' }),
+      { routeKey: '/new' }
+    );
+
+    await fetching;
+    await expect(old).resolves.toEqual({ accepted: false });
+    await expect(current).resolves.toEqual({ accepted: true });
+    expect(fetch.mock.calls[0]?.[0]).toMatchObject({
+      personalization: { profileId: 'current-id' },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0].profileId).toBe('current-id');
     response.resolve({ profile: { id: 'committed-profile' } });
   });
 
@@ -370,6 +475,55 @@ describe('Web handoff and current-page lifecycle', () => {
       await expect(pending).resolves.toEqual({ accepted: false });
       expect(send).not.toHaveBeenCalled();
       expect(runtime.profile).toBeUndefined();
+    }
+  );
+
+  it.each(['reset', 'destroy'] as const)(
+    '%s invalidates published continuation and a fetch waiting on initialization',
+    async (action) => {
+      const response = deferred<{ profile: { id: string } }>();
+      const send = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockReturnValue(response.promise as never);
+      const fetch = vi
+        .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const runtime = createRuntime();
+      const pending = runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/old'), {
+        routeKey: '/old',
+      });
+      const fetching = runtime.fetchExperience(
+        { experienceId: 'waiting' },
+        { config: { components: {} } }
+      );
+      const fetchResult =
+        action === 'destroy'
+          ? expect(fetching).rejects.toThrow('destroyed')
+          : expect(fetching).resolves.toEqual({ nodes: [] });
+      const ordinary = await Promise.resolve().then(() => {
+        const event = runtime.track({ event: 'published' });
+        expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
+        runtime[action]();
+        return { event };
+      });
+      await expect(pending).resolves.toEqual({ accepted: false });
+      await fetchResult;
+      if (action === 'reset') {
+        expect(fetch.mock.calls[0]?.[0]).toEqual({ experienceId: 'waiting' });
+        await expect(
+          runtime.hydrateAndTrackCurrentPage(
+            handoff(runtime, '/new', { profileId: 'fresh-continuation' }),
+            { routeKey: '/new' }
+          )
+        ).resolves.toEqual({ accepted: true });
+        expect(send.mock.calls[1]?.[0].profileId).toBe('fresh-continuation');
+      } else {
+        expect(fetch).not.toHaveBeenCalled();
+        expect(send).toHaveBeenCalledTimes(1);
+      }
+      response.resolve({ profile: { id: 'late-profile' } });
+      await ordinary.event;
+      if (action === 'destroy') expect(runtime.profile).toBeUndefined();
     }
   );
 

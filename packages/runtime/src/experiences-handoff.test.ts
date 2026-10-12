@@ -48,6 +48,47 @@ describe('Experiences handoff', () => {
     ]);
   });
 
+  it('accepts 100 prepared events and rejects 101 in both producer and consumer validation', () => {
+    const identify = Array.from({ length: 50 }, (_, index) =>
+      builder.buildIdentify({ userId: `visitor-${index}`, locale: 'de-DE' })
+    );
+    const track = Array.from({ length: 49 }, (_, index) =>
+      builder.buildTrack({ event: `opened-${index}`, locale: 'de-DE' })
+    );
+    const page = builder.buildPageView({ locale: 'de-DE' });
+    const handoff = {
+      ...privateHandoff(),
+      replay: {
+        routeKey: '/home',
+        locale: 'de-DE',
+        events: [...identify, ...track, page],
+      },
+    };
+
+    const created = createExperiencesHandoff(handoff);
+    const received = parseExperiencesHandoff(JSON.parse(JSON.stringify(created)), scope);
+    expect(created.replay?.events).toEqual(handoff.replay.events);
+    expect(received.replay?.events).toEqual(created.replay?.events);
+    expect(received.replay?.events).toHaveLength(100);
+    expect(new Set(received.replay?.events.map(({ messageId }) => messageId)).size).toBe(100);
+
+    const oversized = {
+      ...handoff,
+      replay: {
+        ...handoff.replay,
+        events: [
+          ...handoff.replay.events.slice(0, -1),
+          builder.buildTrack({ event: 'extra', locale: 'de-DE' }),
+          page,
+        ],
+      },
+    };
+    expect(() => createExperiencesHandoff(oversized)).toThrow('within the SDK handoff limits');
+    expect(() => parseExperiencesHandoff(oversized, scope)).toThrow(
+      'within the SDK handoff limits'
+    );
+  });
+
   it('rejects another space or environment before a consumer can adopt the handoff', () => {
     const handoff = privateHandoff();
     expect(() => assertExperiencesHandoffScope(handoff, { ...scope, spaceId: 'other' })).toThrow(
