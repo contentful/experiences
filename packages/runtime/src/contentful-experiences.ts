@@ -192,7 +192,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
           ? (this.#previewClient as ContentfulViewDeliveryClient)
           : this.#deliveryClient,
       },
-      { config: this.#resolverConfig, ...this.#mergeResolveOptions(resolveOptions) }
+      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
@@ -203,7 +203,7 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, nodeId: options.nodeId },
       { client: this.#deliveryClient },
-      { config: this.#resolverConfig, ...this.#mergeResolveOptions(resolveOptions) }
+      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
@@ -214,15 +214,23 @@ export class ContentfulExperiences implements ExperienceRuntime {
     return fetchExperience(
       { spaceId: this.spaceId, destinationId: options.destinationId, path: options.path },
       { client: this.#deliveryClient },
-      { config: this.#resolverConfig, ...this.#mergeResolveOptions(resolveOptions) }
+      { config: this.#resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
   }
 
   #mergeResolveOptions(options: RuntimeResolveOptions | undefined): RuntimeResolveOptions {
     return {
+      ...this.#mergeFetchResolveOptions(options),
+      sourceMap: options?.sourceMap,
+    };
+  }
+
+  #mergeFetchResolveOptions(
+    options: RuntimeFetchResolveOptions | undefined
+  ): RuntimeFetchResolveOptions {
+    return {
       metadata: { ...this.#resolveDefaults.metadata, ...options?.metadata },
       debug: options?.debug ?? this.#resolveDefaults.debug,
-      sourceMap: options?.sourceMap,
     };
   }
 }
