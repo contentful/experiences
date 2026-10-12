@@ -172,7 +172,7 @@ function buildScope(
 }
 
 function entriesBoundAt(ctx: Context, assemblyRow: number, path: PathSegment[]): readonly string[] {
-  const cacheKey = `${assemblyRow}|${path.join('/')}`;
+  const cacheKey = `${assemblyRow}|${JSON.stringify(path)}`;
   const cached = ctx.bindingEntries.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -180,7 +180,7 @@ function entriesBoundAt(ctx: Context, assemblyRow: number, path: PathSegment[]):
   const visited = new Set<string>();
 
   const followAssembly = (row: number, path: PathSegment[]): void => {
-    const visitKey = `${row}|${path.join('/')}`;
+    const visitKey = `${row}|${JSON.stringify(path)}`;
     const assembly = asRecord(ctx.dataAssemblies[row]);
     if (assembly === undefined || visited.has(visitKey)) return;
     visited.add(visitKey);

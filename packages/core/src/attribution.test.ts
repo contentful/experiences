@@ -362,6 +362,17 @@ describe('scope attribution', () => {
       expect(await entryIdsOf(mapWith([da], { a: ['hero'] }))).toEqual(['e0', 'e1']);
     });
 
+    it('keeps a flat field and a nested field apart when their paths join to the same string', async () => {
+      const da = { return: { 'a/b': entry(0), a: { b: entry(1) } } };
+
+      expect(await entryIdsOf(mapWith([da], { flat: ['a/b'] }))).toEqual(['e0']);
+      expect(await entryIdsOf(mapWith([da], { nested: ['a', 'b'] }))).toEqual(['e1']);
+      expect(await entryIdsOf(mapWith([da], { flat: ['a/b'], nested: ['a', 'b'] }))).toEqual([
+        'e0',
+        'e1',
+      ]);
+    });
+
     it('follows numeric array indexes, and walks a whole array when the path ends on it', async () => {
       const da = { return: { list: [entry(0), entry(1), entry(2)] } };
 
