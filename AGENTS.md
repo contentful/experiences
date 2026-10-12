@@ -107,12 +107,25 @@ is active.
 
 By-ID fetch options can also carry first-class personalization with a profile id
 and caller-built events; Client maps it to XDA's extension body, and Node
-proxies it without retaining state. The current generated XDA request has no
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. The current generated XDA request has no
 noncommitting preflight option. Independent Personalization preparation and an
 event-bearing XDA fetch may duplicate events; this PR adds no interim
 suppression or placeholder API. Typed XDA preflight integration follows upstream
 support and must be verified before public release.
 Existing free functions remain supported.
+
+Events are consent-gated. Consent is `{ events, persistence }`, where undecided
+means not granted. Until event consent is granted only `allowedEventTypes`
+(default `identify` and `page`) are sent; the selectors are the Optimization
+SDK's (`component`, `component_click`, `component_hover`, `flag`). A blocked
+Personalization call resolves `{ accepted: false }`, a blocked Analytics call
+resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
+never replayed. The same gate covers caller-built fetch events. Node gates a
+prepared handoff as a unit, since the browser replays the batch whole.
+Web persists consent, always, in LocalStorage and writes the profile only with
+persistence consent; Node scopes consent to one `forRequest()` facade and exposes
+`canPersistProfile`. This SDK writes no anonymous-id cookie, so persistence
+consent gates LocalStorage only.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 
