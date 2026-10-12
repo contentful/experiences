@@ -67,7 +67,11 @@ export interface ResolveExperienceOptions {
    * resolver context as `ctx.experience.debug`. Defaults to `false`.
    */
   debug?: boolean;
-  /** Carried onto the plan as-is. Omit for no source map. */
+  /**
+   * Source map carried onto the plan. An explicit map wins over
+   * `payload.extensions.sourceMap`. Omit to use the payload's map, if it
+   * carries one.
+   */
   sourceMap?: ExperienceSourceMap;
 }
 
@@ -451,7 +455,9 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
-  if (options.sourceMap !== undefined) plan.sourceMap = options.sourceMap;
+  const sourceMap =
+    options.sourceMap ?? (isPlainPayload ? payload.extensions?.sourceMap : undefined);
+  if (sourceMap) plan.sourceMap = sourceMap;
   const profileId = isPlainPayload && payload.extensions?.personalization?.profile?.id;
   if (profileId) {
     plan.personalization = { profileId };

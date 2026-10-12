@@ -427,7 +427,7 @@ describe('fetchExperience — source map', () => {
     });
   });
 
-  it('forwards the response source map to resolveExperience', async () => {
+  it('hands the resolver the response with its source map, for the payload fallback', async () => {
     const { resolveExperience } = await import('@contentful/experiences-sdk-core');
 
     await fetchExperience(
@@ -436,42 +436,9 @@ describe('fetchExperience — source map', () => {
       resolveOptions
     );
 
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: mockSourceMap })
-    );
-  });
-
-  it('forwards no source map when the extension was not requested', async () => {
-    // Guards against a stray `extensions.sourceMap` leaking onto the plan unasked.
-    mockGet.mockResolvedValue({ ...mockPayload, extensions: { sourceMap: mockSourceMap } });
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(experienceOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: undefined })
-    );
-  });
-
-  it('tolerates a requested source map the API did not return', async () => {
-    mockGetWithOverrides.mockResolvedValue({ ...mockPayload, extensions: {} });
-    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
-
-    await fetchExperience(
-      { ...experienceOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(resolveExperience).toHaveBeenCalledWith(
-      expect.anything(),
-      resolveOptions.config,
-      expect.objectContaining({ sourceMap: undefined })
-    );
+    const [payloadArg, , optionsArg] = vi.mocked(resolveExperience).mock.calls[0]!;
+    expect(payloadArg.extensions?.sourceMap).toBe(mockSourceMap);
+    expect(optionsArg).not.toHaveProperty('sourceMap');
   });
 
   it('hands the resolver the experience payload, with the source map routed separately', async () => {

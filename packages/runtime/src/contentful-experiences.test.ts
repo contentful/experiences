@@ -114,6 +114,7 @@ describe('ContentfulExperiences', () => {
       {
         metadata: { site: 'main', shared: 'call' },
         debug: true,
+        sourceMap: undefined,
       }
     );
     const personalization = {
