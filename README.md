@@ -192,15 +192,23 @@ application can choose a fallback. Ordinary Node event methods remain direct
 and are not staged into this batch.
 
 ```ts
-// Server request handler, using an existing Node SDK singleton:
-const request = experiences.forRequest({
-  locale: requestLocale,
-  profile: currentProfile,
-  eventContext: { page: serverPageProperties },
-  eventConsent: currentConsentMetadata,
+import { ContentfulExperiences as NodeContentfulExperiences } from '@contentful/experiences-node';
+
+// Construct once for this server runtime; replace the registrations and token.
+const experiences = new NodeContentfulExperiences({
+  spaceId: 'your-space-id',
+  environmentId: 'master',
+  resolverConfig: { components: {} },
+  delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
 });
+
+// In a request handler, bind request-local state and prepare one route:
+const request = experiences.forRequest({
+  locale: 'en-US',
+});
+const routeKey = '/products?category=chairs';
 const { handoff, data } = await request.prepareRequestHandoff({
-  routeKey: '/products?category=chairs',
+  routeKey,
   initialEvents: [{ type: 'track', event: 'experience_rendered' }],
   page: { properties: { title: 'Chairs' } },
 });
@@ -226,18 +234,23 @@ reassess it later.
 
 ```ts
 // Browser runtime, after reading the handoff from that response:
-import { ContentfulExperiences as WebContentfulExperiences } from '@contentful/experiences-web';
+import {
+  ContentfulExperiences as WebContentfulExperiences,
+  type ExperiencesHandoff,
+} from '@contentful/experiences-web';
 
 const web = new WebContentfulExperiences({
-  spaceId,
-  environmentId,
-  resolverConfig: experienceConfig,
+  spaceId: 'your-space-id',
+  environmentId: 'master',
+  resolverConfig: { components: {} }, // use the same registrations as the server
   delivery: { host: 'https://application.example/experience-proxy' },
 });
-const result = await web.hydrateAndTrackCurrentPage(handoff, {
-  routeKey: '/products?category=chairs',
-});
-// result.accepted means admitted, not delivered.
+
+async function applyHandoff(handoff: ExperiencesHandoff) {
+  const routeKey = window.location.pathname + window.location.search;
+  const result = await web.hydrateAndTrackCurrentPage(handoff, { routeKey });
+  return result; // accepted means admitted, not delivered
+}
 ```
 
 `hydrateHandoffState(handoff, { routeKey })` can seed state before tracking and
