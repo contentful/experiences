@@ -62,6 +62,12 @@ const plan = await request.fetchExperience({
 
 The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
 
+The current XDA client has no noncommitting preflight option for that POST.
+`prepareRequestHandoff()` previews events through the separate Personalization
+API; it does not make a later XDA fetch render those uncommitted changes. An
+application that independently sends the same events through both operations
+may duplicate them. The SDK does not suppress or deduplicate those calls.
+
 ## Request-scoped events
 
 Event methods live on the request facade, never on the process-long SDK instance. Supply the
@@ -110,6 +116,9 @@ const { handoff, data } = await experienceRequest.prepareRequestHandoff({
 ```
 
 The route key is the visible pathname plus search and must begin with `/`.
+The prepared batch's transport locale follows the final page event, including
+an explicit `page.locale` override; the same locale is captured for browser
+replay.
 Invalid input returns a private handoff without replay or preview data and logs
 a diagnostic. A failed preview retains the already-built replay with the same
 event IDs and omits `data`, so the caller can render a fallback. A successful

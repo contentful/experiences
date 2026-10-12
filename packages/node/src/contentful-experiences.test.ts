@@ -411,6 +411,20 @@ describe('Node ContentfulExperiences', () => {
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
 
+  it('uses an explicit final-page locale for both preparation and browser replay', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const request = runtime.forRequest({ locale: 'de-DE' });
+
+    const result = await request.prepareRequestHandoff({
+      routeKey: '/fr',
+      page: { locale: 'fr-FR' },
+    });
+
+    expect(result.handoff.replay?.events.at(-1)?.context.locale).toBe('fr-FR');
+    expect(result.handoff.replay?.locale).toBe('fr-FR');
+    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'fr-FR', preflight: true });
+  });
+
   it('returns no replay or preview and reports invalid route, event type, and batch limits', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ profile: { id: 'known-profile' } });

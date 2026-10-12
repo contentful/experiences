@@ -30,6 +30,13 @@ Cache warnings are advisory; `assertExperiencesCacheSafety` and the create/parse
 
 `createRequestHandoffFromData` adds only the evaluated API profile to a private handoff. It does not commit a preflight result or copy selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 
+The generated XDA request currently has no preflight option. Ordinary by-ID
+Experience fetches still pass profile IDs and events through Client's Delivery
+boundary, using its event-bearing POST when supplied. Runtime exposes no
+XDA-backed noncommitting content-preparation stub or duplicate-event
+workaround. Once XDA and the generated client support preflight, map the real
+request field through Client before adding a content-and-handoff operation.
+
 ## Personalization delivery
 
 `PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. Admission returns before HTTP settles. Queued batches keep their event bodies, IDs, captured locale, and selected target identity through retry; direct online calls do not wait behind them. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications; `destroy()` attempts one best-effort forced flush, clears retry timers, and prevents late publication. This is neither durable persistence nor an exactly-once guarantee. Consent remains GDPR event metadata only; permission and persistence policy are deferred to another workstream.

@@ -202,7 +202,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       return { handoff };
     }
 
-    const locale = this.locale ?? events.at(-1)?.context.locale ?? 'en-US';
+    const locale = events.at(-1)?.context.locale ?? this.locale ?? 'en-US';
     const preparedHandoff = createExperiencesHandoff({
       ...handoff,
       replay: { routeKey, events, locale },

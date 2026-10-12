@@ -75,6 +75,12 @@ const plan = await experiences.fetchExperience({
 
 Events built by the Web runtime use the `web` channel and the current browser context. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
 
+The current XDA event-bearing POST has no noncommitting preflight option and
+may commit supplied events. A Node-prepared Personalization handoff does not
+make a separate XDA fetch render its uncommitted mutations. Applications that
+independently use both paths for the same events may duplicate them; the SDK
+adds no interim suppression.
+
 ## Browser-safe configuration
 
 Resolver configuration runs in the browser. Keep `resolveData`, `resolveToken`, and component configuration free of server-only imports, secrets, and privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
@@ -248,10 +254,12 @@ for ordinary route tracking; its callback receives `isInitialEmission`. Manual
 `page()` calls remain direct and are not deduplicated.
 
 An admitted continuation ID remains in memory for early event attribution
-until a real API profile arrives. Handoff bodies are browser-visible sensitive
-data: escape their serialization into private, no-store responses, and never
-cache, log, or persist them. Queue retries cannot guarantee exactly-once
-delivery.
+until a real API profile arrives. A private handoff containing a profile,
+identity, or replay is browser-visible sensitive data: escape its
+serialization into a private, no-store response, and never cache, log, or
+persist it. The application owns safe caching for profileless public/static
+handoffs and the rest of its rendered response. Queue retries cannot
+guarantee exactly-once delivery.
 
 ## SSR import safety
 

@@ -53,41 +53,29 @@ Two consequences of that boundary shape recur throughout the layout below:
 
 ## Package graph
 
-Nine libraries under `packages/`, in three layers. Every edge below is a
-`dependencies` entry in the respective `package.json`; there are no other
-cross-package edges.
+Ten libraries live under `packages/`. `core` and `design` have no package
+dependencies. Client is the sole generated Delivery edge; Runtime imports
+Client and owns Optimization integration. Node and Web are sibling leaves over
+Runtime, Client, and Core. Live Preview is a separate public data source that
+the framework adapters also depend on. Every edge below is a `dependencies`
+entry in the corresponding `package.json`.
 
-```
-  layer 3       adapter-*       live-preview       node       web
-  (public)           │                │               │         │
-                     └───────────┬────┴───────────────┴─────────┘
-                                 │
-  layer 2       design (independent)        client ──┬─▶ @contentful/experience-delivery
-  (internal)                                           ├─▶ @contentful/optimization-api-client
-                                                       ├─▶ es-toolkit
-  layer 1                               core ◀────────┘
-  (internal)                       (zero dependencies)   └─▶ zod
-```
+| Nx project        | Directory                  | npm name                               | Depends on                                                     | Public? |
+| ----------------- | -------------------------- | -------------------------------------- | -------------------------------------------------------------- | ------- |
+| `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | —                                                              | no      |
+| `design`          | `packages/design`          | `@contentful/experiences-design`       | —                                                              | no      |
+| `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, generated `@contentful/experience-delivery`            | no      |
+| `runtime`         | `packages/runtime`         | `@contentful/experiences-runtime`      | `core`, `client`, Optimization API client, `es-toolkit`, `zod` | no      |
+| `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`, `runtime`                                    | yes     |
+| `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`, `runtime`                                    | yes     |
+| `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                               | yes     |
+| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
+| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
+| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
 
-Each adapter also depends on `core` **directly**, not only through `design` and
-`client` — all three names appear in every `packages/adapter-*/package.json`.
-
-| Nx project        | Directory                  | npm name                               | Depends on                                                            | Public? |
-| ----------------- | -------------------------- | -------------------------------------- | --------------------------------------------------------------------- | ------- |
-| `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | — (nothing)                                                           | no      |
-| `design`          | `packages/design`          | `@contentful/experiences-design`       | — (nothing)                                                           | no      |
-| `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, delivery client, optimization API client, `es-toolkit`, `zod` | no      |
-| `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`                                                      | yes     |
-| `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`                                                      | yes     |
-| `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                                      | yes     |
-| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`                                            | yes     |
-| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`                                            | yes     |
-| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`                                            | yes     |
-
-The graph is acyclic and public packages are leaves — nothing depends on a
-public package, and no adapter depends on another. That is what makes a new
-framework or platform additive: adding `packages/adapter-vue` adds a leaf and
-changes no existing edge. The Web SDK is the existing platform sibling of Node.
+The graph is acyclic. Framework adapters are leaves and do not depend on one
+another. A future adapter adds a new leaf without changing the existing Core,
+Client, or Runtime ownership boundaries.
 
 **Directory name, Nx project name, and npm package name are three separate
 identifiers** (`packages/adapter-react` / `adapter-react` /
@@ -123,59 +111,62 @@ takes `RuntimeDeliveryClientOptions` and constructs its own delivery clients.
 The rationale is in AGENTS.md; the structural point is that this keeps `core` at
 zero dependencies, which is the invariant every future adapter inherits.
 
-### Core, Client, Node SDK, and Live Preview responsibilities
+### Core, Client, Runtime, Node, Web, and Live Preview responsibilities
 
 `core` is genuinely dependency-free: it contains payload and render-plan types,
 `resolveExperience`, diagnostics, and design-resolution helpers. It
 does not own delivery transport, event construction, or connection state.
 
-`client` owns delivery integration, conversion, free fetch functions, direct
-Optimization transport and event construction, the runtime-neutral
-`EventBuilder`, and the lower-layer shared `ContentfulExperiences` runtime. Its
-event layer depends on the optimization API client, schemas/logger plus
-`es-toolkit` and `zod`; those are Client's dependencies, not Core's. Runtime
-constructors accept `RuntimeDeliveryClientOptions` configuration, then construct
-and retain their own Delivery, optional Preview, and Optimization clients; a
-caller cannot inject a pre-built delivery client. `accessToken` can be the
-generated client's token supplier. It may be omitted only with an explicit proxy
-host, which disables generated bearer auth and must supply upstream auth itself.
-The shared runtime is stateless with respect to request and browser state and
-requires its platform caller to provide the event channel instead of assuming
-server or Web.
+`client` owns generated Delivery integration, XDA-derived request types,
+payload conversion, errors, and free fetch functions. It does not import
+Runtime. `runtime` depends on Client's public boundary and owns the complete
+`EventBuilder`, Optimization transport, event methods, handoff contracts, and
+the lower-layer shared `ContentfulExperiences` base. Runtime, not Client,
+declares the Optimization API client, `es-toolkit`, and `zod` dependencies.
+Runtime constructors accept `RuntimeDeliveryClientOptions` configuration, then
+construct and retain their own Delivery, optional Preview, and Optimization
+clients; a caller cannot inject a pre-built delivery client. `accessToken` can
+be the generated client's token supplier. It may be omitted only with an
+explicit proxy host, which disables generated bearer auth and must supply
+upstream auth itself. The shared runtime is stateless with respect to request
+and browser state and requires its platform caller to provide the event channel.
 
-`node` is the public Node-specific leaf over the shared Client runtime. Its
-process-long SDK instance retains only stable configuration and reusable
-delivery transports; `forRequest()` creates a request-local facade for fetch,
-resolve, destination, and event operations. This keeps locale, resolve options,
-and volatile event profile/context from crossing concurrent requests. `web` is a
-sibling public leaf over Client and Core, not a subclass of Node or a source of
-Node state. It owns mutable browser locale, browser context providers, and an
-in-memory-only event profile, and inherits the shared runtime's trusted
-custom-endpoint and direct by-ID CPA preview capabilities.
+`node` is the public Node-specific leaf over Runtime, Client, and Core. Its
+process-long SDK instance retains stable configuration and reusable delivery
+transports; `forRequest()` creates a request-local facade for fetch, resolve,
+destination, and event operations. This keeps locale, resolve options, and
+volatile event profile/context from crossing concurrent requests. `web` is a
+sibling public leaf, not a subclass of Node. It owns mutable browser locale,
+browser context providers, and a LocalStorage-persisted profile, and inherits
+the shared runtime's trusted custom-endpoint and direct by-ID CPA preview
+capabilities. The shared Runtime enforces one live Experiences SDK instance per
+JavaScript runtime.
 
-Both leaves trigger events directly. `identify`, `page`, and `track` target the
-Personalization API; `trackView`, `trackClick`, `trackHover`, and
-`trackFlagView` target the Analytics API. The SDK deliberately has no event
-queue, durable persistence, consent gate, beacon/lifecycle delivery, automatic
-renderer tracking, or Live Preview event integration. A manual event call still
-sends while a direct CPA preview fetch is active. The exception is an explicit,
-request-scoped Node handoff for a paired browser integration: it is a one-shot
-journal, not a general queue. Node defaults to direct `commit` delivery;
-`eventDelivery: 'handoff'` can preflight the initial Personalization sequence in one
-batch, while individual Personalization methods remain cumulative and Analytics
-methods stage for browser replay. Web has no mode selector: `eventHandoff`
-(mutually exclusive with `profile`) requires the current browser route key.
-Page-bearing journals commit only when their route marker matches. Compatible
-adjacent Personalization entries share a request; locale changes and Analytics
-entries remain ordering boundaries. The handoff contains the exact,
-browser-visible event bodies and must use escaped serialization in a
-private/no-store response; exclude secrets and server-only traits, and never
-cache, log, or persist it. Its internal serialized-payload cap is 64 KiB.
-Replay can partially commit, stops on failure, does not retry automatically,
-and is not distributed exactly-once delivery. A rejected replay receipt releases
-later direct calls so an adapter can send its ordinary initial page. No adapter
-or example is yet wired to this protocol;
-Live Preview remains independent. See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
+Both leaves expose `identify`, `page`, and `track` through the Personalization
+API and interaction methods through Analytics. Node's ordinary methods send
+directly. Its `prepareRequestHandoff()` builds one identify/track/page batch
+and sends a single Personalization `preflight: true` request without a Node
+event commit. The resulting private handoff contains exact browser-visible
+event bodies. Web validates scope and cache safety, hydrates state
+imperatively, and admits a matching replay through Runtime's in-memory
+Personalization queue; construction never replays. Repeated current
+initializations join, route mismatches use ordinary current-page tracking,
+and later visits remain trackable. Admission can precede HTTP completion and
+retry can duplicate a request whose first result was ambiguous. Ordinary
+online Personalization and Analytics calls remain direct; offline ordinary
+Personalization calls use the same in-memory queue. There is no durable event
+persistence, SDK consent permission gate, beacon/lifecycle delivery, or Live
+Preview event integration. Node `eventConsent` and Web `getConsent` provide
+GDPR metadata only. The separate consent and persistence workstream will
+supply later policy. No adapter or example is yet wired to the paired handoff.
+See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
+
+The current generated XDA client has no noncommitting preflight option for
+content fetching. An ordinary XDA fetch with events may commit them; a separate
+Personalization preflight does not render XDA content under uncommitted
+mutations. Duplicate events from independently using those operations are
+accepted until upstream preflight and its typed client support are integrated.
+This work stream adds no placeholder API or duplicate-event workaround.
 
 By-ID fetch options can carry first-class personalization with a profile id and
 caller-built events; Client maps it to XDA's extension body, and Node proxies it
@@ -206,9 +197,10 @@ loading, WebSocket subscription, external-store state, and errors.
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `core` has no dependencies                                       | `packages/core/package.json` (no `dependencies`)                                                    | review                                                                         |
 | Only `client` reaches the delivery client                        | `packages/client/package.json`                                                                      | review                                                                         |
+| Runtime owns event construction; Client owns Delivery            | `packages/runtime/src/*`, `packages/client/src/*`                                                   | review and package dependency inspection                                       |
 | Client is runtime-neutral and request-stateless                  | `packages/client/src/*`                                                                             | review                                                                         |
 | Node request state and volatile event context stay request-local | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
-| Web browser state and in-memory event profile stay browser-owned | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
+| Web browser state and persisted profile stay browser-owned       | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
 | Frameworks are peers, never deps                                 | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
 | Adapters do not surface Node's request facade                    | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
 | Project scope for tags                                           | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
