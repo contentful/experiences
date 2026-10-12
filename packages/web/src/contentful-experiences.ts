@@ -20,6 +20,8 @@ import {
   hasEventTypeConsent,
   methodForEventType,
   toConsentState,
+  validatePreparedEvents,
+  withEventConsent,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
@@ -454,7 +456,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     locale?: string
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
-    const result = this.#delivery.sendPrepared(events, { profileId, locale });
+    const admitted = this.#admitPreparedEvents(events);
+    if (admitted === undefined) return Promise.resolve({ accepted: false });
+    const result = this.#delivery.sendPrepared(admitted, { profileId, locale });
     if (result.accepted && this.#store.profile === undefined) {
       this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId);
     }
@@ -487,6 +491,35 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
 
     const admitted = events.filter((event) => this.#admitEvent(event));
     return { ...options, personalization: { ...options.personalization, events: admitted } };
+  }
+
+  /**
+   * Gates and stamps a server-prepared batch. The server built these events, so they
+   * carry its consent; the browser's own consent decides whether they are sent and is
+   * what they are stamped with, as for direct calls.
+   *
+   * A prepared batch is identify and track events followed by one page, and is
+   * admitted whole or not at all: dropping one event would leave a batch the
+   * validator rejects. Returns `undefined` when the batch is invalid or any event is
+   * not admitted. Invalid input is left to the delivery queue to refuse.
+   */
+  #admitPreparedEvents(events: readonly unknown[]): readonly unknown[] | undefined {
+    let valid: ReturnType<typeof validatePreparedEvents>;
+    try {
+      valid = validatePreparedEvents(events);
+    } catch {
+      return undefined;
+    }
+
+    // Check every event, without stopping at the first blocked one, so each is reported.
+    let admitted = true;
+    for (const event of valid) {
+      if (!this.#admitEvent(event)) admitted = false;
+    }
+    if (!admitted) return undefined;
+
+    const isConsentGiven = this.#store.consent.events === true;
+    return valid.map((event) => withEventConsent(event, isConsentGiven));
   }
 
   #requireRouteKey(routeKey: string): void {

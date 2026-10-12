@@ -35,7 +35,8 @@ function createRuntime(profile?: { id: string }) {
   return runtime;
 }
 
-function prepared(runtime: TestContentfulExperiences, consent = false) {
+// Prepared for an opted-in visitor, matching the browser these tests run as.
+function prepared(runtime: TestContentfulExperiences, consent = true) {
   return buildPreparedEvents({
     eventBuilder: runtime.eventBuilder,
     initialEvents: [{ type: 'track', event: 'prepared' }],
@@ -65,13 +66,13 @@ afterEach(() => {
 });
 
 describe('Web prepared Personalization delivery', () => {
-  it('admits the exact batch before HTTP completes and retains GDPR metadata', async () => {
+  it('admits the exact batch before HTTP completes and stamps the browser consent', async () => {
     const pending = deferred<{ profile: { id: string } }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValue(pending.promise as never);
     const runtime = createRuntime();
-    const events = prepared(runtime, false);
+    const events = prepared(runtime, true);
 
     await expect(runtime.admit(events, undefined, 'de-DE')).resolves.toEqual({ accepted: true });
     expect(runtime.personalizationDeliveryState.status).toBe('pending');
@@ -83,9 +84,7 @@ describe('Web prepared Personalization delivery', () => {
       events.map((event) => event.messageId)
     );
     expect(
-      upsert.mock.calls[0]?.[0].events.every(
-        (event) => event.context.gdpr?.isConsentGiven === false
-      )
+      upsert.mock.calls[0]?.[0].events.every((event) => event.context.gdpr?.isConsentGiven === true)
     ).toBe(true);
     expect(runtime.profile).toBeUndefined();
 

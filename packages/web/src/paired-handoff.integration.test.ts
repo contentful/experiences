@@ -163,7 +163,15 @@ describe('paired Node preparation and Web delivery', () => {
     expect(browser.personalizationDeliveryState.status).toBe('pending');
     expect(upsert).toHaveBeenCalledTimes(2);
     const [firstBody, firstOptions] = upsert.mock.calls[1]!;
-    expect(firstBody).toEqual({ profileId: 'known-profile', events: previewBody.events });
+    // The same events in the same order, except that the consent flag is the browser's
+    // (opted in) and no longer the server's (denied), which admitted them for sending.
+    expect(firstBody).toEqual({
+      profileId: 'known-profile',
+      events: previewBody.events.map((event) => ({
+        ...event,
+        context: { ...event.context, gdpr: { ...event.context.gdpr, isConsentGiven: true } },
+      })),
+    });
     expect(firstOptions).toEqual({ locale: 'de-DE', preflight: false });
     expect(browser.profile).toBeUndefined();
 

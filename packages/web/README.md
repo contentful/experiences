@@ -213,9 +213,20 @@ the Optimization SDK's consent model.
 Personalization methods (`identify`, `page`, `track`) resolve
 `{ accepted, data? }`, where `data` is the Personalization response.
 
-The same gate applies to events passed in
-`fetchExperience({ personalization: { events } })`: they are filtered before the
-request, and the `profileId` still travels.
+The same gate applies to events that are already built:
+
+- A server-prepared handoff batch (`hydrateAndTrackCurrentPage`) is checked against
+  the browser's own consent before it is queued, so a server cannot send what the
+  visitor has not allowed. A prepared batch is identify and track events followed
+  by one page, and is admitted whole or not at all: if any event is not admitted,
+  the batch is refused, each blocked event is reported to `onEventBlocked`, and the
+  browser sends its own page event through the ordinary gated path instead. Each
+  admitted event is sent with `context.gdpr.isConsentGiven` set from the browser's
+  event consent, not the value the server stamped, so the flag always matches the
+  decision that admitted it.
+- Events passed in `fetchExperience({ personalization: { events } })` are filtered
+  before the request, and the `profileId` still travels. They are not re-stamped,
+  because XDA's embedded event schema has no consent field.
 
 Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
 `trackClick`, `exo_node_hover` to `trackHover`, `component` to `trackFlagView`).

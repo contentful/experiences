@@ -120,8 +120,14 @@ means not granted. Until event consent is granted only `allowedEventTypes`
 SDK's (`component`, `component_click`, `component_hover`, `flag`). A blocked
 Personalization call resolves `{ accepted: false }`, a blocked Analytics call
 resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
-never replayed. The same gate covers caller-built fetch events. Node gates a
-prepared handoff as a unit, since the browser replays the batch whole.
+never replayed. The same gate covers caller-built fetch events and the prepared
+handoff batch the browser replays: Node prepares it only when every event is
+admitted, and Web admits it whole or not at all, because a prepared batch is
+identify and track events followed by one page and a partial batch would be
+rejected. A refused prepared batch falls back to the browser's own gated page
+event. Admitted prepared events are re-stamped with the browser's event consent,
+not the server's; fetch events are not, because XDA's embedded event schema has
+no consent field.
 Web persists consent, always, in LocalStorage (the Optimization SDK's keys and
 `accepted`/`denied` encoding, so both SDKs share one decision) and writes the profile
 only with persistence consent; configured startup defaults take precedence over
