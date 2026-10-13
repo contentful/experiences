@@ -8,7 +8,7 @@ The Node.js SDK for fetching and resolving [Contentful Experiences](https://www.
 npm install @contentful/experiences-node
 ```
 
-## Create one SDK instance, then bind every request
+## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.
 
@@ -18,7 +18,6 @@ import { ContentfulExperiences } from '@contentful/experiences-node';
 const experiences = new ContentfulExperiences({
   spaceId: process.env.CONTENTFUL_SPACE_ID!,
   environmentId: 'master',
-  resolverConfig: experienceConfig,
   delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
   preview: process.env.CONTENTFUL_PREVIEW_TOKEN
     ? { accessToken: process.env.CONTENTFUL_PREVIEW_TOKEN }
@@ -38,29 +37,38 @@ const request = experiences.forRequest({
   },
 });
 
-const plan = await request.fetchExperience({ experienceId });
+const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
 ```
 
-The singleton retains only stable SDK configuration and reusable delivery transports. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests.
+An SDK instance retains only stable configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one instance can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. Multiple Node SDK instances can coexist; no teardown is required before constructing another. Each request facade belongs to its creating instance.
 
 ## Personalization
 
 Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
 
 ```ts
-const plan = await request.fetchExperience({
-  experienceId,
-  personalization: {
-    profileId,
-    events: [
-      experiences.eventBuilder.buildIdentify({ userId }),
-      experiences.eventBuilder.buildPageView(),
-    ],
+const plan = await request.fetchExperience(
+  {
+    experienceId,
+    personalization: {
+      profileId,
+      events: [
+        experiences.eventBuilder.buildIdentify({ userId }),
+        experiences.eventBuilder.buildPageView(),
+      ],
+    },
   },
-});
+  { config: experienceConfig }
+);
 ```
 
-Personalization is request data rather than request-context state. Supplying it switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. Enabling or disabling automatic optimization behavior is outside this contract.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+
+The current XDA client has no noncommitting preflight option for that POST.
+`prepareRequestHandoff()` previews events through the separate Personalization
+API; it does not make a later XDA fetch render those uncommitted changes. An
+application that independently sends the same events through both operations
+may duplicate them. The SDK does not suppress or deduplicate those calls.
 
 ## Request-scoped events
 
@@ -76,7 +84,8 @@ const experienceRequest = experiences.forRequest({
   eventConsent: hasAnalyticsConsent,
 });
 
-await experienceRequest.identify({ userId });
+const identified = await experienceRequest.identify({ userId });
+const evaluatedProfile = identified.accepted ? identified.data?.profile : undefined;
 // Persist experienceRequest.profile if your application stores profiles between requests.
 
 await experienceRequest.track({ event: 'checkout_started' });
@@ -86,28 +95,53 @@ await experienceRequest.trackClick({
 });
 ```
 
-`identify`, `page`, and `track` update the request profile from the Personalization API response.
+`identify`, `page`, and `track` send directly and return `{ accepted: true, data }` on success; transport errors reject. Their result type also permits accepted work without response data for a future queued sender. These calls update the request profile from the Personalization API response.
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
 current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
+Personalization request locale uses `forRequest({ locale })` with the constructor locale as
+fallback. An event's explicit locale changes its body only; it does not change content evaluation
+or the Personalization request locale.
 `eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
 
-### Replay handoff for framework adapters
+### Prepare a browser handoff
 
-Only a Node request chooses delivery. Omit `eventDelivery` (or use `'commit'`)
-for direct server events; `createEventHandoff()` then returns `undefined`. Use
-`'handoff'` only when the paired browser runtime will receive this request's
-events. Prefer `previewInitialPersonalization()` for the initial sequence: it sends
-an ordered `identify` / `track` prefix plus one final `page` in a single
-preflight request. Individual Personalization methods remain cumulatively
-preflighted, and Analytics calls stage without transport (`true` means accepted).
-A page-bearing journal requires `initialPageRouteKey` when finalized. Finalize
-once with `createEventHandoff({ initialPageRouteKey })`; later event calls and a
-second finalization throw. Preflight profile data is not committed browser
-state. Follow the root [paired replay guide](../../README.md#paired-server-to-browser-replay)
-for response transport, browser route admission, and page fallback.
+Call `prepareRequestHandoff` on the request facade to build an ordered
+`identify` / `track` prefix and one final `page`. It previews the complete batch
+with `preflight: true` once, without committing events from Node:
+
+```ts
+const { handoff, data } = await experienceRequest.prepareRequestHandoff({
+  routeKey: '/products?category=chairs',
+  initialEvents: [{ type: 'track', event: 'experience_rendered' }],
+  page: { properties: { title: 'Chairs' } },
+});
+```
+
+The route key is the visible pathname plus search and must begin with `/`.
+The prepared batch's transport locale uses the request locale, falling back to
+the constructor locale. The handoff captures this selection, including an absent
+locale, for browser replay. Explicit event locales such as `page.locale` remain
+in the event bodies and do not override the preparation or replay transport locale.
+The SDK handoff limit is 100 total events including the final page,
+with at most 50 identify events and only identify/track events before that page.
+Validation rejects an invalid or oversized batch before preflight; the SDK
+does not split or truncate it. A valid handoff can still be refused by the
+browser when the whole batch does not fit its remaining queue capacity.
+Invalid input returns a private handoff without replay or preview data and logs
+a diagnostic. A failed preview retains the already-built replay with the same
+event IDs and omits `data`, so the caller can render a fallback. A successful
+preview updates only request-local evaluated profile state; its data and
+continuation ID do not mean those events were committed. The handoff is
+browser-visible sensitive data: use escaped serialization in a private,
+no-store response, and do not log or persist it.
+
+Ordinary `identify`, `page`, `track`, and Analytics calls remain direct server
+events and do not join the prepared batch. The Web SDK accepts this handoff
+through `hydrateAndTrackCurrentPage(handoff, { routeKey })` on an existing browser
+instance. Its admission result does not wait for Personalization HTTP delivery.
 
 ## Precedence
 
@@ -120,25 +154,33 @@ For settings that occur at more than one scope, later scope wins:
 | `debug`                          | constructor default → request `resolveOptions` → method `resolveOptions`                                      |
 
 `false` remains meaningful for `debug`: the SDK uses nullish fallback rather than truthiness.
+The resolver `config` is required on each fetch or resolve call and is never
+retained on the SDK or request facade.
 
 ## Delivery, preview, and destinations
 
-`fetchExperience({ experienceId })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the singleton:
+`fetchExperience({ experienceId }, { config: experienceConfig })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the SDK instance:
 
 ```ts
-const draft = await request.fetchExperience({
-  experienceId,
-  preview: true,
-});
+const draft = await request.fetchExperience(
+  {
+    experienceId,
+    preview: true,
+  },
+  { config: experienceConfig }
+);
 ```
 
-Preview is available only for by-id experience fetches. If the singleton has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
+Preview is available only for by-id experience fetches. If the SDK instance has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
 
 ```ts
-const result = await request.fetchByDestinationPath({
-  destinationId,
-  path: requestPath,
-});
+const result = await request.fetchByDestinationPath(
+  {
+    destinationId,
+    path: requestPath,
+  },
+  { config: experienceConfig }
+);
 
 if ('redirect' in result) {
   // Route using result.redirect.path.
@@ -174,7 +216,7 @@ development.
 import { NotFoundError } from '@contentful/experiences-node';
 
 try {
-  return await request.fetchExperience({ experienceId });
+  return await request.fetchExperience({ experienceId }, { config: experienceConfig });
 } catch (error) {
   if (error instanceof NotFoundError) {
     // Use the framework's not-found response.

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockApiClient,
@@ -32,6 +32,18 @@ vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 
+const runtimes: ContentfulExperiences[] = [];
+
+function createRuntime(config: ConstructorParameters<typeof ContentfulExperiences>[0]) {
+  const runtime = new ContentfulExperiences(config);
+  runtimes.push(runtime);
+  return runtime;
+}
+
+afterEach(() => {
+  for (const runtime of runtimes.splice(0)) runtime.destroy();
+});
+
 class DynamicLocaleExperiences extends ContentfulExperiences {
   currentLocale: string | undefined;
 
@@ -40,7 +52,6 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
       spaceId: 'space',
       environmentId: 'env',
       locale,
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
@@ -56,10 +67,9 @@ describe('ContentfulExperiences', () => {
   it('constructs Optimization transport from the runtime Contentful identifiers', () => {
     mockApiClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'staging',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       optimization: {
         personalizationBaseUrl: 'https://personalization.example',
@@ -85,11 +95,10 @@ describe('ContentfulExperiences', () => {
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       locale: 'en-US',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       preview: { accessToken: 'preview' },
       resolveDefaults: { metadata: { site: 'main', shared: 'default' }, debug: true },
@@ -106,7 +115,7 @@ describe('ContentfulExperiences', () => {
     );
     await runtime.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
-      { metadata: { shared: 'call' } }
+      { config: { components: {} }, metadata: { shared: 'call' } }
     );
     expect(mockResolveExperience).toHaveBeenCalledWith(
       expect.anything(),
@@ -121,12 +130,15 @@ describe('ContentfulExperiences', () => {
       profileId: 'profile-1',
       events: [runtime.eventBuilder.buildPageView()],
     };
-    await runtime.fetchExperience({
-      experienceId: 'exp',
-      locale: 'de-DE',
-      personalization,
-      extensions: { sourceMap: {} },
-    });
+    await runtime.fetchExperience(
+      {
+        experienceId: 'exp',
+        locale: 'de-DE',
+        personalization,
+        extensions: { sourceMap: {} },
+      },
+      { config: { components: {} } }
+    );
     expect(mockFetchExperience).toHaveBeenCalledWith(
       expect.objectContaining({
         locale: 'de-DE',
@@ -134,9 +146,45 @@ describe('ContentfulExperiences', () => {
         extensions: { sourceMap: {} },
       }),
       expect.objectContaining({ client: expect.anything() }),
-      expect.objectContaining({ config: { components: {} } })
+      expect.objectContaining({
+        config: { components: {} },
+        metadata: { site: 'main', shared: 'default' },
+        debug: true,
+      })
     );
     expect(runtime.locale).toBe('en-US');
+  });
+
+  it('rejects missing per-call config before resolving or fetching', () => {
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const payload = { sys: { type: 'Experience' as const }, nodes: [] };
+    mockResolveExperience.mockClear();
+    mockFetchExperience.mockClear();
+
+    const calls = [
+      () => runtime.resolveExperience(payload, undefined as never),
+      () => runtime.fetchExperience({ experienceId: 'exp' }, undefined as never),
+      () =>
+        runtime.fetchByDestinationNode(
+          { destinationId: 'dest', nodeId: 'node' },
+          undefined as never
+        ),
+      () =>
+        runtime.fetchByDestinationPath(
+          { destinationId: 'dest', path: '/page' },
+          undefined as never
+        ),
+    ];
+    for (const call of calls) {
+      expect(call).toThrow('A resolver config is required in resolveOptions.config');
+    }
+    expect(mockResolveExperience).not.toHaveBeenCalled();
+    expect(mockFetchExperience).not.toHaveBeenCalled();
   });
 
   it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
@@ -144,45 +192,52 @@ describe('ContentfulExperiences', () => {
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
     mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       preview: { accessToken: 'preview' },
       eventBuilder: { channel: 'server' },
     });
-    await runtime.fetchByDestinationNode({ destinationId: 'dest', nodeId: 'node' });
+    await runtime.fetchByDestinationNode(
+      { destinationId: 'dest', nodeId: 'node' },
+      { config: { components: {} } }
+    );
     expect(mockFetchExperience).toHaveBeenLastCalledWith(
       expect.objectContaining({ destinationId: 'dest' }),
       { client: delivery },
       expect.anything()
     );
-    await runtime.fetchExperience({ experienceId: 'exp', preview: true });
+    await runtime.fetchExperience(
+      { experienceId: 'exp', preview: true },
+      { config: { components: {} } }
+    );
     expect(mockFetchExperience).toHaveBeenLastCalledWith(
       expect.objectContaining({ experienceId: 'exp' }),
       { client: preview },
       expect.anything()
     );
-    const withoutPreview = new ContentfulExperiences({
+    runtime.destroy();
+    const withoutPreview = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
-    expect(() => withoutPreview.fetchExperience({ experienceId: 'exp', preview: true })).toThrow(
-      'fetchExperience()'
-    );
+    expect(() =>
+      withoutPreview.fetchExperience(
+        { experienceId: 'exp', preview: true },
+        { config: { components: {} } }
+      )
+    ).toThrow('fetchExperience()');
   });
 
   it('preserves an explicit generated-client environment for preview clients', () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'env',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       preview: {
         accessToken: 'preview',
@@ -203,10 +258,9 @@ describe('ContentfulExperiences', () => {
   it('gives an explicit host precedence over generated-client environment', () => {
     mockCreateRuntimeDeliveryClient.mockClear();
 
-    new ContentfulExperiences({
+    createRuntime({
       spaceId: 'space',
       environmentId: 'env',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       preview: {
         accessToken: 'preview',
@@ -227,11 +281,10 @@ describe('ContentfulExperiences', () => {
   });
 
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {
-    const runtime = new ContentfulExperiences({
+    const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
       locale: 'fr-FR',
-      resolverConfig: { components: {} },
       delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'web', library: { version: 'test' }, getLocale: () => 'de-DE' },
     });
@@ -246,9 +299,10 @@ describe('ContentfulExperiences', () => {
 
   it('reads locale dynamically for fetches and default EventBuilder locale', async () => {
     const runtime = new DynamicLocaleExperiences('en-US');
+    runtimes.push(runtime);
 
     runtime.currentLocale = 'de-DE';
-    await runtime.fetchExperience({ experienceId: 'exp' });
+    await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
 
     expect(mockFetchExperience).toHaveBeenLastCalledWith(
       expect.objectContaining({ locale: 'de-DE' }),

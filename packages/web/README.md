@@ -4,6 +4,8 @@ The browser SDK for fetching and resolving [Contentful Experiences](https://www.
 
 > **Alpha.** This package is a lean browser runtime. Its API is still evolving.
 
+Only one live Experiences Web SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the Web owner lock. Experiences Web and Optimization Web are alternative product SDKs and are not supported together on one page. Applications must choose one; the SDKs do not coordinate with each other.
+
 ## Install
 
 ```sh
@@ -24,15 +26,17 @@ import { ContentfulExperiences } from '@contentful/experiences-web';
 const experiences = new ContentfulExperiences({
   spaceId,
   environmentId: 'master',
-  resolverConfig,
   delivery: { accessToken: publicDeliveryToken },
   preview: { accessToken: publicPreviewToken }, // optional direct CPA client
   locale: 'en-US',
   app: { name: 'storefront', version: '1.0.0' },
 });
 
-const plan = await experiences.fetchExperience({ experienceId });
-const draft = await experiences.fetchExperience({ experienceId, preview: true });
+const plan = await experiences.fetchExperience({ experienceId }, { config: experienceConfig });
+const draft = await experiences.fetchExperience(
+  { experienceId, preview: true },
+  { config: experienceConfig }
+);
 
 experiences.setLocale('de-DE');
 ```
@@ -62,20 +66,29 @@ Preview here means a direct, by-ID CPA fetch through the shared runtime. It is n
 Pass a profile id and browser-built events through the first-class personalization option:
 
 ```ts
-const plan = await experiences.fetchExperience({
-  experienceId,
-  personalization: {
-    profileId,
-    events: [experiences.eventBuilder.buildPageView()],
+const plan = await experiences.fetchExperience(
+  {
+    experienceId,
+    personalization: {
+      profileId,
+      events: [experiences.eventBuilder.buildPageView()],
+    },
   },
-});
+  { config: experienceConfig }
+);
 ```
 
 Events built by the Web runtime use the `web` channel and the current browser context. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
 
+The current XDA event-bearing POST has no noncommitting preflight option and
+may commit supplied events. A Node-prepared Personalization handoff does not
+make a separate XDA fetch render its uncommitted mutations. Applications that
+independently use both paths for the same events may duplicate them; the SDK
+adds no interim suppression.
+
 ## Browser-safe configuration
 
-Resolver configuration runs in the browser. Keep `resolveData`, `resolveToken`, and component configuration free of server-only imports, secrets, and privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
+Each browser fetch or resolve call receives its own `config`; event-only use does not need one. Keep `resolveData`, `resolveToken`, and component configuration browser-safe, without server-only imports, secrets, or privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
 
 Locale is mutable browser state. Update it with `setLocale()` rather than sharing a request-scoped Node facade; browser navigation, language selection, and concurrent renders then observe the current client-side locale without leaking server request state. An explicit per-call locale still wins for that fetch.
 
@@ -108,15 +121,20 @@ const experiences = new ContentfulExperiences({
 
 ## Events
 
-The Web runtime provides direct event methods: `identify`, `page`, `track`,
+The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile when creating the runtime, or identify a profile before sending
 Analytics events. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
 persisted and restored from LocalStorage.
-Call `reset()` at logout, consent withdrawal, or another browser session
-boundary. The next `identify`, `page`, or `track` call establishes and persists
-the next profile.
+Call `reset()` at logout or another browser session boundary. It clears queued
+Personalization work and the current profile; the next successful event response
+establishes and persists the next profile. `destroy()` stops owned listeners and
+timers and releases the singleton for replacement.
+After `destroy()`, calling `reset()` can still cancel an unfinished drain from
+that instance. It does not clear LocalStorage at that point, because a replacement
+Web SDK may already own the stored profile. Reset before destroy when ending a
+visitor session.
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -127,18 +145,34 @@ const experiences = new ContentfulExperiences({
   },
 });
 
-await experiences.track({ event: 'cta_clicked', properties: { placement: 'hero' } });
+const result = await experiences.track({
+  event: 'cta_clicked',
+  properties: { placement: 'hero' },
+});
+// result.accepted is true for an admitted event; result.data may be absent while queued.
 
 // At logout or another visitor boundary:
 experiences.reset();
 ```
 
 Each call reads the current locale and browser context, so SPA navigation and
-`setLocale()` changes are reflected without recreating the runtime. The consent
-provider annotates the event context; it does not gate sending. Redact page and
+`setLocale()` changes are reflected without recreating the runtime. Explicit event
+locale overrides affect event bodies only. Ordinary Personalization sends use the
+current SDK locale, including when flushing offline events. Prepared replay uses
+the server's captured transport locale, including an absent locale, independently
+of the browser's current locale. The consent provider annotates the event context; it does not gate sending. Redact page and
 user-agent data with the providers above before triggering events.
-There is no browser event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Analytics call on the same runtime.
+Ordinary online Personalization calls send directly and may overlap queued
+prepared work. Offline ordinary calls are accepted into an in-memory queue until
+capacity, then refused without evicting accepted work. A prepared batch is
+admitted whole or refused at capacity. Acceptance is not HTTP
+completion. Read `personalizationDeliveryState` for the latest request status
+(`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
+their original event bodies. `destroy()` makes one best-effort attempt to drain
+queued batches in order, without a delivery guarantee after the runtime exits.
+The queue is not durable and does not gate on consent. Analytics methods continue
+to send directly and require a profile or
+an adopted continuation ID.
 
 ## Interaction tracking
 
@@ -183,8 +217,9 @@ await session.stop();
   nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
-  profile and wait for a pending event handoff like any other call. A rejected
-  call is logged as a warning and does not stop tracking.
+  current profile or an adopted handoff continuation ID. They do not wait for
+  prepared Personalization HTTP delivery. A rejected call is logged as a
+  warning and does not stop tracking.
 - The attribute carries only the node id. Attribution never goes into the DOM.
 - A node without an id cannot be tracked.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
@@ -199,41 +234,65 @@ for where the attribution lookup comes from under SSR, CSR, and Server Component
 
 ## Server event handoff
 
-Pass a request's Node-produced `eventHandoff` to the Web runtime to commit its
-ordered events in the browser. `eventHandoff` and an initial `profile` are
-mutually exclusive. Supply the current browser route identity as the required
-`eventHandoffRouteKey`. A page-bearing journal commits only when that value
-matches the handoff's `initialPageRouteKey`; a missing server marker or mismatch
-skips the complete journal. Compatible adjacent Personalization entries share one
-API request, while locale changes and Analytics entries remain ordering
-boundaries.
+Create one browser runtime, then pass the `ExperiencesHandoff` prepared by Node
+to `hydrateAndTrackCurrentPage`. Supply the visible pathname plus search as the
+route key; the SDK does not read a router. Construction never sends a handoff.
 
 ```ts
 const experiences = new ContentfulExperiences({
   spaceId,
   environmentId,
-  resolverConfig,
   delivery,
-  eventHandoff,
-  eventHandoffRouteKey: currentRouteKey,
 });
 
-try {
-  const receipt = await experiences.whenEventHandoffCommitted();
-  if (receipt.initialPageRouteKey !== currentRouteKey) await experiences.page();
-} catch {
-  await experiences.page();
-}
+const result = await experiences.hydrateAndTrackCurrentPage(handoff, {
+  routeKey: '/products?category=chairs',
+});
+// For accepted replay, result.accepted means queue admission, not HTTP completion.
 ```
 
-The receipt resolves with the matched route only after successful replay. A
-missing server marker or mismatch resolves an empty receipt without replay. A
-transport failure rejects the receipt but releases later direct event calls,
-so the application can send its ordinary browser page. Replay can partially
-commit and has no automatic retry or distributed exactly-once guarantee. The
-handoff is browser-visible; use escaped
-serialization in a private, no-store response and do not cache, log, or persist
-it. See the root [paired replay guide](../../README.md#paired-server-to-browser-replay).
+The SDK validates the handoff envelope, space, environment, and cache safety before
+adopting state or sending. Prepared event contents, count, and order are validated
+at admission. A matching prepared replay is admitted once for the
+current initialization; serialized copies with the same final page event ID
+join it. A later handoff or return visit can track again. When the replay route
+does not match, the SDK skips its evaluated state and events and tracks an
+ordinary page for the supplied route. Prepared batches have a fixed SDK limit of
+100 total events (including the final page), with at most 50 identify events.
+The entire batch must also fit the remaining in-memory queue capacity. If
+admission is refused (including invalid prepared events), the current initialization
+quietly attempts one ordinary page through `trackCurrentPage()`, using the caller's
+`buildPayload` or the default page payload, and returns its result. This attempt
+retains adopted identity and applicable hydrated state and respects ordinary route
+deduplication, capacity, and lifecycle guards; it can also return `{ accepted: false }`.
+Supersession, reset, or destroy prevents a stale fallback. Once replay is accepted,
+a later HTTP failure keeps existing retry behavior and never triggers fallback.
+Ordinary online event calls and Analytics do not wait behind queued prepared delivery.
+
+Use `hydrateHandoffState(handoff, { routeKey })` when state must be adopted before
+page tracking. It joins a later `hydrateAndTrackCurrentPage` call for the same
+current initialization. A profileless public or static handoff leaves the
+current browser profile intact. Use `trackCurrentPage({ routeKey, buildPayload })`
+for ordinary route tracking; its callback receives `isInitialEmission`. Manual
+`page()` calls remain direct and are not deduplicated.
+
+At the start of a still-current initialization, the SDK selects and publishes
+continuation identity atomically. The live browser profile or an already adopted
+continuation takes precedence over the incoming handoff ID. An initialization
+superseded before it begins adopts nothing. Once published, the continuation
+remains available for events and later navigation until a legitimate profile
+update or an explicit reset/destroy boundary; navigation never rolls it back.
+Supersession suppresses pending hydration and replay, but leaves already accepted
+queue work intact. A concurrent `fetchExperience()` joins the current identity
+initialization boundary without waiting for replay HTTP. Evaluated profile-state
+hydration remains separate from the captured replay target.
+
+A private handoff containing a profile, identity, or replay is browser-visible
+sensitive data: escape its
+serialization into a private, no-store response, and never cache, log, or
+persist it. The application owns safe caching for profileless public/static
+handoffs and the rest of its rendered response. Queue retries cannot
+guarantee exactly-once delivery.
 
 ## SSR import safety
 
@@ -247,9 +306,9 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No event persistence, offline queues, beacon/lifecycle delivery, or consent
-  gating. Automatic interaction tracking sends through the ordinary event
-  methods, so it has the same limits.
+- No durable event persistence, beacon/lifecycle delivery, or consent gating.
+  Personalization's offline queue is in memory only. Automatic interaction
+  tracking uses the direct Analytics methods.
 - No framework adapter marks tracked elements yet; components do it with
   `getTrackingAttributes`.
 - No server request facade; use `@contentful/experiences-node` for request-scoped server work.

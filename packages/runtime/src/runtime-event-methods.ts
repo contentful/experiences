@@ -10,6 +10,9 @@ import {
   type PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import type EventBuilder from './event-builder.js';
+import type { EventEmissionResult } from './event-emission-result.js';
+import { sendPersonalizationEvents } from './personalization-delivery.js';
+import { withEventConsent } from './prepared-events.js';
 import type {
   ClickBuilderArgs,
   FlagViewBuilderArgs,
@@ -39,7 +42,7 @@ export interface RuntimeEventDispatch {
   personalization(
     event: PersonalizationEvent,
     profile: EventProfile | undefined
-  ): Promise<EventOptimizationData>;
+  ): Promise<EventEmissionResult>;
   analytics(event: AnalyticsEvent, profile: EventProfile): Promise<boolean>;
 }
 
@@ -50,21 +53,21 @@ export interface RuntimeEventBindings {
   /** Changes when an external session boundary must invalidate an in-flight profile response. */
   getProfileRevision?: () => number;
   getEventContext?: () => UniversalEventBuilderArgs;
+  /** Content/request locale for Personalization; event context does not override it. */
+  getLocale?: () => string | undefined;
   getConsent?: () => boolean | undefined;
 }
 
 /**
  * Event-triggering surface shared by the public Node and Web runtimes.
- * Profile-producing calls are not serialized; await them before another
- * profile-producing or Analytics call on the same bound runtime. In Node
- * handoff mode an Analytics `true` means accepted into the handoff journal,
- * not delivered to the Analytics transport.
+ * Profile-producing calls are not globally serialized. Prepared replay uses
+ * the same Personalization transport through the Web delivery queue.
  */
 export interface RuntimeEventMethods {
   readonly profile: EventProfile | undefined;
-  identify(args: IdentifyBuilderArgs): Promise<EventOptimizationData>;
-  page(args?: PageViewBuilderArgs): Promise<EventOptimizationData>;
-  track(args: TrackBuilderArgs): Promise<EventOptimizationData>;
+  identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
+  page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
+  track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
   trackView(args: ViewBuilderArgs): Promise<boolean>;
   trackClick(args: ClickBuilderArgs): Promise<boolean>;
   trackHover(args: HoverBuilderArgs): Promise<boolean>;
@@ -95,19 +98,19 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     return this.bindings.getProfile();
   }
 
-  async identify(args: IdentifyBuilderArgs): Promise<EventOptimizationData> {
+  async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
     return this.sendPersonalizationEvent(
       this.eventBuilder.buildIdentify(this.withEventContext(args))
     );
   }
 
-  async page(args: PageViewBuilderArgs = {}): Promise<EventOptimizationData> {
+  async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
     return this.sendPersonalizationEvent(
       this.eventBuilder.buildPageView(this.withEventContext(args))
     );
   }
 
-  async track(args: TrackBuilderArgs): Promise<EventOptimizationData> {
+  async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
     return this.sendPersonalizationEvent(this.eventBuilder.buildTrack(this.withEventContext(args)));
   }
 
@@ -147,25 +150,22 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     const consent = this.bindings.getConsent?.();
     if (consent === undefined) return event;
 
-    return {
-      ...event,
-      context: {
-        ...event.context,
-        gdpr: { ...event.context.gdpr, isConsentGiven: consent },
-      },
-    } as TEvent;
+    return withEventConsent(event, consent);
   }
 
   private async sendPersonalizationEvent(
     event: PersonalizationEvent
-  ): Promise<EventOptimizationData> {
+  ): Promise<EventEmissionResult> {
     const eventWithConsent = this.withConsent(event);
     const profileRevision = this.bindings.getProfileRevision?.();
-    const data = await this.dispatch.personalization(eventWithConsent, this.profile);
-    if (profileRevision === undefined || this.bindings.getProfileRevision?.() === profileRevision) {
-      this.bindings.setProfile(data.profile);
+    const result = await this.dispatch.personalization(eventWithConsent, this.profile);
+    if (
+      result.data !== undefined &&
+      (profileRevision === undefined || this.bindings.getProfileRevision?.() === profileRevision)
+    ) {
+      this.bindings.setProfile(result.data.profile);
     }
-    return data;
+    return result;
   }
 
   private async sendAnalyticsEvent(
@@ -178,13 +178,17 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 }
 
-function createDirectEventDispatch(api: RuntimeOptimizationApiClient): RuntimeEventDispatch {
+function createDirectEventDispatch(
+  api: RuntimeOptimizationApiClient,
+  bindings: RuntimeEventBindings
+): RuntimeEventDispatch {
   return {
-    personalization: (event, profile) =>
-      api.personalization.upsertProfile(
-        { profileId: profile?.id, events: [event] },
-        { locale: event.context.locale }
-      ),
+    personalization: async (event, profile) => ({
+      accepted: true,
+      data: await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
+        locale: bindings.getLocale?.(),
+      }),
+    }),
     analytics: (event, profile) => api.analytics.sendBatchEvents([{ profile, events: [event] }]),
   };
 }
@@ -193,7 +197,7 @@ export function createRuntimeEventMethods(
   api: RuntimeOptimizationApiClient,
   eventBuilder: EventBuilder,
   bindings: RuntimeEventBindings,
-  dispatch: RuntimeEventDispatch = createDirectEventDispatch(api)
+  dispatch: RuntimeEventDispatch = createDirectEventDispatch(api, bindings)
 ): RuntimeEventMethods {
   return new BoundRuntimeEventMethods(eventBuilder, bindings, dispatch);
 }

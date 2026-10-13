@@ -2,13 +2,10 @@
 
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
-  EventBuilder,
   EventProfileRequiredError,
   PROFILE_CACHE_KEY,
   type EventProfile,
-  type RuntimeEventHandoff,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
@@ -21,15 +18,18 @@ class TestContentfulExperiences extends ContentfulExperiences {
   }
 }
 
+const runtimes = new Set<ContentfulExperiences>();
+
 function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestContentfulExperiences {
-  return new TestContentfulExperiences({
+  const runtime = new TestContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);
+  runtimes.add(runtime);
+  return runtime;
 }
 
 function mockOptimization(
@@ -46,36 +46,9 @@ function mockOptimization(
   };
 }
 
-function createHandoff(
-  events: RuntimeEventHandoff['events'],
-  overrides: Record<string, unknown> = {}
-): RuntimeEventHandoff {
-  return {
-    version: 1 as const,
-    spaceId: 'space',
-    environmentId: 'environment',
-    events,
-    ...overrides,
-  } as RuntimeEventHandoff;
-}
-
-function createHandoffEvents() {
-  const builder = new EventBuilder({ channel: 'server', library: { name: 'test', version: '1' } });
-  const page = builder.buildPageView();
-  const track = builder.buildTrack({ event: 'experience_rendered' });
-  const click = builder.buildClick({ entityId: 'experience', entityKind: 'Experience' });
-  return {
-    page,
-    track,
-    click,
-    staged: [
-      { transport: 'personalization', event: page },
-      { transport: 'analytics', event: click },
-    ] satisfies RuntimeEventHandoff['events'],
-  };
-}
-
 afterEach(() => {
+  for (const runtime of runtimes) runtime.destroy();
+  runtimes.clear();
   vi.restoreAllMocks();
   window.localStorage.clear();
   window.history.replaceState({}, '', '/');
@@ -135,8 +108,10 @@ describe('Web ContentfulExperiences', () => {
     });
   });
 
-  it('uses mutable defaults while preserving a per-call locale', async () => {
+  it('uses mutable defaults while forwarding each per-call locale and resolver config', async () => {
     const runtime = createRuntime();
+    const defaultResolveOptions = { config: { components: {} } };
+    const frenchResolveOptions = { config: { components: {}, experienceTemplates: {} } };
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
@@ -145,17 +120,20 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.locale).toBe('de-DE');
     expect(runtime.eventBuilder.buildTrack({ event: 'locale' }).context.locale).toBe('de-DE');
 
-    await runtime.fetchExperience({ experienceId: 'default' });
-    await runtime.fetchExperience({ experienceId: 'per-call', locale: 'fr-FR' });
+    await runtime.fetchExperience({ experienceId: 'default' }, defaultResolveOptions);
+    await runtime.fetchExperience(
+      { experienceId: 'per-call', locale: 'fr-FR' },
+      frenchResolveOptions
+    );
 
-    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, undefined);
+    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, defaultResolveOptions);
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       {
         experienceId: 'per-call',
         locale: 'fr-FR',
       },
-      undefined
+      frenchResolveOptions
     );
   });
 
@@ -175,7 +153,7 @@ describe('Web ContentfulExperiences', () => {
     };
     const payload = { sys: { type: 'Experience' }, nodes: [], extensions: { sourceMap } } as never;
 
-    const plan = await runtime.resolveExperience(payload);
+    const plan = await runtime.resolveExperience(payload, { config: { components: {} } });
 
     expect(plan.sourceMap).toEqual(sourceMap);
   });
@@ -191,12 +169,15 @@ describe('Web ContentfulExperiences', () => {
       events: [page],
     };
 
-    await runtime.fetchExperience({ experienceId: 'personalized', personalization });
+    await runtime.fetchExperience(
+      { experienceId: 'personalized', personalization },
+      { config: { components: {} } }
+    );
 
     expect(page.channel).toBe('web');
     expect(fetch).toHaveBeenCalledWith(
       { experienceId: 'personalized', personalization },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -212,7 +193,7 @@ describe('Web ContentfulExperiences', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience({ experienceId: 'personalized' });
+    await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
 
     expect(runtime.profile).toEqual(storedProfile);
     expect(fetch).toHaveBeenCalledWith(
@@ -220,7 +201,7 @@ describe('Web ContentfulExperiences', () => {
         experienceId: 'personalized',
         personalization: { profileId: 'stored-profile' },
       },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -231,10 +212,13 @@ describe('Web ContentfulExperiences', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience({
-      experienceId: 'personalized',
-      personalization: { profileId: 'explicit-profile' },
-    });
+    await runtime.fetchExperience(
+      {
+        experienceId: 'personalized',
+        personalization: { profileId: 'explicit-profile' },
+      },
+      { config: { components: {} } }
+    );
 
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(fetch).toHaveBeenCalledWith(
@@ -242,7 +226,7 @@ describe('Web ContentfulExperiences', () => {
         experienceId: 'personalized',
         personalization: { profileId: 'explicit-profile' },
       },
-      undefined
+      { config: { components: {} } }
     );
   });
 
@@ -253,7 +237,7 @@ describe('Web ContentfulExperiences', () => {
       personalization: { profileId: 'xda-profile' },
     } as never);
 
-    await runtime.fetchExperience({ experienceId: 'personalized' });
+    await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
 
     expect(runtime.profile).toEqual({ id: 'xda-profile' });
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
@@ -283,31 +267,71 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'browser-profile' });
   });
 
-  it('keeps mutable locale state isolated between instances', () => {
+  it('starts replacement locale state from its own configuration after destroy', () => {
     const english = createRuntime({ locale: 'en-US' });
-    const french = createRuntime({ locale: 'fr-FR' });
-
     english.setLocale('de-DE');
-
     expect(english.eventBuilder.buildTrack({ event: 'english' }).context.locale).toBe('de-DE');
+    english.destroy();
+
+    const french = createRuntime({ locale: 'fr-FR' });
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
   });
 
-  it('keeps live profile state isolated between instances', () => {
+  it('restores persisted profile state in a replacement instance', () => {
     const first = createRuntime({ profile: { id: 'first-profile' } });
-    const second = createRuntime({ profile: { id: 'second-profile' } });
-
     first.reset();
-
     expect(first.profile).toBeUndefined();
+    first.destroy();
+
+    const second = createRuntime({ profile: { id: 'second-profile' } });
     expect(second.profile).toEqual({ id: 'second-profile' });
+  });
+
+  it('rejects a second live SDK and permits replacement after idempotent destroy', () => {
+    const first = createRuntime();
+
+    expect(() => createRuntime()).toThrow();
+    first.destroy();
+    first.destroy();
+
+    expect(() => createRuntime()).not.toThrow();
+  });
+
+  it('releases Web ownership when construction fails and does not lock the Runtime base', () => {
+    expect(
+      () =>
+        new ContentfulExperiences({
+          spaceId: 'space',
+          environmentId: 'environment',
+          delivery: {} as never,
+        })
+    ).toThrow('requires accessToken unless an explicit proxy host is provided');
+
+    const web = createRuntime();
+    const base = new RuntimeContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      delivery: { accessToken: 'delivery-token' },
+      eventBuilder: { channel: 'server' },
+    });
+    expect(base.spaceId).toBe(web.spaceId);
+    base.destroy();
+  });
+
+  it('releases Web ownership when leaf initialization fails', () => {
+    const addListener = vi.spyOn(window, 'addEventListener').mockImplementationOnce(() => {
+      throw new Error('listener setup failed');
+    });
+    expect(() => createRuntime()).toThrow('listener setup failed');
+    addListener.mockRestore();
+
+    expect(() => createRuntime()).not.toThrow();
   });
 
   it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
     const baseConfig = {
       spaceId: 'space',
       environmentId: 'environment',
-      resolverConfig: { components: {} },
     };
 
     const hostConfig = {
@@ -328,280 +352,19 @@ describe('Web ContentfulExperiences', () => {
       preview: true,
     };
 
-    expect(() => new ContentfulExperiences(hostConfig)).not.toThrow();
-    expect(() => new ContentfulExperiences(environmentConfig)).not.toThrow();
-    expect(() => new ContentfulExperiences(tokenlessProxyConfig)).not.toThrow();
+    for (const config of [hostConfig, environmentConfig, tokenlessProxyConfig]) {
+      const sdk = new ContentfulExperiences(config);
+      sdk.destroy();
+    }
     expect(options).toBeDefined();
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
 
-    await runtime.fetchExperience(options);
+    await runtime.fetchExperience(options, { config: { components: {} } });
 
-    expect(fetch).toHaveBeenCalledWith(options, undefined);
-  });
-
-  it('returns an immediate empty receipt when no event handoff is supplied', async () => {
-    const runtime = createRuntime();
-
-    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
-  });
-
-  it('batches adjacent Personalization events and preserves Analytics order', async () => {
-    const { page, track, click } = createHandoffEvents();
-    const staged = [
-      { transport: 'personalization', event: page },
-      { transport: 'personalization', event: track },
-      { transport: 'analytics', event: click },
-    ] satisfies RuntimeEventHandoff['events'];
-    const calls: string[] = [];
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockImplementation(async (input, options) => {
-        calls.push('personalization');
-        expect(input).toEqual({ profileId: undefined, events: [page, track] });
-        expect(options).toEqual({ locale: page.context.locale });
-        return { profile: { id: 'committed-profile' } } as never;
-      });
-    const analytics = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-      .mockImplementation(async (batches) => {
-        calls.push('analytics');
-        expect(batches).toEqual([{ profile: { id: 'committed-profile' }, events: [click] }]);
-        return true;
-      });
-
-    const runtime = createRuntime({
-      eventHandoff: createHandoff(staged, {
-        initialPageRouteKey: '/initial',
-      }),
-      eventHandoffRouteKey: '/initial',
-    });
-    const replay = runtime.whenEventHandoffCommitted();
-
-    expect(runtime.whenEventHandoffCommitted()).toBe(replay);
-    await expect(replay).resolves.toEqual({
-      initialPageRouteKey: '/initial',
-    });
-    expect(calls).toEqual(['personalization', 'analytics']);
-    expect(upsert).toHaveBeenCalledOnce();
-    expect(analytics).toHaveBeenCalledOnce();
-    expect(runtime.profile).toEqual({ id: 'committed-profile' });
-  });
-
-  it('splits Personalization replay batches at locale changes', async () => {
-    const builder = new EventBuilder({
-      channel: 'server',
-      library: { name: 'test', version: '1' },
-    });
-    const german = builder.buildTrack({ event: 'german', locale: 'de-DE' });
-    const french = builder.buildTrack({ event: 'french', locale: 'fr-FR' });
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: { id: 'german-profile' } } as never)
-      .mockResolvedValueOnce({ profile: { id: 'french-profile' } } as never);
-
-    const runtime = createRuntime({
-      eventHandoff: createHandoff([
-        { transport: 'personalization', event: german },
-        { transport: 'personalization', event: french },
-      ]),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
-    expect(upsert).toHaveBeenNthCalledWith(
-      1,
-      { profileId: undefined, events: [german] },
-      { locale: 'de-DE' }
-    );
-    expect(upsert).toHaveBeenNthCalledWith(
-      2,
-      { profileId: 'german-profile', events: [french] },
-      { locale: 'fr-FR' }
-    );
-  });
-
-  it('keeps Analytics events as Personalization batch ordering boundaries', async () => {
-    const { page, track, click } = createHandoffEvents();
-    const calls: string[] = [];
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockImplementationOnce(async (input) => {
-        calls.push('personalization:page');
-        expect(input).toEqual({ profileId: undefined, events: [page] });
-        return { profile: { id: 'page-profile' } } as never;
-      })
-      .mockImplementationOnce(async (input) => {
-        calls.push('personalization:track');
-        expect(input).toEqual({ profileId: 'page-profile', events: [track] });
-        return { profile: { id: 'track-profile' } } as never;
-      });
-    vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockImplementation(async (batches) => {
-      calls.push('analytics');
-      expect(batches).toEqual([{ profile: { id: 'page-profile' }, events: [click] }]);
-      return true;
-    });
-    const runtime = createRuntime({
-      eventHandoff: createHandoff(
-        [
-          { transport: 'personalization', event: page },
-          { transport: 'analytics', event: click },
-          { transport: 'personalization', event: track },
-        ],
-        { initialPageRouteKey: '/initial' }
-      ),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({
-      initialPageRouteKey: '/initial',
-    });
-    expect(calls).toEqual(['personalization:page', 'analytics', 'personalization:track']);
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(runtime.profile).toEqual({ id: 'track-profile' });
-  });
-
-  it.each([
-    ['a mismatched browser route', { initialPageRouteKey: '/server' }, '/client'],
-    ['a missing server route marker', {}, '/client'],
-  ])(
-    'skips a page-bearing handoff with %s and releases ordinary page delivery',
-    async (_, overrides, currentRouteKey) => {
-      const { staged } = createHandoffEvents();
-      const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValue({ profile: { id: 'ordinary-profile' } } as never);
-      const analytics = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
-      const runtime = createRuntime({
-        eventHandoff: createHandoff(staged, overrides),
-        eventHandoffRouteKey: currentRouteKey,
-      });
-
-      await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
-      expect(upsert).not.toHaveBeenCalled();
-      expect(analytics).not.toHaveBeenCalled();
-
-      await expect(runtime.page({ properties: { path: '/client' } })).resolves.toMatchObject({
-        profile: { id: 'ordinary-profile' },
-      });
-      expect(upsert).toHaveBeenCalledOnce();
-    }
-  );
-
-  it('requires the browser route key whenever an event handoff is supplied', () => {
-    const { staged } = createHandoffEvents();
-
-    expect(() =>
-      createRuntime({ eventHandoff: createHandoff(staged) } as Partial<ExperiencesWebConfig>)
-    ).toThrow('eventHandoff requires eventHandoffRouteKey');
-  });
-
-  it('holds ordinary events behind a pending replay barrier and rejects reset while pending', async () => {
-    const { staged } = createHandoffEvents();
-    let resolveReplay!: (value: unknown) => void;
-    const replayResponse = new Promise((resolve) => {
-      resolveReplay = resolve;
-    });
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockReturnValueOnce(replayResponse as never)
-      .mockResolvedValue({ profile: { id: 'after-replay' } } as never);
-    const runtime = createRuntime({
-      eventHandoff: createHandoff([staged[0]!], { initialPageRouteKey: '/initial' }),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    const ordinary = runtime.track({ event: 'after-handoff' });
-    expect(upsert).toHaveBeenCalledOnce();
-    expect(() => runtime.reset()).toThrow('Cannot reset while an event handoff is pending');
-
-    resolveReplay({ profile: { id: 'committed-profile' } });
-    await ordinary;
-    expect(upsert).toHaveBeenCalledTimes(2);
-    runtime.reset();
-    expect(runtime.profile).toBeUndefined();
-  });
-
-  it('rejects invalid versions and scope before event transport', () => {
-    const upsert = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
-    const analytics = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
-
-    expect(() =>
-      createRuntime({
-        eventHandoff: createHandoff([], { version: 2 }),
-        eventHandoffRouteKey: '/initial',
-      })
-    ).toThrow();
-    expect(() =>
-      createRuntime({
-        eventHandoff: createHandoff([], { environmentId: 'other' }),
-        eventHandoffRouteKey: '/initial',
-      })
-    ).toThrow('Runtime event handoff does not match this space or environment');
-    expect(() =>
-      createRuntime({ profile: { id: 'profile' }, eventHandoff: createHandoff([]) } as never)
-    ).toThrow('accepts either profile or eventHandoff');
-    expect(upsert).not.toHaveBeenCalled();
-    expect(analytics).not.toHaveBeenCalled();
-  });
-
-  it('rejects a failed receipt but releases later direct events', async () => {
-    const { staged } = createHandoffEvents();
-    const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ profile: { id: 'fallback-profile' } } as never);
-    const analytics = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
-    const runtime = createRuntime({
-      eventHandoff: createHandoff([staged[0]!], {
-        initialPageRouteKey: '/initial',
-      }),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow('offline');
-    await expect(runtime.page({ properties: { path: '/fallback' } })).resolves.toMatchObject({
-      profile: { id: 'fallback-profile' },
-    });
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(analytics).not.toHaveBeenCalled();
-  });
-
-  it('does not report an Analytics event as committed when its transport returns false', async () => {
-    const { staged } = createHandoffEvents();
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-      profile: { id: 'committed-profile' },
-    } as never);
-    vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(false);
-    const runtime = createRuntime({
-      eventHandoff: createHandoff(staged, { initialPageRouteKey: '/initial' }),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    await expect(runtime.whenEventHandoffCommitted()).rejects.toThrow(
-      'Runtime event handoff Analytics replay was not committed'
-    );
-  });
-
-  it('adopts the handoff profile for an Analytics-only replay and later browser events', async () => {
-    const { staged } = createHandoffEvents();
-    const analytics = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-      .mockResolvedValue(true);
-    const runtime = createRuntime({
-      eventHandoff: createHandoff([staged[1]!], { initialProfileId: 'initial-profile' }),
-      eventHandoffRouteKey: '/initial',
-    });
-
-    await expect(runtime.whenEventHandoffCommitted()).resolves.toEqual({});
-    expect(runtime.profile).toEqual({ id: 'initial-profile' });
-
-    await runtime.trackClick({ entityId: 'later', entityKind: 'InlineComponent' });
-    expect(analytics).toHaveBeenLastCalledWith([
-      expect.objectContaining({ profile: { id: 'initial-profile' } }),
-    ]);
+    expect(fetch).toHaveBeenCalledWith(options, { config: { components: {} } });
   });
 
   it('updates and persists the complete profile from Personalization events', async () => {
@@ -671,7 +434,28 @@ describe('Web ContentfulExperiences', () => {
     expect(runtime.profile).toEqual({ id: 'updated-profile' });
   });
 
-  it('uses the latest redacted browser context, locale, and consent without gating events', async () => {
+  it('uses the SDK locale for ordinary Personalization independently of event overrides', async () => {
+    const runtime = createRuntime({ locale: 'en-US' });
+    const { upsertProfile } = mockOptimization(runtime);
+    await runtime.identify({ userId: 'visitor', locale: 'fr-FR' });
+    expect(upsertProfile.mock.calls[0]?.[0].events[0]?.context.locale).toBe('fr-FR');
+    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US' });
+
+    window.dispatchEvent(new Event('offline'));
+    await runtime.track({ event: 'queued', locale: 'it-IT' });
+    expect(upsertProfile).toHaveBeenCalledTimes(1);
+    runtime.setLocale('de-DE');
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(upsertProfile).toHaveBeenCalledTimes(2));
+    expect(upsertProfile.mock.calls[1]?.[0].events[0]?.context.locale).toBe('it-IT');
+    expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'de-DE' });
+
+    await runtime.page({ locale: 'es-ES' });
+    expect(upsertProfile.mock.calls[2]?.[0].events[0]?.context.locale).toBe('es-ES');
+    expect(upsertProfile.mock.calls[2]?.[1]).toEqual({ locale: 'de-DE' });
+  });
+
+  it('uses the latest redacted browser context, locale, and consent metadata', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
       profile: { id: 'visitor' },

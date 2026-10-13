@@ -8,6 +8,7 @@ export type {
   RuntimeFetchByDestinationPathOptions,
   RuntimeEventBuilderConfig,
   RuntimeFetchResolveOptions,
+  RuntimeResolveDefaults,
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
 export type { RuntimeDeliveryClientOptions } from './create-runtime-delivery-client.js';
@@ -15,6 +16,31 @@ export type { RuntimeOptimizationConfig } from './create-optimization-client.js'
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
+export type { EventEmissionResult } from './event-emission-result.js';
+export { PersonalizationDelivery } from './personalization-delivery.js';
+export type { PersonalizationDeliveryState } from './personalization-delivery.js';
+export {
+  buildPreparedEvents,
+  validatePreparedEvents,
+  withEventConsent,
+} from './prepared-events.js';
+export type { BuildPreparedEventsOptions, InitialPersonalizationEvent } from './prepared-events.js';
+export {
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
+  createExperiencesHandoff,
+  createRequestHandoffFromData,
+  getExperiencesCacheSafetyWarnings,
+  parseExperiencesHandoff,
+  parseExperiencesHandoffEnvelope,
+} from './experiences-handoff.js';
+export type {
+  ExperiencesCacheMetadata,
+  ExperiencesCacheSafetyWarning,
+  ExperiencesCacheSafetyWarningCode,
+  ExperiencesHandoff,
+  ExperiencesScope,
+} from './experiences-handoff.js';
 export type {
   EventOptimizationData,
   EventProfile,
@@ -23,14 +49,3 @@ export type {
   RuntimeEventBindings,
   RuntimeEventMethods,
 } from './runtime-event-methods.js';
-export {
-  assertRuntimeEventHandoffSize,
-  parseRuntimeEventHandoff,
-  RUNTIME_EVENT_HANDOFF_VERSION,
-} from './runtime-event-handoff.js';
-export type {
-  RuntimeEventHandoff,
-  RuntimeEventHandoffEvent,
-  RuntimeEventHandoffReceipt,
-  RuntimeServerEventDelivery,
-} from './runtime-event-handoff.js';

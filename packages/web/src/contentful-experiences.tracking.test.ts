@@ -14,14 +14,17 @@ const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
   'node:hero': { entityId: 'hero', entityKind: 'Fragment', parentExperienceId: 'landing' },
 };
 
+const runtimes = new Set<ContentfulExperiences>();
+
 function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
-  return new ContentfulExperiences({
+  const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
-    resolverConfig: { components: {} },
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
   } as ExperiencesWebConfig);
+  runtimes.add(runtime);
+  return runtime;
 }
 
 function render(nodeId: string, tag = 'div'): HTMLElement {
@@ -44,6 +47,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const runtime of runtimes) runtime.destroy();
+  runtimes.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -166,15 +171,38 @@ describe('ContentfulExperiences interaction tracking', () => {
     await second.stop();
   });
 
-  it('keeps sessions isolated between runtime instances', async () => {
-    const a = createRuntime();
-    const b = createRuntime();
+  it('starts a tracking session on a replacement SDK after destroy', async () => {
+    const first = createRuntime();
     const options = { views: false, resolveAttribution: () => undefined } as const;
 
-    const sessionA = a.startInteractionTracking(options);
-    const sessionB = b.startInteractionTracking(options);
+    const session = first.startInteractionTracking(options);
+    await session.stop();
+    first.destroy();
 
-    await Promise.all([sessionA.stop(), sessionB.stop()]);
+    const replacement = createRuntime();
+    await replacement.startInteractionTracking(options).stop();
+  });
+
+  it('stops active interaction listeners before destroy releases singleton ownership', async () => {
+    const first = createRuntime();
+    const trackClick = vi.spyOn(first, 'trackClick').mockResolvedValue(true);
+    const hero = render('node:hero', 'button');
+
+    first.startInteractionTracking({
+      views: false,
+      resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+    });
+    click(hero);
+    expect(trackClick).toHaveBeenCalledOnce();
+
+    first.destroy();
+    click(hero);
+    expect(trackClick).toHaveBeenCalledOnce();
+
+    const replacement = createRuntime();
+    await replacement
+      .startInteractionTracking({ views: false, resolveAttribution: () => undefined })
+      .stop();
   });
 
   it('re-reads attribution on refresh', async () => {
@@ -196,7 +224,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     await session.stop();
   });
 
-  it('holds tracked events behind a pending event handoff', async () => {
+  it('attributes tracked clicks to an adopted continuation while delivery is pending', async () => {
     vi.useRealTimers();
     const builder = new EventBuilder({
       channel: 'server',
@@ -211,16 +239,19 @@ describe('ContentfulExperiences interaction tracking', () => {
     const sendBatchEvents = vi
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
-    const runtime = createRuntime({
-      eventHandoff: {
-        version: 1,
-        spaceId: 'space',
-        environmentId: 'environment',
-        events: [{ transport: 'personalization', event: builder.buildPageView() }],
-        initialPageRouteKey: '/',
-      },
-      eventHandoffRouteKey: '/',
-    });
+    const runtime = createRuntime();
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(
+        {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+          profileId: 'server-profile',
+          replay: { routeKey: '/', events: [builder.buildPageView()] },
+        },
+        { routeKey: '/' }
+      )
+    ).resolves.toEqual({ accepted: true });
     const hero = render('node:hero', 'button');
 
     const session = runtime.startInteractionTracking({
@@ -228,18 +259,14 @@ describe('ContentfulExperiences interaction tracking', () => {
       resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
     });
     click(hero);
-    await Promise.resolve();
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-
-    finishReplay({ profile: { id: 'committed-profile' } });
-    await runtime.whenEventHandoffCommitted();
     await vi.waitFor(() => expect(sendBatchEvents).toHaveBeenCalledOnce());
 
     const [[batch]] = sendBatchEvents.mock.calls as unknown as [
       [[{ profile: { id: string }; events: { type: string }[] }]],
     ];
-    expect(batch[0]!.profile.id).toBe('committed-profile');
+    expect(batch[0]!.profile.id).toBe('server-profile');
     expect(batch[0]!.events[0]!.type).toBe('exo_node_click');
+    finishReplay({ profile: { id: 'committed-profile' } });
     await session.stop();
   });
 });

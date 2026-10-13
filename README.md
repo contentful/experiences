@@ -151,122 +151,160 @@ Session is active.
 
 ## Event tracking
 
-The public Node and Web SDKs provide direct event methods. `identify`, `page`,
-and `track` send through the Personalization API. `trackView`, `trackClick`,
-`trackHover`, and `trackFlagView` send through the Analytics API.
+The public Node and Web SDKs expose `identify`, `page`, and `track` through the
+Personalization API. `trackView`, `trackClick`, `trackHover`, and `trackFlagView`
+use the Analytics API. Web supports one live Experiences Web SDK instance per
+JavaScript runtime; call `destroy()` before constructing a replacement. Node
+instances do not share that lock. Experiences Web and Optimization Web are
+alternative SDKs and are not supported together on one page.
 
-Runtime constructors accept `RuntimeDeliveryClientOptions` for `delivery` and,
-optionally, `preview`; they construct and own the Delivery, Preview, and
-Optimization clients. They do not accept a caller-created
-`ContentfulViewDeliveryClient`. `accessToken` can be a value or token supplier.
-It may be omitted only when an explicit trusted proxy `host` is supplied; the
-runtime disables generated bearer auth in that case and the proxy must own
-upstream authentication.
+Runtime constructors take Delivery and optional Preview configuration and own
+their clients. A token may be a value or supplier. A tokenless trusted proxy
+requires an explicit `host` and must authenticate upstream. Node event methods
+belong to a `forRequest()` facade, whose locale, profile, and context are
+request-local. Web owns mutable locale and browser context, persists its current
+profile in LocalStorage, and offers `reset()` for logout or a new visitor
+session.
 
-On Node, call event methods only from the `forRequest()` facade. The profile and
-event context are request-local, volatile values; do not put them on the
-process-long SDK instance. On the Web, the SDK persists the current profile in
-LocalStorage and automatically supplies its id to later personalized fetches
-and the complete profile to events. A profile id returned by XDA is carried on
-`plan.personalization.profileId` and persisted by the Web runtime. Call
-`reset()` at logout, consent withdrawal, or another browser
-visitor boundary.
+Ordinary online Personalization calls send directly. Web accepts ordinary
+offline calls into an in-memory queue; a new offline call is refused when the
+queue is full rather than evicting accepted work. Analytics remains direct.
+`destroy()` makes one best-effort attempt to drain queued batches in order, but
+queued work is not durable and does not provide exactly-once delivery. Node `eventConsent`
+and Web `browserContext.getConsent` add current GDPR metadata to events; they
+do not grant permission, block sending, or control persistence. The separate
+consent and persistence workstream will define that policy. Web's
+`startInteractionTracking()` sends views, hovers, and clicks through its direct
+Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
+no framework adapter stamps tracked attributes yet. Manually invoked methods
+still send during direct CPA preview or Live Preview.
 
-The default direct-delivery path sends an event at its call site. The SDK does
-not provide a general event queue, event persistence, consent gate, or beacon or
-page-lifecycle delivery. Consent and tracking policy remain the application’s
-responsibility. The Web runtime can track views, hovers, and clicks on rendered
-Experiences and Fragments automatically with `startInteractionTracking()`; those
-events go through the same direct methods (see the
-[Web SDK README](./packages/web/README.md#interaction-tracking)). No framework
-adapter marks tracked elements yet. The narrowly scoped paired
-replay protocol below is the only deferred-delivery path.
-
-Calls are not serialized. Await `identify`, `page`, or `track` before starting
-another profile-producing or Analytics call on the same runtime or request
-facade.
-
-Web event context is read from the browser and can include URL, query, referrer,
-title, browser dimensions, and User-Agent data. Use the browser context providers to
-redact or replace values before they are retained or sent, and avoid putting
-authentication material, raw identifiers, or other personal data into event
-context or properties.
+An ordinary event call does not wait for every queued handoff. If a later call
+needs a profile produced by `identify`, `page`, or `track`, await the earlier
+call. Browser event context can include URL, query, referrer, title, dimensions,
+and User-Agent; use context providers to redact those values before an event is
+built or sent.
 
 ### Paired server-to-browser replay
 
-The default Node delivery mode is `commit`: request events send from the server
-and are suitable for server-only execution. Only Node's `forRequest()` context
-can select `eventDelivery: 'handoff'`, for an integration that passes that same
-request's events to `@contentful/experiences-web`. Web has no delivery mode.
-
-In handoff mode, `previewInitialPersonalization()` is the efficient initial-page
-path: it preflights an ordered `identify` / `track` prefix plus one final `page`
-as a single Personalization API batch and stages the exact generated events. The
-individual `identify`, `page`, and `track` methods remain available and
-cumulatively preflight the journal once per call. Analytics calls (`trackView`,
-`trackClick`, `trackHover`, and `trackFlagView`) stage without transport; `true`
-means the event was accepted into the handoff, not delivered. After all calls
-settle, call `createEventHandoff({ initialPageRouteKey })` exactly once. It
-finalizes the journal and prevents later event calls; a second call throws. In
-`commit` mode it returns `undefined`. A handoff-mode request profile is
-preflight output, not committed browser state.
-
-Pass the handoff as `eventHandoff` when constructing the Web runtime, instead
-of `profile` (the two are mutually exclusive), and pass the browser's current
-route identity as `eventHandoffRouteKey`. A page-bearing journal replays only
-when its server and browser route keys are both present and equal; otherwise
-Web skips the complete journal and resolves an empty receipt so the application
-can send its ordinary browser page. Compatible adjacent Personalization entries
-are committed as one batch, while locale changes and Analytics entries preserve
-ordering boundaries. Ordinary Web calls wait while replay is pending. A failed
-replay rejects `whenEventHandoffCommitted()` but releases later direct calls,
-allowing an ordinary page fallback.
+A Node request facade can prepare one ordered `identify`/`track` prefix plus a
+final `page` with `prepareRequestHandoff()`. It builds the events once and sends
+one Personalization API request with `preflight: true`, which evaluates the
+batch without committing it on Node. The result contains the exact replay and,
+on success, preview data. A preview transport failure retains the replay so the
+application can choose a fallback. Ordinary Node event methods remain direct
+and are not staged into this batch.
 
 ```ts
-import { ContentfulExperiences as WebContentfulExperiences } from '@contentful/experiences-web';
+import { ContentfulExperiences as NodeContentfulExperiences } from '@contentful/experiences-node';
 
-// Server request handler: create exactly one handoff for this response.
+// Construct once for this server runtime; supply the token for your environment.
+const experiences = new NodeContentfulExperiences({
+  spaceId: 'your-space-id',
+  environmentId: 'master',
+  delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
+});
+
+// In a request handler, bind request-local state and prepare one route:
 const request = experiences.forRequest({
-  locale: requestLocale,
-  eventDelivery: 'handoff',
-  eventContext: { page: serverPageProperties },
+  locale: 'en-US',
 });
-
-await request.previewInitialPersonalization({
-  events: [{ type: 'track', event: 'experience_rendered' }],
+const routeKey = '/products?category=chairs';
+const { handoff, data } = await request.prepareRequestHandoff({
+  routeKey,
+  initialEvents: [{ type: 'track', event: 'experience_rendered' }],
+  page: { properties: { title: 'Chairs' } },
 });
-const eventHandoff = request.createEventHandoff({ initialPageRouteKey: routeKey });
-// Serialize eventHandoff safely into this user's private, no-store response.
+// Serialize the handoff into this visitor's private, no-store response.
+```
 
-// Browser bootstrap for that same response/user.
+The application supplies a route key made from the visible pathname and search
+string. It must begin with `/`. A handoff with profile, continuation identity,
+or replay uses `cache: { scope: 'private-request' }`. A profileless public or
+static handoff can carry state without event replay; a public permutation
+requires an application-owned key covering every dimension that changes the
+rendered Experience. The handoff parser checks these metadata rules but does
+not set HTTP cache headers or certify the rest of a response.
+
+On the browser, call `hydrateAndTrackCurrentPage()` on an existing Web instance.
+Construction does not replay events. A matching replay is validated and
+admitted as one batch; the promise settles on **admission**, before HTTP
+completes. Repeated calls for the current handoff and route join that work.
+A different handoff or a later visit can track again. A route mismatch skips
+its evaluated state and replay, then follows ordinary current-page tracking.
+A rejected prepared batch (including invalid events or insufficient capacity)
+quietly falls back to one ordinary `trackCurrentPage()` attempt using the supplied
+`buildPayload`, or the default page payload. The operation returns that attempt's
+result and respects route deduplication, capacity, and lifecycle guards. An
+accepted replay never falls back because of a later HTTP failure.
+
+```ts
+// Browser runtime, after reading the handoff from that response:
+import {
+  ContentfulExperiences as WebContentfulExperiences,
+  type ExperiencesHandoff,
+} from '@contentful/experiences-web';
+
 const web = new WebContentfulExperiences({
-  spaceId,
-  environmentId,
-  resolverConfig: experienceConfig,
+  spaceId: 'your-space-id',
+  environmentId: 'master',
   delivery: { host: 'https://application.example/experience-proxy' },
-  eventHandoff,
-  eventHandoffRouteKey: routeKey,
 });
-try {
-  const receipt = await web.whenEventHandoffCommitted();
-  if (receipt.initialPageRouteKey !== routeKey) await web.page();
-} catch {
-  await web.page();
+
+async function applyHandoff(handoff: ExperiencesHandoff) {
+  const routeKey = window.location.pathname + window.location.search;
+  const result = await web.hydrateAndTrackCurrentPage(handoff, { routeKey });
+  return result; // accepted means admitted, not delivered
 }
 ```
 
-The handoff contains the exact generated event bodies and is browser-visible.
-Use escaped serialization in a private, no-store response. Do not include
-secrets or server-only traits, and never put it in a shared cache, log, or
-persistent store. The runtime enforces an internal 64 KiB serialized-payload
-cap.
+Event-only handoff preparation and hydration need no component registry. When
+the same SDK fetches or resolves an Experience plan, pass that Experience's
+registration config in the call's resolve options, for example
+`web.fetchExperience({ experienceId }, { config: experienceConfig })`. Separate
+calls may use different configs on the same SDK instance.
 
-Replay stops on the first failed batch or Analytics entry. Earlier entries can
-already have been committed, there is no automatic retry, and the protocol does
-not provide a distributed exactly-once guarantee; retrying the whole handoff can
-duplicate events committed before the failure. Later direct Web calls remain
-available for fallback. No framework adapter or example is wired to this
-contract yet; it remains independent from Live Preview.
+`hydrateHandoffState(handoff, { routeKey })` can seed state before tracking and
+joins a later paired call for the same current initialization.
+`trackCurrentPage({ routeKey, buildPayload })` handles ordinary navigation;
+its callback receives `isInitialEmission`. Manual `page()` remains direct and
+is not deduplicated. At the beginning of a still-current initialization, the
+active browser profile or an already adopted continuation takes precedence over
+the incoming handoff ID. Selection and publication happen atomically. An
+initialization superseded before it begins adopts nothing; once published, its
+continuation is retained across navigation. Supersession still cancels pending
+hydration/replay and does not withdraw accepted queued work. Reset/destroy and
+legitimate profile updates retain their existing behavior. Before the
+Personalization response finishes, the adopted ID can attribute events without
+being stored as a synthetic profile. Concurrent `fetchExperience()` calls join
+identity initialization without waiting for replay HTTP; evaluated profile-state
+hydration remains distinct from the captured replay target.
+
+Handoffs containing event bodies are browser-visible private data. Escape JSON
+for the HTML context used by your framework, send it only in a private,
+`Cache-Control: private, no-store` response, and exclude secrets and server-only
+traits. Do not put handoffs in shared caches, logs, or persistent storage. A
+plain `JSON.stringify` result inserted unescaped into a `<script>` element is
+not an HTML-safe serializer. A `PortableRenderPlan` can also contain diagnostic
+values that JSON does not preserve; applications transporting a plan should
+check their own round trip. The SDK does not install response headers or supply
+a framework serializer.
+
+Prepared batches stay in Web's in-memory queue on transport failure and retry
+with their original event IDs, target identity, and locale. A request may have
+committed before a failure becomes visible, so retries do not guarantee
+exactly-once delivery. Analytics calls remain direct; there is no mixed
+Personalization/Analytics replay journal or global ordinary-event barrier.
+No adapter or example currently wires this flow, and Live Preview remains
+independent.
+
+The current XDA client has no noncommitting preflight option. A separate
+Personalization preflight does **not** make an XDA fetch render content with
+those uncommitted mutations. An ordinary event-bearing XDA fetch still uses its
+current POST contract and may commit the events; independently using both
+operations can duplicate them. This SDK adds no interim suppression or fake
+XDA content preview. Typed XDA preflight and a content-and-handoff operation
+will be integrated after upstream support is available, before public release.
 
 ---
 
@@ -1183,18 +1221,18 @@ The SDK-specific wiring (defaults, resolvers, prop reshaping, slot binding) all 
 
 This is an Nx monorepo. Install the framework adapter for rendering. `@contentful/experiences-node` is public for Node request handlers and other server processes, including request-bound event delivery; `@contentful/experiences-web` is public for browser fetch, resolve, and direct event work; and `@contentful/experiences-live-preview` is public for framework-neutral Preview Session use. The remaining packages are workspace-internal.
 
-| Folder                                                   | npm name                               | Scope                                                                                                              |
-| -------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                                         |
-| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** CSS-property helpers for `toCss`.                                                                    |
-| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Generated Delivery boundary, XDA request types, and free fetch functions.                            |
-| [`packages/runtime`](./packages/runtime)                 | `@contentful/experiences-runtime`      | **Internal.** Shared runtime, `EventBuilder`, event metadata, Optimization transport, and handoff contract.        |
-| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch, resolve, and event operations.                                     |
-| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context state, in-memory event profile, and direct event operations. |
-| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                              |
-| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                                        |
-| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                      |
-| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                             |
+| Folder                                                   | npm name                               | Scope                                                                                                                  |
+| -------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [`packages/core`](./packages/core)                       | `@contentful/experiences-sdk-core`     | **Internal.** Runtime-neutral types + `resolveExperience`.                                                             |
+| [`packages/design`](./packages/design)                   | `@contentful/experiences-design`       | **Internal.** CSS-property helpers for `toCss`.                                                                        |
+| [`packages/client`](./packages/client)                   | `@contentful/experiences-client`       | **Internal.** Generated Delivery boundary, XDA request types, and free fetch functions.                                |
+| [`packages/runtime`](./packages/runtime)                 | `@contentful/experiences-runtime`      | **Internal.** Shared runtime, `EventBuilder`, event metadata, Optimization transport, and handoff contract.            |
+| [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch, resolve, and event operations.                                         |
+| [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context, persisted profile, direct events, and prepared-batch admission. |
+| [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                                  |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                                            |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                          |
+| [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                                 |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. The Web SDK is a sibling public package to the Node SDK over Runtime, Client, and Core; it owns browser state and does not inherit Node request semantics.
 

@@ -53,6 +53,7 @@ function createFixture(
         profile = nextProfile;
       },
       getEventContext: () => ({ locale: 'de-DE' }),
+      getLocale: () => 'en-US',
       getConsent: () => options.consent,
     },
     options.dispatch
@@ -66,7 +67,8 @@ describe('RuntimeEventMethods', () => {
     const { methods, upsertProfile } = createFixture({ consent: true });
 
     await expect(methods.page()).resolves.toMatchObject({
-      profile: { id: 'profile-from-api' },
+      accepted: true,
+      data: { profile: { id: 'profile-from-api' } },
     });
     await methods.identify({ userId: 'user-1', locale: 'fr-FR' });
     await methods.track({ event: 'checkout' });
@@ -85,7 +87,7 @@ describe('RuntimeEventMethods', () => {
           }),
         ],
       },
-      { locale: 'de-DE' }
+      { locale: 'en-US' }
     );
     expect(upsertProfile).toHaveBeenNthCalledWith(
       2,
@@ -98,7 +100,7 @@ describe('RuntimeEventMethods', () => {
           }),
         ],
       }),
-      { locale: 'fr-FR' }
+      { locale: 'en-US' }
     );
     expect(upsertProfile).toHaveBeenNthCalledWith(
       3,
@@ -106,9 +108,30 @@ describe('RuntimeEventMethods', () => {
         profileId: 'profile-from-api',
         events: [expect.objectContaining({ type: 'track', event: 'checkout' })],
       }),
-      { locale: 'de-DE' }
+      { locale: 'en-US' }
     );
     expect(methods.profile).toEqual({ id: 'profile-from-api' });
+  });
+
+  it('keeps the current profile when queued Personalization work is accepted without response data', async () => {
+    const dispatch: RuntimeEventDispatch = {
+      personalization: vi.fn().mockResolvedValue({ accepted: true }),
+      analytics: vi.fn().mockResolvedValue(true),
+    };
+    const { methods } = createFixture({ profile: { id: 'current-profile' }, dispatch });
+
+    await expect(methods.page()).resolves.toEqual({ accepted: true });
+
+    expect(methods.profile).toEqual({ id: 'current-profile' });
+  });
+
+  it('propagates direct Personalization transport errors', async () => {
+    const error = new Error('Personalization transport failed');
+    const { methods, upsertProfile } = createFixture({ profile: { id: 'current-profile' } });
+    upsertProfile.mockRejectedValue(error);
+
+    await expect(methods.page()).rejects.toBe(error);
+    expect(methods.profile).toEqual({ id: 'current-profile' });
   });
 
   it('sends each interaction immediately through Analytics and preserves false outcomes', async () => {
@@ -158,7 +181,10 @@ describe('RuntimeEventMethods', () => {
 
   it('supports a runtime-owned dispatch strategy without using the direct transports', async () => {
     const dispatch: RuntimeEventDispatch = {
-      personalization: vi.fn().mockResolvedValue(optimizationData('profile-from-dispatch')),
+      personalization: vi.fn().mockResolvedValue({
+        accepted: true,
+        data: optimizationData('profile-from-dispatch'),
+      }),
       analytics: vi.fn().mockResolvedValue(true),
     };
     const { methods, sendBatchEvents, upsertProfile } = createFixture({
