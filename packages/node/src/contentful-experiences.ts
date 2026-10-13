@@ -224,9 +224,13 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       if (!routeKey.startsWith('/')) {
         throw new TypeError('Request handoff requires a pathname/search route key');
       }
+      // The initial identify and track inputs are optional, and removing one still
+      // leaves a batch that ends in one page, so each is checked on its own. The page is
+      // not optional: without a permitted page there is no batch to prepare.
+      if (!this.admitMethod('page', page ?? {})) return { handoff };
       events = buildPreparedEvents({
         eventBuilder: this.runtime.eventBuilder,
-        initialEvents,
+        initialEvents: initialEvents?.filter((input) => this.admitMethod(input.type, input)),
         page,
         eventContext: this.getRequestEventContext(),
         eventConsent: this.#consent.events === true,
@@ -237,11 +241,6 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       );
       return { handoff };
     }
-
-    // A prepared batch is identify/track events followed by one page and is replayed
-    // as a unit, so it is admitted whole or not at all. Dropping one event would leave
-    // a batch the browser rejects.
-    if (!this.admitPreparedEvents(events)) return { handoff };
 
     const locale = this.locale;
     // The envelope and batch have already been validated; retain the prepared bodies.
@@ -345,29 +344,16 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
-  /**
-   * Admits a prepared batch only when every event passes; reports each one that does
-   * not. A prepared batch is only ever identify and track events plus one page, so
-   * each event's type is also the method that would send it.
-   */
-  private admitPreparedEvents(events: readonly PreparedPersonalizationEvent[]): boolean {
+  /** Whether one prepared method may be sent; reports it to `onEventBlocked` when it may not. */
+  private admitMethod(method: 'identify' | 'page' | 'track', args: unknown): boolean {
     const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
-    let admitted = true;
-    for (const event of events) {
-      const method = event.type;
-      // Fail closed: a type that is not one of the three prepared methods is not admitted.
-      const isPreparedMethod = method === 'identify' || method === 'page' || method === 'track';
-      if (isPreparedMethod && hasEventConsent(method, this.#consent, allowedEventTypes)) continue;
-
-      admitted = false;
-      if (!isPreparedMethod) continue;
-      try {
-        onEventBlocked?.({ reason: 'consent', method, args: [event] });
-      } catch {
-        // A failing diagnostic callback must not break event delivery.
-      }
+    if (hasEventConsent(method, this.#consent, allowedEventTypes)) return true;
+    try {
+      onEventBlocked?.({ reason: 'consent', method, args: [args] });
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
     }
-    return admitted;
+    return false;
   }
 
   private getRequestEventContext(): UniversalEventBuilderArgs {

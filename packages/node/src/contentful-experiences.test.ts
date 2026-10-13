@@ -720,19 +720,56 @@ describe('Node ContentfulExperiences', () => {
         expect(upsertProfile).toHaveBeenCalledOnce();
       });
 
-      it('drops the whole batch when any event is not admitted, and reports each one', async () => {
+      it('drops a blocked initial track but still prepares the permitted page', async () => {
         const onEventBlocked = vi.fn();
         const { runtime, upsertProfile } = createEventRuntime({ onEventBlocked });
         const request = runtime.forRequest({ consent: { events: false } });
 
         const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
 
-        // `track` is not allow-listed, so the batch cannot be replayed as prepared.
-        expect(result.handoff.replay).toBeUndefined();
-        expect(upsertProfile).not.toHaveBeenCalled();
+        // `track` is not allow-listed and is left out; `page` is, so the batch is a valid
+        // page-only preview and is still sent.
+        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
+        expect(result.data).toBeDefined();
+        expect(upsertProfile).toHaveBeenCalledOnce();
+        expect(upsertProfile.mock.calls[0]![0].events.map(({ type }) => type)).toEqual(['page']);
         expect(onEventBlocked).toHaveBeenCalledTimes(1);
         expect(onEventBlocked).toHaveBeenCalledWith(
           expect.objectContaining({ reason: 'consent', method: 'track' })
+        );
+      });
+
+      it('keeps the initial events that are admitted and drops only the others', async () => {
+        const { runtime } = createEventRuntime({ allowedEventTypes: ['identify', 'page'] });
+        const request = runtime.forRequest({ consent: { events: false } });
+
+        const result = await request.prepareRequestHandoff({
+          routeKey: '/home',
+          initialEvents: [
+            { type: 'identify', userId: 'user-1' },
+            { type: 'track', event: 'opened' },
+          ],
+        });
+
+        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['identify', 'page']);
+      });
+
+      it('prepares nothing when the page itself is not admitted', async () => {
+        const onEventBlocked = vi.fn();
+        const { runtime, upsertProfile } = createEventRuntime({
+          allowedEventTypes: ['track'],
+          onEventBlocked,
+        });
+        const request = runtime.forRequest({ consent: { events: false } });
+
+        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
+
+        // A prepared batch must end in one page, so without a permitted page there is no
+        // batch at all, even though the track alone would be allowed.
+        expect(result.handoff.replay).toBeUndefined();
+        expect(upsertProfile).not.toHaveBeenCalled();
+        expect(onEventBlocked).toHaveBeenCalledWith(
+          expect.objectContaining({ reason: 'consent', method: 'page' })
         );
       });
 

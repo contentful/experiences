@@ -161,8 +161,9 @@ persistence, beacon/lifecycle delivery, or Live Preview event integration.
 Events are consent-gated: consent is `{ events, persistence }`, undecided means
 not granted, and until event consent is granted only `allowedEventTypes` are
 sent. Web holds consent globally and stores it in LocalStorage; Node scopes it
-to one `forRequest()` facade. Node gates a prepared handoff as a unit, because
-the browser replays the batch whole. No adapter or example is yet wired to the
+to one `forRequest()` facade. Node drops initial inputs it may not send before preparing a handoff and
+prepares nothing without a permitted page; Web admits an already prepared
+batch whole, because it is replayed as previewed. No adapter or example is yet wired to the
 paired handoff.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 

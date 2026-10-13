@@ -122,10 +122,11 @@ Personalization call resolves `{ accepted: false }`, a blocked Analytics call
 resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
 never replayed, and withdrawing event consent (`consent({ events: false })`) also drops events
 already accepted into Web's offline queue. The same gate covers caller-built fetch events and the prepared
-handoff batch the browser replays: Node prepares it only when every event is
-admitted, and Web admits it whole or not at all, because a prepared batch is
-identify and track events followed by one page and a partial batch would be
-rejected. A refused prepared batch falls back to the browser's own gated page
+handoff batch the browser replays. Node filters the optional initial identify and
+track inputs one by one before it builds the batch, which still ends in one page, and
+prepares nothing if the page itself is not admitted. Web admits a batch that is
+already prepared whole or not at all, because it is replayed exactly as the server
+previewed it. A refused prepared batch falls back to the browser's own gated page
 event. Admitted prepared events are re-stamped with the browser's event consent,
 not the server's; fetch events are not, because XDA's embedded event schema has
 no consent field.

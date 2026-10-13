@@ -114,9 +114,11 @@ Check `request.canPersistProfile` before storing the profile id. Events passed i
 consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 
-`prepareRequestHandoff()` is gated as a unit, because the browser replays the batch whole: it is
-prepared only when every event in it is admitted, and otherwise returns a handoff with no replay
-and reports each blocked event to `onEventBlocked`.
+`prepareRequestHandoff()` filters its optional `initialEvents` one by one before building the batch,
+reporting each one that is not admitted to `onEventBlocked`, so a blocked `track` does not stop a
+permitted `page` from being previewed and replayed. The batch always ends in one page, so when the
+page itself is not admitted nothing is prepared and the handoff has no replay. The browser still
+admits a batch that is already prepared whole or not at all.
 
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
