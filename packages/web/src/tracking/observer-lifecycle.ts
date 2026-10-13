@@ -1,12 +1,6 @@
-import {
-  clearFireTimer,
-  derefElement,
-  type FireTimerState,
-  type Interval,
-  type WeakRefState,
-} from './observer-support.js';
+import { derefElement, type Interval, type WeakRefState } from './observer-support.js';
 
-interface ObserverLifecycleState extends WeakRefState, FireTimerState {
+interface ObserverLifecycleState extends WeakRefState {
   done: boolean;
 }
 
@@ -34,7 +28,6 @@ export const finalizeDroppedState = <TState extends ObserverLifecycleState>(
   state: TState,
   { activeStates, states }: ObserverStateCollection<TState>
 ): void => {
-  clearFireTimer(state);
   state.done = true;
   activeStates.delete(state);
 
@@ -78,4 +71,26 @@ export const sweepOrphans = <TState extends ObserverLifecycleState>(
       safeAutoUnobserve(element, state, { activeStates, states }, unobserve);
     }
   }
+};
+
+/**
+ * Runs `invoke` after whatever `state` has already queued, so one session's
+ * callbacks are delivered in order, and tracks it in `pendingCallbacks` until
+ * it settles so `endActive` can await it.
+ */
+export const chainCallback = (
+  state: { callbackChain: Promise<void> | null },
+  invoke: () => Promise<void>,
+  pendingCallbacks: Set<Promise<void>>
+): Promise<void> => {
+  const pending = state.callbackChain ? state.callbackChain.then(invoke) : invoke();
+
+  state.callbackChain = pending;
+  pendingCallbacks.add(pending);
+  void pending.then(() => {
+    if (state.callbackChain === pending) state.callbackChain = null;
+    pendingCallbacks.delete(pending);
+  });
+
+  return pending;
 };

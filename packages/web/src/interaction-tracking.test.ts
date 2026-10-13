@@ -2,8 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createInteractionTracking, TRACKING_NODE_ATTRIBUTE } from './interaction-tracking.js';
+import { createInteractionTracking } from './interaction-tracking.js';
 import { installIOPolyfill } from './test-fixtures/dom.js';
+import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
 
 import type { TrackingAttribution } from './tracking/attribution.js';
 
@@ -30,7 +31,7 @@ function createEvents() {
 /** A stamped element. Defaults to a `<button>` so clicks on it count as interactive. */
 function stamped(nodeId: string, tag = 'button'): HTMLElement {
   const element = document.createElement(tag);
-  element.setAttribute(TRACKING_NODE_ATTRIBUTE, nodeId);
+  element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, nodeId);
   return element;
 }
 
@@ -110,10 +111,10 @@ describe('createInteractionTracking', () => {
     });
 
     click(element);
-    element.setAttribute(TRACKING_NODE_ATTRIBUTE, 'node-fragment');
+    element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, 'node-fragment');
     await flushMutations();
     click(element);
-    element.removeAttribute(TRACKING_NODE_ATTRIBUTE);
+    element.removeAttribute(TRACKING_SCOPES_ATTRIBUTE);
     await flushMutations();
     click(element);
 
@@ -291,8 +292,8 @@ describe('createInteractionTracking', () => {
         resolveAttribution: (nodeId) => (nodeId === 'node-inline' ? inline : undefined),
       });
 
-      expect(io.getLast().observed.has(element)).toBe(false);
-      io.getLast().trigger(element, true);
+      // Nothing resolvable to track, so no observer is created for it at all.
+      expect(() => io.getLast()).toThrow();
       element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
       click(element);
       await vi.advanceTimersByTimeAsync(1500);
@@ -357,7 +358,7 @@ describe('createInteractionTracking', () => {
 
       io.getLast().trigger(element, true);
       await vi.advanceTimersByTimeAsync(1000);
-      element.setAttribute(TRACKING_NODE_ATTRIBUTE, 'node-b');
+      element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, 'node-b');
       await vi.advanceTimersByTimeAsync(0);
       io.getLast().trigger(element, true);
       await vi.advanceTimersByTimeAsync(1000);
@@ -405,5 +406,205 @@ describe('createInteractionTracking', () => {
       expect(events.trackView).toHaveBeenCalledOnce();
       tracking.destroy();
     });
+  });
+});
+
+describe('createInteractionTracking — scope occurrences', () => {
+  const HERO: TrackingAttribution = { entityId: 'hero', entityKind: 'Fragment' };
+  const PAGE: TrackingAttribution = { entityId: 'landing', entityKind: 'Experience' };
+
+  /** An element listing several occurrence keys, as `data-ctfl-scopes` does. */
+  const rooting = (keys: string, tag = 'div'): HTMLElement => stamped(keys, tag);
+
+  async function setup(attributions: Record<string, TrackingAttribution>) {
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    const io = installIOPolyfill();
+    const events = createEvents();
+    const tracking = createInteractionTracking(events, {
+      resolveAttribution: (key) => attributions[key],
+    });
+    return { io, events, tracking };
+  }
+
+  it('reports a Fragment with two root elements as one view', async () => {
+    const first = rooting('hero-1');
+    const second = rooting('hero-1');
+    document.body.append(first, second);
+    const { io, events, tracking } = await setup({ 'hero-1': HERO });
+
+    io.trigger(first, true);
+    io.trigger(second, true);
+    await vi.advanceTimersByTimeAsync(1200);
+    io.trigger(first, false);
+    io.trigger(second, false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(events.trackView).toHaveBeenCalledTimes(2);
+    const [start, end] = events.trackView.mock.calls.map(([args]) => args);
+    expect(end.viewId).toBe(start.viewId);
+    tracking.destroy();
+  });
+
+  it('keeps the view open while any root element has a visible pixel', async () => {
+    const first = rooting('hero-1');
+    const second = rooting('hero-1');
+    document.body.append(first, second);
+    const { io, events, tracking } = await setup({ 'hero-1': HERO });
+
+    io.trigger(first, true);
+    await vi.advanceTimersByTimeAsync(1000);
+    io.trigger(second, true);
+    io.trigger(first, false);
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(events.trackView).toHaveBeenCalledTimes(1); // only the start: still in view
+    io.trigger(second, false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events.trackView).toHaveBeenCalledTimes(2);
+    tracking.destroy();
+  });
+
+  it('reports two occurrences of the same Fragment as two separate views', async () => {
+    const left = rooting('hero-1');
+    const right = rooting('hero-2');
+    document.body.append(left, right);
+    const { io, events, tracking } = await setup({ 'hero-1': HERO, 'hero-2': HERO });
+
+    io.trigger(left, true);
+    io.trigger(right, true);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(events.trackView).toHaveBeenCalledTimes(2);
+    const ids = events.trackView.mock.calls.map(([args]) => args.viewId);
+    expect(new Set(ids).size).toBe(2);
+    tracking.destroy();
+  });
+
+  it('reports an element in an Experience and a Fragment to both, by kind', async () => {
+    const element = rooting('page hero-1', 'button');
+    document.body.append(element);
+    const { io, events, tracking } = await setup({ page: PAGE, 'hero-1': HERO });
+
+    io.trigger(element, true);
+    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await vi.advanceTimersByTimeAsync(1000);
+    click(element);
+
+    // Views: both scopes. Hovers and clicks: the Fragment only.
+    const viewed = events.trackView.mock.calls.map(([args]) => args.entityKind).sort();
+    expect(viewed).toEqual(['Experience', 'Fragment']);
+    expect(events.trackHover).toHaveBeenCalledTimes(1);
+    expect(events.trackHover.mock.calls[0]![0].entityKind).toBe('Fragment');
+    expect(events.trackClick).toHaveBeenCalledTimes(1);
+    expect(events.trackClick.mock.calls[0]![0].entityKind).toBe('Fragment');
+    tracking.destroy();
+  });
+
+  it('keeps a hover going while the pointer moves between a Fragment’s root elements', async () => {
+    const first = rooting('hero-1');
+    const second = rooting('hero-1');
+    document.body.append(first, second);
+    const { events, tracking } = await setup({ 'hero-1': HERO });
+    const enter = (el: Element) =>
+      el.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    const leave = (el: Element) =>
+      el.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+
+    enter(first);
+    await vi.advanceTimersByTimeAsync(600);
+    enter(second);
+    leave(first);
+    await vi.advanceTimersByTimeAsync(600);
+    leave(second);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(events.trackHover).toHaveBeenCalledTimes(2);
+    const [start, end] = events.trackHover.mock.calls.map(([args]) => args);
+    expect(end.hoverId).toBe(start.hoverId);
+    tracking.destroy();
+  });
+
+  it('sends a click to the innermost Fragment the nearest tracked element roots', async () => {
+    const outer = rooting('outer', 'section');
+    const inner = rooting('inner', 'div');
+    const button = document.createElement('button');
+    inner.append(button);
+    outer.append(inner);
+    document.body.append(outer);
+    const { events, tracking } = await setup({
+      outer: { ...HERO, entityId: 'outer' },
+      inner: { ...HERO, entityId: 'inner' },
+    });
+
+    click(button);
+
+    expect(events.trackClick).toHaveBeenCalledTimes(1);
+    expect(events.trackClick.mock.calls[0]![0].entityId).toBe('inner');
+    tracking.destroy();
+  });
+
+  it('keeps sending clicks to the innermost Fragment after refresh re-points an outer key', async () => {
+    const element = rooting('outer inner', 'button');
+    document.body.append(element);
+    const attributions: Record<string, TrackingAttribution> = {
+      outer: { ...HERO, entityId: 'outer' },
+      inner: { ...HERO, entityId: 'inner' },
+    };
+    const { events, tracking } = await setup(attributions);
+
+    attributions.outer = { ...HERO, entityId: 'outer-b' };
+    tracking.refresh();
+    click(element);
+
+    expect(events.trackClick).toHaveBeenCalledTimes(1);
+    expect(events.trackClick.mock.calls[0]![0].entityId).toBe('inner');
+    tracking.destroy();
+  });
+
+  it('starts a fresh view for a key whose attribution changes on refresh, leaving others alone', async () => {
+    const element = rooting('page hero-1');
+    document.body.append(element);
+    const attributions: Record<string, TrackingAttribution> = { page: PAGE, 'hero-1': HERO };
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    const io = installIOPolyfill();
+    const events = createEvents();
+    const tracking = createInteractionTracking(events, {
+      resolveAttribution: (key) => attributions[key],
+    });
+
+    io.trigger(element, true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(events.trackView).toHaveBeenCalledTimes(2);
+    const before = events.trackView.mock.calls.map(([args]) => args);
+
+    attributions['hero-1'] = { ...HERO, entityId: 'hero-b' };
+    tracking.refresh();
+    io.trigger(element, true);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const after = events.trackView.mock.calls.slice(2).map(([args]) => args);
+    expect(after.some((args) => args.entityId === 'hero-b')).toBe(true);
+    // The Experience key was untouched, so it kept its original view.
+    const pageViewIds = [...before, ...after]
+      .filter((args) => args.entityId === 'landing')
+      .map((args) => args.viewId);
+    expect(new Set(pageViewIds).size).toBe(1);
+    tracking.destroy();
+  });
+
+  it('stops reporting a key once the attribute no longer lists it', async () => {
+    const element = rooting('page hero-1');
+    document.body.append(element);
+    const { io, events, tracking } = await setup({ page: PAGE, 'hero-1': HERO });
+
+    element.setAttribute(TRACKING_SCOPES_ATTRIBUTE, 'page');
+    await vi.advanceTimersByTimeAsync(0);
+    io.trigger(element, true);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(events.trackView.mock.calls.map(([args]) => args.entityKind)).toEqual(['Experience']);
+    tracking.destroy();
   });
 });
