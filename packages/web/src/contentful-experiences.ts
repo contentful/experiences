@@ -17,6 +17,7 @@ import {
   type RuntimeEventMethods,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
+  hasEventConsent,
   hasEventTypeConsent,
   methodForEventType,
   toConsentState,
@@ -268,6 +269,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#currentInitialization = undefined;
       this.#currentPage.reset();
     }
+    // Active views and hovers keep their own clocks, so the send-time gate alone would
+    // report time measured before permission. Start or stop detectors to match.
+    this.#interactionTracking?.syncConsent();
   }
 
   /** Latest ordinary or prepared Personalization HTTP state. */
@@ -360,7 +364,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     if (this.#interactionTracking) {
       throw new Error('Interaction tracking is already running; stop it before starting again');
     }
-    const tracking = createInteractionTracking(this, options);
+    const tracking = createInteractionTracking(this, options, {
+      isAllowed: (method) => hasEventConsent(method, this.#store.consent, this.#allowedEventTypes),
+    });
     this.#interactionTracking = tracking;
 
     let stopping: Promise<void> | undefined;
