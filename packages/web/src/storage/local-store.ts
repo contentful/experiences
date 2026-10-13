@@ -44,11 +44,15 @@ export default class LocalStore {
   }
 
   /**
-   * Apply configured startup consent. Configured values take precedence over
-   * stored ones, and `defaults.events` is also the default for persistence when
-   * no persistence default is given, matching the Optimization SDK. Unset axes
-   * keep their stored value. The result is not written to storage here; storage
-   * changes only when the visitor decides through `updateConsent`.
+   * Resolve startup consent, then bring storage in line with it, as the Optimization
+   * SDK does. Configured values take precedence over stored ones, and
+   * `defaults.events` is also the default for persistence when no persistence default
+   * is given. Unset axes keep their stored value.
+   *
+   * The effective decisions are written to the shared consent keys, so they are what
+   * a later load, with or without the default, starts from. When persistence is
+   * denied the stored profile is removed; when it is granted the profile is restored.
+   * A visitor who has not decided, with no defaults, writes nothing.
    */
   applyConsentDefaults(defaults: ConsentState): void {
     const events = defaults.events ?? this.#consent.events;
@@ -57,13 +61,17 @@ export default class LocalStore {
     if (events !== undefined) next.events = events;
     if (persistence !== undefined) next.persistence = persistence;
     this.#consent = next;
+    this.#writeConsent();
 
-    // Restore only when the effective persistence consent allows it, so a default
-    // of `false` over a stored `accepted` stops restoring the stored profile.
-    if (persistence === true && this.#profile === undefined) {
-      this.#profile = this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
+    if (persistence === true) {
+      this.#profile ??= this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
+      return;
     }
-    if (persistence !== true) this.#profile = undefined;
+    // The profile was read before the configured decision was known, so drop it from
+    // memory as well. Only an explicit denial removes the stored copy; an undecided
+    // visitor keeps it, so a later grant can still restore it.
+    this.#profile = undefined;
+    if (persistence === false) this.setCache(PROFILE_CACHE_KEY, undefined);
   }
 
   /** Merge consent decisions, persist them, and drop the stored profile if persistence is denied. */

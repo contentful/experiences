@@ -194,12 +194,22 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
     window.localStorage.clear();
   });
 
-  it('seeds undecided axes without writing them to storage', () => {
+  it('writes the effective decisions to the shared consent keys', () => {
     const store = new LocalStore();
 
     store.applyConsentDefaults({ events: true, persistence: false });
 
     expect(store.consent).toEqual({ events: true, persistence: false });
+    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('accepted');
+    expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('denied');
+  });
+
+  it('writes nothing for a visitor who has not decided and has no defaults', () => {
+    const store = new LocalStore();
+
+    store.applyConsentDefaults({});
+
+    expect(store.consent).toEqual({});
     expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBeNull();
     expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBeNull();
   });
@@ -217,14 +227,30 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
     seedConsent({ events: false, persistence: true });
     const store = new LocalStore();
 
+    store.applyConsentDefaults({});
+
+    expect(store.consent).toEqual({ events: false, persistence: true });
+  });
+
+  it('lets a configured event default decide persistence too, over the stored value', () => {
+    seedConsent({ events: false, persistence: true });
+    const store = new LocalStore();
+
     store.applyConsentDefaults({ events: true });
 
-    // `events` is configured; `persistence` falls back to `events`, not to storage.
+    // `events` is configured; `persistence` falls back to it rather than to storage.
     expect(store.consent).toEqual({ events: true, persistence: true });
+  });
 
-    const other = new LocalStore();
-    other.applyConsentDefaults({});
-    expect(other.consent).toEqual({ events: false, persistence: true });
+  it('makes a configured default the stored decision for the next load', () => {
+    seedConsent({ events: false, persistence: true });
+    new LocalStore().applyConsentDefaults({ events: true });
+
+    const later = new LocalStore();
+    later.applyConsentDefaults({});
+
+    // Removing the default does not return the visitor to their earlier choice.
+    expect(later.consent).toEqual({ events: true, persistence: true });
   });
 
   it('uses the event default as the persistence default when none is given', () => {
@@ -265,7 +291,7 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
     expect(store.profile).toEqual({ id: 'visitor' });
   });
 
-  it('stops using a stored profile when defaults deny persistence, without deleting it', () => {
+  it('clears the stored profile when defaults deny persistence', () => {
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
     const store = new LocalStore();
@@ -274,6 +300,42 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
     store.applyConsentDefaults({ persistence: false });
 
     expect(store.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('keeps a denial in force when the same SDK is recreated without the default', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    new LocalStore().applyConsentDefaults({ persistence: false });
+
+    const recreated = new LocalStore();
+    recreated.applyConsentDefaults({});
+
+    // The configured denial became the stored decision, so removing it does not bring the
+    // old acceptance or the old profile back.
+    expect(recreated.consent.persistence).toBe(false);
+    expect(recreated.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('resolves consent before loading the profile, so a denied default never loads it', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const store = new LocalStore();
+
+    store.applyConsentDefaults({ persistence: false });
+
+    expect(store.profile).toBeUndefined();
+  });
+
+  it('keeps the stored profile when defaults grant what was already granted', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const store = new LocalStore();
+
+    store.applyConsentDefaults({ persistence: true });
+
+    expect(store.profile).toEqual({ id: 'visitor' });
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
   });
 });

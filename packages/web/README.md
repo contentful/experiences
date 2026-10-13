@@ -198,12 +198,15 @@ the Optimization SDK's consent model.
   `persistence` is `true`. `false` removes the stored profile but keeps the
   in-memory one; undecided neither restores nor clears it.
 - **Startup defaults.** `defaults: { consent, persistenceConsent }` take
-  precedence over a stored decision, as in the Optimization SDK, so a configured
-  value applies on every load. `persistenceConsent` falls back to `consent` when
-  it is not set. An axis you leave unset keeps its stored value. Defaults are not
-  written to storage; only a call to `consent()` is, so removing a default returns
-  the visitor to their last stored choice. A default that denies persistence stops
-  the stored profile being used but does not delete it.
+  precedence over a stored decision, as in the Optimization SDK, and
+  `persistenceConsent` falls back to `consent` when it is not set. An axis you leave
+  unset keeps its stored value. Consent is resolved first and the profile is loaded
+  after, so a default that denies persistence never loads the stored profile.
+  Defaults have the same storage effects as in the Optimization SDK: the effective
+  decisions are written to the consent keys, so a default **becomes the stored
+  decision** and removing it later does not restore the visitor's earlier choice, and
+  a default that denies persistence **deletes the stored profile**. A visitor who has
+  not decided, with no defaults, has nothing written.
 - **Consent itself** is always stored in LocalStorage, so a visitor's choice
   survives reloads. It is global to the runtime, not per call. It uses the
   Optimization SDK's keys and encoding, so pages on one origin share a visitor's

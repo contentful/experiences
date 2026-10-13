@@ -133,7 +133,8 @@ no consent field.
 Web persists consent, always, in LocalStorage (the Optimization SDK's keys and
 `accepted`/`denied` encoding, so both SDKs share one decision) and writes the profile
 only with persistence consent; configured startup defaults take precedence over
-stored decisions; Node scopes consent to one `forRequest()` facade and exposes
+stored decisions and are written to the shared consent keys, and a default that denies
+persistence deletes the stored profile; Node scopes consent to one `forRequest()` facade and exposes
 `canPersistProfile`. This SDK writes no anonymous-id cookie, so persistence
 consent gates LocalStorage only.
 
