@@ -79,7 +79,6 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
     const instance = new ContentfulExperiences({
       spaceId,
       environmentId,
-      resolverConfig: { components: {} },
       delivery: { accessToken },
       onEventBlocked: (event) => setBlocked((previous) => [event, ...previous].slice(0, 5)),
     });
@@ -90,6 +89,8 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
     const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
     return () => {
       void session.stop();
+      // Only one Web SDK may be live at a time; release it so a remount can construct another.
+      instance.destroy();
       runtime.current = undefined;
     };
   }, []);

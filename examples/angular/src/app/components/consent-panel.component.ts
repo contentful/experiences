@@ -155,7 +155,6 @@ export class ConsentPanelComponent {
       const instance = new ContentfulExperiences({
         spaceId: config.spaceId,
         environmentId: config.environmentId,
-        resolverConfig: { components: {} },
         delivery: { accessToken: config.accessToken },
         onEventBlocked: (event) =>
           this.blocked.update((previous) => [event, ...previous].slice(0, 5)),
@@ -168,6 +167,8 @@ export class ConsentPanelComponent {
       const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
       destroyRef.onDestroy(() => {
         void session.stop();
+        // Only one Web SDK may be live at a time; release it so a remount can construct another.
+        instance.destroy();
         this.runtime = undefined;
       });
     });

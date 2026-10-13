@@ -59,7 +59,6 @@
     const instance = new ContentfulExperiences({
       spaceId,
       environmentId,
-      resolverConfig: { components: {} },
       delivery: { accessToken },
       onEventBlocked: (event) => {
         blocked = [event, ...blocked].slice(0, 5);
@@ -72,6 +71,8 @@
     const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
     return () => {
       void session.stop();
+      // Only one Web SDK may be live at a time; release it so a remount can construct another.
+      instance.destroy();
       runtime = undefined;
     };
   });
