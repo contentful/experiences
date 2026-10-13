@@ -79,6 +79,14 @@ export default class LocalStore {
     this.profile = undefined;
   }
 
+  /**
+   * Makes responses that are still in flight stale without changing the profile or
+   * its stored copy, so a late response cannot replace the live profile.
+   */
+  invalidateInFlight(): void {
+    this.#profileRevision += 1;
+  }
+
   /** Revision used to reject profile responses that cross a profile boundary. */
   get profileRevision(): number {
     return this.#profileRevision;

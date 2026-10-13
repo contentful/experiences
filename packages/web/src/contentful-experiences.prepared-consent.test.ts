@@ -293,4 +293,80 @@ describe('Web prepared handoff and consent', () => {
       expect(upsert).not.toHaveBeenCalled();
     });
   });
+
+  describe('responses that complete after consent is withdrawn', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((complete) => {
+        resolve = complete;
+      });
+      return { promise, resolve };
+    }
+
+    it('does not publish or persist a profile from an online event that was in flight', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      const response = deferred<{ profile: { id: string } }>();
+      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+        response.promise as never
+      );
+
+      const pending = runtime.track({ event: 'in-flight' });
+      runtime.consent({ events: false });
+      response.resolve({ profile: { id: 'late-profile' } });
+      await pending;
+
+      // The request was already sent, but its response must not replace the live profile
+      // or reach storage while persistence is still granted.
+      expect(runtime.profile).toEqual({ id: 'live-profile' });
+      expect(window.localStorage.getItem('__ctfl_opt_profile__')).toBe(
+        JSON.stringify({ id: 'live-profile' })
+      );
+    });
+
+    it('does not publish delivery state or profile from a queued flush that was in flight', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      window.dispatchEvent(new Event('offline'));
+      await runtime.track({ event: 'queued' });
+      const response = deferred<{ profile: { id: string } }>();
+      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+        response.promise as never
+      );
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('pending'));
+
+      runtime.consent({ events: false });
+      response.resolve({ profile: { id: 'late-profile' } });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(runtime.profile).toEqual({ id: 'live-profile' });
+      expect(runtime.personalizationDeliveryState.status).not.toBe('success');
+    });
+
+    it('keeps the live in-memory profile and the persistence decision independent', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+
+      runtime.consent({ events: false });
+
+      expect(runtime.profile).toEqual({ id: 'live-profile' });
+      expect(runtime.consentState).toEqual({ events: false, persistence: true });
+    });
+
+    it('still publishes responses for events sent after consent is granted again', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      runtime.consent({ events: false });
+      runtime.consent({ events: true });
+      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockResolvedValue({
+        profile: { id: 'fresh-profile' },
+      } as never);
+
+      await runtime.track({ event: 'after-regrant' });
+
+      expect(runtime.profile).toEqual({ id: 'fresh-profile' });
+    });
+  });
 });

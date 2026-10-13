@@ -183,13 +183,19 @@ export class PersonalizationDelivery {
   }
 
   /**
-   * Drops queued batches and cancels the scheduled retry, leaving the delivery live.
-   * A request already on the wire cannot be recalled. Used when event consent is
-   * withdrawn, so events accepted earlier are not sent after the visitor says no.
+   * Drops queued batches, cancels the scheduled retry, and invalidates requests
+   * already in flight, leaving the delivery live. A request on the wire cannot be
+   * recalled, but its response can no longer publish profile or delivery state.
+   * Used when event consent is withdrawn, so events accepted earlier are not sent,
+   * and nothing they return is kept, after the visitor says no.
    */
   clearQueue(): void {
+    if (this.#token === undefined) return;
+    this.#token = this.#closing ? undefined : {};
+    this.#activeFlush = undefined;
     this.#queue.length = 0;
-    this.#flushRuntime.clearScheduledRetry();
+    this.#flushRuntime.reset();
+    this.#state = { status: 'idle' };
   }
 
   reset(): void {

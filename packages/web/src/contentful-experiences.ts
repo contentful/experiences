@@ -258,7 +258,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     // Events accepted into the offline queue while the visitor had consented must not
     // be sent after they withdraw. Only an explicit denial purges, as in the
     // Optimization SDK; a persistence-only change leaves the queue alone.
-    if (next.events === false) this.#delivery.clearQueue();
+    if (next.events === false) {
+      this.#delivery.clearQueue();
+      this.#store.invalidateInFlight();
+    }
   }
 
   /** Latest ordinary or prepared Personalization HTTP state. */
