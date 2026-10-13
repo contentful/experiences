@@ -147,22 +147,24 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       profile,
       ...clientConfig
     } = config;
+    // `super()` must come before anything that could touch `this`, and must not sit
+    // inside a `try`: when a bundler lowers private fields and arrow-function fields,
+    // it hoists `var _this = this` to the top of the constructor, which then runs
+    // before `super()` and throws a ReferenceError. Next.js (SWC) does exactly this.
+    super({
+      ...clientConfig,
+      eventBuilder: {
+        app,
+        channel: 'web',
+        library: DEFAULT_EVENT_CONTEXT_LIBRARY,
+        getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
+        getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
+      },
+    });
+    // The lock is taken after the base class has validated its configuration, so a
+    // failed construction never holds it. Construction is synchronous, so nothing
+    // else can acquire it in between.
     const singletonOwner = acquireWebSingleton();
-    try {
-      super({
-        ...clientConfig,
-        eventBuilder: {
-          app,
-          channel: 'web',
-          library: DEFAULT_EVENT_CONTEXT_LIBRARY,
-          getPageProperties: browserContext?.getPageProperties ?? getPageProperties,
-          getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
-        },
-      });
-    } catch (error) {
-      releaseWebSingleton(singletonOwner);
-      throw error;
-    }
     this.#singletonOwner = singletonOwner;
     let delivery: PersonalizationDelivery | undefined;
     try {
