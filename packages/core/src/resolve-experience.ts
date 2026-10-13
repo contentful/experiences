@@ -4,6 +4,7 @@
  * `resolveData` hooks in parallel, and resolves design values for the renderer.
  */
 
+import { resolveAttribution } from './attribution.js';
 import { createDebugLogger, type DebugLogger } from './debug-logger.js';
 import type {
   DesignPropValue,
@@ -457,7 +458,11 @@ export async function resolveExperience(
   };
   const sourceMap =
     options.sourceMap ?? (isPlainPayload ? payload.extensions?.sourceMap : undefined);
-  if (sourceMap) plan.sourceMap = sourceMap;
+  if (sourceMap) {
+    plan.sourceMap = sourceMap;
+    const attribution = resolveAttribution(sourceMap, nodes, log);
+    if (attribution) plan.attribution = attribution;
+  }
   const profileId = isPlainPayload && payload.extensions?.personalization?.profile?.id;
   if (profileId) {
     plan.personalization = { profileId };

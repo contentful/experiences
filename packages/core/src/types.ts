@@ -228,6 +228,11 @@ export interface PortableRegistration {
  */
 export interface PortableRenderNode {
   /**
+   * Reportable scopes this node belongs to. Present only when the plan carries
+   * a usable source map and the node's id is in it.
+   */
+  attribution?: NodeAttribution;
+  /**
    * Optional. Passed through from the XDA payload's `id` field when the
    * editor supplies one. The SDK does NOT auto-generate ids; adapters fall
    * back to the array index for React keys / debug labels when absent.
@@ -252,6 +257,41 @@ export interface PortableRenderNode {
 }
 
 /**
+ * One rendered occurrence of an Experience or persisted Fragment. Field names
+ * follow the ExO event shape, so it stays structurally assignable to the
+ * client's interaction-event builder args. Optional fields are omitted, never
+ * invented: the baseline variant carries no `variantId`, `variantIndex` or
+ * `optimizationId`.
+ */
+export interface ScopeAttribution {
+  /** Opaque, plan-local occurrence key. Never parse it. */
+  key: string;
+  entityId: string;
+  entityKind: 'Experience' | 'Fragment';
+  entityKindId?: string;
+  optimizationId?: string;
+  variantId?: string;
+  variantIndex?: number;
+  parentExperienceId?: string;
+  entryIds?: string[];
+}
+
+/** A node's own view of the scopes it belongs to. Plain data, safe to serialize. */
+export interface NodeAttribution {
+  /** Every reportable scope the node belongs to, outer to inner. Shared with `plan.attribution.scopes` and frozen. */
+  scopes: ScopeAttribution[];
+  /** The scopes this node is a top-level node of, i.e. its parent is not in them. */
+  roots: ScopeAttribution[];
+  /** Entries this node's own content properties are bound to. */
+  entryIds?: string[];
+}
+
+/** Occurrence-keyed lookup of every reportable scope in a plan. */
+export interface PlanAttribution {
+  scopes: Record<string, ScopeAttribution>;
+}
+
+/**
  * The interpreted experience tree.
  *
  * Top-level is `nodes: PortableRenderNode[]` (array, not single root) to
@@ -272,6 +312,8 @@ export interface PortableRenderPlan {
   debug: boolean;
   /** Present only when the fetch requested the `sourceMap` extension. */
   sourceMap?: ExperienceSourceMap;
+  /** Reportable scopes resolved from `sourceMap`. Absent when there is no usable map. */
+  attribution?: PlanAttribution;
   /** Present when XDA returned personalization state for this Experience. */
   personalization?: {
     /** Profile id to use for subsequent personalized requests. */
