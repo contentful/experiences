@@ -77,7 +77,7 @@ export function createClickDetector(
     if (!trackedElement || !hasClickablePath) return;
 
     // Clicks go to the innermost Fragment occurrence the nearest tracked element
-    // roots; an Experience is view-only.
+    // roots
     let attribution: ReturnType<ResolveScopeAttribution>;
     const keys = trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '';
     for (const key of keys.split(/\s+/).filter(Boolean)) {

@@ -1,11 +1,5 @@
 /** @vitest-environment jsdom */
 
-/*
- * SSR then hydration, with the real renderers. The server renders the tree,
- * `hydrateRoot` adopts it in a DOM, and React reports a mismatch through
- * `onRecoverableError`. Attribution must not cause one: `getTrackingAttributes`
- * derives from the same serializable plan on both sides.
- */
 import { act } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
