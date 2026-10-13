@@ -1,12 +1,3 @@
-/*
- * `injectContentfulComponent().attribution` under `@angular/platform-server`,
- * with no DOM. Angular has one renderer for client and server, so this pins
- * that the attribution survives the server path and that an unusable map still
- * renders.
- *
- * Runs under vitest.ssr.config.ts (environment: node).
- */
-
 import { Component, InjectionToken, inject, provideZonelessChangeDetection } from '@angular/core';
 import { type BootstrapContext, bootstrapApplication } from '@angular/platform-browser';
 import { provideServerRendering, renderApplication } from '@angular/platform-server';

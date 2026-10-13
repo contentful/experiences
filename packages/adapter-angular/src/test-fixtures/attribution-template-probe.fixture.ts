@@ -1,8 +1,3 @@
-/*
- * A coded Experience Template that renders its own attributed scope ids from
- * `injectContentfulExperienceTemplate()`, then its `content` slot.
- */
-
 import { Component, Input, signal } from '@angular/core';
 
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';

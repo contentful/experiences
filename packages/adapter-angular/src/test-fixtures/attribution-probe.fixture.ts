@@ -1,9 +1,3 @@
-/*
- * Renders the enclosing node's attributed scope ids from
- * `injectContentfulComponent()`. Reads the signal in the template, so a reused
- * node id whose attribution changes must show up in the DOM.
- */
-
 import { Component } from '@angular/core';
 
 import { injectContentfulComponent } from '../context.js';

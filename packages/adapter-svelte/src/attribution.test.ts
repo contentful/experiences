@@ -1,9 +1,3 @@
-/*
- * `getContentfulComponent().attribution` on the CLIENT build (jsdom). The
- * context is published as getters over the reactive `node` prop, so a plan
- * update that reuses a node id — which keeps the NodeRenderer instance —
- * must replace the value rather than leave the first one behind.
- */
 import { render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 

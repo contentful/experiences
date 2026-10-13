@@ -1,8 +1,3 @@
-/*
- * `injectContentfulComponent().attribution`. NodeRenderEngine reuses a unit by
- * `nodeId` and calls `unit.node.set(node)`, so a plan update that reuses an id
- * must replace the attribution on the same live instance.
- */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
