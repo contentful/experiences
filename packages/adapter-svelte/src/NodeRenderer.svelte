@@ -80,23 +80,50 @@
       : normalizeComponentRegistration(entry);
   });
 
+  // Getters over the reactive `node` prop, not a snapshot: `{#each}` in
+  // NodesRenderer keys on `nodeId`, so a plan update that reuses an id keeps
+  // this instance, and a one-time copy would go stale.
   if (isExperienceTemplate) {
     const contentful: ContentfulExperienceTemplate = {
       experienceTemplateId: id,
-      nodeId: node.nodeId,
-      content: node.props.content,
-      design: node.props.designRaw,
-      resolved: node.props.resolved,
+      get nodeId() {
+        return node.nodeId;
+      },
+      get content() {
+        return node.props.content;
+      },
+      get design() {
+        return node.props.designRaw;
+      },
+      get resolved() {
+        return node.props.resolved;
+      },
+      get attribution() {
+        return node.attribution;
+      },
     };
     setContentfulExperienceTemplate(contentful);
   } else {
     const contentful: ContentfulComponent = {
       componentId: id,
-      nodeId: node.nodeId,
-      content: node.props.content,
-      design: node.props.designRaw,
-      resolved: node.props.resolved,
-      slots: node.slots,
+      get nodeId() {
+        return node.nodeId;
+      },
+      get content() {
+        return node.props.content;
+      },
+      get design() {
+        return node.props.designRaw;
+      },
+      get resolved() {
+        return node.props.resolved;
+      },
+      get attribution() {
+        return node.attribution;
+      },
+      get slots() {
+        return node.slots;
+      },
     };
     setContentfulComponent(contentful);
   }
