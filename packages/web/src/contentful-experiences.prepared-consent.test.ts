@@ -369,4 +369,91 @@ describe('Web prepared handoff and consent', () => {
       expect(runtime.profile).toEqual({ id: 'fresh-profile' });
     });
   });
+
+  describe('handoff acceptance across a withdrawal', () => {
+    it('lets the same route be admitted again after its queued page was discarded', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const handoff = handoffWith(serverBatch(true, false));
+
+      // Admitted while offline, so the page sits in the queue and is not sent.
+      window.dispatchEvent(new Event('offline'));
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/first' })
+      ).resolves.toEqual({ accepted: true });
+      expect(upsert).not.toHaveBeenCalled();
+
+      // Withdrawing discards the queued page; granting again and reconnecting must not
+      // leave the route looking admitted.
+      runtime.consent({ events: false });
+      runtime.consent({ events: true });
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+      expect(upsert).not.toHaveBeenCalled();
+
+      const retry = await runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/first' });
+
+      expect(retry.accepted).toBe(true);
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    });
+
+    it('lets trackCurrentPage send the route again after withdrawal discarded its page', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+
+      window.dispatchEvent(new Event('offline'));
+      await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
+        routeKey: '/first',
+      });
+      runtime.consent({ events: false });
+      runtime.consent({ events: true });
+      window.dispatchEvent(new Event('online'));
+
+      const result = await runtime.trackCurrentPage({
+        routeKey: '/first',
+        buildPayload: () => ({}),
+      });
+
+      expect(result.accepted).toBe(true);
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    });
+
+    it('forgets a route that was already sent, so it can be sent again after withdrawal and a new grant', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+
+      await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
+        routeKey: '/first',
+      });
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+      runtime.consent({ events: false });
+      runtime.consent({ events: true });
+
+      await runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
+
+      // A new consent decision starts a new page view for the route.
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    });
+
+    it('keeps an accepted route accepted when consent is only granted or persistence changes', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+
+      await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
+        routeKey: '/first',
+      });
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+      runtime.consent({ persistence: false });
+      runtime.consent({ events: true });
+
+      await runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
+
+      // Already sent for this route; nothing is sent twice.
+      expect(upsert).toHaveBeenCalledTimes(1);
+    });
+  });
 });

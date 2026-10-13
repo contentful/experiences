@@ -261,6 +261,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     if (next.events === false) {
       this.#delivery.clearQueue();
       this.#store.invalidateInFlight();
+      // A discarded queued page must not leave its route looking admitted, or a later
+      // permitted attempt for the same route would be answered from the cache and
+      // never sent. This also forgets routes already sent, so one can be sent again
+      // after a withdrawal and a new grant.
+      this.#currentInitialization = undefined;
+      this.#currentPage.reset();
     }
   }
 
