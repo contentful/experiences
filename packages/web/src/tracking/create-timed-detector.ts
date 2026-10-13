@@ -74,6 +74,8 @@ export function createTimedDetector<TInfo>({
       started = false;
     },
     onElementAdded(element, key) {
+      const attribution = resolveAttribution(key);
+      if (!attribution || !isEligible(attribution)) return;
       let group = groups.get(key);
       if (!group) {
         group = { elements: new Set() };

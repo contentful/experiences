@@ -218,6 +218,19 @@ describe('createHoverDetector', () => {
     expect(trackHover).not.toHaveBeenCalled();
   });
 
+  it('does not observe an element whose key is ineligible', () => {
+    const element = makeElement();
+    const listen = vi.spyOn(element, 'addEventListener');
+    const detector = createHoverDetector(
+      vi.fn().mockResolvedValue(true),
+      lookup(new Map([[element, EXPERIENCE]]))
+    );
+    detector.start();
+    detector.onElementAdded(element, keyOf(element));
+
+    expect(listen).not.toHaveBeenCalled();
+  });
+
   it('keeps the final event attributed to the entity that qualified, even when a slow send delays it past a refresh()', async () => {
     const qualifying = deferred<boolean>();
     const trackHover = vi
