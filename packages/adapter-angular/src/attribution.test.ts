@@ -9,6 +9,7 @@ import {
 } from '@contentful/experiences-sdk-core';
 
 import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 import { AttributionProbeFixture } from './test-fixtures/attribution-probe.fixture.js';
 import { AttributionTemplateProbeFixture } from './test-fixtures/attribution-template-probe.fixture.js';
 import type { Config } from './types.js';
@@ -26,23 +27,7 @@ const node: ComponentNode = {
 const payload: ExperiencePayload = { nodes: [node] };
 const config: Config = { components: { probe: AttributionProbeFixture } };
 
-function sourceMap(experienceId: string) {
-  return {
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: experienceId, variants: [0] },
-      { kind: 'Component', id: 'probe' },
-    ],
-    dataAssemblies: [],
-    nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  };
-}
+const sourceMap = (experienceId: string) => minimalSourceMap({ experienceId });
 
 describe('injectContentfulComponent().attribution', () => {
   it('exposes the node attribution and replaces it when a plan reuses the node id', async () => {
@@ -99,21 +84,12 @@ describe('injectContentfulExperienceTemplate().attribution', () => {
       },
     ],
   } as ExperiencePayload;
-  const templateMap = (experienceId: string) => ({
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: experienceId, variants: [0] },
-      { kind: 'ExperienceTemplate', id: 'page' },
-    ],
-    dataAssemblies: [],
-    nodes: { tpl: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  });
+  const templateMap = (experienceId: string) =>
+    minimalSourceMap({
+      experienceId,
+      node: 'tpl',
+      leaf: { kind: 'ExperienceTemplate', id: 'page' },
+    });
 
   it('exposes the template node attribution and replaces it when a plan reuses the node id', async () => {
     const first = await resolveExperience(templatePayload, templateConfig, {
@@ -143,21 +119,7 @@ describe('injectContentfulExperienceTemplate().attribution', () => {
 });
 
 describe('an unusable source map', () => {
-  const good = {
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: 'exp-a', variants: [0] },
-      { kind: 'Component', id: 'probe' },
-    ],
-    dataAssemblies: [],
-    nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  };
+  const good = minimalSourceMap();
   // A wrong version, a missing table, and a node whose chain is nonsense.
   const unusable = [
     { ...good, version: 99 },

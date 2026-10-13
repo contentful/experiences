@@ -10,6 +10,7 @@ import {
 } from '@contentful/experiences-sdk-core';
 
 import { ServerExperienceRendererComponent } from './server-experience-renderer.component.js';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 import { AttributionProbeFixture } from './test-fixtures/attribution-probe.fixture.js';
 import type { Config } from './types.js';
 
@@ -25,21 +26,7 @@ const node: ComponentNode = {
 };
 const config: Config = { components: { probe: AttributionProbeFixture } };
 
-const sourceMap = {
-  version: 1,
-  variants: [{ type: 'personalization', id: 'default' }],
-  spaces: [],
-  environments: [],
-  locales: [],
-  entries: [],
-  assets: [],
-  layers: [
-    { kind: 'Experience', id: 'exp-a', variants: [0] },
-    { kind: 'Component', id: 'probe' },
-  ],
-  dataAssemblies: [],
-  nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-};
+const sourceMap = minimalSourceMap();
 
 const PLAN = new InjectionToken<PortableRenderPlan>('test.plan');
 const CONFIG = new InjectionToken<Config>('test.config');

@@ -12,6 +12,7 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
 import type { Config } from './types.js';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 import AttributionProbe from './test-fixtures/AttributionProbe.svelte';
 import AttributionTemplateProbe from './test-fixtures/AttributionTemplateProbe.svelte';
 
@@ -31,21 +32,7 @@ describe('getContentfulComponent().attribution (server build)', () => {
   it('renders the node attribution into the markup', async () => {
     const payload: ExperiencePayload = { nodes: [node] };
     const plan = await resolveExperience(payload, config, {
-      sourceMap: {
-        version: 1,
-        variants: [{ type: 'personalization', id: 'default' }],
-        spaces: [],
-        environments: [],
-        locales: [],
-        entries: [],
-        assets: [],
-        layers: [
-          { kind: 'Experience', id: 'exp-a', variants: [0] },
-          { kind: 'Component', id: 'probe' },
-        ],
-        dataAssemblies: [],
-        nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-      },
+      sourceMap: minimalSourceMap(),
     });
 
     const { body } = render(ServerExperienceRenderer as never, {
@@ -89,21 +76,10 @@ describe('getContentfulExperienceTemplate().attribution (server build)', () => {
       },
       templateConfig,
       {
-        sourceMap: {
-          version: 1,
-          variants: [{ type: 'personalization', id: 'default' }],
-          spaces: [],
-          environments: [],
-          locales: [],
-          entries: [],
-          assets: [],
-          layers: [
-            { kind: 'Experience', id: 'exp-a', variants: [0] },
-            { kind: 'ExperienceTemplate', id: 'page' },
-          ],
-          dataAssemblies: [],
-          nodes: { tpl: { layers: [1, 0], scope: 0, contentProperties: [] } },
-        },
+        sourceMap: minimalSourceMap({
+          node: 'tpl',
+          leaf: { kind: 'ExperienceTemplate', id: 'page' },
+        }),
       }
     );
 
@@ -116,21 +92,7 @@ describe('getContentfulExperienceTemplate().attribution (server build)', () => {
 });
 
 describe('an unusable source map (server build)', () => {
-  const good = {
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: 'exp-a', variants: [0] },
-      { kind: 'Component', id: 'probe' },
-    ],
-    dataAssemblies: [],
-    nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  };
+  const good = minimalSourceMap();
   // A wrong version, a missing table, and a node whose chain is nonsense.
   const unusable = [
     { ...good, version: 99 },

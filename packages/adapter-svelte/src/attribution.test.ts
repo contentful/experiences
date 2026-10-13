@@ -6,6 +6,7 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import ClientExperienceRenderer from './ClientExperienceRenderer.svelte';
 import type { Config } from './types.js';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 import AttributionProbe from './test-fixtures/AttributionProbe.svelte';
 import AttributionTemplateProbe from './test-fixtures/AttributionTemplateProbe.svelte';
 
@@ -22,23 +23,7 @@ const node: ComponentNode = {
 const payload: ExperiencePayload = { nodes: [node] };
 const config: Config = { components: { probe: AttributionProbe } };
 
-function sourceMap(experienceId: string) {
-  return {
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: experienceId, variants: [0] },
-      { kind: 'Component', id: 'probe' },
-    ],
-    dataAssemblies: [],
-    nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  };
-}
+const sourceMap = (experienceId: string) => minimalSourceMap({ experienceId });
 
 describe('getContentfulComponent().attribution (client build)', () => {
   it('exposes the node attribution and replaces it when a plan reuses the node id', async () => {
@@ -65,21 +50,7 @@ describe('getContentfulComponent().attribution (client build)', () => {
 });
 
 describe('an unusable source map (client build)', () => {
-  const good = {
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: 'exp-a', variants: [0] },
-      { kind: 'Component', id: 'probe' },
-    ],
-    dataAssemblies: [],
-    nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  };
+  const good = minimalSourceMap();
   // A wrong version, a missing table, and a node whose chain is nonsense.
   const unusable = [
     { ...good, version: 99 },
@@ -119,21 +90,12 @@ describe('getContentfulExperienceTemplate().attribution (client build)', () => {
     components: {},
     experienceTemplates: { page: AttributionTemplateProbe },
   };
-  const templateMap = (experienceId: string) => ({
-    version: 1,
-    variants: [{ type: 'personalization', id: 'default' }],
-    spaces: [],
-    environments: [],
-    locales: [],
-    entries: [],
-    assets: [],
-    layers: [
-      { kind: 'Experience', id: experienceId, variants: [0] },
-      { kind: 'ExperienceTemplate', id: 'page' },
-    ],
-    dataAssemblies: [],
-    nodes: { tpl: { layers: [1, 0], scope: 0, contentProperties: [] } },
-  });
+  const templateMap = (experienceId: string) =>
+    minimalSourceMap({
+      experienceId,
+      node: 'tpl',
+      leaf: { kind: 'ExperienceTemplate', id: 'page' },
+    });
 
   it('exposes the template node attribution and replaces it when a plan reuses the node id', async () => {
     const payload: ExperiencePayload = { nodes: [templateNode] };

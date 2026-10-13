@@ -19,6 +19,7 @@ import { toCss } from './design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 import { useDesignValues } from './use-design-values';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
 
@@ -634,21 +635,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     };
     const cfg: Config = { components: { button: Capture } };
     const plan = await resolveExperience({ nodes: [componentNode('button', { id: 'n' })] }, cfg, {
-      sourceMap: {
-        version: 1,
-        variants: [{ type: 'personalization', id: 'default' }],
-        spaces: [],
-        environments: [],
-        locales: [],
-        entries: [],
-        assets: [],
-        layers: [
-          { kind: 'Experience', id: 'exp-a', variants: [0] },
-          { kind: 'Component', id: 'button' },
-        ],
-        dataAssemblies: [],
-        nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
-      },
+      sourceMap: minimalSourceMap({ leaf: { kind: 'Component', id: 'button' } }),
     });
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
@@ -672,19 +659,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     };
     const cfg: Config = { components: { button: Capture } };
     const sourceMap = {
-      version: 1,
-      variants: [{ type: 'personalization', id: 'default' }],
-      spaces: [],
-      environments: [],
-      locales: [],
-      entries: [],
-      assets: [],
-      layers: [
-        { kind: 'Experience', id: 'exp-a', variants: [0] },
-        { kind: 'Component', id: 'button' },
-      ],
-      dataAssemblies: [],
-      nodes: { n: { layers: [1, 0], scope: 0, contentProperties: [] } },
+      ...minimalSourceMap({ leaf: { kind: 'Component', id: 'button' } }),
       ...override,
     };
     const plan = await resolveExperience({ nodes: [componentNode('button', { id: 'n' })] }, cfg, {
@@ -742,21 +717,10 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
       { nodes: [experienceTemplateNode('page', { id: 'tpl' })] },
       cfg,
       {
-        sourceMap: {
-          version: 1,
-          variants: [{ type: 'personalization', id: 'default' }],
-          spaces: [],
-          environments: [],
-          locales: [],
-          entries: [],
-          assets: [],
-          layers: [
-            { kind: 'Experience', id: 'exp-a', variants: [0] },
-            { kind: 'ExperienceTemplate', id: 'page' },
-          ],
-          dataAssemblies: [],
-          nodes: { tpl: { layers: [1, 0], scope: 0, contentProperties: [] } },
-        },
+        sourceMap: minimalSourceMap({
+          node: 'tpl',
+          leaf: { kind: 'ExperienceTemplate', id: 'page' },
+        }),
       }
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
