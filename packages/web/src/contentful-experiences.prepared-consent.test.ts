@@ -213,4 +213,84 @@ describe('Web prepared handoff and consent', () => {
       });
     });
   });
+
+  describe('queued events when consent changes', () => {
+    /** Accept events while offline so they sit in the queue, as for a visitor on a bad connection. */
+    async function queueOffline(runtime: ContentfulExperiences) {
+      window.dispatchEvent(new Event('offline'));
+      await runtime.track({ event: 'queued-1' });
+      await runtime.track({ event: 'queued-2' });
+      expect(runtime.personalizationDeliveryState.status).toBe('idle');
+    }
+
+    it('drops queued events when event consent is withdrawn, so they are never sent', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      await queueOffline(runtime);
+
+      runtime.consent({ events: false });
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+
+      expect(upsert).not.toHaveBeenCalled();
+    });
+
+    it('treats consent(false) as withdrawal for both axes', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      await queueOffline(runtime);
+
+      runtime.consent(false);
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+
+      expect(upsert).not.toHaveBeenCalled();
+    });
+
+    it('still sends queued events when consent is granted or only persistence changes', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      await queueOffline(runtime);
+
+      runtime.consent({ persistence: false });
+      runtime.consent({ events: true });
+      window.dispatchEvent(new Event('online'));
+
+      await vi.waitFor(() => expect(upsert).toHaveBeenCalled());
+      expect(upsert.mock.calls[0]![0].events.map((event) => event.type)).toEqual([
+        'track',
+        'track',
+      ]);
+    });
+
+    it('does not send queued events from destroy() after consent was withdrawn', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      await queueOffline(runtime);
+
+      runtime.consent({ events: false });
+      runtime.destroy();
+      await Promise.resolve();
+
+      expect(upsert).not.toHaveBeenCalled();
+    });
+
+    it('blocks new events after withdrawal, so nothing is queued again', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime();
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      window.dispatchEvent(new Event('offline'));
+      runtime.consent({ events: false });
+
+      await expect(runtime.track({ event: 'after' })).resolves.toEqual({ accepted: false });
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+
+      expect(upsert).not.toHaveBeenCalled();
+    });
+  });
 });

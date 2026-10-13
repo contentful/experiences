@@ -253,7 +253,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    * the stored profile but keeps it in memory for the current session.
    */
   consent(input: ConsentInput): void {
-    this.#store.updateConsent(toConsentState(input));
+    const next = toConsentState(input);
+    this.#store.updateConsent(next);
+    // Events accepted into the offline queue while the visitor had consented must not
+    // be sent after they withdraw. Only an explicit denial purges, as in the
+    // Optimization SDK; a persistence-only change leaves the queue alone.
+    if (next.events === false) this.#delivery.clearQueue();
   }
 
   /** Latest ordinary or prepared Personalization HTTP state. */

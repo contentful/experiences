@@ -189,6 +189,11 @@ the Optimization SDK's consent model.
   `{ accepted: false }`; a blocked Analytics call resolves `false`.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
+- **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
+  drops events already accepted into the offline queue, and cancels its retry, so
+  they are not sent when the connection returns or when `destroy()` drains the
+  queue. A request already on the wire cannot be recalled. A persistence-only change
+  leaves the queue alone.
 - **Persistence consent.** The profile is written to LocalStorage only when
   `persistence` is `true`. `false` removes the stored profile but keeps the
   in-memory one; undecided neither restores nor clears it.

@@ -120,7 +120,8 @@ means not granted. Until event consent is granted only `allowedEventTypes`
 SDK's (`component`, `component_click`, `component_hover`, `flag`). A blocked
 Personalization call resolves `{ accepted: false }`, a blocked Analytics call
 resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
-never replayed. The same gate covers caller-built fetch events and the prepared
+never replayed, and withdrawing event consent (`consent({ events: false })`) also drops events
+already accepted into Web's offline queue. The same gate covers caller-built fetch events and the prepared
 handoff batch the browser replays: Node prepares it only when every event is
 admitted, and Web admits it whole or not at all, because a prepared batch is
 identify and track events followed by one page and a partial batch would be
