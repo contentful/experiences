@@ -395,8 +395,8 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No durable event persistence, beacon/lifecycle delivery, or consent gating.
-  Personalization's offline queue is in memory only. Automatic interaction
+- No durable event persistence or beacon/lifecycle delivery. Personalization's
+  offline queue is in memory only, and withdrawing event consent discards it. Automatic interaction
   tracking uses the direct Analytics methods.
 - No framework adapter stamps tracked elements for you; components spread
   `getTrackingAttributes` onto their outermost element.
