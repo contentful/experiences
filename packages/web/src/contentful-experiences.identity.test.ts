@@ -317,7 +317,7 @@ describe('reconciling a server cookie with the identity held', () => {
     };
   }
 
-  it('resets before it writes a differing server cookie, then synchronizes the effective identity', () => {
+  it('synchronizes the profile, then resets and writes the captured cookie, as the Optimization constructor does', () => {
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'old-visitor' }));
     setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
@@ -330,11 +330,11 @@ describe('reconciling a server cookie with the identity held', () => {
     const identityWrites = cookieWrites
       .map((write) => write.split(';')[0] ?? '')
       .filter((write) => write.startsWith('ctfl-opt-aid='));
-    // The reset's clearing comes first and nothing is written before it. The adopted identity is
-    // then persisted, and the separate profile synchronization writes the effective one.
+    // The profile is synchronized first, then the reset clears it, then the cookie as it
+    // arrived is restored. The final state is the incoming visitor.
     expect(identityWrites).toEqual([
+      'ctfl-opt-aid=old-visitor',
       'ctfl-opt-aid=',
-      'ctfl-opt-aid=server-id',
       'ctfl-opt-aid=server-id',
     ]);
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('server-id');
@@ -367,14 +367,42 @@ describe('reconciling a server cookie with the identity held', () => {
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('profile-id');
   });
 
-  it('writes the active profile over a different stored identity at startup', () => {
+  it('restores the incoming cookie identity over a conflicting configured profile at startup', () => {
     seedConsent({ events: true, persistence: true });
     setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
 
-    createRuntime({ profile: { id: 'profile-id' } });
+    const runtime = createRuntime({ profile: { id: 'profile-id' } });
 
-    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('profile-id');
+    // The incoming cookie was captured before the profile could overwrite it.
+    expect(runtime.profile).toBeUndefined();
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('cookie-id');
+  });
+
+  it('restores the incoming cookie identity over a conflicting persisted profile at startup', () => {
+    seedConsent({ events: true, persistence: true });
+    setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'profile-id' }));
+
+    const runtime = createRuntime();
+
+    expect(runtime.profile).toBeUndefined();
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('cookie-id');
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('keeps a configured profile that matches the incoming cookie at startup', () => {
+    seedConsent({ events: true, persistence: true });
+    setCookie(ANONYMOUS_ID_COOKIE, 'same-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'same-id');
+
+    const runtime = createRuntime({ profile: { id: 'same-id' } });
+
+    expect(runtime.profile).toEqual({ id: 'same-id' });
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('same-id');
   });
 
   it('migrates a legacy cookie to the current one, then synchronizes the effective identity', () => {

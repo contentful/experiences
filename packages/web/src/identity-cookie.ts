@@ -9,6 +9,12 @@ export const DEFAULT_COOKIE_EXPIRATION_DAYS = 365;
 /** What the identity cookie is written with, and the scope it is deleted in. */
 export type IdentityCookieOptions = CookieAttributes;
 
+/** The identity cookie as it arrived: its value and whether it came from the legacy cookie. */
+export interface CookieSnapshot {
+  id: string | undefined;
+  legacy: boolean;
+}
+
 /**
  * The identity cookie and the stored anonymous id behind it: the pair that lets a
  * server recognise a visitor the browser SDK has already identified.
@@ -65,37 +71,40 @@ export class IdentityCookie {
   }
 
   /**
-   * Adopts the identity the browser already holds, such as one a server wrote, in the
-   * Optimization SDK's order: compare, reset if needed, then persist once.
+   * Captures the identity cookie the browser already holds, such as one a server wrote.
    *
-   * The legacy cookie is read ahead of the current one and removed once read, which
-   * migrates it. A cookie that differs from the stored id replaces it; if it is also a
-   * different visitor than the profile held, `reset` runs first, because that profile is
-   * not theirs. Persisting comes after the reset, so the identity is never written only to
-   * be cleared and written again. A legacy cookie that matches the stored id is still
-   * written, because the current cookie must exist. Nothing is written when the cookie
-   * already matches, so starting the SDK does not push its expiry out.
-   *
-   * Returns the adopted id, or nothing when no cookie is present.
+   * The legacy cookie is read ahead of the current one, as in the Optimization SDK. Read it
+   * once and keep the snapshot: a later read would see what the SDK itself has since
+   * written. Reconciling at startup needs the cookie as it arrived.
    */
-  adopt({
-    currentProfileId,
-    reset,
-  }: {
-    currentProfileId: string | undefined;
-    reset: () => void;
-  }): string | undefined {
+  read(): CookieSnapshot {
     const legacy = getCookie(ANONYMOUS_ID_COOKIE_LEGACY);
-    const id = legacy ?? getCookie(ANONYMOUS_ID_COOKIE);
-    if (legacy) removeCookie(ANONYMOUS_ID_COOKIE_LEGACY, this.#attributes);
-    if (!id) return undefined;
+    return { id: legacy ?? getCookie(ANONYMOUS_ID_COOKIE), legacy: legacy !== undefined };
+  }
+
+  /**
+   * Reconciles a captured cookie with the identity held, in the Optimization SDK's order:
+   * compare, reset if needed, then persist once.
+   *
+   * The legacy cookie is removed, which migrates it. A cookie that differs from the stored
+   * id replaces it; if it is also a different visitor than the profile held, `reset` runs
+   * first, because that profile is not theirs. A legacy cookie that matches the stored id is
+   * still written, because the current cookie must exist. Nothing is written when the cookie
+   * already matches.
+   */
+  reconcile(
+    snapshot: CookieSnapshot,
+    { currentProfileId, reset }: { currentProfileId: string | undefined; reset: () => void }
+  ): void {
+    if (snapshot.legacy) removeCookie(ANONYMOUS_ID_COOKIE_LEGACY, this.#attributes);
+    const { id } = snapshot;
+    if (!id) return;
 
     if (id !== this.#store.anonymousId) {
       if (id !== currentProfileId) reset();
       this.persist(id);
-    } else if (legacy) {
+    } else if (snapshot.legacy) {
       this.persist(id);
     }
-    return id;
   }
 }

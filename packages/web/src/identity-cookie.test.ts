@@ -125,30 +125,70 @@ describe('IdentityCookie cookie scope', () => {
   });
 });
 
-describe('IdentityCookie.adopt', () => {
+describe('IdentityCookie.read', () => {
+  it('captures the current cookie', () => {
+    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
+    const { identity } = create();
+
+    expect(identity.read()).toEqual({ id: 'server-id', legacy: false });
+  });
+
+  it('reads the legacy cookie ahead of the current one, as the Optimization SDK does', () => {
+    setCookie(ANONYMOUS_ID_COOKIE, 'current-id');
+    setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
+    const { identity } = create();
+
+    expect(identity.read()).toEqual({ id: 'legacy-id', legacy: true });
+  });
+
+  it('has no id when there is no cookie, and writes nothing', () => {
+    const { writes, restore } = captureCookieWrites();
+    const { identity } = create();
+
+    const snapshot = identity.read();
+    restore();
+
+    expect(snapshot).toEqual({ id: undefined, legacy: false });
+    expect(writes).toEqual([]);
+  });
+
+  it('is a snapshot: it does not change when the SDK later writes the cookie', () => {
+    setCookie(ANONYMOUS_ID_COOKIE, 'incoming');
+    const { identity } = create();
+
+    const snapshot = identity.read();
+    identity.persist('rewritten');
+
+    expect(snapshot.id).toBe('incoming');
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('rewritten');
+  });
+});
+
+describe('IdentityCookie.reconcile', () => {
   const noReset = () => undefined;
 
-  it('returns the server cookie id and stores it', () => {
-    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
+  it('stores the cookie id when it differs from the stored id', () => {
     const { identity, store } = create();
 
-    const result = identity.adopt({ currentProfileId: undefined, reset: noReset });
+    identity.reconcile(
+      { id: 'server-id', legacy: false },
+      { currentProfileId: undefined, reset: noReset }
+    );
 
-    expect(result).toBe('server-id');
     expect(store.anonymousId).toBe('server-id');
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('server-id');
   });
 
-  it('returns nothing when there is no cookie, and does not reset', () => {
+  it('does nothing, and does not reset, when there is no cookie', () => {
     const { identity } = create();
     const reset = vi.fn();
 
-    expect(identity.adopt({ currentProfileId: 'visitor', reset })).toBeUndefined();
+    identity.reconcile({ id: undefined, legacy: false }, { currentProfileId: 'visitor', reset });
+
     expect(reset).not.toHaveBeenCalled();
   });
 
   it('resets before it writes when the cookie is a different visitor than the profile held', () => {
-    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
     const { identity, store } = create();
     const order: string[] = [];
     const reset = vi.fn(() => {
@@ -156,7 +196,10 @@ describe('IdentityCookie.adopt', () => {
       order.push(`reset (stored: ${store.anonymousId})`);
     });
 
-    identity.adopt({ currentProfileId: 'old-visitor', reset });
+    identity.reconcile(
+      { id: 'server-id', legacy: false },
+      { currentProfileId: 'old-visitor', reset }
+    );
     order.push(`stored: ${store.anonymousId}`);
 
     expect(order).toEqual(['reset (stored: undefined)', 'stored: server-id']);
@@ -164,11 +207,13 @@ describe('IdentityCookie.adopt', () => {
   });
 
   it('does not reset when the cookie is the profile already held', () => {
-    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
     const { identity, store } = create();
     const reset = vi.fn();
 
-    identity.adopt({ currentProfileId: 'server-id', reset });
+    identity.reconcile(
+      { id: 'server-id', legacy: false },
+      { currentProfileId: 'server-id', reset }
+    );
 
     expect(reset).not.toHaveBeenCalled();
     expect(store.anonymousId).toBe('server-id');
@@ -176,47 +221,39 @@ describe('IdentityCookie.adopt', () => {
 
   it('writes nothing and does not reset when the cookie already matches the stored id', () => {
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'server-id');
-    const { writes, restore } = captureCookieWrites(`${ANONYMOUS_ID_COOKIE}=server-id`);
+    const { writes, restore } = captureCookieWrites();
     const { identity } = create();
     const reset = vi.fn();
 
-    const result = identity.adopt({ currentProfileId: 'someone-else', reset });
+    identity.reconcile(
+      { id: 'server-id', legacy: false },
+      { currentProfileId: 'someone-else', reset }
+    );
     restore();
 
-    // Rewriting it would push its expiry out each time the SDK starts.
+    // Rewriting it would push its expiry out each time the SDK reconciles.
     expect(writes).toEqual([]);
     expect(reset).not.toHaveBeenCalled();
-    expect(result).toBe('server-id');
   });
 
   it('migrates a legacy cookie to the current one and removes the legacy cookie', () => {
     setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
     const { identity, store } = create();
 
-    const result = identity.adopt({ currentProfileId: undefined, reset: noReset });
+    identity.reconcile(identity.read(), { currentProfileId: undefined, reset: noReset });
 
-    expect(result).toBe('legacy-id');
     expect(store.anonymousId).toBe('legacy-id');
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('legacy-id');
     expect(getCookie(ANONYMOUS_ID_COOKIE_LEGACY)).toBeUndefined();
   });
 
-  it('reads the legacy cookie ahead of the current one, as the Optimization SDK does, and removes it', () => {
-    setCookie(ANONYMOUS_ID_COOKIE, 'current-id');
-    setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
-    const { identity } = create();
-
-    expect(identity.adopt({ currentProfileId: undefined, reset: noReset })).toBe('legacy-id');
-    expect(getCookie(ANONYMOUS_ID_COOKIE_LEGACY)).toBeUndefined();
-  });
-
-  it('writes the current cookie once when a matching legacy cookie is migrated, without a reset', () => {
+  it('writes the current cookie when a matching legacy cookie is migrated, without a reset', () => {
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'legacy-id');
     setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
     const { identity } = create();
     const reset = vi.fn();
 
-    identity.adopt({ currentProfileId: undefined, reset });
+    identity.reconcile(identity.read(), { currentProfileId: undefined, reset });
 
     expect(reset).not.toHaveBeenCalled();
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('legacy-id');

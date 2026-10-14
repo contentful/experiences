@@ -5,7 +5,7 @@ import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { advance, installIOPolyfill, setDocumentVisibility } from './test-fixtures/dom.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
@@ -59,6 +59,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearIdentityCookies();
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   vi.useRealTimers();

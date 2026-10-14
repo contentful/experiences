@@ -35,7 +35,11 @@ import {
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import { shouldApplyHandoffProfile } from './handoff-continuity.js';
-import { IdentityCookie, type IdentityCookieOptions } from './identity-cookie.js';
+import {
+  type CookieSnapshot,
+  IdentityCookie,
+  type IdentityCookieOptions,
+} from './identity-cookie.js';
 import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 
@@ -681,25 +685,31 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   /**
-   * Adopts an identity the browser already holds, such as a server cookie. A cookie for a
-   * different visitor than the profile held means that profile is not theirs, so it is
-   * reset before the cookie's identity is written, which the cookie helper sequences.
+   * Reconciles a captured cookie with the profile held. A cookie for a different visitor
+   * than the profile held means that profile is not theirs, so it is reset before the
+   * cookie's identity is written, which the cookie helper sequences.
    */
-  #adoptCookieIdentity(): void {
-    this.#identity.adopt({
+  #reconcileCookie(snapshot: CookieSnapshot): void {
+    this.#identity.reconcile(snapshot, {
       currentProfileId: this.#store.profile?.id,
       reset: () => this.reset(),
     });
   }
 
-  /** Startup: adopt what the browser holds and write what is known, if permitted. */
+  /**
+   * Startup, in the Optimization SDK's constructor order: capture the cookie as it arrived,
+   * synchronize the profile's identity, then reconcile the captured cookie. Reading it again
+   * after the synchronization would see what the SDK itself just wrote, so a conflicting
+   * profile would win over the visitor the cookie names.
+   */
   #initializeIdentity(): void {
     if (this.#store.consent.persistence === false) {
       this.#identity.clear();
       return;
     }
-    if (this.#store.consent.persistence === true) this.#adoptCookieIdentity();
+    const incoming = this.#store.consent.persistence === true ? this.#identity.read() : undefined;
     this.#syncIdentity();
+    if (incoming !== undefined) this.#reconcileCookie(incoming);
   }
 
   /**
@@ -711,7 +721,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     if (granted) {
       // Reconciling the cookie and synchronizing the effective identity are separate steps,
       // as in the Optimization SDK: finding a cookie does not mean the profile is persisted.
-      this.#adoptCookieIdentity();
+      this.#reconcileCookie(this.#identity.read());
       this.#syncIdentity();
       return;
     }
