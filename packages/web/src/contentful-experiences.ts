@@ -34,6 +34,7 @@ import {
   type InteractionTrackingOptions,
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import { shouldApplyHandoffProfile } from './handoff-continuity.js';
 import { IdentityCookie, type IdentityCookieOptions } from './identity-cookie.js';
 import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
@@ -629,12 +630,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     const hydration = Promise.resolve().then(() => {
       if (!initialization.isCurrent() || this.#store.profileRevision !== profileRevision) return;
       // Cacheable profileless state never changes browser profile continuity.
-      if (
-        handoff.cache.scope === 'private-request' &&
-        handoff.state !== undefined &&
-        Object.hasOwn(handoff.state, 'profile')
-      ) {
-        this.#store.profile = handoff.state.profile;
+      if (shouldApplyHandoffProfile(handoff)) {
+        this.#store.profile = handoff.state?.profile;
         this.#syncIdentity();
       }
     });
