@@ -470,6 +470,72 @@ describe('handoff identity', () => {
   });
 });
 
+describe('the effective identity when only the stored id is held', () => {
+  // A returning visitor: the cookie and stored id exist, but no complete profile is in memory.
+  function returningVisitor() {
+    seedConsent({ events: true, persistence: true });
+    setCookie(ANONYMOUS_ID_COOKIE, 'visitor-1');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'visitor-1');
+    return createRuntime();
+  }
+
+  function spyOnFetch() {
+    return vi
+      .spyOn(
+        Object.getPrototypeOf(ContentfulExperiences.prototype) as {
+          fetchExperience: ContentfulExperiences['fetchExperience'];
+        },
+        'fetchExperience'
+      )
+      .mockResolvedValue({ nodes: [] } as never);
+  }
+
+  it('is not replaced by the identity an incoming handoff carries', async () => {
+    const runtime = returningVisitor();
+    expect(runtime.profile).toBeUndefined();
+
+    await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'someone-else' }), {
+      routeKey: '/first',
+    });
+
+    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
+      'visitor-1'
+    );
+  });
+
+  it('is sent with the first fetch', async () => {
+    const runtime = returningVisitor();
+    const fetch = spyOnFetch();
+
+    await runtime.fetchExperience({ experienceId: 'landing' }, { config: { components: {} } });
+
+    expect(fetch.mock.calls[0]![0].personalization?.profileId).toBe('visitor-1');
+  });
+
+  it('yields to an explicit profile on the fetch call', async () => {
+    const runtime = returningVisitor();
+    const fetch = spyOnFetch();
+
+    await runtime.fetchExperience(
+      { experienceId: 'landing', personalization: { profileId: 'explicit' } },
+      { config: { components: {} } }
+    );
+
+    expect(fetch.mock.calls[0]![0].personalization?.profileId).toBe('explicit');
+  });
+
+  it('is not sent when persistence is not granted', async () => {
+    setCookie(ANONYMOUS_ID_COOKIE, 'visitor-1');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'visitor-1');
+    const runtime = createRuntime();
+    const fetch = spyOnFetch();
+
+    await runtime.fetchExperience({ experienceId: 'landing' }, { config: { components: {} } });
+
+    expect(fetch.mock.calls[0]![0].personalization?.profileId).toBeUndefined();
+  });
+});
+
 describe('reset and destroy', () => {
   it('reset() clears the cookie, the stored id and the stored profile', () => {
     seedConsent({ events: true, persistence: true });

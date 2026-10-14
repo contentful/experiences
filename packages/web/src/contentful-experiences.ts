@@ -319,8 +319,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     const profileRevision = this.#store.profileRevision;
     const identityRevision = this.#identityRevision;
     const gated = this.#gatePersonalizationEvents(options);
-    const profileId =
-      gated.personalization?.profileId ?? this.#store.profile?.id ?? this.#adoptedProfileId;
+    const profileId = gated.personalization?.profileId ?? this.#requestIdentity();
     const plan = await super.fetchExperience(
       profileId === undefined
         ? gated
@@ -643,7 +642,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   #adoptHandoffIdentity(handoff: HandoffEnvelope): string | undefined {
-    const profileId = this.#store.profile?.id ?? this.#adoptedProfileId ?? handoff.profileId;
+    const profileId = this.#requestIdentity() ?? handoff.profileId;
     this.#setAdoptedProfileId(profileId);
     this.#syncIdentity();
     return profileId;
