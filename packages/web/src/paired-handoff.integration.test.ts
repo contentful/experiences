@@ -373,7 +373,7 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
       prepared,
       setCookie: identitySetCookie({
         canPersistProfile: request.canPersistProfile,
-        profileId: request.profile?.id,
+        profileId: prepared.handoff.profileId,
         hadCookie: identity !== undefined,
       }),
     };
@@ -413,6 +413,25 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
       vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls.at(-1)![0].profileId
     ).toBe('visitor-1');
     expect(getCookie('ctfl-opt-aid')).toBe('visitor-1');
+  });
+
+  it('writes the continuation id the handoff carries, not the profile the preview returned', async () => {
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+      profile: { id: 'evaluated-profile' },
+    } as never);
+    const server = node();
+
+    const { identity, request, prepared, setCookie } = await serverRequest({
+      server,
+      cookieHeader: 'ctfl-opt-aid=incoming-visitor',
+      serverConsent: true,
+    });
+
+    // The preview evaluated a different profile, but the visitor's continuation is unchanged.
+    expect(identity).toBe('incoming-visitor');
+    expect(request.profile?.id).toBe('evaluated-profile');
+    expect(prepared.handoff.profileId).toBe('incoming-visitor');
+    expect(setCookie).toMatch(/^ctfl-opt-aid=incoming-visitor; /);
   });
 
   it('writes the response cookie only when the host grants persistence', async () => {

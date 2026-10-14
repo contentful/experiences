@@ -41,9 +41,12 @@ const server = createServer((req, res) => {
     // identity on to the browser, which continues it.
     const { handoff } = await request.prepareRequestHandoff({ routeKey: req.url ?? '/' });
 
+    // The cookie holds the handoff's continuation id, not the profile the preview evaluated.
+    // They differ when the incoming identity is not the one the API answers with, and the
+    // browser continues the handoff's, so the cookie has to agree with it.
     const setCookie = identitySetCookie({
       canPersistProfile: request.canPersistProfile,
-      profileId: request.profile?.id,
+      profileId: handoff.profileId,
       hadCookie: identity !== undefined,
     });
     if (setCookie) res.setHeader('Set-Cookie', setCookie);
@@ -52,7 +55,7 @@ const server = createServer((req, res) => {
     // JSON for brevity; render it into your page the way your framework escapes data.
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ identity: request.profile?.id ?? null, handoff }));
+    res.end(JSON.stringify({ identity: handoff.profileId ?? null, handoff }));
   })().catch((error: unknown) => {
     res.statusCode = 500;
     res.end(error instanceof Error ? error.message : 'error');

@@ -44,10 +44,13 @@ function scope(settings: IdentityCookieSettings): string {
 /**
  * The `Set-Cookie` value for a response, or `undefined` when there is nothing to change.
  *
- * Pass the request's `canPersistProfile` and the id the SDK ended up with
- * (`request.profile?.id`). Persistence permission decides: when it is withheld the cookie
- * is expired, in the scope it was written in, and otherwise the current id is written.
- * The cookie's presence is never taken as permission.
+ * Pass the request's `canPersistProfile` and the handoff's continuation id
+ * (`handoff.profileId`), which is what the browser continues. Do not pass the profile the
+ * preview evaluated (`request.profile?.id`); it can differ from the visitor's own id.
+ *
+ * Persistence permission decides: when it is withheld the cookie is expired, in the scope
+ * it was written in, and otherwise the current id is written. The cookie's presence is
+ * never taken as permission.
  */
 export function identitySetCookie({
   canPersistProfile,
