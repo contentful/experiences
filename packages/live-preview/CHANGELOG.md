@@ -1,3 +1,14 @@
+## 0.6.4 (2026-10-14)
+
+### 🚀 Features
+
+- **core:** [NT-4312] resolve reportable scopes and bound entries from the source map ([#223](https://github.com/contentful/experiences/pull/223))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.9.4
+- Updated core to 0.12.3
+
 ## 0.6.3 (2026-10-12)
 
 ### 🧱 Updated Dependencies

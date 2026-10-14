@@ -1,3 +1,42 @@
+## 0.6.4 (2026-10-14)
+
+### 🚀 Features
+
+- ⚠️  **web:** [NT-4312] track by scope occurrence instead of node id ([#225](https://github.com/contentful/experiences/pull/225))
+- [NT-4312] expose source-map attribution through the adapter context accessors ([#224](https://github.com/contentful/experiences/pull/224))
+
+### ⚠️  Breaking Changes
+
+- **web:** [NT-4312] track by scope occurrence instead of node id  ([#225](https://github.com/contentful/experiences/pull/225))
+  `data-ctfl-node-id` is replaced by `data-ctfl-scopes`, a
+  space-separated list of scope occurrence keys, and `resolveAttribution` now
+  takes a key rather than a node id. `getTrackingAttributes` takes a node's
+  `attribution` instead of its `nodeId`.
+  A node id cannot say that one element sits in several scopes, or that several
+  root elements make up one Fragment occurrence. Keys resolve through
+  `plan.attribution.scopes`.
+  `getTrackingAttributes` and the attribute names are pure string functions, so
+  they move into core, and React, Svelte and Angular re-export them: components
+  stamp the attribute from `attribution` without installing `web`. The
+  `tracking-attributes` subpath re-exports them from core.
+  The detectors group elements by key and hand each group to one observer, so an
+  occurrence is one view or hover series: it is in view while any element has a
+  visible pixel, hovered until the last element is left, and its final event keeps
+  the attribution that qualified it. Clicks go to the innermost Fragment
+  occurrence of the nearest tracked ancestor, read from the attribute so the order
+  survives `refresh()`. Experiences remain view-only.
+  This diverges from the Optimization SDK, which tracks per element; the ticket's
+  grouping requirement forces it. The interaction-tracking ADR is removed.
+  Refs: NT-4312
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.6.4
+- Updated runtime to 0.0.3
+- Updated client to 0.9.4
+- Updated design to 0.12.2
+- Updated core to 0.12.3
+
 ## 0.6.3 (2026-10-12)
 
 ### 🧱 Updated Dependencies
