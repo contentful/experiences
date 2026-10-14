@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
+import { identitySetCookie, readIdentity } from '../../../examples/node/identity-cookie.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
+import { getCookie } from './lib/cookies.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
@@ -340,4 +342,155 @@ describe('paired Node preparation and Web delivery', () => {
       expect(upsert).toHaveBeenCalledTimes(4);
     }
   );
+});
+
+// The identity cookie carries a visitor from the browser to a server and back. The host
+// application owns the HTTP: it reads the cookie, supplies the profile and its own consent,
+// and decides what to write from `canPersistProfile`. Neither the cookie's presence nor
+// browser storage is ever taken as server-side consent.
+describe('identity cookie round trip between Web, a host, and Node', () => {
+  const PROFILE_BODY = { profile: { id: 'visitor-1' } };
+
+  /** One server request, as a host adapts it: cookie in, SDK request, Set-Cookie out. */
+  async function serverRequest({
+    server,
+    cookieHeader,
+    serverConsent,
+  }: {
+    server: NodeExperiences;
+    cookieHeader: string | undefined;
+    serverConsent: boolean;
+  }) {
+    const identity = readIdentity(cookieHeader);
+    const request = server.forRequest({
+      profile: identity === undefined ? undefined : { id: identity },
+      consent: { events: serverConsent, persistence: serverConsent },
+    });
+    const prepared = await request.prepareRequestHandoff({ routeKey: '/products' });
+    return {
+      identity,
+      request,
+      prepared,
+      setCookie: identitySetCookie({
+        canPersistProfile: request.canPersistProfile,
+        profileId: request.profile?.id,
+        hadCookie: identity !== undefined,
+      }),
+    };
+  }
+
+  it('carries one identity from the browser, through a server request, and back', async () => {
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue(
+      PROFILE_BODY as never
+    );
+
+    // 1. The Web SDK persists an allowed identity.
+    const browser = web();
+    await browser.identify({ userId: 'user-1' });
+    expect(getCookie('ctfl-opt-aid')).toBe('visitor-1');
+
+    // 2. The browser includes it on the next server request, and Node reuses that profile.
+    const server = node();
+    const { identity, request, prepared } = await serverRequest({
+      server,
+      cookieHeader: `ctfl-opt-aid=${getCookie('ctfl-opt-aid')}`,
+      serverConsent: true,
+    });
+    expect(identity).toBe('visitor-1');
+    expect(request.profile).toEqual({ id: 'visitor-1' });
+    expect(
+      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls.at(-1)![0].profileId
+    ).toBe('visitor-1');
+
+    // 3. The handoff the server returns continues the same identity in a new browser runtime.
+    expect(prepared.handoff.profileId).toBe('visitor-1');
+    browser.destroy();
+    const next = web();
+    await next.hydrateAndTrackCurrentPage(JSON.parse(JSON.stringify(prepared.handoff)), {
+      routeKey: '/products',
+    });
+    expect(
+      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls.at(-1)![0].profileId
+    ).toBe('visitor-1');
+    expect(getCookie('ctfl-opt-aid')).toBe('visitor-1');
+  });
+
+  it('writes the response cookie only when the host grants persistence', async () => {
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue(
+      PROFILE_BODY as never
+    );
+    const server = node();
+
+    const granted = await serverRequest({ server, cookieHeader: undefined, serverConsent: true });
+    const withheld = await serverRequest({ server, cookieHeader: undefined, serverConsent: false });
+
+    expect(granted.setCookie).toMatch(/^ctfl-opt-aid=visitor-1; Path=\/; Expires=/);
+    expect(withheld.setCookie).toBeUndefined();
+  });
+
+  it('does not treat the cookie as server-side consent', async () => {
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue(
+      PROFILE_BODY as never
+    );
+    const server = node();
+
+    // The browser sent an identity, but the application has not granted consent for it.
+    const { request, setCookie } = await serverRequest({
+      server,
+      cookieHeader: 'ctfl-opt-aid=visitor-1',
+      serverConsent: false,
+    });
+
+    expect(request.canPersistProfile).toBe(false);
+    // The identity is expired, in its scope, rather than kept alive.
+    expect(setCookie).toBe('ctfl-opt-aid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/');
+  });
+
+  it('expires the cookie on withdrawal in the scope it was written in, then writes it after a later grant', async () => {
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue(
+      PROFILE_BODY as never
+    );
+    const server = node();
+    const settings = {
+      domain: 'example.com',
+      path: '/shop',
+      sameSite: 'Lax',
+      secure: true,
+    } as const;
+    const scoped = (consent: boolean) => {
+      const request = server.forRequest({
+        profile: { id: 'visitor-1' },
+        consent: { events: consent, persistence: consent },
+      });
+      return identitySetCookie({
+        canPersistProfile: request.canPersistProfile,
+        profileId: request.profile?.id,
+        hadCookie: true,
+        settings,
+      });
+    };
+
+    const withdrawn = scoped(false);
+    const granted = scoped(true);
+
+    expect(withdrawn).toBe(
+      'ctfl-opt-aid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/shop; Domain=example.com; SameSite=Lax; Secure'
+    );
+    expect(granted).toMatch(
+      /^ctfl-opt-aid=visitor-1; Path=\/shop; Domain=example\.com; SameSite=Lax; Secure; Expires=/
+    );
+  });
+
+  it('expires nothing when withheld and there was no cookie to begin with', async () => {
+    const server = node();
+    const request = server.forRequest({ consent: { events: false, persistence: false } });
+
+    expect(
+      identitySetCookie({
+        canPersistProfile: request.canPersistProfile,
+        profileId: undefined,
+        hadCookie: false,
+      })
+    ).toBeUndefined();
+  });
 });

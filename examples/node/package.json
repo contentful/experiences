@@ -1,0 +1,19 @@
+{
+  "name": "@contentful/experiences-example-node",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Framework-neutral Node example: carry the identity cookie between a browser and a server",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env --import tsx server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@contentful/experiences-node": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}
