@@ -5,11 +5,13 @@ import {
   PROFILE_CACHE_KEY,
   PersonalizationDelivery,
   type ExperiencesHandoff,
+  withEventConsent,
 } from '@contentful/experiences-runtime';
 import { ExperienceApiClient } from '@contentful/optimization-api-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 
@@ -38,10 +40,11 @@ function handoff(
     replay: {
       routeKey,
       locale: 'de-DE',
+      // Prepared for an opted-in visitor, matching the browser these tests run as.
       events: [
         runtime.eventBuilder.buildTrack({ event: 'prepared' }),
         runtime.eventBuilder.buildPageView(),
-      ],
+      ].map((event) => withEventConsent(event, true)),
     },
     ...overrides,
   };
@@ -57,10 +60,16 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+// Consent is not what these tests are about: run as a visitor who has opted in.
+beforeEach(() => {
+  seedConsent({ events: true, persistence: true });
+});
+
 afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   window.localStorage.clear();
+  clearIdentityCookies();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -283,7 +292,7 @@ describe('Web handoff and current-page lifecycle', () => {
           runtime.eventBuilder.buildTrack({ event: `accepted-${index}` })
         ),
         runtime.eventBuilder.buildPageView(),
-      ];
+      ].map((event) => withEventConsent(event, true));
       await expect(
         runtime.hydrateAndTrackCurrentPage(
           handoff(runtime, '/full', { replay: { routeKey: '/full', events, locale: 'de-DE' } }),

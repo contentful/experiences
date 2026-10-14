@@ -81,7 +81,7 @@ const experienceRequest = experiences.forRequest({
   locale: requestLocale,
   profile: currentProfile,
   eventContext: { page: pageProperties, userAgent },
-  eventConsent: hasAnalyticsConsent,
+  consent: { events: hasAnalyticsConsent },
 });
 
 const identified = await experienceRequest.identify({ userId });
@@ -102,7 +102,27 @@ runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method'
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as
 fallback. An event's explicit locale changes its body only; it does not change content evaluation
 or the Personalization request locale.
-`eventConsent`, when provided, annotates `context.gdpr.isConsentGiven`; it does not gate sending.
+`consent.events` gates sending and sets `context.gdpr.isConsentGiven`. Until it is `true`, only
+`allowedEventTypes` (default `identify` and `page`) are sent; a blocked Personalization call
+resolves `{ accepted: false }` and a blocked Analytics call resolves `false`. Blocked events are
+dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configure
+`allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
+consent itself is per request. A boolean `consent` sets event and persistence consent together.
+Consent is scoped to the request facade and is never shared across requests or persisted.
+Check `request.canPersistProfile` before storing the profile id. A host that carries the
+identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })` and uses
+`canPersistProfile` to write or expire the response cookie; the cookie's presence is never
+server-side consent. See the [Node example](../../examples/node/README.md). Events passed in
+`fetchExperience({ personalization: { events } })` are filtered by the same request
+consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
+alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
+
+`prepareRequestHandoff()` filters its optional `initialEvents` one by one before building the batch,
+reporting each one that is not admitted to `onEventBlocked`, so a blocked `track` does not stop a
+permitted `page` from being previewed and replayed. The batch always ends in one page, so when the
+page itself is not admitted nothing is prepared and the handoff has no replay. The browser still
+admits a batch that is already prepared whole or not at all.
+
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
 

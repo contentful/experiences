@@ -3,6 +3,14 @@ import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   buildPreparedEvents,
   createExperiencesHandoff,
+  hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
+  toConsentState,
+  type AllowedEventType,
+  type BlockedEvent,
+  type ConsentInput,
+  type ConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventEmissionResult,
@@ -30,7 +38,13 @@ import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 /** Stable SDK configuration; request-sensitive values belong to forRequest(). */
 export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder'> & {
   app?: EventBuilderConfig['app'];
+  /** Event types emitted while event consent is not granted. Defaults to identify and page. */
+  allowedEventTypes?: readonly AllowedEventType[];
+  /** Called when consent drops an event. Blocked events are never replayed. */
+  onEventBlocked?: (event: BlockedEvent) => void;
 };
+
+type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'>;
 
 /** Context scoped to one incoming Node request. */
 export type ExperiencesNodeRequestContext = {
@@ -38,7 +52,13 @@ export type ExperiencesNodeRequestContext = {
   resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
   eventContext?: UniversalEventBuilderArgs;
-  /** GDPR metadata on built events; this is not permission to send or persist. */
+  /**
+   * Request-scoped consent: `true` or `false` sets event and persistence consent
+   * together, an object sets either independently. Never shared across requests
+   * and never persisted; undecided is treated as not granted.
+   */
+  consent?: ConsentInput;
+  /** @deprecated Use `consent.events`. Ignored when `consent.events` is set. */
   eventConsent?: boolean;
 };
 
@@ -78,6 +98,8 @@ type NodeAnalyticsMethods = Pick<
 export interface ExperiencesNodeRequest extends NodePersonalizationMethods, NodeAnalyticsMethods {
   readonly locale: string | undefined;
   readonly profile: EventProfile | undefined;
+  /** Whether the host application may persist this request's profile id. */
+  readonly canPersistProfile: boolean;
   resolveExperience(
     payload: ExperiencePayload,
     resolveOptions: RuntimeResolveOptions
@@ -101,8 +123,10 @@ export interface ExperiencesNodeRequest extends NodePersonalizationMethods, Node
 
 /** Node SDK with stable transport configuration and request-local event state. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
+  readonly #consentPolicy: ConsentPolicy;
+
   constructor(config: ExperiencesNodeConfig) {
-    const { app, ...runtimeConfig } = config;
+    const { app, allowedEventTypes, onEventBlocked, ...runtimeConfig } = config;
     super({
       ...runtimeConfig,
       eventBuilder: {
@@ -111,6 +135,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         library: DEFAULT_EVENT_CONTEXT_LIBRARY,
       },
     });
+    this.#consentPolicy = { allowedEventTypes, onEventBlocked };
   }
 
   forRequest(context: ExperiencesNodeRequestContext = {}): ExperiencesNodeRequest {
@@ -122,7 +147,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           { profileId, events: [...events] },
           { locale, preflight: true }
         ),
-      (bindings) => this.createEventMethods(bindings)
+      (bindings) => this.createEventMethods(bindings),
+      this.#consentPolicy
     );
   }
 }
@@ -131,6 +157,8 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   readonly locale: string | undefined;
   #profile: EventProfile | undefined;
   #profileRevision = 0;
+  readonly #consent: ConsentState;
+  readonly canPersistProfile: boolean;
 
   readonly identify: NodePersonalizationMethods['identify'];
   readonly page: NodePersonalizationMethods['page'];
@@ -144,10 +172,14 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     private readonly runtime: ContentfulExperiences,
     private readonly context: ExperiencesNodeRequestContext,
     private readonly preflightPersonalizationEvents: PreflightPersonalizationEvents,
-    createEventMethods: (bindings: RuntimeEventBindings) => RuntimeEventMethods
+    createEventMethods: (bindings: RuntimeEventBindings) => RuntimeEventMethods,
+    private readonly consentPolicy: ConsentPolicy
   ) {
     this.locale = context.locale ?? runtime.locale;
     this.#profile = context.profile;
+    const requested = toConsentState(context.consent ?? {});
+    this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
+    this.canPersistProfile = this.#consent.persistence === true;
 
     const methods = createEventMethods({
       getProfile: () => this.#profile,
@@ -155,7 +187,9 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getProfileRevision: () => this.#profileRevision,
       getLocale: () => this.locale,
       getEventContext: () => this.getRequestEventContext(),
-      getConsent: () => context.eventConsent,
+      getConsent: () => this.#consent,
+      allowedEventTypes: consentPolicy.allowedEventTypes,
+      onEventBlocked: consentPolicy.onEventBlocked,
     });
 
     this.identify = methods.identify.bind(methods);
@@ -190,12 +224,16 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       if (!routeKey.startsWith('/')) {
         throw new TypeError('Request handoff requires a pathname/search route key');
       }
+      // The initial identify and track inputs are optional, and removing one still
+      // leaves a batch that ends in one page, so each is checked on its own. The page is
+      // not optional: without a permitted page there is no batch to prepare.
+      if (!this.admitMethod('page', page ?? {})) return { handoff };
       events = buildPreparedEvents({
         eventBuilder: this.runtime.eventBuilder,
-        initialEvents,
+        initialEvents: initialEvents?.filter((input) => this.admitMethod(input.type, input)),
         page,
         eventContext: this.getRequestEventContext(),
-        eventConsent: this.context.eventConsent,
+        eventConsent: this.#consent.events === true,
       });
     } catch {
       console.warn(
@@ -244,11 +282,12 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const profileRevision = this.#profileRevision;
-    const profileId = options.personalization?.profileId ?? this.#profile?.id;
+    const gated = this.gatePersonalizationEvents(options);
+    const profileId = gated.personalization?.profileId ?? this.#profile?.id;
     const resolvedOptions =
       profileId === undefined
-        ? options
-        : { ...options, personalization: { ...options.personalization, profileId } };
+        ? gated
+        : { ...gated, personalization: { ...gated.personalization, profileId } };
     const plan = await this.runtime.fetchExperience(
       { ...resolvedOptions, locale: options.locale ?? this.locale },
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
@@ -278,6 +317,43 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       options,
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
+  }
+
+  /**
+   * Drops caller-built XDA events that this request's consent does not admit. The
+   * profile id still travels, since it is not an event.
+   */
+  private gatePersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): RuntimeFetchExperienceOptions {
+    const events = options.personalization?.events;
+    if (events === undefined) return options;
+
+    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
+    const admitted = events.filter((event) => {
+      if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
+      const method = methodForEventType(event.type);
+      if (method === undefined) return false;
+      try {
+        onEventBlocked?.({ reason: 'consent', method, args: [event] });
+      } catch {
+        // A failing diagnostic callback must not break event delivery.
+      }
+      return false;
+    });
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
+  }
+
+  /** Whether one prepared method may be sent; reports it to `onEventBlocked` when it may not. */
+  private admitMethod(method: 'identify' | 'page' | 'track', args: unknown): boolean {
+    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
+    if (hasEventConsent(method, this.#consent, allowedEventTypes)) return true;
+    try {
+      onEventBlocked?.({ reason: 'consent', method, args: [args] });
+    } catch {
+      // A failing diagnostic callback must not break event delivery.
+    }
+    return false;
   }
 
   private getRequestEventContext(): UniversalEventBuilderArgs {

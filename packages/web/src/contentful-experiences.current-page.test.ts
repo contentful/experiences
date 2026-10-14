@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { clearIdentityCookies } from './test-fixtures/consent.js';
 import { ContentfulExperiences } from './contentful-experiences.js';
 
 function deferred<T>() {
@@ -16,6 +17,7 @@ function deferred<T>() {
 
 afterEach(() => {
   window.localStorage.clear();
+  clearIdentityCookies();
   vi.restoreAllMocks();
 });
 

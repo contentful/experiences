@@ -93,7 +93,7 @@ use the Personalization API, while `trackView`, `trackClick`,
 `trackHover`, and `trackFlagView` use the Analytics API. Web now has an in-memory
 Personalization queue for ordinary offline events and prepared-batch admission;
 ordinary online events and Analytics remain direct. The SDK does not persist event
-data durably, gate on consent, use beacon/lifecycle delivery, or integrate event
+data durably, use beacon/lifecycle delivery, or integrate event
 delivery with Live Preview. The Web
 runtime's `startInteractionTracking()` tracks views, hovers, and clicks on
 elements carrying `data-ctfl-scopes` (a space-separated list of scope occurrence
@@ -107,12 +107,40 @@ is active.
 
 By-ID fetch options can also carry first-class personalization with a profile id
 and caller-built events; Client maps it to XDA's extension body, and Node
-proxies it without retaining state. The current generated XDA request has no
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. The current generated XDA request has no
 noncommitting preflight option. Independent Personalization preparation and an
 event-bearing XDA fetch may duplicate events; this PR adds no interim
 suppression or placeholder API. Typed XDA preflight integration follows upstream
 support and must be verified before public release.
 Existing free functions remain supported.
+
+Events are consent-gated. Consent is `{ events, persistence }`, where undecided
+means not granted. Until event consent is granted only `allowedEventTypes`
+(default `identify` and `page`) are sent; the selectors are the Optimization
+SDK's (`component`, `component_click`, `component_hover`, `flag`). A blocked
+Personalization call resolves `{ accepted: false }`, a blocked Analytics call
+resolves `false`, and `onEventBlocked` reports it. Blocked events are dropped,
+never replayed, and withdrawing event consent (`consent({ events: false })`) also drops events
+already accepted into Web's offline queue. The same gate covers caller-built fetch events and the prepared
+handoff batch the browser replays. Node filters the optional initial identify and
+track inputs one by one before it builds the batch, which still ends in one page, and
+prepares nothing if the page itself is not admitted. Web admits a batch that is
+already prepared whole or not at all, because it is replayed exactly as the server
+previewed it. A refused prepared batch falls back to the browser's own gated page
+event. Admitted prepared events are re-stamped with the browser's event consent,
+not the server's; fetch events are not, because XDA's embedded event schema has
+no consent field.
+Web persists consent, always, in LocalStorage (the Optimization SDK's keys and
+`accepted`/`denied` encoding, so both SDKs share one decision) and writes the profile
+only with persistence consent; configured startup defaults take precedence over
+stored decisions and are written to the shared consent keys, and a default that denies
+persistence deletes the stored profile; Node scopes consent to one `forRequest()` facade and exposes
+`canPersistProfile`. Persistence consent also gates the identity cookie `ctfl-opt-aid`,
+which Web writes and a server reads: Web adopts a cookie the browser holds, migrates the
+legacy `ntaid`, removes the identity on withdrawal while keeping the in-memory profile,
+clears it on `reset()` and not on `destroy()`. Node never touches HTTP; the host reads the
+cookie, supplies it through `forRequest({ profile, consent })` and uses `canPersistProfile` to
+write or expire the response cookie. The cookie being present is not server-side consent.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 
@@ -286,7 +314,7 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 - **`core` has no dependencies.** It may not depend on `react`, the delivery client, or any framework-specific package. It owns runtime-neutral payload/plan types, resolution, diagnostics, and design-resolution support. Enforced by code review (no module-boundary lint rule yet, but it should land).
 - **`design` owns CSS-property helpers.** Its `CSS_PROPERTIES`, `isCssProperty`, and `toCssKey` exports support the adapters' `toCss` helper. Core owns design-value and token resolution.
 - **`client` is the only package that may depend on `@contentful/experience-delivery`.** All delivery-client usage must go through `packages/client` — never import it directly from an adapter, from `core`, or from the public Node or Web SDK. Live Preview remains independently configured in its own package.
-- **`client` owns Delivery and free functions; `runtime` owns event construction and orchestration.** Client retains generated-XDA-derived request types, payload conversion, errors, and `fetchExperience`. Runtime depends on Client's public exports, never the generated dependency directly. Client never imports Runtime or forwards `EventBuilder`. Runtime owns the complete builder implementation, schemas, defaults, metadata, identity constants, Optimization transport, direct event methods, and lower-layer shared runtime. Node/Web runtime constructors take `RuntimeDeliveryClientOptions`, then construct and retain their own Delivery, optional Preview, and Optimization clients; they never accept caller-created delivery clients. A token may be a supplier, or may be omitted only with an explicit proxy host, which disables generated auth and must own upstream authentication. The runtime never retains request or browser state. `packages/node` is the public request-scoped leaf. Its ordinary event methods send directly, while `prepareRequestHandoff()` builds one identify/track/page batch and previews it once without committing. The request facade retains volatile profile and event context; no cumulative or mixed-transport Node journal remains. Web uses imperative `hydrateHandoffState`, `hydrateAndTrackCurrentPage`, and `trackCurrentPage` calls on its single live instance. A still-current paired initialization atomically publishes its continuation before hydration; existing profile/continuity wins over the incoming ID. Supersession cancels pending hydration/replay but never rolls back published identity or withdraws accepted queue work. Concurrent fetches can join identity initialization without waiting for replay HTTP. It persists its current profile in LocalStorage and uses Runtime's in-memory Personalization sender for offline ordinary events and prepared batch admission. Handoffs are browser-visible exact event bodies; safely escape them into private/no-store responses, exclude secrets/server-only traits, and never cache, log, or persist them. Prepared replay has no durable queue or exactly-once guarantee. `identify`, `page`, and `track` use the Personalization API; `trackView`, `trackClick`, `trackHover`, and `trackFlagView` use Analytics. There are no general SDK-wide queues, durable event persistence, consent gates, beacon/lifecycle delivery, or Live Preview event integration. Web interaction tracking (`startInteractionTracking()`) is browser-only and sends through the direct Analytics methods. Direct CPA fetching is distinct from the Preview Session HTTP/WebSocket functionality owned by `packages/live-preview`; manually invoked event methods still send during preview. The separate adapter/free `fetchExperience(..., { client })`, `createClient`, and raw `ContentfulViewDeliveryClient` paths remain supported. See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
+- **`client` owns Delivery and free functions; `runtime` owns event construction and orchestration.** Client retains generated-XDA-derived request types, payload conversion, errors, and `fetchExperience`. Runtime depends on Client's public exports, never the generated dependency directly. Client never imports Runtime or forwards `EventBuilder`. Runtime owns the complete builder implementation, schemas, defaults, metadata, identity constants, Optimization transport, direct event methods, and lower-layer shared runtime. Node/Web runtime constructors take `RuntimeDeliveryClientOptions`, then construct and retain their own Delivery, optional Preview, and Optimization clients; they never accept caller-created delivery clients. A token may be a supplier, or may be omitted only with an explicit proxy host, which disables generated auth and must own upstream authentication. The runtime never retains request or browser state. `packages/node` is the public request-scoped leaf. Its ordinary event methods send directly, while `prepareRequestHandoff()` builds one identify/track/page batch and previews it once without committing. The request facade retains volatile profile and event context; no cumulative or mixed-transport Node journal remains. Web uses imperative `hydrateHandoffState`, `hydrateAndTrackCurrentPage`, and `trackCurrentPage` calls on its single live instance. A still-current paired initialization atomically publishes its continuation before hydration; existing profile/continuity wins over the incoming ID. Supersession cancels pending hydration/replay but never rolls back published identity or withdraws accepted queue work. Concurrent fetches can join identity initialization without waiting for replay HTTP. It persists its current profile in LocalStorage only once persistence consent is granted. Consent is a `{ events, persistence }` state, undecided meaning not granted: Web holds it globally and always stores it in LocalStorage, while Node scopes it to one `forRequest()` facade and never persists it. Without event consent only `allowedEventTypes` (default `identify`, `page`) are sent. It uses Runtime's in-memory Personalization sender for offline ordinary events and prepared batch admission. Handoffs are browser-visible exact event bodies; safely escape them into private/no-store responses, exclude secrets/server-only traits, and never cache, log, or persist them. Prepared replay has no durable queue or exactly-once guarantee. `identify`, `page`, and `track` use the Personalization API; `trackView`, `trackClick`, `trackHover`, and `trackFlagView` use Analytics. There are no general SDK-wide queues, durable event persistence, beacon/lifecycle delivery, or Live Preview event integration. Web interaction tracking (`startInteractionTracking()`) is browser-only and sends through the direct Analytics methods. Direct CPA fetching is distinct from the Preview Session HTTP/WebSocket functionality owned by `packages/live-preview`; manually invoked event methods still send during preview. The separate adapter/free `fetchExperience(..., { client })`, `createClient`, and raw `ContentfulViewDeliveryClient` paths remain supported. See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 - **One live Experiences Web SDK per JavaScript runtime.** Web owns a `globalThis` lock and releases it on construction failure or idempotent `destroy()`, after stopping active interaction observers. The shared Runtime base and Node SDK do not acquire that lock; independent Node instances may coexist, and `forRequest()` facades remain request-local views of their own Node instance. Experiences Web and Optimization Web are alternative product SDKs; consumers must not run both on the same page. The SDKs do not coordinate their locks or profile storage.
 - **The customer-facing adapter (`adapter-react`) owns the SDK-wide re-exports.** The `live-preview` package has its own customer-facing entry point. Internal packages keep their exports in their own entry points.
 

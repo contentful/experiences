@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { ConsentPanel } from '@/components/ConsentPanel';
+
 export const metadata = {
   title: 'Contentful Experiences — Next.js example',
   description: 'Demonstrates @contentful/experiences-react with the Next.js App Router.',
@@ -18,6 +20,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         }}
       >
         {children}
+        <ConsentPanel
+          spaceId={process.env.SPACE_ID ?? ''}
+          environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
+          accessToken={process.env.CDA_TOKEN ?? ''}
+        />
       </body>
     </html>
   );

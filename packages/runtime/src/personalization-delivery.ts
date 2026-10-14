@@ -11,7 +11,7 @@ import {
   PersonalizationFlushRuntime,
   type PersonalizationFlushPolicy,
 } from './personalization-flush.js';
-import { MAX_PREPARED_EVENTS, validatePreparedEvents } from './prepared-events.js';
+import { MAX_PREPARED_EVENTS } from './prepared-events.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
@@ -99,24 +99,24 @@ export class PersonalizationDelivery {
     return { accepted: true };
   }
 
-  /** Admit an entire prepared batch without waiting for HTTP completion. */
+  /**
+   * Admit an entire prepared batch without waiting for HTTP completion.
+   *
+   * The batch is already validated: validation, the shared batch limits and consent belong
+   * to the emission boundary, which hands the queue the validated type. This only checks
+   * that the queue has room.
+   */
   sendPrepared(
-    events: readonly unknown[],
+    events: readonly ExperienceEvent[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
     if (this.#token === undefined || this.#closing) return { accepted: false };
-    let validEvents: readonly ExperienceEvent[];
-    try {
-      validEvents = validatePreparedEvents(events);
-    } catch {
-      return { accepted: false };
-    }
-    if (this.queuedEventCount + validEvents.length > this.#maxEvents) {
+    if (this.queuedEventCount + events.length > this.#maxEvents) {
       return { accepted: false };
     }
 
     this.#queue.push({
-      events: [...validEvents],
+      events: [...events],
       request: { profileId: target.profileId ?? this.#getProfileId(), locale: target.locale },
     });
     void this.flush();
@@ -180,6 +180,22 @@ export class PersonalizationDelivery {
     } finally {
       if (isCurrent()) this.#flushRuntime.markFlushFinished();
     }
+  }
+
+  /**
+   * Drops queued batches, cancels the scheduled retry, and invalidates requests
+   * already in flight, leaving the delivery live. A request on the wire cannot be
+   * recalled, but its response can no longer publish profile or delivery state.
+   * Used when event consent is withdrawn, so events accepted earlier are not sent,
+   * and nothing they return is kept, after the visitor says no.
+   */
+  clearQueue(): void {
+    if (this.#token === undefined) return;
+    this.#token = this.#closing ? undefined : {};
+    this.#activeFlush = undefined;
+    this.#queue.length = 0;
+    this.#flushRuntime.reset();
+    this.#state = { status: 'idle' };
   }
 
   reset(): void {

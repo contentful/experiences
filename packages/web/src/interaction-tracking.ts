@@ -52,12 +52,29 @@ export interface InteractionTrackingOptions {
   clicks?: boolean;
 }
 
+/** The event methods interaction tracking sends through, which consent can gate. */
+export type TrackedMethod = 'trackView' | 'trackHover' | 'trackClick';
+
+/**
+ * Wiring that the runtime supplies rather than the application: whether a method may
+ * currently be sent. Detectors run only while it is, so permission starts a fresh
+ * measurement instead of reporting time measured before it was granted.
+ */
+export interface InteractionTrackingGate {
+  isAllowed(method: TrackedMethod): boolean;
+}
+
 export interface InteractionTracking {
   /**
    * Re-resolves every discovered element against `resolveAttribution` — call
    * after the lookup's data changes (e.g. new attribution for the same DOM).
    */
   refresh(): void;
+  /**
+   * Starts or stops detectors to match what is currently permitted. Call after consent
+   * changes. A detector that becomes permitted starts a new measurement interval.
+   */
+  syncConsent(): void;
   /** Ends in-progress views/hovers, sending their final events, and awaits them. */
   endActive(): Promise<void>;
   /** Stops discovery and every detector. Call `endActive()` first to flush in-progress events. */
@@ -72,10 +89,16 @@ type TrackingEvents = Pick<ContentfulExperiences, 'trackView' | 'trackHover' | '
  */
 export function createInteractionTracking(
   events: TrackingEvents,
-  options: InteractionTrackingOptions
+  options: InteractionTrackingOptions,
+  gate: InteractionTrackingGate = { isAllowed: () => true }
 ): InteractionTracking {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
-    return { refresh: () => undefined, endActive: async () => undefined, destroy: () => undefined };
+    return {
+      refresh: () => undefined,
+      syncConsent: () => undefined,
+      endActive: async () => undefined,
+      destroy: () => undefined,
+    };
   }
 
   const root = options.root ?? document;
@@ -89,19 +112,38 @@ export function createInteractionTracking(
     return isTrackedEntity(attribution) ? attribution : undefined;
   };
 
-  const detectors: InteractionDetector[] = [];
+  interface ManagedDetector {
+    readonly method: TrackedMethod;
+    readonly detector: InteractionDetector;
+    running: boolean;
+  }
+  const managed: ManagedDetector[] = [];
+  const add = (method: TrackedMethod, detector: InteractionDetector): void => {
+    managed.push({ method, detector, running: false });
+  };
   if (options.views !== false) {
     const viewOptions = typeof options.views === 'object' ? options.views : undefined;
-    detectors.push(
+    add(
+      'trackView',
       createViewDetector((args) => events.trackView(args), resolveKeyAttribution, viewOptions)
     );
   }
   if (options.hovers !== false) {
-    detectors.push(createHoverDetector((args) => events.trackHover(args), resolveKeyAttribution));
+    add(
+      'trackHover',
+      createHoverDetector((args) => events.trackHover(args), resolveKeyAttribution)
+    );
   }
   if (options.clicks !== false) {
-    detectors.push(createClickDetector((args) => events.trackClick(args), resolveKeyAttribution));
+    add(
+      'trackClick',
+      createClickDetector((args) => events.trackClick(args), resolveKeyAttribution)
+    );
   }
+  // Only detectors that are currently permitted observe anything. A detector that is
+  // not running holds no elements and no measurement.
+  const running = (): InteractionDetector[] =>
+    managed.filter((entry) => entry.running).map((entry) => entry.detector);
 
   // Elements currently handed to the detectors: for each, the keys it was handed
   // over under, with the entity each key resolved to.
@@ -136,11 +178,11 @@ export function createInteractionTracking(
 
     for (const [key, entity] of current) {
       if (next.get(key) === entity) continue;
-      for (const detector of detectors) detector.onElementRemoved(element, key);
+      for (const detector of running()) detector.onElementRemoved(element, key);
     }
     for (const [key, entity] of next) {
       if (current.get(key) === entity) continue;
-      for (const detector of detectors) detector.onElementAdded(element, key);
+      for (const detector of running()) detector.onElementAdded(element, key);
     }
 
     if (next.size > 0) observed.set(element, next);
@@ -167,7 +209,29 @@ export function createInteractionTracking(
     for (const element of candidates) reconcile(element);
   });
 
-  for (const detector of detectors) detector.start();
+  /**
+   * Brings each detector in line with what is permitted now. A detector that stops
+   * drops any measurement in progress; one that starts begins fresh over every
+   * (element, key) already observed, so time measured before permission is never
+   * reported.
+   */
+  const sync = (): void => {
+    for (const entry of managed) {
+      const allowed = gate.isAllowed(entry.method);
+      if (allowed && !entry.running) {
+        entry.running = true;
+        entry.detector.start();
+        for (const [element, keys] of observed) {
+          for (const key of keys.keys()) entry.detector.onElementAdded(element, key);
+        }
+      } else if (!allowed && entry.running) {
+        entry.running = false;
+        entry.detector.stop();
+      }
+    }
+  };
+
+  sync();
   mutationObserver.observe(root, {
     childList: true,
     subtree: true,
@@ -182,12 +246,16 @@ export function createInteractionTracking(
       root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
       for (const element of candidates) reconcile(element);
     },
+    syncConsent: sync,
     async endActive() {
-      await Promise.all(detectors.map((detector) => detector.endActive?.()));
+      await Promise.all(running().map((detector) => detector.endActive?.()));
     },
     destroy() {
       mutationObserver.disconnect();
-      for (const detector of detectors) detector.stop();
+      for (const entry of managed) {
+        entry.running = false;
+        entry.detector.stop();
+      }
       observed.clear();
     },
   };

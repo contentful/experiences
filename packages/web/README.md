@@ -126,7 +126,7 @@ The Web runtime provides event methods: `identify`, `page`, `track`,
 initial profile when creating the runtime, or identify a profile before sending
 Analytics events. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
-persisted and restored from LocalStorage.
+persisted and restored from LocalStorage once persistence consent is granted.
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response
 establishes and persists the next profile. `destroy()` stops owned listeners and
@@ -140,10 +140,10 @@ visitor session.
 const experiences = new ContentfulExperiences({
   // delivery and resolver configuration...
   profile: { id: 'visitor-123' },
-  browserContext: {
-    getConsent: () => consentStore.hasAnalyticsConsent(),
-  },
 });
+
+// From your consent banner. Undecided is treated as not granted.
+experiences.consent(true); // or consent({ events: true, persistence: false })
 
 const result = await experiences.track({
   event: 'cta_clicked',
@@ -160,7 +160,7 @@ Each call reads the current locale and browser context, so SPA navigation and
 locale overrides affect event bodies only. Ordinary Personalization sends use the
 current SDK locale, including when flushing offline events. Prepared replay uses
 the server's captured transport locale, including an absent locale, independently
-of the browser's current locale. The consent provider annotates the event context; it does not gate sending. Redact page and
+of the browser's current locale. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
 prepared work. Offline ordinary calls are accepted into an in-memory queue until
@@ -170,9 +170,112 @@ completion. Read `personalizationDeliveryState` for the latest request status
 (`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
-The queue is not durable and does not gate on consent. Analytics methods continue
+The queue is not durable. Analytics methods continue
 to send directly and require a profile or
 an adopted continuation ID.
+
+### Consent
+
+`consent(true | false | { events?, persistence? })` records the visitor's
+decisions, and `consentState` reads them. A boolean sets both axes; an object
+updates either independently. Undecided is treated as not granted. This mirrors
+the Optimization SDK's consent model.
+
+- **Event consent.** Until `events` is `true`, only event types in
+  `allowedEventTypes` (default `identify` and `page`) are sent. Selectors are the
+  Optimization names: `identify`, `page`, `track`, `component` (views),
+  `component_click`, `component_hover`, and `flag` (flag views only; `component`
+  also admits them). A blocked Personalization call resolves
+  `{ accepted: false }`; a blocked Analytics call resolves `false`.
+  `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
+  replayed after consent is granted, and reported to `onEventBlocked`.
+- **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
+  drops events already accepted into the offline queue, and cancels its retry, so
+  they are not sent when the connection returns or when `destroy()` drains the
+  queue. A request already on the wire cannot be recalled. A persistence-only change
+  leaves the queue alone.
+- **Persistence consent.** The profile is written to LocalStorage only when
+  `persistence` is `true`. `false` removes the stored profile but keeps the
+  in-memory one; undecided neither restores nor clears it.
+- **Startup defaults.** `defaults: { consent, persistenceConsent }` take
+  precedence over a stored decision, as in the Optimization SDK, and
+  `persistenceConsent` falls back to `consent` when it is not set. An axis you leave
+  unset keeps its stored value. Consent is resolved first and the profile is loaded
+  after, so a default that denies persistence never loads the stored profile.
+  Defaults have the same storage effects as in the Optimization SDK: the effective
+  decisions are written to the consent keys, so a default **becomes the stored
+  decision** and removing it later does not restore the visitor's earlier choice, and
+  a default that denies persistence **deletes the stored profile**. A visitor who has
+  not decided, with no defaults, has nothing written.
+- **Consent itself** is always stored in LocalStorage, so a visitor's choice
+  survives reloads. It is global to the runtime, not per call. It uses the
+  Optimization SDK's keys and encoding, so pages on one origin share a visitor's
+  decision whichever of the two SDKs they use, for example while migrating. The two
+  SDKs are still not supported together on one page. `__ctfl_opt_consent__` holds
+  `accepted` or `denied`
+  for event consent, and `__ctfl_opt_persistence_consent__` holds the same for
+  persistence consent. An absent key is undecided. Event consent `accepted` with no
+  persistence key counts as persistence `accepted`. A value this SDK does not
+  recognize is treated as undecided and left untouched.
+
+Personalization methods (`identify`, `page`, `track`) resolve
+`{ accepted, data? }`, where `data` is the Personalization response.
+
+The same gate applies to events that are already built:
+
+- A server-prepared handoff batch (`hydrateAndTrackCurrentPage`) is checked against
+  the browser's own consent before it is queued, so a server cannot send what the
+  visitor has not allowed. A prepared batch is identify and track events followed
+  by one page, and is admitted whole or not at all: if any event is not admitted,
+  the batch is refused, each blocked event is reported to `onEventBlocked`, and the
+  browser sends its own page event through the ordinary gated path instead. Each
+  admitted event is sent with `context.gdpr.isConsentGiven` set from the browser's
+  event consent, not the value the server stamped, so the flag always matches the
+  decision that admitted it.
+- Events passed in `fetchExperience({ personalization: { events } })` are filtered
+  before the request, and the `profileId` still travels. They are not re-stamped,
+  because XDA's embedded event schema has no consent field.
+
+Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
+`trackClick`, `exo_node_hover` to `trackHover`, `component` to `trackFlagView`).
+A type this SDK never emits, such as `screen`, is admitted only if it is listed in
+`allowedEventTypes`, and a blocked one is not reported to `onEventBlocked`.
+
+### Identity cookie
+
+A server cannot read LocalStorage, so the SDK also keeps the visitor's identity in the
+`ctfl-opt-aid` cookie, which a server reads to recognise them on the next request. It uses
+the Optimization SDK's cookie names and storage keys, so both SDKs read and write the same
+one. Everything here is gated on **persistence consent**; nothing is written without it.
+
+- **What it holds.** A complete profile's id, else an identity adopted from a handoff, else
+  the id already stored. The fallback means a visitor keeps their continuity while the
+  profile is absent, and a static or public handoff, which carries no profile, cannot erase
+  it. It follows profile responses, XDA profile ids and handoff state.
+- **At startup, and when persistence is granted later,** the SDK adopts an identity the
+  browser already holds, such as one a server wrote, and migrates a legacy `ntaid` cookie.
+  That id is what the next request is sent under. A cookie for a different visitor than the
+  profile held resets that profile first. An identity already held in memory is written when
+  persistence is granted.
+- **Withdrawing persistence** (or a default that denies it) removes the cookie and the stored
+  id and keeps the in-memory profile. Event consent is independent.
+- **`reset()`** clears the identity, the stored profile and the cookie. **`destroy()`** does
+  not: it releases the SDK's resources and leaves approved continuity in place. A response
+  invalidated by a withdrawal or a reset cannot recreate it.
+- **Cookie settings** come from the `cookie` option: `domain`, `path`, `sameSite`, `secure`
+  and `expires` in days (365 by default). A deletion always uses the scope the cookie was
+  written with, so set the same values on any server that also writes it.
+
+```ts
+const experiences = new ContentfulExperiences({
+  // ...
+  cookie: { domain: 'example.com', sameSite: 'lax', secure: true },
+});
+```
+
+On the server, the host reads the cookie, supplies it through `forRequest({ profile,
+consent })`, and uses `canPersistProfile` to write or expire the response cookie. See the
+[Node example](../../examples/node/README.md).
 
 ## Interaction tracking
 
@@ -325,8 +428,8 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No durable event persistence, beacon/lifecycle delivery, or consent gating.
-  Personalization's offline queue is in memory only. Automatic interaction
+- No durable event persistence or beacon/lifecycle delivery. Personalization's
+  offline queue is in memory only, and withdrawing event consent discards it. Automatic interaction
   tracking uses the direct Analytics methods.
 - No framework adapter stamps tracked elements for you; components spread
   `getTrackingAttributes` onto their outermost element.

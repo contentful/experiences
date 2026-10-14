@@ -5,6 +5,7 @@ import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { advance, installIOPolyfill, setDocumentVisibility } from './test-fixtures/dom.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
@@ -36,17 +37,29 @@ function render(nodeId: string, tag = 'div'): HTMLElement {
   return element;
 }
 
+/** Spies on the Analytics transport so tests see what would actually be sent. */
+function spyOnTransport(runtime: ContentfulExperiences) {
+  const analytics = (runtime as unknown as { optimizationApi: { analytics: InsightsApiClient } })
+    .optimizationApi.analytics;
+  return vi.spyOn(analytics, 'sendBatchEvents').mockResolvedValue(true);
+}
+
+const sentEvents = (send: ReturnType<typeof spyOnTransport>) =>
+  send.mock.calls.flatMap(([batches]) => batches.flatMap((batch) => batch.events));
+
 const click = (element: Element): void => {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 };
 
 beforeEach(() => {
+  seedConsent({ events: true, persistence: true });
   vi.useFakeTimers();
   vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
   setDocumentVisibility('visible');
 });
 
 afterEach(() => {
+  clearIdentityCookies();
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   vi.useRealTimers();
@@ -268,5 +281,305 @@ describe('ContentfulExperiences interaction tracking', () => {
     expect(batch[0]!.events[0]!.type).toBe('exo_node_click');
     finishReplay({ profile: { id: 'committed-profile' } });
     await session.stop();
+  });
+
+  describe('consent', () => {
+    it('drops clicks while event consent is denied and sends them once granted', async () => {
+      seedConsent({ events: false });
+      const onEventBlocked = vi.fn();
+      const runtime = createRuntime({ profile: { id: 'visitor' }, onEventBlocked });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+
+      const session = runtime.startInteractionTracking({
+        views: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      click(hero);
+      await advance(0);
+
+      // The click detector does not listen while clicks are not permitted, so the
+      // gesture never reaches the gate and nothing is sent.
+      expect(send).not.toHaveBeenCalled();
+      expect(onEventBlocked).not.toHaveBeenCalled();
+
+      // A manual call still reaches the gate, which stays as a backstop and reports.
+      await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Fragment' })).resolves.toBe(
+        false
+      );
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackClick' })
+      );
+
+      runtime.consent({ events: true });
+      click(hero);
+      await advance(0);
+
+      expect(send).toHaveBeenCalledTimes(1);
+      await session.stop();
+    });
+
+    it('admits clicks under a click-only allow-list', async () => {
+      seedConsent({ events: false });
+      const runtime = createRuntime({
+        profile: { id: 'visitor' },
+        allowedEventTypes: ['component_click'],
+      });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+
+      const session = runtime.startInteractionTracking({
+        views: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      click(hero);
+      await advance(0);
+
+      expect(send).toHaveBeenCalledTimes(1);
+      await session.stop();
+    });
+
+    it('does not observe views while event consent is denied, and starts once it is granted', async () => {
+      seedConsent({ events: false });
+      const io = installIOPolyfill();
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+
+      const session = runtime.startInteractionTracking({
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      // No observer is created for a view that is not permitted.
+      expect(() => io.getLast()).toThrow(/polyfill instance not found/);
+      await advance(1400);
+      expect(send).not.toHaveBeenCalled();
+
+      runtime.consent({ events: true });
+      io.getLast().trigger(page, true);
+      await advance(1400);
+
+      expect(sentEvents(send).map((event) => event.type)).toContain('exo_node_view');
+      await session.stop();
+    });
+  });
+
+  describe('timed interactions across consent changes', () => {
+    const enter = (element: Element): void => {
+      element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    };
+    const leave = (element: Element): void => {
+      element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    };
+
+    it('measures a hover from the grant, not from before consent', async () => {
+      seedConsent({ events: false });
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        views: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      enter(hero);
+      await advance(1150);
+      expect(sentEvents(send)).toEqual([]);
+
+      runtime.consent({ events: true });
+      await advance(100);
+      leave(hero);
+      await advance(0);
+
+      // The hover was not permitted until the grant, so nothing measured before it counts.
+      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      expect(hovers.every((event) => (event.hoverDurationMs ?? 0) < 1000)).toBe(true);
+      await session.stop();
+    });
+
+    it('starts a fresh view measurement at the grant, not at the earlier intersection', async () => {
+      seedConsent({ events: false });
+      const io = installIOPolyfill();
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+      const session = runtime.startInteractionTracking({
+        hovers: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      await advance(5000);
+      runtime.consent({ events: true });
+      io.getLast().trigger(page, true);
+      await advance(500);
+      // Less than a second since the grant: no qualifying view yet, however long the
+      // element had been visible before it.
+      expect(sentEvents(send)).toEqual([]);
+
+      await advance(900);
+      const views = sentEvents(send).filter((event) => event.type === 'exo_node_view');
+      expect(views).toHaveLength(1);
+      expect(views[0]!.viewDurationMs).toBeLessThan(2000);
+      await session.stop();
+    });
+
+    it('stops a view in progress when consent is withdrawn, and reports nothing afterwards', async () => {
+      seedConsent({ events: true });
+      const io = installIOPolyfill();
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+      const session = runtime.startInteractionTracking({
+        hovers: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      const observer = io.getLast();
+
+      observer.trigger(page, true);
+      await advance(500);
+      runtime.consent({ events: false });
+      await advance(5000);
+      observer.trigger(page, false);
+      await advance(0);
+      await session.stop();
+
+      expect(sentEvents(send)).toEqual([]);
+    });
+
+    it('stops a hover in progress when consent is withdrawn, and reports nothing afterwards', async () => {
+      seedConsent({ events: true });
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        views: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      enter(hero);
+      await advance(500);
+      runtime.consent({ events: false });
+      await advance(1500);
+      leave(hero);
+      await advance(0);
+      await session.stop();
+
+      expect(sentEvents(send)).toEqual([]);
+    });
+
+    it('does not carry a hover across a withdrawal and a regrant', async () => {
+      seedConsent({ events: true });
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        views: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      enter(hero);
+      await advance(500);
+      runtime.consent({ events: false });
+      await advance(3000);
+      runtime.consent({ events: true });
+      await advance(100);
+      leave(hero);
+      await advance(0);
+      await session.stop();
+
+      // If the hover were carried through the withdrawal it would report about 3.6s.
+      // Permission was withdrawn, so that time must not be reported once it is back.
+      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      expect(hovers.every((event) => (event.hoverDurationMs ?? 0) < 1000)).toBe(true);
+    });
+
+    it('does not carry a view across a withdrawal and a regrant', async () => {
+      seedConsent({ events: true });
+      const io = installIOPolyfill();
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+      const session = runtime.startInteractionTracking({
+        hovers: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+      const original = io.getLast();
+
+      original.trigger(page, true);
+      await advance(500);
+      runtime.consent({ events: false });
+      await advance(3000);
+      runtime.consent({ events: true });
+
+      // The original observer was disconnected at the withdrawal, so a late signal from it
+      // reaches nothing; the view is only measured by the observer created at the regrant.
+      original.trigger(page, true);
+      await advance(2000);
+      expect(sentEvents(send).filter((event) => event.type === 'exo_node_view')).toEqual([]);
+
+      // The new observer measures from its own first signal.
+      io.getLast().trigger(page, true);
+      await advance(1400);
+      const views = sentEvents(send).filter((event) => event.type === 'exo_node_view');
+      expect(views.length).toBeGreaterThan(0);
+      expect(views.every((event) => (event.viewDurationMs ?? 0) < 2000)).toBe(true);
+      await session.stop();
+    });
+
+    it('leaves a running interaction alone when only persistence consent changes', async () => {
+      seedConsent({ events: true, persistence: true });
+      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        views: false,
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      enter(hero);
+      await advance(500);
+      runtime.consent({ persistence: false });
+      await advance(700);
+      leave(hero);
+      await advance(0);
+      await session.stop();
+
+      // The hover began and ended under event consent, so its measurement is untouched.
+      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      expect(hovers.length).toBeGreaterThan(0);
+      expect(hovers.at(-1)!.hoverDurationMs).toBeGreaterThanOrEqual(1000);
+    });
+
+    it('respects a narrower allow-list: only the permitted interaction runs', async () => {
+      seedConsent({ events: false });
+      const io = installIOPolyfill();
+      const runtime = createRuntime({
+        profile: { id: 'visitor' },
+        allowedEventTypes: ['component_hover'],
+      });
+      const send = spyOnTransport(runtime);
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        clicks: false,
+        resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
+      });
+
+      // Views are not allow-listed, so no view observer exists; hovers are, so one runs.
+      expect(() => io.getLast()).toThrow(/polyfill instance not found/);
+      enter(hero);
+      await advance(1200);
+      leave(hero);
+      await advance(0);
+      await session.stop();
+
+      const types = sentEvents(send).map((event) => event.type);
+      expect(types).toContain('exo_node_hover');
+      expect(types).not.toContain('exo_node_view');
+    });
   });
 });

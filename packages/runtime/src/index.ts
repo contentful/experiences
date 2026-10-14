@@ -1,4 +1,31 @@
-export { ANONYMOUS_ID_COOKIE, PROFILE_CACHE_KEY } from './constants.js';
+export {
+  ANONYMOUS_ID_COOKIE,
+  ANONYMOUS_ID_COOKIE_LEGACY,
+  ANONYMOUS_ID_KEY,
+  ANONYMOUS_ID_KEY_LEGACY,
+  PROFILE_CACHE_KEY,
+} from './constants.js';
+export {
+  CONSENT_CACHE_KEY,
+  DEFAULT_ALLOWED_EVENT_TYPES,
+  decodeConsentStorageValue,
+  encodeConsentStorageValue,
+  hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
+  PERSISTENCE_CONSENT_CACHE_KEY,
+  resolvePersistedPersistenceConsent,
+  toConsentState,
+} from './consent.js';
+export type {
+  AllowedEventType,
+  BlockedEvent,
+  ConsentInput,
+  ConsentState,
+  ConsentStorageValue,
+  EventMethod,
+  EventType,
+} from './consent.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   ContentfulExperiencesConfig,

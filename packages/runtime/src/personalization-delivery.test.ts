@@ -105,29 +105,34 @@ describe('PersonalizationDelivery', () => {
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
   });
 
-  it('admits 100 prepared events and rejects 101 at the shared limit', () => {
+  it('fills the default capacity with one 100-event batch and refuses a batch that no longer fits', () => {
+    // The batch limit itself is the validator's (see prepared-events.test.ts); this is capacity.
     const f = fixture({ online: false });
     const track = builder.buildTrack({ event: 'opened' });
     expect(f.delivery.sendPrepared([...Array(99).fill(track), builder.buildPageView()])).toEqual({
       accepted: true,
     });
-    expect(f.delivery.sendPrepared([...Array(100).fill(track), builder.buildPageView()])).toEqual({
+    expect(f.delivery.sendPrepared([track, builder.buildPageView()])).toEqual({
       accepted: false,
     });
     expect(f.delivery.queuedEventCount).toBe(100);
     expect(f.upsertProfile).not.toHaveBeenCalled();
   });
 
-  it('keeps the prepared batch limit at 100 while honoring a larger queue capacity', async () => {
+  it('honors a larger queue capacity for prepared batches already validated at the boundary', async () => {
+    // The 100-event batch limit is enforced where the batch is validated; the queue owns capacity.
     const f = fixture({ online: false, maxEvents: 250 });
     const track = builder.buildTrack({ event: 'queued' });
     const first = [...Array(99).fill(track), builder.buildPageView()];
     expect(f.delivery.sendPrepared(first)).toEqual({ accepted: true });
     await expect(f.delivery.send(track)).resolves.toEqual({ accepted: true });
-    expect(f.delivery.sendPrepared([...Array(100).fill(track), builder.buildPageView()])).toEqual({
+    expect(f.delivery.sendPrepared([...Array(99).fill(track), builder.buildPageView()])).toEqual({
+      accepted: true,
+    });
+    expect(f.delivery.sendPrepared([...Array(99).fill(track), builder.buildPageView()])).toEqual({
       accepted: false,
     });
-    expect(f.delivery.queuedEventCount).toBe(101);
+    expect(f.delivery.queuedEventCount).toBe(201);
 
     f.setOnline(true);
     await f.delivery.flush();

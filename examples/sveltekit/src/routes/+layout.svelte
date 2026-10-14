@@ -1,5 +1,13 @@
 <script lang="ts">
-  let { children } = $props();
+  import ConsentPanel from '$lib/components/ConsentPanel.svelte';
+
+  let { children, data } = $props();
 </script>
 
 {@render children()}
+
+<ConsentPanel
+  spaceId={data.consent.spaceId}
+  environmentId={data.consent.environmentId}
+  accessToken={data.consent.accessToken}
+/>

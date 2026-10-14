@@ -170,10 +170,10 @@ Ordinary online Personalization calls send directly. Web accepts ordinary
 offline calls into an in-memory queue; a new offline call is refused when the
 queue is full rather than evicting accepted work. Analytics remains direct.
 `destroy()` makes one best-effort attempt to drain queued batches in order, but
-queued work is not durable and does not provide exactly-once delivery. Node `eventConsent`
-and Web `browserContext.getConsent` add current GDPR metadata to events; they
-do not grant permission, block sending, or control persistence. The separate
-consent and persistence workstream will define that policy. Web's
+queued work is not durable and does not provide exactly-once delivery. Event and persistence consent are
+gated by the SDK: `consent()` on Web and `consent` per request on Node. Until event
+consent is granted only `allowedEventTypes` are sent, and the application decides
+when to grant consent. Web's
 `startInteractionTracking()` sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
 no framework adapter stamps tracked attributes yet. Manually invoked methods
