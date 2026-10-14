@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import {
+  ANONYMOUS_ID_KEY,
+  ANONYMOUS_ID_KEY_LEGACY,
   CONSENT_CACHE_KEY,
   PERSISTENCE_CONSENT_CACHE_KEY,
   PROFILE_CACHE_KEY,
@@ -337,5 +339,53 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
 
     expect(store.profile).toEqual({ id: 'visitor' });
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
+  });
+});
+
+describe('LocalStore anonymous id (shared with the Optimization SDK)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('is undefined when nothing is stored', () => {
+    expect(new LocalStore().anonymousId).toBeUndefined();
+  });
+
+  it('stores and reads the id under the shared key', () => {
+    const store = new LocalStore();
+
+    store.anonymousId = 'visitor-1';
+
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('visitor-1');
+    expect(new LocalStore().anonymousId).toBe('visitor-1');
+  });
+
+  it('removes the stored id when cleared', () => {
+    const store = new LocalStore();
+    store.anonymousId = 'visitor-1';
+
+    store.anonymousId = undefined;
+
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
+    expect(store.anonymousId).toBeUndefined();
+  });
+
+  it('reads the legacy key ahead of the current one, and removes it', () => {
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'current-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
+    const store = new LocalStore();
+
+    // Same precedence as the Optimization SDK: the legacy value wins, and is migrated away.
+    expect(store.anonymousId).toBe('legacy-id');
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY_LEGACY)).toBeNull();
+    expect(store.anonymousId).toBe('current-id');
+  });
+
+  it('reads a legacy-only id once', () => {
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
+    const store = new LocalStore();
+
+    expect(store.anonymousId).toBe('legacy-id');
+    expect(store.anonymousId).toBeUndefined();
   });
 });

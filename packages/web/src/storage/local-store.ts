@@ -1,4 +1,6 @@
 import {
+  ANONYMOUS_ID_KEY,
+  ANONYMOUS_ID_KEY_LEGACY,
   CONSENT_CACHE_KEY,
   type ConsentState,
   decodeConsentStorageValue,
@@ -36,6 +38,23 @@ export default class LocalStore {
       this.#profile = this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
     }
     if (this.#consent.persistence === false) this.setCache(PROFILE_CACHE_KEY, undefined);
+  }
+
+  /**
+   * The anonymous id kept for client-server continuity, shared with the Optimization SDK.
+   *
+   * Reading has a side effect, as in that SDK: a value under the legacy key is returned
+   * ahead of the current key and removed, which migrates it on first read. Read it once
+   * and hold on to the result.
+   */
+  get anonymousId(): string | undefined {
+    const legacy = this.#readRaw(ANONYMOUS_ID_KEY_LEGACY);
+    if (legacy) this.setCache(ANONYMOUS_ID_KEY_LEGACY, undefined);
+    return legacy ?? this.#readRaw(ANONYMOUS_ID_KEY) ?? undefined;
+  }
+
+  set anonymousId(id: string | undefined) {
+    this.setCache(ANONYMOUS_ID_KEY, id);
   }
 
   /** Current consent decisions. */
