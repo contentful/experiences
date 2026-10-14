@@ -289,6 +289,83 @@ describe('adopting an identity the browser already holds', () => {
   });
 });
 
+describe('reconciling a server cookie with the identity held', () => {
+  /** Records every write to the cookie jar and to the stored anonymous id. */
+  function recordWrites() {
+    const cookieWrites: string[] = [];
+    const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
+    const jar = document.cookie;
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      get: () => jar,
+      set: (value: string) => {
+        cookieWrites.push(value);
+      },
+    });
+    const setItem = vi.spyOn(window.Storage.prototype, 'setItem');
+    const removeItem = vi.spyOn(window.Storage.prototype, 'removeItem');
+    return {
+      cookieWrites,
+      storedIdWrites: () =>
+        [...setItem.mock.calls, ...removeItem.mock.calls].filter(
+          ([key]) => key === ANONYMOUS_ID_KEY
+        ),
+      restore: () => {
+        Reflect.deleteProperty(document, 'cookie');
+        Object.defineProperty(Document.prototype, 'cookie', descriptor);
+      },
+    };
+  }
+
+  it('resets first and then writes a differing server cookie exactly once', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'old-visitor' }));
+    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
+    const { cookieWrites, storedIdWrites, restore } = recordWrites();
+
+    const runtime = createRuntime();
+    restore();
+
+    expect(runtime.profile).toBeUndefined();
+    const identityWrites = cookieWrites
+      .map((write) => write.split(';')[0] ?? '')
+      .filter((write) => write.startsWith('ctfl-opt-aid='));
+    // The reset's clearing comes first, and the adopted identity is written once after it.
+    expect(identityWrites).toEqual(['ctfl-opt-aid=', 'ctfl-opt-aid=server-id']);
+    expect(storedIdWrites().filter(([, value]) => value === 'server-id')).toHaveLength(1);
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('server-id');
+  });
+
+  it('writes nothing when the cookie already matches the stored id and the profile', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'server-id' }));
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'server-id');
+    setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
+    const { cookieWrites, storedIdWrites, restore } = recordWrites();
+
+    createRuntime();
+    restore();
+
+    expect(cookieWrites).toEqual([]);
+    expect(storedIdWrites()).toEqual([]);
+  });
+
+  it('migrates a legacy cookie to the current one with a single write', () => {
+    seedConsent({ events: true, persistence: true });
+    setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'legacy-id');
+    const { cookieWrites, restore } = recordWrites();
+
+    createRuntime();
+    restore();
+
+    const current = cookieWrites.filter((write) =>
+      write.startsWith(`${ANONYMOUS_ID_COOKIE}=legacy-id`)
+    );
+    expect(current).toHaveLength(1);
+  });
+});
+
 describe('withdrawing persistence consent', () => {
   it('removes the cookie and stored id but keeps the in-memory profile', () => {
     seedConsent({ events: true, persistence: true });

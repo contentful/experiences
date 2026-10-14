@@ -683,20 +683,25 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   /**
    * Adopts an identity the browser already holds, such as a server cookie. A cookie for a
    * different visitor than the profile held means that profile is not theirs, so it is
-   * reset before the cookie's identity is adopted.
+   * reset before the cookie's identity is written, which the cookie helper sequences.
    */
-  #adoptCookieIdentity(): void {
-    const adopted = this.#identity.adopt({ currentProfileId: this.#store.profile?.id });
-    if (adopted?.differsFromProfile !== true) return;
-    this.reset();
-    this.#identity.persist(adopted.id);
+  #adoptCookieIdentity(): boolean {
+    return (
+      this.#identity.adopt({
+        currentProfileId: this.#store.profile?.id,
+        reset: () => this.reset(),
+      }) !== undefined
+    );
   }
 
   /** Startup: adopt what the browser holds and write what is known, if permitted. */
   #initializeIdentity(): void {
-    if (this.#store.consent.persistence === true) this.#adoptCookieIdentity();
+    if (this.#store.consent.persistence === false) {
+      this.#identity.clear();
+      return;
+    }
+    if (this.#store.consent.persistence === true && this.#adoptCookieIdentity()) return;
     this.#syncIdentity();
-    if (this.#store.consent.persistence === false) this.#identity.clear();
   }
 
   /**
@@ -706,8 +711,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    */
   #applyPersistenceChange(granted: boolean): void {
     if (granted) {
-      this.#adoptCookieIdentity();
-      this.#syncIdentity();
+      // An adopted cookie is already written; otherwise write the identity held in memory.
+      if (!this.#adoptCookieIdentity()) this.#syncIdentity();
       return;
     }
     this.#identity.clear();

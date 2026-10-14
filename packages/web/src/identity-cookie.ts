@@ -9,13 +9,6 @@ export const DEFAULT_COOKIE_EXPIRATION_DAYS = 365;
 /** What the identity cookie is written with, and the scope it is deleted in. */
 export type IdentityCookieOptions = CookieAttributes;
 
-/** The id found in the browser's cookies and whether it disagrees with the profile held. */
-export interface AdoptedIdentity {
-  id: string;
-  /** True when the profile held in memory has a different id (or there is none). */
-  differsFromProfile: boolean;
-}
-
 /**
  * The identity cookie and the stored anonymous id behind it: the pair that lets a
  * server recognise a visitor the browser SDK has already identified.
@@ -72,31 +65,37 @@ export class IdentityCookie {
   }
 
   /**
-   * Adopts the identity the browser already holds, such as one a server wrote.
+   * Adopts the identity the browser already holds, such as one a server wrote, in the
+   * Optimization SDK's order: compare, reset if needed, then persist once.
    *
-   * The legacy cookie is read ahead of the current one, as in the Optimization SDK, and
-   * is removed once read, which migrates it to the current cookie. Nothing is written
-   * when the cookie already matches the stored id, so starting the SDK does not push the
-   * cookie's expiry out. Returns nothing when no cookie is present.
+   * The legacy cookie is read ahead of the current one and removed once read, which
+   * migrates it. A cookie that differs from the stored id replaces it; if it is also a
+   * different visitor than the profile held, `reset` runs first, because that profile is
+   * not theirs. Persisting comes after the reset, so the identity is never written only to
+   * be cleared and written again. A legacy cookie that matches the stored id is still
+   * written, because the current cookie must exist. Nothing is written when the cookie
+   * already matches, so starting the SDK does not push its expiry out.
    *
-   * `differsFromProfile` is only set when the cookie is a different identity from the
-   * stored one and from the profile held. That is the case where the profile in memory
-   * belongs to someone else and should be reset.
+   * Returns the adopted id, or nothing when no cookie is present.
    */
   adopt({
     currentProfileId,
+    reset,
   }: {
     currentProfileId: string | undefined;
-  }): AdoptedIdentity | undefined {
+    reset: () => void;
+  }): string | undefined {
     const legacy = getCookie(ANONYMOUS_ID_COOKIE_LEGACY);
     const id = legacy ?? getCookie(ANONYMOUS_ID_COOKIE);
     if (legacy) removeCookie(ANONYMOUS_ID_COOKIE_LEGACY, this.#attributes);
     if (!id) return undefined;
 
-    const storedId = this.#store.anonymousId;
-    const changed = id !== storedId;
-    // A legacy cookie is migrated even when it matches, because the current cookie must exist.
-    if (changed || legacy) this.persist(id);
-    return { id, differsFromProfile: changed && id !== currentProfileId };
+    if (id !== this.#store.anonymousId) {
+      if (id !== currentProfileId) reset();
+      this.persist(id);
+    } else if (legacy) {
+      this.persist(id);
+    }
+    return id;
   }
 }
