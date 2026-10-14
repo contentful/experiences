@@ -31,13 +31,9 @@ export default class LocalStore {
     // the profile is withheld from storage when persistence is denied. It uses the
     // Optimization SDK's keys and encoding, so both SDKs read each other's choice.
     this.#consent = this.#readConsent();
-    // Undecided persistence neither restores nor clears the stored profile, so a
-    // later grant (a consent default or the visitor's choice) can still restore it.
-    // Only an explicit denial removes it.
-    if (this.#consent.persistence === true) {
-      this.#profile = this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
-    }
-    if (this.#consent.persistence === false) this.setCache(PROFILE_CACHE_KEY, undefined);
+    // The profile is not loaded here. Configured defaults can override the stored decision,
+    // so the effective consent is resolved first and `applyConsentDefaults` then loads or
+    // removes the profile once, as the Optimization SDK does.
   }
 
   /**
@@ -81,6 +77,7 @@ export default class LocalStore {
    * The effective decisions are written to the shared consent keys, so they are what
    * a later load, with or without the default, starts from. When persistence is
    * denied the stored profile is removed; when it is granted the profile is restored.
+   * Nothing is read from storage before this runs.
    * A visitor who has not decided, with no defaults, writes nothing.
    */
   applyConsentDefaults(defaults: ConsentState): void {
@@ -92,13 +89,12 @@ export default class LocalStore {
     this.#consent = next;
     this.#writeConsent();
 
+    // Only an explicit denial removes the stored copy; an undecided visitor keeps it, so a
+    // later grant can still restore it.
     if (persistence === true) {
-      this.#profile ??= this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
+      this.#profile = this.getCache(PROFILE_CACHE_KEY, EventProfileSchema);
       return;
     }
-    // The profile was read before the configured decision was known, so drop it from
-    // memory as well. Only an explicit denial removes the stored copy; an undecided
-    // visitor keeps it, so a later grant can still restore it.
     this.#profile = undefined;
     if (persistence === false) this.setCache(PROFILE_CACHE_KEY, undefined);
   }

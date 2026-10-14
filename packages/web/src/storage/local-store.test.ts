@@ -35,7 +35,9 @@ describe('LocalStore', () => {
 
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(store.profile).toEqual(profile);
-    expect(new LocalStore().profile).toEqual(profile);
+    const next = new LocalStore();
+    next.applyConsentDefaults({});
+    expect(next.profile).toEqual(profile);
   });
 
   it('clears the profile on reset', () => {
@@ -88,6 +90,7 @@ describe('LocalStore', () => {
   it('deletes malformed profile JSON', () => {
     window.localStorage.setItem(PROFILE_CACHE_KEY, '{bad-json');
     store = new LocalStore();
+    store.applyConsentDefaults({});
 
     expect(store.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
@@ -96,6 +99,7 @@ describe('LocalStore', () => {
   it('deletes profile values that fail schema validation', () => {
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ traits: {} }));
     store = new LocalStore();
+    store.applyConsentDefaults({});
 
     expect(store.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
@@ -170,6 +174,7 @@ describe('LocalStore consent', () => {
     first.profile = { id: 'visitor' };
 
     const second = new LocalStore();
+    second.applyConsentDefaults({});
 
     expect(second.consent).toEqual({ events: true, persistence: true });
     expect(second.profile).toEqual({ id: 'visitor' });
@@ -186,7 +191,10 @@ describe('LocalStore consent', () => {
     seedConsent({ persistence: false });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'stale' }));
 
-    expect(new LocalStore().profile).toBeUndefined();
+    const store = new LocalStore();
+    store.applyConsentDefaults({});
+
+    expect(store.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 });
@@ -297,6 +305,7 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
     const store = new LocalStore();
+    store.applyConsentDefaults({});
     expect(store.profile).toEqual({ id: 'visitor' });
 
     store.applyConsentDefaults({ persistence: false });
@@ -339,6 +348,65 @@ describe('LocalStore consent defaults (same precedence as the Optimization SDK)'
 
     expect(store.profile).toEqual({ id: 'visitor' });
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
+  });
+});
+
+describe('LocalStore resolves consent before it touches the profile', () => {
+  const profileReads = (getItem: { mock: { calls: unknown[][] } }) =>
+    getItem.mock.calls.filter(([key]) => key === PROFILE_CACHE_KEY);
+
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('never reads the stored profile when a configured default denies persistence', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
+
+    const store = new LocalStore();
+    store.applyConsentDefaults({ persistence: false });
+
+    expect(profileReads(getItem)).toEqual([]);
+    expect(store.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  });
+
+  it('reads the stored profile once when the effective decision grants persistence', () => {
+    seedConsent({ events: true, persistence: false });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
+
+    const store = new LocalStore();
+    store.applyConsentDefaults({ persistence: true });
+
+    expect(profileReads(getItem)).toHaveLength(1);
+    expect(store.profile).toEqual({ id: 'visitor' });
+  });
+
+  it('does not read the stored profile while persistence is undecided, and keeps it', () => {
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
+
+    const store = new LocalStore();
+    store.applyConsentDefaults({});
+
+    expect(profileReads(getItem)).toEqual([]);
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
+  });
+
+  it('loads nothing before the effective consent has been resolved', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
+
+    new LocalStore();
+
+    expect(profileReads(getItem)).toEqual([]);
   });
 });
 
