@@ -17,7 +17,7 @@
     },
     "test": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/adapter-react",
