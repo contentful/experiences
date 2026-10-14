@@ -33,8 +33,9 @@ own (`app-personalization-consent`) to show where that decision belongs; replace
 
 ## Cookie settings
 
-`identitySetCookie` takes the same settings as the Web SDK's `cookie` option: domain, path,
-SameSite, Secure and expiry (365 days by default). Configure both sides identically. A cookie is
+`identitySetCookie` takes the Web SDK's `cookie` option as it is: `domain`, `path`, a lowercase
+`sameSite`, `secure` and `expires` in days (365 by default). Share one settings object between
+both sides. A cookie is
 deleted in the scope it was written in, so a mismatch leaves the old one behind.
 
 ## Run it

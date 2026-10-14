@@ -24,12 +24,13 @@ function node(policy: { allowedEventTypes?: readonly ('identify' | 'page' | 'tra
   return sdk;
 }
 
-function web() {
+function web(config: Partial<ConstructorParameters<typeof WebExperiences>[0]> = {}) {
   const sdk = new WebExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
+    ...config,
   });
   active.add(sdk);
   return sdk;
@@ -473,7 +474,7 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
     const settings = {
       domain: 'example.com',
       path: '/shop',
-      sameSite: 'Lax',
+      sameSite: 'lax',
       secure: true,
     } as const;
     const scoped = (consent: boolean) => {
@@ -493,11 +494,48 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
     const granted = scoped(true);
 
     expect(withdrawn).toBe(
-      'ctfl-opt-aid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/shop; Domain=example.com; SameSite=Lax; Secure'
+      'ctfl-opt-aid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/shop; Domain=example.com; SameSite=lax; Secure'
     );
     expect(granted).toMatch(
-      /^ctfl-opt-aid=visitor-1; Path=\/shop; Domain=example\.com; SameSite=Lax; Secure; Expires=/
+      /^ctfl-opt-aid=visitor-1; Path=\/shop; Domain=example\.com; SameSite=lax; Secure; Expires=/
     );
+  });
+
+  it('takes the Web cookie option unchanged, so one settings object gives both sides the same scope and lifetime', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    seedConsent({ events: true, persistence: true });
+    const settings = {
+      domain: 'example.com',
+      path: '/shop',
+      sameSite: 'none',
+      secure: true,
+      expires: 7,
+    } as const;
+    const writes: string[] = [];
+    const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      get: () => '',
+      set: (value: string) => {
+        writes.push(value);
+      },
+    });
+    web({ profile: { id: 'visitor-1' }, cookie: settings });
+    Reflect.deleteProperty(document, 'cookie');
+    Object.defineProperty(Document.prototype, 'cookie', descriptor);
+
+    const server = identitySetCookie({
+      canPersistProfile: true,
+      profileId: 'visitor-1',
+      hadCookie: false,
+      settings,
+    });
+
+    // Same scope, same lifetime: only the order of attributes is the host's choice.
+    const attributes = (cookie: string) => cookie.split('; ').slice(1).sort();
+    expect(attributes(server!)).toEqual(attributes(writes[0]!));
+    expect(server).toContain(`Expires=${new Date('2026-01-08T00:00:00.000Z').toUTCString()}`);
   });
 
   it('expires nothing when withheld and there was no cookie to begin with', async () => {

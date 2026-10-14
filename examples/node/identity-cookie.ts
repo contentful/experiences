@@ -9,14 +9,18 @@ import { ANONYMOUS_ID_COOKIE } from '@contentful/experiences-node';
  * fits any framework. Copy what you need; none of it is SDK API.
  */
 
-/** The cookie settings. Match the Web SDK's `cookie` option so both sides use one scope. */
+/**
+ * The cookie settings, in the same shape and units as the Web SDK's `cookie` option, so one
+ * object can configure both sides. Only HTTP serialization differs: `expires` is a number
+ * of days here too, and becomes an `Expires` date in the header.
+ */
 export interface IdentityCookieSettings {
   domain?: string;
   path?: string;
-  sameSite?: 'Lax' | 'Strict' | 'None';
+  sameSite?: 'lax' | 'strict' | 'none';
   secure?: boolean;
-  /** Days until the cookie expires. The Web SDK uses 365. */
-  expiresInDays?: number;
+  /** Days until the cookie expires. The Web SDK writes 365 unless told otherwise. */
+  expires?: number;
 }
 
 const DEFAULT_EXPIRES_IN_DAYS = 365;
@@ -71,7 +75,7 @@ export function identitySetCookie({
   }
   if (!profileId) return undefined;
 
-  const days = settings.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS;
+  const days = settings.expires ?? DEFAULT_EXPIRES_IN_DAYS;
   const expires = new Date(Date.now() + days * 86_400_000).toUTCString();
   // Written as it is, like the Web SDK, so both sides read one value.
   return `${ANONYMOUS_ID_COOKIE}=${profileId}${scope(settings)}; Expires=${expires}`;
