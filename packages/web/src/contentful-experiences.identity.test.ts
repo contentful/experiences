@@ -4,6 +4,7 @@ import {
   ANONYMOUS_ID_COOKIE,
   ANONYMOUS_ID_COOKIE_LEGACY,
   ANONYMOUS_ID_KEY,
+  ANONYMOUS_ID_KEY_LEGACY,
   PROFILE_CACHE_KEY,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
@@ -533,6 +534,43 @@ describe('the effective identity when only the stored id is held', () => {
     await runtime.fetchExperience({ experienceId: 'landing' }, { config: { components: {} } });
 
     expect(fetch.mock.calls[0]![0].personalization?.profileId).toBeUndefined();
+  });
+});
+
+describe('clearing a legacy stored identity', () => {
+  it('removes a legacy-only stored id when startup defaults deny persistence, so a later grant does not revive it', () => {
+    seedConsent({ events: true, persistence: true });
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
+    const runtime = createRuntime({ defaults: { persistenceConsent: false } });
+
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY_LEGACY)).toBeNull();
+    runtime.consent({ persistence: true });
+
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
+  });
+
+  it('removes a legacy-only stored id when persistence is withdrawn', () => {
+    seedConsent({ events: true, persistence: true });
+    const runtime = createRuntime();
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
+
+    runtime.consent({ persistence: false });
+    runtime.consent({ persistence: true });
+
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
+  });
+
+  it('removes a legacy-only stored id on reset(), so a later grant does not revive it', () => {
+    seedConsent({ events: true, persistence: true });
+    const runtime = createRuntime();
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
+
+    runtime.reset();
+    runtime.consent({ persistence: true });
+
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY_LEGACY)).toBeNull();
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
   });
 });
 

@@ -57,7 +57,7 @@ export class IdentityCookie {
   persist(id: string | undefined): void {
     if (!id) {
       removeCookie(ANONYMOUS_ID_COOKIE, this.#attributes);
-      this.#store.anonymousId = undefined;
+      this.#store.clearAnonymousId();
       return;
     }
     setCookie(ANONYMOUS_ID_COOKIE, id, this.#attributes);
@@ -68,7 +68,7 @@ export class IdentityCookie {
   clear(): void {
     removeCookie(ANONYMOUS_ID_COOKIE, this.#attributes);
     removeCookie(ANONYMOUS_ID_COOKIE_LEGACY, this.#attributes);
-    this.#store.anonymousId = undefined;
+    this.#store.clearAnonymousId();
   }
 
   /**

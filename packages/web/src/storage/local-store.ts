@@ -57,6 +57,16 @@ export default class LocalStore {
     this.setCache(ANONYMOUS_ID_KEY, id);
   }
 
+  /**
+   * Removes the stored anonymous id under both the current and the legacy key, as the
+   * Optimization SDK's `clearProfileContinuity()` does. Clearing only the current key
+   * would let a legacy value be read back, and written as the identity, after a later grant.
+   */
+  clearAnonymousId(): void {
+    this.setCache(ANONYMOUS_ID_KEY, undefined);
+    this.setCache(ANONYMOUS_ID_KEY_LEGACY, undefined);
+  }
+
   /** Current consent decisions. */
   get consent(): ConsentState {
     return this.#consent;
