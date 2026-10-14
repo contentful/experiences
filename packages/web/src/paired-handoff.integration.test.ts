@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
-import { identitySetCookie, readIdentity } from '../../../examples/node/identity-cookie.js';
+import {
+  hasServerConsent,
+  identitySetCookie,
+  readIdentity,
+} from '../../../examples/node/identity-cookie.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
 import { getCookie } from './lib/cookies.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
@@ -536,6 +540,30 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
     const attributes = (cookie: string) => cookie.split('; ').slice(1).sort();
     expect(attributes(server!)).toEqual(attributes(writes[0]!));
     expect(server).toContain(`Expires=${new Date('2026-01-08T00:00:00.000Z').toUTCString()}`);
+  });
+
+  it.each([
+    ['with a space after the separator', 'other=1; ctfl-opt-aid=visitor-1; last=2'],
+    ['without a space after the separator', 'other=1;ctfl-opt-aid=visitor-1;last=2'],
+    ['with extra whitespace around the field', 'other=1;   ctfl-opt-aid=visitor-1  ;last=2'],
+  ])('reads the identity from a Cookie header %s', (_name, header) => {
+    expect(readIdentity(header)).toBe('visitor-1');
+  });
+
+  it('reads nothing from a header that lacks the cookie, or has it empty', () => {
+    expect(readIdentity('other=1;last=2')).toBeUndefined();
+    expect(readIdentity('ctfl-opt-aid=')).toBeUndefined();
+    expect(readIdentity('xctfl-opt-aid=visitor-1')).toBeUndefined();
+    expect(readIdentity(undefined)).toBeUndefined();
+  });
+
+  it.each([
+    ['with a space after the separator', 'a=1; app-personalization-consent=granted'],
+    ['without a space after the separator', 'a=1;app-personalization-consent=granted'],
+  ])('reads server consent from a Cookie header %s', (_name, header) => {
+    expect(hasServerConsent(header)).toBe(true);
+    expect(hasServerConsent('a=1;app-personalization-consent=denied')).toBe(false);
+    expect(hasServerConsent(undefined)).toBe(false);
   });
 
   it('expires nothing when withheld and there was no cookie to begin with', async () => {

@@ -26,15 +26,36 @@ export interface IdentityCookieSettings {
 const DEFAULT_EXPIRES_IN_DAYS = 365;
 const EXPIRED_UTC = 'Thu, 01 Jan 1970 00:00:00 GMT';
 
-/** The visitor's profile id from a `Cookie` request header, if the cookie is present. */
-export function readIdentity(cookieHeader: string | undefined): string | undefined {
+/**
+ * One cookie's value from a `Cookie` request header. The header is split on `;` and each
+ * field trimmed, so `a=1;b=2` and `a=1; b=2` read alike, as in the Optimization SDK's
+ * server cookie parser.
+ */
+function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
   if (!cookieHeader) return undefined;
-  const prefix = `${ANONYMOUS_ID_COOKIE}=`;
 
-  for (const part of cookieHeader.split('; ')) {
-    if (part.startsWith(prefix)) return part.slice(prefix.length) || undefined;
+  for (const part of cookieHeader.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator === -1) continue;
+    if (part.slice(0, separator).trim() !== name) continue;
+    return part.slice(separator + 1).trim() || undefined;
   }
   return undefined;
+}
+
+/** The visitor's profile id from a `Cookie` request header, if the cookie is present. */
+export function readIdentity(cookieHeader: string | undefined): string | undefined {
+  return readCookie(cookieHeader, ANONYMOUS_ID_COOKIE);
+}
+
+/**
+ * Whether this application may keep the visitor's identity. It has to come from the
+ * application: your own consent record, a session, a CMP token. The identity cookie being
+ * present proves nothing about consent, and neither does anything in the browser's storage.
+ * This example reads a cookie of its own to show where that decision belongs.
+ */
+export function hasServerConsent(cookieHeader: string | undefined): boolean {
+  return readCookie(cookieHeader, 'app-personalization-consent') === 'granted';
 }
 
 function scope(settings: IdentityCookieSettings): string {

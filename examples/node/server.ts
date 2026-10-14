@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 
 import { ContentfulExperiences } from '@contentful/experiences-node';
 
-import { identitySetCookie, readIdentity } from './identity-cookie.js';
+import { hasServerConsent, identitySetCookie, readIdentity } from './identity-cookie.js';
 
 /**
  * A server using the Node SDK with the identity cookie, written against plain `node:http`
@@ -15,16 +15,6 @@ const sdk = new ContentfulExperiences({
   environmentId: process.env.ENVIRONMENT_ID ?? 'master',
   delivery: { accessToken: process.env.CDA_TOKEN ?? '' },
 });
-
-/**
- * Whether this application may keep the visitor's identity. It has to come from the
- * application: your own consent record, a session, a CMP token. The identity cookie being
- * present proves nothing about consent, and neither does anything in the browser's storage.
- * This example reads a cookie of its own to show where that decision belongs.
- */
-function hasServerConsent(cookieHeader: string | undefined): boolean {
-  return cookieHeader?.split('; ').includes('app-personalization-consent=granted') ?? false;
-}
 
 const server = createServer((req, res) => {
   void (async () => {
