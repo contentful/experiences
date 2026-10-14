@@ -685,13 +685,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    * different visitor than the profile held means that profile is not theirs, so it is
    * reset before the cookie's identity is written, which the cookie helper sequences.
    */
-  #adoptCookieIdentity(): boolean {
-    return (
-      this.#identity.adopt({
-        currentProfileId: this.#store.profile?.id,
-        reset: () => this.reset(),
-      }) !== undefined
-    );
+  #adoptCookieIdentity(): void {
+    this.#identity.adopt({
+      currentProfileId: this.#store.profile?.id,
+      reset: () => this.reset(),
+    });
   }
 
   /** Startup: adopt what the browser holds and write what is known, if permitted. */
@@ -700,7 +698,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#identity.clear();
       return;
     }
-    if (this.#store.consent.persistence === true && this.#adoptCookieIdentity()) return;
+    if (this.#store.consent.persistence === true) this.#adoptCookieIdentity();
     this.#syncIdentity();
   }
 
@@ -711,8 +709,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    */
   #applyPersistenceChange(granted: boolean): void {
     if (granted) {
-      // An adopted cookie is already written; otherwise write the identity held in memory.
-      if (!this.#adoptCookieIdentity()) this.#syncIdentity();
+      // Reconciling the cookie and synchronizing the effective identity are separate steps,
+      // as in the Optimization SDK: finding a cookie does not mean the profile is persisted.
+      this.#adoptCookieIdentity();
+      this.#syncIdentity();
       return;
     }
     this.#identity.clear();

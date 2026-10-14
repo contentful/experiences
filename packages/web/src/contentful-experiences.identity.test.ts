@@ -317,11 +317,11 @@ describe('reconciling a server cookie with the identity held', () => {
     };
   }
 
-  it('resets first and then writes a differing server cookie exactly once', () => {
+  it('resets before it writes a differing server cookie, then synchronizes the effective identity', () => {
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'old-visitor' }));
     setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
-    const { cookieWrites, storedIdWrites, restore } = recordWrites();
+    const { cookieWrites, restore } = recordWrites();
 
     const runtime = createRuntime();
     restore();
@@ -330,27 +330,54 @@ describe('reconciling a server cookie with the identity held', () => {
     const identityWrites = cookieWrites
       .map((write) => write.split(';')[0] ?? '')
       .filter((write) => write.startsWith('ctfl-opt-aid='));
-    // The reset's clearing comes first, and the adopted identity is written once after it.
-    expect(identityWrites).toEqual(['ctfl-opt-aid=', 'ctfl-opt-aid=server-id']);
-    expect(storedIdWrites().filter(([, value]) => value === 'server-id')).toHaveLength(1);
+    // The reset's clearing comes first and nothing is written before it. The adopted identity is
+    // then persisted, and the separate profile synchronization writes the effective one.
+    expect(identityWrites).toEqual([
+      'ctfl-opt-aid=',
+      'ctfl-opt-aid=server-id',
+      'ctfl-opt-aid=server-id',
+    ]);
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('server-id');
   });
 
-  it('writes nothing when the cookie already matches the stored id and the profile', () => {
+  it('refreshes the cookie once when it already matches the stored id and the profile, as Optimization does', () => {
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'server-id' }));
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'server-id');
     setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
-    const { cookieWrites, storedIdWrites, restore } = recordWrites();
+    const { cookieWrites, restore } = recordWrites();
 
     createRuntime();
     restore();
 
-    expect(cookieWrites).toEqual([]);
-    expect(storedIdWrites()).toEqual([]);
+    // Reconciliation finds nothing to change; the profile synchronization then refreshes expiry.
+    expect(cookieWrites.map((write) => write.split(';')[0])).toEqual(['ctfl-opt-aid=server-id']);
   });
 
-  it('migrates a legacy cookie to the current one with a single write', () => {
+  it('writes the active profile over a different stored identity when persistence is granted later', () => {
+    setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
+    const runtime = createRuntime({ profile: { id: 'profile-id' } });
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
+
+    runtime.consent({ persistence: true });
+
+    expect(runtime.profile).toEqual({ id: 'profile-id' });
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('profile-id');
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('profile-id');
+  });
+
+  it('writes the active profile over a different stored identity at startup', () => {
+    seedConsent({ events: true, persistence: true });
+    setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
+
+    createRuntime({ profile: { id: 'profile-id' } });
+
+    expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('profile-id');
+  });
+
+  it('migrates a legacy cookie to the current one, then synchronizes the effective identity', () => {
     seedConsent({ events: true, persistence: true });
     setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'legacy-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'legacy-id');
@@ -359,10 +386,8 @@ describe('reconciling a server cookie with the identity held', () => {
     createRuntime();
     restore();
 
-    const current = cookieWrites.filter((write) =>
-      write.startsWith(`${ANONYMOUS_ID_COOKIE}=legacy-id`)
-    );
-    expect(current).toHaveLength(1);
+    const written = cookieWrites.filter((write) => write.startsWith('ctfl-opt-aid=legacy-id'));
+    expect(written).toHaveLength(2);
   });
 });
 
