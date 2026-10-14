@@ -433,6 +433,28 @@ describe('handoff identity', () => {
     }
   );
 
+  it.each([
+    ['static', { scope: 'static' }],
+    ['public permutation', { scope: 'public-permutation', key: 'variant-a' }],
+  ] as const)(
+    'keeps an identity held only in storage when a profileless %s handoff arrives',
+    async (_name, cache) => {
+      seedConsent({ events: true, persistence: true });
+      // A returning visitor: the cookie and stored id exist, but no profile is in memory yet.
+      setCookie(ANONYMOUS_ID_COOKIE, 'visitor-1');
+      window.localStorage.setItem(ANONYMOUS_ID_KEY, 'visitor-1');
+      const runtime = createRuntime();
+      expect(runtime.profile).toBeUndefined();
+
+      await runtime.hydrateAndTrackCurrentPage(handoff({ cache }), { routeKey: '/first' });
+
+      expect(getCookie(ANONYMOUS_ID_COOKIE)).not.toBeUndefined();
+      expect(
+        vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+      ).toBe('visitor-1');
+    }
+  );
+
   it('does not replace an existing identity with a different one carried by a handoff', async () => {
     seedConsent({ events: true, persistence: true });
     const runtime = createRuntime({ profile: { id: 'visitor-1' } });

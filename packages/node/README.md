@@ -109,7 +109,10 @@ dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configu
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.
 Consent is scoped to the request facade and is never shared across requests or persisted.
-Check `request.canPersistProfile` before storing the profile id. Events passed in
+Check `request.canPersistProfile` before storing the profile id. A host that carries the
+identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })` and uses
+`canPersistProfile` to write or expire the response cookie; the cookie's presence is never
+server-side consent. See the [Node example](../../examples/node/README.md). Events passed in
 `fetchExperience({ personalization: { events } })` are filtered by the same request
 consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.

@@ -135,8 +135,12 @@ Web persists consent, always, in LocalStorage (the Optimization SDK's keys and
 only with persistence consent; configured startup defaults take precedence over
 stored decisions and are written to the shared consent keys, and a default that denies
 persistence deletes the stored profile; Node scopes consent to one `forRequest()` facade and exposes
-`canPersistProfile`. This SDK writes no anonymous-id cookie, so persistence
-consent gates LocalStorage only.
+`canPersistProfile`. Persistence consent also gates the identity cookie `ctfl-opt-aid`,
+which Web writes and a server reads: Web adopts a cookie the browser holds, migrates the
+legacy `ntaid`, removes the identity on withdrawal while keeping the in-memory profile,
+clears it on `reset()` and not on `destroy()`. Node never touches HTTP; the host reads the
+cookie, supplies it through `forRequest({ profile, consent })` and uses `canPersistProfile` to
+write or expire the response cookie. The cookie being present is not server-side consent.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 

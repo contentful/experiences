@@ -241,8 +241,41 @@ Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
 A type this SDK never emits, such as `screen`, is admitted only if it is listed in
 `allowedEventTypes`, and a blocked one is not reported to `onEventBlocked`.
 
-This SDK does not write an anonymous-id cookie, so persistence consent gates
-LocalStorage only. Gate any cookie your application sets yourself.
+### Identity cookie
+
+A server cannot read LocalStorage, so the SDK also keeps the visitor's identity in the
+`ctfl-opt-aid` cookie, which a server reads to recognise them on the next request. It uses
+the Optimization SDK's cookie names and storage keys, so both SDKs read and write the same
+one. Everything here is gated on **persistence consent**; nothing is written without it.
+
+- **What it holds.** A complete profile's id, else an identity adopted from a handoff, else
+  the id already stored. The fallback means a visitor keeps their continuity while the
+  profile is absent, and a static or public handoff, which carries no profile, cannot erase
+  it. It follows profile responses, XDA profile ids and handoff state.
+- **At startup, and when persistence is granted later,** the SDK adopts an identity the
+  browser already holds, such as one a server wrote, and migrates a legacy `ntaid` cookie.
+  That id is what the next request is sent under. A cookie for a different visitor than the
+  profile held resets that profile first. An identity already held in memory is written when
+  persistence is granted.
+- **Withdrawing persistence** (or a default that denies it) removes the cookie and the stored
+  id and keeps the in-memory profile. Event consent is independent.
+- **`reset()`** clears the identity, the stored profile and the cookie. **`destroy()`** does
+  not: it releases the SDK's resources and leaves approved continuity in place. A response
+  invalidated by a withdrawal or a reset cannot recreate it.
+- **Cookie settings** come from the `cookie` option: `domain`, `path`, `sameSite`, `secure`
+  and `expires` in days (365 by default). A deletion always uses the scope the cookie was
+  written with, so set the same values on any server that also writes it.
+
+```ts
+const experiences = new ContentfulExperiences({
+  // ...
+  cookie: { domain: 'example.com', sameSite: 'lax', secure: true },
+});
+```
+
+On the server, the host reads the cookie, supplies it through `forRequest({ profile,
+consent })`, and uses `canPersistProfile` to write or expire the response cookie. See the
+[Node example](../../examples/node/README.md).
 
 ## Interaction tracking
 
