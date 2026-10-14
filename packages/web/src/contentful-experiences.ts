@@ -34,6 +34,7 @@ import {
   type InteractionTrackingOptions,
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import { IdentityCookie, type IdentityCookieOptions } from './identity-cookie.js';
 import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 
@@ -60,6 +61,12 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
    * decision, and `consent` is also the default for `persistenceConsent`.
    */
   defaults?: { consent?: boolean; persistenceConsent?: boolean };
+  /**
+   * How the identity cookie is written and deleted: domain, path, SameSite, Secure and
+   * expiry (365 days by default). It is the cookie a server reads to recognise the
+   * visitor, so a deletion always uses the scope it was written with.
+   */
+  cookie?: IdentityCookieOptions;
 };
 
 export interface CurrentPageOptions {
@@ -105,6 +112,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly #singletonOwner: string;
   #locale: string | undefined;
   readonly #store = new LocalStore();
+  readonly #identity: IdentityCookie;
   readonly #delivery: PersonalizationDelivery;
   readonly #allowedEventTypes: readonly AllowedEventType[] | undefined;
   readonly #onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
@@ -145,6 +153,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       allowedEventTypes,
       onEventBlocked,
       defaults,
+      cookie,
       profile,
       ...clientConfig
     } = config;
@@ -176,10 +185,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         events: defaults?.consent,
         persistence: defaults?.persistenceConsent,
       });
+      this.#identity = new IdentityCookie(this.#store, cookie);
       if (profile !== undefined) this.#store.profile = profile;
       this.#delivery = delivery = new PersonalizationDelivery({
         api: this.optimizationApi.personalization,
-        getProfileId: () => this.#store.profile?.id ?? this.#adoptedProfileId,
+        getProfileId: () => this.#requestIdentity(),
         getProfileRevision: () => this.#store.profileRevision,
         getOnline: () => this.#online,
         getLocale: () => this.locale,
@@ -187,17 +197,20 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
           if (this.#destroyed) return;
           this.#store.profile = data.profile;
           this.#setAdoptedProfileId(undefined);
+          this.#syncIdentity();
         },
       });
       this.#eventMethods = this.createEventMethods(
         {
-          getProfile: () =>
-            this.#store.profile ??
-            (this.#adoptedProfileId === undefined ? undefined : { id: this.#adoptedProfileId }),
+          getProfile: () => {
+            const id = this.#store.profile?.id ?? this.#requestIdentity();
+            return this.#store.profile ?? (id === undefined ? undefined : { id });
+          },
           setProfile: (nextProfile) => {
             if (this.#destroyed) return;
             this.#store.profile = nextProfile;
             this.#setAdoptedProfileId(undefined);
+            this.#syncIdentity();
           },
           getProfileRevision: () => this.#store.profileRevision,
           getConsent: () => this.#store.consent,
@@ -212,6 +225,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
             ]),
         }
       );
+      // After the delivery exists, because adopting a different visitor's cookie resets.
+      this.#initializeIdentity();
       if (typeof window !== 'undefined') {
         window.addEventListener('online', this.#handleOnline);
         window.addEventListener('offline', this.#handleOffline);
@@ -255,7 +270,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    */
   consent(input: ConsentInput): void {
     const next = toConsentState(input);
+    const hadPersistence = this.#store.consent.persistence;
     this.#store.updateConsent(next);
+    if (next.persistence !== undefined && next.persistence !== hadPersistence) {
+      this.#applyPersistenceChange(next.persistence);
+    }
     // Events accepted into the offline queue while the visitor had consented must not
     // be sent after they withdraw. Only an explicit denial purges, as in the
     // Optimization SDK; a persistence-only change leaves the queue alone.
@@ -316,6 +335,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#identityRevision === identityRevision
     ) {
       this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
+      this.#syncIdentity();
     }
     return plan;
   }
@@ -332,6 +352,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#setAdoptedProfileId(undefined);
     this.#delivery.reset();
     this.#store.reset();
+    this.#identity.clear();
   }
 
   /** Stop browser-owned work before releasing SDK ownership. */
@@ -614,6 +635,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         Object.hasOwn(handoff.state, 'profile')
       ) {
         this.#store.profile = handoff.state.profile;
+        this.#syncIdentity();
       }
     });
     initialization.hydration = hydration.catch((error: unknown) => {
@@ -626,7 +648,69 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #adoptHandoffIdentity(handoff: HandoffEnvelope): string | undefined {
     const profileId = this.#store.profile?.id ?? this.#adoptedProfileId ?? handoff.profileId;
     this.#setAdoptedProfileId(profileId);
+    this.#syncIdentity();
     return profileId;
+  }
+
+  /**
+   * The id a request is sent under when no complete profile is held: an identity adopted
+   * from a handoff, then, while persistence is granted, the id stored for continuity.
+   * That is how a cookie a server wrote reaches the first request of a new page load.
+   */
+  #requestIdentity(): string | undefined {
+    if (this.#store.profile?.id !== undefined) return this.#store.profile.id;
+    if (this.#adoptedProfileId !== undefined) return this.#adoptedProfileId;
+    return this.#store.consent.persistence === true ? this.#store.anonymousId : undefined;
+  }
+
+  /**
+   * Keeps the identity cookie and stored id in step with what this runtime knows, but only
+   * while persistence is granted; otherwise nothing is written. A complete profile wins,
+   * then an identity adopted from a handoff, then the id already stored, so a visitor
+   * keeps their continuity while the profile is absent and a profileless handoff cannot
+   * erase it. Only callers that are themselves guarded against stale work reach this.
+   */
+  #syncIdentity(): void {
+    if (this.#store.consent.persistence !== true) return;
+    this.#identity.persist(
+      this.#identity.resolve({
+        profileId: this.#store.profile?.id,
+        handoffId: this.#adoptedProfileId,
+      })
+    );
+  }
+
+  /**
+   * Adopts an identity the browser already holds, such as a server cookie. A cookie for a
+   * different visitor than the profile held means that profile is not theirs, so it is
+   * reset before the cookie's identity is adopted.
+   */
+  #adoptCookieIdentity(): void {
+    const adopted = this.#identity.adopt({ currentProfileId: this.#store.profile?.id });
+    if (adopted?.differsFromProfile !== true) return;
+    this.reset();
+    this.#identity.persist(adopted.id);
+  }
+
+  /** Startup: adopt what the browser holds and write what is known, if permitted. */
+  #initializeIdentity(): void {
+    if (this.#store.consent.persistence === true) this.#adoptCookieIdentity();
+    this.#syncIdentity();
+    if (this.#store.consent.persistence === false) this.#identity.clear();
+  }
+
+  /**
+   * Persistence was granted or withdrawn after startup. A grant adopts any existing
+   * cookie and writes the identity already held in memory. A withdrawal removes the
+   * durable identity but leaves the in-memory profile, and event consent is separate.
+   */
+  #applyPersistenceChange(granted: boolean): void {
+    if (granted) {
+      this.#adoptCookieIdentity();
+      this.#syncIdentity();
+      return;
+    }
+    this.#identity.clear();
   }
 
   #setAdoptedProfileId(profileId: string | undefined): void {

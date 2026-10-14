@@ -9,7 +9,7 @@ import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   admit(
@@ -61,6 +61,7 @@ afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   window.localStorage.clear();
+  clearIdentityCookies();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });

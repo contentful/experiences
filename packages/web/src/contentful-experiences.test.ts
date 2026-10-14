@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   get optimization(): typeof this.optimizationApi {
@@ -57,6 +57,7 @@ afterEach(() => {
   runtimes.clear();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  clearIdentityCookies();
   window.history.replaceState({}, '', '/');
   document.title = '';
 });

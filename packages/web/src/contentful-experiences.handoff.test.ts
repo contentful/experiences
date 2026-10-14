@@ -11,7 +11,7 @@ import { ExperienceApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 
@@ -69,6 +69,7 @@ afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   window.localStorage.clear();
+  clearIdentityCookies();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });

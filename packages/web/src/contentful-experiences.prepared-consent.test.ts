@@ -5,7 +5,7 @@ import { ExperienceApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 type ExperienceEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
 
@@ -62,6 +62,7 @@ afterEach(async () => {
   runtimes.clear();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  clearIdentityCookies();
 });
 
 describe('Web prepared handoff and consent', () => {

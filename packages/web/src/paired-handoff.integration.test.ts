@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
-import { seedConsent } from './test-fixtures/consent.js';
+import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
 
@@ -52,6 +52,7 @@ afterEach(() => {
   for (const sdk of active) sdk.destroy();
   active.clear();
   window.localStorage.clear();
+  clearIdentityCookies();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
