@@ -27,9 +27,25 @@ const DEFAULT_EXPIRES_IN_DAYS = 365;
 const EXPIRED_UTC = 'Thu, 01 Jan 1970 00:00:00 GMT';
 
 /**
+ * A cookie's value as the application meant it: surrounding quotes removed, then
+ * percent-decoding, falling back to the unquoted text when the encoding is malformed.
+ * This is the Optimization SDK's `decodeCookieValue`.
+ */
+function decodeCookieValue(value: string): string {
+  const unquoted =
+    value.length >= 2 && value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+
+  try {
+    return decodeURIComponent(unquoted);
+  } catch {
+    return unquoted;
+  }
+}
+
+/**
  * One cookie's value from a `Cookie` request header. The header is split on `;` and each
- * field trimmed, so `a=1;b=2` and `a=1; b=2` read alike, as in the Optimization SDK's
- * server cookie parser.
+ * field trimmed, so `a=1;b=2` and `a=1; b=2` read alike, then the value is decoded, as in
+ * the Optimization SDK's server cookie parser.
  */
 function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
   if (!cookieHeader) return undefined;
@@ -38,7 +54,7 @@ function readCookie(cookieHeader: string | undefined, name: string): string | un
     const separator = part.indexOf('=');
     if (separator === -1) continue;
     if (part.slice(0, separator).trim() !== name) continue;
-    return part.slice(separator + 1).trim() || undefined;
+    return decodeCookieValue(part.slice(separator + 1).trim()) || undefined;
   }
   return undefined;
 }

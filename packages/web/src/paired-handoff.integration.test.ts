@@ -550,6 +550,22 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
     expect(readIdentity(header)).toBe('visitor-1');
   });
 
+  it.each([
+    ['percent-encoded', 'ctfl-opt-aid=incoming%2Fvisitor', 'incoming/visitor'],
+    ['quoted', 'ctfl-opt-aid="incoming-visitor"', 'incoming-visitor'],
+    ['quoted and encoded', 'ctfl-opt-aid="incoming%2Fvisitor"', 'incoming/visitor'],
+    ['malformed encoding, kept as it is', 'ctfl-opt-aid=bad%E0%A4%A', 'bad%E0%A4%A'],
+    ['malformed encoding inside quotes, unquoted', 'ctfl-opt-aid="bad%E0%A4%A"', 'bad%E0%A4%A'],
+    ['a lone quote, kept as it is', 'ctfl-opt-aid="', '"'],
+  ])('decodes a %s identity value', (_name, header, expected) => {
+    expect(readIdentity(`other=1; ${header}; last=2`)).toBe(expected);
+  });
+
+  it('decodes the server consent value the same way', () => {
+    expect(hasServerConsent('app-personalization-consent="granted"')).toBe(true);
+    expect(hasServerConsent('app-personalization-consent=gran%74ed')).toBe(true);
+  });
+
   it('reads nothing from a header that lacks the cookie, or has it empty', () => {
     expect(readIdentity('other=1;last=2')).toBeUndefined();
     expect(readIdentity('ctfl-opt-aid=')).toBeUndefined();
