@@ -1,0 +1,85 @@
+import { http, type HttpHandler, HttpResponse } from 'msw';
+
+interface InsightBatchEvent {
+  profile: { id?: string; stableId?: string };
+}
+
+// Minimal in-memory store
+const eventsStore: InsightBatchEvent[] = [];
+
+// Helper to parse JSON whether body is application/json or text/plain
+async function parseJson<T>(req: Request): Promise<T> {
+  const content = req.headers.get('content-type') ?? '';
+  if (content.includes('application/json')) {
+     
+    return (await req.json()) as T;
+  }
+  // text/plain or others -> try text then JSON.parse
+  // Beacon often sends text/plain with a JSON string body
+  const raw = await req.text();
+   
+  return JSON.parse(raw) as T;
+}
+
+/**
+ * Returns MSW request handlers that mock the Insights API v2 endpoints.
+ *
+ * @param baseUrl - URL prefix prepended to each route pattern.
+ * @returns An array of {@link HttpHandler} instances for use with MSW.
+ *
+ * @example
+ * ```typescript
+ * import { setupServer } from 'msw/node'
+ * import { getHandlers } from './insights-handlers'
+ *
+ * const server = setupServer(...getHandlers())
+ * ```
+ *
+ * @public
+ */
+export function getHandlers(baseUrl = '*'): HttpHandler[] {
+  return [
+    // CORS preflight for Beacon/fetch
+    http.options('*', () =>
+      HttpResponse.text('', {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+      })
+    ),
+    http.post(
+      `${baseUrl}v2/spaces/:spaceId/environments/:environmentSlug/events`,
+      async ({ request }) => {
+        try {
+          const payload = await parseJson<InsightBatchEvent[]>(request);
+
+          eventsStore.push(...payload);
+
+          return HttpResponse.text('', {
+            status: 204,
+            headers: { 'Access-Control-Allow-Origin': '*' },
+          });
+        } catch (e) {
+          return HttpResponse.json(
+            { error: 'Invalid payload', details: String(e) },
+            { status: 400 }
+          );
+        }
+      }
+    ),
+    // Debug endpoint that returns events for a given ID
+    http.get(
+      `${baseUrl}v2/spaces/:spaceId/environments/:environmentSlug/profiles/:profileId`,
+      ({ params }) => {
+        const { profileId } = params;
+        const events = eventsStore.filter(
+          (e) => e.profile.id === profileId || e.profile.stableId === profileId
+        );
+        return HttpResponse.json({ data: events });
+      }
+    ),
+  ];
+}

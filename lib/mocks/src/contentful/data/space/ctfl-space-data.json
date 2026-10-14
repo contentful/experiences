@@ -1,0 +1,5439 @@
+{
+  "contentTypes": [
+    {
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "nt_experience",
+        "type": "ContentType",
+        "createdAt": "2026-10-13T11:35:43.364Z",
+        "updatedAt": "2026-10-13T11:35:43.628Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 1,
+        "publishedAt": "2026-10-13T11:35:43.628Z",
+        "firstPublishedAt": "2026-10-13T11:35:43.628Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 2,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/content_types/nt_experience"
+      },
+      "displayField": "nt_name",
+      "name": "Optimization",
+      "description": "Optimization",
+      "fields": [
+        {
+          "id": "nt_name",
+          "name": "Name",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+            {
+              "unique": true
+            }
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_description",
+          "name": "Description",
+          "type": "Text",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_type",
+          "name": "Type",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+            {
+              "in": [
+                "nt_experiment",
+                "nt_personalization"
+              ]
+            }
+          ],
+          "disabled": true,
+          "omitted": false
+        },
+        {
+          "id": "nt_config",
+          "name": "Config",
+          "type": "Object",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_audience",
+          "name": "Audience",
+          "type": "Link",
+          "localized": false,
+          "required": false,
+          "validations": [
+            {
+              "linkContentType": [
+                "nt_audience"
+              ]
+            }
+          ],
+          "disabled": true,
+          "omitted": false,
+          "linkType": "Entry"
+        },
+        {
+          "id": "nt_variants",
+          "name": "Variants",
+          "type": "Array",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": true,
+          "omitted": false,
+          "items": {
+            "type": "Link",
+            "validations": [
+            ],
+            "linkType": "Entry"
+          }
+        },
+        {
+          "id": "nt_experience_id",
+          "name": "Optimization Id",
+          "type": "Symbol",
+          "localized": false,
+          "required": false,
+          "validations": [
+            {
+              "unique": true
+            }
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_metadata",
+          "name": "Experience Metadata",
+          "type": "Object",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": true,
+          "omitted": false
+        }
+      ]
+    },
+    {
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "nt_audience",
+        "type": "ContentType",
+        "createdAt": "2026-10-13T11:35:44.525Z",
+        "updatedAt": "2026-10-13T11:35:44.798Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 1,
+        "publishedAt": "2026-10-13T11:35:44.798Z",
+        "firstPublishedAt": "2026-10-13T11:35:44.798Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 2,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/content_types/nt_audience"
+      },
+      "displayField": "nt_name",
+      "name": "Audience",
+      "description": "Audience",
+      "fields": [
+        {
+          "id": "nt_name",
+          "name": "Name",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_description",
+          "name": "Description",
+          "type": "Text",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_rules",
+          "name": "Rules",
+          "type": "Object",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_audience_id",
+          "name": "Audience Id",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+            {
+              "unique": true
+            }
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_metadata",
+          "name": "Metadata",
+          "type": "Object",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": true,
+          "omitted": false
+        }
+      ]
+    },
+    {
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "nt_mergetag",
+        "type": "ContentType",
+        "createdAt": "2026-10-13T11:35:45.728Z",
+        "updatedAt": "2026-10-13T11:35:45.983Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 1,
+        "publishedAt": "2026-10-13T11:35:45.983Z",
+        "firstPublishedAt": "2026-10-13T11:35:45.983Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 2,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "AppDefinition",
+            "id": "4QYnIIKna8TpXegJp3oSBi"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/content_types/nt_mergetag"
+      },
+      "displayField": "nt_name",
+      "name": "Dynamic Tag",
+      "description": "Dynamic Tag",
+      "fields": [
+        {
+          "id": "nt_name",
+          "name": "Name",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_fallback",
+          "name": "Fallback",
+          "type": "Symbol",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_mergetag_id",
+          "name": "Dynamic Tag Id",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+            {
+              "unique": true
+            }
+          ],
+          "disabled": false,
+          "omitted": false
+        }
+      ]
+    },
+    {
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "content",
+        "type": "ContentType",
+        "createdAt": "2026-10-13T12:02:59.740Z",
+        "updatedAt": "2026-10-13T12:30:01.261Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 5,
+        "publishedAt": "2026-10-13T12:30:01.261Z",
+        "firstPublishedAt": "2026-10-13T12:03:00.116Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 3,
+        "version": 6,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/content_types/content"
+      },
+      "displayField": "internalTitle",
+      "name": "Content",
+      "description": "Generic content type",
+      "fields": [
+        {
+          "id": "internalTitle",
+          "name": "Internal Title",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "text",
+          "name": "Text",
+          "type": "Symbol",
+          "localized": false,
+          "required": true,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "richText",
+          "name": "Rich Text",
+          "type": "RichText",
+          "localized": false,
+          "required": true,
+          "validations": [
+            {
+              "enabledMarks": [
+                "bold",
+                "italic",
+                "underline",
+                "code",
+                "superscript",
+                "subscript",
+                "strikethrough"
+              ],
+              "message": "Only bold, italic, underline, code, superscript, subscript, and strikethrough marks are allowed"
+            },
+            {
+              "enabledNodeTypes": [
+                "heading-1",
+                "heading-2",
+                "heading-3",
+                "heading-4",
+                "heading-5",
+                "heading-6",
+                "ordered-list",
+                "unordered-list",
+                "hr",
+                "blockquote",
+                "embedded-entry-block",
+                "embedded-asset-block",
+                "table",
+                "asset-hyperlink",
+                "embedded-entry-inline",
+                "entry-hyperlink",
+                "hyperlink"
+              ],
+              "message": "Only heading 1, heading 2, heading 3, heading 4, heading 5, heading 6, ordered list, Unordered list, horizontal rule, quote, block entry, asset, table, link to asset, inline entry, link to entry, and link to Url nodes are allowed"
+            },
+            {
+              "nodes": {
+              }
+            }
+          ],
+          "disabled": false,
+          "omitted": false
+        },
+        {
+          "id": "nt_experiences",
+          "name": "Ninetailed",
+          "type": "Array",
+          "localized": false,
+          "required": false,
+          "validations": [
+          ],
+          "disabled": false,
+          "omitted": false,
+          "items": {
+            "type": "Link",
+            "validations": [
+              {
+                "linkContentType": [
+                  "nt_experience"
+                ]
+              }
+            ],
+            "linkType": "Entry"
+          }
+        }
+      ]
+    }
+  ],
+  "tags": [
+  ],
+  "editorInterfaces": [
+    {
+      "sys": {
+        "id": "default",
+        "type": "EditorInterface",
+        "space": {
+          "sys": {
+            "id": "700s66i6clht",
+            "type": "Link",
+            "linkType": "Space"
+          }
+        },
+        "version": 2,
+        "createdAt": "2026-10-13T11:35:43.720Z",
+        "createdBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "updatedAt": "2026-10-13T11:35:44.126Z",
+        "updatedBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "contentType": {
+          "sys": {
+            "id": "nt_experience",
+            "type": "Link",
+            "linkType": "ContentType"
+          }
+        },
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        }
+      },
+      "controls": [
+        {
+          "fieldId": "nt_type"
+        },
+        {
+          "fieldId": "nt_audience"
+        },
+        {
+          "fieldId": "nt_variants"
+        },
+        {
+          "fieldId": "nt_experience_id",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_config",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_metadata",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_description",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_name",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "default",
+        "type": "EditorInterface",
+        "space": {
+          "sys": {
+            "id": "700s66i6clht",
+            "type": "Link",
+            "linkType": "Space"
+          }
+        },
+        "version": 2,
+        "createdAt": "2026-10-13T11:35:44.927Z",
+        "createdBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "updatedAt": "2026-10-13T11:35:45.332Z",
+        "updatedBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "contentType": {
+          "sys": {
+            "id": "nt_audience",
+            "type": "Link",
+            "linkType": "ContentType"
+          }
+        },
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        }
+      },
+      "editors": [
+        {
+          "settings": {
+          },
+          "widgetId": "default-editor",
+          "widgetNamespace": "editor-builtin"
+        },
+        {
+          "settings": {
+          },
+          "widgetId": "reference-tree",
+          "widgetNamespace": "editor-builtin"
+        },
+        {
+          "settings": {
+          },
+          "widgetId": "tags-editor",
+          "widgetNamespace": "editor-builtin"
+        },
+        {
+          "settings": {
+          },
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        }
+      ],
+      "controls": [
+        {
+          "fieldId": "nt_metadata"
+        },
+        {
+          "fieldId": "nt_audience_id",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_description",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_rules",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        },
+        {
+          "fieldId": "nt_name",
+          "widgetId": "4QYnIIKna8TpXegJp3oSBi",
+          "widgetNamespace": "app"
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "default",
+        "type": "EditorInterface",
+        "space": {
+          "sys": {
+            "id": "700s66i6clht",
+            "type": "Link",
+            "linkType": "Space"
+          }
+        },
+        "version": 1,
+        "createdAt": "2026-10-13T11:35:46.094Z",
+        "createdBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "updatedAt": "2026-10-13T11:35:46.094Z",
+        "updatedBy": {
+          "sys": {
+            "id": "4QYnIIKna8TpXegJp3oSBi",
+            "type": "Link",
+            "linkType": "AppDefinition"
+          }
+        },
+        "contentType": {
+          "sys": {
+            "id": "nt_mergetag",
+            "type": "Link",
+            "linkType": "ContentType"
+          }
+        },
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        }
+      },
+      "controls": [
+        {
+          "fieldId": "nt_name"
+        },
+        {
+          "fieldId": "nt_fallback"
+        },
+        {
+          "fieldId": "nt_mergetag_id"
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "default",
+        "type": "EditorInterface",
+        "space": {
+          "sys": {
+            "id": "700s66i6clht",
+            "type": "Link",
+            "linkType": "Space"
+          }
+        },
+        "version": 6,
+        "createdAt": "2026-10-13T12:03:00.238Z",
+        "createdBy": {
+          "sys": {
+            "id": "2ThAHYPA8kj7F1sHxUzXVt",
+            "type": "Link",
+            "linkType": "User"
+          }
+        },
+        "updatedAt": "2026-10-13T12:30:01.836Z",
+        "updatedBy": {
+          "sys": {
+            "id": "2ThAHYPA8kj7F1sHxUzXVt",
+            "type": "Link",
+            "linkType": "User"
+          }
+        },
+        "contentType": {
+          "sys": {
+            "id": "content",
+            "type": "Link",
+            "linkType": "ContentType"
+          }
+        },
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        }
+      },
+      "controls": [
+        {
+          "fieldId": "internalTitle",
+          "widgetId": "singleLine",
+          "widgetNamespace": "builtin"
+        },
+        {
+          "fieldId": "text",
+          "widgetId": "singleLine",
+          "widgetNamespace": "builtin"
+        },
+        {
+          "fieldId": "richText",
+          "widgetId": "richTextEditor",
+          "widgetNamespace": "builtin"
+        },
+        {
+          "fieldId": "nt_experiences",
+          "widgetId": "entryLinksEditor",
+          "widgetNamespace": "builtin"
+        }
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "sYUgfb8KAVC99aqBiqi5N",
+        "type": "Entry",
+        "createdAt": "2026-10-13T12:42:06.357Z",
+        "updatedAt": "2026-10-13T12:44:52.411Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-13T12:44:52.411Z",
+        "firstPublishedAt": "2026-10-13T12:44:52.411Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/sYUgfb8KAVC99aqBiqi5N"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Coded Component Fragment"
+        },
+        "text": {
+          "en-US": "This is a coded component fragment."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is coded component fragment ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "2gAKoSsVjaO46BPs4iXbm2",
+        "type": "Entry",
+        "createdAt": "2026-10-13T12:46:54.381Z",
+        "updatedAt": "2026-10-13T12:47:33.359Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-13T12:47:33.359Z",
+        "firstPublishedAt": "2026-10-13T12:47:33.359Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/2gAKoSsVjaO46BPs4iXbm2"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Coded Experience Fragment"
+        },
+        "text": {
+          "en-US": "This is a coded experience fragment."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is coded experience fragment ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "4OBnXmehDsmvnenSBDnnLo",
+        "type": "Entry",
+        "createdAt": "2026-10-13T12:55:03.298Z",
+        "updatedAt": "2026-10-13T12:56:09.158Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-13T12:56:09.158Z",
+        "firstPublishedAt": "2026-10-13T12:56:09.158Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4OBnXmehDsmvnenSBDnnLo"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Composed Experience Fragment"
+        },
+        "text": {
+          "en-US": "This is a composed experience fragment."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is composed experience fragment ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "3SaCalGJq7Y3Y0e6QUMxxe",
+        "type": "Entry",
+        "createdAt": "2026-10-14T09:40:01.887Z",
+        "updatedAt": "2026-10-14T09:41:45.845Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 9,
+        "publishedAt": "2026-10-14T09:41:45.845Z",
+        "firstPublishedAt": "2026-10-14T09:41:45.845Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 10,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "nt_audience"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/3SaCalGJq7Y3Y0e6QUMxxe"
+      },
+      "fields": {
+        "nt_name": {
+          "en-US": "Identified Visitor Audience"
+        },
+        "nt_description": {
+          "en-US": "This is an identified visitor audience."
+        },
+        "nt_rules": {
+          "en-US": {
+            "any": [
+              {
+                "all": [
+                  {
+                    "type": "identify",
+                    "count": "1",
+                    "key": "identified",
+                    "operator": "equal",
+                    "value": "true",
+                    "conditions": [
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "nt_audience_id": {
+          "en-US": "3SaCalGJq7Y3Y0e6QUMxxe"
+        },
+        "nt_metadata": {
+          "en-US": {
+            "type": "origin"
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "67lS2EQ9HH1hNELN30vDKS",
+        "type": "Entry",
+        "createdAt": "2026-10-14T09:52:37.362Z",
+        "updatedAt": "2026-10-14T09:53:33.411Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 7,
+        "publishedAt": "2026-10-14T09:53:33.411Z",
+        "firstPublishedAt": "2026-10-14T09:53:33.411Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 8,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/67lS2EQ9HH1hNELN30vDKS"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Composed Component Fragment"
+        },
+        "text": {
+          "en-US": "This is a composed component fragment."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is composed component fragment ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "6bULnHxHSvCtqd5L9me5oJ",
+        "type": "Entry",
+        "createdAt": "2026-10-14T11:04:05.198Z",
+        "updatedAt": "2026-10-14T11:07:59.398Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 11,
+        "publishedAt": "2026-10-14T11:07:59.398Z",
+        "firstPublishedAt": "2026-10-14T11:05:09.623Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 2,
+        "version": 12,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/6bULnHxHSvCtqd5L9me5oJ"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Coded Fragment Baseline"
+        },
+        "text": {
+          "en-US": "This is a personalized coded fragment baseline."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is personalized coded fragment baseline ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "4ORMu6r0JWJOGx7IkE3LTl",
+        "type": "Entry",
+        "createdAt": "2026-10-14T11:05:50.481Z",
+        "updatedAt": "2026-10-14T11:07:39.314Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 9,
+        "publishedAt": "2026-10-14T11:07:39.314Z",
+        "firstPublishedAt": "2026-10-14T11:06:43.982Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 2,
+        "version": 10,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4ORMu6r0JWJOGx7IkE3LTl"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Coded Fragment Variant"
+        },
+        "text": {
+          "en-US": "This is a personalized coded fragment variant."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is personalized coded fragment variant ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "assets": [
+  ],
+  "locales": [
+    {
+      "code": "en-US",
+      "name": "English (United States)",
+      "default": true,
+      "optional": false,
+      "fallbackCode": null,
+      "contentManagementApi": true,
+      "contentDeliveryApi": true,
+      "internal_code": "en-US",
+      "sys": {
+        "id": "034FbfsWsATsk8wHx7buAu",
+        "type": "Locale",
+        "version": 1,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "id": "700s66i6clht",
+            "linkType": "Space"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39.562Z",
+        "updatedAt": "2026-10-13T11:33:39.562Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "id": "system",
+            "linkType": "System"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "id": "system",
+            "linkType": "System"
+          }
+        }
+      }
+    }
+  ],
+  "webhooks": [
+  ],
+  "roles": [
+    {
+      "name": "Author",
+      "description": "Allows editing of content",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034FbftiibQifvG8l63vsv",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    },
+    {
+      "name": "Editor",
+      "description": "Allows editing, publishing and archiving of content",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034FbftiMw6X7ZJDQqLvXM",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    },
+    {
+      "name": "Experience Editor",
+      "description": "Full access to create, manage and publish experiences, component types and fragments.",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Fragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceFragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Experience"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Template"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceTemplate"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ComponentType"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Component"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DesignToken"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create",
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete",
+            "publish"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create",
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete",
+            "publish"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read",
+            "create",
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete",
+            "publish"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034FbftjgRKoNE06o5locI",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    },
+    {
+      "name": "Freelancer",
+      "description": "Allows only editing of content they created themselves",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              },
+              {
+                "paths": [
+                  {
+                    "doc": "fields.%.%"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              },
+              {
+                "paths": [
+                  {
+                    "doc": "fields.%.%"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              },
+              {
+                "equals": [
+                  {
+                    "doc": "sys.createdBy.sys.id"
+                  },
+                  "User.current()"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034FbftjEZqeHPW9bFhq6N",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    },
+    {
+      "name": "Presentation Editor",
+      "description": "Creates and publishes design components and experiences they create",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ComponentType"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Component"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Template"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceTemplate"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DesignToken"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Fragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceFragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Fragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceFragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Fragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceFragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Fragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "ExperienceFragment"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Experience"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "create"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Experience"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "delete"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Experience"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Experience"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": "all",
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034Fbftk9fB3ygQT2LX2L2",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    },
+    {
+      "name": "Translator",
+      "description": "Allows editing of localized fields in the specified language",
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Entry"
+                ]
+              },
+              {
+                "paths": [
+                  {
+                    "doc": "fields.%.%"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "update"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Asset"
+                ]
+              },
+              {
+                "paths": [
+                  {
+                    "doc": "fields.%.%"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationExperienceNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationFolderNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "DestinationRedirectNode"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "effect": "allow",
+          "actions": [
+            "read"
+          ],
+          "constraint": {
+            "and": [
+              {
+                "equals": [
+                  {
+                    "doc": "sys.type"
+                  },
+                  "Destination"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "permissions": {
+        "ContentModel": [
+          "read"
+        ],
+        "Settings": [
+        ],
+        "ContentDelivery": [
+        ],
+        "Environments": [
+        ],
+        "EnvironmentAliases": [
+        ],
+        "Tags": [
+        ],
+        "DesignLibraries": [
+        ],
+        "DesignLibraryInstallations": [
+        ]
+      },
+      "sys": {
+        "type": "Role",
+        "id": "034FbftkDyQhqQSOOpXJh9",
+        "version": 0,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T11:33:39Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T11:33:39Z"
+      }
+    }
+  ],
+  "releases": [
+  ],
+  "designTokens": [
+  ],
+  "components": [
+    {
+      "sys": {
+        "id": "composedComponent",
+        "type": "Component",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "version": 5,
+        "publishedAt": "2026-10-14T09:50:40.407Z",
+        "publishedVersion": 4,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:19:11.693Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "createdAt": "2026-10-13T12:13:12.378Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-14T09:50:40.393Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "automationTags": [
+        ]
+      },
+      "name": "Composed Component",
+      "description": "This is a composed component",
+      "contentProperties": [
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "cp_xTpnN6tKO-"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "cp_EC5B50JR92"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+              {
+                "name": "Collection Item Title",
+                "required": true,
+                "type": "String",
+                "id": "collectionItemTitle"
+              },
+              {
+                "name": "Collection Item Description",
+                "required": true,
+                "type": "RichText",
+                "id": "collectionItemDescription"
+              }
+            ]
+          },
+          "id": "cp_vguv-vzKB1"
+        },
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "cp_S_jCmYKa1K"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "cp_mmPeaVcqlZ"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+              {
+                "name": "Collection Item Title",
+                "required": true,
+                "type": "String",
+                "id": "collectionItemTitle"
+              },
+              {
+                "name": "Collection Item Description",
+                "required": true,
+                "type": "RichText",
+                "id": "collectionItemDescription"
+              }
+            ]
+          },
+          "id": "cp_IP_zCYevjh"
+        }
+      ],
+      "designProperties": [
+      ],
+      "componentTree": [
+        {
+          "id": "vqMpWtzefLdJ8rHUzeWS4",
+          "nodeType": "Component",
+          "component": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
+          },
+          "contentProperties": {
+            "title": "$contentProperties/cp_S_jCmYKa1K",
+            "collection": "$contentProperties/cp_IP_zCYevjh",
+            "description": "$contentProperties/cp_mmPeaVcqlZ"
+          },
+          "designProperties": {
+          },
+          "slots": {
+          }
+        },
+        {
+          "id": "bVS9DMS9pulmCrRJ7InMa",
+          "nodeType": "Component",
+          "component": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
+          },
+          "contentProperties": {
+            "title": "$contentProperties/cp_xTpnN6tKO-",
+            "collection": "$contentProperties/cp_vguv-vzKB1",
+            "description": "$contentProperties/cp_EC5B50JR92"
+          },
+          "designProperties": {
+          },
+          "slots": {
+          }
+        }
+      ],
+      "slots": [
+      ],
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ],
+        "annotations": {
+          "Component": [
+            {
+              "sys": {
+                "id": "Contentful:ComposedImplementation",
+                "type": "Link",
+                "linkType": "Annotation"
+              }
+            }
+          ]
+        }
+      },
+      "dataAssemblies": [
+        {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:DataAssembly",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/28K3R99fBlcr93R65MVJaP"
+          }
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "codedComponent",
+        "type": "Component",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "version": 5,
+        "publishedAt": "2026-10-13T12:33:16.472Z",
+        "publishedVersion": 4,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:17:06.629Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "createdAt": "2026-10-13T12:13:36.661Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T12:33:16.460Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "automationTags": [
+        ]
+      },
+      "name": "Coded Component",
+      "description": "This is a coded component.",
+      "contentProperties": [
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "title"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "description"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+              {
+                "name": "Collection Item Title",
+                "required": true,
+                "type": "String",
+                "id": "collectionItemTitle"
+              },
+              {
+                "name": "Collection Item Description",
+                "required": true,
+                "type": "RichText",
+                "id": "collectionItemDescription"
+              }
+            ]
+          },
+          "id": "collection"
+        }
+      ],
+      "designProperties": [
+      ],
+      "componentTree": null,
+      "slots": [
+      ],
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ],
+        "annotations": {
+          "Component": [
+            {
+              "sys": {
+                "id": "Contentful:CodedImplementation",
+                "type": "Link",
+                "linkType": "Annotation"
+              }
+            }
+          ]
+        }
+      },
+      "dataAssemblies": [
+        {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:DataAssembly",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+          }
+        }
+      ]
+    }
+  ],
+  "experienceTemplates": [
+    {
+      "sys": {
+        "id": "composedExperienceTemplate",
+        "type": "ExperienceTemplate",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "version": 7,
+        "publishedAt": "2026-10-13T12:54:28.483Z",
+        "publishedVersion": 6,
+        "publishedCounter": 3,
+        "firstPublishedAt": "2026-10-13T12:35:14.735Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "createdAt": "2026-10-13T12:10:39.151Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T12:54:28.473Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "automationTags": [
+        ]
+      },
+      "name": "Composed Experience Template",
+      "description": "This is a composed experience template",
+      "contentProperties": [
+        {
+          "name": "Coded Component",
+          "required": true,
+          "type": "TypeRef",
+          "ref": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
+          },
+          "id": "cp_6Dlodq87ul"
+        },
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "cp_HB6x_-Tdqu"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "cp_iR2v8k31D_"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+              {
+                "name": "Collection Item Title",
+                "required": true,
+                "type": "String",
+                "id": "collectionItemTitle"
+              },
+              {
+                "name": "Collection Item Description",
+                "required": true,
+                "type": "RichText",
+                "id": "collectionItemDescription"
+              }
+            ]
+          },
+          "id": "cp_zrRzDk8CtJ"
+        },
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "cp_P2WL7al10b"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "cp_CmdgHsRkhU"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+              {
+                "name": "Collection Item Title",
+                "required": true,
+                "type": "String",
+                "id": "collectionItemTitle"
+              },
+              {
+                "name": "Collection Item Description",
+                "required": true,
+                "type": "RichText",
+                "id": "collectionItemDescription"
+              }
+            ]
+          },
+          "id": "cp_5qO5O5HCj-"
+        }
+      ],
+      "designProperties": [
+      ],
+      "componentTree": [
+        {
+          "id": "y23JIvmmOVX_pHwIDDxM2",
+          "nodeType": "Component",
+          "component": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
+          },
+          "contentProperties": "$contentProperties/cp_6Dlodq87ul",
+          "designProperties": {
+          },
+          "slots": {
+          }
+        },
+        {
+          "id": "LxM1Ah6GNco8DwVtr_qOI",
+          "nodeType": "Component",
+          "component": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/composedComponent"
+            }
+          },
+          "contentProperties": {
+            "cp_EC5B50JR92": "$contentProperties/cp_iR2v8k31D_",
+            "cp_IP_zCYevjh": "$contentProperties/cp_5qO5O5HCj-",
+            "cp_S_jCmYKa1K": "$contentProperties/cp_P2WL7al10b",
+            "cp_mmPeaVcqlZ": "$contentProperties/cp_CmdgHsRkhU",
+            "cp_vguv-vzKB1": "$contentProperties/cp_zrRzDk8CtJ",
+            "cp_xTpnN6tKO-": "$contentProperties/cp_HB6x_-Tdqu"
+          },
+          "designProperties": {
+          },
+          "slots": {
+          }
+        },
+        {
+          "id": "OFsP4wqltzkN8n5XwUyDQ",
+          "nodeType": "Slot",
+          "slotId": "slot"
+        }
+      ],
+      "slots": [
+        {
+          "id": "slot",
+          "name": "Slot",
+          "required": false,
+          "validations": [
+          ]
+        }
+      ],
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ],
+        "annotations": {
+          "ExperienceTemplate": [
+            {
+              "sys": {
+                "id": "Contentful:ComposedImplementation",
+                "type": "Link",
+                "linkType": "Annotation"
+              }
+            }
+          ]
+        }
+      },
+      "dataAssemblies": [
+        {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:DataAssembly",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/JtOVc3Lv922jLsqMZ5lVz"
+          }
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "codedExperienceTemplate",
+        "type": "ExperienceTemplate",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "version": 5,
+        "publishedAt": "2026-10-13T12:38:41.034Z",
+        "publishedVersion": 4,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:37:19.466Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "createdAt": "2026-10-13T12:12:20.644Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedAt": "2026-10-13T12:38:41.018Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "automationTags": [
+        ]
+      },
+      "name": "Coded Experience Template",
+      "description": "This is a coded experience template.",
+      "contentProperties": [
+        {
+          "name": "Title",
+          "required": true,
+          "type": "String",
+          "id": "title"
+        },
+        {
+          "name": "Description",
+          "required": true,
+          "type": "RichText",
+          "id": "description"
+        },
+        {
+          "name": "Collection",
+          "required": false,
+          "type": "Array",
+          "items": {
+            "type": "Record",
+            "fields": [
+            ]
+          },
+          "id": "collection"
+        }
+      ],
+      "designProperties": [
+      ],
+      "componentTree": null,
+      "slots": [
+        {
+          "id": "slot",
+          "name": "Slot",
+          "required": false,
+          "validations": [
+          ]
+        }
+      ],
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ],
+        "annotations": {
+          "ExperienceTemplate": [
+            {
+              "sys": {
+                "id": "Contentful:CodedImplementation",
+                "type": "Link",
+                "linkType": "Annotation"
+              }
+            }
+          ]
+        }
+      },
+      "dataAssemblies": [
+        {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:DataAssembly",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/180im2p4DEwueOrKRAJ1fM"
+          }
+        }
+      ]
+    }
+  ],
+  "dataAssemblies": [
+    {
+      "sys": {
+        "id": "28K3R99fBlcr93R65MVJaP",
+        "type": "DataAssembly",
+        "dataType": [
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "cp_xTpnN6tKO-"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "cp_EC5B50JR92"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+                {
+                  "name": "Collection Item Title",
+                  "required": true,
+                  "type": "String",
+                  "id": "collectionItemTitle"
+                },
+                {
+                  "name": "Collection Item Description",
+                  "required": true,
+                  "type": "RichText",
+                  "id": "collectionItemDescription"
+                }
+              ]
+            },
+            "id": "cp_vguv-vzKB1"
+          },
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "cp_S_jCmYKa1K"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "cp_mmPeaVcqlZ"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+                {
+                  "name": "Collection Item Title",
+                  "required": true,
+                  "type": "String",
+                  "id": "collectionItemTitle"
+                },
+                {
+                  "name": "Collection Item Description",
+                  "required": true,
+                  "type": "RichText",
+                  "id": "collectionItemDescription"
+                }
+              ]
+            },
+            "id": "cp_IP_zCYevjh"
+          }
+        ],
+        "version": 2,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-14T09:50:32.122Z",
+        "updatedAt": "2026-10-14T09:50:39.832Z",
+        "publishedAt": "2026-10-14T09:50:39.847Z",
+        "publishedVersion": 1,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-14T09:50:39.847Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default"
+      },
+      "metadata": {
+        "tags": [
+        ]
+      },
+      "name": "Default",
+      "description": "Default data assembly",
+      "parameters": {
+        "p_MtWSs4OqKc": {
+          "name": "Parameter",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        }
+      },
+      "resolvers": {
+        "r_YxZ_Owq8qE": {
+          "source": "Contentful:GraphQL",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "parameters": {
+            "id": "$parameters/p_MtWSs4OqKc"
+          }
+        }
+      },
+      "return": {
+        "cp_EC5B50JR92": {
+          "$from": {
+            "source": "$resolvers/r_YxZ_Owq8qE/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        },
+        "cp_S_jCmYKa1K": {
+          "$from": {
+            "source": "$resolvers/r_YxZ_Owq8qE/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        },
+        "cp_mmPeaVcqlZ": {
+          "$from": {
+            "source": "$resolvers/r_YxZ_Owq8qE/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        },
+        "cp_xTpnN6tKO-": {
+          "$from": {
+            "source": "$resolvers/r_YxZ_Owq8qE/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sys": {
+        "id": "JtOVc3Lv922jLsqMZ5lVz",
+        "type": "DataAssembly",
+        "dataType": [
+          {
+            "name": "Coded Component",
+            "required": true,
+            "type": "TypeRef",
+            "ref": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:DataAssembly",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+              }
+            },
+            "id": "cp_6Dlodq87ul"
+          },
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "cp_HB6x_-Tdqu"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "cp_iR2v8k31D_"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+                {
+                  "name": "Collection Item Title",
+                  "required": true,
+                  "type": "String",
+                  "id": "collectionItemTitle"
+                },
+                {
+                  "name": "Collection Item Description",
+                  "required": true,
+                  "type": "RichText",
+                  "id": "collectionItemDescription"
+                }
+              ]
+            },
+            "id": "cp_zrRzDk8CtJ"
+          },
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "cp_P2WL7al10b"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "cp_CmdgHsRkhU"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+                {
+                  "name": "Collection Item Title",
+                  "required": true,
+                  "type": "String",
+                  "id": "collectionItemTitle"
+                },
+                {
+                  "name": "Collection Item Description",
+                  "required": true,
+                  "type": "RichText",
+                  "id": "collectionItemDescription"
+                }
+              ]
+            },
+            "id": "cp_5qO5O5HCj-"
+          }
+        ],
+        "version": 2,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T12:54:23.032Z",
+        "updatedAt": "2026-10-13T12:54:27.830Z",
+        "publishedAt": "2026-10-13T12:54:27.842Z",
+        "publishedVersion": 1,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-13T12:54:27.842Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default"
+      },
+      "metadata": {
+        "tags": [
+        ]
+      },
+      "name": "Default",
+      "description": "Default data assembly",
+      "parameters": {
+        "p_sQtsiRzRCd": {
+          "name": "Parameter",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        }
+      },
+      "resolvers": {
+        "r_dZwqwBNa7o": {
+          "source": "Contentful:GraphQL",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "parameters": {
+            "id": "$parameters/p_sQtsiRzRCd"
+          }
+        },
+        "r_fM0xsVsWe5": {
+          "source": "Contentful:DataAssembly",
+          "dataAssembly": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+            }
+          },
+          "parameters": {
+            "p_ijUq5qyYYk": "$parameters/p_sQtsiRzRCd"
+          }
+        }
+      },
+      "return": {
+        "cp_6Dlodq87ul": {
+          "$from": "$resolvers/r_fM0xsVsWe5"
+        },
+        "cp_CmdgHsRkhU": {
+          "$from": {
+            "source": "$resolvers/r_dZwqwBNa7o/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        },
+        "cp_HB6x_-Tdqu": {
+          "$from": {
+            "source": "$resolvers/r_dZwqwBNa7o/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        },
+        "cp_P2WL7al10b": {
+          "$from": {
+            "source": "$resolvers/r_dZwqwBNa7o/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        },
+        "cp_iR2v8k31D_": {
+          "$from": {
+            "source": "$resolvers/r_dZwqwBNa7o/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sys": {
+        "id": "180im2p4DEwueOrKRAJ1fM",
+        "type": "DataAssembly",
+        "dataType": [
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "title"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "description"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+              ]
+            },
+            "id": "collection"
+          }
+        ],
+        "version": 4,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T12:37:16.565Z",
+        "updatedAt": "2026-10-13T12:38:40.412Z",
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedAt": "2026-10-13T12:38:40.465Z",
+        "publishedVersion": 3,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:37:18.772Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default"
+      },
+      "metadata": {
+        "tags": [
+        ]
+      },
+      "name": "Default",
+      "description": "Default data assembly",
+      "parameters": {
+        "p_G7_ikphzLQ": {
+          "name": "Parameter",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        }
+      },
+      "resolvers": {
+        "r_OhRwmcu1_4": {
+          "source": "Contentful:GraphQL",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "parameters": {
+            "id": "$parameters/p_G7_ikphzLQ"
+          }
+        }
+      },
+      "return": {
+        "title": {
+          "$from": {
+            "source": "$resolvers/r_OhRwmcu1_4/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        },
+        "description": {
+          "$from": {
+            "source": "$resolvers/r_OhRwmcu1_4/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sys": {
+        "id": "13BfuVp8G3Ai7dCsKQbkwI",
+        "type": "DataAssembly",
+        "dataType": [
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "title"
+          },
+          {
+            "name": "Description",
+            "required": true,
+            "type": "RichText",
+            "id": "description"
+          },
+          {
+            "name": "Collection",
+            "required": false,
+            "type": "Array",
+            "items": {
+              "type": "Record",
+              "fields": [
+                {
+                  "name": "Collection Item Title",
+                  "required": true,
+                  "type": "String",
+                  "id": "collectionItemTitle"
+                },
+                {
+                  "name": "Collection Item Description",
+                  "required": true,
+                  "type": "RichText",
+                  "id": "collectionItemDescription"
+                }
+              ]
+            },
+            "id": "collection"
+          }
+        ],
+        "version": 2,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-13T12:33:08.086Z",
+        "updatedAt": "2026-10-13T12:33:15.607Z",
+        "publishedAt": "2026-10-13T12:33:15.925Z",
+        "publishedVersion": 1,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-13T12:33:15.925Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default"
+      },
+      "metadata": {
+        "tags": [
+        ]
+      },
+      "name": "Default",
+      "description": "Default data assembly",
+      "parameters": {
+        "p_ijUq5qyYYk": {
+          "name": "Parameter",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        }
+      },
+      "resolvers": {
+        "r_QnqLOHnuz5": {
+          "source": "Contentful:GraphQL",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "parameters": {
+            "id": "$parameters/p_ijUq5qyYYk"
+          }
+        }
+      },
+      "return": {
+        "title": {
+          "$from": {
+            "source": "$resolvers/r_QnqLOHnuz5/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "internalTitle"
+                }
+              }
+            }
+          }
+        },
+        "description": {
+          "$from": {
+            "source": "$resolvers/r_QnqLOHnuz5/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "richText"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "experienceFragments": [
+    {
+      "sys": {
+        "id": "3wLhlciQgJWtR3D8ApSz98",
+        "type": "ExperienceFragment",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-14T10:56:29.224Z",
+        "updatedAt": "2026-10-14T11:07:15.840Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-14T11:07:15.854Z",
+        "publishedVersion": 3,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-14T11:07:15.854Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "component": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:Component",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 4
+      },
+      "name": "Personalized Coded Fragment",
+      "description": "This is a personalized coded fragment.",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+        },
+        "parameters": {
+          "p_ijUq5qyYYk": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/6bULnHxHSvCtqd5L9me5oJ"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+      },
+      "optimizationVariants": [
+        {
+          "sys": {
+            "id": "3wLhlciQgJWtR3D8ApSz98",
+            "type": "ExperienceFragment",
+            "space": {
+              "sys": {
+                "type": "Link",
+                "linkType": "Space",
+                "id": "700s66i6clht"
+              }
+            },
+            "environment": {
+              "sys": {
+                "type": "Link",
+                "linkType": "Environment",
+                "id": "master"
+              }
+            },
+            "createdAt": "2026-10-14T10:57:25.393Z",
+            "updatedAt": "2026-10-14T11:06:59.248Z",
+            "createdBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "4QYnIIKna8TpXegJp3oSBi"
+              }
+            },
+            "updatedBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "2ThAHYPA8kj7F1sHxUzXVt"
+              }
+            },
+            "variant": "1925cd12-8d24-43e7-9a91-220004c5f5d8",
+            "variantType": "personalization",
+            "variantDimension": "default",
+            "publishedAt": "2026-10-14T10:59:37.920Z",
+            "publishedVersion": 2,
+            "publishedCounter": 1,
+            "firstPublishedAt": "2026-10-14T10:59:37.920Z",
+            "publishedBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "4QYnIIKna8TpXegJp3oSBi"
+              }
+            },
+            "component": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Component",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+              }
+            },
+            "automationTags": [
+            ],
+            "version": 7
+          },
+          "name": "Personalized Coded Fragment",
+          "description": "",
+          "designProperties": {
+          },
+          "contentBindings": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+            },
+            "parameters": {
+              "p_ijUq5qyYYk": {
+                "$literal": {
+                  "sys": {
+                    "type": "ResourceLink",
+                    "linkType": "Contentful:Entry",
+                    "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/4ORMu6r0JWJOGx7IkE3LTl"
+                  }
+                }
+              }
+            }
+          },
+          "metadata": {
+            "tags": [
+            ],
+            "concepts": [
+            ]
+          },
+          "slots": {
+          }
+        }
+      ]
+    },
+    {
+      "sys": {
+        "id": "4RRZDmff5TsayVU2dNq2pR",
+        "type": "ExperienceFragment",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-13T12:20:15.256Z",
+        "updatedAt": "2026-10-14T09:53:59.313Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-14T09:53:59.375Z",
+        "publishedVersion": 3,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-14T09:53:59.375Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "component": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:Component",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/composedComponent"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 4
+      },
+      "name": "Composed Fragment",
+      "description": "This is a composed fragment.",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/28K3R99fBlcr93R65MVJaP"
+        },
+        "parameters": {
+          "p_MtWSs4OqKc": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/67lS2EQ9HH1hNELN30vDKS"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+      },
+      "optimizationVariants": [
+      ]
+    },
+    {
+      "sys": {
+        "id": "1klv9aN9OIrHHFy2bm1JCw",
+        "type": "ExperienceFragment",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-13T12:20:49.967Z",
+        "updatedAt": "2026-10-13T12:45:28.092Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-13T12:45:28.234Z",
+        "publishedVersion": 3,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-13T12:45:28.234Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "component": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:Component",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 4
+      },
+      "name": "Coded Fragment",
+      "description": "This is a coded fragment.",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+        },
+        "parameters": {
+          "p_ijUq5qyYYk": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/sYUgfb8KAVC99aqBiqi5N"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+      },
+      "optimizationVariants": [
+      ]
+    }
+  ],
+  "experiences": [
+    {
+      "sys": {
+        "id": "6fQzPrHjFX25yTwi2Ic5gs",
+        "type": "Experience",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-13T12:23:01.268Z",
+        "updatedAt": "2026-10-14T11:09:14.015Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-14T11:09:14.029Z",
+        "publishedVersion": 5,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:48:13.602Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "localeStatus": {
+          "en-US": "published"
+        },
+        "experienceTemplate": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:ExperienceTemplate",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/codedExperienceTemplate"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 6
+      },
+      "name": "Coded Experience",
+      "description": "",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/180im2p4DEwueOrKRAJ1fM"
+        },
+        "parameters": {
+          "p_G7_ikphzLQ": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/2gAKoSsVjaO46BPs4iXbm2"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+        "slot": [
+          {
+            "id": "JkS0ZXVVJ-Pbu1zRrti4i",
+            "nodeType": "ExperienceFragment",
+            "experienceFragment": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:ExperienceFragment",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/3wLhlciQgJWtR3D8ApSz98"
+              }
+            }
+          }
+        ]
+      },
+      "optimizationVariants": [
+      ]
+    },
+    {
+      "sys": {
+        "id": "6fm371os680MYgg0XThK2S",
+        "type": "Experience",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-13T12:23:39.951Z",
+        "updatedAt": "2026-10-14T11:08:39.558Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-14T11:08:39.568Z",
+        "publishedVersion": 5,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-13T12:56:42.430Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "localeStatus": {
+          "en-US": "published"
+        },
+        "experienceTemplate": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:ExperienceTemplate",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/composedExperienceTemplate"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 6
+      },
+      "name": "Composed Experience",
+      "description": "",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/JtOVc3Lv922jLsqMZ5lVz"
+        },
+        "parameters": {
+          "p_sQtsiRzRCd": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/4OBnXmehDsmvnenSBDnnLo"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+        "slot": [
+          {
+            "id": "Pp_kDWMBof-WTlAqDSTJn",
+            "nodeType": "ExperienceFragment",
+            "experienceFragment": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:ExperienceFragment",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/3wLhlciQgJWtR3D8ApSz98"
+              }
+            }
+          }
+        ]
+      },
+      "optimizationVariants": [
+      ]
+    }
+  ]
+}
