@@ -8,9 +8,10 @@ import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import type { EventEmissionResult } from './event-emission-result.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 import {
-  PersonalizationFlushRuntime,
-  type PersonalizationFlushPolicy,
-} from './personalization-flush.js';
+  QueueFlushRuntime,
+  resolveQueueFlushPolicy,
+  type QueueFlushPolicy,
+} from './lib/queue/index.js';
 import { MAX_PREPARED_EVENTS } from './prepared-events.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
@@ -33,7 +34,7 @@ interface PersonalizationDeliveryOptions {
   readonly publishQueuedData: (data: OptimizationData) => void;
   /** Internal override for deterministic tests; Web uses the 100-event SDK handoff capacity. */
   readonly maxEvents?: number;
-  readonly flushPolicy?: PersonalizationFlushPolicy;
+  readonly flushPolicy?: QueueFlushPolicy;
 }
 
 /** One low-level Personalization transport for direct and queued sends. */
@@ -55,7 +56,7 @@ export class PersonalizationDelivery {
   readonly #getLocale: PersonalizationDeliveryOptions['getLocale'];
   readonly #publishQueuedData: PersonalizationDeliveryOptions['publishQueuedData'];
   readonly #maxEvents: number;
-  readonly #flushRuntime: PersonalizationFlushRuntime;
+  readonly #flushRuntime: QueueFlushRuntime;
   readonly #queue: QueuedBatch[] = [];
   #token: object | undefined = {};
   #activeFlush: Promise<void> | undefined;
@@ -72,10 +73,18 @@ export class PersonalizationDelivery {
     this.#getLocale = options.getLocale;
     this.#publishQueuedData = options.publishQueuedData;
     this.#maxEvents = options.maxEvents ?? MAX_PREPARED_EVENTS;
-    this.#flushRuntime = new PersonalizationFlushRuntime(
-      () => void this.flush(),
-      options.flushPolicy
-    );
+    this.#flushRuntime = new QueueFlushRuntime({
+      policy: resolveQueueFlushPolicy(options.flushPolicy),
+      onRetry: () => {
+        void this.flush();
+      },
+      onCallbackError: (callbackName, error) => {
+        deliveryLogger.warn(
+          `Personalization flush policy callback "${callbackName}" failed`,
+          error
+        );
+      },
+    });
   }
 
   get state(): PersonalizationDeliveryState {
@@ -175,7 +184,12 @@ export class PersonalizationDelivery {
           reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
           errorName: error instanceof Error ? error.name : 'unknown',
         });
-        if (!this.#closing) this.#flushRuntime.handleFlushFailure();
+        if (!this.#closing) {
+          this.#flushRuntime.handleFlushFailure({
+            queuedBatches: this.#queue.length,
+            queuedEvents: this.queuedEventCount,
+          });
+        }
       }
     } finally {
       if (isCurrent()) this.#flushRuntime.markFlushFinished();

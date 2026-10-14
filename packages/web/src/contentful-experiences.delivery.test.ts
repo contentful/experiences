@@ -129,6 +129,9 @@ describe('Web prepared Personalization delivery', () => {
     await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(
       true
     );
+    // Personalization is held open on purpose, so start the flush and wait for Analytics.
+    void runtime.flush();
+    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
     expect(analytics).toHaveBeenCalledWith([
       expect.objectContaining({ profile: { id: 'server-profile' } }),
     ]);
@@ -202,6 +205,9 @@ describe('Web prepared Personalization delivery', () => {
     await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(
       true
     );
+    // Personalization is held open on purpose, so start the flush and wait for Analytics.
+    void runtime.flush();
+    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
     expect(analytics).toHaveBeenCalledWith([
       expect.objectContaining({ profile: { id: 'first-profile' } }),
     ]);

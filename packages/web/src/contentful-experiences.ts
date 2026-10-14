@@ -1,4 +1,5 @@
 import {
+  AnalyticsDelivery,
   ContentfulExperiences as RuntimeContentfulExperiences,
   PersonalizationDelivery,
   type AllowedEventType,
@@ -12,6 +13,7 @@ import {
   type ExperiencesHandoff,
   type PageViewBuilderArgs,
   type PersonalizationDeliveryState,
+  type QueueFlushPolicy,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
@@ -40,6 +42,8 @@ import {
   IdentityCookie,
   type IdentityCookieOptions,
 } from './identity-cookie.js';
+import { beaconHandler } from './lib/beacon.js';
+import { createVisibilityChangeListener } from './lib/visibility.js';
 import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 
@@ -61,6 +65,8 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Blocked events are never replayed. */
   onEventBlocked?: (event: BlockedEvent) => void;
+  /** Queue policy for queued Personalization and Analytics work. */
+  queuePolicy?: { flush?: QueueFlushPolicy };
   /**
    * Consent applied at startup. Configured values take precedence over a stored
    * decision, and `consent` is also the default for `persistenceConsent`.
@@ -122,6 +128,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly #store = new LocalStore();
   readonly #identity: IdentityCookie;
   readonly #delivery: PersonalizationDelivery;
+  readonly #analytics: AnalyticsDelivery;
+  #cleanupVisibilityListener: (() => void) | undefined;
   readonly #allowedEventTypes: readonly AllowedEventType[] | undefined;
   readonly #onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
   #interactionTracking: InteractionTracking | undefined;
@@ -136,7 +144,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly #handleOnline = (): void => {
     this.#online = true;
     this.#delivery.clearScheduledRetry();
+    this.#analytics.clearScheduledRetry();
     void this.#delivery.flush({ force: true });
+    void this.#analytics.flush({ force: true });
   };
   readonly #handleOffline = (): void => {
     this.#online = false;
@@ -160,6 +170,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       browserContext,
       allowedEventTypes,
       onEventBlocked,
+      queuePolicy,
       defaults,
       cookie,
       profile,
@@ -185,6 +196,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     const singletonOwner = acquireWebSingleton();
     this.#singletonOwner = singletonOwner;
     let delivery: PersonalizationDelivery | undefined;
+    let analytics: AnalyticsDelivery | undefined;
     try {
       this.#locale = clientConfig.locale;
       this.#allowedEventTypes = allowedEventTypes;
@@ -201,12 +213,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         getProfileRevision: () => this.#store.profileRevision,
         getOnline: () => this.#online,
         getLocale: () => this.locale,
+        flushPolicy: queuePolicy?.flush,
         publishQueuedData: (data) => {
           if (this.#destroyed) return;
           this.#store.profile = data.profile;
           this.#setAdoptedProfileId(undefined);
           this.#syncIdentity();
         },
+      });
+      this.#analytics = analytics = new AnalyticsDelivery({
+        api: this.optimizationApi.analytics,
+        getOnline: () => this.#online,
+        flushPolicy: queuePolicy?.flush,
       });
       this.#eventMethods = this.createEventMethods(
         {
@@ -227,10 +245,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         },
         {
           personalization: (event) => this.#delivery.send(event),
-          analytics: (event, currentProfile) =>
-            this.optimizationApi.analytics.sendBatchEvents([
-              { profile: currentProfile, events: [event] },
-            ]),
+          analytics: (event, currentProfile) => this.#analytics.send(event, currentProfile),
         }
       );
       // After the delivery exists, because adopting a different visitor's cookie resets.
@@ -239,13 +254,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         window.addEventListener('online', this.#handleOnline);
         window.addEventListener('offline', this.#handleOffline);
       }
+      // Last-chance delivery when the page is hidden or unloaded: end in-progress views
+      // and hovers so their final events are queued, then flush with the Beacon API.
+      this.#cleanupVisibilityListener = createVisibilityChangeListener(async () => {
+        await this.#interactionTracking?.endActive();
+        await this.#analytics.flush({ force: true, beacon: beaconHandler });
+      });
     } catch (error) {
+      this.#cleanupVisibilityListener?.();
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', this.#handleOnline);
         window.removeEventListener('offline', this.#handleOffline);
       }
       try {
         delivery?.destroy();
+        analytics?.destroy();
       } finally {
         try {
           super.destroy();
@@ -288,6 +311,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     // Optimization SDK; a persistence-only change leaves the queue alone.
     if (next.events === false) {
       this.#delivery.clearQueue();
+      this.#analytics.clearQueue();
       this.#store.invalidateInFlight();
       // A discarded queued page must not leave its route looking admitted, or a later
       // permitted attempt for the same route would be answered from the cache and
@@ -304,6 +328,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   /** Latest ordinary or prepared Personalization HTTP state. */
   get personalizationDeliveryState(): PersonalizationDeliveryState {
     return this.#delivery.state;
+  }
+
+  /** Send queued Analytics events and any queued Personalization batches now. */
+  async flush(): Promise<void> {
+    await this.#analytics.flush();
+    await this.#delivery.flush();
   }
 
   /** Changes the default locale used by subsequent events and fetches. */
@@ -358,6 +388,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#currentPage.reset();
     this.#setAdoptedProfileId(undefined);
     this.#delivery.reset();
+    this.#analytics.reset();
     this.#store.reset();
     this.#identity.clear();
   }
@@ -374,7 +405,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         window.removeEventListener('online', this.#handleOnline);
         window.removeEventListener('offline', this.#handleOffline);
       }
+      this.#cleanupVisibilityListener?.();
+      this.#cleanupVisibilityListener = undefined;
       this.#delivery.destroy();
+      this.#analytics.destroy();
       this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;

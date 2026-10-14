@@ -415,6 +415,7 @@ describe('Web ContentfulExperiences', () => {
 
     await runtime.page();
     await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+    await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
       expect.objectContaining({ profile: { id: 'updated-profile' } }),
@@ -494,6 +495,7 @@ describe('Web ContentfulExperiences', () => {
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
     ).resolves.toBe(true);
+    await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
       {

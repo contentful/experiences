@@ -41,11 +41,18 @@ function render(nodeId: string, tag = 'div'): HTMLElement {
 function spyOnTransport(runtime: ContentfulExperiences) {
   const analytics = (runtime as unknown as { optimizationApi: { analytics: InsightsApiClient } })
     .optimizationApi.analytics;
-  return vi.spyOn(analytics, 'sendBatchEvents').mockResolvedValue(true);
+  const send = vi.spyOn(analytics, 'sendBatchEvents').mockResolvedValue(true);
+  transportOwners.set(send, runtime);
+  return send;
 }
 
-const sentEvents = (send: ReturnType<typeof spyOnTransport>) =>
-  send.mock.calls.flatMap(([batches]) => batches.flatMap((batch) => batch.events));
+const transportOwners = new WeakMap<object, ContentfulExperiences>();
+
+/** Analytics events are queued, so flush the owning runtime before reading what was sent. */
+const sentEvents = async (send: ReturnType<typeof spyOnTransport>) => {
+  await transportOwners.get(send)?.flush();
+  return send.mock.calls.flatMap(([batches]) => batches.flatMap((batch) => batch.events));
+};
 
 const click = (element: Element): void => {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -272,6 +279,8 @@ describe('ContentfulExperiences interaction tracking', () => {
       resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
     });
     click(hero);
+    // The replay is held open on purpose, so start the flush and wait for Analytics.
+    void runtime.flush();
     await vi.waitFor(() => expect(sendBatchEvents).toHaveBeenCalledOnce());
 
     const [[batch]] = sendBatchEvents.mock.calls as unknown as [
@@ -314,6 +323,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       runtime.consent({ events: true });
       click(hero);
       await advance(0);
+      await runtime.flush();
 
       expect(send).toHaveBeenCalledTimes(1);
       await session.stop();
@@ -334,6 +344,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       });
       click(hero);
       await advance(0);
+      await runtime.flush();
 
       expect(send).toHaveBeenCalledTimes(1);
       await session.stop();
@@ -358,7 +369,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       io.getLast().trigger(page, true);
       await advance(1400);
 
-      expect(sentEvents(send).map((event) => event.type)).toContain('exo_node_view');
+      expect((await sentEvents(send)).map((event) => event.type)).toContain('exo_node_view');
       await session.stop();
     });
   });
@@ -383,7 +394,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
       enter(hero);
       await advance(1150);
-      expect(sentEvents(send)).toEqual([]);
+      expect(await sentEvents(send)).toEqual([]);
 
       runtime.consent({ events: true });
       await advance(100);
@@ -391,7 +402,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       await advance(0);
 
       // The hover was not permitted until the grant, so nothing measured before it counts.
-      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      const hovers = (await sentEvents(send)).filter((event) => event.type === 'exo_node_hover');
       expect(hovers.every((event) => (event.hoverDurationMs ?? 0) < 1000)).toBe(true);
       await session.stop();
     });
@@ -414,10 +425,10 @@ describe('ContentfulExperiences interaction tracking', () => {
       await advance(500);
       // Less than a second since the grant: no qualifying view yet, however long the
       // element had been visible before it.
-      expect(sentEvents(send)).toEqual([]);
+      expect(await sentEvents(send)).toEqual([]);
 
       await advance(900);
-      const views = sentEvents(send).filter((event) => event.type === 'exo_node_view');
+      const views = (await sentEvents(send)).filter((event) => event.type === 'exo_node_view');
       expect(views).toHaveLength(1);
       expect(views[0]!.viewDurationMs).toBeLessThan(2000);
       await session.stop();
@@ -444,7 +455,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       await advance(0);
       await session.stop();
 
-      expect(sentEvents(send)).toEqual([]);
+      expect(await sentEvents(send)).toEqual([]);
     });
 
     it('stops a hover in progress when consent is withdrawn, and reports nothing afterwards', async () => {
@@ -466,7 +477,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       await advance(0);
       await session.stop();
 
-      expect(sentEvents(send)).toEqual([]);
+      expect(await sentEvents(send)).toEqual([]);
     });
 
     it('does not carry a hover across a withdrawal and a regrant', async () => {
@@ -492,7 +503,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
       // If the hover were carried through the withdrawal it would report about 3.6s.
       // Permission was withdrawn, so that time must not be reported once it is back.
-      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      const hovers = (await sentEvents(send)).filter((event) => event.type === 'exo_node_hover');
       expect(hovers.every((event) => (event.hoverDurationMs ?? 0) < 1000)).toBe(true);
     });
 
@@ -519,12 +530,14 @@ describe('ContentfulExperiences interaction tracking', () => {
       // reaches nothing; the view is only measured by the observer created at the regrant.
       original.trigger(page, true);
       await advance(2000);
-      expect(sentEvents(send).filter((event) => event.type === 'exo_node_view')).toEqual([]);
+      expect((await sentEvents(send)).filter((event) => event.type === 'exo_node_view')).toEqual(
+        []
+      );
 
       // The new observer measures from its own first signal.
       io.getLast().trigger(page, true);
       await advance(1400);
-      const views = sentEvents(send).filter((event) => event.type === 'exo_node_view');
+      const views = (await sentEvents(send)).filter((event) => event.type === 'exo_node_view');
       expect(views.length).toBeGreaterThan(0);
       expect(views.every((event) => (event.viewDurationMs ?? 0) < 2000)).toBe(true);
       await session.stop();
@@ -550,7 +563,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       await session.stop();
 
       // The hover began and ended under event consent, so its measurement is untouched.
-      const hovers = sentEvents(send).filter((event) => event.type === 'exo_node_hover');
+      const hovers = (await sentEvents(send)).filter((event) => event.type === 'exo_node_hover');
       expect(hovers.length).toBeGreaterThan(0);
       expect(hovers.at(-1)!.hoverDurationMs).toBeGreaterThanOrEqual(1000);
     });
@@ -577,7 +590,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       await advance(0);
       await session.stop();
 
-      const types = sentEvents(send).map((event) => event.type);
+      const types = (await sentEvents(send)).map((event) => event.type);
       expect(types).toContain('exo_node_hover');
       expect(types).not.toContain('exo_node_view');
     });

@@ -170,9 +170,18 @@ completion. Read `personalizationDeliveryState` for the latest request status
 (`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
-The queue is not durable. Analytics methods continue
-to send directly and require a profile or
-an adopted continuation ID.
+The queue is not durable. Analytics methods
+require a profile or an adopted continuation ID and are queued in memory rather than
+sent one by one. The queue flushes when it holds 25 events, every 30 seconds while
+events remain queued, when the browser comes back online, and when the page is hidden
+or unloaded (`visibilitychange`, `pagehide`, `beforeunload`), where it uses
+`navigator.sendBeacon` and falls back to a keepalive `fetch`. A failed flush keeps its
+events and retries with exponential backoff and a circuit breaker, matching the
+Optimization SDK's defaults, which `queuePolicy.flush` can override: `flushIntervalMs`,
+`baseBackoffMs`, `maxBackoffMs`, `jitterRatio`, `maxConsecutiveFailures`, `circuitOpenMs`, and
+the `onFlushFailure`, `onCircuitOpen` and `onFlushRecovered` callbacks. It applies to both
+the Personalization and Analytics queues. Call `flush()` to send queued Analytics events and
+Personalization batches immediately.
 
 ### Consent
 
@@ -190,9 +199,9 @@ the Optimization SDK's consent model.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
-  drops events already accepted into the offline queue, and cancels its retry, so
-  they are not sent when the connection returns or when `destroy()` drains the
-  queue. A request already on the wire cannot be recalled. A persistence-only change
+  drops events already accepted into the offline and Analytics queues, and cancels
+  their retries, so they are not sent when the connection returns or when `destroy()`
+  drains the queues. A request already on the wire cannot be recalled. A persistence-only change
   leaves the queue alone.
 - **Persistence consent.** The profile is written to LocalStorage only when
   `persistence` is `true`. `false` removes the stored profile but keeps the
