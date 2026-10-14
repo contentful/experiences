@@ -108,6 +108,9 @@ export interface InteractionTrackingSession {
   stop(): Promise<void>;
 }
 
+/** A prepared batch after validation: what the delivery queue accepts. */
+type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
+
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly #singletonOwner: string;
@@ -544,10 +547,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    * A prepared batch is identify and track events followed by one page, and is
    * admitted whole or not at all: dropping one event would leave a batch the
    * validator rejects. Returns `undefined` when the batch is invalid or any event is
-   * not admitted. Invalid input is left to the delivery queue to refuse.
+   * not admitted, and otherwise the validated batch, which the queue takes as it is.
+   * This is the one place the batch is validated.
    */
-  #admitPreparedEvents(events: readonly unknown[]): readonly unknown[] | undefined {
-    let valid: ReturnType<typeof validatePreparedEvents>;
+  #admitPreparedEvents(events: readonly unknown[]): ValidatedPreparedEvents | undefined {
+    let valid: ValidatedPreparedEvents;
     try {
       valid = validatePreparedEvents(events);
     } catch {

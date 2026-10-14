@@ -11,7 +11,7 @@ import {
   PersonalizationFlushRuntime,
   type PersonalizationFlushPolicy,
 } from './personalization-flush.js';
-import { MAX_PREPARED_EVENTS, validatePreparedEvents } from './prepared-events.js';
+import { MAX_PREPARED_EVENTS } from './prepared-events.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
@@ -99,24 +99,24 @@ export class PersonalizationDelivery {
     return { accepted: true };
   }
 
-  /** Admit an entire prepared batch without waiting for HTTP completion. */
+  /**
+   * Admit an entire prepared batch without waiting for HTTP completion.
+   *
+   * The batch is already validated: validation, the shared batch limits and consent belong
+   * to the emission boundary, which hands the queue the validated type. This only checks
+   * that the queue has room.
+   */
   sendPrepared(
-    events: readonly unknown[],
+    events: readonly ExperienceEvent[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
     if (this.#token === undefined || this.#closing) return { accepted: false };
-    let validEvents: readonly ExperienceEvent[];
-    try {
-      validEvents = validatePreparedEvents(events);
-    } catch {
-      return { accepted: false };
-    }
-    if (this.queuedEventCount + validEvents.length > this.#maxEvents) {
+    if (this.queuedEventCount + events.length > this.#maxEvents) {
       return { accepted: false };
     }
 
     this.#queue.push({
-      events: [...validEvents],
+      events: [...events],
       request: { profileId: target.profileId ?? this.#getProfileId(), locale: target.locale },
     });
     void this.flush();
