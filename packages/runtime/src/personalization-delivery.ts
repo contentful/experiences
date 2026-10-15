@@ -6,13 +6,15 @@ import {
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import type { EventEmissionResult } from './event-emission-result.js';
-import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
+import type {
+  ExperienceRequestOptions,
+  RuntimeOptimizationApiClient,
+} from './runtime-event-methods.js';
 import {
+  OFFLINE_QUEUE_MAX_EVENTS,
   QueueFlushRuntime,
-  resolveQueueFlushPolicy,
-  type QueueFlushPolicy,
+  type ResolvedQueueFlushPolicy,
 } from './lib/queue/index.js';
-import { OFFLINE_QUEUE_MAX_EVENTS } from './lib/queue/index.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
@@ -34,7 +36,7 @@ interface PersonalizationDeliveryOptions {
   readonly publishQueuedData: (data: OptimizationData) => void;
   /** Offline admission capacity: `queuePolicy.offlineMaxEvents`, defaulting to 100 events. */
   readonly maxEvents?: number;
-  readonly flushPolicy?: QueueFlushPolicy;
+  readonly flushPolicy: ResolvedQueueFlushPolicy;
 }
 
 /** One low-level Personalization transport for direct and queued sends. */
@@ -42,7 +44,7 @@ export function sendPersonalizationEvents(
   api: PersonalizationApi,
   events: readonly ExperienceEvent[],
   profileId: string | undefined,
-  options?: { locale?: string; preflight?: boolean }
+  options?: ExperienceRequestOptions & { preflight?: boolean }
 ): Promise<OptimizationData> {
   return api.upsertProfile({ profileId, events: [...events] }, options);
 }
@@ -74,7 +76,7 @@ export class PersonalizationDelivery {
     this.#publishQueuedData = options.publishQueuedData;
     this.#maxEvents = options.maxEvents ?? OFFLINE_QUEUE_MAX_EVENTS;
     this.#flushRuntime = new QueueFlushRuntime({
-      policy: resolveQueueFlushPolicy(options.flushPolicy),
+      policy: options.flushPolicy,
       onRetry: () => {
         void this.flush();
       },

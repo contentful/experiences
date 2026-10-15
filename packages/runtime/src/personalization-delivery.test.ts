@@ -4,6 +4,7 @@ import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
+import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 import { buildPreparedEvents } from './prepared-events.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
@@ -39,6 +40,7 @@ function fixture(options: { online?: boolean; profileId?: string; maxEvents?: nu
     getProfileId: () => profileId,
     getProfileRevision: () => revision,
     getOnline: () => online,
+    flushPolicy: resolveQueueFlushPolicy(undefined),
     publishQueuedData,
     maxEvents: options.maxEvents,
   });

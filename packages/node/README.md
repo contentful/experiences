@@ -96,8 +96,11 @@ await experienceRequest.trackClick({
 ```
 
 `identify`, `page`, and `track` send directly and return `{ accepted: true, data }` on success; transport errors reject. Their result type also permits accepted work without response data for a future queued sender. These calls update the request profile from the Personalization API response.
-`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
-current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and resolve with
+no result, as Optimization's do; a transport failure is not reported through the return value, and
+a call blocked by consent resolves the same way and is reported to `onEventBlocked`. They require a
+current profile, because a stateless request is bound to one; otherwise they throw
+`EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as
 fallback. An event's explicit locale changes its body only; it does not change content evaluation
@@ -246,6 +249,17 @@ try {
 ```
 
 ## Request isolation
+
+### Request-scoped submission options
+
+`forRequest()` also accepts `experienceOptions` and `insightsOptions`, shared by every call made
+through that request and never across requests. They are copied when the facade is created.
+
+- `experienceOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
+  the request-handoff preview, which still adds `preflight: true`. Pass the visitor's `ip` from a
+  trusted source such as your proxy, because the API otherwise analyses the server's IP. A
+  `forRequest({ locale })` value takes precedence over `experienceOptions.locale`.
+- `insightsOptions: { beacon }` is forwarded with each Analytics call.
 
 Do not store a request facade beyond the request that created it. Each `forRequest()` call returns a separate object with its own locale and resolve options; concurrent requests do not share those values.
 

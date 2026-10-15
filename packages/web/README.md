@@ -173,8 +173,9 @@ completion. Read `personalizationDeliveryState` for the latest request status
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
-require a profile or an adopted continuation ID and are queued in memory rather than
-sent one by one. The queue flushes when it holds 25 events, every 30 seconds while
+resolve with no result and are queued in memory rather than sent one by one. Without a profile
+or an adopted continuation ID, such as a new visitor's call made while the first profile request is
+still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
 or unloaded (`visibilitychange`, `pagehide`, `beforeunload`). On hide, active views and
 hovers end first, then both queues get a final forced attempt: Analytics uses

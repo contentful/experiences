@@ -160,13 +160,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly page: WebEventMethods['page'] = (...args) => this.#eventMethods.page(...args);
   readonly track: WebEventMethods['track'] = (...args) => this.#eventMethods.track(...args);
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
-    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackView(...args);
+    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackView(...args);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
-    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackClick(...args);
+    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackClick(...args);
   readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
-    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackHover(...args);
+    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackHover(...args);
   readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
-    this.#destroyed ? Promise.resolve(false) : this.#eventMethods.trackFlagView(...args);
+    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackFlagView(...args);
 
   constructor(config: ExperiencesWebConfig) {
     const {

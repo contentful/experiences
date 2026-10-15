@@ -5,12 +5,7 @@ import type {
   PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
-import {
-  QueueFlushRuntime,
-  resolveQueueFlushPolicy,
-  type QueueFlushPolicy,
-  type ResolvedQueueFlushPolicy,
-} from './lib/queue/index.js';
+import { QueueFlushRuntime, type ResolvedQueueFlushPolicy } from './lib/queue/index.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
 const deliveryLogger = createScopedLogger('Experiences:AnalyticsDelivery');
@@ -26,7 +21,7 @@ interface AnalyticsDeliveryOptions {
   readonly getOnline: () => boolean;
   /** Internal override for deterministic tests. */
   readonly maxEvents?: number;
-  readonly flushPolicy?: QueueFlushPolicy;
+  readonly flushPolicy: ResolvedQueueFlushPolicy;
 }
 
 export interface AnalyticsFlushOptions extends InsightsApiClientRequestOptions {
@@ -55,7 +50,7 @@ export class AnalyticsDelivery {
     this.#api = options.api;
     this.#getOnline = options.getOnline;
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
-    const policy: ResolvedQueueFlushPolicy = resolveQueueFlushPolicy(options.flushPolicy);
+    const policy = options.flushPolicy;
     this.#flushIntervalMs = policy.flushIntervalMs;
     this.#flushRuntime = new QueueFlushRuntime({
       policy,
@@ -76,9 +71,13 @@ export class AnalyticsDelivery {
     return count;
   }
 
-  /** Queue one event; reaching the size limit flushes before resolving. */
-  async send(event: AnalyticsEvent, profile: EventProfile): Promise<boolean> {
-    if (this.#token === undefined) return false;
+  /**
+   * Queue one event. Reaching the size limit awaits the triggered flush, as Optimization's
+   * InsightsQueue does. Like Optimization, the call resolves with no result: a failed
+   * flush keeps its events for retry and is not reported through the return value.
+   */
+  async send(event: AnalyticsEvent, profile: EventProfile): Promise<void> {
+    if (this.#token === undefined) return;
 
     const queued = this.#queued.get(profile.id);
     if (queued) {
@@ -91,7 +90,6 @@ export class AnalyticsDelivery {
     this.#ensurePeriodicTimer();
     if (this.queuedEventCount >= this.#maxEvents) await this.flush();
     this.#reconcilePeriodicTimer();
-    return true;
   }
 
   clearScheduledRetry(): void {

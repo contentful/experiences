@@ -4,6 +4,7 @@ import type {
 } from '@contentful/optimization-api-client/api-schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnalyticsDelivery } from './analytics-delivery.js';
+import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -20,6 +21,7 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
   const delivery = new AnalyticsDelivery({
     api: { sendBatchEvents } as never,
     getOnline: () => online,
+    flushPolicy: resolveQueueFlushPolicy(undefined),
     maxEvents: options.maxEvents,
   });
   return {
@@ -34,7 +36,7 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
 describe('AnalyticsDelivery', () => {
   it('queues events instead of sending each one', async () => {
     const { delivery, sendBatchEvents } = setup();
-    await expect(delivery.send(event(1), profile)).resolves.toBe(true);
+    await expect(delivery.send(event(1), profile)).resolves.toBeUndefined();
     expect(sendBatchEvents).not.toHaveBeenCalled();
     expect(delivery.queuedEventCount).toBe(1);
     delivery.destroy();
@@ -136,7 +138,8 @@ describe('AnalyticsDelivery', () => {
     expect(vi.getTimerCount()).toBe(0);
     await delivery.flush({ force: true });
     expect(sendBatchEvents).not.toHaveBeenCalled();
-    await expect(delivery.send(event(2), profile)).resolves.toBe(true);
+    await delivery.send(event(2), profile);
+    expect(delivery.queuedEventCount).toBe(1);
     delivery.destroy();
   });
 
@@ -145,7 +148,46 @@ describe('AnalyticsDelivery', () => {
     await delivery.send(event(1), profile);
     delivery.destroy();
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-    await expect(delivery.send(event(2), profile)).resolves.toBe(false);
+    const queuedAtDestroy = delivery.queuedEventCount;
+    await delivery.send(event(2), profile);
+    // The refused event is neither queued nor sent.
+    expect(delivery.queuedEventCount).toBe(queuedAtDestroy);
+    await Promise.resolve();
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('awaits the threshold flush but resolves with no result when it fails, keeping the events', async () => {
+    vi.useFakeTimers();
+    const { delivery, sendBatchEvents } = setup({ maxEvents: 2 });
+    sendBatchEvents.mockResolvedValueOnce(false);
+    await delivery.send(event(1), profile);
+
+    // The call that reaches the threshold awaits its flush; the failure is not surfaced.
+    await expect(delivery.send(event(2), profile)).resolves.toBeUndefined();
+
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    expect(delivery.queuedEventCount).toBe(2);
+    delivery.destroy();
+  });
+
+  it('does not resolve the threshold-reaching call until its flush settles', async () => {
+    const { delivery, sendBatchEvents } = setup({ maxEvents: 2 });
+    let resolve!: (ok: boolean) => void;
+    sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+    await delivery.send(event(1), profile);
+
+    let settled = false;
+    const reaching = delivery.send(event(2), profile).then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolve(true);
+    await reaching;
+    expect(settled).toBe(true);
+    delivery.destroy();
   });
 
   it('joins an active flush instead of resolving early, without starting a second request', async () => {

@@ -46,8 +46,8 @@ describe('Web Analytics queue', () => {
     const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
 
-    await expect(click(runtime)).resolves.toBe(true);
-    await expect(click(runtime)).resolves.toBe(true);
+    await expect(click(runtime)).resolves.toBeUndefined();
+    await expect(click(runtime)).resolves.toBeUndefined();
     expect(send).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(30_000);
@@ -162,7 +162,10 @@ describe('Web Analytics queue', () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(removed).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
-    await expect(click(runtime)).resolves.toBe(false);
+    // After destroy a call resolves with no result and queues nothing.
+    await expect(click(runtime)).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it('ends an in-progress hover before the hide flush, so its event is in the beacon', async () => {

@@ -78,7 +78,7 @@ afterEach(() => {
 describe('ContentfulExperiences interaction tracking', () => {
   it('sends interactions through the runtime event methods', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const hero = render('node:hero', 'button');
 
     const session = runtime.startInteractionTracking({
@@ -96,7 +96,7 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('flushes an in-progress view when stopped', async () => {
     const io = installIOPolyfill();
     const runtime = createRuntime();
-    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(true);
+    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(undefined);
     const page = render('node:page', 'main');
 
     const session = runtime.startInteractionTracking({
@@ -113,7 +113,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('stops tracking after stop, and stop is idempotent', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const hero = render('node:hero', 'button');
 
     const session = runtime.startInteractionTracking({
@@ -141,8 +141,8 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('allows a new session right after stop without awaiting it, as an effect cleanup does', async () => {
     const io = installIOPolyfill();
     const runtime = createRuntime();
-    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(true);
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const page = render('node:page', 'main');
     const hero = render('node:hero', 'button');
     const options = { resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId] };
@@ -169,8 +169,8 @@ describe('ContentfulExperiences interaction tracking', () => {
     let finishSend!: () => void;
     const trackView = vi
       .spyOn(runtime, 'trackView')
-      .mockImplementation(() => new Promise((resolve) => (finishSend = () => resolve(true))));
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+      .mockImplementation(() => new Promise((resolve) => (finishSend = () => resolve())));
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const page = render('node:page', 'main');
     const hero = render('node:hero', 'button');
     const options = { resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId] };
@@ -205,7 +205,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('stops active interaction listeners before destroy releases singleton ownership', async () => {
     const first = createRuntime();
-    const trackClick = vi.spyOn(first, 'trackClick').mockResolvedValue(true);
+    const trackClick = vi.spyOn(first, 'trackClick').mockResolvedValue(undefined);
     const hero = render('node:hero', 'button');
 
     first.startInteractionTracking({
@@ -227,7 +227,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('re-reads attribution on refresh', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(true);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const hero = render('node:hero', 'button');
     let attributions: Record<string, TrackingAttribution> = {};
 
@@ -313,9 +313,9 @@ describe('ContentfulExperiences interaction tracking', () => {
       expect(onEventBlocked).not.toHaveBeenCalled();
 
       // A manual call still reaches the gate, which stays as a backstop and reports.
-      await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Fragment' })).resolves.toBe(
-        false
-      );
+      await expect(
+        runtime.trackClick({ entityId: 'hero', entityKind: 'Fragment' })
+      ).resolves.toBeUndefined();
       expect(onEventBlocked).toHaveBeenCalledWith(
         expect.objectContaining({ reason: 'consent', method: 'trackClick' })
       );

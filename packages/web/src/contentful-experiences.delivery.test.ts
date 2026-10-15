@@ -126,9 +126,9 @@ describe('Web prepared Personalization delivery', () => {
     expect(runtime.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
 
-    await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(
-      true
-    );
+    await expect(
+      runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
+    ).resolves.toBeUndefined();
     // Personalization is held open on purpose, so start the flush and wait for Analytics.
     void runtime.flush();
     await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
@@ -202,9 +202,9 @@ describe('Web prepared Personalization delivery', () => {
     ).resolves.toEqual({ accepted: true });
     expect(upsert).toHaveBeenCalledTimes(1);
 
-    await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(
-      true
-    );
+    await expect(
+      runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
+    ).resolves.toBeUndefined();
     // Personalization is held open on purpose, so start the flush and wait for Analytics.
     void runtime.flush();
     await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
@@ -343,9 +343,9 @@ describe('Web prepared Personalization delivery', () => {
     const runtime = createRuntime({ id: 'browser-profile' });
 
     runtime.destroy();
-    await expect(runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })).resolves.toBe(
-      false
-    );
+    await expect(
+      runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
+    ).resolves.toBeUndefined();
     expect(analytics).not.toHaveBeenCalled();
   });
 

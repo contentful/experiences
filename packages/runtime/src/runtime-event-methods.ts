@@ -1,7 +1,10 @@
 import type {
   ExperienceApiClient as PersonalizationApiClient,
+  ExperienceApiClientRequestOptions,
   InsightsApiClient as AnalyticsApiClient,
+  InsightsApiClientRequestOptions,
 } from '@contentful/optimization-api-client';
+import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
   PartialProfile as EventProfileSchema,
   type ExperienceEvent as PersonalizationEvent,
@@ -31,6 +34,17 @@ import type {
   ViewBuilderArgs,
 } from './event-builder.js';
 
+const eventLogger = createScopedLogger('Experiences:Events');
+
+/** Request-scoped Insights API options a runtime may forward with direct sends. */
+export type InsightsRequestOptions = Pick<InsightsApiClientRequestOptions, 'beacon'>;
+
+/** Request-scoped Experience API options a runtime may forward with direct sends. */
+export type ExperienceRequestOptions = Pick<
+  ExperienceApiClientRequestOptions,
+  'ip' | 'locale' | 'plainText'
+>;
+
 /** Runtime schema for profiles retained by public runtime leaves. */
 export { EventProfileSchema };
 export type { EventOptimizationData, EventProfile };
@@ -50,7 +64,7 @@ export interface RuntimeEventDispatch {
     event: PersonalizationEvent,
     profile: EventProfile | undefined
   ): Promise<EventEmissionResult>;
-  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<boolean>;
+  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
@@ -68,6 +82,16 @@ export interface RuntimeEventBindings {
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Errors thrown here are swallowed. */
   onEventBlocked?: (event: BlockedEvent) => void;
+  /**
+   * Whether an Analytics call without a profile throws `EventProfileRequiredError`, as in
+   * Optimization's stateless requests. When unset, the call warns and is dropped, as in
+   * Optimization's stateful queue.
+   */
+  requireProfile?: boolean;
+  /** Insights API options forwarded with each direct Analytics send, such as `beacon`. */
+  getInsightsOptions?: () => InsightsRequestOptions | undefined;
+  /** Experience API options forwarded with each direct Personalization send. */
+  getExperienceOptions?: () => ExperienceRequestOptions | undefined;
 }
 
 /**
@@ -82,10 +106,10 @@ export interface RuntimeEventMethods {
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
-  trackView(args: ViewBuilderArgs): Promise<boolean>;
-  trackClick(args: ClickBuilderArgs): Promise<boolean>;
-  trackHover(args: HoverBuilderArgs): Promise<boolean>;
-  trackFlagView(args: FlagViewBuilderArgs): Promise<boolean>;
+  trackView(args: ViewBuilderArgs): Promise<void>;
+  trackClick(args: ClickBuilderArgs): Promise<void>;
+  trackHover(args: HoverBuilderArgs): Promise<void>;
+  trackFlagView(args: FlagViewBuilderArgs): Promise<void>;
 }
 
 /** Thrown when an Analytics event is triggered before a profile is available. */
@@ -130,26 +154,26 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     );
   }
 
-  async trackView(args: ViewBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent('trackView', args, () =>
+  async trackView(args: ViewBuilderArgs): Promise<void> {
+    await this.sendAnalyticsEvent('trackView', args, () =>
       this.eventBuilder.buildView(this.withEventContext(args))
     );
   }
 
-  async trackClick(args: ClickBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent('trackClick', args, () =>
+  async trackClick(args: ClickBuilderArgs): Promise<void> {
+    await this.sendAnalyticsEvent('trackClick', args, () =>
       this.eventBuilder.buildClick(this.withEventContext(args))
     );
   }
 
-  async trackHover(args: HoverBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent('trackHover', args, () =>
+  async trackHover(args: HoverBuilderArgs): Promise<void> {
+    await this.sendAnalyticsEvent('trackHover', args, () =>
       this.eventBuilder.buildHover(this.withEventContext(args))
     );
   }
 
-  async trackFlagView(args: FlagViewBuilderArgs): Promise<boolean> {
-    return this.sendAnalyticsEvent('trackFlagView', args, () =>
+  async trackFlagView(args: FlagViewBuilderArgs): Promise<void> {
+    await this.sendAnalyticsEvent('trackFlagView', args, () =>
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
   }
@@ -202,11 +226,17 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     method: AnalyticsEventMethod,
     args: unknown,
     build: () => AnalyticsEvent
-  ): Promise<boolean> {
-    if (!this.admit(method, [args])) return false;
+  ): Promise<void> {
+    if (!this.admit(method, [args])) return;
     const profile = this.profile;
-    if (profile === undefined) throw new EventProfileRequiredError(method);
-    return this.dispatch.analytics(this.withConsent(build()), profile);
+    if (profile === undefined) {
+      // Stateless requests are bound to a profile, so a missing one is a caller error.
+      // Stateful runtimes follow Optimization's queue: warn and drop the event.
+      if (this.bindings.requireProfile === true) throw new EventProfileRequiredError(method);
+      eventLogger.warn('Attempting to emit an event without an Optimization profile');
+      return;
+    }
+    await this.dispatch.analytics(this.withConsent(build()), profile);
   }
 }
 
@@ -218,10 +248,17 @@ function createDirectEventDispatch(
     personalization: async (event, profile) => ({
       accepted: true,
       data: await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
+        ...bindings.getExperienceOptions?.(),
         locale: bindings.getLocale?.(),
       }),
     }),
-    analytics: (event, profile) => api.analytics.sendBatchEvents([{ profile, events: [event] }]),
+    analytics: async (event, profile) => {
+      const batches = [{ profile, events: [event] }];
+      const options = bindings.getInsightsOptions?.();
+      // As in Optimization's stateless request, the options argument is omitted when unset.
+      if (options === undefined) await api.analytics.sendBatchEvents(batches);
+      else await api.analytics.sendBatchEvents(batches, options);
+    },
   };
 }
 
