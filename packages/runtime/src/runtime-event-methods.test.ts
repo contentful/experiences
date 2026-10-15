@@ -156,7 +156,7 @@ describe('RuntimeEventMethods', () => {
 
     await expect(
       methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     await methods.trackClick(interaction);
     await methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 });
     await methods.trackFlagView({ componentId: 'flag-1' });
@@ -190,8 +190,10 @@ describe('RuntimeEventMethods', () => {
   it('warns and drops a stateful Analytics event without a profile, as Optimization does', async () => {
     const { methods, sendBatchEvents } = createFixture({ consent: { events: true } });
 
+    await expect(
+      methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
+    ).resolves.toEqual({ accepted: true });
     for (const call of [
-      () => methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 }),
       () => methods.trackClick(interaction),
       () => methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 }),
       () => methods.trackFlagView({ componentId: 'flag-1' }),
@@ -320,8 +322,13 @@ describe('RuntimeEventMethods', () => {
           trackHover: { ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 },
         }[method];
         // The argument shape differs per method; each is valid for its own method here.
-        await expect(allowed.methods[method](args as never)).resolves.toBeUndefined();
-        await expect(denied.methods[method](args as never)).resolves.toBeUndefined();
+        // Views report consent admission, as in Optimization; clicks and hovers resolve void.
+        const [admitted, blocked] =
+          method === 'trackView'
+            ? [{ accepted: true }, { accepted: false }]
+            : [undefined, undefined];
+        await expect(allowed.methods[method](args as never)).resolves.toEqual(admitted);
+        await expect(denied.methods[method](args as never)).resolves.toEqual(blocked);
         expect(allowed.sendBatchEvents).toHaveBeenCalledTimes(1);
         expect(denied.sendBatchEvents).not.toHaveBeenCalled();
       }
@@ -368,6 +375,51 @@ describe('RuntimeEventMethods', () => {
       await methods.page();
 
       expect(onEventBlocked).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('trackView acceptance result', () => {
+    const view = { ...interaction, viewId: 'view-1', viewDurationMs: 100 };
+
+    it('resolves { accepted: true } for an admitted view, matching Optimization', async () => {
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: true },
+        profile: { id: 'visitor' },
+      });
+
+      await expect(methods.trackView(view)).resolves.toEqual({ accepted: true });
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves { accepted: false } for a consent-blocked view and reports it', async () => {
+      const onEventBlocked = vi.fn();
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: false },
+        profile: { id: 'visitor' },
+        onEventBlocked,
+      });
+
+      await expect(methods.trackView(view)).resolves.toEqual({ accepted: false });
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackView' })
+      );
+    });
+
+    it('keeps the stateless profile requirement for views', async () => {
+      const { methods } = createFixture({ consent: { events: true }, requireProfile: true });
+
+      await expect(methods.trackView(view)).rejects.toBeInstanceOf(EventProfileRequiredError);
+    });
+
+    it('keeps click, hover and flag view returning void', async () => {
+      const { methods } = createFixture({ consent: { events: true }, profile: { id: 'visitor' } });
+
+      await expect(methods.trackClick(interaction)).resolves.toBeUndefined();
+      await expect(
+        methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 })
+      ).resolves.toBeUndefined();
+      await expect(methods.trackFlagView({ componentId: 'flag-1' })).resolves.toBeUndefined();
     });
   });
 });

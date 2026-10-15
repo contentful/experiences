@@ -909,6 +909,7 @@ describe('Node ContentfulExperiences', () => {
 
       await request.page();
 
+      // The request locale is the content locale and also wins as the transport locale.
       expect(request.locale).toBe('de-DE');
       expect(upsertProfile).toHaveBeenCalledWith(
         expect.anything(),
@@ -916,20 +917,43 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('uses experienceOptions.locale when the request sets no locale', async () => {
+    it('uses experienceOptions.locale for Personalization only, not for content', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const fetchExperience = vi
+        .spyOn(runtime, 'fetchExperience')
+        .mockImplementation(async (options) => ({ locale: options.locale }) as never);
+      const request = runtime.forRequest({
+        consent: true,
+        experienceOptions: { locale: 'fr-FR' },
+      });
+
+      // The request (content) locale stays on the runtime default, as in Optimization.
+      expect(request.locale).toBe('en-US');
+
+      await request.fetchExperience({ experienceId: 'landing' }, { config: resolverConfig });
+      expect(fetchExperience.mock.calls[0]?.[0].locale).toBe('en-US');
+
+      await request.page();
+      expect(upsertProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ locale: 'fr-FR' })
+      );
+    });
+
+    it('uses experienceOptions.locale for the handoff preview and replay, not content', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
         experienceOptions: { locale: 'fr-FR' },
       });
 
-      await request.page();
+      const result = await request.prepareRequestHandoff({ routeKey: '/landing' });
 
-      expect(request.locale).toBe('fr-FR');
-      expect(upsertProfile).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ locale: 'fr-FR' })
+      expect(upsertProfile.mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ locale: 'fr-FR', preflight: true })
       );
+      expect(result.handoff.replay?.locale).toBe('fr-FR');
+      expect(request.locale).toBe('en-US');
     });
 
     it('forwards ip and plainText on the handoff preview and still previews without committing', async () => {
@@ -1006,6 +1030,31 @@ describe('Node ContentfulExperiences', () => {
       await expect(
         request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('trackView acceptance result', () => {
+    const view = {
+      entityId: 'entry',
+      entityKind: 'InlineComponent' as const,
+      viewId: 'v1',
+      viewDurationMs: 1000,
+    };
+
+    it('resolves { accepted: true } for an admitted view', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
+
+      await expect(request.trackView(view)).resolves.toEqual({ accepted: true });
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves { accepted: false } for a consent-blocked view', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
+
+      await expect(request.trackView(view)).resolves.toEqual({ accepted: false });
+      expect(sendBatchEvents).not.toHaveBeenCalled();
     });
   });
 });

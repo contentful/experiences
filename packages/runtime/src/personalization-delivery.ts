@@ -62,8 +62,9 @@ export class PersonalizationDelivery {
   readonly #queue: QueuedBatch[] = [];
   #token: object | undefined = {};
   #activeFlush: Promise<void> | undefined;
-  #closing = false;
-  #closingProfileId: string | undefined;
+  #destroying = false;
+  #destroyToken: object | undefined;
+  #destroyProfileId: string | undefined;
   #continuationProfileId: string | undefined;
   #state: PersonalizationDeliveryState = { status: 'idle' };
 
@@ -99,7 +100,7 @@ export class PersonalizationDelivery {
 
   /** Ordinary online events go direct; offline events use the same queued transport. */
   async send(event: ExperienceEvent): Promise<EventEmissionResult> {
-    if (this.#token === undefined || this.#closing) return { accepted: false };
+    if (!this.#isAcceptingEvents()) return { accepted: false };
     const validEvent = parseOptimizationSchema(ExperienceEventSchema, event);
     if (this.#getOnline()) {
       const data = await this.#upsert([validEvent], undefined, false);
@@ -121,7 +122,7 @@ export class PersonalizationDelivery {
     events: readonly ExperienceEvent[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
-    if (this.#token === undefined || this.#closing) return { accepted: false };
+    if (!this.#isAcceptingEvents()) return { accepted: false };
     if (this.queuedEventCount + events.length > this.#maxEvents) {
       return { accepted: false };
     }
@@ -138,64 +139,113 @@ export class PersonalizationDelivery {
     this.#flushRuntime.clearScheduledRetry();
   }
 
-  flush({ force = false }: { force?: boolean } = {}): Promise<void> {
-    if (this.#closing) return this.#activeFlush ?? Promise.resolve();
-    return this.#startFlush(force);
+  /**
+   * Join an attempt already in flight, or start one unless a gate skips it. Teardown runs
+   * through here too, with `allowDestroy`, as in Optimization's ExperienceQueue.
+   */
+  async flush({
+    force = false,
+    allowDestroy = false,
+  }: { force?: boolean; allowDestroy?: boolean } = {}): Promise<void> {
+    if (this.#activeFlush !== undefined) {
+      await this.#activeFlush;
+      return;
+    }
+    if (this.#shouldSkipFlush(force, allowDestroy)) return;
+    if (this.#queue.length === 0) {
+      this.#flushRuntime.clearScheduledRetry();
+      return;
+    }
+
+    const token = this.#token;
+    const attempt = this.#flushAttempt(token);
+    this.#activeFlush = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (this.#activeFlush === attempt) this.#activeFlush = undefined;
+    }
   }
 
-  #startFlush(force: boolean): Promise<void> {
-    if (this.#activeFlush !== undefined) return this.#activeFlush;
-    if (this.#token === undefined) return Promise.resolve();
-    if (
+  /**
+   * Capture the teardown identity, stop accepting work and retries, then make one forced
+   * attempt at the queue through the common flush path.
+   */
+  async flushOnDestroy(): Promise<void> {
+    this.#destroyToken = this.#token;
+    this.#destroyProfileId = this.#getProfileId();
+    this.#destroying = true;
+    this.#state = { status: 'idle' };
+    this.clearScheduledRetry();
+    await this.flush({ force: true, allowDestroy: true });
+  }
+
+  #isAcceptingEvents(): boolean {
+    return !this.#destroying && this.#token !== undefined;
+  }
+
+  #shouldSkipFlush(force: boolean, allowDestroy: boolean): boolean {
+    return (
+      (this.#destroying && !allowDestroy) ||
+      this.#token === undefined ||
       this.#flushRuntime.shouldSkip({
         force,
         isOnline: this.#getOnline() && this.#token !== undefined,
       })
-    ) {
-      return Promise.resolve();
-    }
-    if (this.#queue.length === 0) {
-      this.#flushRuntime.clearScheduledRetry();
-      return Promise.resolve();
-    }
-
-    const token = this.#token;
-    this.#flushRuntime.markFlushStarted();
-    const attempt = this.#runQueuedFlush(token);
-    this.#activeFlush = attempt;
-    void attempt.then(
-      () => {
-        if (this.#activeFlush === attempt) this.#activeFlush = undefined;
-      },
-      () => {
-        if (this.#activeFlush === attempt) this.#activeFlush = undefined;
-      }
     );
-    return attempt;
   }
 
-  async #runQueuedFlush(token: object): Promise<void> {
-    const isCurrent = (): boolean => token === this.#token;
+  async #flushAttempt(token: object | undefined): Promise<void> {
+    this.#flushRuntime.markFlushStarted();
     try {
       await this.#sendQueuedBatches(token);
-      if (isCurrent() && !this.#closing) this.#flushRuntime.handleFlushSuccess();
+      this.#finishSuccessfulFlush(token);
     } catch (error) {
-      if (isCurrent()) {
-        deliveryLogger.warn('Personalization queue flush request failed', {
-          queuedEvents: this.queuedEventCount,
-          reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
-          errorName: error instanceof Error ? error.name : 'unknown',
-        });
-        if (!this.#closing) {
-          this.#flushRuntime.handleFlushFailure({
-            queuedBatches: this.#queue.length,
-            queuedEvents: this.queuedEventCount,
-          });
-        }
-      }
+      this.#handleFlushError(error, token);
     } finally {
-      if (isCurrent()) this.#flushRuntime.markFlushFinished();
+      this.#finishFlush(token);
     }
+  }
+
+  #finishSuccessfulFlush(token: object | undefined): void {
+    if (this.#isDeliveryCurrent(token) && !this.#destroying)
+      this.#flushRuntime.handleFlushSuccess();
+  }
+
+  #handleFlushError(error: unknown, token: object | undefined): void {
+    if (!this.#isDeliveryCurrent(token)) return;
+    deliveryLogger.warn('Personalization queue flush request failed', {
+      queuedEvents: this.queuedEventCount,
+      reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
+      errorName: error instanceof Error ? error.name : 'unknown',
+    });
+    if (!this.#destroying) {
+      this.#flushRuntime.handleFlushFailure({
+        queuedBatches: this.#queue.length,
+        queuedEvents: this.queuedEventCount,
+      });
+    }
+  }
+
+  /** Release the attempt; a teardown attempt also clears what teardown leaves behind. */
+  #finishFlush(token: object | undefined): void {
+    if (!this.#isDeliveryCurrent(token)) return;
+    this.#flushRuntime.markFlushFinished();
+    if (!this.#destroying) return;
+    this.#token = undefined;
+    this.#queue.length = 0;
+    this.#destroyToken = undefined;
+    this.#destroyProfileId = undefined;
+    this.#continuationProfileId = undefined;
+    this.#flushRuntime.reset();
+    this.#state = { status: 'idle' };
+  }
+
+  #isDeliveryCurrent(token: object | undefined): boolean {
+    return (
+      token !== undefined &&
+      (token === this.#token || (this.#destroying && token === this.#destroyToken))
+    );
   }
 
   /**
@@ -207,7 +257,7 @@ export class PersonalizationDelivery {
    */
   clearQueue(): void {
     if (this.#token === undefined) return;
-    this.#token = this.#closing ? undefined : {};
+    this.#token = this.#destroying ? undefined : {};
     this.#activeFlush = undefined;
     this.#queue.length = 0;
     this.#flushRuntime.reset();
@@ -216,32 +266,10 @@ export class PersonalizationDelivery {
 
   reset(): void {
     if (this.#token === undefined) return;
-    this.#token = this.#closing ? undefined : {};
+    this.#token = this.#destroying ? undefined : {};
     this.#activeFlush = undefined;
-    this.#closingProfileId = undefined;
-    this.#continuationProfileId = undefined;
-    this.#queue.length = 0;
-    this.#flushRuntime.reset();
-    this.#state = { status: 'idle' };
-  }
-
-  /** Attempt queued batches in order without publishing after teardown. */
-  destroy(): void {
-    if (this.#token === undefined || this.#closing) return;
-    this.#closing = true;
-    this.#closingProfileId = this.#getProfileId();
-    this.#state = { status: 'idle' };
-    this.#flushRuntime.clearScheduledRetry();
-    const drain = this.#activeFlush ?? this.#startFlush(true);
-    void drain.then(
-      () => this.#finishDestroy(),
-      () => this.#finishDestroy()
-    );
-  }
-
-  #finishDestroy(): void {
-    this.#token = undefined;
-    this.#closingProfileId = undefined;
+    this.#destroyToken = undefined;
+    this.#destroyProfileId = undefined;
     this.#continuationProfileId = undefined;
     this.#queue.length = 0;
     this.#flushRuntime.reset();
@@ -254,7 +282,7 @@ export class PersonalizationDelivery {
       if (first === undefined) break;
       const snapshot = [...first.events];
       await this.#upsert(snapshot, first.request, true);
-      if (token !== this.#token) return;
+      if (!this.#isDeliveryCurrent(token)) return;
       if (this.#queue[0] === first) {
         const offset = snapshot.findIndex((event) => event === first.events[0]);
         if (offset >= 0) first.events.splice(0, snapshot.length - offset);
@@ -275,14 +303,14 @@ export class PersonalizationDelivery {
     publishQueued: boolean
   ): Promise<OptimizationData | undefined> {
     const token = this.#token;
-    const isCurrent = (): boolean => token !== undefined && token === this.#token;
+    const isCurrent = (): boolean => this.#isDeliveryCurrent(token);
     const profileRevision = this.#getProfileRevision();
-    if (isCurrent() && !this.#closing) this.#state = { status: 'pending' };
+    if (isCurrent() && !this.#destroying) this.#state = { status: 'pending' };
     try {
       const profileId =
         request?.profileId ??
-        (this.#closing
-          ? (this.#continuationProfileId ?? this.#closingProfileId)
+        (this.#destroying
+          ? (this.#continuationProfileId ?? this.#destroyProfileId)
           : (this.#getProfileId() ?? this.#continuationProfileId));
       if (request !== undefined) request.profileId = profileId;
       const data = await sendPersonalizationEvents(
@@ -294,17 +322,17 @@ export class PersonalizationDelivery {
           : { preflight: false, locale: request.locale }
       );
       if (!isCurrent()) return undefined;
-      if (this.#closing && !publishQueued) return undefined;
+      if (this.#destroying && !publishQueued) return undefined;
       if (request !== undefined) request.profileId ??= data.profile.id;
       if (publishQueued) this.#continuationProfileId = data.profile.id;
-      if (!this.#closing && publishQueued && profileRevision === this.#getProfileRevision()) {
+      if (!this.#destroying && publishQueued && profileRevision === this.#getProfileRevision()) {
         this.#publishQueuedData(data);
       }
-      if (!this.#closing) this.#state = { status: 'success' };
+      if (!this.#destroying) this.#state = { status: 'success' };
       return data;
     } catch (error) {
       if (!isCurrent()) return undefined;
-      if (!this.#closing) {
+      if (!this.#destroying) {
         this.#state = {
           status: 'failed',
           reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',

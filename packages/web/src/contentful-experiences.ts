@@ -122,6 +122,19 @@ export interface InteractionTrackingSession {
   stop(): Promise<void>;
 }
 
+/**
+ * Start the Personalization teardown drain and handle its promise, as Optimization's
+ * CoreStateful.destroy() does with ExperienceQueue.flushOnDestroy().
+ */
+function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void {
+  void delivery.flushOnDestroy().catch((error: unknown) => {
+    console.warn(
+      '[@contentful/experiences] Failed to flush Personalization queue during destroy()',
+      error
+    );
+  });
+}
+
 /** A prepared batch after validation: what the delivery queue accepts. */
 type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
 
@@ -160,7 +173,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly page: WebEventMethods['page'] = (...args) => this.#eventMethods.page(...args);
   readonly track: WebEventMethods['track'] = (...args) => this.#eventMethods.track(...args);
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
-    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackView(...args);
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackView(...args);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
     this.#destroyed ? Promise.resolve() : this.#eventMethods.trackClick(...args);
   readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
@@ -277,7 +290,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         window.removeEventListener('offline', this.#handleOffline);
       }
       try {
-        delivery?.destroy();
+        if (delivery !== undefined) flushPersonalizationOnDestroy(delivery);
         analytics?.destroy();
       } finally {
         try {
@@ -419,7 +432,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       }
       this.#cleanupVisibilityListener?.();
       this.#cleanupVisibilityListener = undefined;
-      this.#delivery.destroy();
+      flushPersonalizationOnDestroy(this.#delivery);
       this.#analytics.destroy();
       this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();

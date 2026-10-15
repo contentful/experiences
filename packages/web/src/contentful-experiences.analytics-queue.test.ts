@@ -253,4 +253,43 @@ describe('Web Analytics queue', () => {
 
     expect(send).toHaveBeenCalledTimes(2);
   });
+
+  describe('trackView acceptance result', () => {
+    const view = {
+      entityId: 'hero',
+      entityKind: 'Experience' as const,
+      viewId: 'v1',
+      viewDurationMs: 1000,
+    };
+
+    it('resolves { accepted: true } for an admitted view and queues it', async () => {
+      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const runtime = createRuntime();
+
+      await expect(runtime.trackView(view)).resolves.toEqual({ accepted: true });
+      expect(send).not.toHaveBeenCalled();
+      await runtime.flush();
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves { accepted: false } for a consent-blocked view', async () => {
+      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const runtime = createRuntime();
+      runtime.consent({ events: false });
+
+      await expect(runtime.trackView(view)).resolves.toEqual({ accepted: false });
+      await runtime.flush();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('resolves { accepted: false } after destroy, as Optimization does', async () => {
+      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const runtime = createRuntime();
+      runtime.destroy();
+
+      await expect(runtime.trackView(view)).resolves.toEqual({ accepted: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(send).not.toHaveBeenCalled();
+    });
+  });
 });

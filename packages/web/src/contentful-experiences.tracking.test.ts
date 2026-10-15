@@ -96,7 +96,7 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('flushes an in-progress view when stopped', async () => {
     const io = installIOPolyfill();
     const runtime = createRuntime();
-    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(undefined);
+    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue({ accepted: true });
     const page = render('node:page', 'main');
 
     const session = runtime.startInteractionTracking({
@@ -141,7 +141,7 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('allows a new session right after stop without awaiting it, as an effect cleanup does', async () => {
     const io = installIOPolyfill();
     const runtime = createRuntime();
-    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue(undefined);
+    const trackView = vi.spyOn(runtime, 'trackView').mockResolvedValue({ accepted: true });
     const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const page = render('node:page', 'main');
     const hero = render('node:hero', 'button');
@@ -169,7 +169,9 @@ describe('ContentfulExperiences interaction tracking', () => {
     let finishSend!: () => void;
     const trackView = vi
       .spyOn(runtime, 'trackView')
-      .mockImplementation(() => new Promise((resolve) => (finishSend = () => resolve())));
+      .mockImplementation(
+        () => new Promise((resolve) => (finishSend = () => resolve({ accepted: true })))
+      );
     const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
     const page = render('node:page', 'main');
     const hero = render('node:hero', 'button');

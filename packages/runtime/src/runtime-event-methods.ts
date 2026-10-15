@@ -106,7 +106,7 @@ export interface RuntimeEventMethods {
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
-  trackView(args: ViewBuilderArgs): Promise<void>;
+  trackView(args: ViewBuilderArgs): Promise<EventEmissionResult>;
   trackClick(args: ClickBuilderArgs): Promise<void>;
   trackHover(args: HoverBuilderArgs): Promise<void>;
   trackFlagView(args: FlagViewBuilderArgs): Promise<void>;
@@ -154,10 +154,16 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     );
   }
 
-  async trackView(args: ViewBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent('trackView', args, () =>
+  /**
+   * Like Optimization's non-sticky view, the result reports consent admission: an admitted
+   * view resolves `{ accepted: true }` and a blocked one `{ accepted: false }`. It is not a
+   * delivery result, so a view dropped later for want of a profile is still accepted.
+   */
+  async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
+    const accepted = await this.sendAnalyticsEvent('trackView', args, () =>
       this.eventBuilder.buildView(this.withEventContext(args))
     );
+    return { accepted };
   }
 
   async trackClick(args: ClickBuilderArgs): Promise<void> {
@@ -226,17 +232,18 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     method: AnalyticsEventMethod,
     args: unknown,
     build: () => AnalyticsEvent
-  ): Promise<void> {
-    if (!this.admit(method, [args])) return;
+  ): Promise<boolean> {
+    if (!this.admit(method, [args])) return false;
     const profile = this.profile;
     if (profile === undefined) {
       // Stateless requests are bound to a profile, so a missing one is a caller error.
       // Stateful runtimes follow Optimization's queue: warn and drop the event.
       if (this.bindings.requireProfile === true) throw new EventProfileRequiredError(method);
       eventLogger.warn('Attempting to emit an event without an Optimization profile');
-      return;
+      return true;
     }
     await this.dispatch.analytics(this.withConsent(build()), profile);
+    return true;
   }
 }
 

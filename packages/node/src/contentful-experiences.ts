@@ -178,6 +178,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   /** Copied at construction so a caller mutating the originals cannot leak into this request. */
   readonly #experienceOptions: ExperiencesNodeExperienceOptions | undefined;
   readonly #insightsOptions: ExperiencesNodeInsightsOptions | undefined;
+  readonly #personalizationLocale: string | undefined;
 
   readonly identify: NodePersonalizationMethods['identify'];
   readonly page: NodePersonalizationMethods['page'];
@@ -204,7 +205,12 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
             locale: experienceOptions.locale,
           };
     this.#insightsOptions = insightsOptions === undefined ? undefined : { ...insightsOptions };
-    this.locale = context.locale ?? this.#experienceOptions?.locale ?? runtime.locale;
+    // Content locale comes from the request and the runtime default only, as in Optimization's
+    // stateless request. `experienceOptions.locale` is a Personalization transport option.
+    this.locale = context.locale ?? runtime.locale;
+    // Personalization transport locale: the request locale wins over the transport option.
+    this.#personalizationLocale =
+      context.locale ?? this.#experienceOptions?.locale ?? runtime.locale;
     this.#profile = context.profile;
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
@@ -214,7 +220,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getProfile: () => this.#profile,
       setProfile: (profile) => this.setProfile(profile),
       getProfileRevision: () => this.#profileRevision,
-      getLocale: () => this.locale,
+      getLocale: () => this.#personalizationLocale,
       getEventContext: () => this.getRequestEventContext(),
       getExperienceOptions: () => this.#experienceOptions,
       getInsightsOptions: () => this.#insightsOptions,
@@ -274,7 +280,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       return { handoff };
     }
 
-    const locale = this.locale;
+    const locale = this.#personalizationLocale;
     // The envelope and batch have already been validated; retain the prepared bodies.
     const preparedHandoff: ExperiencesHandoff = {
       ...handoff,

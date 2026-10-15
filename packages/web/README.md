@@ -173,7 +173,10 @@ completion. Read `personalizationDeliveryState` for the latest request status
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
-resolve with no result and are queued in memory rather than sent one by one. Without a profile
+are queued in memory rather than sent one by one, and follow Optimization's return contracts:
+`trackView` resolves `{ accepted: true }` when consent admits it and `{ accepted: false }` when
+consent blocks it or the SDK is destroyed, while `trackClick`, `trackHover` and `trackFlagView`
+resolve with no result. Acceptance is consent admission, not delivery. Without a profile
 or an adopted continuation ID, such as a new visitor's call made while the first profile request is
 still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
