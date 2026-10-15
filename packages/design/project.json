@@ -23,6 +23,7 @@
         "cwd": "packages/design",
         "command": "vitest run"
       }
-    }
+    },
+    "pack": {}
   }
 }

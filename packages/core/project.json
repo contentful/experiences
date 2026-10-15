@@ -23,6 +23,7 @@
         "cwd": "packages/core",
         "command": "vitest run"
       }
-    }
+    },
+    "pack": {}
   }
 }

@@ -1,0 +1,28 @@
+{
+  "name": "package-tools",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": ["scope:internal", "layer:tooling"],
+  "targets": {
+    "test": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --test scripts/*.test.ts"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint scripts/*.ts"
+      }
+    },
+    "typecheck": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p scripts/tsconfig.json"
+      }
+    }
+  }
+}
