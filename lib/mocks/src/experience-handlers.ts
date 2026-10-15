@@ -101,14 +101,12 @@ function resetState(): void {
 async function parseJson<T>(req: Request): Promise<T> {
   const content = req.headers.get('content-type') ?? '';
   if (content.includes('application/json')) {
-     
     return (await req.json()) as T;
   }
 
   // text/plain or others -> try text then JSON.parse
   const raw = await req.text();
 
-   
   return JSON.parse(raw) as T;
 }
 

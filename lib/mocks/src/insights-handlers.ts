@@ -11,13 +11,12 @@ const eventsStore: InsightBatchEvent[] = [];
 async function parseJson<T>(req: Request): Promise<T> {
   const content = req.headers.get('content-type') ?? '';
   if (content.includes('application/json')) {
-     
     return (await req.json()) as T;
   }
   // text/plain or others -> try text then JSON.parse
   // Beacon often sends text/plain with a JSON string body
   const raw = await req.text();
-   
+
   return JSON.parse(raw) as T;
 }
 
