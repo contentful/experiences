@@ -1,0 +1,47 @@
+{
+  "name": "mocks",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "type": "module",
+  "description": "Internal Personalization and Insights mock handlers and Contentful maintenance tools",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contentful-handlers": "./src/contentful-handlers.ts",
+    "./experience-handlers": "./src/experience-handlers.ts",
+    "./insights-handlers": "./src/insights-handlers.ts",
+    "./loggerMock": "./src/loggerMock.ts"
+  },
+  "nx": {
+    "includedScripts": []
+  },
+  "scripts": {
+    "clean": "rimraf ./.rsdoctor ./.rslib ./dist ./coverage .tsbuildinfo ./.cache",
+    "config:ctfl:list": "contentful config list",
+    "fetch:ctfl:space": "mkdir -p ./src/contentful/data/space && contentful space export --config .contentfulrc.json --export-dir ./src/contentful/data/space --content-file ctfl-space-data.json --include-drafts --include-archived --include-experience-orchestration --include-exo-variants --download-assets",
+    "fetch:ctfl:experiences": "tsx ./scripts/fetchExperiences.ts",
+    "fetch:ctfl": "npm run fetch:ctfl:space && npm run fetch:ctfl:experiences",
+    "generate:ctfl:types": "tsx ./scripts/generateTypeDefinition.ts && tsx ./scripts/copyGeneratedTypeDefinition.ts",
+    "upload:ctfl:space": "read -p 'This will overwrite your space data! Do you really want to do this? (y/N)' yn && [ \"$yn\" = 'y' ] && npm run upload:ctfl:space:confirmed",
+    "upload:ctfl:space:confirmed": "contentful space import --config .contentfulrc.json --content-file ./src/contentful/data/space/ctfl-space-data.json --include-experience-orchestration --upload-assets --assets-directory ./src/contentful/data/space",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "vitest run --config vitest.config.ts --passWithNoTests"
+  },
+  "dependencies": {
+    "es-toolkit": "^1.46.0",
+    "msw": "^2.12.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "cf-content-types-generator": "2.16.1",
+    "contentful": "^11.12.10",
+    "contentful-cli": "4.0.11",
+    "rimraf": "^6.1.3",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

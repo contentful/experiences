@@ -17,7 +17,8 @@
   },
   "workspaces": [
     "packages/*",
-    "examples/*"
+    "examples/*",
+    "lib/mocks"
   ],
   "scripts": {
     "build": "nx run-many -t build",
@@ -29,6 +30,17 @@
     "graph": "nx graph",
     "release": "nx release",
     "release:dry": "nx release --dry-run",
+    "mocks:clean": "nx run mocks:clean",
+    "mocks:config:ctfl:list": "nx run mocks:config:ctfl:list",
+    "mocks:fetch:ctfl:space": "nx run mocks:fetch:ctfl:space",
+    "mocks:fetch:ctfl:experiences": "nx run mocks:fetch:ctfl:experiences",
+    "mocks:fetch:ctfl": "nx run mocks:fetch:ctfl",
+    "mocks:generate:ctfl:types": "nx run mocks:generate:ctfl:types",
+    "mocks:upload:ctfl:space": "nx run mocks:upload:ctfl:space",
+    "mocks:upload:ctfl:space:confirmed": "nx run mocks:upload:ctfl:space:confirmed",
+    "mocks:typecheck": "nx run mocks:typecheck",
+    "mocks:lint": "nx run mocks:lint",
+    "mocks:test:unit": "nx run mocks:test:unit",
     "prepare": "husky install"
   },
   "devDependencies": {

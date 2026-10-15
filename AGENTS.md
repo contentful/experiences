@@ -38,10 +38,12 @@ experiences/
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 │   └── adapter-angular/      # @contentful/experiences-angular (customer-facing)
-└── examples/                # Customer-facing example apps
-    ├── nextjs/               # Next.js 15 example (external developers run this)
-    ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
-    └── angular/              # Angular 20 + @angular/ssr example (parity with both)
+├── examples/                # Customer-facing example apps
+│   ├── nextjs/               # Next.js 15 example (external developers run this)
+│   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
+│   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
+└── lib/
+    └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
 
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
@@ -60,6 +62,7 @@ experiences/
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                   |
 | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
+| `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Insights handlers and explicit Contentful maintenance tools.               |
 
 **Customers install the framework adapter for rendering.** The optional `@contentful/experiences-live-preview` package is customer-facing and can be used directly by an application or as an adapter's live-preview data source. The framework adapters declare `core`, `design`, `client`, and `runtime` as dependencies.
 
