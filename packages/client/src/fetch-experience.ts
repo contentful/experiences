@@ -5,6 +5,7 @@ import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences
 import { assertDestinationPreviewSupported } from './destination-guards.js';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
+import { parameterQuery, type ExperienceParameters } from './experience-parameters.js';
 import {
   toExperiencePayload,
   toExperiencePayloadFromDestination,
@@ -30,6 +31,8 @@ export type ByIdExperienceOptions = {
   environmentId: string;
   experienceId: string;
   locale?: string;
+  /** Values for declared Experience parameters. Refetch with new values to swap content. */
+  parameters?: ExperienceParameters;
   /**
    * Profile and events used by XDA to personalize the resolved Experience.
    */
@@ -183,27 +186,50 @@ async function fetchByExperienceId(
   client: ContentfulViewDeliveryClient,
   options: ByIdExperienceOptions
 ): Promise<ExperienceResponse> {
-  const { spaceId, environmentId, experienceId, locale, personalization, extensions } = options;
+  const { spaceId, environmentId, experienceId, locale, parameters, personalization, extensions } =
+    options;
   const requestExtensions: DeliveryExperienceRequestExtensions = {
     ...extensions,
     ...(personalization === undefined ? {} : { personalization }),
   };
 
   try {
-    // Both methods hit the same endpoint, but only the POST operation accepts
-    // extensions in its request body. Keep the cacheable GET when there are no
-    // extensions to evaluate.
+    // GET uses namespaced query leaves. POST preserves values that cannot be
+    // represented by leaves and carries existing request extensions.
     // The generated delivery client owns the alpha-feature header on both
     // paths, including when the caller supplied the client instance.
     //
     // Await inside the try so rejected requests are normalized below.
-    if (hasRequestExtensions(requestExtensions)) {
-      return await client.experience.getWithOverrides(spaceId, environmentId, experienceId, {
+    const queryParams = parameterQuery(parameters);
+    if (hasRequestExtensions(requestExtensions) || queryParams === undefined) {
+      // dev.9's POST serializer passes through extra body keys. Its generated
+      // request type omits parameters, so retain our typed extension locally.
+      const request: ContentfulViewDelivery.GetWithOverridesExperienceRequest & {
+        parameters?: ExperienceParameters;
+      } = {
         locale,
         extensions: requestExtensions,
-      });
+        ...(parameters === undefined ? {} : { parameters }),
+      };
+      return await client.experience.getWithOverrides(
+        spaceId,
+        environmentId,
+        experienceId,
+        request
+      );
     }
 
+    if (Object.keys(queryParams).length > 0) {
+      return await client.experience.get(
+        spaceId,
+        environmentId,
+        experienceId,
+        { locale },
+        {
+          queryParams,
+        }
+      );
+    }
     return await client.experience.get(spaceId, environmentId, experienceId, { locale });
   } catch (err) {
     // Preserve expected 404 control flow for framework routers. Other failures

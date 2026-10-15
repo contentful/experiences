@@ -363,3 +363,13 @@ For the full getting-started walkthrough, merge-precedence rules, and design rat
 ## License
 
 MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.
+
+## Runtime Experience parameters
+
+By-ID `fetchExperience` accepts `parameters`, for example
+`{ featuredPosts: { limit: 6, order: '-fields.title' } }`. Scalars are strings or
+numbers; Record leaves have one level. Order is one signed `fields.<apiName>` or
+`sys.<id>` path. Refetch with changed values, then replace the renderer's plan.
+Exports include `ExperienceParameters`, `ExperienceParameterValue`,
+`ExperienceParameterRecord`, and `ExperienceParameterOrder`.
+See the [collection/refetch example](../../README.md#runtime-experience-parameters).

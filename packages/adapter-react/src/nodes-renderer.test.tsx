@@ -19,6 +19,7 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ClientExperienceRenderer } from './client-renderer';
 import type { Config } from './types';
+import { fetchExperience, type ExperienceParameters } from './index';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,6 +77,58 @@ afterEach(() => {
   container?.remove();
   container = null;
   root = null;
+});
+
+describe('runtime parameter refetch → renderer', () => {
+  it('replaces content for the same Experience and node after parameters change', async () => {
+    const get = vi.fn(
+      async (
+        _space: string,
+        _environment: string,
+        _id: string,
+        _request: unknown,
+        options: { queryParams?: Record<string, unknown> } = {}
+      ) => ({
+        sys: { id: 'collection', type: 'Experience' },
+        nodes: [
+          componentNode('posts', {
+            id: 'stable-node',
+            contentProperties: {
+              title: `${options.queryParams?.['parameter.featuredPosts.limit']} posts`,
+            },
+          }),
+        ],
+      })
+    );
+    const client = { experience: { get } } as never;
+    const resolveData = vi.fn(({ content }: { content: Record<string, unknown> }) => ({
+      title: String(content.title).toUpperCase(),
+    }));
+    const config: Config = {
+      components: {
+        posts: { component: ({ title }: { title: string }) => <p>{title}</p>, resolveData },
+      },
+    };
+    const options = { spaceId: 'space', environmentId: 'master', experienceId: 'collection' };
+    const parameters: ExperienceParameters = {
+      featuredPosts: { limit: 6, order: '-fields.title' },
+    };
+    const first = await fetchExperience({ ...options, parameters }, { client }, { config });
+    await mount(<ClientExperienceRenderer experience={first} config={config} />);
+    expect(container!.textContent).toBe('6 POSTS');
+
+    const second = await fetchExperience(
+      { ...options, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
+      { client },
+      { config }
+    );
+    await act(async () => {
+      root!.render(<ClientExperienceRenderer experience={second} config={config} />);
+    });
+    expect(container!.textContent).toBe('12 POSTS');
+    expect(first.nodes[0]?.nodeId).toBe(second.nodes[0]?.nodeId);
+    expect(resolveData).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('ClientExperienceRenderer — component-render-error, client-side catch', () => {
