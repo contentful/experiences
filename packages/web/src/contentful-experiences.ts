@@ -13,7 +13,8 @@ import {
   type ExperiencesHandoff,
   type PageViewBuilderArgs,
   type PersonalizationDeliveryState,
-  type QueueFlushPolicy,
+  type QueuePolicy,
+  resolveQueuePolicy,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
@@ -65,8 +66,11 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Blocked events are never replayed. */
   onEventBlocked?: (event: BlockedEvent) => void;
-  /** Queue policy for queued Personalization and Analytics work. */
-  queuePolicy?: { flush?: QueueFlushPolicy };
+  /**
+   * Queue policy: `flush` sets retry, backoff and circuit behavior for both queues, and
+   * `offlineMaxEvents` caps the offline Personalization queue (default 100).
+   */
+  queuePolicy?: QueuePolicy;
   /**
    * Consent applied at startup. Configured values take precedence over a stored
    * decision, and `consent` is also the default for `persistenceConsent`.
@@ -195,6 +199,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     // else can acquire it in between.
     const singletonOwner = acquireWebSingleton();
     this.#singletonOwner = singletonOwner;
+    const resolvedQueuePolicy = resolveQueuePolicy(queuePolicy);
     let delivery: PersonalizationDelivery | undefined;
     let analytics: AnalyticsDelivery | undefined;
     try {
@@ -213,7 +218,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         getProfileRevision: () => this.#store.profileRevision,
         getOnline: () => this.#online,
         getLocale: () => this.locale,
-        flushPolicy: queuePolicy?.flush,
+        flushPolicy: resolvedQueuePolicy.flush,
+        maxEvents: resolvedQueuePolicy.offlineMaxEvents,
         publishQueuedData: (data) => {
           if (this.#destroyed) return;
           this.#store.profile = data.profile;
@@ -224,7 +230,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#analytics = analytics = new AnalyticsDelivery({
         api: this.optimizationApi.analytics,
         getOnline: () => this.#online,
-        flushPolicy: queuePolicy?.flush,
+        flushPolicy: resolvedQueuePolicy.flush,
       });
       this.#eventMethods = this.createEventMethods(
         {
@@ -255,10 +261,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
         window.addEventListener('offline', this.#handleOffline);
       }
       // Last-chance delivery when the page is hidden or unloaded: end in-progress views
-      // and hovers so their final events are queued, then flush with the Beacon API.
+      // and hovers so their final events are queued, then force a final attempt on both
+      // queues. Only Analytics uses the Beacon API; each API keeps its own transport.
       this.#cleanupVisibilityListener = createVisibilityChangeListener(async () => {
         await this.#interactionTracking?.endActive();
-        await this.#analytics.flush({ force: true, beacon: beaconHandler });
+        await Promise.all([
+          this.#analytics.flush({ force: true, beacon: beaconHandler }),
+          this.#delivery.flush({ force: true }),
+        ]);
       });
     } catch (error) {
       this.#cleanupVisibilityListener?.();
@@ -330,10 +340,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return this.#delivery.state;
   }
 
-  /** Send queued Analytics events and any queued Personalization batches now. */
+  /**
+   * Send queued Analytics events and any queued Personalization batches now. The two
+   * queues are independent, so both attempts start before either is awaited.
+   */
   async flush(): Promise<void> {
-    await this.#analytics.flush();
-    await this.#delivery.flush();
+    await Promise.all([this.#analytics.flush(), this.#delivery.flush()]);
   }
 
   /** Changes the default locale used by subsequent events and fetches. */

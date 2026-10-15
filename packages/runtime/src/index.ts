@@ -49,7 +49,9 @@ export type {
   QueueFlushFailureContext,
   QueueFlushPolicy,
   QueueFlushRecoveredContext,
+  QueuePolicy,
 } from './lib/queue/index.js';
+export { resolveQueuePolicy } from './lib/queue/index.js';
 export type { AnalyticsFlushOptions } from './analytics-delivery.js';
 export { PersonalizationDelivery } from './personalization-delivery.js';
 export type { PersonalizationDeliveryState } from './personalization-delivery.js';

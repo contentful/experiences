@@ -12,7 +12,7 @@ import {
   resolveQueueFlushPolicy,
   type QueueFlushPolicy,
 } from './lib/queue/index.js';
-import { MAX_PREPARED_EVENTS } from './prepared-events.js';
+import { OFFLINE_QUEUE_MAX_EVENTS } from './lib/queue/index.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
@@ -32,7 +32,7 @@ interface PersonalizationDeliveryOptions {
   /** Current content locale for ordinary sends; prepared batches retain their own locale. */
   readonly getLocale?: () => string | undefined;
   readonly publishQueuedData: (data: OptimizationData) => void;
-  /** Internal override for deterministic tests; Web uses the 100-event SDK handoff capacity. */
+  /** Offline admission capacity: `queuePolicy.offlineMaxEvents`, defaulting to 100 events. */
   readonly maxEvents?: number;
   readonly flushPolicy?: QueueFlushPolicy;
 }
@@ -72,7 +72,7 @@ export class PersonalizationDelivery {
     this.#getOnline = options.getOnline;
     this.#getLocale = options.getLocale;
     this.#publishQueuedData = options.publishQueuedData;
-    this.#maxEvents = options.maxEvents ?? MAX_PREPARED_EVENTS;
+    this.#maxEvents = options.maxEvents ?? OFFLINE_QUEUE_MAX_EVENTS;
     this.#flushRuntime = new QueueFlushRuntime({
       policy: resolveQueueFlushPolicy(options.flushPolicy),
       onRetry: () => {

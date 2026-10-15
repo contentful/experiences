@@ -147,4 +147,58 @@ describe('AnalyticsDelivery', () => {
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     await expect(delivery.send(event(2), profile)).resolves.toBe(false);
   });
+
+  it('joins an active flush instead of resolving early, without starting a second request', async () => {
+    const { delivery, sendBatchEvents } = setup();
+    let resolve!: (ok: boolean) => void;
+    sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+    await delivery.send(event(1), profile);
+
+    const first = delivery.flush();
+    let secondSettled = false;
+    const second = delivery.flush({ force: true }).then(() => {
+      secondSettled = true;
+    });
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+
+    resolve(true);
+    await Promise.all([first, second]);
+    expect(secondSettled).toBe(true);
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    delivery.destroy();
+  });
+
+  it('does not let a join guarantee delivery: a failed attempt is not retried by the joiner', async () => {
+    vi.useFakeTimers();
+    const { delivery, sendBatchEvents } = setup();
+    let resolve!: (ok: boolean) => void;
+    sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+    await delivery.send(event(1), profile);
+
+    const first = delivery.flush();
+    const joined = delivery.flush();
+    resolve(false);
+    await Promise.all([first, joined]);
+
+    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    expect(delivery.queuedEventCount).toBe(1);
+    delivery.destroy();
+  });
+
+  it('forgets an active flush when the queue is cleared, so a new flush can start', async () => {
+    const { delivery, sendBatchEvents } = setup();
+    sendBatchEvents.mockReturnValueOnce(new Promise<boolean>(() => undefined));
+    await delivery.send(event(1), profile);
+    void delivery.flush();
+    delivery.clearQueue();
+
+    await delivery.send(event(2), profile);
+    await delivery.flush({ force: true });
+
+    expect(sendBatchEvents).toHaveBeenCalledTimes(2);
+    expect(delivery.queuedEventCount).toBe(0);
+    delivery.destroy();
+  });
 });

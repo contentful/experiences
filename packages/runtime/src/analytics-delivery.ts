@@ -47,6 +47,7 @@ export class AnalyticsDelivery {
   readonly #flushIntervalMs: number;
   readonly #flushRuntime: QueueFlushRuntime;
   readonly #queued = new Map<string, QueuedProfileEvents>();
+  #activeFlush: Promise<void> | undefined;
   #periodicTimer: ReturnType<typeof setInterval> | undefined;
   #token: object | undefined = {};
 
@@ -98,6 +99,13 @@ export class AnalyticsDelivery {
   }
 
   async flush({ force = false, beacon }: AnalyticsFlushOptions = {}): Promise<void> {
+    // Join an attempt already on the wire instead of returning early: a caller awaiting
+    // flush() waits for that attempt to settle. This starts nothing new, so it is not a
+    // guarantee of eventual delivery, and scheduled retries stay independent.
+    if (this.#activeFlush !== undefined) {
+      await this.#activeFlush;
+      return;
+    }
     const token = this.#token;
     if (token === undefined) return;
     if (this.#flushRuntime.shouldSkip({ force, isOnline: this.#getOnline() })) return;
@@ -117,10 +125,26 @@ export class AnalyticsDelivery {
       return;
     }
 
+    const attempt = this.#flushAttempt(batches, sent, beacon, token);
+    this.#activeFlush = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (this.#activeFlush === attempt) this.#activeFlush = undefined;
+    }
+  }
+
+  async #flushAttempt(
+    batches: BatchInsightsEventArray,
+    sent: ReadonlyMap<string, number>,
+    beacon: AnalyticsFlushOptions['beacon'],
+    token: object
+  ): Promise<void> {
     this.#flushRuntime.markFlushStarted();
+    const isCurrent = (): boolean => token === this.#token;
     try {
       const success = await this.#trySend(batches, beacon ? { beacon } : undefined);
-      if (token !== this.#token) return;
+      if (!isCurrent()) return;
       if (success) {
         this.#discardSent(sent);
         this.#flushRuntime.handleFlushSuccess();
@@ -131,7 +155,7 @@ export class AnalyticsDelivery {
         });
       }
     } finally {
-      if (token === this.#token) {
+      if (isCurrent()) {
         this.#flushRuntime.markFlushFinished();
         this.#reconcilePeriodicTimer();
       }
@@ -146,6 +170,7 @@ export class AnalyticsDelivery {
   clearQueue(): void {
     if (this.#token === undefined) return;
     this.#token = {};
+    this.#activeFlush = undefined;
     this.#queued.clear();
     this.#flushRuntime.reset();
     this.#clearPeriodicTimer();
