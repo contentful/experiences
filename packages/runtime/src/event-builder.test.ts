@@ -27,6 +27,14 @@ function buildInteractionEvents(args: InteractionBuilderArgsBase) {
   ] as const;
 }
 
+function expectApiCompatibleInteractionEvents([view, click, hover]: ReturnType<
+  typeof buildInteractionEvents
+>) {
+  expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
+  expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
+  expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
+}
+
 const interaction = {
   entityId: 'experience-1',
   entityKind: 'Experience' as const,
@@ -47,65 +55,52 @@ describe('EventBuilder', () => {
     });
   });
 
-  it('builds an API-compatible ExO view event', () => {
-    const event = createBuilder().buildView({
-      ...interaction,
-      viewId: 'view-1',
-      viewDurationMs: 1_000,
-    });
+  it('builds API-compatible ExO interaction events', () => {
+    const events = buildInteractionEvents(interaction);
+    const [view, click, hover] = events;
 
-    expect(OptimizationExoViewEvent.parse(event)).toEqual(event);
-    expect(event).toMatchObject({
+    expectApiCompatibleInteractionEvents(events);
+    expect(view).toMatchObject({
       ...interaction,
       type: 'exo_node_view',
       viewId: 'view-1',
       viewDurationMs: 1_000,
     });
-  });
-
-  it('builds API-compatible ExO click and hover events', () => {
-    const builder = createBuilder();
-    const click = builder.buildClick(interaction);
-    const hover = builder.buildHover({
-      ...interaction,
-      hoverId: 'hover-1',
-      hoverDurationMs: 500,
-    });
-
-    expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
-    expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
     expect(click.type).toBe('exo_node_click');
     expect(hover.type).toBe('exo_node_hover');
   });
 
-  it.each(['Experience', 'Fragment'] as const)(
-    'builds baseline %s events with a default variantId',
-    (entityKind) => {
-      const [view, click, hover] = buildInteractionEvents({
+  it('builds baseline Experience events with a default variant and no parent variant', () => {
+    const events = buildInteractionEvents({ entityId: 'experience-1', entityKind: 'Experience' });
+
+    expectApiCompatibleInteractionEvents(events);
+    for (const event of events) {
+      expect(event).toMatchObject({
         entityId: 'experience-1',
-        entityKind,
+        entityKind: 'Experience',
+        variantId: 'default',
       });
-
-      expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
-      expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
-      expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
-
-      for (const event of [view, click, hover]) {
-        expect(event).toMatchObject({
-          entityId: 'experience-1',
-          entityKind,
-          variantId: 'default',
-        });
-        expect(event).not.toHaveProperty('optimizationId');
-        expect(event).not.toHaveProperty('variantIndex');
-        if (entityKind === 'Fragment') {
-          expect(event).toHaveProperty('parentVariantId', 'default');
-        } else {
-          expect(event).not.toHaveProperty('parentVariantId');
-        }
-      }
+      expect(event).not.toHaveProperty('optimizationId');
+      expect(event).not.toHaveProperty('variantIndex');
+      expect(event).not.toHaveProperty('parentVariantId');
     }
-  );
+  });
+
+  it('builds baseline Fragment events with default own and parent variants', () => {
+    const events = buildInteractionEvents({ entityId: 'fragment-1', entityKind: 'Fragment' });
+
+    expectApiCompatibleInteractionEvents(events);
+    for (const event of events) {
+      expect(event).toMatchObject({
+        entityId: 'fragment-1',
+        entityKind: 'Fragment',
+        variantId: 'default',
+        parentVariantId: 'default',
+      });
+      expect(event).not.toHaveProperty('optimizationId');
+      expect(event).not.toHaveProperty('variantIndex');
+    }
+  });
 
   it.each(['InlineFragment', 'InlineComponent'] as const)(
     'keeps absent variant IDs omitted on %s events',
