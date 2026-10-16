@@ -1,0 +1,9 @@
+# Contentful space export: refreshed from Contentful.
+lib/mocks/src/contentful/data/space/ctfl-space-data.json linguist-generated=true
+
+# Content-model declarations produced by the generator and its copy script.
+lib/mocks/src/contentful-generated.d.ts linguist-generated=true
+implementations/**/contentful-generated.d.ts linguist-generated=true
+
+# Dependency resolution output.
+package-lock.json linguist-generated=true

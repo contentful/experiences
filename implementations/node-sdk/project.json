@@ -1,0 +1,100 @@
+{
+  "name": "implementation-node-sdk",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "implementations/node-sdk/src",
+  "projectType": "application",
+  "tags": ["scope:implementation", "runtime:node"],
+  "targets": {
+    "install": {
+      "cache": false,
+      "dependsOn": [
+        {
+          "projects": ["node"],
+          "target": "pack"
+        }
+      ],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/install-implementation.ts implementations/node-sdk"
+      }
+    },
+    "setup": {
+      "cache": false,
+      "dependsOn": ["install"],
+      "executor": "nx:noop"
+    },
+    "dev": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run dev --"
+      }
+    },
+    "serve": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run serve --"
+      }
+    },
+    "serve:stop": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run serve:stop --"
+      }
+    },
+    "restart": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run restart --"
+      }
+    },
+    "status": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run status --"
+      }
+    },
+    "logs": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run logs --"
+      }
+    },
+    "clean": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run clean --"
+      }
+    },
+    "typecheck": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run typecheck --"
+      },
+      "dependsOn": []
+    },
+    "lint": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/node-sdk",
+        "command": "npm run lint --"
+      }
+    }
+  }
+}

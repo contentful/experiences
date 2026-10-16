@@ -1,0 +1,51 @@
+{
+  "name": "@implementation/experiences-node-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone Node SDK reference implementation for Contentful Experiences",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "./node_modules/.bin/tsx --env-file=.env ./src/app.ts",
+    "serve": "./node_modules/.bin/pm2 start ./node_modules/tsx/dist/cli.mjs --name experiences-node-sdk-app -- --env-file=.env ./src/app.ts",
+    "serve:stop": "./node_modules/.bin/pm2 delete experiences-node-sdk-app",
+    "restart": "./node_modules/.bin/pm2 restart experiences-node-sdk-app",
+    "status": "./node_modules/.bin/pm2 list",
+    "logs": "./node_modules/.bin/pm2 logs experiences-node-sdk-app",
+    "clean": "./node_modules/.bin/rimraf ./dist ./coverage",
+    "typecheck": "./node_modules/.bin/tsc --noEmit",
+    "lint": "./node_modules/.bin/eslint --config eslint.config.ts ."
+  },
+  "dependencies": {
+    "@contentful/experiences-node": "file:../../pkgs/contentful-experiences-node-local.tgz",
+    "@contentful/rich-text-html-renderer": "17.1.6",
+    "ejs": "6.0.1",
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "@typescript-eslint/eslint-plugin": "8.70.0",
+    "@typescript-eslint/parser": "8.70.0",
+    "eslint": "10.10.0",
+    "pm2": "7.0.4",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "jiti": "2.6.1",
+    "rimraf": "6.1.3"
+  },
+  "overrides": {
+    "@contentful/experiences-node": "$@contentful/experiences-node",
+    "@contentful/experiences-client": "file:../../pkgs/contentful-experiences-client-local.tgz",
+    "@contentful/experiences-runtime": "file:../../pkgs/contentful-experiences-runtime-local.tgz",
+    "@contentful/experiences-sdk-core": "file:../../pkgs/contentful-experiences-sdk-core-local.tgz"
+  },
+  "nx": {
+    "includedScripts": []
+  }
+}

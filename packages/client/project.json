@@ -23,6 +23,7 @@
         "cwd": "packages/client",
         "command": "vitest run"
       }
-    }
+    },
+    "pack": {}
   }
 }
