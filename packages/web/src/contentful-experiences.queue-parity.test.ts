@@ -253,4 +253,45 @@ describe('Web queue parity with Optimization', () => {
       expect(results.filter((result) => result.accepted)).toHaveLength(150);
     });
   });
+
+  describe('teardown through the public SDK, as Optimization', () => {
+    it('resolves a pending direct page() that fails after destroy, instead of rejecting', async () => {
+      let reject!: (error: unknown) => void;
+      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValueOnce(
+        new Promise((_, r) => (reject = r)) as never
+      );
+      const runtime = createRuntime();
+
+      const pending = runtime.page();
+      runtime.destroy();
+      reject(new Error('network'));
+
+      await expect(pending).resolves.toEqual({ accepted: true });
+    });
+
+    it('sends a queued offline page on destroy under the current profile, not an older one', async () => {
+      const upsert = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValueOnce({ profile: { id: 'profile-A' } } as never)
+        .mockResolvedValueOnce({ profile: { id: 'profile-B' } } as never)
+        .mockResolvedValue({ profile: { id: 'profile-B' } } as never);
+      const runtime = createRuntime({ profile: undefined });
+
+      // A completed drain under A.
+      window.dispatchEvent(new Event('offline'));
+      await runtime.page();
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+      // A newer direct identify() response makes B the current profile.
+      await runtime.identify({ userId: 'user-1' });
+      expect(runtime.profile?.id).toBe('profile-B');
+      // An ordinary offline page, drained during destruction.
+      window.dispatchEvent(new Event('offline'));
+      await runtime.page();
+      runtime.destroy();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(upsert.mock.calls.at(-1)?.[0].profileId).toBe('profile-B');
+    });
+  });
 });

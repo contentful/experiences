@@ -164,6 +164,14 @@ Retained differences:
 
 Parity covers internal design too. `PersonalizationDelivery` follows `ExperienceQueue`'s teardown contract: `flushOnDestroy()` captures the teardown identity and calls the common `flush()`, which owns joining, teardown gating and the attempt, and attempt completion does the teardown cleanup. The owning runtime invokes and handles that promise, as `CoreStateful.destroy()` does. A matching test outcome is not enough if the structure differs.
 
+The same holds for the Analytics queue and request identity:
+
+- `AnalyticsDelivery` has no lifecycle of its own. Like `InsightsQueue` it reads an owner-provided `getResetToken`. Web owns that token: reset and consent withdrawal replace it, and `destroy()` starts the final forced flush, then ends the lifetime and cancels the queue timer and retry, in `CoreStateful.destroy()`'s order. Sent events are removed by the batch snapshot.
+- Profile continuation is local to each `sendQueuedBatches()` drain, as in `ExperienceQueue`. A teardown drain starts from the captured current identity and follows only its own responses; there is no delivery-wide continuation field.
+- Request acceptance separates a live request from a teardown-authorized delivery (`isLive` / `isDestroyDrain`). An ordinary direct request carries no teardown delivery, so once it is no longer live its late success and late failure are both discarded.
+
+Do not fix a defect in these areas with an extra flag, a stale-identity fallback or a parallel lifecycle mechanism; port the reference structure.
+
 ---
 
 ## Architecture in 60 seconds

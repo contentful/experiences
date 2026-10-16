@@ -15,17 +15,40 @@ const profile: EventProfile = { id: 'profile-1' };
 const event = (n: number) =>
   ({ type: 'component', componentId: `c${n}` }) as unknown as AnalyticsEvent;
 
+/**
+ * The queue has no lifecycle of its own; like Optimization's InsightsQueue it reads an
+ * owner-provided reset token. This fixture plays that owner, as Web does.
+ */
 function setup(options: { online?: boolean; maxEvents?: number } = {}) {
   let online = options.online ?? true;
+  let resetToken: object = {};
+  let destroyed = false;
   const sendBatchEvents = vi.fn<(...args: unknown[]) => Promise<boolean>>().mockResolvedValue(true);
   const delivery = new AnalyticsDelivery({
     api: { sendBatchEvents } as never,
     getOnline: () => online,
+    getResetToken: () => (destroyed ? undefined : resetToken),
     flushPolicy: resolveQueueFlushPolicy(undefined),
     maxEvents: options.maxEvents,
   });
+  const owner = {
+    /** Optimization's CoreStateful.clearQueuedEvents(): new token, then clear the queue. */
+    reset: () => {
+      resetToken = {};
+      delivery.clearQueuedEvents();
+    },
+    /** Optimization's CoreStateful.destroy() order: flush, end the lifetime, cancel timers. */
+    destroy: () => {
+      const drain = delivery.flush({ force: true });
+      destroyed = true;
+      delivery.clearPeriodicFlushTimer();
+      delivery.clearScheduledRetry();
+      return drain;
+    },
+  };
   return {
     delivery,
+    owner,
     sendBatchEvents,
     setOnline: (value: boolean) => {
       online = value;
@@ -35,15 +58,15 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
 
 describe('AnalyticsDelivery', () => {
   it('queues events instead of sending each one', async () => {
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     await expect(delivery.send(event(1), profile)).resolves.toBeUndefined();
     expect(sendBatchEvents).not.toHaveBeenCalled();
     expect(delivery.queuedEventCount).toBe(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('flushes when the queue reaches its size limit, batching per profile', async () => {
-    const { delivery, sendBatchEvents } = setup({ maxEvents: 3 });
+    const { delivery, owner, sendBatchEvents } = setup({ maxEvents: 3 });
     await delivery.send(event(1), profile);
     await delivery.send(event(2), { id: 'profile-2' });
     expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -54,23 +77,23 @@ describe('AnalyticsDelivery', () => {
       { profile: { id: 'profile-2' }, events: [event(2)] },
     ]);
     expect(delivery.queuedEventCount).toBe(0);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('flushes every 30 seconds while events remain queued', async () => {
     vi.useFakeTimers();
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     await delivery.send(event(1), profile);
     await vi.advanceTimersByTimeAsync(29_999);
     expect(sendBatchEvents).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('holds events while offline and sends them on a forced flush when back online', async () => {
-    const { delivery, sendBatchEvents, setOnline } = setup({ online: false });
+    const { delivery, owner, sendBatchEvents, setOnline } = setup({ online: false });
     await delivery.send(event(1), profile);
     await delivery.flush();
     expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -78,22 +101,22 @@ describe('AnalyticsDelivery', () => {
     await delivery.flush({ force: true });
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(delivery.queuedEventCount).toBe(0);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('passes the beacon sender through for lifecycle flushes', async () => {
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     const beacon = vi.fn(() => true);
     await delivery.send(event(1), profile);
     await delivery.flush({ force: true, beacon });
     expect(sendBatchEvents.mock.calls[0]?.[1]).toEqual({ beacon });
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('keeps events and retries with backoff after a failed flush', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     sendBatchEvents.mockResolvedValueOnce(false);
     await delivery.send(event(1), profile);
     await delivery.flush();
@@ -103,21 +126,21 @@ describe('AnalyticsDelivery', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(sendBatchEvents).toHaveBeenCalledTimes(2);
     expect(delivery.queuedEventCount).toBe(0);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('treats a thrown request as a failure and keeps the events', async () => {
     vi.useFakeTimers();
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     sendBatchEvents.mockRejectedValueOnce(new Error('network'));
     await delivery.send(event(1), profile);
     await delivery.flush();
     expect(delivery.queuedEventCount).toBe(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('keeps events queued while a flush is in flight', async () => {
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     let resolve!: (ok: boolean) => void;
     sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
     await delivery.send(event(1), profile);
@@ -126,27 +149,27 @@ describe('AnalyticsDelivery', () => {
     resolve(true);
     await flushing;
     expect(delivery.queuedEventCount).toBe(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
-  it('drops queued events and timers on clearQueue, and keeps accepting afterwards', async () => {
+  it('drops queued events and timers when the owner resets, and keeps accepting afterwards', async () => {
     vi.useFakeTimers();
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     await delivery.send(event(1), profile);
-    delivery.clearQueue();
+    owner.reset();
     expect(delivery.queuedEventCount).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
     await delivery.flush({ force: true });
     expect(sendBatchEvents).not.toHaveBeenCalled();
     await delivery.send(event(2), profile);
     expect(delivery.queuedEventCount).toBe(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
-  it('makes a final forced attempt on destroy, then refuses new events', async () => {
-    const { delivery, sendBatchEvents } = setup({ online: false });
+  it('sends a final forced attempt when the owner destroys, then refuses new events', async () => {
+    const { delivery, owner, sendBatchEvents } = setup({ online: false });
     await delivery.send(event(1), profile);
-    delivery.destroy();
+    void owner.destroy();
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     const queuedAtDestroy = delivery.queuedEventCount;
     await delivery.send(event(2), profile);
@@ -158,7 +181,7 @@ describe('AnalyticsDelivery', () => {
 
   it('awaits the threshold flush but resolves with no result when it fails, keeping the events', async () => {
     vi.useFakeTimers();
-    const { delivery, sendBatchEvents } = setup({ maxEvents: 2 });
+    const { delivery, owner, sendBatchEvents } = setup({ maxEvents: 2 });
     sendBatchEvents.mockResolvedValueOnce(false);
     await delivery.send(event(1), profile);
 
@@ -167,11 +190,11 @@ describe('AnalyticsDelivery', () => {
 
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(delivery.queuedEventCount).toBe(2);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('does not resolve the threshold-reaching call until its flush settles', async () => {
-    const { delivery, sendBatchEvents } = setup({ maxEvents: 2 });
+    const { delivery, owner, sendBatchEvents } = setup({ maxEvents: 2 });
     let resolve!: (ok: boolean) => void;
     sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
     await delivery.send(event(1), profile);
@@ -187,11 +210,11 @@ describe('AnalyticsDelivery', () => {
     resolve(true);
     await reaching;
     expect(settled).toBe(true);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('joins an active flush instead of resolving early, without starting a second request', async () => {
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     let resolve!: (ok: boolean) => void;
     sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
     await delivery.send(event(1), profile);
@@ -209,12 +232,12 @@ describe('AnalyticsDelivery', () => {
     await Promise.all([first, second]);
     expect(secondSettled).toBe(true);
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
   it('does not let a join guarantee delivery: a failed attempt is not retried by the joiner', async () => {
     vi.useFakeTimers();
-    const { delivery, sendBatchEvents } = setup();
+    const { delivery, owner, sendBatchEvents } = setup();
     let resolve!: (ok: boolean) => void;
     sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
     await delivery.send(event(1), profile);
@@ -226,21 +249,91 @@ describe('AnalyticsDelivery', () => {
 
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(delivery.queuedEventCount).toBe(1);
-    delivery.destroy();
+    void owner.destroy();
   });
 
-  it('forgets an active flush when the queue is cleared, so a new flush can start', async () => {
-    const { delivery, sendBatchEvents } = setup();
+  it('forgets an active flush when the owner resets, so a new flush can start', async () => {
+    const { delivery, owner, sendBatchEvents } = setup();
     sendBatchEvents.mockReturnValueOnce(new Promise<boolean>(() => undefined));
     await delivery.send(event(1), profile);
     void delivery.flush();
-    delivery.clearQueue();
+    owner.reset();
 
     await delivery.send(event(2), profile);
     await delivery.flush({ force: true });
 
     expect(sendBatchEvents).toHaveBeenCalledTimes(2);
     expect(delivery.queuedEventCount).toBe(0);
-    delivery.destroy();
+    void owner.destroy();
+  });
+
+  describe('owner-provided lifecycle, as Optimization InsightsQueue', () => {
+    it('removes sent events by the batch snapshot, keeping events added in flight', async () => {
+      const { delivery, owner, sendBatchEvents } = setup();
+      let resolve!: (ok: boolean) => void;
+      sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+      await delivery.send(event(1), profile);
+      await delivery.send(event(2), { id: 'profile-2' });
+
+      const flushing = delivery.flush();
+      // Appended while the snapshot is on the wire: must survive the success.
+      await delivery.send(event(3), profile);
+      await delivery.send(event(4), { id: 'profile-3' });
+      resolve(true);
+      await flushing;
+
+      expect(sendBatchEvents.mock.calls[0]?.[0]).toEqual([
+        { profile, events: [event(1)] },
+        { profile: { id: 'profile-2' }, events: [event(2)] },
+      ]);
+      expect(delivery.queuedEventCount).toBe(2);
+      void owner.destroy();
+    });
+
+    it('does not apply an attempt the owner reset while it was in flight', async () => {
+      const { delivery, owner, sendBatchEvents } = setup();
+      let resolve!: (ok: boolean) => void;
+      sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+      await delivery.send(event(1), profile);
+      const flushing = delivery.flush();
+
+      owner.reset();
+      await delivery.send(event(2), profile);
+      resolve(true);
+      await flushing;
+
+      // The stale success must not remove the event queued after the reset.
+      expect(delivery.queuedEventCount).toBe(1);
+      void owner.destroy();
+    });
+
+    it('sends the final flush on destroy but ignores its late result', async () => {
+      vi.useFakeTimers();
+      const { delivery, owner, sendBatchEvents } = setup();
+      let resolve!: (ok: boolean) => void;
+      sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
+      await delivery.send(event(1), profile);
+
+      const drain = owner.destroy();
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+      resolve(false);
+      await drain;
+
+      // A late failure after destroy schedules no retry and leaves no timers.
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses events and skips flushing once the owner token is gone', async () => {
+      const { delivery, owner, sendBatchEvents } = setup();
+      await owner.destroy();
+
+      await delivery.send(event(1), profile);
+      await delivery.flush({ force: true });
+
+      expect(delivery.queuedEventCount).toBe(0);
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+    });
   });
 });

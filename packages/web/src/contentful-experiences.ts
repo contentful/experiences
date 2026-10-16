@@ -156,6 +156,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly #currentPage = new AcceptedCurrentPageTracker();
   #generation = 0;
   #destroyed = false;
+  /**
+   * Lifecycle token the Analytics queue reads, as in Optimization's CoreStateful. Reset and
+   * consent withdrawal replace it; destroy() makes it read `undefined`.
+   */
+  #resetToken: object = {};
   #online = globalThis.navigator?.onLine !== false;
   readonly #eventMethods: RuntimeEventMethods;
   readonly #handleOnline = (): void => {
@@ -243,6 +248,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#analytics = analytics = new AnalyticsDelivery({
         api: this.optimizationApi.analytics,
         getOnline: () => this.#online,
+        getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
         flushPolicy: resolvedQueuePolicy.flush,
       });
       this.#eventMethods = this.createEventMethods(
@@ -291,7 +297,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       }
       try {
         if (delivery !== undefined) flushPersonalizationOnDestroy(delivery);
-        analytics?.destroy();
+        if (analytics !== undefined) {
+          this.#destroyed = true;
+          analytics.clearPeriodicFlushTimer();
+          analytics.clearScheduledRetry();
+        }
       } finally {
         try {
           super.destroy();
@@ -334,7 +344,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     // Optimization SDK; a persistence-only change leaves the queue alone.
     if (next.events === false) {
       this.#delivery.clearQueue();
-      this.#analytics.clearQueue();
+      this.#resetToken = {};
+      this.#analytics.clearQueuedEvents();
       this.#store.invalidateInFlight();
       // A discarded queued page must not leave its route looking admitted, or a later
       // permitted attempt for the same route would be answered from the cache and
@@ -413,7 +424,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     this.#currentPage.reset();
     this.#setAdoptedProfileId(undefined);
     this.#delivery.reset();
-    this.#analytics.reset();
+    this.#resetToken = {};
+    this.#analytics.clearQueuedEvents();
     this.#store.reset();
     this.#identity.clear();
   }
@@ -421,7 +433,20 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   /** Stop browser-owned work before releasing SDK ownership. */
   override destroy(): void {
     if (this.#destroyed) return;
+    // As in Optimization's CoreStateful.destroy(), start the final forced flushes while the
+    // lifecycle token is still live, then end the lifetime and cancel the queue timers. The
+    // Analytics request captures the live token, so it is sent, and its late result no
+    // longer applies once the token reads `undefined`.
+    void this.#analytics.flush({ force: true }).catch((error: unknown) => {
+      console.warn(
+        '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
+        error
+      );
+    });
+    flushPersonalizationOnDestroy(this.#delivery);
     this.#destroyed = true;
+    this.#analytics.clearPeriodicFlushTimer();
+    this.#analytics.clearScheduledRetry();
     this.#generation += 1;
     this.#currentInitialization = undefined;
     this.#currentPage.reset();
@@ -432,8 +457,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       }
       this.#cleanupVisibilityListener?.();
       this.#cleanupVisibilityListener = undefined;
-      flushPersonalizationOnDestroy(this.#delivery);
-      this.#analytics.destroy();
       this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;

@@ -19,6 +19,12 @@ type QueuedProfileEvents = { profile: EventProfile; events: AnalyticsEvent[] };
 interface AnalyticsDeliveryOptions {
   readonly api: AnalyticsApi;
   readonly getOnline: () => boolean;
+  /**
+   * The owning runtime's lifecycle token, as in Optimization's InsightsQueue. The owner
+   * replaces it to invalidate in-flight work and returns `undefined` once destroyed; the
+   * queue has no lifecycle of its own.
+   */
+  readonly getResetToken?: () => object | undefined;
   /** Internal override for deterministic tests. */
   readonly maxEvents?: number;
   readonly flushPolicy: ResolvedQueueFlushPolicy;
@@ -42,13 +48,14 @@ export class AnalyticsDelivery {
   readonly #flushIntervalMs: number;
   readonly #flushRuntime: QueueFlushRuntime;
   readonly #queued = new Map<string, QueuedProfileEvents>();
+  readonly #getResetToken: () => object | undefined;
   #activeFlush: Promise<void> | undefined;
   #periodicTimer: ReturnType<typeof setInterval> | undefined;
-  #token: object | undefined = {};
 
   constructor(options: AnalyticsDeliveryOptions) {
     this.#api = options.api;
     this.#getOnline = options.getOnline;
+    this.#getResetToken = options.getResetToken ?? (() => this);
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
     const policy = options.flushPolicy;
     this.#flushIntervalMs = policy.flushIntervalMs;
@@ -77,7 +84,8 @@ export class AnalyticsDelivery {
    * flush keeps its events for retry and is not reported through the return value.
    */
   async send(event: AnalyticsEvent, profile: EventProfile): Promise<void> {
-    if (this.#token === undefined) return;
+    const token = this.#getResetToken();
+    if (token === undefined) return;
 
     const queued = this.#queued.get(profile.id);
     if (queued) {
@@ -104,18 +112,16 @@ export class AnalyticsDelivery {
       await this.#activeFlush;
       return;
     }
-    const token = this.#token;
-    if (token === undefined) return;
-    if (this.#flushRuntime.shouldSkip({ force, isOnline: this.#getOnline() })) return;
+    if (
+      this.#flushRuntime.shouldSkip({
+        force,
+        isOnline: this.#getOnline() && this.#getResetToken() !== undefined,
+      })
+    ) {
+      return;
+    }
 
-    // Snapshot how many events each profile contributes so that events queued while the
-    // request is in flight are kept, not dropped with the batch that was sent.
-    const sent = new Map<string, number>();
-    const batches: BatchInsightsEventArray = [];
-    this.#queued.forEach(({ profile, events }, id) => {
-      sent.set(id, events.length);
-      batches.push({ profile, events: [...events] });
-    });
+    const batches = this.#createBatches();
 
     if (batches.length === 0) {
       this.#flushRuntime.clearScheduledRetry();
@@ -123,7 +129,8 @@ export class AnalyticsDelivery {
       return;
     }
 
-    const attempt = this.#flushAttempt(batches, sent, beacon, token);
+    const token = this.#getResetToken();
+    const attempt = this.#flushAttempt(batches, beacon, token);
     this.#activeFlush = attempt;
     try {
       await attempt;
@@ -134,17 +141,16 @@ export class AnalyticsDelivery {
 
   async #flushAttempt(
     batches: BatchInsightsEventArray,
-    sent: ReadonlyMap<string, number>,
     beacon: AnalyticsFlushOptions['beacon'],
-    token: object
+    token: object | undefined
   ): Promise<void> {
     this.#flushRuntime.markFlushStarted();
-    const isCurrent = (): boolean => token === this.#token;
+    const isCurrent = (): boolean => token !== undefined && token === this.#getResetToken();
     try {
       const success = await this.#trySend(batches, beacon ? { beacon } : undefined);
       if (!isCurrent()) return;
       if (success) {
-        this.#discardSent(sent);
+        this.#removeSentEvents(batches);
         this.#flushRuntime.handleFlushSuccess();
       } else {
         this.#flushRuntime.handleFlushFailure({
@@ -161,31 +167,20 @@ export class AnalyticsDelivery {
   }
 
   /**
-   * Drops queued events and cancels retries and the periodic timer, leaving the delivery
-   * live. A request on the wire cannot be recalled, but it no longer affects this queue.
-   * Used when event consent is withdrawn and on `reset()`.
+   * Drop queued events and reset retry state, as Optimization's
+   * InsightsQueue.clearQueuedEvents(). The owner invalidates in-flight work by replacing
+   * its reset token; a request on the wire cannot be recalled but can no longer apply.
    */
-  clearQueue(): void {
-    if (this.#token === undefined) return;
-    this.#token = {};
-    this.#activeFlush = undefined;
+  clearQueuedEvents(): void {
     this.#queued.clear();
     this.#flushRuntime.reset();
-    this.#clearPeriodicTimer();
+    this.#activeFlush = undefined;
+    this.#reconcilePeriodicTimer();
   }
 
-  reset(): void {
-    this.clearQueue();
-  }
-
-  /** Make a final forced attempt at queued events, then stop accepting new ones. */
-  destroy(): void {
-    if (this.#token === undefined) return;
-    this.#flushRuntime.clearScheduledRetry();
+  /** Cancel the periodic flush timer, as Optimization's InsightsQueue does on destroy. */
+  clearPeriodicFlushTimer(): void {
     this.#clearPeriodicTimer();
-    const drain = this.flush({ force: true });
-    this.#token = undefined;
-    void drain.catch(() => undefined).finally(() => this.#queued.clear());
   }
 
   async #trySend(
@@ -202,13 +197,21 @@ export class AnalyticsDelivery {
     }
   }
 
-  #discardSent(sent: ReadonlyMap<string, number>): void {
-    sent.forEach((count, id) => {
-      const queued = this.#queued.get(id);
-      if (queued === undefined) return;
-      queued.events.splice(0, count);
-      if (queued.events.length === 0) this.#queued.delete(id);
+  #removeSentEvents(batches: BatchInsightsEventArray): void {
+    for (const { profile, events } of batches) {
+      const queued = this.#queued.get(profile.id);
+      if (queued === undefined) continue;
+      queued.events.splice(0, events.length);
+      if (queued.events.length === 0) this.#queued.delete(profile.id);
+    }
+  }
+
+  #createBatches(): BatchInsightsEventArray {
+    const batches: BatchInsightsEventArray = [];
+    this.#queued.forEach(({ profile, events }) => {
+      batches.push({ profile, events: [...events] });
     });
+    return batches;
   }
 
   #ensurePeriodicTimer(): void {
