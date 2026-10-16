@@ -10,7 +10,7 @@
 
 import type { ReactNode } from 'react';
 
-import { useExperience } from './context';
+import { useExperience } from './context.js';
 
 export interface MissingComponentProps {
   componentId: string;

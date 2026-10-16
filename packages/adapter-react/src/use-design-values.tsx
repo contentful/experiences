@@ -1,6 +1,6 @@
 'use client';
 
-import { useResolvedDesign } from './context';
+import { useResolvedDesign } from './context.js';
 
 /**
  * Read the current node's token-resolved design values. Returns `{}` when

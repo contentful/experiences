@@ -1,1 +1,1 @@
-export { CSS_PROPERTIES, isCssProperty, toCssKey } from './css-properties';
+export { CSS_PROPERTIES, isCssProperty, toCssKey } from './css-properties.js';
