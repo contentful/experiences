@@ -221,6 +221,9 @@ describe('paired Node preparation and Web delivery', () => {
     expect(upsert.mock.calls[1]?.[0].profileId).toBe('issued-profile');
     expect(upsert.mock.calls[1]?.[0].events).toEqual(prepared.handoff.replay?.events);
     await browser.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+    // The replayed delivery is held open, so start the flush and wait for Analytics.
+    void browser.flush();
+    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
     expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('issued-profile');
 
     delivery.resolve({ profile: { id: 'committed-profile' } });

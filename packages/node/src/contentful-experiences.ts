@@ -16,7 +16,9 @@ import {
   type EventEmissionResult,
   type EventOptimizationData,
   type EventProfile,
+  type ExperienceRequestOptions,
   type ExperiencesHandoff,
+  type InsightsRequestOptions,
   type IdentifyBuilderArgs,
   type InitialPersonalizationEvent,
   type PageViewBuilderArgs,
@@ -60,7 +62,21 @@ export type ExperiencesNodeRequestContext = {
   consent?: ConsentInput;
   /** @deprecated Use `consent.events`. Ignored when `consent.events` is set. */
   eventConsent?: boolean;
+  /**
+   * Experience API options shared by Personalization calls made through this request, such
+   * as the visitor's `ip` (the API otherwise analyses the server's IP). A request `locale`
+   * takes precedence over `experienceOptions.locale`.
+   */
+  experienceOptions?: ExperiencesNodeExperienceOptions;
+  /** Insights API options shared by Analytics calls made through this request. */
+  insightsOptions?: ExperiencesNodeInsightsOptions;
 };
+
+/** Request-bound Experience API options for stateless requests. */
+export type ExperiencesNodeExperienceOptions = ExperienceRequestOptions;
+
+/** Request-bound Insights API options for stateless requests. */
+export type ExperiencesNodeInsightsOptions = InsightsRequestOptions;
 
 export type PrepareRequestHandoffOptions = {
   /** Visible pathname plus search, beginning with `/`. */
@@ -80,7 +96,7 @@ type PreparedPersonalizationEvent = NonNullable<ExperiencesHandoff['replay']>['e
 type PreflightPersonalizationEvents = (
   profileId: string | undefined,
   events: readonly PreparedPersonalizationEvent[],
-  locale: string | undefined
+  options: ExperienceRequestOptions
 ) => Promise<EventOptimizationData>;
 
 type NodePersonalizationMethods = {
@@ -142,10 +158,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     return new RequestBoundExperiences(
       this,
       context,
-      (profileId, events, locale) =>
+      (profileId, events, options) =>
         this.optimizationApi.personalization.upsertProfile(
           { profileId, events: [...events] },
-          { locale, preflight: true }
+          { ...options, preflight: true }
         ),
       (bindings) => this.createEventMethods(bindings),
       this.#consentPolicy
@@ -159,6 +175,10 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   #profileRevision = 0;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
+  /** Copied at construction so a caller mutating the originals cannot leak into this request. */
+  readonly #experienceOptions: ExperiencesNodeExperienceOptions | undefined;
+  readonly #insightsOptions: ExperiencesNodeInsightsOptions | undefined;
+  readonly #personalizationLocale: string | undefined;
 
   readonly identify: NodePersonalizationMethods['identify'];
   readonly page: NodePersonalizationMethods['page'];
@@ -175,7 +195,22 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     createEventMethods: (bindings: RuntimeEventBindings) => RuntimeEventMethods,
     private readonly consentPolicy: ConsentPolicy
   ) {
+    const { experienceOptions, insightsOptions } = context;
+    this.#experienceOptions =
+      experienceOptions === undefined
+        ? undefined
+        : {
+            ip: experienceOptions.ip,
+            plainText: experienceOptions.plainText,
+            locale: experienceOptions.locale,
+          };
+    this.#insightsOptions = insightsOptions === undefined ? undefined : { ...insightsOptions };
+    // Content locale comes from the request and the runtime default only, as in Optimization's
+    // stateless request. `experienceOptions.locale` is a Personalization transport option.
     this.locale = context.locale ?? runtime.locale;
+    // Personalization transport locale: the request locale wins over the transport option.
+    this.#personalizationLocale =
+      context.locale ?? this.#experienceOptions?.locale ?? runtime.locale;
     this.#profile = context.profile;
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
@@ -185,8 +220,11 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getProfile: () => this.#profile,
       setProfile: (profile) => this.setProfile(profile),
       getProfileRevision: () => this.#profileRevision,
-      getLocale: () => this.locale,
+      getLocale: () => this.#personalizationLocale,
       getEventContext: () => this.getRequestEventContext(),
+      getExperienceOptions: () => this.#experienceOptions,
+      getInsightsOptions: () => this.#insightsOptions,
+      requireProfile: true,
       getConsent: () => this.#consent,
       allowedEventTypes: consentPolicy.allowedEventTypes,
       onEventBlocked: consentPolicy.onEventBlocked,
@@ -242,7 +280,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       return { handoff };
     }
 
-    const locale = this.locale;
+    const locale = this.#personalizationLocale;
     // The envelope and batch have already been validated; retain the prepared bodies.
     const preparedHandoff: ExperiencesHandoff = {
       ...handoff,
@@ -250,7 +288,10 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     };
     const profileRevision = this.#profileRevision;
     try {
-      const data = await this.preflightPersonalizationEvents(incomingProfileId, events, locale);
+      const data = await this.preflightPersonalizationEvents(incomingProfileId, events, {
+        ...this.#experienceOptions,
+        locale,
+      });
       if (this.#profileRevision === profileRevision) this.setProfile(data.profile);
       return {
         handoff: {

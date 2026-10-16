@@ -4,6 +4,7 @@ import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
+import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 import { buildPreparedEvents } from './prepared-events.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
@@ -39,6 +40,7 @@ function fixture(options: { online?: boolean; profileId?: string; maxEvents?: nu
     getProfileId: () => profileId,
     getProfileRevision: () => revision,
     getOnline: () => online,
+    flushPolicy: resolveQueueFlushPolicy(undefined),
     publishQueuedData,
     maxEvents: options.maxEvents,
   });
@@ -259,22 +261,25 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
     expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
 
+    // Joiners await the active attempt, as in Optimization: no new request starts, and each
+    // joiner settles only when the drain does.
     const drain = f.delivery.flush({ force: true });
-    expect(f.delivery.flush()).toBe(drain);
-    expect(f.delivery.flush({ force: true })).toBe(drain);
+    const joiners = [f.delivery.flush(), f.delivery.flush({ force: true })];
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
 
     let settled = false;
-    void drain.then(() => {
+    void Promise.all([drain, ...joiners]).then(() => {
       settled = true;
     });
     firstResponse.resolve(data('continuation-id'));
     await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
     expect(settled).toBe(false);
-    expect(f.delivery.flush({ force: true })).toBe(drain);
+    const lateJoiner = f.delivery.flush({ force: true });
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     secondResponse.resolve(data('continuation-id'));
-    await drain;
+    await Promise.all([drain, ...joiners, lateJoiner]);
     expect(settled).toBe(true);
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
@@ -312,10 +317,13 @@ describe('PersonalizationDelivery', () => {
     await staleDrain;
     expect(f.delivery.queuedEventCount).toBe(replacement.length);
     expect(f.publishQueuedData).not.toHaveBeenCalled();
-    expect(f.delivery.flush({ force: true })).toBe(replacementDrain);
+    // A later flush joins the replacement attempt instead of starting another request.
+    const joiner = f.delivery.flush({ force: true });
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
 
     replacementResponse.resolve(data('replacement-id'));
-    await replacementDrain;
+    await Promise.all([replacementDrain, joiner]);
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     expect(f.delivery.queuedEventCount).toBe(0);
     expect(f.publishQueuedData).toHaveBeenCalledExactlyOnceWith(data('replacement-id'));
   });
@@ -340,6 +348,11 @@ describe('PersonalizationDelivery', () => {
   it('uses the first response ID for a second batch without a captured ID', async () => {
     const response = deferred<OptimizationData>();
     const f = fixture();
+    // The owner adopts each published response as the current profile, as Web does; the
+    // next live batch then reads it, as Optimization's live batches read profileSignal.
+    f.publishQueuedData.mockImplementation((published: OptimizationData) =>
+      f.setProfile(published.profile.id)
+    );
     f.upsertProfile.mockReturnValueOnce(response.promise);
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
@@ -348,7 +361,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.upsertProfile.mock.calls[1]?.[0].profileId).toBe('new-id');
   });
 
-  it.each(['reset', 'destroy'] as const)(
+  it.each(['reset', 'flushOnDestroy'] as const)(
     '%s prevents stale in-flight publication and retries',
     async (action) => {
       vi.useFakeTimers();
@@ -356,14 +369,14 @@ describe('PersonalizationDelivery', () => {
       const f = fixture();
       f.upsertProfile.mockReturnValueOnce(response.promise);
       expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
-      f.delivery[action]();
+      void f.delivery[action]();
       response.resolve(data('stale'));
       await vi.runAllTimersAsync();
       expect(f.publishQueuedData).not.toHaveBeenCalled();
       expect(f.delivery.state).toEqual({ status: 'idle' });
       expect(f.delivery.queuedEventCount).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
-      if (action === 'destroy')
+      if (action === 'flushOnDestroy')
         expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
     }
   );
@@ -376,7 +389,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(events)).toEqual({ accepted: true });
     expect(f.upsertProfile).not.toHaveBeenCalled();
 
-    f.delivery.destroy();
+    void f.delivery.flushOnDestroy();
     expect(f.upsertProfile).toHaveBeenCalledExactlyOnceWith(
       { profileId: undefined, events },
       { preflight: false, locale: undefined }
@@ -396,7 +409,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(first, { locale: 'de-DE' })).toEqual({ accepted: true });
     expect(f.delivery.sendPrepared(second, { locale: 'fr-FR' })).toEqual({ accepted: true });
 
-    f.delivery.destroy();
+    void f.delivery.flushOnDestroy();
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
     await expect(f.delivery.send(builder.buildTrack({ event: 'late' }))).resolves.toEqual({
@@ -423,7 +436,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(first, { locale: 'de-DE' })).toEqual({ accepted: true });
     expect(f.delivery.sendPrepared(second, { locale: 'fr-FR' })).toEqual({ accepted: true });
 
-    f.delivery.destroy();
+    void f.delivery.flushOnDestroy();
     firstResponse.resolve(data('continuation-id'));
     await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
@@ -437,7 +450,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
     expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
 
-    f.delivery.destroy();
+    void f.delivery.flushOnDestroy();
     const drain = f.delivery.flush();
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
     f.delivery.reset();
@@ -462,7 +475,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
 
     try {
-      f.delivery.destroy();
+      void f.delivery.flushOnDestroy();
       await vi.runAllTimersAsync();
       expect(f.upsertProfile).toHaveBeenCalledTimes(1);
       expect(f.delivery.queuedEventCount).toBe(0);
@@ -480,5 +493,215 @@ describe('PersonalizationDelivery', () => {
     } finally {
       logger.removeSink(sink.name);
     }
+  });
+
+  describe('flushOnDestroy, following Optimization ExperienceQueue', () => {
+    it('makes one forced attempt with no active attempt, even offline', async () => {
+      const f = fixture({ online: false });
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+
+      await f.delivery.flushOnDestroy();
+
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.delivery.queuedEventCount).toBe(0);
+      expect(f.publishQueuedData).not.toHaveBeenCalled();
+    });
+
+    it('joins an active attempt instead of starting a duplicate', async () => {
+      const response = deferred<OptimizationData>();
+      const f = fixture();
+      f.upsertProfile.mockReturnValueOnce(response.promise);
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+
+      const teardown = f.delivery.flushOnDestroy();
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+
+      response.resolve(data('late'));
+      await teardown;
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.publishQueuedData).not.toHaveBeenCalled();
+    });
+
+    it('lets concurrent flush callers join the teardown drain without new requests', async () => {
+      const response = deferred<OptimizationData>();
+      const f = fixture({ online: false });
+      f.upsertProfile.mockReturnValueOnce(response.promise);
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+
+      const teardown = f.delivery.flushOnDestroy();
+      let settledCount = 0;
+      const joiners = [f.delivery.flush(), f.delivery.flush({ force: true })].map((joiner) =>
+        joiner.then(() => {
+          settledCount += 1;
+        })
+      );
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      // While the drain's request is outstanding, no joiner has settled: they wait on it.
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      expect(settledCount).toBe(0);
+
+      response.resolve(data('late'));
+      await Promise.all([teardown, ...joiners]);
+      expect(settledCount).toBe(2);
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let a flush start new work once teardown has finished', async () => {
+      const f = fixture({ online: false });
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+      await f.delivery.flushOnDestroy();
+
+      await f.delivery.flush({ force: true });
+
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
+    });
+
+    it('stops a failed teardown drain without retrying', async () => {
+      vi.useFakeTimers();
+      const f = fixture({ online: false });
+      f.upsertProfile.mockRejectedValueOnce(new Error('network'));
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+
+      await f.delivery.flushOnDestroy();
+      // No retry is scheduled for a failed teardown drain, as in Optimization.
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.runAllTimersAsync();
+
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(f.delivery.state).toEqual({ status: 'idle' });
+    });
+
+    it('cancels the remaining drain when reset follows teardown', async () => {
+      const first = deferred<OptimizationData>();
+      const f = fixture({ online: false });
+      f.upsertProfile.mockReturnValueOnce(first.promise);
+      expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
+      expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
+
+      const teardown = f.delivery.flushOnDestroy();
+      f.delivery.reset();
+      first.resolve(data('late'));
+      await teardown;
+
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.publishQueuedData).not.toHaveBeenCalled();
+    });
+
+    it('keeps a replacement delivery isolated from a draining one', async () => {
+      const draining = deferred<OptimizationData>();
+      const old = fixture({ online: false });
+      old.upsertProfile.mockReturnValueOnce(draining.promise);
+      expect(old.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
+      const teardown = old.delivery.flushOnDestroy();
+
+      const replacement = fixture();
+      expect(replacement.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
+      await vi.waitFor(() => expect(replacement.publishQueuedData).toHaveBeenCalledTimes(1));
+
+      draining.resolve(data('old-visitor'));
+      await teardown;
+      expect(old.publishQueuedData).not.toHaveBeenCalled();
+      expect(replacement.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(replacement.delivery.queuedEventCount).toBe(0);
+    });
+  });
+
+  describe('profile continuation is local to the current drain, as Optimization', () => {
+    it('sends a teardown drain under the captured current profile, not an older drain profile', async () => {
+      const f = fixture({ online: false });
+      f.publishQueuedData.mockImplementation((published: OptimizationData) =>
+        f.setProfile(published.profile.id)
+      );
+      // A completed drain under A.
+      f.upsertProfile.mockResolvedValueOnce(data('A'));
+      await f.delivery.send(builder.buildPageView());
+      f.setOnline(true);
+      await f.delivery.flush({ force: true });
+      // A newer direct response establishes B as the current profile.
+      f.upsertProfile.mockResolvedValueOnce(data('B'));
+      await f.delivery.send(builder.buildIdentify({ userId: 'user-1' }));
+      f.setProfile('B');
+      // An ordinary offline event, drained during destruction.
+      f.setOnline(false);
+      await f.delivery.send(builder.buildPageView());
+      f.upsertProfile.mockResolvedValueOnce(data('B'));
+      await f.delivery.flushOnDestroy();
+
+      expect(f.upsertProfile.mock.calls.at(-1)?.[0].profileId).toBe('B');
+    });
+
+    it('carries a teardown drain response to the next ordinary batch of the same drain', async () => {
+      const f = fixture({ online: false, profileId: 'captured' });
+      f.upsertProfile
+        .mockResolvedValueOnce(data('after-first'))
+        .mockResolvedValueOnce(data('after-second'))
+        .mockResolvedValueOnce(data('after-third'));
+      // Three batches: ordinary, prepared, ordinary. The prepared one splits the two.
+      await f.delivery.send(builder.buildTrack({ event: 'first' }));
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+      await f.delivery.send(builder.buildTrack({ event: 'third' }));
+
+      await f.delivery.flushOnDestroy();
+
+      // The drain starts from the captured identity, then follows its own latest response,
+      // as Optimization does with `profileId = data?.profile.id ?? profileId`.
+      expect(f.upsertProfile.mock.calls[0]?.[0].profileId).toBe('captured');
+      expect(f.upsertProfile.mock.calls[2]?.[0].profileId).toBe('after-second');
+    });
+  });
+
+  describe('late direct requests vs authorized teardown deliveries, as Optimization', () => {
+    it('resolves { accepted: true } without data when a direct request fails after destroy', async () => {
+      let reject!: (error: unknown) => void;
+      const failing = new Promise<OptimizationData>((_, r) => (reject = r));
+      const f = fixture({ profileId: 'visitor' });
+      f.upsertProfile.mockReturnValueOnce(failing);
+      const result = f.delivery.send(builder.buildPageView());
+
+      await f.delivery.flushOnDestroy();
+      reject(new Error('network'));
+
+      await expect(result).resolves.toEqual({ accepted: true });
+      expect(f.delivery.state).toEqual({ status: 'idle' });
+    });
+
+    it('resolves { accepted: true } without data when a direct request succeeds after destroy', async () => {
+      const response = deferred<OptimizationData>();
+      const f = fixture({ profileId: 'visitor' });
+      f.upsertProfile.mockReturnValueOnce(response.promise);
+      const result = f.delivery.send(builder.buildPageView());
+
+      await f.delivery.flushOnDestroy();
+      response.resolve(data('late'));
+
+      await expect(result).resolves.toEqual({ accepted: true });
+      expect(f.publishQueuedData).not.toHaveBeenCalled();
+    });
+
+    it('keeps a queued teardown request authorized to drain, and surfaces its failure to the drain', async () => {
+      const f = fixture({ online: false });
+      f.upsertProfile.mockRejectedValueOnce(new Error('network'));
+      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+
+      // The drain is authorized: it sends, and its failure ends the drain rather than vanishing.
+      await f.delivery.flushOnDestroy();
+
+      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+      expect(f.delivery.queuedEventCount).toBe(0);
+    });
+
+    it('still delivers a live direct request normally before destroy', async () => {
+      const f = fixture({ profileId: 'visitor' });
+      f.upsertProfile.mockResolvedValueOnce(data('live'));
+
+      await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({
+        accepted: true,
+        data: data('live'),
+      });
+    });
   });
 });

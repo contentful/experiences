@@ -488,9 +488,9 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile).toHaveBeenCalledTimes(2);
     expect(upsertProfile.mock.calls[1]?.[0]).toMatchObject({ profileId: 'updated-profile' });
     expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
-    expect(await request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })).toBe(
-      true
-    );
+    await expect(
+      request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+    ).resolves.toBeUndefined();
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
 
@@ -840,6 +840,221 @@ describe('Node ContentfulExperiences', () => {
         );
 
       expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({ events: [track] });
+    });
+  });
+
+  describe('request-scoped submission options', () => {
+    it('forwards Experience API ip, plainText and locale on a direct Personalization call', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const request = runtime.forRequest({
+        consent: true,
+        experienceOptions: { ip: '203.0.113.7', plainText: true },
+      });
+
+      await request.page();
+
+      expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), {
+        ip: '203.0.113.7',
+        plainText: true,
+        locale: 'en-US',
+      });
+    });
+
+    it('keeps separate request facades from leaking options into each other', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const first = runtime.forRequest({
+        consent: true,
+        experienceOptions: { ip: '203.0.113.1' },
+      });
+      const second = runtime.forRequest({
+        consent: true,
+        experienceOptions: { ip: '203.0.113.2', plainText: true },
+      });
+      const third = runtime.forRequest({ consent: true });
+
+      await Promise.all([first.page(), second.page(), third.page()]);
+
+      const optionsByCall = upsertProfile.mock.calls.map(([, options]) => options);
+      expect(optionsByCall).toContainEqual({
+        ip: '203.0.113.1',
+        plainText: undefined,
+        locale: 'en-US',
+      });
+      expect(optionsByCall).toContainEqual({ ip: '203.0.113.2', plainText: true, locale: 'en-US' });
+      expect(optionsByCall).toContainEqual({ locale: 'en-US' });
+      expect(optionsByCall).toHaveLength(3);
+    });
+
+    it('copies options at construction so later mutation cannot change a request', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const experienceOptions = { ip: '203.0.113.1' };
+      const request = runtime.forRequest({ consent: true, experienceOptions });
+
+      experienceOptions.ip = '198.51.100.99';
+      await request.page();
+
+      expect(upsertProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ ip: '203.0.113.1' })
+      );
+    });
+
+    it('lets the request locale take precedence over experienceOptions.locale', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const request = runtime.forRequest({
+        consent: true,
+        locale: 'de-DE',
+        experienceOptions: { locale: 'fr-FR' },
+      });
+
+      await request.page();
+
+      // The request locale is the content locale and also wins as the transport locale.
+      expect(request.locale).toBe('de-DE');
+      expect(upsertProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ locale: 'de-DE' })
+      );
+    });
+
+    it('uses experienceOptions.locale for Personalization only, not for content', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const fetchExperience = vi
+        .spyOn(runtime, 'fetchExperience')
+        .mockImplementation(async (options) => ({ locale: options.locale }) as never);
+      const request = runtime.forRequest({
+        consent: true,
+        experienceOptions: { locale: 'fr-FR' },
+      });
+
+      // The request (content) locale stays on the runtime default, as in Optimization.
+      expect(request.locale).toBe('en-US');
+
+      await request.fetchExperience({ experienceId: 'landing' }, { config: resolverConfig });
+      expect(fetchExperience.mock.calls[0]?.[0].locale).toBe('en-US');
+
+      await request.page();
+      expect(upsertProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ locale: 'fr-FR' })
+      );
+    });
+
+    it('uses experienceOptions.locale for the handoff preview and replay, not content', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const request = runtime.forRequest({
+        consent: true,
+        experienceOptions: { locale: 'fr-FR' },
+      });
+
+      const result = await request.prepareRequestHandoff({ routeKey: '/landing' });
+
+      expect(upsertProfile.mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ locale: 'fr-FR', preflight: true })
+      );
+      expect(result.handoff.replay?.locale).toBe('fr-FR');
+      expect(request.locale).toBe('en-US');
+    });
+
+    it('forwards ip and plainText on the handoff preview and still previews without committing', async () => {
+      const { runtime, upsertProfile } = createEventRuntime();
+      const request = runtime.forRequest({
+        consent: true,
+        experienceOptions: { ip: '203.0.113.7', plainText: true },
+      });
+
+      await request.prepareRequestHandoff({ routeKey: '/landing' });
+
+      expect(upsertProfile).toHaveBeenCalledTimes(1);
+      expect(upsertProfile.mock.calls[0]?.[1]).toEqual({
+        ip: '203.0.113.7',
+        plainText: true,
+        locale: 'en-US',
+        preflight: true,
+      });
+    });
+
+    it('forwards the Insights beacon to a direct Analytics send', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const beacon = vi.fn(() => true);
+      const request = runtime.forRequest({
+        consent: true,
+        profile: { id: 'visitor' },
+        insightsOptions: { beacon },
+      });
+
+      await request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' });
+
+      expect(sendBatchEvents).toHaveBeenCalledWith(expect.any(Array), { beacon });
+    });
+
+    it('calls Insights with a single argument when a request sets no insightsOptions', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
+
+      await request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' });
+
+      expect(sendBatchEvents.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('keeps requiring a profile for stateless Analytics calls', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: true });
+
+      await expect(
+        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+      ).rejects.toBeInstanceOf(EventProfileRequiredError);
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+    });
+
+    it('resolves with no result for a consent-blocked Analytics call and reports it', async () => {
+      const onEventBlocked = vi.fn();
+      const { runtime, sendBatchEvents } = createEventRuntime({ onEventBlocked });
+      const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
+
+      await expect(
+        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+      ).resolves.toBeUndefined();
+
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackClick' })
+      );
+    });
+
+    it('resolves a failed Insights transport the same as a successful one in Node', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      sendBatchEvents.mockResolvedValueOnce(false);
+      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
+
+      await expect(
+        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('trackView acceptance result', () => {
+    const view = {
+      entityId: 'entry',
+      entityKind: 'InlineComponent' as const,
+      viewId: 'v1',
+      viewDurationMs: 1000,
+    };
+
+    it('resolves { accepted: true } for an admitted view', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
+
+      await expect(request.trackView(view)).resolves.toEqual({ accepted: true });
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves { accepted: false } for a consent-blocked view', async () => {
+      const { runtime, sendBatchEvents } = createEventRuntime();
+      const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
+
+      await expect(request.trackView(view)).resolves.toEqual({ accepted: false });
+      expect(sendBatchEvents).not.toHaveBeenCalled();
     });
   });
 });

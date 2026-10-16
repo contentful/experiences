@@ -293,7 +293,7 @@ a framework serializer.
 Prepared batches stay in Web's in-memory queue on transport failure and retry
 with their original event IDs, target identity, and locale. A request may have
 committed before a failure becomes visible, so retries do not guarantee
-exactly-once delivery. Analytics calls remain direct; there is no mixed
+exactly-once delivery. Web queues Analytics calls separately in memory; there is no mixed
 Personalization/Analytics replay journal or global ordinary-event barrier.
 No adapter or example currently wires this flow, and Live Preview remains
 independent.
