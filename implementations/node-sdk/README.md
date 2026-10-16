@@ -2,13 +2,56 @@
 
 This standalone Express/EJS implementation consumes `@contentful/experiences-node`
 from locally built npm tarballs. It has its own dependencies, configuration, and
-tooling, outside the root npm workspaces. The current scaffold imports the Node
-SDK and serves `GET /health`; Experience fetching, visitor scenarios, and rendered
-content are not yet implemented. It makes no Contentful requests.
+tooling, outside the root npm workspaces. It follows Optimization's Node reference
+flow: create a request facade, send a page event, optionally identify, then fetch
+content through the runtime and render it with EJS. `GET /health` makes no API calls.
+
+## Request flow
+
+`GET /` calls the request facade's `page()` method and then fetches the reference
+Experiences. `GET /?userId=charles` also calls `identify()` with that user ID and
+`traits: { identified: true }`, matching Optimization. A fixed identify user ID
+is acceptable; it is distinct from the API-issued profile ID.
+
+Profiles come only from Experience API/XDA responses. The SDK carries the profile
+between operations on the request facade. The app does not accept a profile-ID
+input, persist profiles, or add cookies or sessions. Page/identify events are not
+resent in content-fetch extensions. Requests assume `consent: true`, like the
+Optimization reference; this is not a consent-management implementation.
+
+The page shows the identify state and rendered Experience content. SDK exceptions
+produce a short error response. The app does not inspect raw XDA responses;
+application-level errors that the runtime does not surface remain an SDK limitation.
+Responses are private/no-store and profiles remain request-local. The rate limiter
+matches Optimization's 1000 requests per 30 seconds.
+
+## Rendering and differences from Optimization
+
+The EJS shell uses Optimization's CSS, including its font stack, 1040px width,
+spacing, centered gray panels, and fixed 75dvh rows. Branding and the Experiences
+section label reflect this SDK; the States/Identify interaction is unchanged.
+
+Experiences returns nested plans instead of CDA entries. The recursive `nodes.ejs` partial
+renders this space's title, Rich Text description, optional collection
+records, and slot children. Both delivered node types use those same fields.
+The SDK owns resolution; the template uses its resolved props and does not look up
+the management export. Rich Text documents are passed directly to Contentful's
+HTML renderer at the same version Optimization uses. Text and attributes use
+ordinary EJS escaping. There is no diagnostic UI or custom Rich Text handling.
+
+The existing `npm run mocks:generate:ctfl:types` command generates declarations
+from the local space export and copies them to `src/contentful-generated.d.ts`.
+Do not edit that copy. Its current output describes CDA entries, not the Experience
+component/template properties, so those declarations are not imported by this app.
+The app uses the SDK's `PortableRenderPlan` type; no local content interfaces are
+maintained. The installed generator is 3.0.1 and produces only CDA declarations;
+running it requires Node 24 or later. Custom Experience type generation is outside this task’s scope.
 
 ## Prerequisites
 
-- Node.js 22.13 or later; validation uses Node 24.15 and npm 12.0.2.
+- Node.js 24 or later for repository tooling, including content-type generation.
+  The standalone app declares Node.js 22.13 or later. Validation uses Node 24.15
+  and npm 12.0.2.
 - The repository's root dependencies installed with `npm ci`.
 
 ## Setup
@@ -28,10 +71,21 @@ Optimization's fresh local-artifact install workflow using npm and Nx.
 
 Setup creates `.env` from `.env.example` only when the file is missing. Populate
 this implementation's `.env` with `SPACE_ID`, `ENVIRONMENT_ID`, and `CDA_TOKEN`.
+Set `LOCALE` if different from `en-US`.
 Workers may gather these values from `lib/mocks/.contentfulrc.json` and
 `lib/mocks/.env` during setup. The app and its launch commands use only the local
 `.env`; they never read those source files. Do not copy the management token.
 Keep real credentials out of `.env.example` and Git.
+
+The default Experience IDs are fixed in source, matching Optimization's approach
+and shared by all reference implementations:
+
+- `6fQzPrHjFX25yTwi2Ic5gs` — Coded Experience
+- `6fm371os680MYgg0XThK2S` — Composed Experience
+
+Optionally set comma-separated `EXPERIENCE_IDS` in this implementation's `.env`
+to replace that list. An absent or blank value uses the defaults. These are
+content IDs; profile IDs continue to come only from the APIs through the SDK.
 
 After SDK changes, refresh the installed artifacts:
 
@@ -54,7 +108,7 @@ npx nx run implementation-node-sdk:restart
 npx nx run implementation-node-sdk:serve:stop  # deletes only this app's process
 ```
 
-The default health URL is `http://localhost:3100/health`. Set `PORT` in the local
+The default app URL is `http://localhost:3100/`; health is at `/health`. Set `PORT` in the local
 `.env` to change it. Both launch paths load that same file. The server binds to
 loopback. PM2 uses the name `experiences-node-sdk-app`. Run only one checkout with
 that process name at a time. Stop deletes that named process; PM2 reports an error

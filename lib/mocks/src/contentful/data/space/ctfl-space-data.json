@@ -1195,7 +1195,7 @@
         "id": "3SaCalGJq7Y3Y0e6QUMxxe",
         "type": "Entry",
         "createdAt": "2026-10-14T09:40:01.887Z",
-        "updatedAt": "2026-10-14T09:41:45.845Z",
+        "updatedAt": "2026-10-15T16:21:00.198Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -1203,8 +1203,8 @@
             "linkType": "Environment"
           }
         },
-        "publishedVersion": 9,
-        "publishedAt": "2026-10-14T09:41:45.845Z",
+        "publishedVersion": 13,
+        "publishedAt": "2026-10-15T16:21:00.198Z",
         "firstPublishedAt": "2026-10-14T09:41:45.845Z",
         "createdBy": {
           "sys": {
@@ -1220,8 +1220,8 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "publishedCounter": 1,
-        "version": 10,
+        "publishedCounter": 2,
+        "version": 14,
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -4870,7 +4870,7 @@
           }
         },
         "createdAt": "2026-10-14T10:56:29.224Z",
-        "updatedAt": "2026-10-14T11:07:15.840Z",
+        "updatedAt": "2026-10-16T11:30:37.917Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -4888,9 +4888,9 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-14T11:07:15.854Z",
-        "publishedVersion": 3,
-        "publishedCounter": 1,
+        "publishedAt": "2026-10-16T11:30:37.932Z",
+        "publishedVersion": 9,
+        "publishedCounter": 7,
         "firstPublishedAt": "2026-10-14T11:07:15.854Z",
         "publishedBy": {
           "sys": {
@@ -4908,7 +4908,7 @@
         },
         "automationTags": [
         ],
-        "version": 4
+        "version": 10
       },
       "name": "Personalized Coded Fragment",
       "description": "This is a personalized coded fragment.",
@@ -4960,7 +4960,7 @@
               }
             },
             "createdAt": "2026-10-14T10:57:25.393Z",
-            "updatedAt": "2026-10-14T11:06:59.248Z",
+            "updatedAt": "2026-10-16T11:36:53.487Z",
             "createdBy": {
               "sys": {
                 "type": "Link",
@@ -4978,15 +4978,15 @@
             "variant": "1925cd12-8d24-43e7-9a91-220004c5f5d8",
             "variantType": "personalization",
             "variantDimension": "default",
-            "publishedAt": "2026-10-14T10:59:37.920Z",
-            "publishedVersion": 2,
-            "publishedCounter": 1,
+            "publishedAt": "2026-10-16T11:36:53.513Z",
+            "publishedVersion": 8,
+            "publishedCounter": 2,
             "firstPublishedAt": "2026-10-14T10:59:37.920Z",
             "publishedBy": {
               "sys": {
                 "type": "Link",
                 "linkType": "User",
-                "id": "4QYnIIKna8TpXegJp3oSBi"
+                "id": "2ThAHYPA8kj7F1sHxUzXVt"
               }
             },
             "component": {
@@ -4998,7 +4998,7 @@
             },
             "automationTags": [
             ],
-            "version": 7
+            "version": 9
           },
           "name": "Personalized Coded Fragment",
           "description": "",

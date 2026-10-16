@@ -15,7 +15,6 @@ const SPACE_EXPORT_PATH = path.join(
 );
 const TEMP_OUTPUT_DIRECTORY = path.join(MOCKS_DIRECTORY, '.cache/contentful-types');
 const GENERATED_DEFINITION_PATH = path.join(MOCKS_DIRECTORY, 'src', GENERATED_FILENAME);
-const CONTENTFUL_V10_FLAG = '-X';
 const RESPONSE_TYPES_FLAG = '-r';
 
 function ensureSpaceExportExists(): void {
@@ -32,7 +31,7 @@ function generateRawTypes(): void {
 
   execFileSync(
     'cf-content-types-generator',
-    [SPACE_EXPORT_PATH, CONTENTFUL_V10_FLAG, RESPONSE_TYPES_FLAG, '--out', TEMP_OUTPUT_DIRECTORY],
+    [SPACE_EXPORT_PATH, RESPONSE_TYPES_FLAG, '--out', TEMP_OUTPUT_DIRECTORY],
     {
       cwd: MOCKS_DIRECTORY,
       stdio: 'inherit',
