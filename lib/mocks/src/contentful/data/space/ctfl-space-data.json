@@ -1640,6 +1640,129 @@
           }
         }
       }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "5OKN7BkA3xiHUpLyD7VnsG",
+        "type": "Entry",
+        "createdAt": "2026-10-16T15:12:04.819Z",
+        "updatedAt": "2026-10-16T15:12:05.371Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 1,
+        "publishedAt": "2026-10-16T15:12:05.371Z",
+        "firstPublishedAt": "2026-10-16T15:12:05.371Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 2,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "nt_experience"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5OKN7BkA3xiHUpLyD7VnsG"
+      },
+      "fields": {
+        "nt_name": {
+          "en-US": "Personalized Coded Fragment Personalization"
+        },
+        "nt_description": {
+          "en-US": "This is a personalized coded fragment personalization"
+        },
+        "nt_type": {
+          "en-US": "nt_personalization"
+        },
+        "nt_config": {
+          "en-US": {
+            "traffic": 1,
+            "distribution": [
+              0,
+              1
+            ],
+            "sticky": false,
+            "components": [
+              {
+                "baseline": {
+                  "id": "default",
+                  "entityId": "3wLhlciQgJWtR3D8ApSz98"
+                },
+                "variants": [
+                  {
+                    "id": "1925cd12-8d24-43e7-9a91-220004c5f5d8",
+                    "entityId": "3wLhlciQgJWtR3D8ApSz98"
+                  }
+                ],
+                "type": "FragmentReplacement"
+              }
+            ],
+            "primaryMetric": "fececd8c-d0bd-4a37-bea7-b2f68b782923"
+          }
+        },
+        "nt_audience": {
+          "en-US": {
+            "sys": {
+              "type": "Link",
+              "linkType": "Entry",
+              "id": "3SaCalGJq7Y3Y0e6QUMxxe"
+            }
+          }
+        },
+        "nt_experience_id": {
+          "en-US": "dfeeff0d-67b9-464e-80f8-96ebb8c168e5"
+        },
+        "nt_metadata": {
+          "en-US": {
+            "type": "origin"
+          }
+        }
+      }
     }
   ],
   "assets": [

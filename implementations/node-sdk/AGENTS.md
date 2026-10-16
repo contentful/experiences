@@ -10,9 +10,16 @@
 - Use `npx nx run implementation-node-sdk:<target>` from the root. Run setup or
   install after SDK artifacts change; never add workspace source aliases to bypass
   a failed installation.
-- Follow Optimization's Node reference: one runtime, a facade per request, page,
-  optional identify, then content fetches. Profile IDs come from API responses
+- Keep one runtime and a facade per request. Send the page event
+  directly with `request.page()`. Build the optional identify event with
+  `sdk.eventBuilder`, including `traits: { identified: true }`, and pass it in
+  `fetchExperience()` personalization options. Fetch each Experience only once per
+  app request; do not send identify independently. XDA selects content using the
+  fetch’s identify event. Profile IDs come from API responses
   and stay SDK-managed; do not add manual profile input, cookies, or sessions.
+- Follow the README's [XDA workaround removal criteria](./README.md#current-xda-limitations-and-workaround-removal)
+  when upstream behavior changes. Verify profile-only selection, initial-profile
+  identification, and built-event compatibility before simplifying the flow.
 - Use the public runtime for SDK operations. Do not inspect raw responses or
   compensate for runtime gaps with application-level transport adapters.
 - Preserve Optimization's EJS shell and styling. Keep the shell in `index.ejs`

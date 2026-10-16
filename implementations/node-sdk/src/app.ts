@@ -57,30 +57,35 @@ app.get('/', async (req, res) => {
     search: url.search,
     url: url.href,
   };
-  const request = sdk.forRequest({
-    consent: true,
+  const eventContext = {
     locale,
-    eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
-  });
-
-  const pageResult = await request.page({ properties: page });
-  let data = pageResult.accepted ? pageResult.data : undefined;
-  if (userId) {
-    const identifyResult = await request.identify({ userId, traits: { identified: true } });
-    data = (identifyResult.accepted ? identifyResult.data : undefined) ?? data;
-  }
-  if (!data) throw new Error('The runtime did not return profile data.');
+    page,
+    userAgent: req.get('user-agent') ?? 'node-js-server',
+  };
+  const request = sdk.forRequest({ consent: true, locale, eventContext });
+  // XDA can time out when identify creates a profile in the initial content fetch.
+  // Once that is fixed, include page in the first fetch instead of sending it here.
+  await request.page({ properties: page });
+  const identifyEvent = userId
+    ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
+    : undefined;
+  const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 
   const experiences: { id: string; plan: PortableRenderPlan }[] = [];
   for (const experienceId of experienceIds) {
     const plan = await request.fetchExperience(
-      { experienceId },
-      { config: { components: {}, experienceTemplates: {} } }
+      {
+        experienceId,
+        // XDA currently returns baseline for profile-only fetches. Include identify
+        // until that is fixed; later fetches can then use the established profile alone.
+        ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
+      },
+      resolveOptions
     );
     experiences.push({ id: experienceId, plan });
   }
 
-  res.render('index', { profile: data.profile, experiences });
+  res.render('index', { identifyRequested: Boolean(userId), experiences });
 });
 
 app.use((error: unknown, _request: Request, response: Response, next: NextFunction) => {
