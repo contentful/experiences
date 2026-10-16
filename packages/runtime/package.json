@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-runtime",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Shared runtime and event construction for Contentful Experiences",
   "license": "MIT",
   "type": "module",

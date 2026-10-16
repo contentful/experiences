@@ -1,3 +1,126 @@
+## 0.6.0 (2026-10-16)
+
+### 🚀 Features
+
+- ⚠️  **web,runtime:** [NT-4154] queue and flush Analytics events with retry ([#233](https://github.com/contentful/experiences/pull/233))
+
+### ⚠️  Breaking Changes
+
+- **web,runtime:** [NT-4154] queue and flush Analytics events with retry  ([#233](https://github.com/contentful/experiences/pull/233))
+  trackView, trackClick, trackHover and trackFlagView
+  resolve once the event is queued, not when the request completes.
+  * fix(web,runtime): [NT-4154] align queue flush behavior with Optimization
+  Address review feedback on the Analytics queue by matching the reviewed
+  Optimization behavior (173fac4).
+  - Page hide forces a final attempt on both queues after ending active
+    interactions. Only Analytics uses the Beacon API.
+  - AnalyticsDelivery.flush() joins an attempt already in flight instead of
+    returning early, and clearQueue() forgets it. A join starts no new
+    request and guarantees nothing about delivery.
+  - Web flush() starts the Analytics and Personalization attempts together.
+  - Add queuePolicy.offlineMaxEvents (default 100, normalized with
+    toPositiveInt) for offline Personalization admission, kept separate
+    from the per-handoff payload limit. onOfflineDrop is deprecated and
+    inactive in Optimization, so it is not added.
+  * fix(web,node,runtime)!: [NT-4154] align submission contracts with Optimization
+  Address the second review round by following the Optimization contracts
+  at 173fac4 instead of introducing alternatives.
+  - trackView, trackClick, trackHover and trackFlagView resolve with no
+    result in Web and Node, as in Optimization. A consent-blocked call and
+    a failed transport are no longer reported through a boolean, and the
+    threshold-reaching Analytics call still awaits its flush.
+  - Without a profile, Web warns and drops the event like the stateful
+    InsightsQueue. Node keeps throwing EventProfileRequiredError, because
+    stateless requests are bound to a profile.
+  - forRequest() accepts experienceOptions (ip, plainText, locale) and
+    insightsOptions (beacon). They are copied per request, forwarded on
+    direct sends and on the handoff preview, and a request locale takes
+    precedence over experienceOptions.locale.
+  - Both delivery queues require a ResolvedQueueFlushPolicy; the owning
+    runtime resolves the policy once.
+  - Document the parity rule and the retained differences in AGENTS.md.
+  BREAKING CHANGE: the Analytics methods return Promise<void> instead of
+  Promise<boolean>, and Web no longer rejects a call made without a profile.
+  * fix(web,node,runtime)!: [NT-4154] align trackView, locale and teardown with Optimization
+  Address the third review round by following Optimization at 173fac4 for
+  behavior, public API and internal design.
+  - trackView returns EventEmissionResult in Web and Node, as in
+    Optimization: { accepted: true } when consent admits it and
+    { accepted: false } when consent blocks it or Web is destroyed. Click,
+    hover and flag view keep returning void.
+  - In Node, experienceOptions.locale is only the Personalization transport
+    and replay locale. request.locale and content fetches use the request
+    locale or the runtime default, so the option no longer changes content.
+  - PersonalizationDelivery teardown follows ExperienceQueue: flushOnDestroy()
+    captures the teardown identity and calls the common flush(), which owns
+    joining, teardown gating and the attempt; attempt completion does the
+    teardown cleanup. Web's destroy() invokes and handles that promise, as
+    CoreStateful.destroy() does. The separate destroy path is removed.
+  - Remove the teardown item from the retained differences in AGENTS.md.
+  BREAKING CHANGE: trackView returns EventEmissionResult instead of void, and
+  in Node experienceOptions.locale no longer changes request.locale.
+  * fix(web,runtime): [NT-4154] port Optimization teardown identity, acceptance and Analytics lifecycle
+  Address the fourth review round by porting the Optimization structures at
+  173fac4 rather than adding special cases.
+  - Profile continuation is local to each sendQueuedBatches() drain, as in
+    ExperienceQueue. A teardown drain starts from the captured current
+    identity and follows only its own responses. The delivery-wide
+    continuation field is removed. Fixes a teardown request being sent under
+    a stale profile after a newer direct response changed the profile.
+  - Request acceptance separates live requests from teardown-authorized
+    deliveries (isLive / isDestroyDrain / isAccepted). A direct request
+    carries no teardown delivery, so its late success and late failure are
+    both discarded after destroy. Fixes a pending direct page() rejecting
+    after destroy instead of resolving { accepted: true }.
+  - AnalyticsDelivery reads an owner-provided getResetToken and exposes
+    clearQueuedEvents / clearPeriodicFlushTimer, as InsightsQueue does. Web
+    owns the token and the teardown: destroy() starts the final flushes,
+    then ends the lifetime and cancels the queue timer and retry, in
+    CoreStateful.destroy()'s order. The queue's own destroy() is removed.
+  - Sent Analytics events are removed by the batch snapshot; the parallel
+    bookkeeping map is removed."
+  M	AGENTS.md
+  M	ARCHITECTURE.md
+  M	README.md
+  M	packages/node/README.md
+  M	packages/node/src/contentful-experiences.test.ts
+  M	packages/node/src/contentful-experiences.ts
+  M	packages/node/src/index.ts
+  A	packages/runtime/src/analytics-delivery.test.ts
+  A	packages/runtime/src/analytics-delivery.ts
+  M	packages/runtime/src/index.ts
+  A	packages/runtime/src/lib/number/index.ts
+  A	packages/runtime/src/lib/number/number.test.ts
+  A	packages/runtime/src/lib/number/number.ts
+  A	packages/runtime/src/lib/queue/QueueFlushRuntime.test.ts
+  A	packages/runtime/src/lib/queue/QueueFlushRuntime.ts
+  A	packages/runtime/src/lib/queue/flushPolicy.test.ts
+  A	packages/runtime/src/lib/queue/flushPolicy.ts
+  A	packages/runtime/src/lib/queue/index.ts
+  A	packages/runtime/src/lib/queue/queuePolicy.test.ts
+  A	packages/runtime/src/lib/queue/queuePolicy.ts
+  M	packages/runtime/src/personalization-delivery.test.ts
+  M	packages/runtime/src/personalization-delivery.ts
+  D	packages/runtime/src/personalization-flush.test.ts
+  D	packages/runtime/src/personalization-flush.ts
+  M	packages/runtime/src/runtime-event-methods.test.ts
+  M	packages/runtime/src/runtime-event-methods.ts
+  M	packages/web/README.md
+  A	packages/web/src/contentful-experiences.analytics-queue.test.ts
+  M	packages/web/src/contentful-experiences.delivery.test.ts
+  A	packages/web/src/contentful-experiences.queue-parity.test.ts
+  M	packages/web/src/contentful-experiences.test.ts
+  M	packages/web/src/contentful-experiences.tracking.test.ts
+  M	packages/web/src/contentful-experiences.ts
+  A	packages/web/src/lib/beacon.ts
+  A	packages/web/src/lib/visibility.ts
+  M	packages/web/src/paired-handoff.integration.test.ts
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.1.0
+- Updated node to 0.6.1
+
 ## 0.5.0 (2026-10-14)
 
 ### 🚀 Features

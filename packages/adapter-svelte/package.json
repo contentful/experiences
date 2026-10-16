@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-svelte",
-  "version": "0.11.5",
+  "version": "0.11.6",
   "description": "Svelte adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@contentful/experiences-client": "0.9.4",
-    "@contentful/experiences-runtime": "0.0.3",
+    "@contentful/experiences-runtime": "0.1.0",
     "@contentful/experiences-sdk-core": "0.12.3",
     "@contentful/experiences-design": "0.12.3",
     "@contentful/experiences-live-preview": "0.6.4"

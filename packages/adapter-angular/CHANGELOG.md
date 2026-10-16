@@ -1,3 +1,9 @@
+## 0.6.6 (2026-10-16)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.1.0
+
 ## 0.6.5 (2026-10-16)
 
 ### 🧱 Updated Dependencies
