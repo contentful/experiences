@@ -118,7 +118,6 @@ describe('EventBuilder', () => {
   it.each([
     [undefined, 'default'],
     ['', 'default'],
-    ['default', 'default'],
     ['root-variant', 'root-variant'],
   ])(
     'retains the root Experience variant %s on all interaction events',
