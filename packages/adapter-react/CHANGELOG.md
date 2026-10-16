@@ -1,3 +1,13 @@
+## 0.13.5 (2026-10-16)
+
+### 🩹 Fixes
+
+- **exo:** emit ESM-compatible adapter imports [SPA-5573] ([#231](https://github.com/contentful/experiences/pull/231))
+
+### 🧱 Updated Dependencies
+
+- Updated design to 0.12.3
+
 ## 0.13.4 (2026-10-14)
 
 ### 🚀 Features
