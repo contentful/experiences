@@ -89,11 +89,12 @@ describe('scope attribution', () => {
       variantIndex: 1,
       optimizationId: 'optimization2',
       parentExperienceId: 'experience2',
+      parentVariantId: 'default',
     });
     expect(roots).toHaveLength(2);
   });
 
-  it('omits variant fields for the baseline instead of inventing them', async () => {
+  it('uses default as the baseline variant without optimization selection data', async () => {
     const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
     const experience = plan.nodes[0]!.attribution!.scopes[0]!;
@@ -102,10 +103,16 @@ describe('scope attribution', () => {
       entityId: 'experience2',
       entityKind: 'Experience',
       entityKindId: 'page',
+      variantId: 'default',
     });
   });
 
-  it.each([[2, 1, 'root-variant', 'variant2']])(
+  it.each([
+    [0, 0, 'default', 'default'],
+    [0, 1, 'default', 'variant2'],
+    [2, 0, 'root-variant', 'default'],
+    [2, 1, 'root-variant', 'variant2'],
+  ])(
     'keeps root and own variants separate for nested Fragments (%s, %s)',
     async (rootRef, fragmentRef, rootVariant, fragmentVariant) => {
       const sourceMap = {
@@ -146,10 +153,10 @@ describe('scope attribution', () => {
       });
       expect(inner).toMatchObject({
         entityId: 'inner',
+        variantId: 'default',
         parentExperienceId: 'root',
         parentVariantId: rootVariant,
       });
-      expect(inner).not.toHaveProperty('variantId');
       expect(inner).not.toHaveProperty('optimizationId');
       expect(inner).not.toHaveProperty('variantIndex');
       expect(
@@ -158,7 +165,7 @@ describe('scope attribution', () => {
     }
   );
 
-  it('omits unknown root variants without reusing a previously selected root variant', async () => {
+  it('falls back to default without reusing a previously selected root variant', async () => {
     const unknownRoot = {
       ...FRAGMENT_SOURCE_MAP,
       layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
@@ -179,9 +186,44 @@ describe('scope attribution', () => {
       'parentExperienceId',
       'experience2'
     );
-    expect(second.nodes[0]!.attribution!.scopes[1]).not.toHaveProperty('parentVariantId');
-    expect(second.nodes[0]!.attribution!.scopes[0]).not.toHaveProperty('variantId');
+    expect(second.nodes[0]!.attribution!.scopes[1]).toHaveProperty('parentVariantId', 'default');
+    expect(second.nodes[0]!.attribution!.scopes[0]).toHaveProperty('variantId', 'default');
   });
+
+  it.each([undefined, [], [99], [-1], ['bad'], 'bad'])(
+    'always sets default for scopes with unavailable variant references (%j)',
+    async (variants) => {
+      const sourceMap = {
+        ...FRAGMENT_SOURCE_MAP,
+        layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
+          i === 0 || i === 3 ? { ...(layer as object), variants } : layer
+        ),
+      };
+      const plan = await resolve([node('node2-1')], sourceMap);
+      const [experience, fragment] = plan.nodes[0]!.attribution!.scopes;
+
+      expect(experience).toHaveProperty('variantId', 'default');
+      expect(fragment).toMatchObject({ variantId: 'default', parentVariantId: 'default' });
+    }
+  );
+
+  it.each([null, '', undefined])(
+    'falls back to default when a variant row has no ID (%j)',
+    async (variantId) => {
+      const sourceMap = {
+        ...FRAGMENT_SOURCE_MAP,
+        variants: [{ variantId }],
+        layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
+          i === 0 || i === 3 ? { ...(layer as object), variants: [0] } : layer
+        ),
+      };
+      const plan = await resolve([node('node2-1')], sourceMap);
+      const [experience, fragment] = plan.nodes[0]!.attribution!.scopes;
+
+      expect(experience).toHaveProperty('variantId', 'default');
+      expect(fragment).toMatchObject({ variantId: 'default', parentVariantId: 'default' });
+    }
+  );
 
   it('walks through inline fragments without reporting them', async () => {
     const plan = await resolve(

@@ -230,6 +230,15 @@ class EventBuilder {
     args: InteractionBuilderArgsBase
   ): OptimizationUniversalEventProperties & InteractionBuilderArgsBase {
     const { campaign, locale, location, page, screen, userAgent, ...interactionProperties } = args;
+    const variantId =
+      interactionProperties.entityKind === 'Experience' ||
+      interactionProperties.entityKind === 'Fragment'
+        ? interactionProperties.variantId || 'default'
+        : interactionProperties.variantId;
+    const parentVariantId =
+      interactionProperties.entityKind === 'Fragment'
+        ? interactionProperties.parentVariantId || 'default'
+        : interactionProperties.parentVariantId;
 
     return {
       ...this.buildUniversalEventProperties({
@@ -241,6 +250,8 @@ class EventBuilder {
         userAgent,
       }),
       ...interactionProperties,
+      ...(variantId === undefined ? {} : { variantId }),
+      ...(parentVariantId === undefined ? {} : { parentVariantId }),
     };
   }
 

@@ -133,19 +133,18 @@ function occurrenceKey(row: number, listPath: string, runStart: number): string 
 
 function readVariant(ctx: Context, scope: ChainScope): VariantFields {
   const refs = scope.layer.record.variants;
-  if (!Array.isArray(refs) || refs.length === 0) return {};
+  if (!Array.isArray(refs) || refs.length === 0) return { variantId: 'default' };
   if (refs.length > 1) {
     ctx.log.log(`layer "${scope.entityId}" lists ${refs.length} variants; using the first`);
   }
 
   const variant = rowAt(ctx.variants, refs[0]);
   const optimizationId = asString(variant?.optimizationId);
-  const variantId = asString(variant?.variantId);
+  const variantId = asString(variant?.variantId) ?? 'default';
   const variantIndex = variant?.variantIndex;
 
-  const fields: VariantFields = {};
+  const fields: VariantFields = { variantId };
   if (optimizationId !== undefined) fields.optimizationId = optimizationId;
-  if (variantId !== undefined) fields.variantId = variantId;
   if (typeof variantIndex === 'number') fields.variantIndex = variantIndex;
   return fields;
 }

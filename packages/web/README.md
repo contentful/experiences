@@ -321,7 +321,8 @@ packages re-export it, and so does
   lookup result with any other `entityKind` is ignored.
 - Fragment attribution includes `parentExperienceId` and `parentVariantId`
   for the root Experience, including when the Fragment is nested in another Fragment.
-  `variantId` identifies the Fragment's own variant.
+  `variantId` identifies the Fragment's own variant. Experiences and Fragments always
+  have a `variantId`: the selected variant, or `default` when no variant ID is available.
   Experience attribution omits both parent fields.
 - Elements are grouped by scope occurrence. A Fragment rendered as several root
   elements is one view, hover, and click series. Two copies of the same Fragment

@@ -259,9 +259,9 @@ export interface PortableRenderNode {
 /**
  * One rendered occurrence of an Experience or persisted Fragment. Field names
  * follow the ExO event shape, so it stays structurally assignable to the
- * runtime's interaction-event builder args. Optional fields are omitted, never
- * invented: the baseline variant carries no `variantId`, `variantIndex` or
- * `optimizationId`.
+ * runtime's interaction-event builder args. Resolved scopes always have a
+ * `variantId`: the selected variant, or `default` when no variant ID is available.
+ * Other unavailable selection fields are omitted.
  */
 export interface ScopeAttribution {
   /** Opaque, plan-local occurrence key. Never parse it. */

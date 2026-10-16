@@ -66,41 +66,63 @@ describe('EventBuilder', () => {
     expect(hover.type).toBe('exo_node_hover');
   });
 
-  it('builds ExO events without optimization selection data', () => {
-    const builder = createBuilder();
-    const view = builder.buildView({
-      entityId: 'experience-1',
-      entityKind: 'Experience',
-      viewId: 'view-1',
-      viewDurationMs: 1_000,
-    });
-    const click = builder.buildClick({
-      entityId: 'experience-1',
-      entityKind: 'Experience',
-    });
-    const hover = builder.buildHover({
-      entityId: 'experience-1',
-      entityKind: 'Experience',
-      hoverId: 'hover-1',
-      hoverDurationMs: 500,
-    });
-
-    expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
-    expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
-    expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
-
-    for (const event of [view, click, hover]) {
-      expect(event).toMatchObject({
+  it.each(['Experience', 'Fragment'] as const)(
+    'builds baseline %s events with a default variantId',
+    (entityKind) => {
+      const builder = createBuilder();
+      const view = builder.buildView({
         entityId: 'experience-1',
-        entityKind: 'Experience',
+        entityKind,
+        viewId: 'view-1',
+        viewDurationMs: 1_000,
       });
-      expect(event).not.toHaveProperty('optimizationId');
-      expect(event).not.toHaveProperty('variantId');
-      expect(event).not.toHaveProperty('variantIndex');
-    }
-  });
+      const click = builder.buildClick({
+        entityId: 'experience-1',
+        entityKind,
+      });
+      const hover = builder.buildHover({
+        entityId: 'experience-1',
+        entityKind,
+        hoverId: 'hover-1',
+        hoverDurationMs: 500,
+      });
 
-  it.each(['default', 'root-variant'])(
+      expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
+      expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
+      expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
+
+      for (const event of [view, click, hover]) {
+        expect(event).toMatchObject({
+          entityId: 'experience-1',
+          entityKind,
+          variantId: 'default',
+        });
+        expect(event).not.toHaveProperty('optimizationId');
+        expect(event).not.toHaveProperty('variantIndex');
+        if (entityKind === 'Fragment') {
+          expect(event).toHaveProperty('parentVariantId', 'default');
+        } else {
+          expect(event).not.toHaveProperty('parentVariantId');
+        }
+      }
+    }
+  );
+
+  it.each(['InlineFragment', 'InlineComponent'] as const)(
+    'keeps absent variant IDs omitted on %s events',
+    (entityKind) => {
+      const builder = createBuilder();
+      const args = { entityId: 'inline-1', entityKind };
+      const events = [
+        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
+        builder.buildClick(args),
+        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
+      ];
+      for (const event of events) expect(event).not.toHaveProperty('variantId');
+    }
+  );
+
+  it.each([undefined, '', 'default', 'root-variant'])(
     'retains the root Experience variant %s on all interaction events',
     (parentVariantId) => {
       const builder = createBuilder();
@@ -122,9 +144,23 @@ describe('EventBuilder', () => {
           entityId: 'fragment-1',
           variantId: 'variant-1',
           parentExperienceId: 'experience-1',
-          parentVariantId,
+          parentVariantId: parentVariantId || 'default',
         });
       }
+    }
+  );
+
+  it.each(['Experience', 'Fragment'] as const)(
+    'defaults an empty own variant on %s events',
+    (entityKind) => {
+      const builder = createBuilder();
+      const args = { entityId: 'entity-1', entityKind, variantId: '' };
+      const events = [
+        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
+        builder.buildClick(args),
+        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
+      ];
+      for (const event of events) expect(event).toHaveProperty('variantId', 'default');
     }
   );
 
