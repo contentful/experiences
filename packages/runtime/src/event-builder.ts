@@ -296,7 +296,7 @@ class EventBuilder {
     };
   }
 
-  buildIdentify(args: IdentifyBuilderArgs): OptimizationIdentifyEvent {
+  buildIdentify(args: IdentifyBuilderArgs): OptimizationIdentifyEvent & { userId: string } {
     const {
       traits = {},
       userId,

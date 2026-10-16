@@ -3,6 +3,15 @@
 Use Optimization's corresponding reference implementation as the example. Keep
 SDK operations in the public runtime and justify every departure from that example.
 
+For server-side personalization, send the page event directly to establish the
+SDK-owned visitor profile. Build the identify event with the SDK event builder
+and include it in `request.fetchExperience()` personalization options so XDA can
+select content for the identified visitor. Fetch each Experience once per app
+request; do not send identify independently or add an initialization content fetch.
+These choices compensate for current XDA behavior. Follow the Node reference's
+[workaround removal criteria](./node-sdk/README.md#current-xda-limitations-and-workaround-removal)
+when XDA/client support changes instead of treating the flow as a permanent API requirement.
+
 All reference implementations use the same hard-coded default Experience IDs:
 
 - `6fQzPrHjFX25yTwi2Ic5gs` — Coded Experience

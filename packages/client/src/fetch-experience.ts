@@ -1,5 +1,6 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
+import { GetWithOverridesExperienceRequestExtensionsPersonalization as personalizationSchema } from '@contentful/experience-delivery/serialization';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { assertDestinationPreviewSupported } from './destination-guards.js';
@@ -184,12 +185,20 @@ async function fetchByExperienceId(
   options: ByIdExperienceOptions
 ): Promise<ExperienceResponse> {
   const { spaceId, environmentId, experienceId, locale, personalization, extensions } = options;
-  const requestExtensions: DeliveryExperienceRequestExtensions = {
-    ...extensions,
-    ...(personalization === undefined ? {} : { personalization }),
-  };
-
   try {
+    // XDA rejects EventBuilder's context.gdpr with HTTP 422. Keep the original
+    // events intact and serialize to its generated schema. When upstream XDA and
+    // client types accept built events, verify compatibility and remove this if redundant.
+    const requestExtensions: DeliveryExperienceRequestExtensions = {
+      ...extensions,
+      ...(personalization === undefined
+        ? {}
+        : {
+            personalization: personalizationSchema.parseOrThrow(personalization, {
+              unrecognizedObjectKeys: 'strip',
+            }),
+          }),
+    };
     // Both methods hit the same endpoint, but only the POST operation accepts
     // extensions in its request body. Keep the cacheable GET when there are no
     // extensions to evaluate.
