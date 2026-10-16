@@ -40,6 +40,15 @@ async function resolve(nodes: ExperienceNode[], sourceMap: unknown) {
   });
 }
 
+function fragmentMapWithVariants(variants: unknown, layerRows = [0, 3]) {
+  return {
+    ...FRAGMENT_SOURCE_MAP,
+    layers: FRAGMENT_SOURCE_MAP.layers.map((layer, row) =>
+      layerRows.includes(row) ? { ...(layer as object), variants } : layer
+    ),
+  };
+}
+
 function find(nodes: PortableRenderNode[], nodeId: string): PortableRenderNode {
   for (const n of nodes) {
     if (n.nodeId === nodeId) return n;
@@ -166,18 +175,8 @@ describe('scope attribution', () => {
   );
 
   it('falls back to default without reusing a previously selected root variant', async () => {
-    const unknownRoot = {
-      ...FRAGMENT_SOURCE_MAP,
-      layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
-        i === 0 ? { kind: 'Experience', id: 'experience2', variants: [99] } : layer
-      ),
-    };
-    const selectedRoot = {
-      ...FRAGMENT_SOURCE_MAP,
-      layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
-        i === 0 ? { kind: 'Experience', id: 'experience2', variants: [1] } : layer
-      ),
-    };
+    const unknownRoot = fragmentMapWithVariants([99], [0]);
+    const selectedRoot = fragmentMapWithVariants([1], [0]);
     const first = await resolve([node('node2-1')], selectedRoot);
     const second = await resolve([node('node2-1')], unknownRoot);
 
@@ -193,12 +192,7 @@ describe('scope attribution', () => {
   it.each([undefined, [], [99], [-1], ['bad'], 'bad'])(
     'always sets default for scopes with unavailable variant references (%j)',
     async (variants) => {
-      const sourceMap = {
-        ...FRAGMENT_SOURCE_MAP,
-        layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
-          i === 0 || i === 3 ? { ...(layer as object), variants } : layer
-        ),
-      };
+      const sourceMap = fragmentMapWithVariants(variants);
       const plan = await resolve([node('node2-1')], sourceMap);
       const [experience, fragment] = plan.nodes[0]!.attribution!.scopes;
 
@@ -211,11 +205,8 @@ describe('scope attribution', () => {
     'falls back to default when a variant row has no ID (%j)',
     async (variantId) => {
       const sourceMap = {
-        ...FRAGMENT_SOURCE_MAP,
+        ...fragmentMapWithVariants([0]),
         variants: [{ variantId }],
-        layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
-          i === 0 || i === 3 ? { ...(layer as object), variants: [0] } : layer
-        ),
       };
       const plan = await resolve([node('node2-1')], sourceMap);
       const [experience, fragment] = plan.nodes[0]!.attribution!.scopes;

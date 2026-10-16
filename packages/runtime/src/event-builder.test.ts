@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import EventBuilder, { DEFAULT_PAGE_PROPERTIES } from './event-builder';
+import EventBuilder, {
+  DEFAULT_PAGE_PROPERTIES,
+  type InteractionBuilderArgsBase,
+} from './event-builder';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info';
 
 import {
@@ -13,6 +16,15 @@ const LIBRARY = { name: '@contentful/experiences-sdk-core', version: '0.8.4' };
 
 function createBuilder() {
   return new EventBuilder({ channel: 'web', library: LIBRARY });
+}
+
+function buildInteractionEvents(args: InteractionBuilderArgsBase) {
+  const builder = createBuilder();
+  return [
+    builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1_000 }),
+    builder.buildClick(args),
+    builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
+  ] as const;
 }
 
 const interaction = {
@@ -69,22 +81,9 @@ describe('EventBuilder', () => {
   it.each(['Experience', 'Fragment'] as const)(
     'builds baseline %s events with a default variantId',
     (entityKind) => {
-      const builder = createBuilder();
-      const view = builder.buildView({
+      const [view, click, hover] = buildInteractionEvents({
         entityId: 'experience-1',
         entityKind,
-        viewId: 'view-1',
-        viewDurationMs: 1_000,
-      });
-      const click = builder.buildClick({
-        entityId: 'experience-1',
-        entityKind,
-      });
-      const hover = builder.buildHover({
-        entityId: 'experience-1',
-        entityKind,
-        hoverId: 'hover-1',
-        hoverDurationMs: 500,
       });
 
       expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
@@ -111,40 +110,33 @@ describe('EventBuilder', () => {
   it.each(['InlineFragment', 'InlineComponent'] as const)(
     'keeps absent variant IDs omitted on %s events',
     (entityKind) => {
-      const builder = createBuilder();
-      const args = { entityId: 'inline-1', entityKind };
-      const events = [
-        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
-        builder.buildClick(args),
-        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
-      ];
+      const events = buildInteractionEvents({ entityId: 'inline-1', entityKind });
       for (const event of events) expect(event).not.toHaveProperty('variantId');
     }
   );
 
-  it.each([undefined, '', 'default', 'root-variant'])(
+  it.each([
+    [undefined, 'default'],
+    ['', 'default'],
+    ['default', 'default'],
+    ['root-variant', 'root-variant'],
+  ])(
     'retains the root Experience variant %s on all interaction events',
-    (parentVariantId) => {
-      const builder = createBuilder();
-      const args = {
+    (parentVariantId, expectedParentVariantId) => {
+      const events = buildInteractionEvents({
         ...interaction,
         entityId: 'fragment-1',
         entityKind: 'Fragment' as const,
         parentExperienceId: 'experience-1',
         parentVariantId,
-      };
-      const events = [
-        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
-        builder.buildClick(args),
-        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
-      ];
+      });
 
       for (const event of events) {
         expect(event).toMatchObject({
           entityId: 'fragment-1',
           variantId: 'variant-1',
           parentExperienceId: 'experience-1',
-          parentVariantId: parentVariantId || 'default',
+          parentVariantId: expectedParentVariantId,
         });
       }
     }
@@ -153,13 +145,7 @@ describe('EventBuilder', () => {
   it.each(['Experience', 'Fragment'] as const)(
     'defaults an empty own variant on %s events',
     (entityKind) => {
-      const builder = createBuilder();
-      const args = { entityId: 'entity-1', entityKind, variantId: '' };
-      const events = [
-        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
-        builder.buildClick(args),
-        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
-      ];
+      const events = buildInteractionEvents({ entityId: 'entity-1', entityKind, variantId: '' });
       for (const event of events) expect(event).toHaveProperty('variantId', 'default');
     }
   );

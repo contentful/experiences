@@ -71,36 +71,6 @@ describe('createInteractionTracking', () => {
     tracking.destroy();
   });
 
-  it('passes root variant attribution to views, hovers and clicks', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
-    const io = installIOPolyfill();
-    const fragment = stamped('node-fragment');
-    document.body.append(fragment);
-    const events = createEvents();
-    const tracking = createInteractionTracking(events, {
-      resolveAttribution: (key) => ATTRIBUTIONS[key],
-    });
-
-    io.trigger(fragment, true);
-    fragment.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
-    await vi.advanceTimersByTimeAsync(1200);
-    click(fragment);
-    await tracking.endActive();
-
-    for (const method of [events.trackView, events.trackHover, events.trackClick]) {
-      expect(method).toHaveBeenCalled();
-      for (const [args] of method.mock.calls) {
-        expect(args).toMatchObject({
-          entityId: 'hero',
-          parentExperienceId: 'landing',
-          parentVariantId: 'root-variant',
-        });
-      }
-    }
-    tracking.destroy();
-  });
-
   it('discovers elements added after it starts', async () => {
     const events = createEvents();
     const tracking = createInteractionTracking(events, {
@@ -458,6 +428,30 @@ describe('createInteractionTracking — scope occurrences', () => {
     });
     return { io, events, tracking };
   }
+
+  it('passes root variant attribution to views, hovers and clicks', async () => {
+    const fragment = stamped('node-fragment');
+    document.body.append(fragment);
+    const { io, events, tracking } = await setup(ATTRIBUTIONS);
+
+    io.trigger(fragment, true);
+    fragment.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await vi.advanceTimersByTimeAsync(1200);
+    click(fragment);
+    await tracking.endActive();
+
+    for (const method of [events.trackView, events.trackHover, events.trackClick]) {
+      expect(method).toHaveBeenCalled();
+      for (const [args] of method.mock.calls) {
+        expect(args).toMatchObject({
+          entityId: 'hero',
+          parentExperienceId: 'landing',
+          parentVariantId: 'root-variant',
+        });
+      }
+    }
+    tracking.destroy();
+  });
 
   it('reports a Fragment with two root elements as one view', async () => {
     const first = rooting('hero-1');
