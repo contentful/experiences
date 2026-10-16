@@ -86,6 +86,7 @@ export const InteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
   optimizationId: z.optional(z.string()),
   parameters: z.optional(z.record(z.string(), z.json())),
   parentExperienceId: z.optional(z.string()),
+  parentVariantId: z.optional(z.string()),
   variantId: z.optional(z.string()),
   variantIndex: z.optional(z.number()),
 });

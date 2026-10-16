@@ -23,6 +23,7 @@ const FRAGMENT: TrackingAttribution = {
   entityKind: 'Fragment',
   entityKindId: 'hero-component',
   parentExperienceId: 'landing',
+  parentVariantId: 'root-variant',
   variantIndex: 1,
 };
 
@@ -324,6 +325,7 @@ describe('createClickDetector', () => {
         'entryIds',
         'optimizationId',
         'parentExperienceId',
+        'parentVariantId',
         'variantId',
         'variantIndex',
       ].sort()

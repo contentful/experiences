@@ -65,6 +65,7 @@ describe('scope attribution', () => {
       optimizationId: 'optimization1',
     });
     expect(scope).not.toHaveProperty('parentExperienceId');
+    expect(scope).not.toHaveProperty('parentVariantId');
   });
 
   it('puts sibling nodes of one Experience in a single occurrence', async () => {
@@ -102,6 +103,84 @@ describe('scope attribution', () => {
       entityKind: 'Experience',
       entityKindId: 'page',
     });
+  });
+
+  it.each([[2, 1, 'root-variant', 'variant2']])(
+    'keeps root and own variants separate for nested Fragments (%s, %s)',
+    async (rootRef, fragmentRef, rootVariant, fragmentVariant) => {
+      const sourceMap = {
+        ...FRAGMENT_SOURCE_MAP,
+        variants: [
+          ...FRAGMENT_SOURCE_MAP.variants,
+          {
+            id: 'root-selection',
+            variantId: 'root-variant',
+            optimizationId: 'root-opt',
+            variantIndex: 2,
+          },
+        ],
+        layers: [
+          { kind: 'Experience', id: 'root', variants: [rootRef] },
+          { kind: 'ExperienceTemplate', id: 'page' },
+          { kind: 'ExperienceFragment', id: 'outer', variants: [fragmentRef] },
+          { kind: 'Component', id: 'outer-component' },
+          { kind: 'ExperienceFragment', id: 'inner', variants: [0] },
+          { kind: 'Component', id: 'inner-component' },
+        ],
+        nodes: {
+          outer: { layers: [3, 2, 1, 0] },
+          inner: { layers: [5, 4, 3, 2, 1, 0] },
+        },
+      };
+      const plan = await resolve([node('outer', { children: [node('inner')] })], sourceMap);
+      const [root, outer, inner] = plan.nodes[0]!.slots.children![0]!.attribution!.scopes;
+
+      expect(root).toMatchObject({ entityId: 'root', variantId: rootVariant });
+      expect(root).not.toHaveProperty('parentExperienceId');
+      expect(root).not.toHaveProperty('parentVariantId');
+      expect(outer).toMatchObject({
+        entityId: 'outer',
+        variantId: fragmentVariant,
+        parentExperienceId: 'root',
+        parentVariantId: rootVariant,
+      });
+      expect(inner).toMatchObject({
+        entityId: 'inner',
+        parentExperienceId: 'root',
+        parentVariantId: rootVariant,
+      });
+      expect(inner).not.toHaveProperty('variantId');
+      expect(inner).not.toHaveProperty('optimizationId');
+      expect(inner).not.toHaveProperty('variantIndex');
+      expect(
+        JSON.parse(JSON.stringify(plan)).nodes[0].slots.children[0].attribution.scopes[2]
+      ).toEqual(inner);
+    }
+  );
+
+  it('omits unknown root variants without reusing a previously selected root variant', async () => {
+    const unknownRoot = {
+      ...FRAGMENT_SOURCE_MAP,
+      layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
+        i === 0 ? { kind: 'Experience', id: 'experience2', variants: [99] } : layer
+      ),
+    };
+    const selectedRoot = {
+      ...FRAGMENT_SOURCE_MAP,
+      layers: FRAGMENT_SOURCE_MAP.layers.map((layer, i) =>
+        i === 0 ? { kind: 'Experience', id: 'experience2', variants: [1] } : layer
+      ),
+    };
+    const first = await resolve([node('node2-1')], selectedRoot);
+    const second = await resolve([node('node2-1')], unknownRoot);
+
+    expect(first.nodes[0]!.attribution!.scopes[1]).toHaveProperty('parentVariantId', 'variant2');
+    expect(second.nodes[0]!.attribution!.scopes[1]).toHaveProperty(
+      'parentExperienceId',
+      'experience2'
+    );
+    expect(second.nodes[0]!.attribution!.scopes[1]).not.toHaveProperty('parentVariantId');
+    expect(second.nodes[0]!.attribution!.scopes[0]).not.toHaveProperty('variantId');
   });
 
   it('walks through inline fragments without reporting them', async () => {

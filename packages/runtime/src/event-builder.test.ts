@@ -100,6 +100,43 @@ describe('EventBuilder', () => {
     }
   });
 
+  it.each(['default', 'root-variant'])(
+    'retains the root Experience variant %s on all interaction events',
+    (parentVariantId) => {
+      const builder = createBuilder();
+      const args = {
+        ...interaction,
+        entityId: 'fragment-1',
+        entityKind: 'Fragment' as const,
+        parentExperienceId: 'experience-1',
+        parentVariantId,
+      };
+      const events = [
+        builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 }),
+        builder.buildClick(args),
+        builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
+      ];
+
+      for (const event of events) {
+        expect(event).toMatchObject({
+          entityId: 'fragment-1',
+          variantId: 'variant-1',
+          parentExperienceId: 'experience-1',
+          parentVariantId,
+        });
+      }
+    }
+  );
+
+  it('rejects a non-string root Experience variant', () => {
+    expect(() =>
+      createBuilder().buildClick({
+        ...interaction,
+        parentVariantId: 42 as unknown as string,
+      })
+    ).toThrow();
+  });
+
   it('uses configured context providers and infers campaign values', () => {
     const builder = new EventBuilder({
       channel: 'web',

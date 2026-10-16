@@ -13,6 +13,7 @@ const FRAGMENT: TrackingAttribution = {
   entityId: 'hero',
   entityKind: 'Fragment',
   parentExperienceId: 'landing',
+  parentVariantId: 'root-variant',
 };
 
 const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
@@ -65,7 +66,38 @@ describe('createInteractionTracking', () => {
       entityId: 'hero',
       entityKind: 'Fragment',
       parentExperienceId: 'landing',
+      parentVariantId: 'root-variant',
     });
+    tracking.destroy();
+  });
+
+  it('passes root variant attribution to views, hovers and clicks', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    const io = installIOPolyfill();
+    const fragment = stamped('node-fragment');
+    document.body.append(fragment);
+    const events = createEvents();
+    const tracking = createInteractionTracking(events, {
+      resolveAttribution: (key) => ATTRIBUTIONS[key],
+    });
+
+    io.trigger(fragment, true);
+    fragment.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await vi.advanceTimersByTimeAsync(1200);
+    click(fragment);
+    await tracking.endActive();
+
+    for (const method of [events.trackView, events.trackHover, events.trackClick]) {
+      expect(method).toHaveBeenCalled();
+      for (const [args] of method.mock.calls) {
+        expect(args).toMatchObject({
+          entityId: 'hero',
+          parentExperienceId: 'landing',
+          parentVariantId: 'root-variant',
+        });
+      }
+    }
     tracking.destroy();
   });
 
@@ -593,6 +625,47 @@ describe('createInteractionTracking — scope occurrences', () => {
     expect(new Set(pageViewIds).size).toBe(1);
     tracking.destroy();
   });
+
+  it.each(['view', 'hover'] as const)(
+    'starts a fresh %s when only the root Experience variant changes',
+    async (kind) => {
+      const element = rooting('hero-1');
+      document.body.append(element);
+      const ownVariant = 'fragment-variant';
+      const attributions: Record<string, TrackingAttribution> = {
+        'hero-1': {
+          ...HERO,
+          variantId: ownVariant,
+          parentExperienceId: 'landing',
+          parentVariantId: 'default',
+        },
+      };
+      const { io, events, tracking } = await setup(attributions);
+      const trigger = () =>
+        kind === 'view'
+          ? io.trigger(element, true)
+          : element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+      const method = kind === 'view' ? events.trackView : events.trackHover;
+      const idField = kind === 'view' ? 'viewId' : 'hoverId';
+
+      trigger();
+      await vi.advanceTimersByTimeAsync(1200);
+      attributions['hero-1'] = { ...attributions['hero-1']!, parentVariantId: 'root-b' };
+      tracking.refresh();
+      trigger();
+      await vi.advanceTimersByTimeAsync(1200);
+
+      const args = method.mock.calls.map(([args]) => args);
+      expect(args).toHaveLength(2);
+      expect(args[0]).toMatchObject({
+        variantId: ownVariant,
+        parentVariantId: 'default',
+      });
+      expect(args[1]).toMatchObject({ variantId: ownVariant, parentVariantId: 'root-b' });
+      expect(args[1][idField]).not.toBe(args[0][idField]);
+      tracking.destroy();
+    }
+  );
 
   it('stops reporting a key once the attribute no longer lists it', async () => {
     const element = rooting('page hero-1');
