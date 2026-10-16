@@ -547,9 +547,22 @@ async function linkDataAssembliesToComponents() {
   }
 }
 
+// Content binding parameter value pointing at an Entry, in the canonical
+// `{ $literal: ResourceLink }` notation. The Experience Management API no
+// longer accepts the bare ResourceLink form.
+function entryLiteralBinding(entryId: string): unknown {
+  return {
+    $literal: {
+      sys: {
+        type: 'ResourceLink',
+        linkType: 'Contentful:Entry',
+        urn: entryUrn(entryId),
+      },
+    },
+  };
+}
+
 // Walk fixture nodes and swap tempIds for real ids in contentBindings.
-// Parameter bindings use the canonical `{ $literal: ResourceLink }` notation;
-// the bare ResourceLink form is deprecated.
 function resolveNode(node: ExperienceNode): unknown {
   const out: Record<string, unknown> = {
     id: node.id,
@@ -571,15 +584,7 @@ function resolveNode(node: ExperienceNode): unknown {
   if ('contentBindings' in node && node.contentBindings) {
     const parameters: Record<string, unknown> = {};
     for (const [pid, ref] of Object.entries(node.contentBindings.parameters)) {
-      parameters[pid] = {
-        $literal: {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:Entry',
-            urn: entryUrn(resolveId(ref.$entryTempId)),
-          },
-        },
-      };
+      parameters[pid] = entryLiteralBinding(resolveId(ref.$entryTempId));
     }
     out.contentBindings = {
       sys: {
@@ -693,13 +698,9 @@ function createPersonalizedSlots(
             `Node "${fixture.targetNodeId}" has no "${fixture.bindingParameterId}" binding`
           );
         }
-        bindings.parameters[fixture.bindingParameterId] = {
-          sys: {
-            type: 'ResourceLink',
-            linkType: 'Contentful:Entry',
-            urn: entryUrn(resolveId(fixture.entry.tempId)),
-          },
-        };
+        bindings.parameters[fixture.bindingParameterId] = entryLiteralBinding(
+          resolveId(fixture.entry.tempId)
+        );
         replaced = true;
       }
       for (const children of Object.values((node.slots as Record<string, unknown[]>) ?? {})) {
