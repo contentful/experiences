@@ -90,6 +90,7 @@ describe('fetchExperience → plan → EventBuilder', () => {
       entityId: 'frag-1',
       entityKindId: 'hero-component',
       parentExperienceId: 'exp-1',
+      parentVariantId: 'default',
       optimizationId: 'opt-1',
       variantId: 'variant-b',
       variantIndex: 1,
@@ -107,7 +108,7 @@ describe('fetchExperience → plan → EventBuilder', () => {
     expect(view).toMatchObject({ type: 'exo_node_view', entityId: 'frag-1', variantIndex: 1 });
   });
 
-  it('builds a valid baseline Experience event that omits the optional variant fields', async () => {
+  it('builds a valid baseline Experience event with default as its own variant and no parent', async () => {
     const { client } = fakeClient();
     const plan = await fetchExperience(
       { ...options, extensions: { sourceMap: {} } },
@@ -122,7 +123,9 @@ describe('fetchExperience → plan → EventBuilder', () => {
     const view = builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 });
 
     expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
-    expect(view).not.toHaveProperty('variantId');
+    expect(view).toHaveProperty('variantId', 'default');
+    expect(view).not.toHaveProperty('parentExperienceId');
+    expect(view).not.toHaveProperty('parentVariantId');
     expect(view).not.toHaveProperty('variantIndex');
     expect(view).not.toHaveProperty('optimizationId');
   });
