@@ -204,6 +204,8 @@ async function fetchByExperienceId(
     if (hasRequestExtensions(requestExtensions) || queryParams === undefined) {
       // dev.9's POST serializer passes through extra body keys. Its generated
       // request type omits parameters, so retain our typed extension locally.
+      // TODO: Remove this intersection once contentful-experience-delivery.js
+      // generates parameters on GetWithOverridesExperienceRequest and we upgrade.
       const request: ContentfulViewDelivery.GetWithOverridesExperienceRequest & {
         parameters?: ExperienceParameters;
       } = {

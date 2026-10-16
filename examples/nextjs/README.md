@@ -8,6 +8,7 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
 - **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then `useLivePreview` applies Preview Session updates in the browser.
+- **Runtime parameters via `?parameter_demo=true`**: a JSON form forwards scalar/Record values to `fetchExperience`; submitting changed values refetches and renders a new plan.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Design values as props** (spacing, color, typography, layout): every component declares the design keys it consumes as **named props** and destructures them. That is the recommended styling contract, and it's what all nine components here do. Don't collect leftovers with `...rest` and forward them to a DOM element — design keys are camelCase prop names, not HTML attributes, so React warns and they land in the markup as junk.
@@ -45,6 +46,40 @@ npm run dev
 ```
 
 Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
+
+### Optional: runtime parameters
+
+Open `/<experience-id>?parameter_demo=true` to show the parameter form. Enter a
+JSON object using IDs declared in that Experience's `parameters`, then click
+**Refetch Experience**. The GET form reloads the same route with new values;
+the server calls `fetchExperience` again and renders its newly resolved plan.
+Existing locale, preview, debug and personalization query options are preserved.
+
+For an Experience declaring a String parameter `categorySlug`, try
+`{"categorySlug":"technology"}`, then change it to `{"categorySlug":"culture"}`.
+
+For an Experience declaring a Record parameter `featuredPosts` and a collection
+binding referencing `$parameters/featuredPosts`, try:
+
+```json
+{ "featuredPosts": { "limit": 6, "order": "-fields.title" } }
+```
+
+Change `limit` to `12` and `order` to `fields.title`, then refetch to show more
+entries sorted ascending. Order is one signed `fields.<apiName>` or `sys.<id>`
+path. Delivery validates declared names, requiredness, fallbacks and values.
+The bootstrap's `landing` Experience has no such declarations; use an Experience
+with the matching parameter and collection binding already configured.
+
+The route passes the parsed map as the first argument's `parameters` option.
+GET delivery requests encode Record leaves as `parameter.featuredPosts.limit`
+and `parameter.featuredPosts.order`; personalization or an empty Record selects
+POST automatically. The form's JSON lives in the page URL, so use public content
+selectors here. This example keeps the server-side delivery token off the form.
+
+`?preview=true` also accepts these parameters. A Preview Session instead uses
+its server-owned `context.parameters` and WebSocket updates: the route ignores
+the form's parameters and hides its controls while a live session is active.
 
 ### Optional: personalization
 

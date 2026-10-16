@@ -4,9 +4,11 @@ import {
   ServerExperienceRenderer,
   fetchExperience,
   fetchPreviewSession,
+  type ExperienceParameters,
 } from '@contentful/experiences-react';
 
 import { LivePreviewExperience } from '@/components/LivePreviewExperience';
+import { RuntimeParametersForm } from '@/components/RuntimeParametersForm';
 import { experienceConfig } from '@/lib/experience-config';
 import { buildPagePersonalization } from '@/lib/personalization';
 
@@ -31,6 +33,27 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = sessionId !== undefined && previewToken !== undefined;
   const previewMode = preview === 'true' || preview === '1' || livePreview;
+  const parameterInput = typeof sp.parameters === 'string' ? sp.parameters : undefined;
+  const showParameters =
+    !livePreview && (sp.parameter_demo === 'true' || parameterInput !== undefined);
+  let parameters: ExperienceParameters | undefined;
+  if (!livePreview && parameterInput !== undefined) {
+    try {
+      // Check the form's JSON envelope only. Delivery validates names and values.
+      const parsed: unknown = JSON.parse(parameterInput);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Expected a JSON object');
+      }
+      parameters = parsed as ExperienceParameters;
+    } catch {
+      return (
+        <>
+          <RuntimeParametersForm parameters={parameterInput} searchParams={sp} />
+          <p role="alert">Parameters must be a JSON object. Correct the value and refetch.</p>
+        </>
+      );
+    }
+  }
 
   const requestHeaders = await headers();
   const forwardedProto = requestHeaders.get('x-forwarded-proto') ?? 'http';
@@ -62,6 +85,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
           environmentId,
           experienceId,
           locale,
+          parameters,
           personalization,
         },
         {
@@ -87,11 +111,16 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   }
 
   return (
-    <ServerExperienceRenderer
-      experience={experience}
-      config={experienceConfig}
-      metadata={{ renderer: 'server' }}
-      debug={debug}
-    />
+    <>
+      {showParameters && (
+        <RuntimeParametersForm parameters={parameterInput ?? '{}'} searchParams={sp} />
+      )}
+      <ServerExperienceRenderer
+        experience={experience}
+        config={experienceConfig}
+        metadata={{ renderer: 'server' }}
+        debug={debug}
+      />
+    </>
   );
 }
