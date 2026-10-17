@@ -73,6 +73,25 @@ function createEventRuntime(
 }
 
 describe('Node ContentfulExperiences', () => {
+  it('forwards changed parameters through request facades independently of event consent', async () => {
+    const runtime = createRuntime();
+    const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
+    const request = runtime.forRequest({ consent: { events: false }, locale: 'de-DE' });
+    const parameters = { featuredPosts: { limit: 6, order: '-fields.title' } };
+    await request.fetchExperience({ experienceId: 'exp', parameters }, { config: resolverConfig });
+    await request.fetchExperience(
+      { experienceId: 'exp', parameters: { productId: 'other' }, preview: true },
+      { config: resolverConfig }
+    );
+    await runtime.forRequest().fetchExperience({ experienceId: 'exp' }, { config: resolverConfig });
+    expect(fetch.mock.calls.map(([options]) => options.parameters)).toEqual([
+      parameters,
+      { productId: 'other' },
+      undefined,
+    ]);
+    expect(fetch.mock.calls[1]?.[0]).toMatchObject({ locale: 'de-DE', preview: true });
+  });
+
   it('allows independent live SDK instances without requiring teardown', () => {
     const first = createRuntime();
     const german = first.forRequest({ locale: 'de-DE' });

@@ -2,6 +2,17 @@
 
 Optional live preview for Contentful Experiences.
 
+## Runtime parameters and Session updates
+
+Direct by-ID `fetchExperience` accepts per-call `parameters`; see the
+[runtime parameters guide](../../README.md#runtime-experience-parameters).
+Preview Sessions retain their existing unprefixed `context.parameters` map
+(for example `{ productId: 'foo123' }`), with values supported by the Session
+contract. The Contentful editor owns Session context changes. `fetchPreviewSession`
+loads the current hydrated snapshot; `createLivePreviewClient` consumes subsequent
+WebSocket snapshots. Replace the rendered plan from each update as usual.
+These APIs do not mutate Session parameters or encode `parameter.*` query keys.
+
 ## API
 
 ```ts
