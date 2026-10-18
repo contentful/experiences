@@ -2,6 +2,8 @@ export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   ExperiencesNodeConfig,
   ExperiencesNodeRequest,
+  ExperiencesNodeExperienceOptions,
+  ExperiencesNodeInsightsOptions,
   ExperiencesNodeRequestContext,
   PrepareRequestHandoffOptions,
   PrepareRequestHandoffResult,

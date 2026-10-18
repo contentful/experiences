@@ -165,14 +165,34 @@ user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
 prepared work. Offline ordinary calls are accepted into an in-memory queue until
 capacity, then refused without evicting accepted work. A prepared batch is
-admitted whole or refused at capacity. Acceptance is not HTTP
+admitted whole or refused at capacity. Capacity is `queuePolicy.offlineMaxEvents`
+(default 100; a non-positive or non-finite value falls back to the default, and a
+fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
 completion. Read `personalizationDeliveryState` for the latest request status
 (`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
-The queue is not durable. Analytics methods continue
-to send directly and require a profile or
-an adopted continuation ID.
+The queue is not durable. Analytics methods
+are queued in memory rather than sent one by one, and follow Optimization's return contracts:
+`trackView` resolves `{ accepted: true }` when consent admits it and `{ accepted: false }` when
+consent blocks it or the SDK is destroyed, while `trackClick`, `trackHover` and `trackFlagView`
+resolve with no result. Acceptance is consent admission, not delivery. Without a profile
+or an adopted continuation ID, such as a new visitor's call made while the first profile request is
+still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
+events remain queued, when the browser comes back online, and when the page is hidden
+or unloaded (`visibilitychange`, `pagehide`, `beforeunload`). On hide, active views and
+hovers end first, then both queues get a final forced attempt: Analytics uses
+`navigator.sendBeacon` and falls back to a keepalive `fetch`, and Personalization keeps
+its ordinary request. Acceptance is not delivery: the call that fills the Analytics queue
+also awaits the flush it triggers. A failed flush keeps its
+events and retries with exponential backoff and a circuit breaker, matching the
+Optimization SDK's defaults, which `queuePolicy.flush` can override: `flushIntervalMs`,
+`baseBackoffMs`, `maxBackoffMs`, `jitterRatio`, `maxConsecutiveFailures`, `circuitOpenMs`, and
+the `onFlushFailure`, `onCircuitOpen` and `onFlushRecovered` callbacks. It applies to both
+the Personalization and Analytics queues. Call `flush()` to send queued Analytics events and
+Personalization batches immediately. Both attempts start together, and a call made while
+an Analytics request is in flight waits for that request to settle without starting
+another; retries stay scheduled independently.
 
 ### Consent
 
@@ -190,9 +210,9 @@ the Optimization SDK's consent model.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
-  drops events already accepted into the offline queue, and cancels its retry, so
-  they are not sent when the connection returns or when `destroy()` drains the
-  queue. A request already on the wire cannot be recalled. A persistence-only change
+  drops events already accepted into the offline and Analytics queues, and cancels
+  their retries, so they are not sent when the connection returns or when `destroy()`
+  drains the queues. A request already on the wire cannot be recalled. A persistence-only change
   leaves the queue alone.
 - **Persistence consent.** The profile is written to LocalStorage only when
   `persistence` is `true`. `false` removes the stored profile but keeps the

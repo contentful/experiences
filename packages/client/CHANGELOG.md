@@ -1,3 +1,13 @@
+## 0.9.5 (2026-10-16)
+
+### 🩹 Fixes
+
+- **deps:** update dependency @contentful/experience-delivery to v1.0.0-dev.10 ([#238](https://github.com/contentful/experiences/pull/238))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.12.4
+
 ## 0.9.4 (2026-10-14)
 
 ### 🧱 Updated Dependencies
