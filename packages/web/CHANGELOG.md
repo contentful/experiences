@@ -1,3 +1,16 @@
+## 0.6.2 (2026-10-18)
+
+### 🚀 Features
+
+- attribute Fragments to root Experience variants [EXA-2560] ([#237](https://github.com/contentful/experiences/pull/237))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.1.2
+- Updated client to 0.9.6
+- Updated core to 0.12.5
+- Updated node to 0.6.3
+
 ## 0.6.1 (2026-10-16)
 
 ### 🧱 Updated Dependencies

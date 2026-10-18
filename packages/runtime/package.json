@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-runtime",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared runtime and event construction for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -29,8 +29,8 @@
     "directory": "packages/runtime"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.9.5",
-    "@contentful/experiences-sdk-core": "0.12.4",
+    "@contentful/experiences-client": "0.9.6",
+    "@contentful/experiences-sdk-core": "0.12.5",
     "@contentful/optimization-api-client": "^2.1.0",
     "es-toolkit": "^1.46.0",
     "zod": "^4.3.6"
