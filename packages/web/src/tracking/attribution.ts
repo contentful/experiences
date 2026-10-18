@@ -10,6 +10,7 @@ export type TrackingAttribution = Pick<
   | 'variantIndex'
   | 'optimizationId'
   | 'parentExperienceId'
+  | 'parentVariantId'
   | 'entryIds'
 > & { entityKind: TrackedEntityKind };
 

@@ -133,19 +133,18 @@ function occurrenceKey(row: number, listPath: string, runStart: number): string 
 
 function readVariant(ctx: Context, scope: ChainScope): VariantFields {
   const refs = scope.layer.record.variants;
-  if (!Array.isArray(refs) || refs.length === 0) return {};
+  if (!Array.isArray(refs) || refs.length === 0) return { variantId: 'default' };
   if (refs.length > 1) {
     ctx.log.log(`layer "${scope.entityId}" lists ${refs.length} variants; using the first`);
   }
 
   const variant = rowAt(ctx.variants, refs[0]);
   const optimizationId = asString(variant?.optimizationId);
-  const variantId = asString(variant?.variantId);
+  const variantId = asString(variant?.variantId) ?? 'default';
   const variantIndex = variant?.variantIndex;
 
-  const fields: VariantFields = {};
+  const fields: VariantFields = { variantId };
   if (optimizationId !== undefined) fields.optimizationId = optimizationId;
-  if (variantId !== undefined) fields.variantId = variantId;
   if (typeof variantIndex === 'number') fields.variantIndex = variantIndex;
   return fields;
 }
@@ -154,7 +153,7 @@ function buildScope(
   ctx: Context,
   scope: ChainScope,
   key: string,
-  parentExperienceId: string | undefined
+  parentExperience: ScopeAttribution | undefined
 ): ScopeAttribution {
   const attribution: ScopeAttribution = {
     key,
@@ -165,8 +164,11 @@ function buildScope(
   if (scope.entityKindId !== undefined) {
     attribution.entityKindId = scope.entityKindId;
   }
-  if (scope.kind === 'Fragment' && parentExperienceId !== undefined) {
-    attribution.parentExperienceId = parentExperienceId;
+  if (scope.kind === 'Fragment' && parentExperience !== undefined) {
+    attribution.parentExperienceId = parentExperience.entityId;
+    if (parentExperience.variantId !== undefined) {
+      attribution.parentVariantId = parentExperience.variantId;
+    }
   }
   return attribution;
 }
@@ -266,7 +268,7 @@ function attributeNode(
 
   const keys = new Map<number, string>();
   const attribution: NodeAttribution = { scopes: [], roots: [] };
-  let parentExperienceId: string | undefined;
+  let parentExperience: ScopeAttribution | undefined;
   let nearest: ScopeAttribution | undefined;
 
   // A sibling's key is only reusable while every enclosing scope matches as well.
@@ -285,10 +287,10 @@ function attributeNode(
     sameOccurrencePrefix &&= previous?.[1] === key;
     keys.set(scope.row, key);
 
-    nearest = ctx.scopes[key] ??= buildScope(ctx, scope, key, parentExperienceId);
+    nearest = ctx.scopes[key] ??= buildScope(ctx, scope, key, parentExperience);
     attribution.scopes.push(nearest);
     if (isRoot) attribution.roots.push(nearest);
-    if (scope.kind === 'Experience') parentExperienceId = scope.entityId;
+    if (scope.kind === 'Experience' && parentExperience === undefined) parentExperience = nearest;
   }
 
   const entryIds = readNodeEntries(ctx, entry);
