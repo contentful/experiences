@@ -14,8 +14,8 @@ when XDA/client support changes instead of treating the flow as a permanent API 
 
 All reference implementations use the same hard-coded default Experience IDs:
 
-- `6fQzPrHjFX25yTwi2Ic5gs` — Coded Experience
-- `6fm371os680MYgg0XThK2S` — Composed Experience
+- `3fLAdFb3BYAuImRhcW8k4t` — Coded Experience
+- `4WzbgzPQHa9Tr2ffbOU8p7` — Composed Experience
 
 An implementation-local override is optional; configuring IDs must not be required
 to use the reference data. Keep implementations standalone rather than adding a

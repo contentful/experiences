@@ -3,20 +3,9 @@
 %>
   <article>
     <h3><%= props.title %></h3>
-    <% if (props.description) { %>
-      <%- documentToHtmlString(props.description.document) %>
-    <% } %>
-    <% if (props.collection) { %>
-      <ol>
-        <% for (const item of props.collection) { %>
-          <li>
-            <strong><%= item.collectionItemTitle %></strong>
-            <% if (item.collectionItemDescription) { %>
-              <%- documentToHtmlString(item.collectionItemDescription.document) %>
-            <% } %>
-          </li>
-        <% } %>
-      </ol>
+    <p><%= props.text %></p>
+    <% if (props.richText) { %>
+      <%- documentToHtmlString(props.richText.document) %>
     <% } %>
     <% for (const children of Object.values(node.slots)) { %>
       <%- include('nodes', { nodes: children }) %>

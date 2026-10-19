@@ -83,8 +83,16 @@ next request. Unlike Optimization’s separate event and CDA-resolution flow, XD
 evaluates these events while selecting the Experience content.
 
 Experiences returns nested plans instead of CDA entries. The recursive `nodes.ejs` partial
-renders this space's title, Rich Text description, optional collection
-records, and slot children. Both delivered node types use those same fields.
+renders this space's `title`, plain `text`, `richText.document`, and slot children.
+The data assemblies map the `content` entry's `internalTitle` to `title`, pass
+through `text`, and wrap the Rich Text JSON in `richText.document`. Both delivered
+node types use those same fields; the current bindings have no collection output.
+The Coded Experience has one `codedExperienceTemplate` node with two
+`codedComponent` nodes in its `slot`. The Composed Experience expands into five
+`codedComponent` nodes: two from its template, two from its composed fragment,
+and one personalized fragment. Both Experiences include that personalized
+fragment, configured to replace baseline content with variant content for the
+Identified Users audience.
 The SDK owns resolution; the template uses its resolved props and does not look up
 the management export. Rich Text documents are passed directly to Contentful's
 HTML renderer at the same version Optimization uses. Text and attributes use
@@ -131,8 +139,8 @@ Keep real credentials out of `.env.example` and Git.
 The default Experience IDs are fixed in source, matching Optimization's approach
 and shared by all reference implementations:
 
-- `6fQzPrHjFX25yTwi2Ic5gs` — Coded Experience
-- `6fm371os680MYgg0XThK2S` — Composed Experience
+- `3fLAdFb3BYAuImRhcW8k4t` — Coded Experience
+- `4WzbgzPQHa9Tr2ffbOU8p7` — Composed Experience
 
 Optionally set comma-separated `EXPERIENCE_IDS` in this implementation's `.env`
 to replace that list. An absent or blank value uses the defaults. These are

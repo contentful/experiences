@@ -832,10 +832,10 @@
             "id": "700s66i6clht"
           }
         },
-        "id": "sYUgfb8KAVC99aqBiqi5N",
+        "id": "2YSCijeHf1iArxiJqBYj1A",
         "type": "Entry",
-        "createdAt": "2026-10-13T12:42:06.357Z",
-        "updatedAt": "2026-10-13T12:44:52.411Z",
+        "createdAt": "2026-10-19T15:16:01.024Z",
+        "updatedAt": "2026-10-19T15:16:58.158Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -843,9 +843,9 @@
             "linkType": "Environment"
           }
         },
-        "publishedVersion": 6,
-        "publishedAt": "2026-10-13T12:44:52.411Z",
-        "firstPublishedAt": "2026-10-13T12:44:52.411Z",
+        "publishedVersion": 8,
+        "publishedAt": "2026-10-19T15:16:58.158Z",
+        "firstPublishedAt": "2026-10-19T15:16:58.158Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -861,7 +861,7 @@
           }
         },
         "publishedCounter": 1,
-        "version": 7,
+        "version": 9,
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -883,14 +883,14 @@
             "id": "content"
           }
         },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/sYUgfb8KAVC99aqBiqi5N"
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/2YSCijeHf1iArxiJqBYj1A"
       },
       "fields": {
         "internalTitle": {
-          "en-US": "Coded Component Fragment"
+          "en-US": "Coded Experience Fragment Content"
         },
         "text": {
-          "en-US": "This is a coded component fragment."
+          "en-US": "This is coded experience fragment content."
         },
         "richText": {
           "en-US": {
@@ -905,7 +905,7 @@
                 "content": [
                   {
                     "nodeType": "text",
-                    "value": "This is coded component fragment ",
+                    "value": "This is coded experience fragment content ",
                     "marks": [
                     ],
                     "data": {
@@ -952,354 +952,10 @@
             "id": "700s66i6clht"
           }
         },
-        "id": "2gAKoSsVjaO46BPs4iXbm2",
+        "id": "3Wm47G0CQNnkRBEPLvhw8T",
         "type": "Entry",
-        "createdAt": "2026-10-13T12:46:54.381Z",
-        "updatedAt": "2026-10-13T12:47:33.359Z",
-        "environment": {
-          "sys": {
-            "id": "master",
-            "type": "Link",
-            "linkType": "Environment"
-          }
-        },
-        "publishedVersion": 6,
-        "publishedAt": "2026-10-13T12:47:33.359Z",
-        "firstPublishedAt": "2026-10-13T12:47:33.359Z",
-        "createdBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "updatedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "publishedCounter": 1,
-        "version": 7,
-        "publishedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "fieldStatus": {
-          "*": {
-            "en-US": "published"
-          }
-        },
-        "automationTags": [
-        ],
-        "contentType": {
-          "sys": {
-            "type": "Link",
-            "linkType": "ContentType",
-            "id": "content"
-          }
-        },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/2gAKoSsVjaO46BPs4iXbm2"
-      },
-      "fields": {
-        "internalTitle": {
-          "en-US": "Coded Experience Fragment"
-        },
-        "text": {
-          "en-US": "This is a coded experience fragment."
-        },
-        "richText": {
-          "en-US": {
-            "nodeType": "document",
-            "data": {
-            },
-            "content": [
-              {
-                "nodeType": "paragraph",
-                "data": {
-                },
-                "content": [
-                  {
-                    "nodeType": "text",
-                    "value": "This is coded experience fragment ",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": "rich text",
-                    "marks": [
-                      {
-                        "type": "bold"
-                      }
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": ".",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "metadata": {
-        "tags": [
-        ],
-        "concepts": [
-        ]
-      },
-      "sys": {
-        "space": {
-          "sys": {
-            "type": "Link",
-            "linkType": "Space",
-            "id": "700s66i6clht"
-          }
-        },
-        "id": "4OBnXmehDsmvnenSBDnnLo",
-        "type": "Entry",
-        "createdAt": "2026-10-13T12:55:03.298Z",
-        "updatedAt": "2026-10-13T12:56:09.158Z",
-        "environment": {
-          "sys": {
-            "id": "master",
-            "type": "Link",
-            "linkType": "Environment"
-          }
-        },
-        "publishedVersion": 6,
-        "publishedAt": "2026-10-13T12:56:09.158Z",
-        "firstPublishedAt": "2026-10-13T12:56:09.158Z",
-        "createdBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "updatedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "publishedCounter": 1,
-        "version": 7,
-        "publishedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "fieldStatus": {
-          "*": {
-            "en-US": "published"
-          }
-        },
-        "automationTags": [
-        ],
-        "contentType": {
-          "sys": {
-            "type": "Link",
-            "linkType": "ContentType",
-            "id": "content"
-          }
-        },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4OBnXmehDsmvnenSBDnnLo"
-      },
-      "fields": {
-        "internalTitle": {
-          "en-US": "Composed Experience Fragment"
-        },
-        "text": {
-          "en-US": "This is a composed experience fragment."
-        },
-        "richText": {
-          "en-US": {
-            "nodeType": "document",
-            "data": {
-            },
-            "content": [
-              {
-                "nodeType": "paragraph",
-                "data": {
-                },
-                "content": [
-                  {
-                    "nodeType": "text",
-                    "value": "This is composed experience fragment ",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": "rich text",
-                    "marks": [
-                      {
-                        "type": "bold"
-                      }
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": ".",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "metadata": {
-        "tags": [
-        ],
-        "concepts": [
-        ]
-      },
-      "sys": {
-        "space": {
-          "sys": {
-            "type": "Link",
-            "linkType": "Space",
-            "id": "700s66i6clht"
-          }
-        },
-        "id": "3SaCalGJq7Y3Y0e6QUMxxe",
-        "type": "Entry",
-        "createdAt": "2026-10-14T09:40:01.887Z",
-        "updatedAt": "2026-10-15T16:21:00.198Z",
-        "environment": {
-          "sys": {
-            "id": "master",
-            "type": "Link",
-            "linkType": "Environment"
-          }
-        },
-        "publishedVersion": 13,
-        "publishedAt": "2026-10-15T16:21:00.198Z",
-        "firstPublishedAt": "2026-10-14T09:41:45.845Z",
-        "createdBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "updatedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "publishedCounter": 2,
-        "version": 14,
-        "publishedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "fieldStatus": {
-          "*": {
-            "en-US": "published"
-          }
-        },
-        "automationTags": [
-        ],
-        "contentType": {
-          "sys": {
-            "type": "Link",
-            "linkType": "ContentType",
-            "id": "nt_audience"
-          }
-        },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/3SaCalGJq7Y3Y0e6QUMxxe"
-      },
-      "fields": {
-        "nt_name": {
-          "en-US": "Identified Visitor Audience"
-        },
-        "nt_description": {
-          "en-US": "This is an identified visitor audience."
-        },
-        "nt_rules": {
-          "en-US": {
-            "any": [
-              {
-                "all": [
-                  {
-                    "type": "identify",
-                    "count": "1",
-                    "key": "identified",
-                    "operator": "equal",
-                    "value": "true",
-                    "conditions": [
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        "nt_audience_id": {
-          "en-US": "3SaCalGJq7Y3Y0e6QUMxxe"
-        },
-        "nt_metadata": {
-          "en-US": {
-            "type": "origin"
-          }
-        }
-      }
-    },
-    {
-      "metadata": {
-        "tags": [
-        ],
-        "concepts": [
-        ]
-      },
-      "sys": {
-        "space": {
-          "sys": {
-            "type": "Link",
-            "linkType": "Space",
-            "id": "700s66i6clht"
-          }
-        },
-        "id": "67lS2EQ9HH1hNELN30vDKS",
-        "type": "Entry",
-        "createdAt": "2026-10-14T09:52:37.362Z",
-        "updatedAt": "2026-10-14T09:53:33.411Z",
+        "createdAt": "2026-10-19T15:19:31.880Z",
+        "updatedAt": "2026-10-19T15:20:32.410Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -1308,8 +964,8 @@
           }
         },
         "publishedVersion": 7,
-        "publishedAt": "2026-10-14T09:53:33.411Z",
-        "firstPublishedAt": "2026-10-14T09:53:33.411Z",
+        "publishedAt": "2026-10-19T15:20:32.410Z",
+        "firstPublishedAt": "2026-10-19T15:20:32.410Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -1347,14 +1003,14 @@
             "id": "content"
           }
         },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/67lS2EQ9HH1hNELN30vDKS"
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/3Wm47G0CQNnkRBEPLvhw8T"
       },
       "fields": {
         "internalTitle": {
-          "en-US": "Composed Component Fragment"
+          "en-US": "Composed Experience Fragment Content 1"
         },
         "text": {
-          "en-US": "This is a composed component fragment."
+          "en-US": "This is composed experience fragment content for the first component."
         },
         "richText": {
           "en-US": {
@@ -1369,7 +1025,7 @@
                 "content": [
                   {
                     "nodeType": "text",
-                    "value": "This is composed component fragment ",
+                    "value": "This is composed experience fragment content for the first component ",
                     "marks": [
                     ],
                     "data": {
@@ -1416,10 +1072,10 @@
             "id": "700s66i6clht"
           }
         },
-        "id": "6bULnHxHSvCtqd5L9me5oJ",
+        "id": "2n2KQ8QXvSgUEcvpfPJWXd",
         "type": "Entry",
-        "createdAt": "2026-10-14T11:04:05.198Z",
-        "updatedAt": "2026-10-14T11:07:59.398Z",
+        "createdAt": "2026-10-19T15:20:56.651Z",
+        "updatedAt": "2026-10-19T15:21:35.527Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -1427,9 +1083,9 @@
             "linkType": "Environment"
           }
         },
-        "publishedVersion": 11,
-        "publishedAt": "2026-10-14T11:07:59.398Z",
-        "firstPublishedAt": "2026-10-14T11:05:09.623Z",
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-19T15:21:35.527Z",
+        "firstPublishedAt": "2026-10-19T15:21:35.527Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -1444,8 +1100,8 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "publishedCounter": 2,
-        "version": 12,
+        "publishedCounter": 1,
+        "version": 7,
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -1467,14 +1123,14 @@
             "id": "content"
           }
         },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/6bULnHxHSvCtqd5L9me5oJ"
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/2n2KQ8QXvSgUEcvpfPJWXd"
       },
       "fields": {
         "internalTitle": {
-          "en-US": "Personalized Coded Fragment Baseline"
+          "en-US": "Composed Experience Fragment Content 2"
         },
         "text": {
-          "en-US": "This is a personalized coded fragment baseline."
+          "en-US": "This is composed experience fragment content for the second component."
         },
         "richText": {
           "en-US": {
@@ -1489,7 +1145,7 @@
                 "content": [
                   {
                     "nodeType": "text",
-                    "value": "This is personalized coded fragment baseline ",
+                    "value": "This is composed experience fragment content for the second component ",
                     "marks": [
                     ],
                     "data": {
@@ -1536,10 +1192,10 @@
             "id": "700s66i6clht"
           }
         },
-        "id": "4ORMu6r0JWJOGx7IkE3LTl",
+        "id": "4SUbE6Ve5P2LoxGYTckiUg",
         "type": "Entry",
-        "createdAt": "2026-10-14T11:05:50.481Z",
-        "updatedAt": "2026-10-14T11:07:39.314Z",
+        "createdAt": "2026-10-19T15:23:31.482Z",
+        "updatedAt": "2026-10-19T15:24:13.592Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -1547,9 +1203,9 @@
             "linkType": "Environment"
           }
         },
-        "publishedVersion": 9,
-        "publishedAt": "2026-10-14T11:07:39.314Z",
-        "firstPublishedAt": "2026-10-14T11:06:43.982Z",
+        "publishedVersion": 7,
+        "publishedAt": "2026-10-19T15:24:13.592Z",
+        "firstPublishedAt": "2026-10-19T15:24:13.592Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -1564,8 +1220,8 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "publishedCounter": 2,
-        "version": 10,
+        "publishedCounter": 1,
+        "version": 8,
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -1584,59 +1240,43 @@
           "sys": {
             "type": "Link",
             "linkType": "ContentType",
-            "id": "content"
+            "id": "nt_audience"
           }
         },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4ORMu6r0JWJOGx7IkE3LTl"
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4SUbE6Ve5P2LoxGYTckiUg"
       },
       "fields": {
-        "internalTitle": {
-          "en-US": "Personalized Coded Fragment Variant"
+        "nt_name": {
+          "en-US": "Identified Users"
         },
-        "text": {
-          "en-US": "This is a personalized coded fragment variant."
+        "nt_description": {
+          "en-US": "This is an audience for users who have been identified"
         },
-        "richText": {
+        "nt_rules": {
           "en-US": {
-            "nodeType": "document",
-            "data": {
-            },
-            "content": [
+            "any": [
               {
-                "nodeType": "paragraph",
-                "data": {
-                },
-                "content": [
+                "all": [
                   {
-                    "nodeType": "text",
-                    "value": "This is personalized coded fragment variant ",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": "rich text",
-                    "marks": [
-                      {
-                        "type": "bold"
-                      }
-                    ],
-                    "data": {
-                    }
-                  },
-                  {
-                    "nodeType": "text",
-                    "value": ".",
-                    "marks": [
-                    ],
-                    "data": {
-                    }
+                    "type": "identify",
+                    "count": "1",
+                    "key": "identified",
+                    "operator": "equal",
+                    "value": "true",
+                    "conditions": [
+                    ]
                   }
                 ]
               }
             ]
+          }
+        },
+        "nt_audience_id": {
+          "en-US": "4SUbE6Ve5P2LoxGYTckiUg"
+        },
+        "nt_metadata": {
+          "en-US": {
+            "type": "origin"
           }
         }
       }
@@ -1656,10 +1296,10 @@
             "id": "700s66i6clht"
           }
         },
-        "id": "5OKN7BkA3xiHUpLyD7VnsG",
+        "id": "5Z0pmZOTBQeJ1dvCMH8akH",
         "type": "Entry",
-        "createdAt": "2026-10-16T15:12:04.819Z",
-        "updatedAt": "2026-10-16T15:12:05.371Z",
+        "createdAt": "2026-10-19T15:26:21.067Z",
+        "updatedAt": "2026-10-19T15:26:21.719Z",
         "environment": {
           "sys": {
             "id": "master",
@@ -1668,8 +1308,8 @@
           }
         },
         "publishedVersion": 1,
-        "publishedAt": "2026-10-16T15:12:05.371Z",
-        "firstPublishedAt": "2026-10-16T15:12:05.371Z",
+        "publishedAt": "2026-10-19T15:26:21.719Z",
+        "firstPublishedAt": "2026-10-19T15:26:21.719Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -1707,14 +1347,14 @@
             "id": "nt_experience"
           }
         },
-        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5OKN7BkA3xiHUpLyD7VnsG"
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5Z0pmZOTBQeJ1dvCMH8akH"
       },
       "fields": {
         "nt_name": {
-          "en-US": "Personalized Coded Fragment Personalization"
+          "en-US": "Personalized Coded Experience Fragment Personalization"
         },
         "nt_description": {
-          "en-US": "This is a personalized coded fragment personalization"
+          "en-US": "This is a personalized coded experience fragment personalization."
         },
         "nt_type": {
           "en-US": "nt_personalization"
@@ -1731,18 +1371,17 @@
               {
                 "baseline": {
                   "id": "default",
-                  "entityId": "3wLhlciQgJWtR3D8ApSz98"
+                  "entityId": "5ildOvX1W4Il3gMxRnMCx"
                 },
                 "variants": [
                   {
-                    "id": "1925cd12-8d24-43e7-9a91-220004c5f5d8",
-                    "entityId": "3wLhlciQgJWtR3D8ApSz98"
+                    "id": "6dc4dc00-4e2e-417c-a5c3-cc069fc4d1a1",
+                    "entityId": "5ildOvX1W4Il3gMxRnMCx"
                   }
                 ],
                 "type": "FragmentReplacement"
               }
-            ],
-            "primaryMetric": "fececd8c-d0bd-4a37-bea7-b2f68b782923"
+            ]
           }
         },
         "nt_audience": {
@@ -1750,16 +1389,616 @@
             "sys": {
               "type": "Link",
               "linkType": "Entry",
-              "id": "3SaCalGJq7Y3Y0e6QUMxxe"
+              "id": "4SUbE6Ve5P2LoxGYTckiUg"
             }
           }
         },
         "nt_experience_id": {
-          "en-US": "dfeeff0d-67b9-464e-80f8-96ebb8c168e5"
+          "en-US": "7ae4a677-153d-49ff-9f6d-7d9376ef3cc4"
         },
         "nt_metadata": {
           "en-US": {
             "type": "origin"
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "7M6wXBRLE07IwUFzOAiQlj",
+        "type": "Entry",
+        "createdAt": "2026-10-19T15:26:59.923Z",
+        "updatedAt": "2026-10-19T15:28:03.093Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 9,
+        "publishedAt": "2026-10-19T15:28:03.093Z",
+        "firstPublishedAt": "2026-10-19T15:28:03.093Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 10,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/7M6wXBRLE07IwUFzOAiQlj"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Coded Experience Fragment Baseline Content"
+        },
+        "text": {
+          "en-US": "This is personalized coded experience fragment baseline content."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is personalized coded experience fragment baseline content ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "1QAInQEKqJdM1F2JEJoggI",
+        "type": "Entry",
+        "createdAt": "2026-10-19T15:28:29.183Z",
+        "updatedAt": "2026-10-19T15:29:11.081Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 7,
+        "publishedAt": "2026-10-19T15:29:11.081Z",
+        "firstPublishedAt": "2026-10-19T15:29:11.081Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 8,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/1QAInQEKqJdM1F2JEJoggI"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Coded Experience Fragment Variant Content"
+        },
+        "text": {
+          "en-US": "This is personalized coded experience fragment variant content."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is personalized coded experience fragment variant content ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "5adomUwFVsczdV9CRfhTYI",
+        "type": "Entry",
+        "createdAt": "2026-10-19T15:33:23.343Z",
+        "updatedAt": "2026-10-19T15:33:55.041Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-19T15:33:55.041Z",
+        "firstPublishedAt": "2026-10-19T15:33:55.041Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5adomUwFVsczdV9CRfhTYI"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Coded Experience Content"
+        },
+        "text": {
+          "en-US": "This is coded experience content."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is coded experience content ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "rRNdlzDF1fbLa40W4Zn3h",
+        "type": "Entry",
+        "createdAt": "2026-10-19T15:38:24.648Z",
+        "updatedAt": "2026-10-19T15:42:02.568Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 14,
+        "publishedAt": "2026-10-19T15:42:02.568Z",
+        "firstPublishedAt": "2026-10-19T15:39:49.365Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 2,
+        "version": 15,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/rRNdlzDF1fbLa40W4Zn3h"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Composed Experience Content 1"
+        },
+        "text": {
+          "en-US": "This is composed experience content for the first component."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is composed experience content for the first component ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "5OnDydh7Y8VIYirnx7nbMI",
+        "type": "Entry",
+        "createdAt": "2026-10-19T15:40:25.220Z",
+        "updatedAt": "2026-10-19T15:41:13.805Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-19T15:41:13.805Z",
+        "firstPublishedAt": "2026-10-19T15:41:13.805Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5OnDydh7Y8VIYirnx7nbMI"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Composed Experience Content 2"
+        },
+        "text": {
+          "en-US": "This is composed experience content for the second component."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is composed experience content for the second component ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
           }
         }
       }
@@ -3637,11 +3876,11 @@
             "id": "master"
           }
         },
-        "version": 5,
-        "publishedAt": "2026-10-14T09:50:40.407Z",
-        "publishedVersion": 4,
+        "version": 6,
+        "publishedAt": "2026-10-19T15:18:57.668Z",
+        "publishedVersion": 5,
         "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:19:11.693Z",
+        "firstPublishedAt": "2026-10-19T15:11:32.616Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -3652,7 +3891,7 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "createdAt": "2026-10-13T12:13:12.378Z",
+        "createdAt": "2026-10-19T15:10:07.457Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -3660,7 +3899,7 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "updatedAt": "2026-10-14T09:50:40.393Z",
+        "updatedAt": "2026-10-19T15:18:57.654Z",
         "updatedBy": {
           "sys": {
             "type": "Link",
@@ -3672,84 +3911,40 @@
         ]
       },
       "name": "Composed Component",
-      "description": "This is a composed component",
+      "description": "This is a composed component.",
       "contentProperties": [
         {
-          "name": "Title",
+          "name": "Coded Component",
           "required": true,
-          "type": "String",
-          "id": "cp_xTpnN6tKO-"
-        },
-        {
-          "name": "Description",
-          "required": true,
-          "type": "RichText",
-          "id": "cp_EC5B50JR92"
-        },
-        {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-              {
-                "name": "Collection Item Title",
-                "required": true,
-                "type": "String",
-                "id": "collectionItemTitle"
-              },
-              {
-                "name": "Collection Item Description",
-                "required": true,
-                "type": "RichText",
-                "id": "collectionItemDescription"
-              }
-            ]
+          "type": "TypeRef",
+          "ref": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
           },
-          "id": "cp_vguv-vzKB1"
+          "id": "cp_r8UEGKwoXF"
         },
         {
-          "name": "Title",
+          "name": "Coded Component",
           "required": true,
-          "type": "String",
-          "id": "cp_S_jCmYKa1K"
-        },
-        {
-          "name": "Description",
-          "required": true,
-          "type": "RichText",
-          "id": "cp_mmPeaVcqlZ"
-        },
-        {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-              {
-                "name": "Collection Item Title",
-                "required": true,
-                "type": "String",
-                "id": "collectionItemTitle"
-              },
-              {
-                "name": "Collection Item Description",
-                "required": true,
-                "type": "RichText",
-                "id": "collectionItemDescription"
-              }
-            ]
+          "type": "TypeRef",
+          "ref": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
           },
-          "id": "cp_IP_zCYevjh"
+          "id": "cp_XxhQNVJuDb"
         }
       ],
       "designProperties": [
       ],
       "componentTree": [
         {
-          "id": "vqMpWtzefLdJ8rHUzeWS4",
+          "id": "X1kFfMuX2PvZcrImTKQ0F",
           "nodeType": "Component",
           "component": {
             "sys": {
@@ -3758,18 +3953,14 @@
               "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
             }
           },
-          "contentProperties": {
-            "title": "$contentProperties/cp_S_jCmYKa1K",
-            "collection": "$contentProperties/cp_IP_zCYevjh",
-            "description": "$contentProperties/cp_mmPeaVcqlZ"
-          },
+          "contentProperties": "$contentProperties/cp_r8UEGKwoXF",
           "designProperties": {
           },
           "slots": {
           }
         },
         {
-          "id": "bVS9DMS9pulmCrRJ7InMa",
+          "id": "fUudrffwbkD_iNLR6V_y3",
           "nodeType": "Component",
           "component": {
             "sys": {
@@ -3778,11 +3969,7 @@
               "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
             }
           },
-          "contentProperties": {
-            "title": "$contentProperties/cp_xTpnN6tKO-",
-            "collection": "$contentProperties/cp_vguv-vzKB1",
-            "description": "$contentProperties/cp_EC5B50JR92"
-          },
+          "contentProperties": "$contentProperties/cp_XxhQNVJuDb",
           "designProperties": {
           },
           "slots": {
@@ -3813,7 +4000,7 @@
           "sys": {
             "type": "ResourceLink",
             "linkType": "Contentful:DataAssembly",
-            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/28K3R99fBlcr93R65MVJaP"
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/246bbtx2pFLq7paqNanBXp"
           }
         }
       ]
@@ -3836,11 +4023,11 @@
             "id": "master"
           }
         },
-        "version": 5,
-        "publishedAt": "2026-10-13T12:33:16.472Z",
-        "publishedVersion": 4,
-        "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:17:06.629Z",
+        "version": 3,
+        "publishedAt": "2026-10-19T15:09:44.215Z",
+        "publishedVersion": 2,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-19T15:09:44.215Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -3851,7 +4038,7 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "createdAt": "2026-10-13T12:13:36.661Z",
+        "createdAt": "2026-10-19T15:07:53.266Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -3859,7 +4046,7 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "updatedAt": "2026-10-13T12:33:16.460Z",
+        "updatedAt": "2026-10-19T15:09:44.201Z",
         "updatedBy": {
           "sys": {
             "type": "Link",
@@ -3880,33 +4067,16 @@
           "id": "title"
         },
         {
-          "name": "Description",
+          "name": "Text",
           "required": true,
-          "type": "RichText",
-          "id": "description"
+          "type": "String",
+          "id": "text"
         },
         {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-              {
-                "name": "Collection Item Title",
-                "required": true,
-                "type": "String",
-                "id": "collectionItemTitle"
-              },
-              {
-                "name": "Collection Item Description",
-                "required": true,
-                "type": "RichText",
-                "id": "collectionItemDescription"
-              }
-            ]
-          },
-          "id": "collection"
+          "name": "Rich Text",
+          "required": true,
+          "type": "RichText",
+          "id": "richText"
         }
       ],
       "designProperties": [
@@ -3936,7 +4106,7 @@
           "sys": {
             "type": "ResourceLink",
             "linkType": "Contentful:DataAssembly",
-            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
           }
         }
       ]
@@ -3961,11 +4131,11 @@
             "id": "master"
           }
         },
-        "version": 7,
-        "publishedAt": "2026-10-13T12:54:28.483Z",
-        "publishedVersion": 6,
-        "publishedCounter": 3,
-        "firstPublishedAt": "2026-10-13T12:35:14.735Z",
+        "version": 5,
+        "publishedAt": "2026-10-19T15:36:06.613Z",
+        "publishedVersion": 4,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-19T15:15:05.176Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -3976,7 +4146,7 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "createdAt": "2026-10-13T12:10:39.151Z",
+        "createdAt": "2026-10-19T15:14:36.738Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -3984,7 +4154,7 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "updatedAt": "2026-10-13T12:54:28.473Z",
+        "updatedAt": "2026-10-19T15:36:06.598Z",
         "updatedBy": {
           "sys": {
             "type": "Link",
@@ -3996,7 +4166,7 @@
         ]
       },
       "name": "Composed Experience Template",
-      "description": "This is a composed experience template",
+      "description": "This is a composed experience template.",
       "contentProperties": [
         {
           "name": "Coded Component",
@@ -4009,84 +4179,27 @@
               "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
             }
           },
-          "id": "cp_6Dlodq87ul"
+          "id": "cp_17S_0fGkrF"
         },
         {
-          "name": "Title",
+          "name": "Coded Component",
           "required": true,
-          "type": "String",
-          "id": "cp_HB6x_-Tdqu"
-        },
-        {
-          "name": "Description",
-          "required": true,
-          "type": "RichText",
-          "id": "cp_iR2v8k31D_"
-        },
-        {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-              {
-                "name": "Collection Item Title",
-                "required": true,
-                "type": "String",
-                "id": "collectionItemTitle"
-              },
-              {
-                "name": "Collection Item Description",
-                "required": true,
-                "type": "RichText",
-                "id": "collectionItemDescription"
-              }
-            ]
+          "type": "TypeRef",
+          "ref": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:Component",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
+            }
           },
-          "id": "cp_zrRzDk8CtJ"
-        },
-        {
-          "name": "Title",
-          "required": true,
-          "type": "String",
-          "id": "cp_P2WL7al10b"
-        },
-        {
-          "name": "Description",
-          "required": true,
-          "type": "RichText",
-          "id": "cp_CmdgHsRkhU"
-        },
-        {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-              {
-                "name": "Collection Item Title",
-                "required": true,
-                "type": "String",
-                "id": "collectionItemTitle"
-              },
-              {
-                "name": "Collection Item Description",
-                "required": true,
-                "type": "RichText",
-                "id": "collectionItemDescription"
-              }
-            ]
-          },
-          "id": "cp_5qO5O5HCj-"
+          "id": "cp_iFJCJZhqU-"
         }
       ],
       "designProperties": [
       ],
       "componentTree": [
         {
-          "id": "y23JIvmmOVX_pHwIDDxM2",
+          "id": "CP7FFDYKFgaQ7sauKAST3",
           "nodeType": "Component",
           "component": {
             "sys": {
@@ -4095,37 +4208,30 @@
               "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
             }
           },
-          "contentProperties": "$contentProperties/cp_6Dlodq87ul",
+          "contentProperties": "$contentProperties/cp_17S_0fGkrF",
           "designProperties": {
           },
           "slots": {
           }
         },
         {
-          "id": "LxM1Ah6GNco8DwVtr_qOI",
+          "id": "YtYCQ_TihhNnBjrBcTl1x",
           "nodeType": "Component",
           "component": {
             "sys": {
               "type": "ResourceLink",
               "linkType": "Contentful:Component",
-              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/composedComponent"
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/components/codedComponent"
             }
           },
-          "contentProperties": {
-            "cp_EC5B50JR92": "$contentProperties/cp_iR2v8k31D_",
-            "cp_IP_zCYevjh": "$contentProperties/cp_5qO5O5HCj-",
-            "cp_S_jCmYKa1K": "$contentProperties/cp_P2WL7al10b",
-            "cp_mmPeaVcqlZ": "$contentProperties/cp_CmdgHsRkhU",
-            "cp_vguv-vzKB1": "$contentProperties/cp_zrRzDk8CtJ",
-            "cp_xTpnN6tKO-": "$contentProperties/cp_HB6x_-Tdqu"
-          },
+          "contentProperties": "$contentProperties/cp_iFJCJZhqU-",
           "designProperties": {
           },
           "slots": {
           }
         },
         {
-          "id": "OFsP4wqltzkN8n5XwUyDQ",
+          "id": "TvZ1nDbk_TLn7jJ23KQCr",
           "nodeType": "Slot",
           "slotId": "slot"
         }
@@ -4161,7 +4267,7 @@
           "sys": {
             "type": "ResourceLink",
             "linkType": "Contentful:DataAssembly",
-            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/JtOVc3Lv922jLsqMZ5lVz"
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/1xrW5RkILRtGaWxGhtqtE7"
           }
         }
       ]
@@ -4184,11 +4290,11 @@
             "id": "master"
           }
         },
-        "version": 5,
-        "publishedAt": "2026-10-13T12:38:41.034Z",
-        "publishedVersion": 4,
-        "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:37:19.466Z",
+        "version": 4,
+        "publishedAt": "2026-10-19T15:14:10.307Z",
+        "publishedVersion": 3,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-19T15:14:10.307Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -4199,7 +4305,7 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "createdAt": "2026-10-13T12:12:20.644Z",
+        "createdAt": "2026-10-19T15:12:54.549Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -4207,7 +4313,7 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "updatedAt": "2026-10-13T12:38:41.018Z",
+        "updatedAt": "2026-10-19T15:14:10.292Z",
         "updatedBy": {
           "sys": {
             "type": "Link",
@@ -4228,21 +4334,16 @@
           "id": "title"
         },
         {
-          "name": "Description",
+          "name": "Text",
           "required": true,
-          "type": "RichText",
-          "id": "description"
+          "type": "String",
+          "id": "text"
         },
         {
-          "name": "Collection",
-          "required": false,
-          "type": "Array",
-          "items": {
-            "type": "Record",
-            "fields": [
-            ]
-          },
-          "id": "collection"
+          "name": "Rich Text",
+          "required": true,
+          "type": "RichText",
+          "id": "richText"
         }
       ],
       "designProperties": [
@@ -4279,7 +4380,7 @@
           "sys": {
             "type": "ResourceLink",
             "linkType": "Contentful:DataAssembly",
-            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/180im2p4DEwueOrKRAJ1fM"
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/6qkMYKRvKerQnsOX3Hdc2N"
           }
         }
       ]
@@ -4288,202 +4389,7 @@
   "dataAssemblies": [
     {
       "sys": {
-        "id": "28K3R99fBlcr93R65MVJaP",
-        "type": "DataAssembly",
-        "dataType": [
-          {
-            "name": "Title",
-            "required": true,
-            "type": "String",
-            "id": "cp_xTpnN6tKO-"
-          },
-          {
-            "name": "Description",
-            "required": true,
-            "type": "RichText",
-            "id": "cp_EC5B50JR92"
-          },
-          {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-                {
-                  "name": "Collection Item Title",
-                  "required": true,
-                  "type": "String",
-                  "id": "collectionItemTitle"
-                },
-                {
-                  "name": "Collection Item Description",
-                  "required": true,
-                  "type": "RichText",
-                  "id": "collectionItemDescription"
-                }
-              ]
-            },
-            "id": "cp_vguv-vzKB1"
-          },
-          {
-            "name": "Title",
-            "required": true,
-            "type": "String",
-            "id": "cp_S_jCmYKa1K"
-          },
-          {
-            "name": "Description",
-            "required": true,
-            "type": "RichText",
-            "id": "cp_mmPeaVcqlZ"
-          },
-          {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-                {
-                  "name": "Collection Item Title",
-                  "required": true,
-                  "type": "String",
-                  "id": "collectionItemTitle"
-                },
-                {
-                  "name": "Collection Item Description",
-                  "required": true,
-                  "type": "RichText",
-                  "id": "collectionItemDescription"
-                }
-              ]
-            },
-            "id": "cp_IP_zCYevjh"
-          }
-        ],
-        "version": 2,
-        "space": {
-          "sys": {
-            "type": "Link",
-            "linkType": "Space",
-            "id": "700s66i6clht"
-          }
-        },
-        "environment": {
-          "sys": {
-            "type": "Link",
-            "linkType": "Environment",
-            "id": "master"
-          }
-        },
-        "createdBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "createdAt": "2026-10-14T09:50:32.122Z",
-        "updatedAt": "2026-10-14T09:50:39.832Z",
-        "publishedAt": "2026-10-14T09:50:39.847Z",
-        "publishedVersion": 1,
-        "publishedCounter": 1,
-        "firstPublishedAt": "2026-10-14T09:50:39.847Z",
-        "publishedBy": {
-          "sys": {
-            "type": "Link",
-            "linkType": "User",
-            "id": "2ThAHYPA8kj7F1sHxUzXVt"
-          }
-        },
-        "variant": "default"
-      },
-      "metadata": {
-        "tags": [
-        ]
-      },
-      "name": "Default",
-      "description": "Default data assembly",
-      "parameters": {
-        "p_MtWSs4OqKc": {
-          "name": "Parameter",
-          "required": true,
-          "type": "ResourceLink",
-          "allowedResources": [
-            {
-              "type": "Contentful:Entry",
-              "source": "crn:contentful:::content:spaces/$self/environments/$self",
-              "allowedTypes": [
-                "content"
-              ]
-            }
-          ]
-        }
-      },
-      "resolvers": {
-        "r_YxZ_Owq8qE": {
-          "source": "Contentful:GraphQL",
-          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
-          "parameters": {
-            "id": "$parameters/p_MtWSs4OqKc"
-          }
-        }
-      },
-      "return": {
-        "cp_EC5B50JR92": {
-          "$from": {
-            "source": "$resolvers/r_YxZ_Owq8qE/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "richText"
-                }
-              }
-            }
-          }
-        },
-        "cp_S_jCmYKa1K": {
-          "$from": {
-            "source": "$resolvers/r_YxZ_Owq8qE/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "internalTitle"
-                }
-              }
-            }
-          }
-        },
-        "cp_mmPeaVcqlZ": {
-          "$from": {
-            "source": "$resolvers/r_YxZ_Owq8qE/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "richText"
-                }
-              }
-            }
-          }
-        },
-        "cp_xTpnN6tKO-": {
-          "$from": {
-            "source": "$resolvers/r_YxZ_Owq8qE/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "internalTitle"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "sys": {
-        "id": "JtOVc3Lv922jLsqMZ5lVz",
+        "id": "1xrW5RkILRtGaWxGhtqtE7",
         "type": "DataAssembly",
         "dataType": [
           {
@@ -4494,80 +4400,23 @@
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:DataAssembly",
-                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
               }
             },
-            "id": "cp_6Dlodq87ul"
+            "id": "cp_17S_0fGkrF"
           },
           {
-            "name": "Title",
+            "name": "Coded Component",
             "required": true,
-            "type": "String",
-            "id": "cp_HB6x_-Tdqu"
-          },
-          {
-            "name": "Description",
-            "required": true,
-            "type": "RichText",
-            "id": "cp_iR2v8k31D_"
-          },
-          {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-                {
-                  "name": "Collection Item Title",
-                  "required": true,
-                  "type": "String",
-                  "id": "collectionItemTitle"
-                },
-                {
-                  "name": "Collection Item Description",
-                  "required": true,
-                  "type": "RichText",
-                  "id": "collectionItemDescription"
-                }
-              ]
+            "type": "TypeRef",
+            "ref": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:DataAssembly",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+              }
             },
-            "id": "cp_zrRzDk8CtJ"
-          },
-          {
-            "name": "Title",
-            "required": true,
-            "type": "String",
-            "id": "cp_P2WL7al10b"
-          },
-          {
-            "name": "Description",
-            "required": true,
-            "type": "RichText",
-            "id": "cp_CmdgHsRkhU"
-          },
-          {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-                {
-                  "name": "Collection Item Title",
-                  "required": true,
-                  "type": "String",
-                  "id": "collectionItemTitle"
-                },
-                {
-                  "name": "Collection Item Description",
-                  "required": true,
-                  "type": "RichText",
-                  "id": "collectionItemDescription"
-                }
-              ]
-            },
-            "id": "cp_5qO5O5HCj-"
+            "id": "cp_iFJCJZhqU-"
           }
         ],
         "version": 2,
@@ -4592,12 +4441,12 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "createdAt": "2026-10-13T12:54:23.032Z",
-        "updatedAt": "2026-10-13T12:54:27.830Z",
-        "publishedAt": "2026-10-13T12:54:27.842Z",
+        "createdAt": "2026-10-19T15:36:00.971Z",
+        "updatedAt": "2026-10-19T15:36:05.912Z",
+        "publishedAt": "2026-10-19T15:36:05.944Z",
         "publishedVersion": 1,
         "publishedCounter": 1,
-        "firstPublishedAt": "2026-10-13T12:54:27.842Z",
+        "firstPublishedAt": "2026-10-19T15:36:05.944Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -4614,8 +4463,22 @@
       "name": "Default",
       "description": "Default data assembly",
       "parameters": {
-        "p_sQtsiRzRCd": {
-          "name": "Parameter",
+        "p_izZHsyrzM7": {
+          "name": "Parameter 1",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        },
+        "p_sGZk50FFJZ": {
+          "name": "Parameter 1",
           "required": true,
           "type": "ResourceLink",
           "allowedResources": [
@@ -4630,111 +4493,75 @@
         }
       },
       "resolvers": {
-        "r_dZwqwBNa7o": {
-          "source": "Contentful:GraphQL",
-          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
-          "parameters": {
-            "id": "$parameters/p_sQtsiRzRCd"
-          }
-        },
-        "r_fM0xsVsWe5": {
+        "r_Ep3yi7wtRl": {
           "source": "Contentful:DataAssembly",
           "dataAssembly": {
             "sys": {
               "type": "ResourceLink",
               "linkType": "Contentful:DataAssembly",
-              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
             }
           },
           "parameters": {
-            "p_ijUq5qyYYk": "$parameters/p_sQtsiRzRCd"
+            "p_loEUg6m7uc": "$parameters/p_sGZk50FFJZ"
+          }
+        },
+        "r_z6xRfr_npr": {
+          "source": "Contentful:DataAssembly",
+          "dataAssembly": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+            }
+          },
+          "parameters": {
+            "p_loEUg6m7uc": "$parameters/p_izZHsyrzM7"
           }
         }
       },
       "return": {
-        "cp_6Dlodq87ul": {
-          "$from": "$resolvers/r_fM0xsVsWe5"
+        "cp_17S_0fGkrF": {
+          "$from": "$resolvers/r_z6xRfr_npr"
         },
-        "cp_CmdgHsRkhU": {
-          "$from": {
-            "source": "$resolvers/r_dZwqwBNa7o/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "richText"
-                }
-              }
-            }
-          }
-        },
-        "cp_HB6x_-Tdqu": {
-          "$from": {
-            "source": "$resolvers/r_dZwqwBNa7o/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "internalTitle"
-                }
-              }
-            }
-          }
-        },
-        "cp_P2WL7al10b": {
-          "$from": {
-            "source": "$resolvers/r_dZwqwBNa7o/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "internalTitle"
-                }
-              }
-            }
-          }
-        },
-        "cp_iR2v8k31D_": {
-          "$from": {
-            "source": "$resolvers/r_dZwqwBNa7o/_node",
-            "select": {
-              "$on": {
-                "type": {
-                  "Content": "richText"
-                }
-              }
-            }
-          }
+        "cp_iFJCJZhqU-": {
+          "$from": "$resolvers/r_Ep3yi7wtRl"
         }
       }
     },
     {
       "sys": {
-        "id": "180im2p4DEwueOrKRAJ1fM",
+        "id": "246bbtx2pFLq7paqNanBXp",
         "type": "DataAssembly",
         "dataType": [
           {
-            "name": "Title",
+            "name": "Coded Component",
             "required": true,
-            "type": "String",
-            "id": "title"
-          },
-          {
-            "name": "Description",
-            "required": true,
-            "type": "RichText",
-            "id": "description"
-          },
-          {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-              ]
+            "type": "TypeRef",
+            "ref": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:DataAssembly",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+              }
             },
-            "id": "collection"
+            "id": "cp_r8UEGKwoXF"
+          },
+          {
+            "name": "Coded Component",
+            "required": true,
+            "type": "TypeRef",
+            "ref": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:DataAssembly",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+              }
+            },
+            "id": "cp_XxhQNVJuDb"
           }
         ],
-        "version": 4,
+        "version": 2,
         "space": {
           "sys": {
             "type": "Link",
@@ -4756,8 +4583,142 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "createdAt": "2026-10-13T12:37:16.565Z",
-        "updatedAt": "2026-10-13T12:38:40.412Z",
+        "createdAt": "2026-10-19T15:18:51.506Z",
+        "updatedAt": "2026-10-19T15:18:56.988Z",
+        "publishedAt": "2026-10-19T15:18:57.007Z",
+        "publishedVersion": 1,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-19T15:18:57.007Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default"
+      },
+      "metadata": {
+        "tags": [
+        ]
+      },
+      "name": "Default",
+      "description": "Default data assembly",
+      "parameters": {
+        "p_n97U8pOqnX": {
+          "name": "Parameter 1",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        },
+        "p_nSiQyRokNs": {
+          "name": "Parameter 1",
+          "required": true,
+          "type": "ResourceLink",
+          "allowedResources": [
+            {
+              "type": "Contentful:Entry",
+              "source": "crn:contentful:::content:spaces/$self/environments/$self",
+              "allowedTypes": [
+                "content"
+              ]
+            }
+          ]
+        }
+      },
+      "resolvers": {
+        "r_BqJ5zv55Ag": {
+          "source": "Contentful:DataAssembly",
+          "dataAssembly": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+            }
+          },
+          "parameters": {
+            "p_loEUg6m7uc": "$parameters/p_n97U8pOqnX"
+          }
+        },
+        "r_SXLvKSkWO3": {
+          "source": "Contentful:DataAssembly",
+          "dataAssembly": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
+            }
+          },
+          "parameters": {
+            "p_loEUg6m7uc": "$parameters/p_nSiQyRokNs"
+          }
+        }
+      },
+      "return": {
+        "cp_XxhQNVJuDb": {
+          "$from": "$resolvers/r_SXLvKSkWO3"
+        },
+        "cp_r8UEGKwoXF": {
+          "$from": "$resolvers/r_BqJ5zv55Ag"
+        }
+      }
+    },
+    {
+      "sys": {
+        "id": "6qkMYKRvKerQnsOX3Hdc2N",
+        "type": "DataAssembly",
+        "dataType": [
+          {
+            "name": "Title",
+            "required": true,
+            "type": "String",
+            "id": "title"
+          },
+          {
+            "name": "Text",
+            "required": true,
+            "type": "String",
+            "id": "text"
+          },
+          {
+            "name": "Rich Text",
+            "required": true,
+            "type": "RichText",
+            "id": "richText"
+          }
+        ],
+        "version": 3,
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "createdAt": "2026-10-19T15:13:47.361Z",
+        "updatedAt": "2026-10-19T15:14:09.323Z",
         "updatedBy": {
           "sys": {
             "type": "Link",
@@ -4765,10 +4726,10 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "publishedAt": "2026-10-13T12:38:40.465Z",
-        "publishedVersion": 3,
-        "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:37:18.772Z",
+        "publishedAt": "2026-10-19T15:14:09.337Z",
+        "publishedVersion": 2,
+        "publishedCounter": 1,
+        "firstPublishedAt": "2026-10-19T15:14:09.337Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -4785,8 +4746,8 @@
       "name": "Default",
       "description": "Default data assembly",
       "parameters": {
-        "p_G7_ikphzLQ": {
-          "name": "Parameter",
+        "p_j1sxQn41xf": {
+          "name": "Parameter 1",
           "required": true,
           "type": "ResourceLink",
           "allowedResources": [
@@ -4801,18 +4762,30 @@
         }
       },
       "resolvers": {
-        "r_OhRwmcu1_4": {
+        "r_tO15hM9NKa": {
           "source": "Contentful:GraphQL",
-          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n      text\n    }\n  }\n}",
           "parameters": {
-            "id": "$parameters/p_G7_ikphzLQ"
+            "id": "$parameters/p_j1sxQn41xf"
           }
         }
       },
       "return": {
+        "text": {
+          "$from": {
+            "source": "$resolvers/r_tO15hM9NKa/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "text"
+                }
+              }
+            }
+          }
+        },
         "title": {
           "$from": {
-            "source": "$resolvers/r_OhRwmcu1_4/_node",
+            "source": "$resolvers/r_tO15hM9NKa/_node",
             "select": {
               "$on": {
                 "type": {
@@ -4822,9 +4795,9 @@
             }
           }
         },
-        "description": {
+        "richText": {
           "$from": {
-            "source": "$resolvers/r_OhRwmcu1_4/_node",
+            "source": "$resolvers/r_tO15hM9NKa/_node",
             "select": {
               "$on": {
                 "type": {
@@ -4838,7 +4811,7 @@
     },
     {
       "sys": {
-        "id": "13BfuVp8G3Ai7dCsKQbkwI",
+        "id": "5yb8t7OHz3FgDoriyuR2Ek",
         "type": "DataAssembly",
         "dataType": [
           {
@@ -4848,33 +4821,16 @@
             "id": "title"
           },
           {
-            "name": "Description",
+            "name": "Text",
             "required": true,
-            "type": "RichText",
-            "id": "description"
+            "type": "String",
+            "id": "text"
           },
           {
-            "name": "Collection",
-            "required": false,
-            "type": "Array",
-            "items": {
-              "type": "Record",
-              "fields": [
-                {
-                  "name": "Collection Item Title",
-                  "required": true,
-                  "type": "String",
-                  "id": "collectionItemTitle"
-                },
-                {
-                  "name": "Collection Item Description",
-                  "required": true,
-                  "type": "RichText",
-                  "id": "collectionItemDescription"
-                }
-              ]
-            },
-            "id": "collection"
+            "name": "Rich Text",
+            "required": true,
+            "type": "RichText",
+            "id": "richText"
           }
         ],
         "version": 2,
@@ -4899,12 +4855,12 @@
             "id": "2ThAHYPA8kj7F1sHxUzXVt"
           }
         },
-        "createdAt": "2026-10-13T12:33:08.086Z",
-        "updatedAt": "2026-10-13T12:33:15.607Z",
-        "publishedAt": "2026-10-13T12:33:15.925Z",
+        "createdAt": "2026-10-19T15:09:38.769Z",
+        "updatedAt": "2026-10-19T15:09:42.909Z",
+        "publishedAt": "2026-10-19T15:09:43.021Z",
         "publishedVersion": 1,
         "publishedCounter": 1,
-        "firstPublishedAt": "2026-10-13T12:33:15.925Z",
+        "firstPublishedAt": "2026-10-19T15:09:43.021Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -4921,8 +4877,8 @@
       "name": "Default",
       "description": "Default data assembly",
       "parameters": {
-        "p_ijUq5qyYYk": {
-          "name": "Parameter",
+        "p_loEUg6m7uc": {
+          "name": "Parameter 1",
           "required": true,
           "type": "ResourceLink",
           "allowedResources": [
@@ -4937,18 +4893,30 @@
         }
       },
       "resolvers": {
-        "r_QnqLOHnuz5": {
+        "r_yjVHW6jzWT": {
           "source": "Contentful:GraphQL",
-          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n    }\n  }\n}",
+          "query": "query ($id: ID!) {\n  _node(id: $id) {\n    __typename\n    ... on Content {\n      internalTitle\n      richText {\n        document: json\n      }\n      text\n    }\n  }\n}",
           "parameters": {
-            "id": "$parameters/p_ijUq5qyYYk"
+            "id": "$parameters/p_loEUg6m7uc"
           }
         }
       },
       "return": {
+        "text": {
+          "$from": {
+            "source": "$resolvers/r_yjVHW6jzWT/_node",
+            "select": {
+              "$on": {
+                "type": {
+                  "Content": "text"
+                }
+              }
+            }
+          }
+        },
         "title": {
           "$from": {
-            "source": "$resolvers/r_QnqLOHnuz5/_node",
+            "source": "$resolvers/r_yjVHW6jzWT/_node",
             "select": {
               "$on": {
                 "type": {
@@ -4958,9 +4926,9 @@
             }
           }
         },
-        "description": {
+        "richText": {
           "$from": {
-            "source": "$resolvers/r_QnqLOHnuz5/_node",
+            "source": "$resolvers/r_yjVHW6jzWT/_node",
             "select": {
               "$on": {
                 "type": {
@@ -4976,7 +4944,7 @@
   "experienceFragments": [
     {
       "sys": {
-        "id": "3wLhlciQgJWtR3D8ApSz98",
+        "id": "5ildOvX1W4Il3gMxRnMCx",
         "type": "ExperienceFragment",
         "space": {
           "sys": {
@@ -4992,8 +4960,8 @@
             "id": "master"
           }
         },
-        "createdAt": "2026-10-14T10:56:29.224Z",
-        "updatedAt": "2026-10-16T11:30:37.917Z",
+        "createdAt": "2026-10-19T15:23:11.473Z",
+        "updatedAt": "2026-10-19T15:30:33.739Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -5011,10 +4979,10 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-16T11:30:37.932Z",
-        "publishedVersion": 9,
-        "publishedCounter": 7,
-        "firstPublishedAt": "2026-10-14T11:07:15.854Z",
+        "publishedAt": "2026-10-19T15:30:33.753Z",
+        "publishedVersion": 4,
+        "publishedCounter": 2,
+        "firstPublishedAt": "2026-10-19T15:29:43.361Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -5031,25 +4999,25 @@
         },
         "automationTags": [
         ],
-        "version": 10
+        "version": 5
       },
-      "name": "Personalized Coded Fragment",
-      "description": "This is a personalized coded fragment.",
+      "name": "Personalized Coded Experience Fragment",
+      "description": "This is a personalized coded experience fragment.",
       "designProperties": {
       },
       "contentBindings": {
         "sys": {
           "type": "ResourceLink",
           "linkType": "Contentful:DataAssembly",
-          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
         },
         "parameters": {
-          "p_ijUq5qyYYk": {
+          "p_loEUg6m7uc": {
             "$literal": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:Entry",
-                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/6bULnHxHSvCtqd5L9me5oJ"
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/7M6wXBRLE07IwUFzOAiQlj"
               }
             }
           }
@@ -5066,7 +5034,7 @@
       "optimizationVariants": [
         {
           "sys": {
-            "id": "3wLhlciQgJWtR3D8ApSz98",
+            "id": "5ildOvX1W4Il3gMxRnMCx",
             "type": "ExperienceFragment",
             "space": {
               "sys": {
@@ -5082,8 +5050,8 @@
                 "id": "master"
               }
             },
-            "createdAt": "2026-10-14T10:57:25.393Z",
-            "updatedAt": "2026-10-16T11:36:53.487Z",
+            "createdAt": "2026-10-19T15:25:12.959Z",
+            "updatedAt": "2026-10-19T15:30:12.337Z",
             "createdBy": {
               "sys": {
                 "type": "Link",
@@ -5095,23 +5063,12 @@
               "sys": {
                 "type": "Link",
                 "linkType": "User",
-                "id": "2ThAHYPA8kj7F1sHxUzXVt"
+                "id": "4QYnIIKna8TpXegJp3oSBi"
               }
             },
-            "variant": "1925cd12-8d24-43e7-9a91-220004c5f5d8",
+            "variant": "6dc4dc00-4e2e-417c-a5c3-cc069fc4d1a1",
             "variantType": "personalization",
             "variantDimension": "default",
-            "publishedAt": "2026-10-16T11:36:53.513Z",
-            "publishedVersion": 8,
-            "publishedCounter": 2,
-            "firstPublishedAt": "2026-10-14T10:59:37.920Z",
-            "publishedBy": {
-              "sys": {
-                "type": "Link",
-                "linkType": "User",
-                "id": "2ThAHYPA8kj7F1sHxUzXVt"
-              }
-            },
             "component": {
               "sys": {
                 "type": "ResourceLink",
@@ -5121,9 +5078,9 @@
             },
             "automationTags": [
             ],
-            "version": 9
+            "version": 4
           },
-          "name": "Personalized Coded Fragment",
+          "name": "Personalized Coded Experience Fragment",
           "description": "",
           "designProperties": {
           },
@@ -5131,15 +5088,15 @@
             "sys": {
               "type": "ResourceLink",
               "linkType": "Contentful:DataAssembly",
-              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
             },
             "parameters": {
-              "p_ijUq5qyYYk": {
+              "p_loEUg6m7uc": {
                 "$literal": {
                   "sys": {
                     "type": "ResourceLink",
                     "linkType": "Contentful:Entry",
-                    "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/4ORMu6r0JWJOGx7IkE3LTl"
+                    "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/1QAInQEKqJdM1F2JEJoggI"
                   }
                 }
               }
@@ -5149,7 +5106,8 @@
             "tags": [
             ],
             "concepts": [
-            ]
+            ],
+            "name": "Variant 2"
           },
           "slots": {
           }
@@ -5158,7 +5116,7 @@
     },
     {
       "sys": {
-        "id": "4RRZDmff5TsayVU2dNq2pR",
+        "id": "2xwzbFDDohkv7eGMTLcU6k",
         "type": "ExperienceFragment",
         "space": {
           "sys": {
@@ -5174,8 +5132,8 @@
             "id": "master"
           }
         },
-        "createdAt": "2026-10-13T12:20:15.256Z",
-        "updatedAt": "2026-10-14T09:53:59.313Z",
+        "createdAt": "2026-10-19T15:18:18.790Z",
+        "updatedAt": "2026-10-19T15:21:57.369Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -5193,10 +5151,10 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-14T09:53:59.375Z",
-        "publishedVersion": 3,
+        "publishedAt": "2026-10-19T15:21:57.378Z",
+        "publishedVersion": 4,
         "publishedCounter": 1,
-        "firstPublishedAt": "2026-10-14T09:53:59.375Z",
+        "firstPublishedAt": "2026-10-19T15:21:57.378Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -5213,25 +5171,34 @@
         },
         "automationTags": [
         ],
-        "version": 4
+        "version": 5
       },
-      "name": "Composed Fragment",
-      "description": "This is a composed fragment.",
+      "name": "Composed Experience Fragment",
+      "description": "This is a composed experience fragment.",
       "designProperties": {
       },
       "contentBindings": {
         "sys": {
           "type": "ResourceLink",
           "linkType": "Contentful:DataAssembly",
-          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/28K3R99fBlcr93R65MVJaP"
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/246bbtx2pFLq7paqNanBXp"
         },
         "parameters": {
-          "p_MtWSs4OqKc": {
+          "p_n97U8pOqnX": {
             "$literal": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:Entry",
-                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/67lS2EQ9HH1hNELN30vDKS"
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/3Wm47G0CQNnkRBEPLvhw8T"
+              }
+            }
+          },
+          "p_nSiQyRokNs": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/2n2KQ8QXvSgUEcvpfPJWXd"
               }
             }
           }
@@ -5250,7 +5217,7 @@
     },
     {
       "sys": {
-        "id": "1klv9aN9OIrHHFy2bm1JCw",
+        "id": "5bUegR0xol4erDOmPnnbVP",
         "type": "ExperienceFragment",
         "space": {
           "sys": {
@@ -5266,8 +5233,8 @@
             "id": "master"
           }
         },
-        "createdAt": "2026-10-13T12:20:49.967Z",
-        "updatedAt": "2026-10-13T12:45:28.092Z",
+        "createdAt": "2026-10-19T15:15:50.610Z",
+        "updatedAt": "2026-10-19T15:17:34.710Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -5285,10 +5252,10 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-13T12:45:28.234Z",
+        "publishedAt": "2026-10-19T15:17:34.724Z",
         "publishedVersion": 3,
         "publishedCounter": 1,
-        "firstPublishedAt": "2026-10-13T12:45:28.234Z",
+        "firstPublishedAt": "2026-10-19T15:17:34.724Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -5307,23 +5274,23 @@
         ],
         "version": 4
       },
-      "name": "Coded Fragment",
-      "description": "This is a coded fragment.",
+      "name": "Coded Experience Fragment",
+      "description": "This is a coded experience fragment.",
       "designProperties": {
       },
       "contentBindings": {
         "sys": {
           "type": "ResourceLink",
           "linkType": "Contentful:DataAssembly",
-          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/13BfuVp8G3Ai7dCsKQbkwI"
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/5yb8t7OHz3FgDoriyuR2Ek"
         },
         "parameters": {
-          "p_ijUq5qyYYk": {
+          "p_loEUg6m7uc": {
             "$literal": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:Entry",
-                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/sYUgfb8KAVC99aqBiqi5N"
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/2YSCijeHf1iArxiJqBYj1A"
               }
             }
           }
@@ -5344,7 +5311,7 @@
   "experiences": [
     {
       "sys": {
-        "id": "6fQzPrHjFX25yTwi2Ic5gs",
+        "id": "3fLAdFb3BYAuImRhcW8k4t",
         "type": "Experience",
         "space": {
           "sys": {
@@ -5360,8 +5327,8 @@
             "id": "master"
           }
         },
-        "createdAt": "2026-10-13T12:23:01.268Z",
-        "updatedAt": "2026-10-14T11:09:14.015Z",
+        "createdAt": "2026-10-19T15:32:55.273Z",
+        "updatedAt": "2026-10-19T15:47:47.160Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -5379,10 +5346,10 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-14T11:09:14.029Z",
-        "publishedVersion": 5,
+        "publishedAt": "2026-10-19T15:47:47.177Z",
+        "publishedVersion": 7,
         "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:48:13.602Z",
+        "firstPublishedAt": "2026-10-19T15:34:34.558Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -5402,7 +5369,7 @@
         },
         "automationTags": [
         ],
-        "version": 6
+        "version": 8
       },
       "name": "Coded Experience",
       "description": "",
@@ -5412,15 +5379,15 @@
         "sys": {
           "type": "ResourceLink",
           "linkType": "Contentful:DataAssembly",
-          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/180im2p4DEwueOrKRAJ1fM"
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/6qkMYKRvKerQnsOX3Hdc2N"
         },
         "parameters": {
-          "p_G7_ikphzLQ": {
+          "p_j1sxQn41xf": {
             "$literal": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:Entry",
-                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/2gAKoSsVjaO46BPs4iXbm2"
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/5adomUwFVsczdV9CRfhTYI"
               }
             }
           }
@@ -5435,13 +5402,24 @@
       "slots": {
         "slot": [
           {
-            "id": "JkS0ZXVVJ-Pbu1zRrti4i",
+            "id": "DyWVe9nw5-Y5gilLAPxtz",
             "nodeType": "ExperienceFragment",
             "experienceFragment": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:ExperienceFragment",
-                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/3wLhlciQgJWtR3D8ApSz98"
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/5bUegR0xol4erDOmPnnbVP"
+              }
+            }
+          },
+          {
+            "id": "69goNnvWjsB7oxteysk0d",
+            "nodeType": "ExperienceFragment",
+            "experienceFragment": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:ExperienceFragment",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/5ildOvX1W4Il3gMxRnMCx"
               }
             }
           }
@@ -5452,7 +5430,7 @@
     },
     {
       "sys": {
-        "id": "6fm371os680MYgg0XThK2S",
+        "id": "4WzbgzPQHa9Tr2ffbOU8p7",
         "type": "Experience",
         "space": {
           "sys": {
@@ -5468,8 +5446,8 @@
             "id": "master"
           }
         },
-        "createdAt": "2026-10-13T12:23:39.951Z",
-        "updatedAt": "2026-10-14T11:08:39.558Z",
+        "createdAt": "2026-10-19T15:35:04.949Z",
+        "updatedAt": "2026-10-19T15:47:02.875Z",
         "createdBy": {
           "sys": {
             "type": "Link",
@@ -5487,10 +5465,10 @@
         "variant": "default",
         "variantType": "default",
         "variantDimension": "default",
-        "publishedAt": "2026-10-14T11:08:39.568Z",
-        "publishedVersion": 5,
-        "publishedCounter": 2,
-        "firstPublishedAt": "2026-10-13T12:56:42.430Z",
+        "publishedAt": "2026-10-19T15:47:02.890Z",
+        "publishedVersion": 13,
+        "publishedCounter": 3,
+        "firstPublishedAt": "2026-10-19T15:37:59.428Z",
         "publishedBy": {
           "sys": {
             "type": "Link",
@@ -5510,7 +5488,7 @@
         },
         "automationTags": [
         ],
-        "version": 6
+        "version": 14
       },
       "name": "Composed Experience",
       "description": "",
@@ -5520,15 +5498,24 @@
         "sys": {
           "type": "ResourceLink",
           "linkType": "Contentful:DataAssembly",
-          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/JtOVc3Lv922jLsqMZ5lVz"
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/1xrW5RkILRtGaWxGhtqtE7"
         },
         "parameters": {
-          "p_sQtsiRzRCd": {
+          "p_izZHsyrzM7": {
             "$literal": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:Entry",
-                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/4OBnXmehDsmvnenSBDnnLo"
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/rRNdlzDF1fbLa40W4Zn3h"
+              }
+            }
+          },
+          "p_sGZk50FFJZ": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/5OnDydh7Y8VIYirnx7nbMI"
               }
             }
           }
@@ -5543,13 +5530,24 @@
       "slots": {
         "slot": [
           {
-            "id": "Pp_kDWMBof-WTlAqDSTJn",
+            "id": "Xu76HAN8dblkx0EctpOr-",
             "nodeType": "ExperienceFragment",
             "experienceFragment": {
               "sys": {
                 "type": "ResourceLink",
                 "linkType": "Contentful:ExperienceFragment",
-                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/3wLhlciQgJWtR3D8ApSz98"
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/2xwzbFDDohkv7eGMTLcU6k"
+              }
+            }
+          },
+          {
+            "id": "Y54sBHN3HhJoaTPl4j5cZ",
+            "nodeType": "ExperienceFragment",
+            "experienceFragment": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:ExperienceFragment",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceFragments/5ildOvX1W4Il3gMxRnMCx"
               }
             }
           }
