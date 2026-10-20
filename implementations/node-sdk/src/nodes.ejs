@@ -1,0 +1,14 @@
+<% for (const node of nodes) {
+  const props = { ...node.props.design, ...node.props.content, ...node.props.resolved, ...node.slots };
+%>
+  <article>
+    <h3><%= props.title %></h3>
+    <p><%= props.text %></p>
+    <% if (props.richText) { %>
+      <%- documentToHtmlString(props.richText.document) %>
+    <% } %>
+    <% for (const children of Object.values(node.slots)) { %>
+      <%- include('nodes', { nodes: children }) %>
+    <% } %>
+  </article>
+<% } %>

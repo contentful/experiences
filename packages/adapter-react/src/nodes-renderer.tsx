@@ -8,21 +8,21 @@ import { Fragment, createElement, type ReactNode } from 'react';
 
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import { ComponentErrorBoundary } from './component-error-boundary';
-import type { ComponentErrorProps } from './component-error';
+import { ComponentErrorBoundary } from './component-error-boundary.js';
+import type { ComponentErrorProps } from './component-error.js';
 import {
   ContentfulComponentProvider,
   ContentfulExperienceTemplateProvider,
   ResolvedDesignProvider,
-} from './context';
-import type { MissingComponentProps } from './missing-component';
+} from './context.js';
+import type { MissingComponentProps } from './missing-component.js';
 import {
   normalizeComponentRegistration,
   normalizeExperienceTemplateRegistration,
   type ContentfulComponent,
   type ContentfulExperienceTemplate,
   type Config,
-} from './types';
+} from './types.js';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 export type RenderError = (props: ComponentErrorProps) => ReactNode;

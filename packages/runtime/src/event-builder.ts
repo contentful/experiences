@@ -86,6 +86,7 @@ export const InteractionBuilderArgsBase = z.extend(UniversalEventBuilderArgs, {
   optimizationId: z.optional(z.string()),
   parameters: z.optional(z.record(z.string(), z.json())),
   parentExperienceId: z.optional(z.string()),
+  parentVariantId: z.optional(z.string()),
   variantId: z.optional(z.string()),
   variantIndex: z.optional(z.number()),
 });
@@ -229,6 +230,15 @@ class EventBuilder {
     args: InteractionBuilderArgsBase
   ): OptimizationUniversalEventProperties & InteractionBuilderArgsBase {
     const { campaign, locale, location, page, screen, userAgent, ...interactionProperties } = args;
+    const variantId =
+      interactionProperties.entityKind === 'Experience' ||
+      interactionProperties.entityKind === 'Fragment'
+        ? interactionProperties.variantId || 'default'
+        : interactionProperties.variantId;
+    const parentVariantId =
+      interactionProperties.entityKind === 'Fragment'
+        ? interactionProperties.parentVariantId || 'default'
+        : interactionProperties.parentVariantId;
 
     return {
       ...this.buildUniversalEventProperties({
@@ -240,6 +250,8 @@ class EventBuilder {
         userAgent,
       }),
       ...interactionProperties,
+      ...(variantId === undefined ? {} : { variantId }),
+      ...(parentVariantId === undefined ? {} : { parentVariantId }),
     };
   }
 
@@ -296,7 +308,7 @@ class EventBuilder {
     };
   }
 
-  buildIdentify(args: IdentifyBuilderArgs): OptimizationIdentifyEvent {
+  buildIdentify(args: IdentifyBuilderArgs): OptimizationIdentifyEvent & { userId: string } {
     const {
       traits = {},
       userId,

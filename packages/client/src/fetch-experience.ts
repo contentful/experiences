@@ -1,5 +1,6 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
+import { GetWithOverridesExperienceRequestExtensionsPersonalization as personalizationSchema } from '@contentful/experience-delivery/serialization';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { assertDestinationPreviewSupported } from './destination-guards.js';
@@ -188,10 +189,19 @@ async function fetchByExperienceId(
 ): Promise<ExperienceResponse> {
   const { spaceId, environmentId, experienceId, locale, parameters, personalization, extensions } =
     options;
-  const requestExtensions: DeliveryExperienceRequestExtensions = {
-    ...extensions,
-    ...(personalization === undefined ? {} : { personalization }),
-  };
+  const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
+  if (personalization !== undefined) {
+    try {
+      // XDA rejects EventBuilder's context.gdpr with HTTP 422. Keep the original
+      // events intact and serialize to its generated schema. When upstream XDA and
+      // client types accept built events, verify compatibility and remove this if redundant.
+      requestExtensions.personalization = personalizationSchema.parseOrThrow(personalization, {
+        unrecognizedObjectKeys: 'strip',
+      });
+    } catch (cause) {
+      throw new TypeError('Invalid Experience personalization options', { cause });
+    }
+  }
 
   try {
     // GET uses namespaced query leaves. POST preserves values that cannot be
@@ -202,7 +212,7 @@ async function fetchByExperienceId(
     // Await inside the try so rejected requests are normalized below.
     const queryParams = parameterQuery(parameters);
     if (hasRequestExtensions(requestExtensions) || queryParams === undefined) {
-      // dev.9's POST serializer passes through extra body keys. Its generated
+      // dev.10's POST serializer passes through extra body keys. Its generated
       // request type omits parameters, so retain our typed extension locally.
       // TODO: Remove this intersection once contentful-experience-delivery.js
       // generates parameters on GetWithOverridesExperienceRequest and we upgrade.

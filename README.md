@@ -293,7 +293,7 @@ a framework serializer.
 Prepared batches stay in Web's in-memory queue on transport failure and retry
 with their original event IDs, target identity, and locale. A request may have
 committed before a failure becomes visible, so retries do not guarantee
-exactly-once delivery. Analytics calls remain direct; there is no mixed
+exactly-once delivery. Web queues Analytics calls separately in memory; there is no mixed
 Personalization/Analytics replay journal or global ordinary-event barrier.
 No adapter or example currently wires this flow, and Live Preview remains
 independent.
@@ -1087,7 +1087,7 @@ Two things to know before switching it on:
 
 When a plan carries a usable source map, the SDK resolves which reportable scopes each node belongs to: the Experience, and any persisted Fragment it sits in. Inline fragments are walked through and never reported. The result is plain serializable data:
 
-- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'Fragment'`), and the optional `entityKindId`, `parentExperienceId`, `optimizationId`, `variantId`, `variantIndex` and `entryIds`. The baseline variant omits the three variant fields rather than inventing them. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
+- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'Fragment'`), `variantId`, and the optional `entityKindId`, `parentExperienceId`, `parentVariantId`, `optimizationId`, `variantIndex` and `entryIds`. `variantId` is the scope's selected variant, or `default` when no variant ID is available; unavailable optimization and variant-index fields are omitted. Fragments inside an Experience carry the root Experience's `parentExperienceId` and selected or `default` `parentVariantId`, including when nested in another Fragment. Experiences omit both parent fields. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
 - `node.attribution` lists every scope the node belongs to (`scopes`, outer to inner), the ones it is a top-level node of (`roots`), and the entries its own content is bound to (`entryIds`).
 
 Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.
@@ -1374,6 +1374,51 @@ npm run typecheck                   # nx run-many -t typecheck
 npx nx graph                        # visual dep graph
 npm run release:dry                 # rehearse independent release
 ```
+
+### Local npm artifacts
+
+Build and pack the SDK packages for use by standalone reference implementations:
+
+```sh
+npm run build:pkgs                   # all publishable packages under packages/*
+npm run pack:pkgs                    # same pipeline; reuses valid Nx build caches
+npx nx run node:pack                 # optional: only Node and its local dependencies
+```
+
+`build:pkgs` is the counterpart to Optimization's suite-wide build-and-pack
+workflow. The per-project `node:pack` command is an additional Nx convenience:
+it prepares only Core, Client, Runtime, and Node, using the same pack tasks and
+archive format as the suite-wide command. It does not install or start the Node
+reference implementation.
+
+Nx builds dependencies first and runs the existing release-artifact checks for
+Runtime, Node, and Web before packing them. Packing is uncached and writes to the
+ignored `pkgs/` directory: each package has its npm-generated versioned filename
+and a stable alias such as `contentful-experiences-node-local.tgz`. Each task
+replaces only its own archives; older versioned files can remain in `pkgs/`.
+The stable alias is replaced only after a complete archive passes entry-point
+checks; failures stop the command.
+
+The helper runs `npm pack` against each package's publication files and checks
+that its exported entry points are included. It preserves package manifests,
+including dependency ranges, scripts, and devDependencies, so local artifacts
+exercise the same metadata as publication. Lifecycle scripts are disabled during
+packing; Nx performs the required builds explicitly. These commands do not change
+versions, publish to a registry, or install a reference implementation.
+
+Run the packaging helper's checks with `npx nx test package-tools` and
+`npx nx lint package-tools`. They also participate in the root test/lint commands.
+
+The [standalone Node reference implementation](./implementations/node-sdk/README.md)
+uses these artifacts with its own dependencies and `.env`. Prepare it with
+`npx nx run implementation-node-sdk:setup`, then run
+`npx nx run implementation-node-sdk:dev`. Root aggregate checks exclude
+implementations; their README documents the explicit Nx commands.
+
+Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
+`npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
+every process in the selected PM2 home. Use the implementation's scoped stop
+target when managing only the Node reference app.
 
 For deeper context (design decisions, multi-framework architecture notes, conventions, and gotchas), see [`AGENTS.md`](./AGENTS.md).
 

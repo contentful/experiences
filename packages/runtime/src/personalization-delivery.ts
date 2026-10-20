@@ -6,18 +6,23 @@ import {
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import type { EventEmissionResult } from './event-emission-result.js';
-import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
+import type {
+  ExperienceRequestOptions,
+  RuntimeOptimizationApiClient,
+} from './runtime-event-methods.js';
 import {
-  PersonalizationFlushRuntime,
-  type PersonalizationFlushPolicy,
-} from './personalization-flush.js';
-import { MAX_PREPARED_EVENTS } from './prepared-events.js';
+  OFFLINE_QUEUE_MAX_EVENTS,
+  QueueFlushRuntime,
+  type ResolvedQueueFlushPolicy,
+} from './lib/queue/index.js';
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
 type PersonalizationApi = RuntimeOptimizationApiClient['personalization'];
 type DeliveryRequest = { profileId?: string; locale?: string };
 type QueuedBatch = { events: ExperienceEvent[]; request?: DeliveryRequest };
+/** A teardown-authorized delivery, as Optimization's QueuedDelivery. */
+type QueuedDelivery = { token: object | undefined; profileId?: string };
 
 export type PersonalizationDeliveryState =
   | { readonly status: 'idle' | 'pending' | 'success' }
@@ -31,9 +36,9 @@ interface PersonalizationDeliveryOptions {
   /** Current content locale for ordinary sends; prepared batches retain their own locale. */
   readonly getLocale?: () => string | undefined;
   readonly publishQueuedData: (data: OptimizationData) => void;
-  /** Internal override for deterministic tests; Web uses the 100-event SDK handoff capacity. */
+  /** Offline admission capacity: `queuePolicy.offlineMaxEvents`, defaulting to 100 events. */
   readonly maxEvents?: number;
-  readonly flushPolicy?: PersonalizationFlushPolicy;
+  readonly flushPolicy: ResolvedQueueFlushPolicy;
 }
 
 /** One low-level Personalization transport for direct and queued sends. */
@@ -41,7 +46,7 @@ export function sendPersonalizationEvents(
   api: PersonalizationApi,
   events: readonly ExperienceEvent[],
   profileId: string | undefined,
-  options?: { locale?: string; preflight?: boolean }
+  options?: ExperienceRequestOptions & { preflight?: boolean }
 ): Promise<OptimizationData> {
   return api.upsertProfile({ profileId, events: [...events] }, options);
 }
@@ -55,13 +60,13 @@ export class PersonalizationDelivery {
   readonly #getLocale: PersonalizationDeliveryOptions['getLocale'];
   readonly #publishQueuedData: PersonalizationDeliveryOptions['publishQueuedData'];
   readonly #maxEvents: number;
-  readonly #flushRuntime: PersonalizationFlushRuntime;
+  readonly #flushRuntime: QueueFlushRuntime;
   readonly #queue: QueuedBatch[] = [];
   #token: object | undefined = {};
   #activeFlush: Promise<void> | undefined;
-  #closing = false;
-  #closingProfileId: string | undefined;
-  #continuationProfileId: string | undefined;
+  #destroying = false;
+  #destroyToken: object | undefined;
+  #destroyProfileId: string | undefined;
   #state: PersonalizationDeliveryState = { status: 'idle' };
 
   constructor(options: PersonalizationDeliveryOptions) {
@@ -71,11 +76,19 @@ export class PersonalizationDelivery {
     this.#getOnline = options.getOnline;
     this.#getLocale = options.getLocale;
     this.#publishQueuedData = options.publishQueuedData;
-    this.#maxEvents = options.maxEvents ?? MAX_PREPARED_EVENTS;
-    this.#flushRuntime = new PersonalizationFlushRuntime(
-      () => void this.flush(),
-      options.flushPolicy
-    );
+    this.#maxEvents = options.maxEvents ?? OFFLINE_QUEUE_MAX_EVENTS;
+    this.#flushRuntime = new QueueFlushRuntime({
+      policy: options.flushPolicy,
+      onRetry: () => {
+        void this.flush();
+      },
+      onCallbackError: (callbackName, error) => {
+        deliveryLogger.warn(
+          `Personalization flush policy callback "${callbackName}" failed`,
+          error
+        );
+      },
+    });
   }
 
   get state(): PersonalizationDeliveryState {
@@ -88,10 +101,10 @@ export class PersonalizationDelivery {
 
   /** Ordinary online events go direct; offline events use the same queued transport. */
   async send(event: ExperienceEvent): Promise<EventEmissionResult> {
-    if (this.#token === undefined || this.#closing) return { accepted: false };
+    if (!this.#isAcceptingEvents()) return { accepted: false };
     const validEvent = parseOptimizationSchema(ExperienceEventSchema, event);
     if (this.#getOnline()) {
-      const data = await this.#upsert([validEvent], undefined, false);
+      const data = await this.#upsert([validEvent], undefined, undefined);
       return data === undefined ? { accepted: true } : { accepted: true, data };
     }
     if (this.queuedEventCount >= this.#maxEvents) return { accepted: false };
@@ -110,7 +123,7 @@ export class PersonalizationDelivery {
     events: readonly ExperienceEvent[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
-    if (this.#token === undefined || this.#closing) return { accepted: false };
+    if (!this.#isAcceptingEvents()) return { accepted: false };
     if (this.queuedEventCount + events.length > this.#maxEvents) {
       return { accepted: false };
     }
@@ -127,59 +140,112 @@ export class PersonalizationDelivery {
     this.#flushRuntime.clearScheduledRetry();
   }
 
-  flush({ force = false }: { force?: boolean } = {}): Promise<void> {
-    if (this.#closing) return this.#activeFlush ?? Promise.resolve();
-    return this.#startFlush(force);
+  /**
+   * Join an attempt already in flight, or start one unless a gate skips it. Teardown runs
+   * through here too, with `allowDestroy`, as in Optimization's ExperienceQueue.
+   */
+  async flush({
+    force = false,
+    allowDestroy = false,
+  }: { force?: boolean; allowDestroy?: boolean } = {}): Promise<void> {
+    if (this.#activeFlush !== undefined) {
+      await this.#activeFlush;
+      return;
+    }
+    if (this.#shouldSkipFlush(force, allowDestroy)) return;
+    if (this.#queue.length === 0) {
+      this.#flushRuntime.clearScheduledRetry();
+      return;
+    }
+
+    const token = this.#token;
+    const attempt = this.#flushAttempt(token);
+    this.#activeFlush = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (this.#activeFlush === attempt) this.#activeFlush = undefined;
+    }
   }
 
-  #startFlush(force: boolean): Promise<void> {
-    if (this.#activeFlush !== undefined) return this.#activeFlush;
-    if (this.#token === undefined) return Promise.resolve();
-    if (
+  /**
+   * Capture the teardown identity, stop accepting work and retries, then make one forced
+   * attempt at the queue through the common flush path.
+   */
+  async flushOnDestroy(): Promise<void> {
+    this.#destroyToken = this.#token;
+    this.#destroyProfileId = this.#getProfileId();
+    this.#destroying = true;
+    this.#state = { status: 'idle' };
+    this.clearScheduledRetry();
+    await this.flush({ force: true, allowDestroy: true });
+  }
+
+  #isAcceptingEvents(): boolean {
+    return !this.#destroying && this.#token !== undefined;
+  }
+
+  #shouldSkipFlush(force: boolean, allowDestroy: boolean): boolean {
+    return (
+      (this.#destroying && !allowDestroy) ||
+      this.#token === undefined ||
       this.#flushRuntime.shouldSkip({
         force,
         isOnline: this.#getOnline() && this.#token !== undefined,
       })
-    ) {
-      return Promise.resolve();
-    }
-    if (this.#queue.length === 0) {
-      this.#flushRuntime.clearScheduledRetry();
-      return Promise.resolve();
-    }
-
-    const token = this.#token;
-    this.#flushRuntime.markFlushStarted();
-    const attempt = this.#runQueuedFlush(token);
-    this.#activeFlush = attempt;
-    void attempt.then(
-      () => {
-        if (this.#activeFlush === attempt) this.#activeFlush = undefined;
-      },
-      () => {
-        if (this.#activeFlush === attempt) this.#activeFlush = undefined;
-      }
     );
-    return attempt;
   }
 
-  async #runQueuedFlush(token: object): Promise<void> {
-    const isCurrent = (): boolean => token === this.#token;
+  async #flushAttempt(token: object | undefined): Promise<void> {
+    this.#flushRuntime.markFlushStarted();
     try {
       await this.#sendQueuedBatches(token);
-      if (isCurrent() && !this.#closing) this.#flushRuntime.handleFlushSuccess();
+      this.#finishSuccessfulFlush(token);
     } catch (error) {
-      if (isCurrent()) {
-        deliveryLogger.warn('Personalization queue flush request failed', {
-          queuedEvents: this.queuedEventCount,
-          reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
-          errorName: error instanceof Error ? error.name : 'unknown',
-        });
-        if (!this.#closing) this.#flushRuntime.handleFlushFailure();
-      }
+      this.#handleFlushError(error, token);
     } finally {
-      if (isCurrent()) this.#flushRuntime.markFlushFinished();
+      this.#finishFlush(token);
     }
+  }
+
+  #finishSuccessfulFlush(token: object | undefined): void {
+    if (this.#isDeliveryCurrent(token) && !this.#destroying)
+      this.#flushRuntime.handleFlushSuccess();
+  }
+
+  #handleFlushError(error: unknown, token: object | undefined): void {
+    if (!this.#isDeliveryCurrent(token)) return;
+    deliveryLogger.warn('Personalization queue flush request failed', {
+      queuedEvents: this.queuedEventCount,
+      reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
+      errorName: error instanceof Error ? error.name : 'unknown',
+    });
+    if (!this.#destroying) {
+      this.#flushRuntime.handleFlushFailure({
+        queuedBatches: this.#queue.length,
+        queuedEvents: this.queuedEventCount,
+      });
+    }
+  }
+
+  /** Release the attempt; a teardown attempt also clears what teardown leaves behind. */
+  #finishFlush(token: object | undefined): void {
+    if (!this.#isDeliveryCurrent(token)) return;
+    this.#flushRuntime.markFlushFinished();
+    if (!this.#destroying) return;
+    this.#token = undefined;
+    this.#queue.length = 0;
+    this.#destroyToken = undefined;
+    this.#destroyProfileId = undefined;
+    this.#flushRuntime.reset();
+    this.#state = { status: 'idle' };
+  }
+
+  #isDeliveryCurrent(token: object | undefined): boolean {
+    return (
+      token !== undefined &&
+      (token === this.#token || (this.#destroying && token === this.#destroyToken))
+    );
   }
 
   /**
@@ -191,7 +257,7 @@ export class PersonalizationDelivery {
    */
   clearQueue(): void {
     if (this.#token === undefined) return;
-    this.#token = this.#closing ? undefined : {};
+    this.#token = this.#destroying ? undefined : {};
     this.#activeFlush = undefined;
     this.#queue.length = 0;
     this.#flushRuntime.reset();
@@ -200,45 +266,29 @@ export class PersonalizationDelivery {
 
   reset(): void {
     if (this.#token === undefined) return;
-    this.#token = this.#closing ? undefined : {};
+    this.#token = this.#destroying ? undefined : {};
     this.#activeFlush = undefined;
-    this.#closingProfileId = undefined;
-    this.#continuationProfileId = undefined;
-    this.#queue.length = 0;
-    this.#flushRuntime.reset();
-    this.#state = { status: 'idle' };
-  }
-
-  /** Attempt queued batches in order without publishing after teardown. */
-  destroy(): void {
-    if (this.#token === undefined || this.#closing) return;
-    this.#closing = true;
-    this.#closingProfileId = this.#getProfileId();
-    this.#state = { status: 'idle' };
-    this.#flushRuntime.clearScheduledRetry();
-    const drain = this.#activeFlush ?? this.#startFlush(true);
-    void drain.then(
-      () => this.#finishDestroy(),
-      () => this.#finishDestroy()
-    );
-  }
-
-  #finishDestroy(): void {
-    this.#token = undefined;
-    this.#closingProfileId = undefined;
-    this.#continuationProfileId = undefined;
+    this.#destroyToken = undefined;
+    this.#destroyProfileId = undefined;
     this.#queue.length = 0;
     this.#flushRuntime.reset();
     this.#state = { status: 'idle' };
   }
 
   async #sendQueuedBatches(token: object | undefined): Promise<void> {
+    // Continuation is local to this drain, as in Optimization's ExperienceQueue: a teardown
+    // drain starts from the captured current identity and follows only its own responses.
+    let profileId: string | undefined = undefined;
     while (this.#queue.length > 0) {
       const first = this.#queue[0];
       if (first === undefined) break;
       const snapshot = [...first.events];
-      await this.#upsert(snapshot, first.request, true);
-      if (token !== this.#token) return;
+      const data = await this.#upsert(snapshot, first.request, {
+        token,
+        profileId: this.#destroying ? profileId : undefined,
+      });
+      if (!this.#isDeliveryCurrent(token)) return;
+      profileId = data?.profile.id ?? profileId;
       if (this.#queue[0] === first) {
         const offset = snapshot.findIndex((event) => event === first.events[0]);
         if (offset >= 0) first.events.splice(0, snapshot.length - offset);
@@ -253,42 +303,34 @@ export class PersonalizationDelivery {
     else this.#queue.push({ events: [event] });
   }
 
+  /**
+   * Send one request. A live request (not destroying, current token) may publish and update
+   * delivery state. A teardown drain is accepted only when it carries the teardown token.
+   * An ordinary direct request carries no delivery, so once it is no longer live its late
+   * success and late failure are both discarded, as in Optimization's ExperienceQueue.
+   */
   async #upsert(
     events: ExperienceEvent[],
     request: DeliveryRequest | undefined,
-    publishQueued: boolean
+    delivery: QueuedDelivery | undefined
   ): Promise<OptimizationData | undefined> {
     const token = this.#token;
-    const isCurrent = (): boolean => token !== undefined && token === this.#token;
     const profileRevision = this.#getProfileRevision();
-    if (isCurrent() && !this.#closing) this.#state = { status: 'pending' };
+    const isLive = (): boolean => this.#isLiveRequest(token);
+    const canPublish = (): boolean => isLive() && profileRevision === this.#getProfileRevision();
+    const isDestroyDrain = (): boolean => this.#isDestroyDeliveryCurrent(delivery);
+    const isAccepted = (): boolean => isLive() || isDestroyDrain();
+    if (isLive()) this.#state = { status: 'pending' };
     try {
-      const profileId =
-        request?.profileId ??
-        (this.#closing
-          ? (this.#continuationProfileId ?? this.#closingProfileId)
-          : (this.#getProfileId() ?? this.#continuationProfileId));
-      if (request !== undefined) request.profileId = profileId;
-      const data = await sendPersonalizationEvents(
-        this.#api,
-        events,
-        profileId,
-        request === undefined
-          ? { locale: this.#getLocale?.() }
-          : { preflight: false, locale: request.locale }
-      );
-      if (!isCurrent()) return undefined;
-      if (this.#closing && !publishQueued) return undefined;
+      const data = await this.#requestExperienceData(events, request, delivery?.profileId);
+      if (!isAccepted()) return undefined;
       if (request !== undefined) request.profileId ??= data.profile.id;
-      if (publishQueued) this.#continuationProfileId = data.profile.id;
-      if (!this.#closing && publishQueued && profileRevision === this.#getProfileRevision()) {
-        this.#publishQueuedData(data);
-      }
-      if (!this.#closing) this.#state = { status: 'success' };
-      return data;
+      if (delivery !== undefined && canPublish()) this.#publishQueuedData(data);
+      if (isLive()) this.#state = { status: 'success' };
+      return isAccepted() ? data : undefined;
     } catch (error) {
-      if (!isCurrent()) return undefined;
-      if (!this.#closing) {
+      if (!isAccepted()) return undefined;
+      if (isLive()) {
         this.#state = {
           status: 'failed',
           reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
@@ -296,5 +338,36 @@ export class PersonalizationDelivery {
       }
       throw error;
     }
+  }
+
+  #isLiveRequest(token: object | undefined): boolean {
+    return !this.#destroying && token !== undefined && token === this.#token;
+  }
+
+  #isDestroyDeliveryCurrent(delivery: QueuedDelivery | undefined): boolean {
+    return (
+      this.#destroying && this.#destroyToken !== undefined && delivery?.token === this.#destroyToken
+    );
+  }
+
+  /** Identity precedence, as Optimization's requestExperienceData. */
+  #requestExperienceData(
+    events: ExperienceEvent[],
+    request: DeliveryRequest | undefined,
+    continuationProfileId: string | undefined
+  ): Promise<OptimizationData> {
+    const profileId =
+      request?.profileId ??
+      continuationProfileId ??
+      (this.#destroying ? this.#destroyProfileId : this.#getProfileId());
+    if (request !== undefined) request.profileId = profileId;
+    return sendPersonalizationEvents(
+      this.#api,
+      events,
+      profileId,
+      request === undefined
+        ? { locale: this.#getLocale?.() }
+        : { preflight: false, locale: request.locale }
+    );
   }
 }

@@ -23,6 +23,7 @@
         "cwd": "packages/adapter-svelte",
         "command": "vitest run && vitest run -c vitest.ssr.config.ts"
       }
-    }
+    },
+    "pack": {}
   }
 }

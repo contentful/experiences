@@ -91,7 +91,16 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer uses the generated XDA schema to remove unsupported event fields, including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+
+Current XDA behavior limits this integration: profile-only requests can return
+baseline content despite audience membership; initial identify requests without
+a profile can return a personalization timeout; and unmodified EventBuilder
+consent context is rejected. The Node reference establishes its profile with a
+direct page event, includes identify with each personalized fetch, and relies on
+Client's generated-schema serialization. See the reference's
+[workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal)
+before removing these accommodations after upstream fixes.
 
 The current XDA client has no noncommitting preflight option for that POST.
 `prepareRequestHandoff()` previews events through the separate Personalization
@@ -125,8 +134,12 @@ await experienceRequest.trackClick({
 ```
 
 `identify`, `page`, and `track` send directly and return `{ accepted: true, data }` on success; transport errors reject. Their result type also permits accepted work without response data for a future queued sender. These calls update the request profile from the Personalization API response.
-`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and require a
-current profile; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and follow
+Optimization's return contracts. `trackView` resolves an acceptance result: `{ accepted: true }`
+when consent admits it and `{ accepted: false }` when consent blocks it. `trackClick`, `trackHover`,
+and `trackFlagView` resolve with no result. A transport failure is not reported through either
+return value, and a blocked call is reported to `onEventBlocked`. All four require a current profile,
+because a stateless request is bound to one; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as
 fallback. An event's explicit locale changes its body only; it does not change content evaluation
@@ -275,6 +288,21 @@ try {
 ```
 
 ## Request isolation
+
+### Request-scoped submission options
+
+`forRequest()` also accepts `experienceOptions` and `insightsOptions`, shared by every call made
+through that request and never across requests. They are copied when the facade is created.
+
+- `experienceOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
+  the request-handoff preview, which still adds `preflight: true`. Pass the visitor's `ip` from a
+  trusted source such as your proxy, because the API otherwise analyses the server's IP.
+- `experienceOptions.locale` is a Personalization transport option, as in Optimization: it sets the
+  locale the Experience API uses to translate profile location fields, and the handoff's replay
+  locale. It does not change the content locale. `request.locale` and content fetches use
+  `forRequest({ locale })` or the constructor locale only. When both are set, `forRequest({ locale })`
+  also wins as the transport locale.
+- `insightsOptions: { beacon }` is forwarded with each Analytics call.
 
 Do not store a request facade beyond the request that created it. Each `forRequest()` call returns a separate object with its own locale and resolve options; concurrent requests do not share those values.
 

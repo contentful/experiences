@@ -1,3 +1,17 @@
+## 0.12.5 (2026-10-18)
+
+This was a version bump only for design to align it with other projects, there were no code changes.
+
+## 0.12.4 (2026-10-16)
+
+This was a version bump only for design to align it with other projects, there were no code changes.
+
+## 0.12.3 (2026-10-16)
+
+### 🩹 Fixes
+
+- **exo:** emit ESM-compatible adapter imports [SPA-5573] ([#231](https://github.com/contentful/experiences/pull/231))
+
 ## 0.12.2 (2026-10-14)
 
 This was a version bump only for design to align it with other projects, there were no code changes.

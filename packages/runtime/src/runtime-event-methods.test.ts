@@ -1,3 +1,4 @@
+import type { InsightsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AllowedEventType, BlockedEvent, ConsentState } from './consent.js';
@@ -7,6 +8,7 @@ import {
   EventProfileRequiredError,
   type EventOptimizationData,
   type EventProfile,
+  type ExperienceRequestOptions,
   type RuntimeEventDispatch,
   type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
@@ -34,6 +36,9 @@ function createFixture(
     onEventBlocked?: (event: BlockedEvent) => void;
     sendResult?: boolean;
     dispatch?: RuntimeEventDispatch;
+    requireProfile?: boolean;
+    insightsOptions?: InsightsApiClientRequestOptions;
+    experienceOptions?: ExperienceRequestOptions;
   } = {}
 ) {
   let profile = options.profile;
@@ -60,6 +65,9 @@ function createFixture(
       getConsent: () => options.consent,
       allowedEventTypes: options.allowedEventTypes,
       onEventBlocked: options.onEventBlocked,
+      requireProfile: options.requireProfile,
+      getInsightsOptions: () => options.insightsOptions,
+      getExperienceOptions: () => options.experienceOptions,
     },
     options.dispatch
   );
@@ -139,7 +147,7 @@ describe('RuntimeEventMethods', () => {
     expect(methods.profile).toEqual({ id: 'current-profile' });
   });
 
-  it('sends each interaction immediately through Analytics and preserves false outcomes', async () => {
+  it('sends each interaction immediately through Analytics and resolves with no result, even when the transport reports failure', async () => {
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
       profile: { id: 'profile-1' },
@@ -148,7 +156,7 @@ describe('RuntimeEventMethods', () => {
 
     await expect(
       methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ accepted: true });
     await methods.trackClick(interaction);
     await methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 });
     await methods.trackFlagView({ componentId: 'flag-1' });
@@ -166,14 +174,46 @@ describe('RuntimeEventMethods', () => {
     }
   });
 
-  it('requires a profile for Analytics events without calling the transport', async () => {
-    const { methods, sendBatchEvents } = createFixture({ consent: { events: true } });
+  it('requires a profile for stateless Analytics events without calling the transport', async () => {
+    const { methods, sendBatchEvents } = createFixture({
+      consent: { events: true },
+      requireProfile: true,
+    });
 
     await expect(methods.trackClick(interaction)).rejects.toMatchObject({
       name: 'EventProfileRequiredError',
       method: 'trackClick',
     } satisfies Partial<EventProfileRequiredError>);
     expect(sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('warns and drops a stateful Analytics event without a profile, as Optimization does', async () => {
+    const { methods, sendBatchEvents } = createFixture({ consent: { events: true } });
+
+    await expect(
+      methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
+    ).resolves.toEqual({ accepted: true });
+    for (const call of [
+      () => methods.trackClick(interaction),
+      () => methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 }),
+      () => methods.trackFlagView({ componentId: 'flag-1' }),
+    ]) {
+      await expect(call()).resolves.toBeUndefined();
+    }
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('forwards request-scoped Insights options with a direct Analytics send', async () => {
+    const beacon = vi.fn(() => true);
+    const { methods, sendBatchEvents } = createFixture({
+      consent: { events: true },
+      profile: { id: 'profile-1' },
+      insightsOptions: { beacon },
+    });
+
+    await methods.trackClick(interaction);
+
+    expect(sendBatchEvents).toHaveBeenCalledWith(expect.any(Array), { beacon });
   });
 
   it('validates builder arguments before dispatch', async () => {
@@ -232,7 +272,7 @@ describe('RuntimeEventMethods', () => {
         await expect(methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
         await expect(
           methods.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
-        ).resolves.toBe(false);
+        ).resolves.toBeUndefined();
 
         expect(upsertProfile).toHaveBeenCalledTimes(1);
         expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -282,8 +322,15 @@ describe('RuntimeEventMethods', () => {
           trackHover: { ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 },
         }[method];
         // The argument shape differs per method; each is valid for its own method here.
-        await expect(allowed.methods[method](args as never)).resolves.toBe(true);
-        await expect(denied.methods[method](args as never)).resolves.toBe(false);
+        // Views report consent admission, as in Optimization; clicks and hovers resolve void.
+        const [admitted, blocked] =
+          method === 'trackView'
+            ? [{ accepted: true }, { accepted: false }]
+            : [undefined, undefined];
+        await expect(allowed.methods[method](args as never)).resolves.toEqual(admitted);
+        await expect(denied.methods[method](args as never)).resolves.toEqual(blocked);
+        expect(allowed.sendBatchEvents).toHaveBeenCalledTimes(1);
+        expect(denied.sendBatchEvents).not.toHaveBeenCalled();
       }
     });
 
@@ -292,11 +339,16 @@ describe('RuntimeEventMethods', () => {
       const args = { componentId: 'flag-1' };
 
       for (const allowedEventTypes of [['flag'], ['component']] as const) {
-        const { methods } = createFixture({ allowedEventTypes, profile });
-        await expect(methods.trackFlagView(args)).resolves.toBe(true);
+        const { methods, sendBatchEvents } = createFixture({ allowedEventTypes, profile });
+        await expect(methods.trackFlagView(args)).resolves.toBeUndefined();
+        expect(sendBatchEvents).toHaveBeenCalledTimes(1);
       }
-      const { methods } = createFixture({ allowedEventTypes: ['component_click'], profile });
-      await expect(methods.trackFlagView(args)).resolves.toBe(false);
+      const { methods, sendBatchEvents } = createFixture({
+        allowedEventTypes: ['component_click'],
+        profile,
+      });
+      await expect(methods.trackFlagView(args)).resolves.toBeUndefined();
+      expect(sendBatchEvents).not.toHaveBeenCalled();
     });
 
     it('reports each blocked event to onEventBlocked, and survives a throwing callback', async () => {
@@ -323,6 +375,51 @@ describe('RuntimeEventMethods', () => {
       await methods.page();
 
       expect(onEventBlocked).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('trackView acceptance result', () => {
+    const view = { ...interaction, viewId: 'view-1', viewDurationMs: 100 };
+
+    it('resolves { accepted: true } for an admitted view, matching Optimization', async () => {
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: true },
+        profile: { id: 'visitor' },
+      });
+
+      await expect(methods.trackView(view)).resolves.toEqual({ accepted: true });
+      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves { accepted: false } for a consent-blocked view and reports it', async () => {
+      const onEventBlocked = vi.fn();
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: false },
+        profile: { id: 'visitor' },
+        onEventBlocked,
+      });
+
+      await expect(methods.trackView(view)).resolves.toEqual({ accepted: false });
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackView' })
+      );
+    });
+
+    it('keeps the stateless profile requirement for views', async () => {
+      const { methods } = createFixture({ consent: { events: true }, requireProfile: true });
+
+      await expect(methods.trackView(view)).rejects.toBeInstanceOf(EventProfileRequiredError);
+    });
+
+    it('keeps click, hover and flag view returning void', async () => {
+      const { methods } = createFixture({ consent: { events: true }, profile: { id: 'visitor' } });
+
+      await expect(methods.trackClick(interaction)).resolves.toBeUndefined();
+      await expect(
+        methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 })
+      ).resolves.toBeUndefined();
+      await expect(methods.trackFlagView({ componentId: 'flag-1' })).resolves.toBeUndefined();
     });
   });
 });

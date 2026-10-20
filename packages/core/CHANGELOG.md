@@ -1,3 +1,13 @@
+## 0.12.5 (2026-10-18)
+
+### 🚀 Features
+
+- attribute Fragments to root Experience variants [EXA-2560] ([#237](https://github.com/contentful/experiences/pull/237))
+
+## 0.12.4 (2026-10-16)
+
+This was a version bump only for core to align it with other projects, there were no code changes.
+
 ## 0.12.3 (2026-10-14)
 
 ### 🚀 Features

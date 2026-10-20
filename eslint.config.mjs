@@ -104,10 +104,17 @@ export default [
   },
   prettierConfig,
   {
+    files: ['lib/mocks/src/*-handlers.ts'],
+    languageOptions: {
+      globals: { Request: 'readonly', Response: 'readonly' },
+    },
+  },
+  {
     ignores: [
       '**/node_modules/',
       '**/dist/',
       '**/build/',
+      'pkgs/',
       '**/coverage/',
       '**/.next/',
       '**/.svelte-kit/',

@@ -1,0 +1,70 @@
+{
+  "name": "mocks",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "lib/mocks/src",
+  "projectType": "library",
+  "tags": ["scope:internal", "layer:test-support"],
+  "targets": {
+    "clean": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run clean" }
+    },
+    "config:ctfl:list": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run config:ctfl:list" }
+    },
+    "fetch:ctfl:space": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run fetch:ctfl:space" }
+    },
+    "fetch:ctfl:experiences": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run fetch:ctfl:experiences" }
+    },
+    "fetch:ctfl": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run fetch:ctfl" }
+    },
+    "generate:ctfl:types": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run generate:ctfl:types" }
+    },
+    "upload:ctfl:space": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run upload:ctfl:space", "tty": true }
+    },
+    "upload:ctfl:space:confirmed": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "lib/mocks",
+        "command": "npm run upload:ctfl:space:confirmed",
+        "tty": true
+      }
+    },
+    "typecheck": {
+      "cache": true,
+      "inputs": ["default"],
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run typecheck" }
+    },
+    "lint": {
+      "cache": true,
+      "inputs": ["default"],
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run lint" }
+    },
+    "test:unit": {
+      "cache": true,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run test:unit" }
+    }
+  }
+}

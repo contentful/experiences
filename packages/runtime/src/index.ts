@@ -43,7 +43,17 @@ export type { RuntimeOptimizationConfig } from './create-optimization-client.js'
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
+export type { ExperienceRequestOptions, InsightsRequestOptions } from './runtime-event-methods.js';
 export type { EventEmissionResult } from './event-emission-result.js';
+export { AnalyticsDelivery } from './analytics-delivery.js';
+export type {
+  QueueFlushFailureContext,
+  QueueFlushPolicy,
+  QueueFlushRecoveredContext,
+  QueuePolicy,
+} from './lib/queue/index.js';
+export { resolveQueuePolicy } from './lib/queue/index.js';
+export type { AnalyticsFlushOptions } from './analytics-delivery.js';
 export { PersonalizationDelivery } from './personalization-delivery.js';
 export type { PersonalizationDeliveryState } from './personalization-delivery.js';
 export {

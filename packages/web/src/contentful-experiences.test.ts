@@ -2,7 +2,6 @@
 
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
-  EventProfileRequiredError,
   PROFILE_CACHE_KEY,
   type EventProfile,
 } from '@contentful/experiences-runtime';
@@ -416,13 +415,45 @@ describe('Web ContentfulExperiences', () => {
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(updatedProfile);
   });
 
-  it('requires a profile for Analytics events', async () => {
+  it('warns and drops an Analytics event without a profile, as Optimization does', async () => {
     const runtime = createRuntime();
-    mockOptimization(runtime);
+    const optimization = mockOptimization(runtime);
 
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).rejects.toBeInstanceOf(EventProfileRequiredError);
+    ).resolves.toBeUndefined();
+    await runtime.flush();
+
+    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('drops an Analytics call made while the initial profile request is still pending', async () => {
+    const runtime = createRuntime();
+    let respond!: (value: { profile: EventProfile }) => void;
+    const optimization = mockOptimization(runtime);
+    optimization.upsertProfile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        respond = resolve;
+      }) as never
+    );
+
+    const pending = runtime.page();
+    // A new visitor has no identity yet: the call resolves instead of rejecting, and sends nothing.
+    await expect(
+      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+    ).resolves.toBeUndefined();
+
+    respond({ profile: { id: 'issued-profile' } });
+    await pending;
+    await runtime.flush();
+    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
+
+    // Once the profile exists, tracking queues and sends as usual.
+    await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+    await runtime.flush();
+    expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
+      expect.objectContaining({ profile: { id: 'issued-profile' } }),
+    ]);
   });
 
   it('resets the profile before establishing a new one', async () => {
@@ -434,10 +465,13 @@ describe('Web ContentfulExperiences', () => {
     runtime.reset();
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).rejects.toBeInstanceOf(EventProfileRequiredError);
+    ).resolves.toBeUndefined();
+    await runtime.flush();
+    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
 
     await runtime.page();
     await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+    await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
       expect.objectContaining({ profile: { id: 'updated-profile' } }),
@@ -510,13 +544,15 @@ describe('Web ContentfulExperiences', () => {
 
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBe(false);
+    ).resolves.toBeUndefined();
+    await runtime.flush();
     expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
 
     runtime.consent({ events: true });
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBe(true);
+    ).resolves.toBeUndefined();
+    await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
       {

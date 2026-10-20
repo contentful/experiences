@@ -22,7 +22,7 @@ names, requiredness, fallbacks and values. Collection order is one signed
 
 GET uses `parameter.<id>` and `parameter.<id>.<field>` in the generated client's
 `queryParams`, separate from `locale`. Empty Records or defined extensions select
-POST, with structured, unprefixed `parameters` in the body. dev.9 supports that
+POST, with structured, unprefixed `parameters` in the body. dev.10 supports that
 body through serializer passthrough, although its generated type omits the key;
 the SDK uses a local typed request extension. Authentication and rename headers
 remain owned by the generated client. Refetch with changed values and replace

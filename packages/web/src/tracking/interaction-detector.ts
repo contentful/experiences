@@ -27,5 +27,6 @@ export const toInteractionArgs = (attribution: TrackingAttribution): TrackingAtt
   variantIndex: attribution.variantIndex,
   optimizationId: attribution.optimizationId,
   parentExperienceId: attribution.parentExperienceId,
+  parentVariantId: attribution.parentVariantId,
   entryIds: attribution.entryIds,
 });

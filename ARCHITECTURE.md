@@ -155,9 +155,14 @@ Personalization queue; construction never replays. Repeated current
 initializations join, route mismatches use ordinary current-page tracking,
 and later visits remain trackable. Admission can precede HTTP completion and
 retry can duplicate a request whose first result was ambiguous. Ordinary
-online Personalization and Analytics calls remain direct; offline ordinary
-Personalization calls use the same in-memory queue. There is no durable event
-persistence, beacon/lifecycle delivery, or Live Preview event integration.
+online Personalization calls remain direct; offline ordinary Personalization
+calls use the same in-memory queue. Web queues Analytics events in a separate
+in-memory queue, adapted from Optimization's InsightsQueue, flushed at 25
+events, every 30 seconds, on reconnect, and on page hide via the Beacon API; page hide
+also forces a final Personalization attempt, and `queuePolicy.offlineMaxEvents` sets the
+offline Personalization capacity.
+Node sends immediately. There is no durable event persistence or Live Preview
+event integration.
 Events are consent-gated: consent is `{ events, persistence }`, undecided means
 not granted, and until event consent is granted only `allowedEventTypes` are
 sent. Web holds consent globally and stores it in LocalStorage; Node scopes it

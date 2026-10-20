@@ -6,12 +6,12 @@ import type { ReactNode } from 'react';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { ComponentError } from './component-error';
-import { DebugExperience } from './debug-experience';
-import { ExperienceProvider } from './context';
-import { MissingComponent } from './missing-component';
-import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer';
-import type { Config, RenderContext } from './types';
+import { ComponentError } from './component-error.js';
+import { DebugExperience } from './debug-experience.js';
+import { ExperienceProvider } from './context.js';
+import { MissingComponent } from './missing-component.js';
+import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer.js';
+import type { Config, RenderContext } from './types.js';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   debug: false,

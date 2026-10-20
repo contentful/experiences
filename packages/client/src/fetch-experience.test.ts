@@ -462,6 +462,60 @@ describe('fetchExperience — personalization', () => {
     mockGetWithOverrides.mockResolvedValue(mockPayload);
   });
 
+  it('rejects invalid personalization with a TypeError before calling Delivery', async () => {
+    const rejection: unknown = await fetchExperience(
+      {
+        ...experienceOptions,
+        personalization: { profileId: 123 } as unknown as PersonalizationOptions,
+      },
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((error) => error);
+
+    expect(rejection).toBeInstanceOf(TypeError);
+    expect(rejection).toMatchObject({
+      message: 'Invalid Experience personalization options',
+      cause: expect.objectContaining({
+        message: expect.stringContaining('profileId'),
+        errors: [
+          {
+            path: ['profileId'],
+            message: 'Expected string. Received 123.',
+          },
+        ],
+      }),
+    });
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockGetWithOverrides).not.toHaveBeenCalled();
+  });
+
+  it('wraps a personalized Delivery failure in ExperienceFetchError with its cause', async () => {
+    const networkError = new Error('fetch failed: ECONNRESET');
+    mockGetWithOverrides.mockRejectedValueOnce(networkError);
+
+    const rejection: unknown = await fetchExperience(
+      { ...experienceOptions, personalization },
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((error) => error);
+
+    expect(rejection).toBeInstanceOf(ExperienceFetchError);
+    expect((rejection as ExperienceFetchError).cause).toBe(networkError);
+  });
+
+  it('preserves NotFoundError from a personalized Delivery request', async () => {
+    const notFound = new ContentfulViewDelivery.NotFoundError('experience not found');
+    mockGetWithOverrides.mockRejectedValueOnce(notFound);
+
+    const rejection: unknown = await fetchExperience(
+      { ...experienceOptions, personalization },
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((error) => error);
+
+    expect(rejection).toBe(notFound);
+  });
+
   it('routes to getWithOverrides with the personalization extension', async () => {
     await fetchExperience(
       { ...experienceOptions, locale: 'en-US', personalization },

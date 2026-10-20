@@ -8,6 +8,7 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+pkgs/
 *.tsbuildinfo
 .next/
 out/
@@ -23,6 +24,7 @@ coverage/
 .env
 .env.local
 .env.*.local
+lib/mocks/.contentfulrc.json
 
 # IDE
 .vscode/
@@ -35,9 +37,12 @@ coverage/
 # Logs
 logs/
 *.log
+contentful-export-error-log-*.json
+contentful-import-error-log-*.json
 
 # ignore NX cache/configuration
 .nx/
+lib/mocks/.cache/
 
 # Temporary files
 tmp/
