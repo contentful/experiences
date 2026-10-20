@@ -185,20 +185,21 @@ async function fetchByExperienceId(
   options: ByIdExperienceOptions
 ): Promise<ExperienceResponse> {
   const { spaceId, environmentId, experienceId, locale, personalization, extensions } = options;
+  const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
+  if (personalization !== undefined) {
+    try {
+      // XDA rejects EventBuilder's context.gdpr with HTTP 422. Keep the original
+      // events intact and serialize to its generated schema. When upstream XDA and
+      // client types accept built events, verify compatibility and remove this if redundant.
+      requestExtensions.personalization = personalizationSchema.parseOrThrow(personalization, {
+        unrecognizedObjectKeys: 'strip',
+      });
+    } catch (cause) {
+      throw new TypeError('Invalid Experience personalization options', { cause });
+    }
+  }
+
   try {
-    // XDA rejects EventBuilder's context.gdpr with HTTP 422. Keep the original
-    // events intact and serialize to its generated schema. When upstream XDA and
-    // client types accept built events, verify compatibility and remove this if redundant.
-    const requestExtensions: DeliveryExperienceRequestExtensions = {
-      ...extensions,
-      ...(personalization === undefined
-        ? {}
-        : {
-            personalization: personalizationSchema.parseOrThrow(personalization, {
-              unrecognizedObjectKeys: 'strip',
-            }),
-          }),
-    };
     // Both methods hit the same endpoint, but only the POST operation accepts
     // extensions in its request body. Keep the cacheable GET when there are no
     // extensions to evaluate.
