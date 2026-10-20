@@ -21,7 +21,11 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error('PORT must be an integer between 1 and 65535.');
 }
 const locale = process.env.LOCALE ?? 'en-US';
-const defaultExperienceIds = ['3fLAdFb3BYAuImRhcW8k4t', '4WzbgzPQHa9Tr2ffbOU8p7'];
+const defaultExperienceIds = [
+  '3fLAdFb3BYAuImRhcW8k4t',
+  '4WzbgzPQHa9Tr2ffbOU8p7',
+  '7u2eP09B4BIBToH8UwSHck',
+];
 const experienceIds = (process.env.EXPERIENCE_IDS?.trim() || defaultExperienceIds.join(','))
   .split(',')
   .map((id) => id.trim())

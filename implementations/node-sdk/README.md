@@ -90,9 +90,12 @@ node types use those same fields; the current bindings have no collection output
 The Coded Experience has one `codedExperienceTemplate` node with two
 `codedComponent` nodes in its `slot`. The Composed Experience expands into five
 `codedComponent` nodes: two from its template, two from its composed fragment,
-and one personalized fragment. Both Experiences include that personalized
+and one personalized fragment. These two Experiences include that personalized
 fragment, configured to replace baseline content with variant content for the
 Identified Users audience.
+The Personalized Composed Experience expands into two `codedComponent` nodes with
+no slot content. Its baseline displays Content 1 followed by Content 2; its
+Experience variant reverses that order for the Identified Users audience.
 The SDK owns resolution; the template uses its resolved props and does not look up
 the management export. Rich Text documents are passed directly to Contentful's
 HTML renderer at the same version Optimization uses. Text and attributes use
@@ -141,6 +144,7 @@ and shared by all reference implementations:
 
 - `3fLAdFb3BYAuImRhcW8k4t` — Coded Experience
 - `4WzbgzPQHa9Tr2ffbOU8p7` — Composed Experience
+- `7u2eP09B4BIBToH8UwSHck` — Personalized Composed Experience
 
 Optionally set comma-separated `EXPERIENCE_IDS` in this implementation's `.env`
 to replace that list. An absent or blank value uses the defaults. These are

@@ -16,6 +16,7 @@ All reference implementations use the same hard-coded default Experience IDs:
 
 - `3fLAdFb3BYAuImRhcW8k4t` — Coded Experience
 - `4WzbgzPQHa9Tr2ffbOU8p7` — Composed Experience
+- `7u2eP09B4BIBToH8UwSHck` — Personalized Composed Experience
 
 An implementation-local override is optional; configuring IDs must not be required
 to use the reference data. Keep implementations standalone rather than adding a

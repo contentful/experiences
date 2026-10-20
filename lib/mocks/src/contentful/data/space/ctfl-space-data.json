@@ -2002,6 +2002,368 @@
           }
         }
       }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "3mGJY0IVfa8edF2Z2CpQjo",
+        "type": "Entry",
+        "createdAt": "2026-10-20T08:44:37.037Z",
+        "updatedAt": "2026-10-20T08:45:19.923Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 7,
+        "publishedAt": "2026-10-20T08:45:19.923Z",
+        "firstPublishedAt": "2026-10-20T08:45:19.923Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 8,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/3mGJY0IVfa8edF2Z2CpQjo"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Composed Experience Content 1"
+        },
+        "text": {
+          "en-US": "This is personalized composed experience content for the first component."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is composed experience content for the first component ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "5eTSPurkcX9y3q7cRdKfoD",
+        "type": "Entry",
+        "createdAt": "2026-10-20T08:45:46.814Z",
+        "updatedAt": "2026-10-20T08:46:20.206Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 6,
+        "publishedAt": "2026-10-20T08:46:20.206Z",
+        "firstPublishedAt": "2026-10-20T08:46:20.206Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 7,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "content"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/5eTSPurkcX9y3q7cRdKfoD"
+      },
+      "fields": {
+        "internalTitle": {
+          "en-US": "Personalized Composed Experience Content 2"
+        },
+        "text": {
+          "en-US": "This is personalized composed experience content for the second component."
+        },
+        "richText": {
+          "en-US": {
+            "nodeType": "document",
+            "data": {
+            },
+            "content": [
+              {
+                "nodeType": "paragraph",
+                "data": {
+                },
+                "content": [
+                  {
+                    "nodeType": "text",
+                    "value": "This is personalized composed experience content for the first component ",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": "rich text",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ],
+                    "data": {
+                    }
+                  },
+                  {
+                    "nodeType": "text",
+                    "value": ".",
+                    "marks": [
+                    ],
+                    "data": {
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "sys": {
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "id": "4JnI0NUnwqIymua5gTB7CB",
+        "type": "Entry",
+        "createdAt": "2026-10-20T08:48:09.083Z",
+        "updatedAt": "2026-10-20T08:48:09.615Z",
+        "environment": {
+          "sys": {
+            "id": "master",
+            "type": "Link",
+            "linkType": "Environment"
+          }
+        },
+        "publishedVersion": 1,
+        "publishedAt": "2026-10-20T08:48:09.615Z",
+        "firstPublishedAt": "2026-10-20T08:48:09.615Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "publishedCounter": 1,
+        "version": 2,
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "fieldStatus": {
+          "*": {
+            "en-US": "published"
+          }
+        },
+        "automationTags": [
+        ],
+        "contentType": {
+          "sys": {
+            "type": "Link",
+            "linkType": "ContentType",
+            "id": "nt_experience"
+          }
+        },
+        "urn": "crn:contentful:::content:spaces/700s66i6clht/environments/master/entries/4JnI0NUnwqIymua5gTB7CB"
+      },
+      "fields": {
+        "nt_name": {
+          "en-US": "Personalized Composed Experience Optimization"
+        },
+        "nt_description": {
+          "en-US": "This is a personalized composed experience optimization."
+        },
+        "nt_type": {
+          "en-US": "nt_personalization"
+        },
+        "nt_config": {
+          "en-US": {
+            "traffic": 1,
+            "distribution": [
+              0,
+              1
+            ],
+            "sticky": false,
+            "components": [
+              {
+                "baseline": {
+                  "id": "default",
+                  "entityId": "7u2eP09B4BIBToH8UwSHck"
+                },
+                "variants": [
+                  {
+                    "id": "a3ccb21b-2c39-42be-96de-c2303cd4b27d",
+                    "entityId": "7u2eP09B4BIBToH8UwSHck"
+                  }
+                ],
+                "type": "ExperienceReplacement"
+              }
+            ]
+          }
+        },
+        "nt_audience": {
+          "en-US": {
+            "sys": {
+              "type": "Link",
+              "linkType": "Entry",
+              "id": "4SUbE6Ve5P2LoxGYTckiUg"
+            }
+          }
+        },
+        "nt_experience_id": {
+          "en-US": "b3dfb205-742a-4c5f-b80c-2ee18aabe3c3"
+        },
+        "nt_metadata": {
+          "en-US": {
+            "type": "origin"
+          }
+        }
+      }
     }
   ],
   "assets": [
@@ -5051,7 +5413,7 @@
               }
             },
             "createdAt": "2026-10-19T15:25:12.959Z",
-            "updatedAt": "2026-10-19T15:30:12.337Z",
+            "updatedAt": "2026-10-19T15:56:56.410Z",
             "createdBy": {
               "sys": {
                 "type": "Link",
@@ -5069,6 +5431,17 @@
             "variant": "6dc4dc00-4e2e-417c-a5c3-cc069fc4d1a1",
             "variantType": "personalization",
             "variantDimension": "default",
+            "publishedAt": "2026-10-19T15:56:56.435Z",
+            "publishedVersion": 4,
+            "publishedCounter": 1,
+            "firstPublishedAt": "2026-10-19T15:56:56.435Z",
+            "publishedBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "2ThAHYPA8kj7F1sHxUzXVt"
+              }
+            },
             "component": {
               "sys": {
                 "type": "ResourceLink",
@@ -5078,7 +5451,7 @@
             },
             "automationTags": [
             ],
-            "version": 4
+            "version": 5
           },
           "name": "Personalized Coded Experience Fragment",
           "description": "",
@@ -5309,6 +5682,217 @@
     }
   ],
   "experiences": [
+    {
+      "sys": {
+        "id": "7u2eP09B4BIBToH8UwSHck",
+        "type": "Experience",
+        "space": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Space",
+            "id": "700s66i6clht"
+          }
+        },
+        "environment": {
+          "sys": {
+            "type": "Link",
+            "linkType": "Environment",
+            "id": "master"
+          }
+        },
+        "createdAt": "2026-10-20T08:43:51.161Z",
+        "updatedAt": "2026-10-20T08:49:39.053Z",
+        "createdBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "updatedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "variant": "default",
+        "variantType": "default",
+        "variantDimension": "default",
+        "publishedAt": "2026-10-20T08:49:39.070Z",
+        "publishedVersion": 6,
+        "publishedCounter": 3,
+        "firstPublishedAt": "2026-10-20T08:48:07.465Z",
+        "publishedBy": {
+          "sys": {
+            "type": "Link",
+            "linkType": "User",
+            "id": "2ThAHYPA8kj7F1sHxUzXVt"
+          }
+        },
+        "localeStatus": {
+          "en-US": "published"
+        },
+        "experienceTemplate": {
+          "sys": {
+            "type": "ResourceLink",
+            "linkType": "Contentful:ExperienceTemplate",
+            "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/composedExperienceTemplate"
+          }
+        },
+        "automationTags": [
+        ],
+        "version": 7
+      },
+      "name": "Personalized Composed Experience",
+      "description": "",
+      "designProperties": {
+      },
+      "contentBindings": {
+        "sys": {
+          "type": "ResourceLink",
+          "linkType": "Contentful:DataAssembly",
+          "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/1xrW5RkILRtGaWxGhtqtE7"
+        },
+        "parameters": {
+          "p_izZHsyrzM7": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/3mGJY0IVfa8edF2Z2CpQjo"
+              }
+            }
+          },
+          "p_sGZk50FFJZ": {
+            "$literal": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:Entry",
+                "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/5eTSPurkcX9y3q7cRdKfoD"
+              }
+            }
+          }
+        }
+      },
+      "metadata": {
+        "tags": [
+        ],
+        "concepts": [
+        ]
+      },
+      "slots": {
+        "slot": [
+        ]
+      },
+      "optimizationVariants": [
+        {
+          "sys": {
+            "id": "7u2eP09B4BIBToH8UwSHck",
+            "type": "Experience",
+            "space": {
+              "sys": {
+                "type": "Link",
+                "linkType": "Space",
+                "id": "700s66i6clht"
+              }
+            },
+            "environment": {
+              "sys": {
+                "type": "Link",
+                "linkType": "Environment",
+                "id": "master"
+              }
+            },
+            "createdAt": "2026-10-20T08:46:59.382Z",
+            "updatedAt": "2026-10-20T09:30:29.733Z",
+            "createdBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "4QYnIIKna8TpXegJp3oSBi"
+              }
+            },
+            "updatedBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "4QYnIIKna8TpXegJp3oSBi"
+              }
+            },
+            "variant": "a3ccb21b-2c39-42be-96de-c2303cd4b27d",
+            "variantType": "personalization",
+            "variantDimension": "default",
+            "publishedAt": "2026-10-20T09:30:29.748Z",
+            "publishedVersion": 6,
+            "publishedCounter": 2,
+            "firstPublishedAt": "2026-10-20T08:48:08.603Z",
+            "publishedBy": {
+              "sys": {
+                "type": "Link",
+                "linkType": "User",
+                "id": "2ThAHYPA8kj7F1sHxUzXVt"
+              }
+            },
+            "localeStatus": {
+              "en-US": "published"
+            },
+            "experienceTemplate": {
+              "sys": {
+                "type": "ResourceLink",
+                "linkType": "Contentful:ExperienceTemplate",
+                "urn": "crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/composedExperienceTemplate"
+              }
+            },
+            "automationTags": [
+            ],
+            "version": 7
+          },
+          "name": "Personalized Composed Experience",
+          "description": "",
+          "designProperties": {
+          },
+          "contentBindings": {
+            "sys": {
+              "type": "ResourceLink",
+              "linkType": "Contentful:DataAssembly",
+              "urn": "crn:contentful:::experience:spaces/$self/environments/$self/dataAssemblies/1xrW5RkILRtGaWxGhtqtE7"
+            },
+            "parameters": {
+              "p_izZHsyrzM7": {
+                "$literal": {
+                  "sys": {
+                    "type": "ResourceLink",
+                    "linkType": "Contentful:Entry",
+                    "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/5eTSPurkcX9y3q7cRdKfoD"
+                  }
+                }
+              },
+              "p_sGZk50FFJZ": {
+                "$literal": {
+                  "sys": {
+                    "type": "ResourceLink",
+                    "linkType": "Contentful:Entry",
+                    "urn": "crn:contentful:::content:spaces/$self/environments/$self/entries/3mGJY0IVfa8edF2Z2CpQjo"
+                  }
+                }
+              }
+            }
+          },
+          "metadata": {
+            "tags": [
+            ],
+            "concepts": [
+            ],
+            "name": "Variant 2"
+          },
+          "slots": {
+            "slot": [
+            ]
+          }
+        }
+      ]
+    },
     {
       "sys": {
         "id": "3fLAdFb3BYAuImRhcW8k4t",
