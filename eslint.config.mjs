@@ -114,6 +114,7 @@ export default [
       '**/node_modules/',
       '**/dist/',
       '**/build/',
+      'pkgs/',
       '**/coverage/',
       '**/.next/',
       '**/.svelte-kit/',

@@ -23,6 +23,7 @@
         "cwd": "packages/adapter-react",
         "command": "vitest run"
       }
-    }
+    },
+    "pack": {}
   }
 }

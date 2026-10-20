@@ -37,6 +37,15 @@
       "options": {
         "registry": "https://npm.pkg.github.com"
       }
+    },
+    "pack": {
+      "cache": false,
+      "dependsOn": ["build", "^pack"],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx ../../scripts/pack-package.ts",
+        "cwd": "{projectRoot}"
+      }
     }
   },
   "plugins": [

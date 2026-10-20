@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Experiences Node SDK Reference Implementation</title>
+
+    <style>
+      html,
+      textarea,
+      input,
+      button {
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          avenir next,
+          avenir,
+          segoe ui,
+          helvetica neue,
+          Adwaita Sans,
+          Cantarell,
+          Ubuntu,
+          roboto,
+          noto,
+          helvetica,
+          arial,
+          sans-serif;
+      }
+      h1,
+      main {
+        display: grid;
+        grid-gap: 2rem;
+        grid-template-rows: auto 1fr;
+        max-width: 1040px;
+        margin-inline: auto;
+      }
+      ol {
+        margin: 0;
+      }
+      summary {
+        cursor: pointer;
+      }
+      a {
+        color: inherit;
+
+        &:hover,
+        &:active {
+          color: blue;
+        }
+      }
+      #experiences > div {
+        display: grid;
+        grid-gap: 2rem;
+        grid-auto-rows: 75dvh;
+        justify-items: center;
+        align-items: center;
+        margin-block-end: 2rem;
+
+        > div {
+          display: grid;
+          width: 100%;
+          height: 100%;
+          justify-items: center;
+          align-items: center;
+          background: #eee;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Experiences Node SDK Reference Implementation</h1>
+
+    <main>
+      <section>
+        <h2>States</h2>
+
+        <p>
+          <% if (identifyRequested) { %>
+            <span>Identify event included</span>
+          <% } else { %>
+            <a href="/?userId=charles">Identify</a>
+          <% } %>
+        </p>
+      </section>
+
+      <section id="experiences">
+        <h2>Experiences</h2>
+
+        <div>
+          <% for (const { id, plan } of experiences) { %>
+            <div data-experience-id="<%= id %>">
+              <div>
+                <%- include('nodes', { nodes: plan.nodes }) %>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

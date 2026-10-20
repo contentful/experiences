@@ -42,11 +42,18 @@ experiences/
 │   ├── nextjs/               # Next.js 15 example (external developers run this)
 │   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
 │   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
+├── implementations/         # Standalone reference apps consuming local npm tarballs
+│   └── node-sdk/             # Express/EJS Node reference, managed through Nx
 └── lib/
     └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
 
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
+
+**`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
+Use `npx nx run implementation-node-sdk:setup` and `:dev`; root aggregate checks
+exclude implementations. Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
+and the app README for the package boundary, local `.env`, and lifecycle commands.
 
 ### Package roles
 
