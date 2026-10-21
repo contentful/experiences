@@ -34,7 +34,7 @@
     "@typescript-eslint/parser": "8.70.0",
     "eslint": "10.10.0",
     "pm2": "7.0.4",
-    "tsx": "4.21.0",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
     "jiti": "2.6.1",
     "rimraf": "6.1.3"
