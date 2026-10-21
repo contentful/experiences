@@ -1,3 +1,14 @@
+## 0.1.3 (2026-10-21)
+
+### 🩹 Fixes
+
+- **deps:** update dependency es-toolkit to ^1.52.0 ([#247](https://github.com/contentful/experiences/pull/247))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.9.7
+- Updated core to 0.12.6
+
 ## 0.1.2 (2026-10-18)
 
 ### 🚀 Features
