@@ -13,7 +13,11 @@
       "!{projectRoot}/vitest.setup.ts",
       "!{projectRoot}/tsconfig.spec.json"
     ],
-    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json", "{workspaceRoot}/eslint.config.mjs"]
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/eslint.config.mjs",
+      "{workspaceRoot}/scripts/emit-dual-dts.ts"
+    ]
   },
   "targetDefaults": {
     "build": {

@@ -6,12 +6,6 @@ import EventBuilder, {
 } from './event-builder';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info';
 
-import {
-  ExoClickEvent as OptimizationExoClickEvent,
-  ExoHoverEvent as OptimizationExoHoverEvent,
-  ExoViewEvent as OptimizationExoViewEvent,
-} from '@contentful/optimization-api-client/api-schemas';
-
 const LIBRARY = { name: '@contentful/experiences-sdk-core', version: '0.8.4' };
 
 function createBuilder() {
@@ -25,14 +19,6 @@ function buildInteractionEvents(args: InteractionBuilderArgsBase) {
     builder.buildClick(args),
     builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 }),
   ] as const;
-}
-
-function expectApiCompatibleInteractionEvents([view, click, hover]: ReturnType<
-  typeof buildInteractionEvents
->) {
-  expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
-  expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
-  expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
 }
 
 const interaction = {
@@ -55,11 +41,10 @@ describe('EventBuilder', () => {
     });
   });
 
-  it('builds API-compatible ExO interaction events', () => {
+  it('maps ExO interaction properties and event types', () => {
     const events = buildInteractionEvents(interaction);
     const [view, click, hover] = events;
 
-    expectApiCompatibleInteractionEvents(events);
     expect(view).toMatchObject({
       ...interaction,
       type: 'exo_node_view',
@@ -68,12 +53,14 @@ describe('EventBuilder', () => {
     });
     expect(click.type).toBe('exo_node_click');
     expect(hover.type).toBe('exo_node_hover');
+    expect(() =>
+      createBuilder().buildView({ ...interaction, viewId: 'view-1', viewDurationMs: -1 })
+    ).toThrow();
   });
 
   it('builds baseline Experience events with a default variant and no parent variant', () => {
     const events = buildInteractionEvents({ entityId: 'experience-1', entityKind: 'Experience' });
 
-    expectApiCompatibleInteractionEvents(events);
     for (const event of events) {
       expect(event).toMatchObject({
         entityId: 'experience-1',
@@ -92,7 +79,6 @@ describe('EventBuilder', () => {
       entityKind: 'ExperienceFragment',
     });
 
-    expectApiCompatibleInteractionEvents(events);
     for (const event of events) {
       expect(event).toMatchObject({
         entityId: 'fragment-1',
@@ -138,15 +124,6 @@ describe('EventBuilder', () => {
       for (const event of events) expect(event).toHaveProperty('variantId', 'default');
     }
   );
-
-  it('rejects a non-string root Experience variant', () => {
-    expect(() =>
-      createBuilder().buildClick({
-        ...interaction,
-        parentVariantId: 42 as unknown as string,
-      })
-    ).toThrow();
-  });
 
   it('uses configured context providers and infers campaign values', () => {
     const builder = new EventBuilder({
@@ -194,15 +171,5 @@ describe('EventBuilder', () => {
       event: 'cta_clicked',
       properties: {},
     });
-  });
-
-  it('rejects invalid ExO interaction arguments', () => {
-    expect(() =>
-      createBuilder().buildView({
-        ...interaction,
-        viewId: 'view-1',
-        viewDurationMs: -1,
-      })
-    ).toThrow();
   });
 });

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
+import { deferred } from './test-fixtures/dom.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   admit(
@@ -29,7 +30,7 @@ function createRuntime(profile?: { id: string }) {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    ...(profile === undefined ? {} : { profile }),
+    ...(profile === undefined ? {} : { defaults: { profile } }),
   });
   runtimes.add(runtime);
   return runtime;
@@ -42,14 +43,6 @@ function prepared(runtime: TestContentfulExperiences, consent = true) {
     initialEvents: [{ type: 'track', event: 'prepared' }],
     eventConsent: consent,
   });
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((complete) => {
-    resolve = complete;
-  });
-  return { promise, resolve };
 }
 
 // Consent is not what these tests are about: run as a visitor who has opted in.
@@ -76,7 +69,7 @@ describe('Web prepared Personalization delivery', () => {
     const events = prepared(runtime, true);
 
     await expect(runtime.admit(events, undefined, 'de-DE')).resolves.toEqual({ accepted: true });
-    expect(runtime.personalizationDeliveryState.status).toBe('pending');
+    expect(runtime.states.experienceRequestState.current.status).toBe('pending');
     expect(upsert).toHaveBeenCalledWith(
       { profileId: undefined, events },
       { preflight: false, locale: 'de-DE' }
@@ -87,10 +80,10 @@ describe('Web prepared Personalization delivery', () => {
     expect(
       upsert.mock.calls[0]?.[0].events.every((event) => event.context.gdpr?.isConsentGiven === true)
     ).toBe(true);
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
 
     pending.resolve({ profile: { id: 'api-profile' } });
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'api-profile' }));
+    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual({ id: 'api-profile' }));
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
       id: 'api-profile',
     });
@@ -106,7 +99,7 @@ describe('Web prepared Personalization delivery', () => {
 
     await expect(runtime.admit(events)).resolves.toEqual({ accepted: false });
     expect(upsert).not.toHaveBeenCalled();
-    expect(runtime.personalizationDeliveryState.status).toBe('idle');
+    expect(runtime.states.experienceRequestState.current.status).toBe('idle');
   });
 
   it('uses a continuation ID for early Analytics without persisting a synthetic profile', async () => {
@@ -123,7 +116,7 @@ describe('Web prepared Personalization delivery', () => {
       accepted: true,
     });
     expect(upsert.mock.calls[0]?.[0].profileId).toBe('server-profile');
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
 
     await expect(
@@ -138,7 +131,7 @@ describe('Web prepared Personalization delivery', () => {
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
 
     pending.resolve({ profile: { id: 'api-profile' } });
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'api-profile' }));
+    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual({ id: 'api-profile' }));
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
       id: 'api-profile',
     });
@@ -232,11 +225,13 @@ describe('Web prepared Personalization delivery', () => {
     });
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(upsert.mock.calls[1]?.[0].events).toHaveLength(1);
-    expect(runtime.profile).toEqual({ id: 'direct-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'direct-profile' });
 
     pending.resolve({ profile: { id: 'stale-prepared-profile' } });
-    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
-    expect(runtime.profile).toEqual({ id: 'direct-profile' });
+    await vi.waitFor(() =>
+      expect(runtime.states.experienceRequestState.current.status).toBe('success')
+    );
+    expect(runtime.states.profile.current).toEqual({ id: 'direct-profile' });
   });
 
   it('queues while offline and flushes on reconnect', async () => {
@@ -252,7 +247,9 @@ describe('Web prepared Personalization delivery', () => {
 
     window.dispatchEvent(new Event('online'));
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'connected-profile' }));
+    await vi.waitFor(() =>
+      expect(runtime.states.profile.current).toEqual({ id: 'connected-profile' })
+    );
   });
 
   it('ignores stale prepared responses after reset and cleans up a failed retry', async () => {
@@ -269,18 +266,21 @@ describe('Web prepared Personalization delivery', () => {
     pending.resolve({ profile: { id: 'old-profile' } });
     await Promise.resolve();
     await Promise.resolve();
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-    expect(runtime.personalizationDeliveryState.status).toBe('idle');
+    expect(runtime.states.experienceRequestState.current.status).toBe('idle');
 
     await runtime.admit(prepared(runtime));
     await Promise.resolve();
     await Promise.resolve();
-    expect(runtime.personalizationDeliveryState).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(runtime.states.experienceRequestState.current).toEqual({
+      status: 'failed',
+      reason: 'api-error',
+    });
     runtime.reset();
     await vi.advanceTimersByTimeAsync(1000);
     expect(upsert).toHaveBeenCalledTimes(2);
-    expect(runtime.personalizationDeliveryState.status).toBe('idle');
+    expect(runtime.states.experienceRequestState.current.status).toBe('idle');
   });
 
   it('ignores a late prepared response after destroy', async () => {
@@ -295,7 +295,7 @@ describe('Web prepared Personalization delivery', () => {
     pending.resolve({ profile: { id: 'old-profile' } });
     await Promise.resolve();
     await Promise.resolve();
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
@@ -306,11 +306,12 @@ describe('Web prepared Personalization delivery', () => {
     );
     const runtime = createRuntime();
     const send = runtime.track({ event: 'in-flight' });
+    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
 
     runtime.destroy();
     pending.resolve({ profile: { id: 'late-profile' } });
     await send;
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
@@ -332,7 +333,7 @@ describe('Web prepared Personalization delivery', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(upsert).toHaveBeenCalledTimes(1);
-    expect(replacement.profile).toEqual({ id: 'replacement-profile' });
+    expect(replacement.states.profile.current).toEqual({ id: 'replacement-profile' });
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
       id: 'replacement-profile',
     });

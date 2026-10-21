@@ -4,6 +4,8 @@ import type {
 } from '@contentful/optimization-api-client/api-schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnalyticsDelivery } from './analytics-delivery.js';
+import EventBuilder from './event-builder.js';
+import type { EventInterceptors } from './event-interceptors.js';
 import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 
 afterEach(() => {
@@ -12,8 +14,12 @@ afterEach(() => {
 });
 
 const profile: EventProfile = { id: 'profile-1' };
-const event = (n: number) =>
-  ({ type: 'component', componentId: `c${n}` }) as unknown as AnalyticsEvent;
+const builder = new EventBuilder({
+  channel: 'web',
+  library: { name: '@contentful/experiences-web', version: 'test' },
+});
+const baseEvent = builder.buildFlagView({ componentId: 'flag', experienceId: 'experience' });
+const event = (n: number): AnalyticsEvent => ({ ...baseEvent, componentId: `c${n}` });
 
 /**
  * The queue has no lifecycle of its own; like Optimization's InsightsQueue it reads an
@@ -24,8 +30,12 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
   let resetToken: object = {};
   let destroyed = false;
   const sendBatchEvents = vi.fn<(...args: unknown[]) => Promise<boolean>>().mockResolvedValue(true);
+  const eventInterceptors = { run: vi.fn<EventInterceptors['run']>(async (event) => event) };
+  const publishEvent = vi.fn();
   const delivery = new AnalyticsDelivery({
     api: { sendBatchEvents } as never,
+    eventInterceptors,
+    publishEvent,
     getOnline: () => online,
     getResetToken: () => (destroyed ? undefined : resetToken),
     flushPolicy: resolveQueueFlushPolicy(undefined),
@@ -50,6 +60,8 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
     delivery,
     owner,
     sendBatchEvents,
+    eventInterceptors,
+    publishEvent,
     setOnline: (value: boolean) => {
       online = value;
     },
@@ -57,6 +69,26 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
 }
 
 describe('AnalyticsDelivery', () => {
+  it('discards an event when the owner resets during asynchronous interception', async () => {
+    const f = setup();
+    let resolve!: (value: AnalyticsEvent) => void;
+    f.eventInterceptors.run.mockReturnValueOnce(
+      new Promise<AnalyticsEvent>((done) => {
+        resolve = done;
+      })
+    );
+    const sending = f.delivery.send(event(1), profile);
+    f.owner.reset();
+    resolve(event(1));
+    await sending;
+    await f.delivery.flush({ force: true });
+
+    expect(f.publishEvent).not.toHaveBeenCalled();
+    expect(f.delivery.queuedEventCount).toBe(0);
+    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+    await f.owner.destroy();
+  });
+
   it('queues events instead of sending each one', async () => {
     const { delivery, owner, sendBatchEvents } = setup();
     await expect(delivery.send(event(1), profile)).resolves.toBeUndefined();
@@ -135,19 +167,6 @@ describe('AnalyticsDelivery', () => {
     sendBatchEvents.mockRejectedValueOnce(new Error('network'));
     await delivery.send(event(1), profile);
     await delivery.flush();
-    expect(delivery.queuedEventCount).toBe(1);
-    void owner.destroy();
-  });
-
-  it('keeps events queued while a flush is in flight', async () => {
-    const { delivery, owner, sendBatchEvents } = setup();
-    let resolve!: (ok: boolean) => void;
-    sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
-    await delivery.send(event(1), profile);
-    const flushing = delivery.flush();
-    await delivery.send(event(2), profile);
-    resolve(true);
-    await flushing;
     expect(delivery.queuedEventCount).toBe(1);
     void owner.destroy();
   });

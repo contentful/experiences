@@ -16,6 +16,7 @@ describe('createRuntimeOptimizationClient', () => {
     const client = createRuntimeOptimizationClient({
       spaceId: 'space',
       environmentId: 'staging',
+      locale: 'de-DE',
       personalizationBaseUrl: 'https://personalization.example',
       analyticsBaseUrl: 'https://analytics.example',
       personalizationEnabledFeatures: ['location'],
@@ -29,12 +30,10 @@ describe('createRuntimeOptimizationClient', () => {
       experience: {
         baseUrl: 'https://personalization.example',
         enabledFeatures: ['location'],
+        locale: 'de-DE',
       },
       insights: { baseUrl: 'https://analytics.example' },
     });
-    expect(client).toEqual({
-      personalization: expect.objectContaining({ upsertProfile: expect.any(Function) }),
-      analytics: expect.objectContaining({ sendBatchEvents: expect.any(Function) }),
-    });
+    expect(client).toBe(vi.mocked(OptimizationApiClient).mock.results[0]?.value);
   });
 });

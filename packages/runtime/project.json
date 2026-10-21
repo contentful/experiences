@@ -10,7 +10,10 @@
       "dependsOn": ["^build"],
       "outputs": ["{projectRoot}/dist"],
       "executor": "nx:run-commands",
-      "options": { "cwd": "packages/runtime", "command": "tsup" }
+      "options": {
+        "cwd": "packages/runtime",
+        "command": "tsup && tsx ../../scripts/emit-dual-dts.ts dist"
+      }
     },
     "test": {
       "cache": true,

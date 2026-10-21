@@ -23,6 +23,7 @@ interface CreateTimedDetectorOptions<TInfo> {
    */
   createObserver: (callback: (info: TInfo) => Promise<void>) => TimedObserver;
   track: (attribution: TrackingAttribution, info: TInfo) => Promise<void>;
+  getResetToken?: () => unknown;
 }
 
 interface Group {
@@ -37,6 +38,7 @@ export function createTimedDetector<TInfo>({
   isFinal,
   createObserver,
   track,
+  getResetToken = () => undefined,
 }: CreateTimedDetectorOptions<TInfo>): InteractionDetector {
   const groups = new Map<string, Group>();
   let started = false;
@@ -46,7 +48,11 @@ export function createTimedDetector<TInfo>({
     // Its final event keeps the attribution that qualified it: a slow send can
     // delay the final past a `refresh()` that re-points this key.
     let qualified: TrackingAttribution | undefined;
+    const resetToken = getResetToken();
     const observer = createObserver(async (info) => {
+      // A queued final may outlive disconnect or an explicitly draining session.
+      // Only the observer's original owner may authorize that delayed send.
+      if (group.observer !== observer || getResetToken() !== resetToken) return;
       let attribution: TrackingAttribution | undefined;
       if (isFinal(info)) {
         attribution = qualified ?? resolveAttribution(key);
@@ -68,8 +74,11 @@ export function createTimedDetector<TInfo>({
       started = true;
       for (const [key, group] of groups) startGroup(key, group);
     },
-    stop() {
-      for (const group of groups.values()) group.observer?.disconnect();
+    stop({ preservePending = false } = {}) {
+      for (const group of groups.values()) {
+        group.observer?.disconnect();
+        if (!preservePending) group.observer = undefined;
+      }
       groups.clear();
       started = false;
     },

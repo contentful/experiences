@@ -67,28 +67,38 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
   const [blocked, setBlocked] = useState<BlockedEvent[]>([]);
   const [lastResult, setLastResult] = useState<string>('');
 
-  function refresh() {
-    const current = runtime.current;
-    if (current === undefined) return;
-    setConsent({ ...current.consentState });
-    setProfileId(current.profile?.id);
-    setStored(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
-  }
-
   useEffect(() => {
     const instance = new ContentfulExperiences({
       spaceId,
       environmentId,
       delivery: { accessToken },
-      onEventBlocked: (event) => setBlocked((previous) => [event, ...previous].slice(0, 5)),
     });
     runtime.current = instance;
-    refresh();
+    const refreshStored = () =>
+      setStored(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
+    const subscriptions = [
+      instance.states.consent.subscribe((events) => {
+        setConsent((previous) => ({ ...previous, events }));
+        refreshStored();
+      }),
+      instance.states.persistenceConsent.subscribe((persistence) => {
+        setConsent((previous) => ({ ...previous, persistence }));
+        refreshStored();
+      }),
+      instance.states.profile.subscribe((profile) => {
+        setProfileId(profile?.id);
+        refreshStored();
+      }),
+      instance.states.blockedEventStream.subscribe((event) => {
+        if (event !== undefined) setBlocked((previous) => [event, ...previous].slice(0, 5));
+      }),
+    ];
 
     // Views, hovers, and clicks on rendered nodes go through the same consent gate.
     const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
     return () => {
       void session.stop();
+      subscriptions.forEach((subscription) => subscription.unsubscribe());
       // Only one Web SDK may be live at a time; release it so a remount can construct another.
       instance.destroy();
       runtime.current = undefined;
@@ -101,12 +111,10 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
     } catch (error) {
       setLastResult(`${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    refresh();
   }
 
   function setChoice(next: boolean | Consent) {
     runtime.current?.consent(next);
-    refresh();
   }
 
   return (

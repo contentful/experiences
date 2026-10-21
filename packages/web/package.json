@@ -4,20 +4,49 @@
   "description": "Browser SDK for Contentful Experiences",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.mts",
   "sideEffects": false,
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
+        "types": "./dist/index.d.mts",
         "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./runtime": {
+      "import": {
+        "types": "./dist/runtime.d.mts",
+        "default": "./dist/runtime.js"
+      },
+      "require": {
+        "types": "./dist/runtime.d.cts",
+        "default": "./dist/runtime.cjs"
       }
     },
     "./tracking-attributes": {
       "import": {
-        "types": "./dist/tracking-attributes.d.ts",
+        "types": "./dist/tracking-attributes.d.mts",
         "default": "./dist/tracking-attributes.js"
+      },
+      "require": {
+        "types": "./dist/tracking-attributes.d.cts",
+        "default": "./dist/tracking-attributes.cjs"
+      }
+    },
+    "./bridge-support": {
+      "import": {
+        "types": "./dist/bridge-support.d.mts",
+        "default": "./dist/bridge-support.js"
+      },
+      "require": {
+        "types": "./dist/bridge-support.d.cts",
+        "default": "./dist/bridge-support.cjs"
       }
     },
     "./package.json": "./package.json"
@@ -38,7 +67,9 @@
   "dependencies": {
     "@contentful/experiences-client": "0.10.0",
     "@contentful/experiences-runtime": "0.2.0",
-    "@contentful/experiences-sdk-core": "0.13.0"
+    "@contentful/experiences-sdk-core": "0.13.0",
+    "@preact/signals-core": "^1.13.0",
+    "es-toolkit": "^1.46.0"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"

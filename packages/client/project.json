@@ -12,7 +12,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/client",
-        "command": "tsup"
+        "command": "tsup && tsx ../../scripts/emit-dual-dts.ts dist"
       }
     },
     "test": {

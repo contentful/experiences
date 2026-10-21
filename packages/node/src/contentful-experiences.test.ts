@@ -44,10 +44,6 @@ class TestContentfulExperiences extends ContentfulExperiences {
     if (hasConsent) return super.forRequest(context);
     return super.forRequest({ ...context, consent: { events: true } });
   }
-
-  get optimizationApiForTest() {
-    return this.optimizationApi;
-  }
 }
 
 function createEventRuntime(
@@ -63,11 +59,9 @@ function createEventRuntime(
     })
   );
   const upsertProfile = vi
-    .spyOn(runtime.optimizationApiForTest.personalization, 'upsertProfile')
+    .spyOn(runtime.api.experience, 'upsertProfile')
     .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
-  const sendBatchEvents = vi
-    .spyOn(runtime.optimizationApiForTest.analytics, 'sendBatchEvents')
-    .mockResolvedValue(true);
+  const sendBatchEvents = vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true);
 
   return { runtime, sendBatchEvents, upsertProfile };
 }

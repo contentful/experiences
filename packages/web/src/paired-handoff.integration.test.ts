@@ -168,7 +168,7 @@ describe('paired Node preparation and Web delivery', () => {
       routeKey: '/products?sort=popular',
     });
     await expect(admission).resolves.toEqual({ accepted: true });
-    expect(browser.personalizationDeliveryState.status).toBe('pending');
+    expect(browser.states.experienceRequestState.current.status).toBe('pending');
     expect(upsert).toHaveBeenCalledTimes(2);
     const [firstBody, firstOptions] = upsert.mock.calls[1]!;
     // The same events in the same order, except that the consent flag is the browser's
@@ -181,16 +181,20 @@ describe('paired Node preparation and Web delivery', () => {
       })),
     });
     expect(firstOptions).toEqual({ locale: 'de-DE', preflight: false });
-    expect(browser.profile).toBeUndefined();
+    expect(browser.states.profile.current).toBeUndefined();
 
     firstDelivery.reject(new Error('response lost after request may have arrived'));
-    await vi.waitFor(() => expect(browser.personalizationDeliveryState.status).toBe('failed'));
+    await vi.waitFor(() =>
+      expect(browser.states.experienceRequestState.current.status).toBe('failed')
+    );
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(1000);
     expect(upsert).toHaveBeenCalledTimes(3);
     expect(upsert.mock.calls[2]).toEqual([firstBody, firstOptions]);
     secondDelivery.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() => expect(browser.profile).toEqual({ id: 'committed-profile' }));
+    await vi.waitFor(() =>
+      expect(browser.states.profile.current).toEqual({ id: 'committed-profile' })
+    );
   });
 
   it('carries a preview-issued continuation ID across JSON for a new visitor', async () => {
@@ -227,7 +231,9 @@ describe('paired Node preparation and Web delivery', () => {
     expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('issued-profile');
 
     delivery.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() => expect(browser.profile).toEqual({ id: 'committed-profile' }));
+    await vi.waitFor(() =>
+      expect(browser.states.profile.current).toEqual({ id: 'committed-profile' })
+    );
   });
 
   it('retains replay after preview failure and uses an ordinary page on a different route', async () => {
@@ -334,7 +340,8 @@ describe('paired Node preparation and Web delivery', () => {
 
       firstDelivery.resolve({ profile: { id: 'committed-profile' } });
       window.dispatchEvent(new Event('online'));
-      await vi.waitFor(() => expect(browser.personalizationDeliveryState.status).toBe('success'));
+      await browser.flush();
+      expect(browser.states.experienceRequestState.current.status).toBe('success');
       const repeated = await browser.hydrateAndTrackCurrentPage(nextHandoff, {
         routeKey: '/next',
         buildPayload,
@@ -528,7 +535,7 @@ describe('identity cookie round trip between Web, a host, and Node', () => {
         writes.push(value);
       },
     });
-    web({ profile: { id: 'visitor-1' }, cookie: settings });
+    web({ defaults: { profile: { id: 'visitor-1' } }, cookie: settings });
     Reflect.deleteProperty(document, 'cookie');
     Object.defineProperty(Document.prototype, 'cookie', descriptor);
 

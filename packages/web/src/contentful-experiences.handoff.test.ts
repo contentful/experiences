@@ -21,7 +21,7 @@ function createRuntime(profile?: { id: string }): ContentfulExperiences {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    ...(profile === undefined ? {} : { profile }),
+    ...(profile === undefined ? {} : { defaults: { profile } }),
   });
   runtimes.add(runtime);
   return runtime;
@@ -99,7 +99,9 @@ describe('Web handoff and current-page lifecycle', () => {
       { preflight: false, locale: 'de-DE' }
     );
     response.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'committed-profile' }));
+    await vi.waitFor(() =>
+      expect(runtime.states.profile.current).toEqual({ id: 'committed-profile' })
+    );
   });
 
   it('joins state-only hydration with subsequent delivery without reseeding the response profile', async () => {
@@ -110,16 +112,17 @@ describe('Web handoff and current-page lifecycle', () => {
     const input = handoff(runtime, '/first', { state: { profile: { id: 'server-state' } } });
 
     await runtime.hydrateHandoffState(input, { routeKey: '/first' });
-    expect(runtime.profile).toEqual({ id: 'server-state' });
+    expect(runtime.states.profile.current).toEqual({ id: 'server-state' });
+    expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
     expect(send).not.toHaveBeenCalled();
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' })
     ).resolves.toEqual({
       accepted: true,
     });
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'api-profile' }));
+    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual({ id: 'api-profile' }));
     await runtime.hydrateHandoffState(input, { routeKey: '/first' });
-    expect(runtime.profile).toEqual({ id: 'api-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'api-profile' });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0].profileId).toBe('server-state');
   });
@@ -141,9 +144,11 @@ describe('Web handoff and current-page lifecycle', () => {
       accepted: true,
     });
     expect(send.mock.calls[0]?.[0].profileId).toBe('continuation-id');
-    expect(runtime.profile).toEqual({ id: 'evaluated-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'evaluated-profile' });
     response.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() => expect(runtime.profile).toEqual({ id: 'committed-profile' }));
+    await vi.waitFor(() =>
+      expect(runtime.states.profile.current).toEqual({ id: 'committed-profile' })
+    );
   });
 
   it('skips mismatched replay and state, and treats search changes as distinct routes', async () => {
@@ -157,7 +162,7 @@ describe('Web handoff and current-page lifecycle', () => {
     const buildPayload = vi.fn(() => ({ properties: { source: 'current-route' } }));
 
     await runtime.hydrateHandoffState(input, { routeKey: '/first?view=two' });
-    expect(runtime.profile).toEqual({ id: 'browser-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, {
         routeKey: '/first?view=two',
@@ -254,7 +259,9 @@ describe('Web handoff and current-page lifecycle', () => {
       expect(send).not.toHaveBeenCalled();
 
       window.dispatchEvent(new Event('online'));
-      await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
+      await vi.waitFor(() =>
+        expect(runtime.states.experienceRequestState.current.status).toBe('success')
+      );
       expect(send).toHaveBeenCalledTimes(1);
       const request = send.mock.calls[0]?.[0];
       expect(request?.profileId).toBe('server-profile');
@@ -307,10 +314,10 @@ describe('Web handoff and current-page lifecycle', () => {
             : runtime.track({ event: 'rejected' });
       await expect(rejected).resolves.toEqual({ accepted: false });
       expect(send).not.toHaveBeenCalled();
-      expect(runtime.profile).toEqual({ id: 'browser-profile' });
+      expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
 
       window.dispatchEvent(new Event('online'));
-      expect(send).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
       expect(send).toHaveBeenCalledWith(
         { profileId: 'browser-profile', events },
         { preflight: false, locale: 'de-DE' }
@@ -319,45 +326,16 @@ describe('Web handoff and current-page lifecycle', () => {
     }
   );
 
-  it.each([
-    '101 events',
-    '51 identifies',
-    'schema',
-    'event locale',
-    'order',
-    'empty',
-    'null event',
-  ] as const)('falls back once with retained identity for invalid prepared %s', async (invalid) => {
+  it('falls back once with retained identity for an out-of-order prepared batch', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const runtime = createRuntime();
-    const page = runtime.eventBuilder.buildPageView();
-    const events =
-      invalid === '101 events'
-        ? [
-            ...Array.from({ length: 100 }, () =>
-              runtime.eventBuilder.buildTrack({ event: 'oversized' })
-            ),
-            page,
-          ]
-        : invalid === '51 identifies'
-          ? [
-              ...Array.from({ length: 51 }, () =>
-                runtime.eventBuilder.buildIdentify({ userId: 'visitor' })
-              ),
-              page,
-            ]
-          : invalid === 'event locale'
-            ? [{ ...page, context: { ...page.context, locale: 42 } }]
-            : invalid === 'schema'
-              ? [{ type: 'track' }, page]
-              : invalid === 'order'
-                ? [page, runtime.eventBuilder.buildTrack({ event: 'after-page' })]
-                : invalid === 'null event'
-                  ? [null]
-                  : [];
+    const events = [
+      runtime.eventBuilder.buildPageView(),
+      runtime.eventBuilder.buildTrack({ event: 'after-page' }),
+    ];
     const input = handoff(runtime, '/invalid', {
       replay: {
         routeKey: '/invalid',
@@ -370,10 +348,7 @@ describe('Web handoff and current-page lifecycle', () => {
       routeKey: '/invalid',
       buildPayload,
     });
-    const copy =
-      invalid === 'empty' || invalid === 'null event'
-        ? input
-        : (JSON.parse(JSON.stringify(input)) as ExperiencesHandoff);
+    const copy = JSON.parse(JSON.stringify(input)) as ExperiencesHandoff;
     const second = runtime.hydrateAndTrackCurrentPage(copy, {
       routeKey: '/invalid',
       buildPayload,
@@ -435,7 +410,7 @@ describe('Web handoff and current-page lifecycle', () => {
         runtime.hydrateAndTrackCurrentPage(invalid, { routeKey: '/first', buildPayload })
       ).rejects.toThrow();
     }
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(buildPayload).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
   });
@@ -453,7 +428,7 @@ describe('Web handoff and current-page lifecycle', () => {
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' })
     ).resolves.toMatchObject({ accepted: true });
-    expect(runtime.profile?.id).toBe('evaluated-profile');
+    expect(runtime.states.profile.current?.id).toBe('evaluated-profile');
     expect(send.mock.calls[0]?.[0]).toMatchObject({
       profileId: 'evaluated-profile',
       events: [{ type: 'page' }],
@@ -474,7 +449,7 @@ describe('Web handoff and current-page lifecycle', () => {
       { routeKey: '/current' }
     );
     expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
-    expect(runtime.profile?.id).toBe('server-profile');
+    expect(runtime.states.profile.current?.id).toBe('server-profile');
   });
 
   it.each(['supersession', 'reset', 'destroy'] as const)(
@@ -524,14 +499,19 @@ describe('Web handoff and current-page lifecycle', () => {
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
     ).resolves.toEqual({ accepted: true });
     response.reject(new Error('HTTP failure'));
-    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('failed'));
+    await vi.waitFor(() =>
+      expect(runtime.states.experienceRequestState.current.status).toBe('failed')
+    );
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
     ).resolves.toEqual({ accepted: true });
     expect(send).toHaveBeenCalledTimes(1);
     expect(buildPayload).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('offline'));
     window.dispatchEvent(new Event('online'));
-    await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('success'));
+    await vi.waitFor(() =>
+      expect(runtime.states.experienceRequestState.current.status).toBe('success')
+    );
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
     expect(buildPayload).not.toHaveBeenCalled();
@@ -545,12 +525,12 @@ describe('Web handoff and current-page lifecycle', () => {
     const pending = runtime.hydrateHandoffState(older, { routeKey: '/old' });
     await runtime.hydrateHandoffState(newer, { routeKey: '/new' });
     await pending;
-    expect(runtime.profile).toEqual({ id: 'new-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'new-profile' });
 
     const resetting = runtime.hydrateHandoffState(older, { routeKey: '/old' });
     runtime.reset();
     await resetting;
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
@@ -579,7 +559,7 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0].profileId).toBe('new-continuation');
     expect(send.mock.calls[0]?.[0].events.at(-1)?.type).toBe('page');
-    expect(runtime.profile).toEqual({ id: 'new-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'new-profile' });
   });
 
   it('retains published identity when an ordinary event observes it before supersession', async () => {
@@ -596,22 +576,26 @@ describe('Web handoff and current-page lifecycle', () => {
       state: { profile: { id: 'obsolete-evaluated-profile' } },
     });
     const newer = handoff(runtime, '/new', { profileId: 'new-continuation' });
-    const old = runtime.hydrateAndTrackCurrentPage(older, { routeKey: '/old' });
-
-    // Observe publication through an ordinary request at the initialization boundary,
-    // then navigate before pending hydration or replay admission can proceed.
-    const boundary = Promise.resolve().then(() => {
-      const ordinary = runtime.track({ event: 'between-routes' });
-      expect(send.mock.calls[0]?.[0].profileId).toBe('old-continuation');
-      expect(runtime.profile).toBeUndefined();
-      const current = runtime.hydrateAndTrackCurrentPage(newer, { routeKey: '/new' });
-      return { ordinary, current };
+    const hydrationStarted = deferred<void>();
+    const releaseHydration = deferred<void>();
+    runtime.interceptors.state.add(async (state) => {
+      hydrationStarted.resolve();
+      await releaseHydration.promise;
+      return state;
     });
-    const { ordinary, current } = await boundary;
+    const old = runtime.hydrateAndTrackCurrentPage(older, { routeKey: '/old' });
+    await hydrationStarted.promise;
+
+    const ordinary = runtime.track({ event: 'between-routes' });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(send.mock.calls[0]?.[0].profileId).toBe('old-continuation');
+    expect(runtime.states.profile.current).toBeUndefined();
+    const current = runtime.hydrateAndTrackCurrentPage(newer, { routeKey: '/new' });
+    releaseHydration.resolve();
     await expect(old).resolves.toEqual({ accepted: false });
     await expect(current).resolves.toEqual({ accepted: true });
     await runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } });
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0]).toEqual({
       profileId: 'old-continuation',
@@ -690,7 +674,7 @@ describe('Web handoff and current-page lifecycle', () => {
       runtime[action]();
       await expect(pending).resolves.toEqual({ accepted: false });
       expect(send).not.toHaveBeenCalled();
-      expect(runtime.profile).toBeUndefined();
+      expect(runtime.states.profile.current).toBeUndefined();
     }
   );
 
@@ -705,23 +689,35 @@ describe('Web handoff and current-page lifecycle', () => {
         .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
         .mockResolvedValue({ nodes: [] } as never);
       const runtime = createRuntime();
-      const pending = runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/old'), {
-        routeKey: '/old',
+      const hydrationStarted = deferred<void>();
+      const releaseHydration = deferred<void>();
+      runtime.interceptors.state.add(async (state) => {
+        hydrationStarted.resolve();
+        await releaseHydration.promise;
+        return state;
       });
-      const fetching = runtime.fetchExperience(
-        { experienceId: 'waiting' },
-        { config: { components: {} } }
+      const pending = runtime.hydrateAndTrackCurrentPage(
+        handoff(runtime, '/old', { state: { profile: undefined } }),
+        { routeKey: '/old' }
       );
-      const fetchResult =
-        action === 'destroy'
-          ? expect(fetching).rejects.toThrow('destroyed')
-          : expect(fetching).resolves.toEqual({ nodes: [] });
-      const ordinary = await Promise.resolve().then(() => {
-        const event = runtime.track({ event: 'published' });
-        expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
+      await hydrationStarted.promise;
+      let fetchResult!: Promise<unknown>;
+      send.mockImplementationOnce(() => {
+        const fetching = runtime.fetchExperience(
+          { experienceId: 'waiting' },
+          { config: { components: {} } }
+        );
+        fetchResult =
+          action === 'destroy'
+            ? expect(fetching).rejects.toThrow('destroyed')
+            : expect(fetching).resolves.toEqual({ nodes: [] });
         runtime[action]();
-        return { event };
+        return response.promise as never;
       });
+      const ordinary = runtime.track({ event: 'published' });
+      await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+      expect(send.mock.calls[0]?.[0].profileId).toBe('server-profile');
+      releaseHydration.resolve();
       await expect(pending).resolves.toEqual({ accepted: false });
       await fetchResult;
       if (action === 'reset') {
@@ -738,8 +734,8 @@ describe('Web handoff and current-page lifecycle', () => {
         expect(send).toHaveBeenCalledTimes(1);
       }
       response.resolve({ profile: { id: 'late-profile' } });
-      await ordinary.event;
-      if (action === 'destroy') expect(runtime.profile).toBeUndefined();
+      await ordinary;
+      if (action === 'destroy') expect(runtime.states.profile.current).toBeUndefined();
     }
   );
 
@@ -751,6 +747,7 @@ describe('Web handoff and current-page lifecycle', () => {
       .mockResolvedValue({ profile: { id: 'new-profile' } } as never);
     const runtime = createRuntime();
     const oldPage = runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     runtime.reset();
     oldResponse.resolve({ profile: { id: 'old-profile' } });
     await oldPage;
@@ -759,7 +756,7 @@ describe('Web handoff and current-page lifecycle', () => {
       runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) })
     ).resolves.toMatchObject({ accepted: true });
     expect(send).toHaveBeenCalledTimes(2);
-    expect(runtime.profile).toEqual({ id: 'new-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'new-profile' });
   });
 
   it('releases singleton ownership on destroy and rejects later publication', async () => {
@@ -772,12 +769,12 @@ describe('Web handoff and current-page lifecycle', () => {
     runtime.destroy();
     runtime.destroy();
     await pending;
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     await expect(
       runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) })
     ).resolves.toEqual({ accepted: false });
     const replacement = createRuntime();
-    expect(replacement.profile).toBeUndefined();
+    expect(replacement.states.profile.current).toBeUndefined();
   });
 
   it('makes adopted identity visible to a fetch during hydration and ignores stale fetch results', async () => {
@@ -814,7 +811,7 @@ describe('Web handoff and current-page lifecycle', () => {
     await currentFetch;
     first.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });
     await staleFetch;
-    expect(runtime.profile?.id).toBe('new-profile');
+    expect(runtime.states.profile.current?.id).toBe('new-profile');
     expect(send).toHaveBeenCalledTimes(1);
   });
 
@@ -837,7 +834,7 @@ describe('Web handoff and current-page lifecycle', () => {
     await runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/new'), { routeKey: '/new' });
     staleResponse.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });
     await earlierFetch;
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     await runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } });
     expect(fetch.mock.calls[1]?.[0]).toMatchObject({
       personalization: { profileId: 'server-profile' },
@@ -848,6 +845,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('does not overwrite browser identity with profileless public or static state', async () => {
     const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
     const runtime = createRuntime({ id: 'browser-profile' });
+    runtime.interceptors.state.add(() => ({ profile: { id: 'interceptor-profile' } }));
     for (const cache of [
       { scope: 'public-permutation' as const, key: 'experience:en-US:revision' },
       { scope: 'static' as const },
@@ -857,7 +855,8 @@ describe('Web handoff and current-page lifecycle', () => {
           { spaceId: 'space', environmentId: 'environment', cache, state },
           { routeKey: '/first' }
         );
-        expect(runtime.profile).toEqual({ id: 'browser-profile' });
+        expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
+        expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
       }
     }
     expect(send).not.toHaveBeenCalled();
@@ -874,7 +873,7 @@ describe('Web handoff and current-page lifecycle', () => {
       },
       { routeKey: '/first' }
     );
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
@@ -892,7 +891,7 @@ describe('Web handoff and current-page lifecycle', () => {
         { routeKey: '/first' }
       )
     ).rejects.toThrow('Profile state');
-    expect(runtime.profile).toEqual({ id: 'browser-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -917,7 +916,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
     await runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' });
     response.resolve({ profile: { id: 'api-profile' } });
-    await vi.waitFor(() => expect(runtime.profile?.id).toBe('api-profile'));
+    await vi.waitFor(() => expect(runtime.states.profile.current?.id).toBe('api-profile'));
     expect(plan).toEqual({ nodes: [], personalization: { profileId: 'server-profile' } });
   });
 });

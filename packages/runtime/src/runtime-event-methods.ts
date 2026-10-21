@@ -54,8 +54,8 @@ export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | '
 
 /** The Optimization API surface used by the shared runtime. */
 export interface RuntimeOptimizationApiClient {
-  readonly personalization: Pick<PersonalizationApiClient, 'upsertProfile'>;
-  readonly analytics: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
+  readonly experience: Pick<PersonalizationApiClient, 'upsertProfile'>;
+  readonly insights: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
 }
 
 /** Internal strategy used by a runtime to commit or stage built events. */
@@ -70,9 +70,6 @@ export interface RuntimeEventDispatch {
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
 export interface RuntimeEventBindings {
   getProfile: () => EventProfile | undefined;
-  setProfile: (profile: EventProfile) => void;
-  /** Changes when an external session boundary must invalidate an in-flight profile response. */
-  getProfileRevision?: () => number;
   getEventContext?: () => UniversalEventBuilderArgs;
   /** Content/request locale for Personalization; event context does not override it. */
   getLocale?: () => string | undefined;
@@ -80,8 +77,8 @@ export interface RuntimeEventBindings {
   getConsent?: () => ConsentState | undefined;
   /** Event types emitted while event consent is not granted. Defaults to identify and page. */
   allowedEventTypes?: readonly AllowedEventType[];
-  /** Called when consent drops an event. Errors thrown here are swallowed. */
-  onEventBlocked?: (event: BlockedEvent) => void;
+  /** Owner publication when consent drops an event; subscriber errors propagate. */
+  reportBlockedEvent?: (event: BlockedEvent) => void;
   /**
    * Whether an Analytics call without a profile throws `EventProfileRequiredError`, as in
    * Optimization's stateless requests. When unset, the call warns and is dropped, as in
@@ -92,6 +89,18 @@ export interface RuntimeEventBindings {
   getInsightsOptions?: () => InsightsRequestOptions | undefined;
   /** Experience API options forwarded with each direct Personalization send. */
   getExperienceOptions?: () => ExperienceRequestOptions | undefined;
+}
+
+/** Owner bindings for the default transport, which publishes returned profiles. */
+export interface RuntimeDirectEventBindings extends Omit<
+  RuntimeEventBindings,
+  'reportBlockedEvent'
+> {
+  /** Configured diagnostic callback; its errors must not interrupt event delivery. */
+  onEventBlocked?: (event: BlockedEvent) => void;
+  setProfile: (profile: EventProfile) => void;
+  /** Changes when an external session boundary must invalidate an in-flight profile response. */
+  getProfileRevision?: () => number;
 }
 
 /**
@@ -137,19 +146,25 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
-    return this.sendPersonalizationEvent('identify', args, () =>
+    return this.sendPersonalizationEvent(
+      'identify',
+      args,
       this.eventBuilder.buildIdentify(this.withEventContext(args))
     );
   }
 
   async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
-    return this.sendPersonalizationEvent('page', args, () =>
+    return this.sendPersonalizationEvent(
+      'page',
+      args,
       this.eventBuilder.buildPageView(this.withEventContext(args))
     );
   }
 
   async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
-    return this.sendPersonalizationEvent('track', args, () =>
+    return this.sendPersonalizationEvent(
+      'track',
+      args,
       this.eventBuilder.buildTrack(this.withEventContext(args))
     );
   }
@@ -160,26 +175,36 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
    * delivery result, so a view dropped later for want of a profile is still accepted.
    */
   async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
-    const accepted = await this.sendAnalyticsEvent('trackView', args, () =>
+    if (!this.admit('trackView', [args])) return { accepted: false };
+
+    const accepted = await this.sendAnalyticsEvent(
+      'trackView',
+      args,
       this.eventBuilder.buildView(this.withEventContext(args))
     );
     return { accepted };
   }
 
   async trackClick(args: ClickBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent('trackClick', args, () =>
+    await this.sendAnalyticsEvent(
+      'trackClick',
+      args,
       this.eventBuilder.buildClick(this.withEventContext(args))
     );
   }
 
   async trackHover(args: HoverBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent('trackHover', args, () =>
+    await this.sendAnalyticsEvent(
+      'trackHover',
+      args,
       this.eventBuilder.buildHover(this.withEventContext(args))
     );
   }
 
   async trackFlagView(args: FlagViewBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent('trackFlagView', args, () =>
+    await this.sendAnalyticsEvent(
+      'trackFlagView',
+      args,
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
   }
@@ -195,43 +220,31 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     return withEventConsent(event, consent.events === true);
   }
 
-  /** Whether `method` may emit; reports a blocked event to `onEventBlocked` otherwise. */
+  /** Whether `method` may emit; reports a blocked event to its owner otherwise. */
   private admit(method: EventMethod, args: readonly unknown[]): boolean {
-    const { getConsent, allowedEventTypes, onEventBlocked } = this.bindings;
+    const { getConsent, allowedEventTypes, reportBlockedEvent } = this.bindings;
     if (getConsent === undefined || hasEventConsent(method, getConsent(), allowedEventTypes)) {
       return true;
     }
-    try {
-      onEventBlocked?.({ reason: 'consent', method, args });
-    } catch {
-      // A failing diagnostic callback must not break event delivery.
-    }
+    reportBlockedEvent?.({ reason: 'consent', method, args });
     return false;
   }
 
   private async sendPersonalizationEvent(
     method: PersonalizationEventMethod,
     args: unknown,
-    build: () => PersonalizationEvent
+    event: PersonalizationEvent
   ): Promise<EventEmissionResult> {
     if (!this.admit(method, [args])) return { accepted: false };
 
-    const eventWithConsent = this.withConsent(build());
-    const profileRevision = this.bindings.getProfileRevision?.();
-    const result = await this.dispatch.personalization(eventWithConsent, this.profile);
-    if (
-      result.data !== undefined &&
-      (profileRevision === undefined || this.bindings.getProfileRevision?.() === profileRevision)
-    ) {
-      this.bindings.setProfile(result.data.profile);
-    }
-    return result;
+    const eventWithConsent = this.withConsent(event);
+    return this.dispatch.personalization(eventWithConsent, this.profile);
   }
 
   private async sendAnalyticsEvent(
     method: AnalyticsEventMethod,
     args: unknown,
-    build: () => AnalyticsEvent
+    event: AnalyticsEvent
   ): Promise<boolean> {
     if (!this.admit(method, [args])) return false;
     const profile = this.profile;
@@ -242,29 +255,33 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
       eventLogger.warn('Attempting to emit an event without an Optimization profile');
       return true;
     }
-    await this.dispatch.analytics(this.withConsent(build()), profile);
+    await this.dispatch.analytics(this.withConsent(event), profile);
     return true;
   }
 }
 
 function createDirectEventDispatch(
   api: RuntimeOptimizationApiClient,
-  bindings: RuntimeEventBindings
+  bindings: RuntimeDirectEventBindings
 ): RuntimeEventDispatch {
   return {
-    personalization: async (event, profile) => ({
-      accepted: true,
-      data: await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
+    personalization: async (event, profile) => {
+      const profileRevision = bindings.getProfileRevision?.();
+      const data = await sendPersonalizationEvents(api.experience, [event], profile?.id, {
         ...bindings.getExperienceOptions?.(),
         locale: bindings.getLocale?.(),
-      }),
-    }),
+      });
+      if (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision) {
+        bindings.setProfile(data.profile);
+      }
+      return { accepted: true, data };
+    },
     analytics: async (event, profile) => {
       const batches = [{ profile, events: [event] }];
       const options = bindings.getInsightsOptions?.();
       // As in Optimization's stateless request, the options argument is omitted when unset.
-      if (options === undefined) await api.analytics.sendBatchEvents(batches);
-      else await api.analytics.sendBatchEvents(batches, options);
+      if (options === undefined) await api.insights.sendBatchEvents(batches);
+      else await api.insights.sendBatchEvents(batches, options);
     },
   };
 }
@@ -272,8 +289,24 @@ function createDirectEventDispatch(
 export function createRuntimeEventMethods(
   api: RuntimeOptimizationApiClient,
   eventBuilder: EventBuilder,
-  bindings: RuntimeEventBindings,
-  dispatch: RuntimeEventDispatch = createDirectEventDispatch(api, bindings)
+  ...args:
+    | [bindings: RuntimeDirectEventBindings]
+    | [bindings: RuntimeEventBindings, dispatch: RuntimeEventDispatch]
 ): RuntimeEventMethods {
-  return new BoundRuntimeEventMethods(eventBuilder, bindings, dispatch);
+  if (args.length === 2) return new BoundRuntimeEventMethods(eventBuilder, args[0], args[1]);
+  const { onEventBlocked, ...bindings } = args[0];
+  return new BoundRuntimeEventMethods(
+    eventBuilder,
+    {
+      ...bindings,
+      reportBlockedEvent: (event) => {
+        try {
+          onEventBlocked?.(event);
+        } catch {
+          // A failing diagnostic callback must not break event delivery.
+        }
+      },
+    },
+    createDirectEventDispatch(api, args[0])
+  );
 }

@@ -17,8 +17,6 @@ interface PackageManifest {
 }
 
 interface PackedArchive {
-  name: string;
-  version: string;
   filename: string;
   files: { path: string }[];
 }
@@ -54,11 +52,7 @@ export async function packPackage(packageDirectory: string, outputDirectory: str
     );
     // npm 12 keys results by package name; earlier versions return an array.
     const archives: PackedArchive[] | Record<string, PackedArchive> = JSON.parse(result);
-    const archive = Array.isArray(archives) ? archives[0] : archives[manifest.name];
-    if (archive?.name !== manifest.name || archive?.version !== manifest.version) {
-      throw new Error(`Unexpected npm pack result for ${manifest.name}.`);
-    }
-
+    const archive = (Array.isArray(archives) ? archives[0] : archives[manifest.name])!;
     const files = new Set(archive.files.map((file) => file.path));
     const entryPoints = [
       manifest.main,

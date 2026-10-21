@@ -1,7 +1,9 @@
 import {
   AnalyticsDelivery,
+  type AnalyticsFlushOptions,
   ContentfulExperiences as RuntimeContentfulExperiences,
   PersonalizationDelivery,
+  DEFAULT_ALLOWED_EVENT_TYPES,
   type AllowedEventType,
   type BlockedEvent,
   type ConsentInput,
@@ -9,10 +11,8 @@ import {
   type ContentfulExperiencesConfig,
   type EventBuilderConfig,
   type EventEmissionResult,
-  type EventProfile,
   type ExperiencesHandoff,
   type PageViewBuilderArgs,
-  type PersonalizationDeliveryState,
   type QueuePolicy,
   resolveQueuePolicy,
   parseExperiencesHandoff,
@@ -28,6 +28,32 @@ import {
   withEventConsent,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { serializePersonalization } from '@contentful/experiences-client';
+import { signal, untracked } from '@preact/signals-core';
+import { isEqual } from 'es-toolkit/predicate';
+import {
+  batch,
+  blockedEvent as blockedEventSignal,
+  consent as consentSignal,
+  effect,
+  event as eventSignal,
+  experienceRequestState as experienceRequestStateSignal,
+  locale as localeSignal,
+  online as onlineSignal,
+  persistenceConsent as persistenceConsentSignal,
+  profile as profileSignal,
+  toObservable,
+} from './signals/index.js';
+import type { CoreStates } from './states.js';
+import { normalizeExplicitLocale } from './locale.js';
+import { InterceptorManager } from './lib/interceptor/InterceptorManager.js';
+import {
+  mergeExperienceState,
+  type ExperienceState,
+  type LifecycleInterceptors,
+} from './interceptors.js';
+import { installCoreBridgeCapabilities } from './bridge-support/capabilities.js';
+import { resolveStatefulDefaults, type StatefulDefaults } from './stateful-defaults.js';
 
 import { AcceptedCurrentPageTracker } from './accepted-current-page-tracker.js';
 import { getPageProperties, getUserAgent } from './browser-event-context.js';
@@ -54,11 +80,13 @@ export type BrowserEventContextProviders = Pick<
   'getPageProperties' | 'getUserAgent'
 >;
 
+/** Initial values for the stateful Web runtime. */
+export type CoreConfigDefaults = StatefulDefaults;
+
 /**
  * Long-lived, browser-oriented SDK configuration.
  */
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
-  profile?: EventProfile;
   locale?: string;
   app?: EventBuilderConfig['app'];
   browserContext?: BrowserEventContextProviders;
@@ -66,6 +94,8 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Blocked events are never replayed. */
   onEventBlocked?: (event: BlockedEvent) => void;
+  /** Anonymous identity provider; takes precedence over the active profile id. */
+  getAnonymousId?: () => string | undefined;
   /**
    * Queue policy: `flush` sets retry, backoff and circuit behavior for both queues, and
    * `offlineMaxEvents` caps the offline Personalization queue (default 100).
@@ -75,7 +105,7 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
    * Consent applied at startup. Configured values take precedence over a stored
    * decision, and `consent` is also the default for `persistenceConsent`.
    */
-  defaults?: { consent?: boolean; persistenceConsent?: boolean };
+  defaults?: CoreConfigDefaults;
   /**
    * How the identity cookie is written and deleted: domain, path, SameSite, Secure and
    * expiry (365 days by default). It is the cookie a server reads to recognise the
@@ -123,8 +153,7 @@ export interface InteractionTrackingSession {
 }
 
 /**
- * Start the Personalization teardown drain and handle its promise, as Optimization's
- * CoreStateful.destroy() does with ExperienceQueue.flushOnDestroy().
+ * Start the Personalization teardown drain and handle its completion.
  */
 function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void {
   void delivery.flushOnDestroy().catch((error: unknown) => {
@@ -139,44 +168,44 @@ function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void 
 type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
 
 /** Browser runtime with mutable application locale and live event context. */
-export class ContentfulExperiences extends RuntimeContentfulExperiences {
+export class ContentfulExperiences extends RuntimeContentfulExperiences<
+  ExperiencesWebConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
+> {
   readonly #singletonOwner: string;
-  #locale: string | undefined;
-  readonly #store = new LocalStore();
+  #profileRevision = 0;
+  readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
-  readonly #delivery: PersonalizationDelivery;
-  readonly #analytics: AnalyticsDelivery;
+  protected readonly experienceQueue: PersonalizationDelivery;
+  protected readonly insightsQueue: AnalyticsDelivery;
   #cleanupVisibilityListener: (() => void) | undefined;
-  readonly #allowedEventTypes: readonly AllowedEventType[] | undefined;
-  readonly #onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
+  protected readonly allowedEventTypes: AllowedEventType[];
+  protected readonly onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
+  readonly #getAnonymousId: () => string | undefined;
   #interactionTracking: InteractionTracking | undefined;
-  #adoptedProfileId: string | undefined;
+  readonly #adoptedProfileId = signal<string | undefined>();
   #identityRevision = 0;
   #currentInitialization: HandoffInitialization | undefined;
   readonly #currentPage = new AcceptedCurrentPageTracker();
   #generation = 0;
   #destroyed = false;
   /**
-   * Lifecycle token the Analytics queue reads, as in Optimization's CoreStateful. Reset and
+   * Lifecycle token the Analytics queue reads. Reset and
    * consent withdrawal replace it; destroy() makes it read `undefined`.
    */
   #resetToken: object = {};
-  #online = globalThis.navigator?.onLine !== false;
   readonly #eventMethods: RuntimeEventMethods;
   readonly #handleOnline = (): void => {
-    this.#online = true;
-    this.#delivery.clearScheduledRetry();
-    this.#analytics.clearScheduledRetry();
-    void this.#delivery.flush({ force: true });
-    void this.#analytics.flush({ force: true });
+    this.online = true;
   };
   readonly #handleOffline = (): void => {
-    this.#online = false;
+    this.online = false;
   };
   readonly identify: WebEventMethods['identify'] = (...args) =>
-    this.#eventMethods.identify(...args);
-  readonly page: WebEventMethods['page'] = (...args) => this.#eventMethods.page(...args);
-  readonly track: WebEventMethods['track'] = (...args) => this.#eventMethods.track(...args);
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.identify(...args);
+  readonly page: WebEventMethods['page'] = (...args) =>
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.page(...args);
+  readonly track: WebEventMethods['track'] = (...args) =>
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.track(...args);
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackView(...args);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
@@ -186,24 +215,42 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
     this.#destroyed ? Promise.resolve() : this.#eventMethods.trackFlagView(...args);
 
+  /** Observable state shared with application subscriptions and internal effects. */
+  readonly states: CoreStates = {
+    blockedEventStream: toObservable(blockedEventSignal),
+    consent: toObservable(consentSignal),
+    persistenceConsent: toObservable(persistenceConsentSignal),
+    eventStream: toObservable(eventSignal, (event) => event),
+    locale: toObservable(localeSignal),
+    experienceRequestState: toObservable(experienceRequestStateSignal),
+    profile: toObservable(profileSignal),
+  };
+
+  /** Transform emitted events and incoming state in registration order. */
+  readonly interceptors: LifecycleInterceptors = {
+    event: new InterceptorManager(),
+    state: new InterceptorManager(),
+  };
+
   constructor(config: ExperiencesWebConfig) {
     const {
       app,
       browserContext,
       allowedEventTypes,
       onEventBlocked,
+      getAnonymousId,
       queuePolicy,
       defaults,
       cookie,
-      profile,
-      ...clientConfig
     } = config;
+    const locale = normalizeExplicitLocale(config.locale);
     // `super()` must come before anything that could touch `this`, and must not sit
     // inside a `try`: when a bundler lowers private fields and arrow-function fields,
     // it hoists `var _this = this` to the top of the constructor, which then runs
     // before `super()` and throws a ReferenceError. Next.js (SWC) does exactly this.
     super({
-      ...clientConfig,
+      ...config,
+      locale,
       eventBuilder: {
         app,
         channel: 'web',
@@ -221,60 +268,80 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     let delivery: PersonalizationDelivery | undefined;
     let analytics: AnalyticsDelivery | undefined;
     try {
-      this.#locale = clientConfig.locale;
-      this.#allowedEventTypes = allowedEventTypes;
-      this.#onEventBlocked = onEventBlocked;
-      this.#store.applyConsentDefaults({
-        events: defaults?.consent,
-        persistence: defaults?.persistenceConsent,
+      this.allowedEventTypes = [...(allowedEventTypes ?? DEFAULT_ALLOWED_EVENT_TYPES)];
+      this.onEventBlocked = onEventBlocked;
+      this.#getAnonymousId =
+        getAnonymousId ??
+        (() => (persistenceConsentSignal.value === true ? LocalStore.anonymousId : undefined));
+      const { defaults: resolvedDefaults } = resolveStatefulDefaults(defaults, {
+        consent: LocalStore.consent,
+        persistenceConsent: LocalStore.persistenceConsent,
+        profile: () => LocalStore.profile,
       });
-      this.#identity = new IdentityCookie(this.#store, cookie);
-      if (profile !== undefined) this.#store.profile = profile;
-      this.#delivery = delivery = new PersonalizationDelivery({
-        api: this.optimizationApi.personalization,
+      batch(() => {
+        consentSignal.value = resolvedDefaults.consent;
+        persistenceConsentSignal.value = resolvedDefaults.persistenceConsent;
+        profileSignal.value = resolvedDefaults.profile;
+        localeSignal.value = locale;
+        onlineSignal.value = globalThis.navigator?.onLine !== false;
+        eventSignal.value = undefined;
+        blockedEventSignal.value = undefined;
+        experienceRequestStateSignal.value = { status: 'idle' };
+      });
+      this.eventBuilder.getConsent = () => consentSignal.value;
+      this.#identity = new IdentityCookie(LocalStore, cookie);
+      this.experienceQueue = delivery = new PersonalizationDelivery({
+        api: this.api.experience,
         getProfileId: () => this.#requestIdentity(),
-        getProfileRevision: () => this.#store.profileRevision,
-        getOnline: () => this.#online,
+        getProfileRevision: () => this.#profileRevision,
+        getOnline: () => this.online,
         getLocale: () => this.locale,
         flushPolicy: resolvedQueuePolicy.flush,
         maxEvents: resolvedQueuePolicy.offlineMaxEvents,
-        publishQueuedData: (data) => {
-          if (this.#destroyed) return;
-          this.#store.profile = data.profile;
-          this.#setAdoptedProfileId(undefined);
-          this.#syncIdentity();
+        experienceRequestState: experienceRequestStateSignal,
+        eventInterceptors: this.interceptors.event,
+        publishEvent: (event) => {
+          eventSignal.value = event;
         },
+        applyOptimizationData: (data, isCurrent) =>
+          this.#applyOptimizationDataToSignals(data, isCurrent),
       });
-      this.#analytics = analytics = new AnalyticsDelivery({
-        api: this.optimizationApi.analytics,
-        getOnline: () => this.#online,
+      this.insightsQueue = analytics = new AnalyticsDelivery({
+        api: this.api.insights,
+        getOnline: () => this.online,
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
         flushPolicy: resolvedQueuePolicy.flush,
+        eventInterceptors: this.interceptors.event,
+        publishEvent: (event) => {
+          eventSignal.value = event;
+        },
       });
       this.#eventMethods = this.createEventMethods(
         {
           getProfile: () => {
-            const id = this.#store.profile?.id ?? this.#requestIdentity();
-            return this.#store.profile ?? (id === undefined ? undefined : { id });
+            const id = this.#requestIdentity();
+            return profileSignal.value ?? (id === undefined ? undefined : { id });
           },
-          setProfile: (nextProfile) => {
-            if (this.#destroyed) return;
-            this.#store.profile = nextProfile;
-            this.#setAdoptedProfileId(undefined);
-            this.#syncIdentity();
-          },
-          getProfileRevision: () => this.#store.profileRevision,
-          getConsent: () => this.#store.consent,
-          allowedEventTypes,
-          onEventBlocked,
+          getConsent: () => this.#getConsent(),
+          allowedEventTypes: this.allowedEventTypes,
+          reportBlockedEvent: (event) => this.#reportBlockedEvent(event),
         },
         {
-          personalization: (event) => this.#delivery.send(event),
-          analytics: (event, currentProfile) => this.#analytics.send(event, currentProfile),
+          personalization: (event) => this.experienceQueue.send(event),
+          analytics: (event, currentProfile) => this.insightsQueue.send(event, currentProfile),
         }
       );
-      // After the delivery exists, because adopting a different visitor's cookie resets.
-      this.#initializeIdentity();
+      installCoreBridgeCapabilities(this, (data) => {
+        const generation = this.#generation;
+        return this.#applyOptimizationDataToSignals(
+          data,
+          () => !this.#destroyed && this.#generation === generation
+        );
+      });
+      // Capture the incoming cookie before the profile-persistence effect can replace it.
+      const incoming = persistenceConsentSignal.value === true ? this.#identity.read() : undefined;
+      this.#initializeEffects();
+      if (incoming !== undefined) this.#reconcileCookie(incoming);
       if (typeof window !== 'undefined') {
         window.addEventListener('online', this.#handleOnline);
         window.addEventListener('offline', this.#handleOffline);
@@ -284,12 +351,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       // queues. Only Analytics uses the Beacon API; each API keeps its own transport.
       this.#cleanupVisibilityListener = createVisibilityChangeListener(async () => {
         await this.#interactionTracking?.endActive();
-        await Promise.all([
-          this.#analytics.flush({ force: true, beacon: beaconHandler }),
-          this.#delivery.flush({ force: true }),
-        ]);
+        await this.flushQueues({ force: true, beacon: beaconHandler });
       });
     } catch (error) {
+      this.#disposeEffects();
       this.#cleanupVisibilityListener?.();
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', this.#handleOnline);
@@ -314,16 +379,20 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   }
 
   override get locale(): string | undefined {
-    return this.#locale;
+    return localeSignal.value;
   }
 
-  get profile(): EventProfile | undefined {
-    return this.#store.profile;
+  protected get online(): boolean {
+    return onlineSignal.value ?? false;
   }
 
-  /** Current consent decisions. Undecided values are treated as not granted. */
-  get consentState(): Readonly<ConsentState> {
-    return this.#store.consent;
+  protected set online(isOnline: boolean) {
+    onlineSignal.value = isOnline;
+  }
+
+  /** Whether event consent or the configured allowlist admits this method/type. */
+  hasConsent(name: string): boolean {
+    return hasEventConsent(name, this.#getConsent(), this.allowedEventTypes);
   }
 
   /**
@@ -333,20 +402,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    * the stored profile but keeps it in memory for the current session.
    */
   consent(input: ConsentInput): void {
+    if (this.#destroyed) return;
     const next = toConsentState(input);
-    const hadPersistence = this.#store.consent.persistence;
-    this.#store.updateConsent(next);
-    if (next.persistence !== undefined && next.persistence !== hadPersistence) {
-      this.#applyPersistenceChange(next.persistence);
-    }
+    batch(() => {
+      if (next.events !== undefined) consentSignal.value = next.events;
+      if (next.persistence !== undefined) persistenceConsentSignal.value = next.persistence;
+    });
     // Events accepted into the offline queue while the visitor had consented must not
     // be sent after they withdraw. Only an explicit denial purges, as in the
     // Optimization SDK; a persistence-only change leaves the queue alone.
     if (next.events === false) {
-      this.#delivery.clearQueue();
+      this.#generation += 1;
+      this.experienceQueue.clearQueue();
       this.#resetToken = {};
-      this.#analytics.clearQueuedEvents();
-      this.#store.invalidateInFlight();
+      this.insightsQueue.clearQueuedEvents();
+      this.#profileRevision += 1;
       // A discarded queued page must not leave its route looking admitted, or a later
       // permitted attempt for the same route would be answered from the cache and
       // never sent. This also forgets routes already sent, so one can be sent again
@@ -354,27 +424,30 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this.#currentInitialization = undefined;
       this.#currentPage.reset();
     }
-    // Active views and hovers keep their own clocks, so the send-time gate alone would
-    // report time measured before permission. Start or stop detectors to match.
-    this.#interactionTracking?.syncConsent();
   }
 
-  /** Latest ordinary or prepared Personalization HTTP state. */
-  get personalizationDeliveryState(): PersonalizationDeliveryState {
-    return this.#delivery.state;
-  }
-
-  /**
-   * Send queued Analytics events and any queued Personalization batches now. The two
-   * queues are independent, so both attempts start before either is awaited.
-   */
+  /** Send queued Analytics events, then Personalization batches, as in Stateful Core. */
   async flush(): Promise<void> {
-    await Promise.all([this.#analytics.flush(), this.#delivery.flush()]);
+    await this.flushQueues();
+  }
+
+  protected async flushQueues(
+    options: AnalyticsFlushOptions = {},
+    isCurrent: () => boolean = () => true
+  ): Promise<void> {
+    if (!isCurrent()) return;
+    await this.insightsQueue.flush(options);
+    if (!isCurrent()) return;
+    await this.experienceQueue.flush({ force: options.force });
   }
 
   /** Changes the default locale used by subsequent events and fetches. */
-  setLocale(locale: string | undefined): void {
-    this.#locale = locale;
+  setLocale(locale: string | undefined): string | undefined {
+    if (this.#destroyed) return undefined;
+    const resolvedLocale = normalizeExplicitLocale(locale);
+    localeSignal.value = resolvedLocale;
+    this.api.experience.setLocale(resolvedLocale);
+    return resolvedLocale;
   }
 
   override async fetchExperience(
@@ -389,16 +462,37 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       await this.#awaitCurrentHandoffIdentity();
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     }
-    const profileRevision = this.#store.profileRevision;
+    const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
+    const generation = this.#generation;
     const gated = this.#gatePersonalizationEvents(options);
-    const profileId = gated.personalization?.profileId ?? this.#requestIdentity();
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    const intercepted =
+      gated.personalization?.events === undefined
+        ? gated.personalization
+        : {
+            ...gated.personalization,
+            events: await Promise.all(
+              gated.personalization.events.map((event) => this.interceptors.event.run(event))
+            ),
+          };
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    const personalization =
+      intercepted === undefined ? undefined : serializePersonalization(intercepted);
+    for (const event of personalization?.events ?? []) {
+      eventSignal.value = event;
+      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+      if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    }
+    const profileId = personalization?.profileId ?? this.#requestIdentity();
     const plan = await super.fetchExperience(
       profileId === undefined
-        ? gated
+        ? { ...gated, personalization }
         : {
             ...gated,
-            personalization: { ...gated.personalization, profileId },
+            personalization: { ...personalization, profileId },
           },
       resolveOptions
     );
@@ -407,8 +501,25 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       options.preview !== true &&
       this.#identityRevision === identityRevision
     ) {
-      this.#store.updateProfileFromId(plan.personalization?.profileId, profileRevision);
-      this.#syncIdentity();
+      const nextProfileId = plan.personalization?.profileId;
+      if (
+        nextProfileId !== undefined &&
+        this.#profileRevision === profileRevision &&
+        profileSignal.value?.id !== nextProfileId
+      ) {
+        const next = await this.interceptors.state.run(
+          { profile: { id: nextProfileId } },
+          mergeExperienceState
+        );
+        if (
+          !this.#destroyed &&
+          this.#generation === generation &&
+          this.#identityRevision === identityRevision &&
+          this.#profileRevision === profileRevision &&
+          !isEqual(profileSignal.value, next.profile)
+        )
+          profileSignal.value = next.profile;
+      }
     }
     return plan;
   }
@@ -416,37 +527,46 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
   reset(): void {
     if (this.#destroyed) {
-      this.#delivery.reset();
+      this.experienceQueue.reset();
       return;
     }
-    this.#generation += 1;
-    this.#currentInitialization = undefined;
-    this.#currentPage.reset();
-    this.#setAdoptedProfileId(undefined);
-    this.#delivery.reset();
-    this.#resetToken = {};
-    this.#analytics.clearQueuedEvents();
-    this.#store.reset();
-    this.#identity.clear();
+    batch(() => {
+      this.#generation += 1;
+      this.#interactionTracking?.reset();
+      this.#currentInitialization = undefined;
+      this.#currentPage.reset();
+      this.#setAdoptedProfileId(undefined);
+      this.experienceQueue.reset();
+      this.#resetToken = {};
+      this.insightsQueue.clearQueuedEvents();
+      this.#profileRevision += 1;
+      LocalStore.reset();
+      this.#identity.clear();
+      profileSignal.value = undefined;
+      eventSignal.value = undefined;
+      blockedEventSignal.value = undefined;
+      experienceRequestStateSignal.value = { status: 'idle' };
+    });
   }
 
   /** Stop browser-owned work before releasing SDK ownership. */
   override destroy(): void {
     if (this.#destroyed) return;
-    // As in Optimization's CoreStateful.destroy(), start the final forced flushes while the
-    // lifecycle token is still live, then end the lifetime and cancel the queue timers. The
+    // Start the final forced flushes while the lifecycle token is still live,
+    // then end the lifetime and cancel the queue timers. The
     // Analytics request captures the live token, so it is sent, and its late result no
     // longer applies once the token reads `undefined`.
-    void this.#analytics.flush({ force: true }).catch((error: unknown) => {
+    void this.insightsQueue.flush({ force: true }).catch((error: unknown) => {
       console.warn(
         '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
         error
       );
     });
-    flushPersonalizationOnDestroy(this.#delivery);
+    flushPersonalizationOnDestroy(this.experienceQueue);
     this.#destroyed = true;
-    this.#analytics.clearPeriodicFlushTimer();
-    this.#analytics.clearScheduledRetry();
+    this.#disposeEffects();
+    this.insightsQueue.clearPeriodicFlushTimer();
+    this.insightsQueue.clearScheduledRetry();
     this.#generation += 1;
     this.#currentInitialization = undefined;
     this.#currentPage.reset();
@@ -475,7 +595,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       throw new Error('Interaction tracking is already running; stop it before starting again');
     }
     const tracking = createInteractionTracking(this, options, {
-      isAllowed: (method) => hasEventConsent(method, this.#store.consent, this.#allowedEventTypes),
+      isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
+      getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
     });
     this.#interactionTracking = tracking;
 
@@ -588,25 +709,29 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     locale?: string
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
+    const generation = this.#generation;
+    const isCurrent = (): boolean => !this.#destroyed && this.#generation === generation;
     const admitted = this.#admitPreparedEvents(events);
-    if (admitted === undefined) return Promise.resolve({ accepted: false });
-    const result = this.#delivery.sendPrepared(admitted, { profileId, locale });
-    if (result.accepted && this.#store.profile === undefined) {
-      this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId);
+    if (admitted === undefined || !isCurrent()) return Promise.resolve({ accepted: false });
+    const result = this.experienceQueue.sendPrepared(admitted, { profileId, locale });
+    if (result.accepted && isCurrent()) {
+      for (const event of admitted) {
+        if (!isCurrent()) break;
+        eventSignal.value = event;
+      }
+      if (isCurrent() && profileSignal.value === undefined) {
+        this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId.value);
+      }
     }
     return Promise.resolve(result);
   }
 
   /** Whether an already-built event may be emitted; reports it to `onEventBlocked` otherwise. */
   #admitEvent(event: { type: string }): boolean {
-    if (hasEventTypeConsent(event.type, this.#store.consent, this.#allowedEventTypes)) return true;
-    try {
-      const method = methodForEventType(event.type);
-      if (method !== undefined) {
-        this.#onEventBlocked?.({ reason: 'consent', method, args: [event] });
-      }
-    } catch {
-      // A failing diagnostic callback must not break event delivery.
+    if (hasEventTypeConsent(event.type, this.#getConsent(), this.allowedEventTypes)) return true;
+    const method = methodForEventType(event.type);
+    if (method !== undefined) {
+      this.#reportBlockedEvent({ reason: 'consent', method, args: [event] });
     }
     return false;
   }
@@ -651,7 +776,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     }
     if (!admitted) return undefined;
 
-    const isConsentGiven = this.#store.consent.events === true;
+    const isConsentGiven = consentSignal.value === true;
     return valid.map((event) => withEventConsent(event, isConsentGiven));
   }
 
@@ -715,14 +840,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
     }
     if (initialization.hydration !== undefined) return initialization.hydration;
 
-    const profileRevision = this.#store.profileRevision;
-    const hydration = Promise.resolve().then(() => {
-      if (!initialization.isCurrent() || this.#store.profileRevision !== profileRevision) return;
-      // Cacheable profileless state never changes browser profile continuity.
-      if (shouldApplyHandoffProfile(handoff)) {
-        this.#store.profile = handoff.state?.profile;
-        this.#syncIdentity();
-      }
+    const profileRevision = this.#profileRevision;
+    const hydration = Promise.resolve().then(async () => {
+      if (!initialization.isCurrent() || this.#profileRevision !== profileRevision) return;
+      // Profileless/cacheable hydration declares success without changing continuity.
+      await this.#applyOptimizationDataToSignals(
+        shouldApplyHandoffProfile(handoff) ? { profile: handoff.state?.profile } : {},
+        initialization.isCurrent,
+        () => shouldApplyHandoffProfile(handoff)
+      );
     });
     initialization.hydration = hydration.catch((error: unknown) => {
       initialization.hydration = undefined;
@@ -734,36 +860,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
   #adoptHandoffIdentity(handoff: HandoffEnvelope): string | undefined {
     const profileId = this.#requestIdentity() ?? handoff.profileId;
     this.#setAdoptedProfileId(profileId);
-    this.#syncIdentity();
     return profileId;
   }
 
   /**
-   * The id a request is sent under when no complete profile is held: an identity adopted
-   * from a handoff, then, while persistence is granted, the id stored for continuity.
-   * That is how a cookie a server wrote reaches the first request of a new page load.
+   * Resolve request identity with Optimization's provider-first precedence, then the
+   * active profile and an identity adopted from a server handoff.
    */
   #requestIdentity(): string | undefined {
-    if (this.#store.profile?.id !== undefined) return this.#store.profile.id;
-    if (this.#adoptedProfileId !== undefined) return this.#adoptedProfileId;
-    return this.#store.consent.persistence === true ? this.#store.anonymousId : undefined;
-  }
-
-  /**
-   * Keeps the identity cookie and stored id in step with what this runtime knows, but only
-   * while persistence is granted; otherwise nothing is written. A complete profile wins,
-   * then an identity adopted from a handoff, then the id already stored, so a visitor
-   * keeps their continuity while the profile is absent and a profileless handoff cannot
-   * erase it. Only callers that are themselves guarded against stale work reach this.
-   */
-  #syncIdentity(): void {
-    if (this.#store.consent.persistence !== true) return;
-    this.#identity.persist(
-      this.#identity.resolve({
-        profileId: this.#store.profile?.id,
-        handoffId: this.#adoptedProfileId,
-      })
-    );
+    return this.#getAnonymousId() ?? profileSignal.value?.id ?? this.#adoptedProfileId.value;
   }
 
   /**
@@ -773,46 +878,112 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
    */
   #reconcileCookie(snapshot: CookieSnapshot): void {
     this.#identity.reconcile(snapshot, {
-      currentProfileId: this.#store.profile?.id,
+      currentProfileId: profileSignal.value?.id,
       reset: () => this.reset(),
     });
   }
 
-  /**
-   * Startup, in the Optimization SDK's constructor order: capture the cookie as it arrived,
-   * synchronize the profile's identity, then reconcile the captured cookie. Reading it again
-   * after the synchronization would see what the SDK itself just wrote, so a conflicting
-   * profile would win over the visitor the cookie names.
-   */
-  #initializeIdentity(): void {
-    if (this.#store.consent.persistence === false) {
-      this.#identity.clear();
-      return;
-    }
-    const incoming = this.#store.consent.persistence === true ? this.#identity.read() : undefined;
-    this.#syncIdentity();
-    if (incoming !== undefined) this.#reconcileCookie(incoming);
+  #getConsent(): ConsentState {
+    return { events: consentSignal.value, persistence: persistenceConsentSignal.value };
   }
 
-  /**
-   * Persistence was granted or withdrawn after startup. A grant adopts any existing
-   * cookie and writes the identity already held in memory. A withdrawal removes the
-   * durable identity but leaves the in-memory profile, and event consent is separate.
-   */
-  #applyPersistenceChange(granted: boolean): void {
-    if (granted) {
-      // Reconciling the cookie and synchronizing the effective identity are separate steps,
-      // as in the Optimization SDK: finding a cookie does not mean the profile is persisted.
-      this.#reconcileCookie(this.#identity.read());
-      this.#syncIdentity();
-      return;
+  async #applyOptimizationDataToSignals(
+    data: ExperienceState,
+    isCurrent: () => boolean,
+    canApplyProfile: () => boolean = () => true
+  ): Promise<void> {
+    if (this.#destroyed) return;
+    const profileRevision = this.#profileRevision;
+    const next = mergeExperienceState(
+      data,
+      await this.interceptors.state.run(data, mergeExperienceState)
+    );
+    if (!isCurrent()) return;
+    batch(() => {
+      if (
+        canApplyProfile() &&
+        this.#profileRevision === profileRevision &&
+        Object.hasOwn(next, 'profile')
+      ) {
+        if (!isEqual(profileSignal.value, next.profile)) profileSignal.value = next.profile;
+        this.#setAdoptedProfileId(undefined);
+      }
+      experienceRequestStateSignal.value = { status: 'success' };
+    });
+  }
+
+  #reportBlockedEvent(event: BlockedEvent): void {
+    if (this.#destroyed) return;
+    const generation = this.#generation;
+    try {
+      this.onEventBlocked?.(event);
+    } catch (error) {
+      console.warn(`onEventBlocked callback failed for method "${event.method}"`, error);
     }
-    this.#identity.clear();
+    if (!this.#destroyed && this.#generation === generation) blockedEventSignal.value = event;
+  }
+
+  #initializeEffects(): void {
+    let previousProfile = profileSignal.peek();
+    this.#effects.push(
+      effect(() => {
+        const profile = profileSignal.value;
+        if (profile !== previousProfile) {
+          previousProfile = profile;
+          this.#profileRevision += 1;
+        }
+      })
+    );
+    this.#effects.push(
+      effect(() => {
+        const consent = consentSignal.value;
+        LocalStore.consent = consent;
+        untracked(() => this.#interactionTracking?.syncConsent());
+      })
+    );
+    this.#effects.push(
+      effect(() => {
+        const persistenceConsent = persistenceConsentSignal.value;
+        LocalStore.persistenceConsent = persistenceConsent;
+        if (persistenceConsent === true) {
+          untracked(() => this.#reconcileCookie(this.#identity.read()));
+        }
+        if (persistenceConsent === false) {
+          this.#identity.clear();
+          LocalStore.clearProfileContinuity();
+        }
+      })
+    );
+    this.#effects.push(
+      effect(() => {
+        const profile = profileSignal.value;
+        const persistenceConsent = persistenceConsentSignal.value;
+        const handoffId = this.#adoptedProfileId.value;
+        if (persistenceConsent !== true) return;
+        LocalStore.profile = profile;
+        this.#identity.persist(this.#identity.resolve({ profileId: profile?.id, handoffId }));
+      })
+    );
+    this.#effects.push(
+      effect(() => {
+        if (!onlineSignal.value) return;
+        this.experienceQueue.clearScheduledRetry();
+        this.insightsQueue.clearScheduledRetry();
+        void this.flushQueues(
+          { force: true },
+          () => !this.#destroyed && onlineSignal.peek() === true
+        );
+      })
+    );
+  }
+
+  #disposeEffects(): void {
+    for (const dispose of this.#effects.splice(0)) dispose();
   }
 
   #setAdoptedProfileId(profileId: string | undefined): void {
-    if (this.#adoptedProfileId === profileId) return;
-    this.#adoptedProfileId = profileId;
+    if (this.#adoptedProfileId.value === profileId) return;
     this.#identityRevision += 1;
+    this.#adoptedProfileId.value = profileId;
   }
 }

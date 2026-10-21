@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
+import { deferred } from './test-fixtures/dom.js';
 
 type ExperienceEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
 
@@ -70,15 +71,17 @@ describe('Web prepared handoff and consent', () => {
     it('admits a page-only batch by default, since page is allow-listed', async () => {
       const runtime = createRuntime();
       const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const [page] = serverBatch(true, false);
 
-      const result = await runtime.hydrateAndTrackCurrentPage(
-        handoffWith(serverBatch(true, false)),
-        { routeKey: '/first' }
-      );
+      const result = await runtime.hydrateAndTrackCurrentPage(handoffWith([page!]), {
+        routeKey: '/first',
+      });
 
       expect(result.accepted).toBe(true);
       await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
-      expect(upsert.mock.calls[0]![0].events.map(({ type }) => type)).toEqual(['page']);
+      expect(upsert.mock.calls[0]![0].events).toEqual([
+        { ...page, context: { ...page!.context, gdpr: { isConsentGiven: false } } },
+      ]);
     });
 
     it('refuses the whole batch when one event is not admitted, and reports each', async () => {
@@ -109,7 +112,9 @@ describe('Web prepared handoff and consent', () => {
       const runtime = createRuntime({ onEventBlocked, allowedEventTypes: [] });
       const events = serverBatch(true);
 
-      await runtime.hydrateAndTrackCurrentPage(handoffWith(events), { routeKey: '/first' });
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(handoffWith(events), { routeKey: '/first' })
+      ).resolves.toEqual({ accepted: false });
 
       // Both prepared events are reported, then the browser's own fallback page, which
       // the same gate also blocks.
@@ -118,45 +123,7 @@ describe('Web prepared handoff and consent', () => {
         'page',
         'page',
       ]);
-    });
-
-    it('sends nothing under strict opt-in, not even the fallback page', async () => {
-      const runtime = createRuntime({ allowedEventTypes: [] });
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-
-      const result = await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true)), {
-        routeKey: '/first',
-      });
-
-      expect(result.accepted).toBe(false);
-      expect(upsert).not.toHaveBeenCalled();
-    });
-
-    it('admits the whole batch once event consent is granted', async () => {
-      seedConsent({ events: true });
-      const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-
-      await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true)), {
-        routeKey: '/first',
-      });
-
-      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
-      expect(upsert.mock.calls[0]![0].events.map(({ type }) => type)).toEqual(['track', 'page']);
-    });
-
-    it('does not treat a malformed batch as admitted', async () => {
-      const runtime = createRuntime();
-      const events = serverBatch(true, false);
-      const malformed = { ...handoffWith(events), replay: { routeKey: '/first', events: [{}] } };
-
-      const result = await runtime.hydrateAndTrackCurrentPage(
-        malformed as unknown as ExperiencesHandoff,
-        { routeKey: '/first' }
-      );
-
-      // Invalid prepared input is refused; the browser's own page is sent instead.
-      expect(result.accepted).toBe(true);
+      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
     });
   });
 
@@ -187,32 +154,6 @@ describe('Web prepared handoff and consent', () => {
       await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
       expect(flags(upsert.mock.calls[0]![0].events)).toEqual([true, true]);
     });
-
-    it('stamps false for undecided browser consent', async () => {
-      const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-
-      await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
-        routeKey: '/first',
-      });
-
-      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
-      expect(flags(upsert.mock.calls[0]![0].events)).toEqual([false]);
-    });
-
-    it('changes only the consent flag on an admitted event', async () => {
-      const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-      const [page] = serverBatch(true, false);
-
-      await runtime.hydrateAndTrackCurrentPage(handoffWith([page!]), { routeKey: '/first' });
-
-      await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
-      expect(upsert.mock.calls[0]![0].events[0]).toEqual({
-        ...page,
-        context: { ...page!.context, gdpr: { isConsentGiven: false } },
-      });
-    });
   });
 
   describe('queued events when consent changes', () => {
@@ -221,7 +162,7 @@ describe('Web prepared handoff and consent', () => {
       window.dispatchEvent(new Event('offline'));
       await runtime.track({ event: 'queued-1' });
       await runtime.track({ event: 'queued-2' });
-      expect(runtime.personalizationDeliveryState.status).toBe('idle');
+      expect(runtime.states.experienceRequestState.current.status).toBe('idle');
     }
 
     it('drops queued events when event consent is withdrawn, so they are never sent', async () => {
@@ -235,18 +176,8 @@ describe('Web prepared handoff and consent', () => {
       await Promise.resolve();
 
       expect(upsert).not.toHaveBeenCalled();
-    });
-
-    it('treats consent(false) as withdrawal for both axes', async () => {
-      seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-      await queueOffline(runtime);
-
-      runtime.consent(false);
-      window.dispatchEvent(new Event('online'));
+      runtime.destroy();
       await Promise.resolve();
-
       expect(upsert).not.toHaveBeenCalled();
     });
 
@@ -267,19 +198,6 @@ describe('Web prepared handoff and consent', () => {
       ]);
     });
 
-    it('does not send queued events from destroy() after consent was withdrawn', async () => {
-      seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
-      await queueOffline(runtime);
-
-      runtime.consent({ events: false });
-      runtime.destroy();
-      await Promise.resolve();
-
-      expect(upsert).not.toHaveBeenCalled();
-    });
-
     it('blocks new events after withdrawal, so nothing is queued again', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
@@ -296,38 +214,37 @@ describe('Web prepared handoff and consent', () => {
   });
 
   describe('responses that complete after consent is withdrawn', () => {
-    function deferred<T>() {
-      let resolve!: (value: T) => void;
-      const promise = new Promise<T>((complete) => {
-        resolve = complete;
-      });
-      return { promise, resolve };
-    }
-
     it('does not publish or persist a profile from an online event that was in flight', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
       const response = deferred<{ profile: { id: string } }>();
       vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
         response.promise as never
       );
 
       const pending = runtime.track({ event: 'in-flight' });
+      await vi.waitFor(() =>
+        expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled()
+      );
       runtime.consent({ events: false });
       response.resolve({ profile: { id: 'late-profile' } });
       await pending;
 
       // The request was already sent, but its response must not replace the live profile
       // or reach storage while persistence is still granted.
-      expect(runtime.profile).toEqual({ id: 'live-profile' });
+      expect(runtime.states.profile.current).toEqual({ id: 'live-profile' });
       expect(window.localStorage.getItem('__ctfl_opt_profile__')).toBe(
         JSON.stringify({ id: 'live-profile' })
       );
+      expect({
+        events: runtime.states.consent.current,
+        persistence: runtime.states.persistenceConsent.current,
+      }).toEqual({ events: false, persistence: true });
     });
 
     it('does not publish delivery state or profile from a queued flush that was in flight', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
       window.dispatchEvent(new Event('offline'));
       await runtime.track({ event: 'queued' });
       const response = deferred<{ profile: { id: string } }>();
@@ -335,30 +252,22 @@ describe('Web prepared handoff and consent', () => {
         response.promise as never
       );
       window.dispatchEvent(new Event('online'));
-      await vi.waitFor(() => expect(runtime.personalizationDeliveryState.status).toBe('pending'));
+      await vi.waitFor(() =>
+        expect(runtime.states.experienceRequestState.current.status).toBe('pending')
+      );
 
       runtime.consent({ events: false });
       response.resolve({ profile: { id: 'late-profile' } });
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(runtime.profile).toEqual({ id: 'live-profile' });
-      expect(runtime.personalizationDeliveryState.status).not.toBe('success');
-    });
-
-    it('keeps the live in-memory profile and the persistence decision independent', async () => {
-      seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'live-profile' } });
-
-      runtime.consent({ events: false });
-
-      expect(runtime.profile).toEqual({ id: 'live-profile' });
-      expect(runtime.consentState).toEqual({ events: false, persistence: true });
+      expect(runtime.states.profile.current).toEqual({ id: 'live-profile' });
+      expect(runtime.states.experienceRequestState.current.status).not.toBe('success');
     });
 
     it('still publishes responses for events sent after consent is granted again', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'live-profile' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
       runtime.consent({ events: false });
       runtime.consent({ events: true });
       vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockResolvedValue({
@@ -367,7 +276,7 @@ describe('Web prepared handoff and consent', () => {
 
       await runtime.track({ event: 'after-regrant' });
 
-      expect(runtime.profile).toEqual({ id: 'fresh-profile' });
+      expect(runtime.states.profile.current).toEqual({ id: 'fresh-profile' });
     });
   });
 

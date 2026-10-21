@@ -33,25 +33,16 @@
     return 'denied';
   }
 
-  function refresh() {
-    if (runtime === undefined) return;
-    consent = { ...runtime.consentState };
-    profileId = runtime.profile?.id;
-    stored = window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)';
-  }
-
   async function fire(name: string, send: () => Promise<unknown>) {
     try {
       lastResult = `${name}: ${JSON.stringify(await send())}`;
     } catch (error) {
       lastResult = `${name}: ${error instanceof Error ? error.message : String(error)}`;
     }
-    refresh();
   }
 
   function setChoice(next: boolean | { events?: boolean; persistence?: boolean }) {
     runtime?.consent(next);
-    refresh();
   }
 
   // The Web runtime is browser-only, so it is created on mount, never during SSR.
@@ -60,17 +51,34 @@
       spaceId,
       environmentId,
       delivery: { accessToken },
-      onEventBlocked: (event) => {
-        blocked = [event, ...blocked].slice(0, 5);
-      },
     });
     runtime = instance;
-    refresh();
+    const refreshStored = () => {
+      stored = window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)';
+    };
+    const subscriptions = [
+      instance.states.consent.subscribe((events) => {
+        consent = { ...consent, events };
+        refreshStored();
+      }),
+      instance.states.persistenceConsent.subscribe((persistence) => {
+        consent = { ...consent, persistence };
+        refreshStored();
+      }),
+      instance.states.profile.subscribe((profile) => {
+        profileId = profile?.id;
+        refreshStored();
+      }),
+      instance.states.blockedEventStream.subscribe((event) => {
+        if (event !== undefined) blocked = [event, ...blocked].slice(0, 5);
+      }),
+    ];
 
     // Views, hovers, and clicks on rendered nodes go through the same consent gate.
     const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
     return () => {
       void session.stop();
+      subscriptions.forEach((subscription) => subscription.unsubscribe());
       // Only one Web SDK may be live at a time; release it so a remount can construct another.
       instance.destroy();
       runtime = undefined;

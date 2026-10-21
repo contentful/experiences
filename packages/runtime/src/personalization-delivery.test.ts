@@ -3,6 +3,8 @@ import type { OptimizationData } from '@contentful/optimization-api-client/api-s
 import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
+import type { ExperienceRequestState } from './experience-request-state.js';
+import type { EventInterceptors } from './event-interceptors.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
 import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 import { buildPreparedEvents } from './prepared-events.js';
@@ -27,27 +29,48 @@ function data(id: string): OptimizationData {
   return { profile: { id }, changes: [], selectedOptimizations: [] } as unknown as OptimizationData;
 }
 
-function fixture(options: { online?: boolean; profileId?: string; maxEvents?: number } = {}) {
+function fixture(
+  options: {
+    online?: boolean;
+    profileId?: string;
+    maxEvents?: number;
+    experienceRequestState?: { value: ExperienceRequestState };
+  } = {}
+) {
   let online = options.online ?? true;
   let profileId = options.profileId;
   let revision = 0;
   const upsertProfile = vi
-    .fn<RuntimeOptimizationApiClient['personalization']['upsertProfile']>()
+    .fn<RuntimeOptimizationApiClient['experience']['upsertProfile']>()
     .mockResolvedValue(data('response-id'));
-  const publishQueuedData = vi.fn();
+  const experienceRequestState: { value: ExperienceRequestState } =
+    options.experienceRequestState ?? { value: { status: 'idle' } };
+  const applyOptimizationData = vi.fn<
+    (data: OptimizationData, isCurrent: () => boolean) => void | Promise<void>
+  >(() => {
+    experienceRequestState.value = { status: 'success' };
+  });
+  const eventInterceptors = { run: vi.fn<EventInterceptors['run']>(async (event) => event) };
+  const publishEvent = vi.fn();
   const delivery = new PersonalizationDelivery({
     api: { upsertProfile },
+    eventInterceptors,
+    publishEvent,
+    experienceRequestState,
     getProfileId: () => profileId,
     getProfileRevision: () => revision,
     getOnline: () => online,
     flushPolicy: resolveQueueFlushPolicy(undefined),
-    publishQueuedData,
+    applyOptimizationData,
     maxEvents: options.maxEvents,
   });
   return {
     delivery,
+    experienceRequestState,
     upsertProfile,
-    publishQueuedData,
+    applyOptimizationData,
+    eventInterceptors,
+    publishEvent,
     setOnline: (value: boolean) => {
       online = value;
     },
@@ -73,6 +96,26 @@ afterEach(() => {
 });
 
 describe('PersonalizationDelivery', () => {
+  it('validates and publishes intercepted events before transport, rejecting invalid rewrites', async () => {
+    const f = fixture();
+    const original = builder.buildTrack({ event: 'original' });
+    const rewritten = { ...original, event: 'rewritten' };
+    f.eventInterceptors.run
+      .mockResolvedValueOnce(rewritten)
+      .mockResolvedValueOnce({ type: 'track' });
+    f.publishEvent.mockImplementation((event) => {
+      expect(event).toEqual(rewritten);
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+    });
+
+    await f.delivery.send(original);
+    expect(f.publishEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([rewritten]);
+    await expect(f.delivery.send(original)).rejects.toThrow();
+    expect(f.publishEvent).toHaveBeenCalledTimes(1);
+    expect(f.upsertProfile).toHaveBeenCalledTimes(1);
+  });
+
   it('admits a prepared batch before HTTP settles and preserves the exact events and GDPR metadata', async () => {
     const response = deferred<OptimizationData>();
     const f = fixture({ profileId: 'profile-1' });
@@ -80,7 +123,7 @@ describe('PersonalizationDelivery', () => {
     const events = prepared();
 
     expect(f.delivery.sendPrepared(events, { locale: 'fr-FR' })).toEqual({ accepted: true });
-    expect(f.delivery.state.status).toBe('pending');
+    expect(f.experienceRequestState.value.status).toBe('pending');
     expect(f.upsertProfile).toHaveBeenCalledWith(
       { profileId: 'profile-1', events },
       { preflight: false, locale: 'fr-FR' }
@@ -91,11 +134,88 @@ describe('PersonalizationDelivery', () => {
     expect(
       f.upsertProfile.mock.calls[0]?.[0].events.every((event) => event.context.gdpr?.isConsentGiven)
     ).toBe(true);
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
 
     response.resolve(data('profile-1'));
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
-    expect(f.publishQueuedData).toHaveBeenCalledWith(data('profile-1'));
+    expect(f.applyOptimizationData).toHaveBeenCalledWith(data('profile-1'), expect.any(Function));
+  });
+
+  it('does not send a direct event when a pending-state subscriber resets the owner', async () => {
+    let value: ExperienceRequestState = { status: 'idle' };
+    const experienceRequestState = {
+      get value() {
+        return value;
+      },
+      set value(next: ExperienceRequestState) {
+        value = next;
+        if (next.status === 'pending') f.delivery.reset();
+      },
+    };
+    const f = fixture({ experienceRequestState });
+
+    await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({ accepted: true });
+    expect(f.upsertProfile).not.toHaveBeenCalled();
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
+    expect(experienceRequestState.value).toEqual({ status: 'idle' });
+  });
+
+  it('joins teardown triggered synchronously by pending publication and drains each batch once', async () => {
+    let value: ExperienceRequestState = { status: 'idle' };
+    let teardown: Promise<void> | undefined;
+    let onPending: (() => void) | undefined;
+    const experienceRequestState = {
+      get value() {
+        return value;
+      },
+      set value(next: ExperienceRequestState) {
+        value = next;
+        if (next.status === 'pending') onPending?.();
+      },
+    };
+    const first = deferred<OptimizationData>();
+    const second = deferred<OptimizationData>();
+    const old = fixture({ online: false, profileId: 'captured-profile', experienceRequestState });
+    old.upsertProfile.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const head = prepared('de-DE');
+    const tail = prepared('fr-FR');
+    old.delivery.sendPrepared(head, { locale: 'de-DE' });
+    old.delivery.sendPrepared(tail, { locale: 'fr-FR' });
+    onPending = () => {
+      onPending = undefined;
+      teardown = old.delivery.flushOnDestroy();
+    };
+
+    const drain = old.delivery.flush({ force: true });
+    expect(teardown).toBeDefined();
+    expect(old.upsertProfile).toHaveBeenCalledExactlyOnceWith(
+      { profileId: 'captured-profile', events: head },
+      { preflight: false, locale: 'de-DE' }
+    );
+    expect(experienceRequestState.value).toEqual({ status: 'idle' });
+    const replacementResponse = deferred<OptimizationData>();
+    const replacement = fixture({ experienceRequestState });
+    replacement.upsertProfile.mockReturnValueOnce(replacementResponse.promise);
+    const replacementRequest = replacement.delivery.send(builder.buildPageView());
+    await Promise.resolve();
+    expect(experienceRequestState.value).toEqual({ status: 'pending' });
+
+    first.resolve(data('head-response'));
+    await vi.waitFor(() => expect(old.upsertProfile).toHaveBeenCalledTimes(2));
+    expect(old.upsertProfile.mock.calls[1]).toEqual([
+      { profileId: 'captured-profile', events: tail },
+      { preflight: false, locale: 'fr-FR' },
+    ]);
+    second.resolve(data('tail-response'));
+    await Promise.all([drain, teardown]);
+    expect(old.upsertProfile).toHaveBeenCalledTimes(2);
+    expect(old.delivery.queuedEventCount).toBe(0);
+    expect(old.applyOptimizationData).not.toHaveBeenCalled();
+    expect(experienceRequestState.value).toEqual({ status: 'pending' });
+
+    replacementResponse.resolve(data('replacement'));
+    await replacementRequest;
+    expect(experienceRequestState.value).toEqual({ status: 'success' });
   });
 
   it('refuses a valid prepared batch exceeding capacity without sending a prefix', () => {
@@ -188,7 +308,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(failure);
     await expect(f.delivery.send(builder.buildPageView())).rejects.toBe(failure);
     expect(f.delivery.queuedEventCount).toBe(0);
-    expect(f.delivery.state).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
   });
 
   it('classifies an aborted transport as a timeout without queueing the direct event', async () => {
@@ -198,7 +318,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(abort);
 
     await expect(f.delivery.send(builder.buildPageView())).rejects.toBe(abort);
-    expect(f.delivery.state).toEqual({ status: 'failed', reason: 'timeout' });
+    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'timeout' });
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
@@ -291,7 +411,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
 
     await f.delivery.flush({ force: true });
-    expect(f.delivery.state).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
     expect(f.delivery.queuedEventCount).toBe(2);
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
@@ -316,7 +436,7 @@ describe('PersonalizationDelivery', () => {
     staleResponse.resolve(data('stale-id'));
     await staleDrain;
     expect(f.delivery.queuedEventCount).toBe(replacement.length);
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
     // A later flush joins the replacement attempt instead of starting another request.
     const joiner = f.delivery.flush({ force: true });
     expect(f.upsertProfile).toHaveBeenCalledTimes(2);
@@ -325,7 +445,10 @@ describe('PersonalizationDelivery', () => {
     await Promise.all([replacementDrain, joiner]);
     expect(f.upsertProfile).toHaveBeenCalledTimes(2);
     expect(f.delivery.queuedEventCount).toBe(0);
-    expect(f.publishQueuedData).toHaveBeenCalledExactlyOnceWith(data('replacement-id'));
+    expect(f.applyOptimizationData).toHaveBeenCalledExactlyOnceWith(
+      data('replacement-id'),
+      expect.any(Function)
+    );
   });
 
   it('keeps retry body, IDs, target, and absent locale stable after a failure', async () => {
@@ -335,7 +458,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(new Error('network'));
     const events = prepared();
     expect(f.delivery.sendPrepared(events)).toEqual({ accepted: true });
-    await vi.waitFor(() => expect(f.delivery.state.status).toBe('failed'));
+    await vi.waitFor(() => expect(f.experienceRequestState.value.status).toBe('failed'));
     const firstCall = f.upsertProfile.mock.calls[0];
     f.setProfile('later');
     await vi.advanceTimersByTimeAsync(500);
@@ -350,7 +473,7 @@ describe('PersonalizationDelivery', () => {
     const f = fixture();
     // The owner adopts each published response as the current profile, as Web does; the
     // next live batch then reads it, as Optimization's live batches read profileSignal.
-    f.publishQueuedData.mockImplementation((published: OptimizationData) =>
+    f.applyOptimizationData.mockImplementation((published: OptimizationData) =>
       f.setProfile(published.profile.id)
     );
     f.upsertProfile.mockReturnValueOnce(response.promise);
@@ -372,8 +495,8 @@ describe('PersonalizationDelivery', () => {
       void f.delivery[action]();
       response.resolve(data('stale'));
       await vi.runAllTimersAsync();
-      expect(f.publishQueuedData).not.toHaveBeenCalled();
-      expect(f.delivery.state).toEqual({ status: 'idle' });
+      expect(f.applyOptimizationData).not.toHaveBeenCalled();
+      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
       expect(f.delivery.queuedEventCount).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       if (action === 'flushOnDestroy')
@@ -396,8 +519,8 @@ describe('PersonalizationDelivery', () => {
     );
     pending.resolve(data('late-profile'));
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
-    expect(f.delivery.state).toEqual({ status: 'idle' });
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
+    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
   });
 
   it('attempts every queued batch in order on destroy and carries the response profile ID', async () => {
@@ -423,8 +546,8 @@ describe('PersonalizationDelivery', () => {
       { preflight: false, locale: 'fr-FR' },
     ]);
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
-    expect(f.delivery.state).toEqual({ status: 'idle' });
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
+    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
   });
 
   it('continues an active flush on destroy without publishing late responses', async () => {
@@ -440,7 +563,7 @@ describe('PersonalizationDelivery', () => {
     firstResponse.resolve(data('continuation-id'));
     await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
   });
 
   it('cancels the remaining destroy drain when reset follows destroy', async () => {
@@ -459,8 +582,8 @@ describe('PersonalizationDelivery', () => {
     firstResponse.resolve(data('late-profile'));
     await drain;
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-    expect(f.publishQueuedData).not.toHaveBeenCalled();
-    expect(f.delivery.state).toEqual({ status: 'idle' });
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
+    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
   });
 
@@ -479,7 +602,7 @@ describe('PersonalizationDelivery', () => {
       await vi.runAllTimersAsync();
       expect(f.upsertProfile).toHaveBeenCalledTimes(1);
       expect(f.delivery.queuedEventCount).toBe(0);
-      expect(f.delivery.state).toEqual({ status: 'idle' });
+      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
       expect(vi.getTimerCount()).toBe(0);
       expect(ingest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -496,34 +619,6 @@ describe('PersonalizationDelivery', () => {
   });
 
   describe('flushOnDestroy, following Optimization ExperienceQueue', () => {
-    it('makes one forced attempt with no active attempt, even offline', async () => {
-      const f = fixture({ online: false });
-      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
-      expect(f.upsertProfile).not.toHaveBeenCalled();
-
-      await f.delivery.flushOnDestroy();
-
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-      expect(f.delivery.queuedEventCount).toBe(0);
-      expect(f.publishQueuedData).not.toHaveBeenCalled();
-    });
-
-    it('joins an active attempt instead of starting a duplicate', async () => {
-      const response = deferred<OptimizationData>();
-      const f = fixture();
-      f.upsertProfile.mockReturnValueOnce(response.promise);
-      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-
-      const teardown = f.delivery.flushOnDestroy();
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-
-      response.resolve(data('late'));
-      await teardown;
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-      expect(f.publishQueuedData).not.toHaveBeenCalled();
-    });
-
     it('lets concurrent flush callers join the teardown drain without new requests', async () => {
       const response = deferred<OptimizationData>();
       const f = fixture({ online: false });
@@ -559,38 +654,6 @@ describe('PersonalizationDelivery', () => {
       expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
     });
 
-    it('stops a failed teardown drain without retrying', async () => {
-      vi.useFakeTimers();
-      const f = fixture({ online: false });
-      f.upsertProfile.mockRejectedValueOnce(new Error('network'));
-      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
-
-      await f.delivery.flushOnDestroy();
-      // No retry is scheduled for a failed teardown drain, as in Optimization.
-      expect(vi.getTimerCount()).toBe(0);
-      await vi.runAllTimersAsync();
-
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-      expect(vi.getTimerCount()).toBe(0);
-      expect(f.delivery.state).toEqual({ status: 'idle' });
-    });
-
-    it('cancels the remaining drain when reset follows teardown', async () => {
-      const first = deferred<OptimizationData>();
-      const f = fixture({ online: false });
-      f.upsertProfile.mockReturnValueOnce(first.promise);
-      expect(f.delivery.sendPrepared(prepared('de-DE'))).toEqual({ accepted: true });
-      expect(f.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
-
-      const teardown = f.delivery.flushOnDestroy();
-      f.delivery.reset();
-      first.resolve(data('late'));
-      await teardown;
-
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-      expect(f.publishQueuedData).not.toHaveBeenCalled();
-    });
-
     it('keeps a replacement delivery isolated from a draining one', async () => {
       const draining = deferred<OptimizationData>();
       const old = fixture({ online: false });
@@ -600,11 +663,11 @@ describe('PersonalizationDelivery', () => {
 
       const replacement = fixture();
       expect(replacement.delivery.sendPrepared(prepared('fr-FR'))).toEqual({ accepted: true });
-      await vi.waitFor(() => expect(replacement.publishQueuedData).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(replacement.applyOptimizationData).toHaveBeenCalledTimes(1));
 
       draining.resolve(data('old-visitor'));
       await teardown;
-      expect(old.publishQueuedData).not.toHaveBeenCalled();
+      expect(old.applyOptimizationData).not.toHaveBeenCalled();
       expect(replacement.upsertProfile).toHaveBeenCalledTimes(1);
       expect(replacement.delivery.queuedEventCount).toBe(0);
     });
@@ -613,7 +676,7 @@ describe('PersonalizationDelivery', () => {
   describe('profile continuation is local to the current drain, as Optimization', () => {
     it('sends a teardown drain under the captured current profile, not an older drain profile', async () => {
       const f = fixture({ online: false });
-      f.publishQueuedData.mockImplementation((published: OptimizationData) =>
+      f.applyOptimizationData.mockImplementation((published: OptimizationData) =>
         f.setProfile(published.profile.id)
       );
       // A completed drain under A.
@@ -624,7 +687,6 @@ describe('PersonalizationDelivery', () => {
       // A newer direct response establishes B as the current profile.
       f.upsertProfile.mockResolvedValueOnce(data('B'));
       await f.delivery.send(builder.buildIdentify({ userId: 'user-1' }));
-      f.setProfile('B');
       // An ordinary offline event, drained during destruction.
       f.setOnline(false);
       await f.delivery.send(builder.buildPageView());
@@ -661,12 +723,13 @@ describe('PersonalizationDelivery', () => {
       const f = fixture({ profileId: 'visitor' });
       f.upsertProfile.mockReturnValueOnce(failing);
       const result = f.delivery.send(builder.buildPageView());
+      await Promise.resolve();
 
       await f.delivery.flushOnDestroy();
       reject(new Error('network'));
 
       await expect(result).resolves.toEqual({ accepted: true });
-      expect(f.delivery.state).toEqual({ status: 'idle' });
+      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
     });
 
     it('resolves { accepted: true } without data when a direct request succeeds after destroy', async () => {
@@ -674,24 +737,13 @@ describe('PersonalizationDelivery', () => {
       const f = fixture({ profileId: 'visitor' });
       f.upsertProfile.mockReturnValueOnce(response.promise);
       const result = f.delivery.send(builder.buildPageView());
+      await Promise.resolve();
 
       await f.delivery.flushOnDestroy();
       response.resolve(data('late'));
 
       await expect(result).resolves.toEqual({ accepted: true });
-      expect(f.publishQueuedData).not.toHaveBeenCalled();
-    });
-
-    it('keeps a queued teardown request authorized to drain, and surfaces its failure to the drain', async () => {
-      const f = fixture({ online: false });
-      f.upsertProfile.mockRejectedValueOnce(new Error('network'));
-      expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
-
-      // The drain is authorized: it sends, and its failure ends the drain rather than vanishing.
-      await f.delivery.flushOnDestroy();
-
-      expect(f.upsertProfile).toHaveBeenCalledTimes(1);
-      expect(f.delivery.queuedEventCount).toBe(0);
+      expect(f.applyOptimizationData).not.toHaveBeenCalled();
     });
 
     it('still delivers a live direct request normally before destroy', async () => {
@@ -702,6 +754,11 @@ describe('PersonalizationDelivery', () => {
         accepted: true,
         data: data('live'),
       });
+      expect(f.applyOptimizationData).toHaveBeenCalledExactlyOnceWith(
+        data('live'),
+        expect.any(Function)
+      );
+      expect(f.experienceRequestState.value).toEqual({ status: 'success' });
     });
   });
 });

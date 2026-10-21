@@ -166,6 +166,14 @@ request-local. Web owns mutable locale and browser context, persists its current
 profile in LocalStorage, and offers `reset()` for logout or a new visitor
 session.
 
+Web exposes current values and subscriptions through `states`, including
+`profile`, `locale`, `consent`, `persistenceConsent`, `experienceRequestState`,
+`eventStream`, and `blockedEventStream`. Read `states.profile.current` or subscribe
+to changes with `states.profile.subscribe(...)`; dispose the returned handle
+with `unsubscribe()` during application cleanup. See the [Web state and
+subscriptions reference](./packages/web/README.md#state-and-subscriptions) for
+snapshot, event publication, and lifecycle semantics. Node's profile remains request-local.
+
 Ordinary online Personalization calls send directly. Web accepts ordinary
 offline calls into an in-memory queue; a new offline call is refused when the
 queue is full rather than evicting accepted work. Analytics remains direct.

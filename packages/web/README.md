@@ -16,6 +16,11 @@ npm install @contentful/experiences-web
 
 This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only.
 
+The inherited readonly `api` is the actual Optimization API client, with
+`api.experience` and `api.insights`; inherited readonly `config` retains the
+typed Web configuration. Web keeps its queue references, event allowlist,
+blocked-event callback, and connectivity accessor protected for subclasses.
+
 Browser configuration is trusted application configuration. When configured, a bearer token is sent to the selected endpoint, so validate its origin, CORS/preflight policy, and token scope before constructing the SDK. Do not place tokens in query strings. Browser-visible delivery and preview tokens must be appropriate for the audience and origin that can load them; use a server boundary when that is not acceptable.
 
 `environmentId` identifies the Contentful environment used by an Experience request. It is distinct from the generated delivery client's optional `environment` endpoint configuration. The runtime constructs its clients: `host` maps to the generated client's `baseUrl`. Endpoint precedence is explicit `host`, then generated-client `environment`, then the delivery or preview default. These options support trusted custom endpoints such as a proxy, staging service, or regional endpoint.
@@ -92,6 +97,102 @@ Each browser fetch or resolve call receives its own `config`; event-only use doe
 
 Locale is mutable browser state. Update it with `setLocale()` rather than sharing a request-scoped Node facade; browser navigation, language selection, and concurrent renders then observe the current client-side locale without leaking server request state. An explicit per-call locale still wins for that fetch.
 
+Constructor `locale` and `setLocale()` trim whitespace and replace underscores with
+hyphens (for example, `' en_US '` becomes `'en-US'`). An omitted locale remains
+`undefined`; invalid explicit values, including blank strings, `'*'`, and `'und'`,
+throw. The package exports `normalizeLocale()` for normalization that returns
+`undefined` for unusable values, and `normalizeExplicitLocale()` for the same
+validation used by the constructor and setter.
+
+## State and subscriptions
+
+`experiences.states` exposes the browser SDK's observable state. Each observable
+has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
+
+| State                    | Value                                                                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                | Current profile, or `undefined`.                                                                                                                     |
+| `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
+| `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
+| `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
+| `experienceRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`. |
+| `eventStream`            | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                |
+| `blockedEventStream`     | Most recently blocked event metadata, or `undefined`.                                                                                                |
+
+`subscribe` immediately invokes its callback with the current value, including
+`undefined`, then observes changes. `subscribeOnce` waits for the first
+non-nullish value and automatically unsubscribes; `false` is a value, so it also
+settles a one-time consent subscription. Both return a handle with
+`unsubscribe()`. Subscriptions belong to the caller: dispose them when the
+component or application lifecycle ends, including before replacing the SDK.
+
+```ts
+const profileSubscription = experiences.states.profile.subscribe((profile) => {
+  console.log('Current visitor:', profile?.id);
+});
+const consentSubscription = experiences.states.consent.subscribeOnce((consent) => {
+  console.log('First consent decision:', consent);
+});
+
+// During application/component cleanup; also cancels an undecided one-time subscription:
+profileSubscription.unsubscribe();
+consentSubscription.unsubscribe();
+```
+
+Object snapshots are deep-cloned by default, so changing a snapshot does not
+update SDK state. `eventStream` uses the emitted event reference instead; treat
+its values as immutable. For ordinary calls, `eventStream` publishes validated,
+consent-allowed events before transport or queue admission, so an event may appear
+even if queue capacity later refuses it. Each prepared event appears once only
+when the whole batch is admitted; a refused prepared batch publishes none of its
+events. Embedded `fetchExperience()` events appear after consent filtering and
+serialization to XDA's event schema, using those serialized fields. Streams do not
+report HTTP delivery or retries. Blocked events are published after the
+`onEventBlocked` callback. `reset()` clears the profile, request outcome, and
+both event streams while retaining locale and consent decisions.
+
+Lifecycle isolation is stronger than the [pinned Optimization
+reference](../../AGENTS.md#parity-with-the-optimization-sdk): reset and event-consent withdrawal invalidate queued work and in-flight state updates,
+so an older response cannot restore cleared state. Destruction and failed
+construction dispose internal effects before releasing ownership. Response guards
+keep a replacement instance isolated. Application
+subscriptions still require the caller's `unsubscribe()` cleanup.
+
+For extensions, the package also exports `signals`, `signalFns`, `batch`,
+`effect`, `toObservable`, and `toDistinctObservable`, plus the types `Observable`,
+`Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
+`OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
+The supported state names follow Optimization's shared browser-state contract;
+Experiences has no flags, selected-optimization, optimization-eligibility, or
+preview state in `states`.
+
+### Interceptors
+
+`experiences.interceptors.event` and `.state` are `InterceptorManager` registries.
+Register synchronous or asynchronous transforms with `add()`, retain its id for
+`remove()`, or use `clear()` to remove all transforms. They run in insertion order
+with a cloned input; registry changes do not affect a chain already running.
+Event interceptors run before wire-event revalidation, publication, and sending or
+queueing, including caller-built events embedded in an XDA fetch. Prepared server
+handoff replay keeps its evaluated event contents and bypasses event rewriting.
+
+State interceptors receive incoming `{ profile }` state from Personalization,
+XDA, and private handoff hydration before it is committed. A sparse result that
+omits `profile` retains the previous value in the chain; `{ profile: undefined }`
+explicitly clears it. The package exports `InterceptorManager`, `Interceptor`,
+`InterceptorMerge`, `MaybePromise`, `ExperienceState`, `LifecycleInterceptors`, and
+`mergeExperienceState`. XDA owns personalization resolution, so state interception
+supports profile state only.
+
+The `@contentful/experiences-web/bridge-support` entry exports
+`hydrateOptimizationData(sdk, { profile })`, `CoreBridgeCapabilities`,
+`CoreBridgeHost`, and the shared bridge symbol for compatible integrations. It
+supports profile hydration only; it does not expose the Optimization Preview
+Panel bridge. Shared state application reports request-state success atomically
+with hydration, even when the incoming state is profileless. Profileless shared
+handoffs therefore preserve existing profile and continuity. Ordinary XDA
+content fetches do not request this bridge hydration.
+
 ## Context providers and redaction
 
 The default event context is read lazily and includes the current URL, path, query parameters, search, hash, referrer, title, browser window dimensions, and User-Agent. SPA navigation is therefore reflected without reconstructing the SDK. These values can contain sensitive data.
@@ -123,10 +224,19 @@ const experiences = new ContentfulExperiences({
 
 The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
-initial profile when creating the runtime, or identify a profile before sending
-Analytics events. Personalization event responses supply a complete profile to
+initial profile through `defaults.profile` when creating the runtime, or identify
+a profile before sending Analytics events. `CoreConfigDefaults` describes the
+`defaults` object with `profile`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
 persisted and restored from LocalStorage once persistence consent is granted.
+`getAnonymousId` is an optional configuration callback whose returned id takes
+precedence over the active profile id. The default provider reads the stored
+anonymous id only when persistence consent is `true`; an `undefined` result falls
+back to the current profile or adopted handoff identity.
+Runtime event methods run interceptors before validation, publication, and
+admission. `trackView` preserves Optimization's early consent check before its
+view-specific validation. `BlockedEvent.method` is a string, matching the
+reference's public payload type.
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response
 establishes and persists the next profile. `destroy()` stops owned listeners and
@@ -139,7 +249,7 @@ visitor session.
 ```ts
 const experiences = new ContentfulExperiences({
   // delivery and resolver configuration...
-  profile: { id: 'visitor-123' },
+  defaults: { profile: { id: 'visitor-123' } },
 });
 
 // From your consent banner. Undecided is treated as not granted.
@@ -168,8 +278,9 @@ capacity, then refused without evicting accepted work. A prepared batch is
 admitted whole or refused at capacity. Capacity is `queuePolicy.offlineMaxEvents`
 (default 100; a non-positive or non-finite value falls back to the default, and a
 fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
-completion. Read `personalizationDeliveryState` for the latest request status
-(`idle`, `pending`, `success`, or `failed`); failed queued batches retry with
+completion. Read `states.experienceRequestState.current` for the latest
+Personalization request status (`idle`, `pending`, `success`, or `failed`);
+failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
@@ -190,16 +301,22 @@ Optimization SDK's defaults, which `queuePolicy.flush` can override: `flushInter
 `baseBackoffMs`, `maxBackoffMs`, `jitterRatio`, `maxConsecutiveFailures`, `circuitOpenMs`, and
 the `onFlushFailure`, `onCircuitOpen` and `onFlushRecovered` callbacks. It applies to both
 the Personalization and Analytics queues. Call `flush()` to send queued Analytics events and
-Personalization batches immediately. Both attempts start together, and a call made while
-an Analytics request is in flight waits for that request to settle without starting
-another; retries stay scheduled independently.
+Personalization batches immediately, awaiting Analytics before Personalization. A
+call made while an Analytics request is in flight waits for that request to settle
+without starting another; retries stay scheduled independently. Reconnect and
+visibility handling use the same order. Destruction starts both final flush
+attempts independently before ending the instance lifetime.
 
 ### Consent
 
 `consent(true | false | { events?, persistence? })` records the visitor's
-decisions, and `consentState` reads them. A boolean sets both axes; an object
+decisions. Read `states.consent.current` and `states.persistenceConsent.current`
+for each axis. A boolean sets both axes; an object
 updates either independently. Undecided is treated as not granted. This mirrors
 the Optimization SDK's consent model.
+
+`hasConsent(name: string)` checks whether current event consent or
+`allowedEventTypes` admits the supplied method/type selector.
 
 - **Event consent.** Until `events` is `true`, only event types in
   `allowedEventTypes` (default `identify` and `page`) are sent. Selectors are the
@@ -237,6 +354,15 @@ the Optimization SDK's consent model.
   persistence consent. An absent key is undecided. Event consent `accepted` with no
   persistence key counts as persistence `accepted`. A value this SDK does not
   recognize is treated as undecided and left untouched.
+
+`resolveStatefulDefaults(configured?, persisted?)` exposes the same startup
+resolution independently of browser storage. It returns `{ defaults,
+canLoadPersistedContinuity }`; a persisted profile may be a lazy loader and is
+read only when persistence is granted and no configured profile is supplied.
+The constructor uses this lazy path for LocalStorage. The package exports
+`StatefulDefaults`, `PersistedDefaultLoader`, `PersistedDefaultValue`,
+`PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `CoreConfigDefaults`
+uses the same supported profile and consent fields.
 
 Personalization methods (`identify`, `page`, `track`) resolve
 `{ accepted, data? }`, where `data` is the Personalization response.
@@ -368,6 +494,11 @@ packages re-export it, and so does
   a source map.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
   so server-rendered components can import it.
+- `reset()` stops and releases the active session, discarding in-progress view
+  and hover durations so they cannot cross visitor identities. It retains the
+  tracking configuration and session; a later `session.refresh()` or consent
+  synchronization can resume tracking with fresh intervals. This explicit
+  Experience/Fragment session boundary is specific to this SDK's attribution model.
 - `startInteractionTracking` does nothing outside a browser. One session runs per
   runtime at a time. `stop()` frees it immediately, so a new session can start
   from a React effect whose cleanup cannot await; the stopped session finishes
@@ -419,7 +550,8 @@ Ordinary online event calls and Analytics do not wait behind queued prepared del
 Use `hydrateHandoffState(handoff, { routeKey })` when state must be adopted before
 page tracking. It joins a later `hydrateAndTrackCurrentPage` call for the same
 current initialization. A profileless public or static handoff leaves the
-current browser profile intact. Use `trackCurrentPage({ routeKey, buildPayload })`
+current browser profile and continuity intact while atomically marking the shared
+request state successful. Use `trackCurrentPage({ routeKey, buildPayload })`
 for ordinary route tracking; its callback receives `isInitialEmission`. Manual
 `page()` calls remain direct and are not deduplicated.
 
@@ -445,6 +577,29 @@ guarantee exactly-once delivery.
 
 The package can be imported by server-rendered applications, but importing it must not read browser globals or start browser work. Import safety does not make the live Web runtime a server runtime: create and use browser-owned SDK state only in client-side lifecycle code, and use the Node SDK plus a serializable `PortableRenderPlan` for server rendering. The separate SSR test configuration protects the public-entry import and pure browser-context fallbacks without promising that future stateful Web construction will run on the server.
 
+For presentation layers that consume already-resolved state, `createSnapshotRuntime()`
+creates a read-only `ExperiencesRuntime` without browser ownership or transport:
+
+```ts
+import { createSnapshotRuntime } from '@contentful/experiences-web/runtime';
+
+const runtime = createSnapshotRuntime({
+  data: { profile: { id: 'visitor-123' } },
+  locale: 'en-US',
+  consent: true,
+});
+```
+
+Its seven `states` observables are static: profile, locale, and consent come from
+the snapshot, persistence consent falls back to event consent, request state is
+`{ status: 'success' }`, and both event streams are `undefined`. `hasConsent()`
+uses the snapshot's consent and optional `allowedEventTypes`. Event methods and
+state-changing commands warn and do no work; methods returning an admission
+result resolve `{ accepted: false }`. `destroy()` needs no cleanup. Fetching and
+resolution remain outside this interface. `createSnapshotRuntime` and the types
+`ExperiencesRuntime`, `ExperiencesSnapshot`, and `SnapshotRuntime` are exported
+from both the package root and `@contentful/experiences-web/runtime`.
+
 ## Errors and destinations
 
 Missing Experiences surface the delivery client's `NotFoundError`; other delivery and resolution errors propagate so the application can apply its normal error policy. Destination operations use the delivery service and return either a resolved plan or a redirect result; route redirects at the application boundary.
@@ -453,7 +608,7 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Current limitations
 
-- No durable event persistence or beacon/lifecycle delivery. Personalization's
+- No durable event persistence. Personalization's
   offline queue is in memory only, and withdrawing event consent discards it. Automatic interaction
   tracking uses the direct Analytics methods.
 - No framework adapter stamps tracked elements for you; components spread
@@ -464,7 +619,13 @@ For a by-ID fetch, `preview: true` selects the configured CPA client and throws 
 
 ## Architecture boundary
 
-`@contentful/experiences-web` is a public Web-specific sibling of `@contentful/experiences-node`. Both build on the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime owns shared event construction and orchestration; Client owns the generated Delivery boundary and free fetch functions. The Web package owns browser state; the Node package owns request-local state. Neither package inherits the other's lifecycle semantics.
+`@contentful/experiences-web` is a public Web-specific sibling of `@contentful/experiences-node`. Both build on the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime owns shared event construction and orchestration; Client owns the generated Delivery boundary and free fetch functions.
+
+The Web package owns module signals and the effects for persistence, consent, and
+connectivity, using `@preact/signals-core` and `es-toolkit`; the Node package owns
+request-local state. Internal effects are disposed on destroy or failed construction
+before the singleton lock is released, and late responses from a previous instance
+cannot update its replacement. Neither package inherits the other's lifecycle semantics.
 
 ## License
 
