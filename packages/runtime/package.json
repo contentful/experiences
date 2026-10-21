@@ -32,7 +32,7 @@
     "@contentful/experiences-client": "0.9.6",
     "@contentful/experiences-sdk-core": "0.12.5",
     "@contentful/optimization-api-client": "^2.1.0",
-    "es-toolkit": "^1.46.0",
+    "es-toolkit": "^1.52.0",
     "zod": "^4.3.6"
   }
 }

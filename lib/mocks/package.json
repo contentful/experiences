@@ -31,7 +31,7 @@
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests"
   },
   "dependencies": {
-    "es-toolkit": "^1.46.0",
+    "es-toolkit": "^1.52.0",
     "msw": "^2.12.10"
   },
   "devDependencies": {
