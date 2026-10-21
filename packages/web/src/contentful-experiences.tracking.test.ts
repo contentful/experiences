@@ -455,6 +455,123 @@ describe('ContentfulExperiences interaction tracking', () => {
   });
 
   describe('timed interactions across consent changes', () => {
+    it('keeps allowlisted views and hovers live across withdrawal, regrant and refresh', async () => {
+      const io = installIOPolyfill();
+      const runtime = createRuntime({
+        defaults: { profile: { id: 'visitor' } },
+        allowedEventTypes: ['component', 'component_hover'],
+      });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        clicks: false,
+        resolveAttribution: (key) => ATTRIBUTIONS[key],
+      });
+
+      for (const stage of ['initial', 'withdrawn', 'withdrawn again', 'regranted', 'refreshed']) {
+        if (stage.startsWith('withdrawn')) runtime.consent({ events: false });
+        if (stage === 'regranted') runtime.consent({ events: true });
+        if (stage === 'refreshed') session.refresh();
+        expect(runtime.hasConsent('trackView')).toBe(true);
+        expect(runtime.hasConsent('trackHover')).toBe(true);
+        send.mockClear();
+
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1400);
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+
+        const events = await sentEvents(send);
+        const views = events.filter((event) => event.type === 'exo_node_view');
+        const hovers = events.filter((event) => event.type === 'exo_node_hover');
+        expect(
+          views.map((event) => event.viewDurationMs),
+          stage
+        ).toEqual([1000, 1400]);
+        expect(
+          hovers.map((event) => event.hoverDurationMs),
+          stage
+        ).toEqual([1000, 1400]);
+        expect(views[1]?.viewId).toBe(views[0]?.viewId);
+        expect(hovers[1]?.hoverId).toBe(hovers[0]?.hoverId);
+      }
+      await session.stop();
+    });
+
+    it.each(['active', 'stopping'] as const)(
+      'discards pending allowlisted callbacks from an %s session at withdrawal',
+      async (lifecycle) => {
+        const io = installIOPolyfill();
+        const runtime = createRuntime({
+          defaults: { profile: { id: 'visitor' } },
+          allowedEventTypes: ['component', 'component_hover'],
+        });
+        const qualifying = deferred<void>();
+        runtime.interceptors.event.add(async (event) => {
+          await qualifying.promise;
+          return event;
+        });
+        const trackView = vi.spyOn(runtime, 'trackView');
+        const trackHover = vi.spyOn(runtime, 'trackHover');
+        const send = spyOnTransport(runtime);
+        const page = render('node:page', 'main');
+        const hero = render('node:hero', 'button');
+        const options = {
+          clicks: false,
+          resolveAttribution: (key: string) => ATTRIBUTIONS[key],
+        };
+        let session = runtime.startInteractionTracking(options);
+        const originalObserver = io.getLast();
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1500);
+        // Finals are serialised behind the still-pending qualifying callbacks.
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+        // A stopped session intentionally retains its pending finals. Withdrawal must
+        // invalidate those callbacks too, even though it no longer owns the session.
+        const stopping = lifecycle === 'stopping' ? session.stop() : undefined;
+        runtime.consent({ events: false });
+        if (stopping) session = runtime.startInteractionTracking(options);
+        qualifying.resolve();
+        await stopping;
+        await advance(0);
+        originalObserver.trigger(page, true);
+        await advance(3000);
+
+        expect(trackView).toHaveBeenCalledTimes(1);
+        expect(trackHover).toHaveBeenCalledTimes(1);
+        expect(await sentEvents(send)).toEqual([]);
+
+        // Neither the queued final nor the previous measurement crosses the boundary.
+        // The existing session starts fresh while consent remains denied.
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1400);
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+        const events = await sentEvents(send);
+        expect(
+          events
+            .filter((event) => event.type === 'exo_node_view')
+            .map((event) => event.viewDurationMs)
+        ).toEqual([1000, 1400]);
+        expect(
+          events
+            .filter((event) => event.type === 'exo_node_hover')
+            .map((event) => event.hoverDurationMs)
+        ).toEqual([1000, 1400]);
+        expect(trackView).toHaveBeenCalledTimes(3);
+        expect(trackHover).toHaveBeenCalledTimes(3);
+        await session.stop();
+      }
+    );
+
     const enter = (element: Element): void => {
       element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     };

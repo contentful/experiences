@@ -241,6 +241,12 @@ Experiences safeguards below to that reference:
   Personalization requests must still be live to publish success or failure.
   These guards keep a previous visitor's response from restoring cleared state
   or recreating continuity after consent withdrawal.
+- Experiences completes event-consent withdrawal in one reactive batch: both
+  queues are purged and request/lifecycle guards are invalidated before consent
+  or request-state subscribers run. Explicit consent decisions are persisted
+  before subscribers can destroy the SDK and dispose pending persistence effects.
+  The pinned reference publishes consent before purging queues; this is a local
+  correction of that shared defect, not a claim that Optimization has been fixed.
 - Experiences destruction starts both final flush attempts independently before
   ending the live lifetime. Personalization's `flushOnDestroy()` captures its
   teardown identity and joins the common drain; that drain follows only its own
@@ -250,7 +256,11 @@ Experiences safeguards below to that reference:
   tracking configuration and session. A later `session.refresh()` or consent
   synchronization resumes fresh intervals. Experiences also invalidates pending
   interaction callbacks with the owner's reset token, preventing old measurements
-  from being sent under the next visitor's identity.
+  from being sent under the next visitor's identity. Event-consent withdrawal
+  discards active measurements and restarts permitted detectors with the new
+  token, including allowlisted views and hovers. This restart is required by
+  Experiences' additional token guard; the pinned reference retains permitted
+  detectors without that guard.
 
 Ordinary `flush()`, reconnect, and visibility handling await Analytics before
 Personalization, following the reference order. Preserve the stated lifecycle

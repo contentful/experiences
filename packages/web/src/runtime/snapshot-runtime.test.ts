@@ -41,7 +41,7 @@ describe('SnapshotRuntime', () => {
     const runtime = createSnapshotRuntime({ data: { profile: { id: 'server' } }, locale: 'en-US' });
     await expect(runtime.page()).resolves.toEqual({ accepted: false });
     await expect(
-      runtime.trackClick({ entityId: 'hero', entityKind: 'InlineComponent' })
+      runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
     ).resolves.toBeUndefined();
     runtime.consent(true);
     runtime.reset();

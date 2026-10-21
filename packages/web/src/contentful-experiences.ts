@@ -405,25 +405,47 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.#destroyed) return;
     const next = toConsentState(input);
     batch(() => {
-      if (next.events !== undefined) consentSignal.value = next.events;
-      if (next.persistence !== undefined) persistenceConsentSignal.value = next.persistence;
+      // A subscriber can destroy the SDK and dispose effects still waiting for the
+      // batch to end. Persist explicit decisions before any such notification.
+      if (next.events !== undefined) {
+        consentSignal.value = next.events;
+        LocalStore.consent = next.events;
+      }
+      if (next.persistence !== undefined) {
+        persistenceConsentSignal.value = next.persistence;
+        LocalStore.persistenceConsent = next.persistence;
+      }
+      // Complete withdrawal before consent or request-state subscribers can reenter
+      // the SDK (including destroy()) or throw. clearQueue() also publishes state.
+      // A persistence-only change leaves the queues and measurements alone.
+      if (next.events === false) {
+        this.#generation += 1;
+        this.experienceQueue.clearQueue();
+        this.#resetToken = {};
+        this.insightsQueue.clearQueuedEvents();
+        this.#profileRevision += 1;
+        // A discarded queued page must not leave its route looking admitted, or a later
+        // permitted attempt for the same route would be answered from the cache and
+        // never sent. This also forgets routes already sent, so one can be sent again
+        // after a withdrawal and a new grant.
+        this.#currentInitialization = undefined;
+        this.#currentPage.reset();
+        // Even allowlisted detectors must discard the previous lifecycle's intervals
+        // and capture the new token. Sync explicitly: repeated denials do not change
+        // the consent signal and therefore do not rerun its effect.
+        this.#interactionTracking?.reset();
+      }
+      try {
+        if (next.persistence === false) {
+          LocalStore.clearProfileContinuity();
+          this.#identity.clear();
+        }
+      } finally {
+        // Cookie deletion can throw in a restricted document. Queues and old
+        // measurements are already discarded; permitted detectors still restart.
+        if (next.events === false) this.#interactionTracking?.syncConsent();
+      }
     });
-    // Events accepted into the offline queue while the visitor had consented must not
-    // be sent after they withdraw. Only an explicit denial purges, as in the
-    // Optimization SDK; a persistence-only change leaves the queue alone.
-    if (next.events === false) {
-      this.#generation += 1;
-      this.experienceQueue.clearQueue();
-      this.#resetToken = {};
-      this.insightsQueue.clearQueuedEvents();
-      this.#profileRevision += 1;
-      // A discarded queued page must not leave its route looking admitted, or a later
-      // permitted attempt for the same route would be answered from the cache and
-      // never sent. This also forgets routes already sent, so one can be sent again
-      // after a withdrawal and a new grant.
-      this.#currentInitialization = undefined;
-      this.#currentPage.reset();
-    }
   }
 
   /** Send queued Analytics events, then Personalization batches, as in Stateful Core. */
@@ -937,7 +959,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.#effects.push(
       effect(() => {
         const consent = consentSignal.value;
-        LocalStore.consent = consent;
+        // consent() persists explicit decisions before subscribers run. Construction
+        // still persists defaults, and an undecided value clears any stored decision.
+        if (consent === undefined || LocalStore.consent !== consent) LocalStore.consent = consent;
         untracked(() => this.#interactionTracking?.syncConsent());
       })
     );

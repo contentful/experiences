@@ -4,6 +4,7 @@ import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   CONSENT_CACHE_KEY,
   EventBuilder,
+  PERSISTENCE_CONSENT_CACHE_KEY,
   PROFILE_CACHE_KEY,
   type EventProfile,
   type ExperiencesHandoff,
@@ -79,6 +80,93 @@ afterEach(async () => {
 });
 
 describe('Web public state subscriptions', () => {
+  describe('consent withdrawal notifications', () => {
+    it('completes event withdrawal even if deleting the identity cookie throws', async () => {
+      const runtime = createRuntime();
+      window.dispatchEvent(new Event('offline'));
+      await runtime.track({ event: 'queued' });
+      await runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+      subscriptions.push(
+        runtime.states.consent.subscribe((consent) => {
+          if (consent === false) runtime.destroy();
+        })
+      );
+      const error = new globalThis.DOMException('Cookie access denied', 'SecurityError');
+      const cookieSetter = vi.spyOn(document, 'cookie', 'set').mockImplementation(() => {
+        throw error;
+      });
+
+      expect(() => runtime.consent(false)).toThrow('Cookie access denied');
+      cookieSetter.mockRestore();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(runtime.states.consent.current).toBe(false);
+      expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('denied');
+      expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('denied');
+      expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+    });
+
+    describe.each(['events', 'both'] as const)('%s consent', (axes) => {
+      it.each([
+        ['consent', 'destroy'],
+        ['consent', 'throw'],
+        ['request state', 'destroy'],
+        ['request state', 'throw'],
+      ] as const)('purges both queues before a %s subscriber can %s', async (state, action) => {
+        const runtime = createRuntime({
+          defaults: {
+            profile: { id: 'visitor' },
+            consent: true,
+            persistenceConsent: axes === 'both',
+          },
+        });
+        window.dispatchEvent(new Event('offline'));
+        await expect(runtime.track({ event: 'queued' })).resolves.toEqual({ accepted: true });
+        await runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+
+        const error = new Error('withdrawal subscriber failed');
+        let withdrawing = false;
+        const subscriber = vi.fn(() => {
+          if (!withdrawing) return;
+          withdrawing = false; // destroy() can also publish request state.
+          if (action === 'destroy') runtime.destroy();
+          else throw error;
+        });
+        const observable =
+          state === 'consent' ? runtime.states.consent : runtime.states.experienceRequestState;
+        const subscription = observable.subscribe(subscriber);
+        subscriptions.push(subscription);
+
+        withdrawing = true;
+        if (action === 'throw') {
+          expect(() => runtime.consent(axes === 'both' ? false : { events: false })).toThrow(error);
+        } else {
+          runtime.consent(axes === 'both' ? false : { events: false });
+        }
+        expect(subscriber.mock.calls.length).toBeGreaterThan(1);
+        subscription.unsubscribe();
+        expect(runtime.states.consent.current).toBe(false);
+        expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('denied');
+        expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('denied');
+        expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+        expect(document.cookie).toBe('');
+
+        await runtime.flush();
+        window.dispatchEvent(new Event('online'));
+        await vi.advanceTimersByTimeAsync(0);
+        runtime.consent({ events: true });
+        await runtime.flush();
+        await vi.advanceTimersByTimeAsync(30_000);
+        runtime.destroy();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+        expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   it('publishes and sends intercepted events, then commits intercepted response state', async () => {
     const runtime = createRuntime();
     runtime.interceptors.event.add(async (event) =>

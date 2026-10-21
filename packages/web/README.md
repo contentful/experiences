@@ -329,7 +329,11 @@ the Optimization SDK's consent model.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
   drops events already accepted into the offline and Analytics queues, and cancels
   their retries, so they are not sent when the connection returns or when `destroy()`
-  drains the queues. A request already on the wire cannot be recalled. A persistence-only change
+  drains the queues. Queue cleanup and request/lifecycle invalidation complete in
+  the same reactive batch before consent or request-state subscribers run, even
+  if a subscriber destroys the SDK or throws. Explicit decisions are persisted
+  before notification; subscriber errors still propagate to the caller.
+  A request already on the wire cannot be recalled. A persistence-only change
   leaves the queue alone.
 - **Persistence consent.** The profile is written to LocalStorage only when
   `persistence` is `true`. `false` removes the stored profile but keeps the
@@ -489,6 +493,9 @@ packages re-export it, and so does
   current profile or an adopted handoff continuation ID. They do not wait for
   prepared Personalization HTTP delivery. A rejected call is logged as a
   warning and does not stop tracking.
+- Withdrawing event consent discards active view/hover measurements and delayed
+  callbacks. Detectors whose event types remain allowlisted restart with fresh
+  intervals immediately; they continue working through regrant and `session.refresh()`.
 - The attribute carries only opaque scope keys. Attribution never goes into the DOM.
 - A node without an id cannot be tracked, and neither can a plan fetched without
   a source map.
