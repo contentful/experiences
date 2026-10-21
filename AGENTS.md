@@ -483,6 +483,13 @@ entries and emit paired `.d.mts`/`.d.cts` declarations through
 their current output formats. Keep the React adapter's `'use client'` source
 directives intact; its current build remains unbundled for RSC compatibility.
 
+Only Web uses Rslib, following Optimization's ESM/CJS/UMD configuration pattern.
+Its UMD builds directly from `src/contentful-experiences.ts` and exposes the
+`ContentfulExperiences` constructor. Web emits per-file declarations so shared
+types retain their identity across public subpaths; the dual-declaration helper
+preserves the package's existing type entry paths. Other package builders remain
+unchanged. Rslib's generated `packages/web/.rstack/` directory is disposable.
+
 ---
 
 ## Gotchas

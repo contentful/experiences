@@ -4,5 +4,5 @@
     "outDir": "out-tsc",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "vitest.config.ts", "vitest.ssr.config.ts", "tsup.config.ts"]
+  "include": ["src/**/*.ts", "vitest.config.ts", "vitest.ssr.config.ts", "rslib.config.ts"]
 }

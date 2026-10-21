@@ -12,6 +12,37 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 npm install @contentful/experiences-web
 ```
 
+The package provides ESM and CommonJS entries with matching declarations for
+the root, `./runtime`, `./tracking-attributes`, and `./bridge-support` exports.
+These module builds retain their package dependencies as external imports.
+
+For a page without a bundler, serve `dist/contentful-experiences-web.umd.js`
+from the installed package and load it as a classic script. This standalone
+bundle includes its runtime dependencies and exposes the
+`ContentfulExperiences` constructor directly:
+
+```html
+<script src="/vendor/contentful-experiences-web.umd.js"></script>
+<script>
+  const sdk = new ContentfulExperiences({
+    spaceId: 'YOUR_SPACE_ID',
+    environmentId: 'master',
+    delivery: { accessToken: 'YOUR_BROWSER_VISIBLE_DELIVERY_TOKEN' },
+  });
+</script>
+```
+
+The UMD builds directly from the SDK class module, following Optimization's Web
+SDK distribution pattern. Helpers such as `getTrackingAttributes` remain available
+through the existing `./tracking-attributes` module entry and can be included in
+an application's asset build. The UMD artifact is served directly; the package's
+supported module subpaths remain the exports listed above.
+
+From this repository, `npx nx run web:build` builds all three formats with Rslib
+and generates paired `.d.mts`/`.d.cts` declarations through the shared declaration
+helper. The build tools require Node.js 22.12 or later.
+`RELEASE_VERSION` overrides the package version embedded in event metadata.
+
 ## Browser transport and preview
 
 This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only.

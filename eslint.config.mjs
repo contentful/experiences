@@ -114,6 +114,7 @@ export default [
       '**/node_modules/',
       '**/dist/',
       '**/build/',
+      'packages/web/.rstack/',
       'pkgs/',
       '**/coverage/',
       '**/.next/',
