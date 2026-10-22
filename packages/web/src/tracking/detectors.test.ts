@@ -20,7 +20,7 @@ import { createViewDetector } from './view/create-view-detector.js';
 const EXPERIENCE: TrackingAttribution = { entityId: 'landing', entityKind: 'Experience' };
 const FRAGMENT: TrackingAttribution = {
   entityId: 'hero',
-  entityKind: 'Fragment',
+  entityKind: 'ExperienceFragment',
   entityKindId: 'hero-component',
   parentExperienceId: 'landing',
   parentVariantId: 'root-variant',
@@ -404,7 +404,7 @@ describe('createClickDetector', () => {
     click(button);
 
     expect(trackClick).toHaveBeenCalledTimes(1);
-    expect(trackClick.mock.calls[0]![0].entityKind).toBe('Fragment');
+    expect(trackClick.mock.calls[0]![0].entityKind).toBe('ExperienceFragment');
   });
 
   it('never sends clicks for an Experience', () => {

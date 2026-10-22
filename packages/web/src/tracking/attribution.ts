@@ -1,6 +1,9 @@
 import type { ClickBuilderArgs } from '@contentful/experiences-runtime';
 
-export type TrackedEntityKind = Extract<ClickBuilderArgs['entityKind'], 'Experience' | 'Fragment'>;
+export type TrackedEntityKind = Extract<
+  ClickBuilderArgs['entityKind'],
+  'Experience' | 'ExperienceFragment'
+>;
 
 export type TrackingAttribution = Pick<
   ClickBuilderArgs,
@@ -16,7 +19,7 @@ export type TrackingAttribution = Pick<
 
 const TRACKED_ENTITY_KINDS: ReadonlySet<string> = new Set<TrackedEntityKind>([
   'Experience',
-  'Fragment',
+  'ExperienceFragment',
 ]);
 
 export const isTrackedEntity = (

@@ -85,7 +85,9 @@ describe('fetchExperience → plan → EventBuilder', () => {
     );
 
     expect(getWithOverrides).toHaveBeenCalledOnce();
-    const fragment = plan.nodes[0]!.attribution!.scopes.find((s) => s.entityKind === 'Fragment')!;
+    const fragment = plan.nodes[0]!.attribution!.scopes.find(
+      (s) => s.entityKind === 'ExperienceFragment'
+    )!;
     expect(fragment).toMatchObject({
       entityId: 'frag-1',
       entityKindId: 'hero-component',

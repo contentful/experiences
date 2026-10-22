@@ -89,10 +89,10 @@ describe('scope attribution', () => {
     const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 
     const { scopes, roots } = plan.nodes[0]!.attribution!;
-    expect(scopes.map((s) => s.entityKind)).toEqual(['Experience', 'Fragment']);
+    expect(scopes.map((s) => s.entityKind)).toEqual(['Experience', 'ExperienceFragment']);
     expect(scopes[1]).toMatchObject({
       entityId: 'fragment2',
-      entityKind: 'Fragment',
+      entityKind: 'ExperienceFragment',
       entityKindId: 'demo-hero',
       variantId: 'variant2',
       variantIndex: 1,
@@ -247,7 +247,7 @@ describe('scope attribution', () => {
   describe('two copies of one persisted Fragment (recorded from a live space)', () => {
     const fragmentKeys = (plan: { nodes: PortableRenderNode[] }) =>
       plan.nodes.map(
-        (n) => n.attribution?.scopes.find((s) => s.entityKind === 'Fragment')?.key ?? null
+        (n) => n.attribution?.scopes.find((s) => s.entityKind === 'ExperienceFragment')?.key ?? null
       );
 
     it('merges copies placed directly next to each other into one occurrence (documented limit)', async () => {
@@ -257,7 +257,7 @@ describe('scope attribution', () => {
       expect(a).not.toBeNull();
       expect(a).toBe(b);
       expect(
-        Object.values(plan.attribution!.scopes).filter((s) => s.entityKind === 'Fragment')
+        Object.values(plan.attribution!.scopes).filter((s) => s.entityKind === 'ExperienceFragment')
       ).toHaveLength(1);
     });
 
@@ -285,7 +285,7 @@ describe('scope attribution', () => {
       expect(separatorKey).toBeNull();
       expect(a).not.toBe(b);
       expect(
-        Object.values(plan.attribution!.scopes).filter((s) => s.entityKind === 'Fragment')
+        Object.values(plan.attribution!.scopes).filter((s) => s.entityKind === 'ExperienceFragment')
       ).toHaveLength(2);
     });
 

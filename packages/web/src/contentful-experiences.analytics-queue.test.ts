@@ -181,7 +181,7 @@ describe('Web Analytics queue', () => {
     const session = runtime.startInteractionTracking({
       views: false,
       clicks: false,
-      resolveAttribution: () => ({ entityId: 'hero', entityKind: 'Fragment' }),
+      resolveAttribution: () => ({ entityId: 'hero', entityKind: 'ExperienceFragment' }),
     });
 
     hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));

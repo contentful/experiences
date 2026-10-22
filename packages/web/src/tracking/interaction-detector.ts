@@ -17,7 +17,7 @@ export interface InteractionDetector {
 }
 
 export const isFragment = (attribution: TrackingAttribution): boolean =>
-  attribution.entityKind === 'Fragment';
+  attribution.entityKind === 'ExperienceFragment';
 
 export const toInteractionArgs = (attribution: TrackingAttribution): TrackingAttribution => ({
   entityId: attribution.entityId,

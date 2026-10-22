@@ -12,7 +12,11 @@ import { getTrackingAttributes } from './tracking-attributes.js';
 
 const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
   'node:page': { entityId: 'landing', entityKind: 'Experience' },
-  'node:hero': { entityId: 'hero', entityKind: 'Fragment', parentExperienceId: 'landing' },
+  'node:hero': {
+    entityId: 'hero',
+    entityKind: 'ExperienceFragment',
+    parentExperienceId: 'landing',
+  },
 };
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -316,7 +320,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
       // A manual call still reaches the gate, which stays as a backstop and reports.
       await expect(
-        runtime.trackClick({ entityId: 'hero', entityKind: 'Fragment' })
+        runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
       ).resolves.toBeUndefined();
       expect(onEventBlocked).toHaveBeenCalledWith(
         expect.objectContaining({ reason: 'consent', method: 'trackClick' })
