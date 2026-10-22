@@ -10,12 +10,16 @@
     <script src="/dist/contentful-experiences-web.umd.js"></script>
   </head>
   <body>
+    <!-- Reference app: navigation, templates and layout are presentation choices.
+         Maintainer: data-testid hooks support verification; the SDK does not read them. -->
     <div class="app-shell">
       <nav class="app-nav" id="app-nav" aria-label="Main navigation">
         <a href="/" data-testid="link-home">Home</a>
         <a href="/page-two" data-testid="link-page-two">Page Two</a>
       </nav>
       <div class="app-body">
+        <!-- Maintainer: optional attempt diagnostics, driven by tracking.js.
+             This table is not part of SDK delivery or automatic detection. -->
         <aside class="app-sidebar" aria-label="Tracking">
           <section class="tracking-log" data-testid="analytics-events-container">
             <div class="tracking-log__header">
@@ -25,14 +29,32 @@
               </span>
             </div>
             <p class="tracking-log__empty" data-testid="no-events-message" id="no-events-message">
-              Tracking is not connected yet.
+              No event attempts observed yet.
             </p>
+            <p class="tracking-log__empty">
+              Attempts include XDA events and can precede queue refusal. They do not confirm
+              delivery.
+            </p>
+            <table class="tracking-log__table" id="tracking-table" style="display: none">
+              <thead class="tracking-log__thead">
+                <tr>
+                  <th>Type</th>
+                  <th>Value</th>
+                  <th>Dur</th>
+                  <th>Age</th>
+                  <th aria-label="Count"></th>
+                </tr>
+              </thead>
+              <tbody id="tracking-tbody"></tbody>
+            </table>
           </section>
         </aside>
         <main class="app-main" id="app-main" tabindex="-1"></main>
       </div>
     </div>
 
+    <!-- Reference app: controls exercise real SDK consent/visitor actions.
+         Consumers provide their own consent and identity flows. -->
     <template id="tpl-utilities">
       <section class="control-panel" aria-label="Utilities">
         <h2 class="control-panel__title">Utilities</h2>
@@ -69,29 +91,80 @@
       </section>
     </template>
 
+    <template id="tpl-card">
+      <article class="entry-card">
+        <h3></h3>
+        <p></p>
+        <div class="rich-text"></div>
+      </article>
+    </template>
+
+    <!-- Reference app: manual-event alternatives for illustration/verification.
+         The matching content is deliberately excluded from automatic tracking. -->
+    <template id="tpl-manual-actions">
+      <div class="entry-card__actions">
+        <span class="entry-card__id-label"></span>
+        <button class="btn btn--secondary btn--sm" data-action="view">Record view</button>
+        <button class="btn btn--secondary btn--sm" data-action="click">Record click</button>
+        <span class="entry-card__action-status" role="status"></span>
+      </div>
+    </template>
+
+    <template id="tpl-experience">
+      <section class="entry-grid">
+        <div class="entry-card__ids">
+          <span class="entry-card__id-label">Experience</span>
+          <span class="entry-card__id-value"></span>
+        </div>
+        <p>This Experience has no content.</p>
+      </section>
+    </template>
+
+    <template id="tpl-event-row">
+      <tr>
+        <td><span class="tracking-log__type"></span></td>
+        <td class="tracking-log__label"></td>
+        <td class="tracking-log__duration"></td>
+        <td class="tracking-log__time">0s</td>
+        <td class="tracking-log__count"></td>
+      </tr>
+    </template>
+
+    <template id="tpl-status">
+      <div class="placeholder-card" role="status"></div>
+      <button class="btn btn--sm btn--secondary" data-testid="retry-experiences-button">
+        Retry content
+      </button>
+    </template>
+
     <template id="tpl-home">
       <div class="page-header" data-testid="home-view">
         <h1>Web SDK – Vanilla JS</h1>
         <p class="page-header__subtitle">Reference implementation of @contentful/experiences-web</p>
       </div>
-      <div data-utilities></div>
+    </template>
+
+    <template id="tpl-content">
       <div id="content-error" data-testid="content-error" hidden></div>
       <div class="sections-grid sections-grid--split">
         <section class="page-section">
           <header class="page-section__header">
             <h2>Automatically tracked Experiences</h2>
-            <p>Content rendering is active; interaction tracking is not connected yet.</p>
+            <p>
+              Views and hovers are measured by the SDK. Click a Fragment card to record its click.
+            </p>
           </header>
-          <div class="entry-grid entry-grid--experiences" id="auto-observed"></div>
+          <div class="entry-grid entry-grid--experiences" data-experiences="auto"></div>
         </section>
         <section class="page-section">
           <header class="page-section__header">
             <h2>Manual events</h2>
             <p>
-              This presentation reuses the first Experience. Event actions are not connected yet.
+              Record view or click attempts explicitly. This presentation is not automatically
+              tracked.
             </p>
           </header>
-          <div class="entry-grid entry-grid--experiences" id="manually-observed"></div>
+          <div class="entry-grid entry-grid--experiences" data-experiences="manual"></div>
         </section>
       </div>
     </template>
@@ -102,25 +175,11 @@
         <h1>Page Two</h1>
         <p class="page-header__subtitle">A second route in the standalone Web SDK reference.</p>
       </div>
-      <div data-utilities></div>
-      <div id="content-error" data-testid="content-error" hidden></div>
-      <div class="sections-grid sections-grid--split" data-testid="page-two-experiences">
-        <section class="page-section">
-          <header class="page-section__header">
-            <h2>Automatically tracked Experiences</h2>
-            <p>Content rendering is active; interaction tracking is not connected yet.</p>
-          </header>
-          <div class="entry-grid entry-grid--experiences" id="page-two-auto-grid"></div>
-        </section>
-        <section class="page-section">
-          <header class="page-section__header">
-            <h2>Manual events</h2>
-            <p>
-              This presentation reuses the first Experience. Event actions are not connected yet.
-            </p>
-          </header>
-          <div class="entry-grid entry-grid--experiences" id="page-two-manual-grid"></div>
-        </section>
+      <div class="control-panel__actions" data-custom-action>
+        <button class="btn btn--secondary btn--sm" data-testid="track-custom-action-button">
+          Record custom action
+        </button>
+        <p class="control-panel__note" role="status"></p>
       </div>
     </template>
 

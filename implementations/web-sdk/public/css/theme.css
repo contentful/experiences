@@ -664,6 +664,24 @@ main {
   row-gap: 1.5rem;
 }
 
+.entry-card[data-ctfl-clickable='true'] {
+  cursor: pointer;
+}
+
+.entry-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.entry-card__action-status {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 .entry-card--slotted {
   background: #f0fdfa;
   border-left-color: #0f766e;

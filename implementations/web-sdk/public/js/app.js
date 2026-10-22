@@ -1,9 +1,14 @@
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
+import { createTrackingLog } from './tracking.js';
+import { cloneTemplate } from './templates.js';
 
 const appMain = document.getElementById('app-main');
 const appNav = document.getElementById('app-nav');
 const env = window.ENVIRONMENT;
+// Consumer integration: keep one SDK for this browser app's lifetime; it owns profile,
+// consent, persistence and delivery. UMD and window.ENVIRONMENT are this app's
+// loading/configuration choices; the delivery token must be safe to expose publicly.
 const sdk = new window.ContentfulExperiences({
   spaceId: env.SPACE_ID,
   environmentId: env.ENVIRONMENT_ID,
@@ -11,12 +16,47 @@ const sdk = new window.ContentfulExperiences({
   delivery: { accessToken: env.CDA_TOKEN },
 });
 const experienceIds = env.EXPERIENCE_IDS;
+// Reference app: these routes and Experience selections form the demonstration.
+const routes = {
+  '/': {
+    template: 'home',
+    title: 'Home',
+    auto: experienceIds,
+    grids: ['auto-observed', 'manually-observed'],
+  },
+  '/page-two': {
+    template: 'page-two',
+    title: 'Page Two',
+    auto: experienceIds.slice(-1),
+    grids: ['page-two-auto-grid', 'page-two-manual-grid'],
+  },
+};
+// Maintainer: optional attempt diagnostics, subscribed before the first event.
+const trackingLog = createTrackingLog(sdk);
+// Consumer integration: pass resolver registrations on fetch. These bindings need no
+// resolveData hooks, so the registries are empty; DOM rendering is separate.
 const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+// Reference app: these guards coordinate this vanilla SPA's overlapping actions.
+// A framework/router may own equivalent cancellation and lifecycle handling.
 let generation = 0;
 let pageGeneration = 0;
 let disposed = false;
 let pendingPage = Promise.resolve();
+let trackingSession;
+let pendingTrackingStop = Promise.resolve();
+let renderInstance = 0;
 
+function stopTracking() {
+  if (trackingSession) {
+    const active = trackingSession;
+    trackingSession = undefined;
+    pendingTrackingStop = active.stop();
+  }
+  return pendingTrackingStop;
+}
+
+// Reference app: a fixed URL identity makes personalization easy to verify.
+// Consumers supply identity from their own application; this is not authentication.
 const controls = createControlPanel(sdk, {
   onIdentify() {
     const url = new URL(location.href);
@@ -44,29 +84,30 @@ function routeUrl(path) {
 }
 
 function showStatus(target, text, { error = false, retry = false, initialize = false } = {}) {
-  const message = document.createElement('div');
-  message.className = 'placeholder-card';
+  const content = cloneTemplate('status');
+  const message = content.firstElementChild;
   message.setAttribute('role', error ? 'alert' : 'status');
   message.textContent = text;
-  target.replaceChildren(message);
+  const button = content.querySelector('button');
   if (retry) {
-    const button = document.createElement('button');
-    button.className = 'btn btn--sm btn--secondary';
-    button.dataset.testid = 'retry-experiences-button';
-    button.textContent = 'Retry content';
     button.addEventListener('click', () => {
       void renderRoute({ sendPage: initialize || !sdk.states.profile.current?.id });
     });
-    target.appendChild(button);
-  }
+  } else button.remove();
+  target.replaceChildren(content);
 }
 
 async function renderRoute({ sendPage = false, focus = false } = {}) {
   const current = ++generation;
   const isCurrent = () => !disposed && current === generation;
+  // Consumer integration, when tracking: stop before removing tracked DOM and retain the
+  // session's attribution lookup through its final events.
+  // A rapid second action joins an already-running stop before replacing DOM.
+  await stopTracking();
+  if (!isCurrent()) return;
   const path = location.pathname;
   const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
-  const templateId = path === '/' ? 'tpl-home' : path === '/page-two' ? 'tpl-page-two' : undefined;
+  const route = routes[path];
   for (const link of appNav.querySelectorAll('a')) {
     const linkPath = new URL(link.href).pathname;
     link.href = routeUrl(linkPath);
@@ -75,61 +116,75 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
     if (active) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
-  document.title = `${path === '/' ? 'Home' : path === '/page-two' ? 'Page Two' : 'Page not found'} – Contentful Experiences`;
+  document.title = `${route?.title ?? 'Page not found'} – Contentful Experiences`;
   appMain.scrollTop = 0;
   appMain.removeAttribute('aria-busy');
-  if (!templateId) {
+  if (!route) {
     const heading = document.createElement('h1');
     heading.textContent = 'Page not found';
     appMain.replaceChildren(heading);
     return;
   }
-  appMain.replaceChildren(document.getElementById(templateId).content.cloneNode(true));
-  appMain
-    .querySelector('[data-utilities]')
-    .replaceWith(document.getElementById('tpl-utilities').content.cloneNode(true));
+  appMain.replaceChildren(
+    cloneTemplate(route.template),
+    cloneTemplate('utilities'),
+    cloneTemplate('content')
+  );
   for (const link of appMain.querySelectorAll('a[href]'))
     link.href = routeUrl(new URL(link.href).pathname);
   controls.wire();
+  if (path === '/page-two') {
+    // Reference app: this button demonstrates a custom event independently of XDA.
+    appMain.querySelector('.sections-grid').dataset.testid = 'page-two-experiences';
+    const actions = appMain.querySelector('[data-custom-action]');
+    const status = actions.querySelector('[role="status"]');
+    actions.querySelector('button').addEventListener('click', async () => {
+      try {
+        const result = await sdk.track({ event: 'reference_custom_action' });
+        status.textContent = result.accepted
+          ? 'Custom event admitted; delivery unconfirmed.'
+          : 'Custom event not admitted.';
+      } catch {
+        status.textContent = 'Unable to record the custom action.';
+      }
+    });
+    appMain.querySelector('.control-panel').appendChild(actions);
+  }
   if (focus) appMain.focus();
 
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
   const destinations = new Map();
-  const addDestination = (id, section, parent) => {
-    const target = document.createElement('div');
-    target.dataset.experienceId = id;
-    target.dataset.section = section;
-    showStatus(target, 'Loading Experience content…');
-    parent.appendChild(target);
-    if (!destinations.has(id)) destinations.set(id, []);
-    destinations.get(id).push({ section, target });
-  };
-  if (path === '/') {
-    for (const id of experienceIds)
-      addDestination(id, 'auto', document.getElementById('auto-observed'));
-    addDestination(experienceIds[0], 'manual', document.getElementById('manually-observed'));
-  } else {
-    addDestination(experienceIds.at(-1), 'auto', document.getElementById('page-two-auto-grid'));
-    addDestination(experienceIds[0], 'manual', document.getElementById('page-two-manual-grid'));
+  // Reference app: show automatic and manual alternatives side by side, reusing
+  // one fetched plan for each ID. Consumers normally choose one tracking path.
+  for (const [index, section] of ['auto', 'manual'].entries()) {
+    const parent = appMain.querySelector(`[data-experiences="${section}"]`);
+    parent.id = route.grids[index];
+    for (const id of section === 'auto' ? route.auto : [experienceIds[0]]) {
+      const target = document.createElement('div');
+      Object.assign(target.dataset, { experienceId: id, section });
+      showStatus(target, 'Loading Experience content…');
+      parent.appendChild(target);
+      if (!destinations.has(id)) destinations.set(id, []);
+      destinations.get(id).push({ section, target });
+    }
   }
 
   try {
     if (sendPage) {
       const pageRequest = ++pageGeneration;
-      const previousPage = pendingPage;
-      const pageUrl = location.href;
-      const pageTitle = document.title;
-      // Establish SDK-owned identity first: initial XDA identify can time out.
+      const properties = { url: location.href, title: document.title };
+      // XDA workaround: establish SDK-owned identity first; initial XDA identify can time out.
       // Remove the independent page only after initial event-bearing XDA fetches
       // reliably create a profile and select the expected variant (README).
-      pendingPage = (async () => {
-        await previousPage.catch(() => {});
-        if (disposed || pageRequest !== pageGeneration) return;
-        const result = await sdk.page({ properties: { url: pageUrl, title: pageTitle } });
-        if (!disposed && pageRequest === pageGeneration && !result.accepted)
-          throw new Error('Page event was not admitted.');
-      })();
+      pendingPage = pendingPage
+        .catch(() => {})
+        .then(async () => {
+          if (disposed || pageRequest !== pageGeneration) return;
+          const result = await sdk.page({ properties });
+          if (!disposed && pageRequest === pageGeneration && !result.accepted)
+            throw new Error('Page event was not admitted.');
+        });
     }
     // Identify joins any initial page; it does not emit another page or identify call.
     await pendingPage;
@@ -138,6 +193,15 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
     const identifyEvent = identifyRequested
       ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
       : undefined;
+    const attribution = new Map();
+    // Consumer integration, when using automatic tracking: give the SDK the actual scrolling
+    // view root and a lookup for the scopes stamped by the renderer. Detectors,
+    // dwell times, consent and event delivery remain SDK-owned.
+    trackingSession = sdk.startInteractionTracking({
+      root: appMain,
+      views: { root: appMain },
+      resolveAttribution: (key) => attribution.get(key),
+    });
     let failed = false;
     for (const [experienceId, targets] of destinations) {
       if (!isCurrent()) return;
@@ -145,7 +209,9 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
         const plan = await sdk.fetchExperience(
           {
             experienceId,
-            // XDA profile-only selection can return baseline. Reuse one fresh built
+            // Consumer integration, when tracking: request source maps to obtain attribution.
+            extensions: { sourceMap: {} },
+            // XDA workaround: profile-only selection can return baseline. Reuse one built
             // identify across this cycle's fetches until equivalent profile-only
             // selection is verified; Client owns wire normalization (README).
             ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
@@ -154,9 +220,15 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
         );
         if (!isCurrent()) return;
         // Build each presentation before committing, so a render failure stays local.
+        const namespace = `plan-${++renderInstance}`;
+        // Consumer integration, with multiple plans: local scope keys can collide. Prefix
+        // them consistently in DOM/lookup, retaining shared keys within each plan.
         const rendered = targets.map(({ section }) =>
-          renderExperience(plan, experienceId, section)
+          renderExperience(plan, experienceId, section, { sdk, namespace })
         );
+        for (const [key, scope] of Object.entries(plan.attribution?.scopes ?? {})) {
+          attribution.set(`${namespace}:${key}`, scope);
+        }
         targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
       } catch (error) {
         if (!isCurrent()) return;
@@ -195,6 +267,7 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
   }
 }
 
+// Reference app: a small SPA router. SDK consumers can use their existing router.
 document.addEventListener('click', (event) => {
   if (
     event.defaultPrevented ||
@@ -208,18 +281,26 @@ document.addEventListener('click', (event) => {
   const link = event.target.closest('a[href]');
   if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
   const url = new URL(link.href);
-  if (url.origin !== location.origin || url.hash || !['/', '/page-two'].includes(url.pathname))
-    return;
+  if (url.origin !== location.origin || url.hash || !Object.hasOwn(routes, url.pathname)) return;
   event.preventDefault();
   history.pushState(null, '', routeUrl(url.pathname + url.search));
   void renderRoute({ sendPage: true, focus: true });
 });
 window.addEventListener('popstate', () => void renderRoute({ sendPage: true, focus: true }));
-window.addEventListener('pagehide', (event) => {
+window.addEventListener('pagehide', async (event) => {
+  // Consumer integration: release caller-owned tracking/subscriptions before SDK destruction.
+  // A back/forward-cache suspension keeps this instance alive for resumption.
   if (event.persisted) return;
   disposed = true;
   generation += 1;
-  controls.dispose();
-  sdk.destroy();
+  try {
+    await stopTracking();
+  } catch {
+    window.console.error('Unable to finish the interaction tracking session.');
+  } finally {
+    trackingLog.dispose();
+    controls.dispose();
+    sdk.destroy();
+  }
 });
 void renderRoute({ sendPage: true });

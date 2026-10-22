@@ -7,8 +7,15 @@ npm workspaces and declares its own dependencies and tools.
 
 Home and Page Two render live Experience plans through one Web SDK instance.
 Utilities provides Grant/Revoke consent, Identify, and Reset. Navigation supports
-direct URLs and back/forward. The Tracking sidebar and automatic/manual interaction
-event examples remain unconnected until their separately authorized phase.
+direct URLs and back/forward. The Tracking sidebar observes SDK event attempts;
+automatic and manual interaction examples use the public SDK tracking/event APIs.
+
+Code comments distinguish **Consumer integration** responsibilities (conditional where a
+feature is optional), **Reference app** demonstration choices, **Maintainer**
+diagnostics/verification support, and temporary **XDA workaround** behavior.
+The sidebar, utility buttons, selectors, sample routes and local artifact workflow
+are not prerequisites for a consumer integration. The calls they demonstrate use
+the real public SDK; consumers provide their own UI, hosting and build tooling.
 
 ## Content and visitor actions
 
@@ -93,6 +100,50 @@ rewrite responses, silently retry content fetches, or simulate successful select
 The coded and composed Experiences should change their personalized fragment from
 baseline to variant content; the third Experience's identified variant reverses
 Content 1 and Content 2. Compare actual rendered content when checking these paths.
+
+## Interaction tracking and event attempts
+
+Every existing content fetch requests `extensions: { sourceMap: {} }` so the SDK
+can provide Experience/ExperienceFragment attribution. This adds no content
+initialization fetch. The automatic section stamps only each node's scope roots,
+using the public `getTrackingAttributes` helper. Each rendered plan gets a unique
+prefix for its opaque scope keys and a lookup into that plan's original attribution.
+Repeated local keys across Experiences remain distinct; multiple root nodes sharing
+one scope key within a plan remain one occurrence. Plans are not mutated.
+
+One `sdk.startInteractionTracking()` session discovers the active content subtree,
+with `views.root` pointing to the scrolling `.app-main` element. The SDK measures
+views for Experiences and Fragments, and hover/click interactions for Fragments.
+Fragment scope roots opt into card clicks with the public clickable attribute.
+Visibility thresholds, dwell, interval IDs, durations, consent gating, and retries
+remain SDK-owned. Route/action replacement awaits the old session's `stop()` while
+its attribution lookup is still available for final events. Reset discards existing
+measurements through `sdk.reset()`; the explicit page/fetch cycle installs a fresh
+session. Consent changes synchronize detectors through the SDK and do not refetch
+content.
+
+The manual section has no automatic tracking attributes. Its Record view actions
+use a real Experience/Fragment scope, a fresh view ID, and duration zero; Fragment
+scopes also offer Record click. The SDK still gates these calls by consent.
+The view result reports admission; click completion has no admission result.
+Neither UI message claims successful delivery. Page Two's Record custom action
+calls `sdk.track({ event: 'reference_custom_action' })` without fetching content.
+
+The Tracking pill now counts every non-undefined notification from the public
+`states.eventStream`, including XDA-embedded identify events. These are attempts:
+ordinary notifications can precede queue capacity refusal, and neither observation
+nor admission confirms HTTP delivery. Blocked calls do not enter this counter;
+transport completion/retries do not add notifications. Repeated XDA notifications
+are counted separately even when they reuse one built event's message ID.
+
+View/hover duration updates share a table row only when their interval IDs match,
+so the attempt count can exceed the row count. Other events keep distinct rows.
+The table uses text APIs for event-derived values and displays entity kind/ID,
+duration and age. Rows persist across navigation and reset, following the pinned
+Optimization reference; an undefined reset notification adds no row. The app owns
+one subscription and one age timer and disposes both before SDK destruction.
+No extra event stream, interceptor demo, transport observer, queue, or timing
+implementation is added.
 
 ## Setup and local commands
 
@@ -188,13 +239,18 @@ preflight workflow nor Node handoff.
   package's complete dist (including UMD/source map), then uses Vite's library
   build to create `rich-text.js` from `scripts/rich-text.ts` with
   `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
-  and renders live Rich Text documents.
-- `public/index.html` and `public/js/app.js`: common shell and route templates.
+  and renders live Rich Text documents. The same tiny ES module also exports the
+  installed SDK's pure tracking-attribute helper and clickable constant; the UMD
+  constructor distribution is unchanged.
+- `public/index.html` and `public/js/app.js`: common shell, route headers and shared
+  content layout. Native templates also supply cards, manual controls, event rows
+  and status messages; `templates.js` clones their markup while the rendering
+  modules fill dynamic text and wire actions.
   Stable navigation, utility, and sidebar `data-testid` conventions follow the
   Optimization reference. Experience-specific placeholders replace entry/Web
   Component semantics. `control-panel.js` owns utility display and consent
-  subscription cleanup; `experiences.js` owns DOM plan rendering. No interaction
-  tracking module is present yet.
+  subscription cleanup; `experiences.js` owns DOM plan rendering and real-scope
+  manual controls; `tracking.js` owns the observable sidebar and its cleanup.
 - `public/css/theme.css`: locally vendored Optimization theme from commit
   `59add9d6ebff503b9033a59a2eee0149d4b4e925`, `lib/e2e-web/src/theme.css` (MIT).
   This is stylesheet provenance, not a dependency on its testing package.
@@ -205,7 +261,7 @@ preflight workflow nor Node handoff.
 Server, template navigation and installed-asset preparation patterns also derive
 from that commit's `implementations/web-sdk`. npm/Nx, scoped PM2, ESLint, Prettier,
 local tarball overrides and the shared installer follow Experiences tooling.
-Vite bundles only the app Rich Text dependency; Web's accepted Rslib distribution
+Vite bundles Rich Text and the pure public tracking helper; Web's accepted Rslib distribution
 is consumed unchanged. No adjacent checkout is needed to build or run this app.
 
 ## Validation and scope
@@ -219,14 +275,14 @@ included.
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. No Live Updates or Live Preview is included.
-Content fetching/rendering and explicit visitor actions belong to Phase 5;
-tracking behavior requires its own phase. An event-stream notification denotes
+Content fetching/rendering and explicit visitor actions are accepted Phase 5 work;
+interaction tracking and the sidebar belong to Phase 6. An event-stream notification denotes
 an event attempt, not admission or successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
 
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current phase authorization and validation evidence. Stop for Phase 5
-acceptance before implementing Phase 6.
+records current phase authorization and validation evidence. Stop for Phase 6
+acceptance before implementing Phase 7.
 
 ## Troubleshooting
 

@@ -5,6 +5,9 @@ import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import process from 'node:process';
 
+// Reference app: local static hosting and runtime configuration. The Web SDK runs
+// in the browser and calls live services directly; no Node server/proxy is required
+// in a consumer integration that already has hosting/configuration in place.
 const root = resolve(import.meta.dirname, 'public');
 const localEnvironment = resolve(import.meta.dirname, '.env');
 const env = parse(
@@ -19,6 +22,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error('PORT in implementations/web-sdk/.env must be an integer between 1 and 65535.');
 }
 
+// Reference app: shared demonstration content, overridable for local verification.
 const defaultExperienceIds = [
   '3fLAdFb3BYAuImRhcW8k4t',
   '4WzbgzPQHa9Tr2ffbOU8p7',
@@ -27,7 +31,9 @@ const defaultExperienceIds = [
 const experienceIds = env.EXPERIENCE_IDS?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
-// CDA_TOKEN is the sole intentionally public credential. No process.env spread.
+// Consumer integration, when injecting config: allowlist browser-safe values and escape '<'
+// in inline JSON. CDA_TOKEN is intentionally public; never expose private tokens
+// or spread process.env. window.ENVIRONMENT is this host's convention, not an SDK API.
 const publicEnvironment = {
   SPACE_ID: env.SPACE_ID,
   ENVIRONMENT_ID: env.ENVIRONMENT_ID,
@@ -76,6 +82,7 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (pathname === '/health') {
+    // Maintainer: process liveness only; this does not check SDK/upstream readiness.
     respond(200, JSON.stringify({ status: 'ok' }), 'application/json; charset=utf-8');
     return;
   }

@@ -1,3 +1,5 @@
+// Reference app: Utilities exercises real SDK commands for manual verification.
+// Consumers use their own consent/identity UI; SDK state remains authoritative.
 export function createControlPanel(sdk, { onIdentify, onReset }) {
   const find = (name) => document.querySelector(`[data-testid="${name}"]`);
   const consentLabel = (value) => (value === true ? 'Yes' : value === false ? 'No' : 'Undecided');
@@ -16,13 +18,16 @@ export function createControlPanel(sdk, { onIdentify, onReset }) {
     find('reset-button').disabled = false;
   }
 
-  // Consent subscriptions update only Utilities; content changes are explicit actions.
+  // Consumer integration, when observing state: subscriptions are caller-owned (dispose below).
+  // Reference app: consent updates Utilities only; content changes are explicit actions.
   const subscriptions = [
     sdk.states.consent.subscribe(update),
     sdk.states.persistenceConsent.subscribe(update),
   ];
   return {
     wire() {
+      // Reference app: the paired buttons change both consent decisions together.
+      // Products can collect event and persistence consent independently.
       find('consent-button').addEventListener('click', () => sdk.consent(true));
       find('unconsent-button').addEventListener('click', () => sdk.consent(false));
       find('identify-button').addEventListener('click', onIdentify);

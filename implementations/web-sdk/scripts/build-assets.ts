@@ -2,6 +2,9 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'vite';
 
+// Maintainer: prepare this standalone reference from locally packed/installed SDK
+// artifacts, so verification exercises the consumer distribution. A consumer's
+// existing bundler/package installation can supply these assets instead.
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'public/dist');
 
@@ -13,6 +16,8 @@ await cp(resolve(root, 'node_modules/@contentful/experiences-web/dist'), dist, {
 });
 
 await build({
+  // Reference app: bundle Rich Text and pure tracking helpers for native ES modules;
+  // the SDK constructor still comes from the unchanged classic UMD distribution.
   configFile: false,
   root,
   publicDir: false,
