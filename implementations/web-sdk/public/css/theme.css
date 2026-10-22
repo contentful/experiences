@@ -659,7 +659,28 @@ main {
   text-decoration: underline;
 }
 
-/* Foundation placeholders and narrow-screen shell */
+/* Experiences slot presentation, placeholders and narrow-screen shell */
+.entry-grid--experiences {
+  row-gap: 1.5rem;
+}
+
+.entry-card--slotted {
+  background: #f0fdfa;
+  border-left-color: #0f766e;
+}
+
+.entry-card__badge--slot {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  background: #ccfbf1;
+  color: #115e59;
+  font-size: 0.65rem;
+}
+
+.app-shell [hidden] {
+  display: none;
+}
+
 .app-main {
   align-content: start;
 }

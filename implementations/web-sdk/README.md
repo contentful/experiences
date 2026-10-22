@@ -5,10 +5,94 @@ SDK as a classic UMD script. Browser application files are vanilla JavaScript;
 the HTTP server and asset builder use TypeScript. The app lives outside the root
 npm workspaces and declares its own dependencies and tools.
 
-The current foundation provides Home and Page Two, a Utilities placeholder, and
-an empty Tracking sidebar. Navigation supports direct URLs and back/forward.
-Controls are disabled: this phase does not construct an SDK instance, fetch
-Experience content, identify visitors, change consent, or send events.
+Home and Page Two render live Experience plans through one Web SDK instance.
+Utilities provides Grant/Revoke consent, Identify, and Reset. Navigation supports
+direct URLs and back/forward. The Tracking sidebar and automatic/manual interaction
+event examples remain unconnected until their separately authorized phase.
+
+## Content and visitor actions
+
+On navigation, the app awaits `sdk.page()` before fetching content. A new visitor
+must have an SDK-owned profile before initialization continues; queue admission
+alone is not treated as successful delivery. If no profile becomes available,
+the app shows a recoverable initialization error and a Retry content action.
+
+Home fetches every configured Experience once, sequentially. Its manual section
+reuses the first plan. Page Two fetches the last configured
+Experience for the automatic section and the first for the manual section. If
+these IDs coincide, it fetches once and renders both presentations. There is no
+cross-cycle content cache. Actual named slots render recursively with nested-card
+styles; flattened composed nodes remain siblings. `title` and `text` use DOM text
+APIs, and `richText.document` uses Contentful's HTML renderer. The DOM renderer
+registry handles `codedComponent` and `codedExperienceTemplate`; the SDK receives
+empty resolver registries, matching the current content bindings.
+
+Slot children use a teal accent and a `Slot: <name>` badge, derived from the public
+plan's `node.slots` map, which preserves XDA's named slot structure. Root cards keep
+the purple accent. This identifies only slots present in the delivered tree;
+flattened composed nodes are not assigned an inferred slot or hierarchy.
+
+Identify sets `?userId=charles` using `history.replaceState`, waits for any pending
+navigation page, and explicitly fetches the current route's content. Only that
+fixed demonstration value requests identification. Navigation preserves it and
+reload reads it. The URL represents application intent, not an API-issued profile
+ID or authentication state. Utilities therefore says **Identify requested**;
+it does not claim confirmed traits or audience membership. No full profile is
+rendered, manually entered, or copied into an application-owned store.
+
+Reset removes the identify parameter, calls `sdk.reset()`, awaits a fresh page,
+and explicitly fetches baseline content. Grant/Revoke calls `sdk.consent(true/false)`
+to change event and persistence consent together. Effective values come from the
+SDK observables, with startup defaults left unset so stored decisions are respected.
+The SDK permits identify/page by default even without event consent. Consent
+subscriptions update only Utilities; they do not fetch or rerender content or send
+page events. The SDK owns persistence, cookies, profile IDs, consent filtering,
+queues, and transport retries.
+
+Each route/action cycle invalidates older render work and stops scheduling its
+remaining fetches. Already submitted events are not undone. Identify joins the
+pending page rather than creating another page or sending an independent identify.
+Content retry starts a new content cycle; only missing/failed initialization also
+requires a page. Loading, empty plans, not-found errors, and other fetch/render
+failures are separate states. Each Experience presentation shows its own loading
+or error feedback, tied to fetch/render completion rather than the SDK's
+Personalization request-state observable. There is no separate readiness example:
+Optimization's producer-hidden Web Component demonstration has no corresponding
+custom-element contract in this vanilla DOM renderer. No persistent success banner
+is shown; a route-wide panel appears only for errors that need a retry. App-owned consent
+subscriptions are disposed before SDK destruction on final page exit; a back/forward
+cache suspension preserves the instance for resumption.
+
+## Current XDA limitations and workaround removal
+
+The current flow follows the Node reference's documented upstream workarounds:
+
+1. **Profile-only fetches can return baseline for identified visitors.** Build one
+   fresh identify event with `userId: 'charles'` and `traits: { identified: true }`
+   per content cycle, then include that event in each distinct Experience fetch.
+   Do not send it independently through `sdk.identify()`. Once the same established
+   profile selects equivalent content without the repeated event, remove repeated
+   inclusion while keeping identify where the visitor is actually identified or
+   their traits change. Repeated inclusion does not guarantee exactly-once event
+   processing.
+2. **XDA rejects unsupported built-event consent context such as `context.gdpr`.**
+   Client already normalizes against the generated wire schema. The application
+   must not strip fields again or remove consent metadata from ordinary SDK events.
+   Revisit Client normalization only when upstream/generated types support the
+   built shape; verify built events end to end before removing redundant conversion.
+3. **Initial identification inside XDA can time out without an established profile.**
+   A direct page first establishes SDK-owned identity. Move page into the first
+   event-bearing XDA fetch only after that initial fetch reliably creates the
+   profile, applies identify traits, matches the audience, and selects the expected
+   variant. Preserve one fetch per distinct Experience.
+
+XDA is currently unstable and may require multiple attempts. HTTP 200 and a returned
+profile ID alone do not prove personalization. Plans do not expose all raw XDA
+errors. Keep direct API diagnosis outside application runtime; do not intercept or
+rewrite responses, silently retry content fetches, or simulate successful selection.
+The coded and composed Experiences should change their personalized fragment from
+baseline to variant content; the third Experience's identified variant reverses
+Content 1 and Content 2. Compare actual rendered content when checking these paths.
 
 ## Setup and local commands
 
@@ -103,12 +187,14 @@ preflight workflow nor Node handoff.
 - `scripts/build-assets.ts`: cleans `public/dist`, copies the installed Web
   package's complete dist (including UMD/source map), then uses Vite's library
   build to create `rich-text.js` from `scripts/rich-text.ts` with
-  `emptyOutDir: false`. Rich Text is prepared for later rendering; it is not
-  invoked by the foundation.
+  `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
+  and renders live Rich Text documents.
 - `public/index.html` and `public/js/app.js`: common shell and route templates.
   Stable navigation, utility, and sidebar `data-testid` conventions follow the
   Optimization reference. Experience-specific placeholders replace entry/Web
-  Component semantics. No visitor or tracking modules are present yet.
+  Component semantics. `control-panel.js` owns utility display and consent
+  subscription cleanup; `experiences.js` owns DOM plan rendering. No interaction
+  tracking module is present yet.
 - `public/css/theme.css`: locally vendored Optimization theme from commit
   `59add9d6ebff503b9033a59a2eee0149d4b4e925`, `lib/e2e-web/src/theme.css` (MIT).
   This is stylesheet provenance, not a dependency on its testing package.
@@ -133,14 +219,14 @@ included.
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. No Live Updates or Live Preview is included.
-Content fetching/rendering and visitor actions require the next accepted phase;
+Content fetching/rendering and explicit visitor actions belong to Phase 5;
 tracking behavior requires its own phase. An event-stream notification denotes
 an event attempt, not admission or successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
 
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current phase authorization and validation evidence. Stop for Phase 4
-acceptance before implementing Phase 5.
+records current phase authorization and validation evidence. Stop for Phase 5
+acceptance before implementing Phase 6.
 
 ## Troubleshooting
 

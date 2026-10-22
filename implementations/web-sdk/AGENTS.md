@@ -3,7 +3,8 @@
 - Read `README.md`, parent implementation guidance, and the checkout-local
   `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
   explicit phase authorization and stop for user acceptance at each boundary.
-  Phase 4 provides only the server, assets, visual shell and route placeholders.
+  Phase 5 adds content rendering and explicit visitor actions. Interaction tracking
+  and the event sidebar remain Phase 6 work and require separate authorization.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.
@@ -29,8 +30,19 @@
   simulated responses, E2E tests, or E2E infrastructure. Validate using local
   build/lint/typecheck, real artifacts and direct live browser inspection.
 - Retain stable selectors and applicable Optimization `data-testid` conventions.
-  Keep disabled placeholder controls inert until their phase is authorized. SDK
+  Keep interaction event placeholders inert until Phase 6 is authorized. SDK
   state, interceptors, consent, queues and event observations already exist; do not
   reimplement them. Event-stream publication is an attempt, not delivery success.
 - Stop only `experiences-web-sdk-app`; preserve unrelated processes. Do not add
   app-owned process-management runners or bespoke validation scripts.
+- Keep one SDK instance, SDK-owned profile/consent/persistence, and empty SDK resolver
+  registries. Render the two current registration kinds through the app DOM
+  registry and actual named slots recursively; do not invent composed hierarchy.
+- Follow README/D5: await page on navigation, build one identify per explicit
+  content cycle and embed it in each distinct sequential fetch, never send identify
+  independently. URL `?userId=charles` is intent only. Reset clears that intent and
+  SDK state, then page/fetches again. No profile subscription may refresh content.
+- Retain current XDA workaround comments/removal criteria and stale-action guards.
+  Consent subscriptions update Utilities only and remain caller-owned. Show
+  initialization failure when admission produces no profile; do not equate event
+  admission, an event attempt, or HTTP 200 with delivered/personalized success.
