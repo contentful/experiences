@@ -1,6 +1,7 @@
 import { parse } from 'dotenv';
-import { existsSync, readFileSync } from 'node:fs';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import type { Buffer } from 'node:buffer';
+import { constants, existsSync, readFileSync } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -88,17 +89,28 @@ const server = createServer(async (req, res) => {
   }
 
   const file = resolve(root, pathname === '/' ? 'index.html' : pathname.slice(1));
+  if (!file.startsWith(`${root}${sep}`)) {
+    respond(403, 'Forbidden');
+    return;
+  }
   try {
     const actual = await realpath(file);
     if (!actual.startsWith(`${root}${sep}`)) {
       respond(403, 'Forbidden');
       return;
     }
-    if (!(await stat(actual)).isFile()) {
-      respond(404, 'Not found');
-      return;
+    // Check and read the same opened file; reject a symlink swapped in after realpath.
+    const handle = await open(actual, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let raw: Buffer;
+    try {
+      if (!(await handle.stat()).isFile()) {
+        respond(404, 'Not found');
+        return;
+      }
+      raw = await handle.readFile();
+    } finally {
+      await handle.close();
     }
-    const raw = await readFile(actual);
     const extension = extname(actual);
     if (extension === '.html') {
       respond(
@@ -129,7 +141,8 @@ const server = createServer(async (req, res) => {
         respond(403, 'Forbidden');
         return;
       }
-      const html = await readFile(index, 'utf8');
+      const handle = await open(index, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const html = await handle.readFile('utf8').finally(() => handle.close());
       respond(
         200,
         html.replace('<script data-env-placeholder></script>', () => environmentScript),
