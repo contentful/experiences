@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-web",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Browser SDK for Contentful Experiences",
   "license": "MIT",
   "type": "module",
@@ -65,9 +65,9 @@
     "directory": "packages/web"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.10.0",
-    "@contentful/experiences-runtime": "0.2.0",
-    "@contentful/experiences-sdk-core": "0.13.0",
+    "@contentful/experiences-client": "0.10.1",
+    "@contentful/experiences-runtime": "0.2.1",
+    "@contentful/experiences-sdk-core": "0.13.1",
     "@preact/signals-core": "^1.13.0",
     "es-toolkit": "^1.46.0"
   },

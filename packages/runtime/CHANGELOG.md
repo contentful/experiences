@@ -1,3 +1,18 @@
+## 0.2.1 (2026-10-22)
+
+### 🚀 Features
+
+- ⚠️  **web:** add interceptors and diagnostic streams [NT-4155] ([#251](https://github.com/contentful/experiences/pull/251))
+
+### ⚠️  Breaking Changes
+
+- **web:** add interceptors and diagnostic streams [NT-4155]  ([#251](https://github.com/contentful/experiences/pull/251))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.1
+- Updated core to 0.13.1
+
 ## 0.2.0 (2026-10-22)
 
 ### 🚀 Features
