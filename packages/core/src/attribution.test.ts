@@ -85,6 +85,29 @@ describe('scope attribution', () => {
     expect(Object.keys(plan.attribution!.scopes)).toEqual([a]);
   });
 
+  it('keeps slot names distinct and scope keys safe for space-separated DOM attributes', async () => {
+    const plan = await resolve(
+      [
+        node('unmapped-parent', {
+          'slot name': [node('node2-1')],
+          'slot%20name': [node('node2-1')],
+          'slot/name': [node('node2-1')],
+          'slot\0name': [node('node2-1')],
+        }),
+      ],
+      FRAGMENT_SOURCE_MAP
+    );
+
+    const keys = Object.keys(plan.attribution!.scopes);
+    expect(keys).toHaveLength(8);
+    expect(keys.every((key) => !/[\s\p{Cc}]/u.test(key))).toBe(true);
+    expect(new Set(keys).size).toBe(8);
+    expect(keys.some((key) => key.includes('slot%20name'))).toBe(true);
+    expect(keys.some((key) => key.includes('slot%2520name'))).toBe(true);
+    expect(keys.some((key) => key.includes('slot%2Fname'))).toBe(true);
+    expect(keys.some((key) => key.includes('slot%00name'))).toBe(true);
+  });
+
   it('attributes a Fragment with its parent Experience, and puts the node in both scopes', async () => {
     const plan = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
 

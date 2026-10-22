@@ -7,8 +7,6 @@ export type {
   ExperiencesWebConfig,
   ExperiencesTrackingApi,
   HydrateAndTrackCurrentPageOptions,
-  InteractionTrackingSession,
-  InteractionTrackingStartOptions,
 } from './contentful-experiences.js';
 export type { TrackedEntityKind, TrackingAttribution } from './tracking/attribution.js';
 export type { ElementViewObserverOptions as ViewTrackingOptions } from './tracking/view/element-view-observer-support.js';

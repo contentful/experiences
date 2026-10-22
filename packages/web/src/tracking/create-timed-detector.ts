@@ -45,21 +45,23 @@ export function createTimedDetector<TInfo, TKey extends InteractionKey = string>
   getResetToken = () => undefined,
 }: CreateTimedDetectorOptions<TInfo, TKey>): InteractionDetector<TKey> {
   const groups = new Map<TKey, Group>();
+  const pendingDrains = new Map<Promise<void>, Group>();
   let started = false;
 
   const startGroup = (key: TKey, group: Group): void => {
     // A group's callbacks are serialised, so one session is in flight at a time.
     // Its final event keeps the attribution that qualified it: a slow send can
-    // delay the final past a `refresh()` that re-points this key.
+    // delay the final past a DOM update that replaces the occurrence.
     let qualified: TrackingAttribution | undefined;
     const resetToken = getResetToken();
+    const originalAttribution = resolveAttribution(key);
     const observer = createObserver(async (info) => {
       // A queued final may outlive disconnect or an explicitly draining session.
       // Only the observer's original owner may authorize that delayed send.
       if (group.observer !== observer || getResetToken() !== resetToken) return;
       let attribution: TrackingAttribution | undefined;
       if (isFinal(info)) {
-        attribution = qualified ?? resolveAttribution(key);
+        attribution = qualified ?? originalAttribution;
         qualified = undefined;
       } else {
         attribution = resolveAttribution(key);
@@ -84,6 +86,10 @@ export function createTimedDetector<TInfo, TKey extends InteractionKey = string>
         if (!preservePending) group.observer = undefined;
       }
       groups.clear();
+      if (!preservePending) {
+        for (const group of pendingDrains.values()) group.observer = undefined;
+        pendingDrains.clear();
+      }
       started = false;
     },
     onElementAdded(element, key) {
@@ -98,18 +104,35 @@ export function createTimedDetector<TInfo, TKey extends InteractionKey = string>
       if (group.observer) group.observer.observe(element);
       else if (started) startGroup(key, group);
     },
-    onElementRemoved(element, key) {
+    onElementRemoved(element, key, { finalize = false } = {}) {
       const group = groups.get(key);
       if (!group) return;
+      // Snapshot the final duration while the last member still belongs to the
+      // observer. Retired groups never rejoin a later occurrence of this key.
+      const observer = group.observer;
+      const draining = finalize && group.elements.size === 1 ? observer?.endActive() : undefined;
       group.elements.delete(element);
       group.observer?.unobserve(element);
       if (group.elements.size > 0) return;
-      // The occurrence has no elements left: drop its session without a final event.
-      group.observer?.disconnect();
+      observer?.disconnect();
       groups.delete(key);
+      if (draining) {
+        const pending = draining
+          .catch((error: unknown) => {
+            console.error('[@contentful/experiences] Error ending removed interaction:', error);
+          })
+          .finally(() => {
+            group.observer = undefined;
+            pendingDrains.delete(pending);
+          });
+        pendingDrains.set(pending, group);
+      } else group.observer = undefined;
     },
     async endActive() {
-      await Promise.all([...groups.values()].map((group) => group.observer?.endActive()));
+      await Promise.all([
+        ...pendingDrains.keys(),
+        ...[...groups.values()].map((group) => group.observer?.endActive()),
+      ]);
     },
   };
 }

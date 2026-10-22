@@ -314,7 +314,10 @@ function assignSiblings(
     previousKeys = ownKeys ?? new Map();
 
     for (const [slotName, children] of Object.entries(node.slots)) {
-      assignSiblings(ctx, children, ownKeys ?? parentKeys, `${listPath}/${index}.${slotName}`);
+      // Scope keys are opaque DOM tokens. Escape separators and control characters
+      // so whitespace splitting and HTML round trips preserve the same key.
+      const slotPath = slotName.replace(/[%/\s\p{Cc}]/gu, (part) => encodeURIComponent(part));
+      assignSiblings(ctx, children, ownKeys ?? parentKeys, `${listPath}/${index}.${slotPath}`);
     }
   }
 }

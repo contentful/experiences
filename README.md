@@ -182,7 +182,7 @@ queued work is not durable and does not provide exactly-once delivery. Event and
 gated by the SDK: `consent()` on Web and `consent` per request on Node. Until event
 consent is granted only `allowedEventTypes` are sent, and the application decides
 when to grant consent. Web's
-`startInteractionTracking()` sends views, hovers, and clicks through its direct
+automatic interaction tracking sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
 no framework adapter stamps tracked attributes yet. Manually invoked methods
 still send during direct CPA preview or Live Preview.
