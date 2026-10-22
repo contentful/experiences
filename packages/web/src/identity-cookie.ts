@@ -1,4 +1,8 @@
-import { ANONYMOUS_ID_COOKIE, ANONYMOUS_ID_COOKIE_LEGACY } from '@contentful/experiences-runtime';
+import {
+  ANONYMOUS_ID_COOKIE,
+  ANONYMOUS_ID_COOKIE_LEGACY,
+  ANONYMOUS_ID_KEY_LEGACY,
+} from '@contentful/experiences-runtime';
 
 import { getCookie, removeCookie, setCookie, type CookieAttributes } from './lib/cookies.js';
 import type LocalStore from './storage/local-store.js';
@@ -27,10 +31,10 @@ export interface CookieSnapshot {
  * @internal
  */
 export class IdentityCookie {
-  readonly #store: LocalStore;
+  readonly #store: typeof LocalStore;
   readonly #attributes: CookieAttributes;
 
-  constructor(store: LocalStore, options: IdentityCookieOptions = {}) {
+  constructor(store: typeof LocalStore, options: IdentityCookieOptions = {}) {
     this.#store = store;
     // Writing and deleting share these attributes, so a cookie is removed in the scope
     // it was set in.
@@ -56,7 +60,8 @@ export class IdentityCookie {
   persist(id: string | undefined): void {
     if (!id) {
       removeCookie(ANONYMOUS_ID_COOKIE, this.#attributes);
-      this.#store.clearAnonymousId();
+      this.#store.anonymousId = undefined;
+      this.#store.setCache(ANONYMOUS_ID_KEY_LEGACY, undefined);
       return;
     }
     setCookie(ANONYMOUS_ID_COOKIE, id, this.#attributes);
@@ -67,7 +72,8 @@ export class IdentityCookie {
   clear(): void {
     removeCookie(ANONYMOUS_ID_COOKIE, this.#attributes);
     removeCookie(ANONYMOUS_ID_COOKIE_LEGACY, this.#attributes);
-    this.#store.clearAnonymousId();
+    this.#store.anonymousId = undefined;
+    this.#store.setCache(ANONYMOUS_ID_KEY_LEGACY, undefined);
   }
 
   /**

@@ -20,6 +20,7 @@ export {
 export type {
   AllowedEventType,
   BlockedEvent,
+  BlockedEventReason,
   ConsentInput,
   ConsentState,
   ConsentStorageValue,
@@ -55,7 +56,15 @@ export type {
 export { resolveQueuePolicy } from './lib/queue/index.js';
 export type { AnalyticsFlushOptions } from './analytics-delivery.js';
 export { PersonalizationDelivery } from './personalization-delivery.js';
-export type { PersonalizationDeliveryState } from './personalization-delivery.js';
+export type {
+  ExperienceRequestState,
+  ExperienceRequestFailureReason,
+} from './experience-request-state.js';
+export type { EventInterceptors } from './event-interceptors.js';
+export type {
+  ExperienceEvent,
+  InsightsEvent,
+} from '@contentful/optimization-api-client/api-schemas';
 export {
   buildPreparedEvents,
   validatePreparedEvents,
@@ -84,5 +93,7 @@ export type {
   AnalyticsEventMethod,
   PersonalizationEventMethod,
   RuntimeEventBindings,
+  RuntimeDirectEventBindings,
+  RuntimeEventDispatch,
   RuntimeEventMethods,
 } from './runtime-event-methods.js';

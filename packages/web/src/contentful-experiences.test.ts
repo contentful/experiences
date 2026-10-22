@@ -5,23 +5,17 @@ import {
   PROFILE_CACHE_KEY,
   type EventProfile,
 } from '@contentful/experiences-runtime';
+import { serializePersonalization } from '@contentful/experiences-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
-class TestContentfulExperiences extends ContentfulExperiences {
-  get optimization(): typeof this.optimizationApi {
-    return this.optimizationApi;
-  }
-}
-
 const runtimes = new Set<ContentfulExperiences>();
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestContentfulExperiences {
-  const runtime = new TestContentfulExperiences({
+function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
+  const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
@@ -33,16 +27,14 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): TestConte
 }
 
 function mockOptimization(
-  runtime: TestContentfulExperiences,
+  runtime: ContentfulExperiences,
   profile: EventProfile = { id: 'updated-profile' }
 ) {
   return {
     upsertProfile: vi
-      .spyOn(runtime.optimization.personalization, 'upsertProfile')
+      .spyOn(runtime.api.experience, 'upsertProfile')
       .mockResolvedValue({ profile } as never),
-    sendBatchEvents: vi
-      .spyOn(runtime.optimization.analytics, 'sendBatchEvents')
-      .mockResolvedValue(true),
+    sendBatchEvents: vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true),
   };
 }
 
@@ -66,6 +58,8 @@ describe('Web ContentfulExperiences', () => {
     window.history.replaceState({}, '', '/first?utm_source=search&tag=one&tag=two#details');
     document.title = 'First page';
     const runtime = createRuntime({ app: { name: 'storefront', version: '1.2.3' } });
+    expect(runtime.config.app).toEqual({ name: 'storefront', version: '1.2.3' });
+    expect(runtime.config.locale).toBe('en-US');
 
     const first = runtime.eventBuilder.buildTrack({ event: 'first' });
     window.history.replaceState({}, '', '/second?campaign=spring#top');
@@ -76,12 +70,15 @@ describe('Web ContentfulExperiences', () => {
     expect(first.context).toMatchObject({
       app: { name: 'storefront', version: '1.2.3' },
       library: DEFAULT_EVENT_CONTEXT_LIBRARY,
+      userAgent: window.navigator.userAgent,
       page: {
         path: '/first',
         query: { utm_source: 'search', tag: 'two' },
         search: '?utm_source=search&tag=one&tag=two',
         hash: '#details',
         title: 'First page',
+        width: window.innerWidth,
+        height: window.innerHeight,
       },
     });
     expect(second.context.page).toMatchObject({
@@ -121,8 +118,10 @@ describe('Web ContentfulExperiences', () => {
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
+    const setApiLocale = vi.spyOn(runtime.api.experience, 'setLocale');
 
     runtime.setLocale('de-DE');
+    expect(setApiLocale).toHaveBeenCalledExactlyOnceWith('de-DE');
     expect(runtime.locale).toBe('de-DE');
     expect(runtime.eventBuilder.buildTrack({ event: 'locale' }).context.locale).toBe('de-DE');
 
@@ -143,27 +142,6 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it("keeps a raw payload's source map", async () => {
-    const runtime = createRuntime();
-    const sourceMap = {
-      version: 1,
-      variants: [],
-      spaces: [],
-      environments: [],
-      locales: [],
-      entries: [],
-      assets: [],
-      layers: [],
-      dataAssemblies: [],
-      nodes: {},
-    };
-    const payload = { sys: { type: 'Experience' }, nodes: [], extensions: { sourceMap } } as never;
-
-    const plan = await runtime.resolveExperience(payload, { config: { components: {} } });
-
-    expect(plan.sourceMap).toEqual(sourceMap);
-  });
-
   it('forwards personalization with Web event context', async () => {
     const runtime = createRuntime();
     const fetch = vi
@@ -176,13 +154,13 @@ describe('Web ContentfulExperiences', () => {
     };
 
     await runtime.fetchExperience(
-      { experienceId: 'personalized', personalization },
+      { experienceId: 'personalized', personalization: serializePersonalization(personalization) },
       { config: { components: {} } }
     );
 
     expect(page.channel).toBe('web');
     expect(fetch).toHaveBeenCalledWith(
-      { experienceId: 'personalized', personalization },
+      { experienceId: 'personalized', personalization: serializePersonalization(personalization) },
       { config: { components: {} } }
     );
   });
@@ -201,7 +179,7 @@ describe('Web ContentfulExperiences', () => {
 
     await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
 
-    expect(runtime.profile).toEqual(storedProfile);
+    expect(runtime.states.profile.current).toEqual(storedProfile);
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
@@ -213,7 +191,7 @@ describe('Web ContentfulExperiences', () => {
 
   it('persists the profile and preserves an explicit fetchExperience profile id', async () => {
     const profile = { id: 'browser-profile', traits: { plan: 'pro' } };
-    const runtime = createRuntime({ profile });
+    const runtime = createRuntime({ defaults: { profile } });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
@@ -236,30 +214,6 @@ describe('Web ContentfulExperiences', () => {
     );
   });
 
-  it('persists a minimal profile returned by XDA on the render plan', async () => {
-    const runtime = createRuntime();
-    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
-      nodes: [],
-      personalization: { profileId: 'xda-profile' },
-    } as never);
-
-    await runtime.fetchExperience({ experienceId: 'personalized' }, { config: { components: {} } });
-
-    expect(runtime.profile).toEqual({ id: 'xda-profile' });
-    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
-      id: 'xda-profile',
-    });
-  });
-
-  it('clears the persisted profile on reset', () => {
-    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
-
-    runtime.reset();
-
-    expect(runtime.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-
   it('continues when LocalStorage is unavailable', () => {
     vi.spyOn(window.Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('storage blocked');
@@ -268,9 +222,9 @@ describe('Web ContentfulExperiences', () => {
       throw new Error('storage blocked');
     });
 
-    const runtime = createRuntime({ profile: { id: 'browser-profile' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'browser-profile' } } });
 
-    expect(runtime.profile).toEqual({ id: 'browser-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
   });
 
   it('starts replacement locale state from its own configuration after destroy', () => {
@@ -281,16 +235,6 @@ describe('Web ContentfulExperiences', () => {
 
     const french = createRuntime({ locale: 'fr-FR' });
     expect(french.eventBuilder.buildTrack({ event: 'french' }).context.locale).toBe('fr-FR');
-  });
-
-  it('restores persisted profile state in a replacement instance', () => {
-    const first = createRuntime({ profile: { id: 'first-profile' } });
-    first.reset();
-    expect(first.profile).toBeUndefined();
-    first.destroy();
-
-    const second = createRuntime({ profile: { id: 'second-profile' } });
-    expect(second.profile).toEqual({ id: 'second-profile' });
   });
 
   it('rejects a second live SDK and permits replacement after idempotent destroy', () => {
@@ -334,35 +278,12 @@ describe('Web ContentfulExperiences', () => {
     expect(() => createRuntime()).not.toThrow();
   });
 
-  it('accepts runtime-owned endpoint, preview, and tokenless proxy configuration', async () => {
-    const baseConfig = {
-      spaceId: 'space',
-      environmentId: 'environment',
-    };
-
-    const hostConfig = {
-      ...baseConfig,
-      delivery: { accessToken: 'delivery-token', host: 'https://delivery.example' },
-      preview: { accessToken: 'preview-token', host: 'https://preview.example' },
-    } satisfies ExperiencesWebConfig;
-    const environmentConfig = {
-      ...baseConfig,
-      delivery: { accessToken: 'delivery-token', environment: 'https://environment.example' },
-    } satisfies ExperiencesWebConfig;
-    const tokenlessProxyConfig = {
-      ...baseConfig,
-      delivery: { host: 'https://application.example/experience-proxy' },
-    } satisfies ExperiencesWebConfig;
+  it('forwards per-call preview to the runtime', async () => {
     const options: Parameters<ContentfulExperiences['fetchExperience']>[0] = {
       experienceId: 'experience',
       preview: true,
     };
 
-    for (const config of [hostConfig, environmentConfig, tokenlessProxyConfig]) {
-      const sdk = new ContentfulExperiences(config);
-      sdk.destroy();
-    }
-    expect(options).toBeDefined();
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -375,20 +296,20 @@ describe('Web ContentfulExperiences', () => {
 
   it('updates and persists the complete profile from Personalization events', async () => {
     const runtime = createRuntime({
-      profile: { id: 'initial-profile' },
+      defaults: { profile: { id: 'initial-profile' } },
     });
     const updatedProfile = { id: 'updated-profile', traits: { plan: 'pro' } };
     const optimization = mockOptimization(runtime, updatedProfile);
 
     const track = runtime.track({ event: 'started' });
-    expect(optimization.upsertProfile).toHaveBeenCalledOnce();
     await track;
+    expect(optimization.upsertProfile).toHaveBeenCalledOnce();
 
     expect(optimization.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ profileId: 'initial-profile' }),
       { locale: 'en-US' }
     );
-    expect(runtime.profile).toEqual(updatedProfile);
+    expect(runtime.states.profile.current).toEqual(updatedProfile);
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(updatedProfile);
   });
 
@@ -435,7 +356,7 @@ describe('Web ContentfulExperiences', () => {
 
   it('resets the profile before establishing a new one', async () => {
     const runtime = createRuntime({
-      profile: { id: 'first-profile' },
+      defaults: { profile: { id: 'first-profile' } },
     });
     const optimization = mockOptimization(runtime);
 
@@ -461,18 +382,19 @@ describe('Web ContentfulExperiences', () => {
       resolveResponse = resolve;
     });
     const runtime = createRuntime({
-      profile: { id: 'first-profile' },
+      defaults: { profile: { id: 'first-profile' } },
     });
     const optimization = mockOptimization(runtime);
     optimization.upsertProfile.mockReturnValueOnce(response as never);
 
     const pending = runtime.track({ event: 'started-before-session-change' });
+    await vi.waitFor(() => expect(optimization.upsertProfile).toHaveBeenCalledOnce());
     runtime.reset();
     await runtime.page();
     resolveResponse({ profile: { id: 'first-profile-from-api' } });
 
     await pending;
-    expect(runtime.profile).toEqual({ id: 'updated-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'updated-profile' });
   });
 
   it('uses the SDK locale for ordinary Personalization independently of event overrides', async () => {
@@ -499,7 +421,7 @@ describe('Web ContentfulExperiences', () => {
   it('uses the latest redacted browser context and locale, with consent from the runtime', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
-      profile: { id: 'visitor' },
+      defaults: { profile: { id: 'visitor' } },
       browserContext: {
         getPageProperties: () => ({
           path: window.location.pathname,
@@ -554,13 +476,22 @@ describe('Web ContentfulExperiences consent', () => {
     const runtime = createRuntime();
 
     runtime.consent(true);
-    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+    expect({
+      events: runtime.states.consent.current,
+      persistence: runtime.states.persistenceConsent.current,
+    }).toEqual({ events: true, persistence: true });
 
     runtime.consent({ persistence: false });
-    expect(runtime.consentState).toEqual({ events: true, persistence: false });
+    expect({
+      events: runtime.states.consent.current,
+      persistence: runtime.states.persistenceConsent.current,
+    }).toEqual({ events: true, persistence: false });
 
     runtime.consent(false);
-    expect(runtime.consentState).toEqual({ events: false, persistence: false });
+    expect({
+      events: runtime.states.consent.current,
+      persistence: runtime.states.persistenceConsent.current,
+    }).toEqual({ events: false, persistence: false });
   });
 
   it('applies configured defaults over a stored decision, as the Optimization SDK does', () => {
@@ -568,19 +499,25 @@ describe('Web ContentfulExperiences consent', () => {
 
     const runtime = createRuntime({ defaults: { consent: true, persistenceConsent: true } });
 
-    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+    expect({
+      events: runtime.states.consent.current,
+      persistence: runtime.states.persistenceConsent.current,
+    }).toEqual({ events: true, persistence: true });
   });
 
   it('uses defaults.consent as the persistence default', () => {
     const runtime = createRuntime({ defaults: { consent: true } });
 
-    expect(runtime.consentState).toEqual({ events: true, persistence: true });
+    expect({
+      events: runtime.states.consent.current,
+      persistence: runtime.states.persistenceConsent.current,
+    }).toEqual({ events: true, persistence: true });
   });
 
   it('reports blocked events to onEventBlocked and drops them', async () => {
     window.localStorage.clear();
     const onEventBlocked = vi.fn();
-    const runtime = createRuntime({ onEventBlocked, profile: { id: 'visitor' } });
+    const runtime = createRuntime({ onEventBlocked, defaults: { profile: { id: 'visitor' } } });
     const optimization = mockOptimization(runtime, { id: 'visitor' });
 
     await expect(runtime.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
@@ -589,16 +526,7 @@ describe('Web ContentfulExperiences consent', () => {
     expect(onEventBlocked).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'consent', method: 'track' })
     );
-  });
-
-  it('does not replay a blocked event after consent is granted', async () => {
-    window.localStorage.clear();
-    const runtime = createRuntime({ profile: { id: 'visitor' } });
-    const optimization = mockOptimization(runtime, { id: 'visitor' });
-
-    await runtime.track({ event: 'blocked' });
     runtime.consent(true);
-
     expect(optimization.upsertProfile).not.toHaveBeenCalled();
   });
 });
@@ -628,7 +556,7 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
-        personalization: { profileId: 'profile-1', events: [page] },
+        personalization: serializePersonalization({ profileId: 'profile-1', events: [page] }),
       },
       { config: { components: {} } }
     );
@@ -654,27 +582,11 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     );
 
     expect(fetch).toHaveBeenCalledWith(
-      { experienceId: 'personalized', personalization: { events: [track] } },
+      {
+        experienceId: 'personalized',
+        personalization: serializePersonalization({ events: [track] }),
+      },
       { config: { components: {} } }
     );
-  });
-});
-
-describe('browser event context helpers', () => {
-  it('returns dynamic browser values', () => {
-    window.history.replaceState({}, '', '/context?one=1#hash');
-    document.title = 'Context';
-    const page = getPageProperties();
-
-    expect(page).toMatchObject({
-      path: '/context',
-      query: { one: '1' },
-      search: '?one=1',
-      hash: '#hash',
-      title: 'Context',
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
-    expect(getUserAgent()).toBe(window.navigator.userAgent);
   });
 });

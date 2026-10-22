@@ -10,7 +10,7 @@ export type ResolveScopeAttribution = (key: string) => TrackingAttribution | und
  */
 export interface InteractionDetector {
   start(): void;
-  stop(): void;
+  stop(options?: { preservePending?: boolean }): void;
   onElementAdded(element: Element, key: string): void;
   onElementRemoved(element: Element, key: string): void;
   endActive?(): Promise<void>;

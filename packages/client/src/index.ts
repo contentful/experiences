@@ -36,3 +36,4 @@ export type {
   DestinationRedirectResult,
 } from './fetch-experience.js';
 export { DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST } from './hosts.js';
+export { serializePersonalization } from './personalization.js';

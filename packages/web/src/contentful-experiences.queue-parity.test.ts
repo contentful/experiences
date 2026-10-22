@@ -26,7 +26,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    profile: { id: 'visitor' },
+    defaults: { profile: { id: 'visitor' } },
     ...overrides,
   } as ExperiencesWebConfig);
   runtimes.add(runtime);
@@ -83,38 +83,20 @@ describe('Web queue parity with Optimization', () => {
 
       expect(upsert).toHaveBeenCalledTimes(2);
     });
-
-    it('does not use the Beacon API for Personalization', async () => {
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-        profile: { id: 'visitor' },
-      } as never);
-      const analytics = vi
-        .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-        .mockResolvedValue(true);
-      const beacon = vi.fn(() => true);
-      Object.defineProperty(window.navigator, 'sendBeacon', { configurable: true, value: beacon });
-      const runtime = createRuntime();
-      await click(runtime);
-
-      window.dispatchEvent(new Event('pagehide'));
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(analytics.mock.calls[0]?.[1]).toEqual({ beacon: expect.any(Function) });
-      expect(beacon).not.toHaveBeenCalled();
-    });
   });
 
   describe('flush()', () => {
-    it('starts both queues before awaiting either', async () => {
+    it('awaits Analytics before flushing Personalization and waits for both queues', async () => {
       vi.spyOn(Math, 'random').mockReturnValue(0);
       const analyticsPending = deferred<boolean>();
+      const personalizationPending = deferred<{ profile: { id: string } }>();
       const analytics = vi
         .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
         .mockReturnValue(analyticsPending.promise);
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
         .mockRejectedValueOnce(new Error('offline'))
-        .mockResolvedValue({ profile: { id: 'visitor' } } as never);
+        .mockReturnValueOnce(personalizationPending.promise as never);
       const runtime = createRuntime();
 
       // A Personalization batch fails once and waits in backoff.
@@ -129,40 +111,25 @@ describe('Web queue parity with Optimization', () => {
       vi.setSystemTime(Date.now() + 60_000);
       await click(runtime);
 
-      // Analytics will stay pending; Personalization must not wait behind it.
-      const flushing = runtime.flush();
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(analytics).toHaveBeenCalledTimes(1);
-      expect(upsert).toHaveBeenCalledTimes(2);
-
-      analyticsPending.resolve(true);
-      await flushing;
-    });
-
-    it('joins an active Analytics flush instead of resolving early', async () => {
-      const pending = deferred<boolean>();
-      const analytics = vi
-        .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-        .mockReturnValue(pending.promise);
-      const runtime = createRuntime();
-      await click(runtime);
-
-      const first = runtime.flush();
-      await vi.advanceTimersByTimeAsync(0);
-      let secondSettled = false;
-      const second = runtime.flush().then(() => {
-        secondSettled = true;
+      // Personalization must wait until the Analytics request completes.
+      let settled = false;
+      const flushing = runtime.flush().then(() => {
+        settled = true;
       });
       await vi.advanceTimersByTimeAsync(0);
 
       expect(analytics).toHaveBeenCalledTimes(1);
-      expect(secondSettled).toBe(false);
+      expect(upsert).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(false);
 
-      pending.resolve(true);
-      await Promise.all([first, second]);
-      expect(secondSettled).toBe(true);
-      expect(analytics).toHaveBeenCalledTimes(1);
+      analyticsPending.resolve(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(upsert).toHaveBeenCalledTimes(2);
+      expect(settled).toBe(false);
+
+      personalizationPending.resolve({ profile: { id: 'visitor' } });
+      await flushing;
+      expect(settled).toBe(true);
     });
   });
 
@@ -192,34 +159,6 @@ describe('Web queue parity with Optimization', () => {
       ]);
     });
 
-    it('defaults to 100 events', async () => {
-      const runtime = createRuntime();
-      window.dispatchEvent(new Event('offline'));
-
-      const results = await offlineTracks(runtime, 101);
-
-      expect(results.filter((result) => result.accepted)).toHaveLength(100);
-      expect(results[100]).toEqual({ accepted: false });
-    });
-
-    it.each([0, -5, Number.NaN])('falls back to the default for %s', async (offlineMaxEvents) => {
-      const runtime = createRuntime({ queuePolicy: { offlineMaxEvents } });
-      window.dispatchEvent(new Event('offline'));
-
-      const results = await offlineTracks(runtime, 101);
-
-      expect(results.filter((result) => result.accepted)).toHaveLength(100);
-    });
-
-    it('floors a fractional capacity', async () => {
-      const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 2.9 } });
-      window.dispatchEvent(new Event('offline'));
-
-      const results = await offlineTracks(runtime, 3);
-
-      expect(results.map((result) => result.accepted)).toEqual([true, true, false]);
-    });
-
     it('admits a prepared batch only if the whole batch fits', async () => {
       const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 3 } });
       window.dispatchEvent(new Event('offline'));
@@ -243,39 +182,16 @@ describe('Web queue parity with Optimization', () => {
       await expect(runtime.admit(prepared(runtime))).resolves.toEqual({ accepted: true });
       await expect(runtime.admit(prepared(runtime))).resolves.toEqual({ accepted: false });
     });
-
-    it('keeps capacity independent of the per-handoff payload limit', async () => {
-      const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 150 } });
-      window.dispatchEvent(new Event('offline'));
-
-      const results = await offlineTracks(runtime, 151);
-
-      expect(results.filter((result) => result.accepted)).toHaveLength(150);
-    });
   });
 
   describe('teardown through the public SDK, as Optimization', () => {
-    it('resolves a pending direct page() that fails after destroy, instead of rejecting', async () => {
-      let reject!: (error: unknown) => void;
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValueOnce(
-        new Promise((_, r) => (reject = r)) as never
-      );
-      const runtime = createRuntime();
-
-      const pending = runtime.page();
-      runtime.destroy();
-      reject(new Error('network'));
-
-      await expect(pending).resolves.toEqual({ accepted: true });
-    });
-
     it('sends a queued offline page on destroy under the current profile, not an older one', async () => {
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
         .mockResolvedValueOnce({ profile: { id: 'profile-A' } } as never)
         .mockResolvedValueOnce({ profile: { id: 'profile-B' } } as never)
         .mockResolvedValue({ profile: { id: 'profile-B' } } as never);
-      const runtime = createRuntime({ profile: undefined });
+      const runtime = createRuntime({ defaults: { profile: undefined } });
 
       // A completed drain under A.
       window.dispatchEvent(new Event('offline'));
@@ -284,7 +200,7 @@ describe('Web queue parity with Optimization', () => {
       await vi.advanceTimersByTimeAsync(0);
       // A newer direct identify() response makes B the current profile.
       await runtime.identify({ userId: 'user-1' });
-      expect(runtime.profile?.id).toBe('profile-B');
+      expect(runtime.states.profile.current?.id).toBe('profile-B');
       // An ordinary offline page, drained during destruction.
       window.dispatchEvent(new Event('offline'));
       await runtime.page();

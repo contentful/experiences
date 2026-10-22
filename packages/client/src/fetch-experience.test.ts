@@ -185,17 +185,6 @@ describe('fetchExperience', () => {
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
     });
-
-    // The alpha-feature header that selects the ExO entity shapes this SDK reads
-    // is sent by the delivery client itself as of 1.0.0-dev.7, so a
-    // caller-supplied client is covered without us passing request options.
-    it('sends no request options of its own', async () => {
-      const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
-
-      await fetchExperience(experienceOptions, { client }, resolveOptions);
-
-      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: undefined });
-    });
   });
 
   describe('preview toggle', () => {

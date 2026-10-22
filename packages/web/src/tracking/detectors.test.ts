@@ -178,6 +178,34 @@ describe('createViewDetector', () => {
     expect(first).toMatchObject({ entityId: 'A' });
     expect(second).toMatchObject({ entityId: 'A', viewId: first.viewId });
   });
+
+  it('cancels a pending final drain when its owner resets after the detector is stopped', async () => {
+    const io = installIOPolyfill();
+    const qualifying = deferred<boolean>();
+    const trackView = vi.fn().mockImplementation(() => qualifying.promise);
+    const element = makeElement();
+    let resetToken = {};
+    const detector = createViewDetector(
+      trackView,
+      lookup(new Map([[element, EXPERIENCE]])),
+      undefined,
+      () => resetToken
+    );
+    detector.onElementAdded(element, keyOf(element));
+    detector.start();
+    io.trigger(element, true);
+    await advance(1000);
+    expect(trackView).toHaveBeenCalledOnce();
+
+    // Session.stop starts its final drain before releasing the detector.
+    const drained = detector.endActive!();
+    detector.stop({ preservePending: true });
+    resetToken = {};
+    qualifying.resolve(true);
+    await drained;
+
+    expect(trackView).toHaveBeenCalledOnce();
+  });
 });
 
 describe('createHoverDetector', () => {

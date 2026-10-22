@@ -32,13 +32,13 @@ describe('Web public entry on the server', () => {
       spaceId: 'space',
       environmentId: 'environment',
       delivery: { accessToken: 'delivery-token' },
-      profile: { id: 'server-render-profile' },
+      defaults: { profile: { id: 'server-render-profile' } },
     });
 
-    expect(runtime.profile).toEqual({ id: 'server-render-profile' });
+    expect(runtime.states.profile.current).toEqual({ id: 'server-render-profile' });
 
     runtime.reset();
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
   });
 });
 

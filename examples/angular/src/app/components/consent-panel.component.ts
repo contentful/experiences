@@ -156,30 +156,41 @@ export class ConsentPanelComponent {
         spaceId: config.spaceId,
         environmentId: config.environmentId,
         delivery: { accessToken: config.accessToken },
-        onEventBlocked: (event) =>
-          this.blocked.update((previous) => [event, ...previous].slice(0, 5)),
       });
       this.runtime = instance;
       this.ready.set(true);
-      this.refresh();
+      const refreshStored = () =>
+        this.stored.set(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
+      const subscriptions = [
+        instance.states.consent.subscribe((events) => {
+          this.consent.update((previous) => ({ ...previous, events }));
+          refreshStored();
+        }),
+        instance.states.persistenceConsent.subscribe((persistence) => {
+          this.consent.update((previous) => ({ ...previous, persistence }));
+          refreshStored();
+        }),
+        instance.states.profile.subscribe((profile) => {
+          this.profileId.set(profile?.id);
+          refreshStored();
+        }),
+        instance.states.blockedEventStream.subscribe((event) => {
+          if (event !== undefined) {
+            this.blocked.update((previous) => [event, ...previous].slice(0, 5));
+          }
+        }),
+      ];
 
       // Views, hovers, and clicks on rendered nodes go through the same consent gate.
       const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
       destroyRef.onDestroy(() => {
         void session.stop();
+        subscriptions.forEach((subscription) => subscription.unsubscribe());
         // Only one Web SDK may be live at a time; release it so a remount can construct another.
         instance.destroy();
         this.runtime = undefined;
       });
     });
-  }
-
-  protected refresh(): void {
-    const runtime = this.runtime;
-    if (runtime === undefined) return;
-    this.consent.set({ ...runtime.consentState });
-    this.profileId.set(runtime.profile?.id);
-    this.stored.set(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
   }
 
   protected async send(name: EventName): Promise<void> {
@@ -202,11 +213,9 @@ export class ConsentPanelComponent {
     } catch (error) {
       this.lastResult.set(`${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    this.refresh();
   }
 
   protected setChoice(next: boolean | Consent): void {
     this.runtime?.consent(next);
-    this.refresh();
   }
 }

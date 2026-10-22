@@ -4,7 +4,6 @@ import {
   type ExperienceApiClientConfig as PersonalizationApiClientConfig,
   type InsightsApiClientConfig as AnalyticsApiClientConfig,
 } from '@contentful/optimization-api-client';
-import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
 /** Stable configuration for the runtime-owned Optimization API client. */
 export type RuntimeOptimizationConfig = {
@@ -17,29 +16,27 @@ export type RuntimeOptimizationConfig = {
 type CreateRuntimeOptimizationClientOptions = RuntimeOptimizationConfig & {
   spaceId: string;
   environmentId: string;
+  locale?: string;
 };
 
 export function createRuntimeOptimizationClient({
   spaceId,
   environmentId,
+  locale,
   personalizationBaseUrl,
   analyticsBaseUrl,
   personalizationEnabledFeatures,
   fetchOptions,
-}: CreateRuntimeOptimizationClientOptions): RuntimeOptimizationApiClient {
-  const client = new OptimizationApiClient({
+}: CreateRuntimeOptimizationClientOptions): OptimizationApiClient {
+  return new OptimizationApiClient({
     spaceId,
     environment: environmentId,
     fetchOptions,
     experience: {
       baseUrl: personalizationBaseUrl,
       enabledFeatures: personalizationEnabledFeatures,
+      locale,
     },
     insights: { baseUrl: analyticsBaseUrl },
   });
-
-  return {
-    personalization: client.experience,
-    analytics: client.insights,
-  };
 }

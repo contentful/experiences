@@ -53,10 +53,13 @@ export interface ConsentState {
  */
 export type ConsentInput = boolean | ConsentState;
 
+/** Reasons why an event was blocked before being sent. */
+export type BlockedEventReason = 'consent';
+
 /** Why an event was dropped at the SDK boundary. Blocked events are never replayed. */
 export interface BlockedEvent {
-  reason: 'consent';
-  method: EventMethod;
+  reason: BlockedEventReason;
+  method: string;
   args: readonly unknown[];
 }
 
@@ -71,7 +74,7 @@ export function toConsentState(input: ConsentInput): ConsentState {
 
 /** Whether `method` may emit under `consent`, mirroring the Optimization SDK's method mapping. */
 export function hasEventConsent(
-  method: EventMethod,
+  method: string,
   consent: ConsentState | undefined,
   allowedEventTypes: readonly AllowedEventType[] = DEFAULT_ALLOWED_EVENT_TYPES
 ): boolean {
@@ -87,7 +90,7 @@ export function hasEventConsent(
     case 'trackHover':
       return allowedEventTypes.includes('component_hover');
     default:
-      return allowedEventTypes.includes(method);
+      return allowedEventTypes.some((allowed) => allowed === method);
   }
 }
 
