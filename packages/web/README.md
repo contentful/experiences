@@ -66,6 +66,35 @@ origins outside explicit local development.
 
 Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
 
+## Runtime Experience parameters
+
+Supply values per by-ID fetch. The Experience declares accepted IDs in
+`Experience.parameters`, and bindings read `$parameters/<id>`. Delivery enforces
+names, requiredness, fallbacks, and value validation.
+
+```ts
+const plan = await experiences.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 6, order: '-fields.title' } } },
+  { config: experienceConfig }
+);
+
+// Change parameters, refetch the same Experience, then replace the renderer's plan.
+const nextPlan = await experiences.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
+  { config: experienceConfig }
+);
+```
+
+Values are strings, numbers, or one-level Records of string/number leaves.
+Collection order is one signed `fields.<apiName>` or `sys.<id>` path, with `-`
+for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
+`ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
+GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
+extensions select POST with an unprefixed structured map. `locale` stays separate.
+Direct `preview: true` fetches accept the same option. Preview Sessions retain
+server-owned `context.parameters` and WebSocket updates.
+See the [render/refetch example](../../README.md#runtime-experience-parameters).
+
 ## Personalization
 
 Pass a profile id and browser-built events through the first-class personalization option:

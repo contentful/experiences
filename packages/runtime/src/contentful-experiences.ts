@@ -4,6 +4,7 @@ import {
   PREVIEW_HOST,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
+  type ExperienceParameters,
   type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
@@ -61,6 +62,7 @@ export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'li
 export type RuntimeFetchExperienceOptions = {
   experienceId: string;
   locale?: string;
+  parameters?: ExperienceParameters;
   personalization?: PersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
@@ -211,6 +213,7 @@ export class ContentfulExperiences<
         environmentId: this.environmentId,
         experienceId: options.experienceId,
         locale: options.locale ?? this.locale,
+        parameters: options.parameters,
         personalization: options.personalization,
         extensions: options.extensions,
       },

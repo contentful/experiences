@@ -23,6 +23,10 @@ export {
 export type {
   DestinationRedirectResult,
   ExperienceRequestExtensions,
+  ExperienceParameters,
+  ExperienceParameterValue,
+  ExperienceParameterRecord,
+  ExperienceParameterOrder,
   PersonalizationOptions,
 } from '@contentful/experiences-client';
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';

@@ -14,13 +14,27 @@ The primary fetch + resolve entry point. Fetches an Experience payload from the 
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
+By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
+`{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
+`Experience.parameters` and referenced by `$parameters/<id>`. Delivery validates
+names, requiredness, fallbacks and values. Collection order is one signed
+`fields.<apiName>` or `sys.<id>` path, never `OrderTerm[]`.
+
+GET uses `parameter.<id>` and `parameter.<id>.<field>` in the generated client's
+`queryParams`, separate from `locale`. Empty Records or defined extensions select
+POST, with structured, unprefixed `parameters` in the body. dev.10 supports that
+body through serializer passthrough, although its generated type omits the key;
+the SDK uses a local typed request extension. Authentication and rename headers
+remain owned by the generated client. Refetch with changed values and replace
+the renderer's plan; see the [runtime parameters example](../../README.md#runtime-experience-parameters).
+
 Three positional args group by concern:
 
-| Arg                 | Type                                                                  | Purpose                                                                                |
-| ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale? }`                   | Which Experience to fetch.                                                             |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }` | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
+| Arg                 | Type                                                                                            | Purpose                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch.                                                             |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                           | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                 | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte

@@ -54,6 +54,29 @@ afterEach(() => {
 });
 
 describe('Web ContentfulExperiences', () => {
+  it('forwards changed parameters and preview flags without retaining fetch values', async () => {
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const runtime = createRuntime({ defaults: { consent: false } });
+    const parameters = { featuredPosts: { limit: 6, order: '-fields.title' } };
+    await runtime.fetchExperience(
+      { experienceId: 'exp', parameters },
+      { config: { components: {} } }
+    );
+    await runtime.fetchExperience(
+      { experienceId: 'exp', parameters: { featuredPosts: { limit: 12 } }, preview: true },
+      { config: { components: {} } }
+    );
+    await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
+    expect(fetch.mock.calls.map(([options]) => options.parameters)).toEqual([
+      parameters,
+      { featuredPosts: { limit: 12 } },
+      undefined,
+    ]);
+    expect(fetch.mock.calls[1]?.[0].preview).toBe(true);
+  });
+
   it('uses live browser context and Web attribution', () => {
     window.history.replaceState({}, '', '/first?utm_source=search&tag=one&tag=two#details');
     document.title = 'First page';

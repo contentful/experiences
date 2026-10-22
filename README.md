@@ -910,11 +910,11 @@ and direct `ContentfulViewDeliveryClient` use remain supported.
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                               | Purpose                                                                                                                                                    |
-| ------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, personalization?, extensions? }` | Which Experience to fetch, including first-class personalization and additional XDA extensions. Future digital-property identifiers widen this type.       |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`              | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                    | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
+| Arg                 | Type                                                                                            | Purpose                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch, including first-class personalization and additional XDA extensions. Future digital-property identifiers widen this type.       |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                           | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                 | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
 
 Both `metadata` and `debug` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 
@@ -953,6 +953,122 @@ try {
   throw err;
 }
 ```
+
+### Runtime Experience parameters
+
+Pass `parameters` on a by-ID fetch to resolve content with caller-selected values.
+The Experience declares accepted IDs in `Experience.parameters`; bindings read
+`$parameters/<id>`. There is no separate `dynamic` flag. Delivery enforces names,
+requiredness, fallbacks, and value validation; the SDK does not need the authored
+Experience definition before fetching.
+
+Values are strings, numbers, or one-level Records of strings/numbers. For example,
+an Experience declaring the Record `featuredPosts` can bind a collection query to
+`$parameters/featuredPosts`:
+
+```ts
+import { fetchExperience, type ExperienceParameters } from '@contentful/experiences-react';
+
+const parameters = {
+  featuredPosts: { limit: 6, order: '-fields.title' },
+} satisfies ExperienceParameters;
+
+const initialPlan = await fetchExperience(
+  { spaceId, environmentId, experienceId, locale: 'en-US', parameters },
+  { accessToken },
+  { config: experienceConfig }
+);
+```
+
+Collection `order` is **one signed, namespaced path**: `fields.<apiName>` or
+`sys.<id>`, optionally prefixed with `-` for descending order. For example,
+`fields.title`, `-fields.title`, `sys.createdAt`, or `-sys.createdAt`.
+`ExperienceParameterOrder` describes that string shape; Delivery validates the
+actual field and allowed values. Comma-separated paths, `title_ASC`, and the
+internal binding `OrderTerm[]` format are not runtime order values.
+
+Change the values and refetch the same Experience, then replace the renderer's
+plan. Each fetch resolves the returned payload again, including `resolveData`.
+For example, in a client React component with `initialPlan` supplied as a prop:
+
+```tsx
+import { useState } from 'react';
+import {
+  ExperienceRenderer,
+  fetchExperience,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react';
+
+function FeaturedPosts({ initialPlan }: { initialPlan: PortableRenderPlan }) {
+  const [plan, setPlan] = useState(initialPlan);
+
+  async function showMore() {
+    const nextPlan = await fetchExperience(
+      {
+        spaceId,
+        environmentId,
+        experienceId,
+        parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } },
+      },
+      { accessToken },
+      { config: experienceConfig }
+    );
+    setPlan(nextPlan);
+  }
+
+  return (
+    <>
+      <button onClick={showMore}>Show 12, oldest first</button>
+      <ExperienceRenderer experience={plan} config={experienceConfig} />
+    </>
+  );
+}
+```
+
+Use a browser-appropriate token or a trusted proxy for browser fetches. Svelte and
+Angular use the same fetch options and replace their renderer's plan input.
+The types `ExperienceParameters`, `ExperienceParameterValue`,
+`ExperienceParameterRecord`, and `ExperienceParameterOrder` are exported by every
+framework adapter and the public Node/Web SDKs.
+
+Node's request facade and Web's live instance take the same per-call option:
+
+```ts
+// Node: parameters belong to this fetch, not the process-long instance.
+const plan = await request.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 6, order: '-fields.title' } } },
+  { config: experienceConfig }
+);
+
+// Web: refetch and publish this new plan to your renderer.
+const nextPlan = await experiences.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
+  { config: experienceConfig }
+);
+```
+
+GET encodes `parameter.<id>` and `parameter.<id>.<field>` query keys, for example
+`?locale=en-US&parameter.featuredPosts.limit=6&parameter.featuredPosts.order=-fields.title`.
+System options such as `locale` remain separate. An empty Record or a key containing dots needs POST to
+preserve its shape or name for Delivery validation. Personalization or defined `extensions` also select POST,
+whose body carries the structured, unprefixed map:
+
+```json
+{ "parameters": { "featuredPosts": { "limit": 6, "order": "-fields.title" } } }
+```
+
+Both transports use the generated Delivery client's authentication and rename
+headers. Calls omitting `parameters` retain existing behavior. Delivery failures
+retain their message and original error (including status/body) as
+`ExperienceFetchError.cause`; `NotFoundError` still passes through unchanged.
+
+Direct by-ID preview fetches accept the same option and transport encoding.
+Preview can report missing/invalid values in the hydrated response's `errors`
+instead of failing the fetch. Preview Sessions continue to use their existing
+**unprefixed** `context.parameters` map, such as `{ productId: 'foo123' }`;
+the Session contract determines its supported values. The Contentful editor owns
+Session context changes, and the SDK consumes the new hydrated snapshots through
+HTTP and WebSocket updates. No client-side Session mutation API is added.
 
 ### Content source maps
 

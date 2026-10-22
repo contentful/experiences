@@ -120,6 +120,20 @@ outermost element. Preview fetches remain ordinary manual
 event-call contexts: a manually invoked event method still sends while preview
 is active.
 
+By-ID fetch options accept per-call `parameters`: strings/numbers or one-level
+Records of string/number leaves. Experience.parameters declares IDs and bindings
+use `$parameters/<id>`; there is no dynamic flag. Client flattens GET values into
+`parameter.<id>[.<field>]` through the generated client's `queryParams`; empty
+Records or defined extensions select POST with an unprefixed structured map.
+`@contentful/experience-delivery@1.0.0-dev.10` omits `parameters` in its generated
+POST request type but preserves it through serializer passthrough; the SDK extends
+the request type locally and transport tests verify the actual wire body, auth,
+and rename header. Collection order is a single signed `fields.<apiName>` or
+`sys.<id>` string, never binding `OrderTerm[]`. Delivery owns parameter validation
+and fallbacks. Runtime/Node/Web forward values without retaining them; refetch and
+replace the renderer's plan to swap content. Preview Sessions keep their existing
+unprefixed `context.parameters` and server-owned WebSocket updates.
+
 By-ID fetch options can also carry first-class personalization with a profile id
 and caller-built events; Client maps it to XDA's extension body, and Node
 proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. The current generated XDA request has no

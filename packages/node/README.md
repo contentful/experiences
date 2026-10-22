@@ -42,6 +42,35 @@ const plan = await request.fetchExperience({ experienceId }, { config: experienc
 
 An SDK instance retains only stable configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one instance can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. Multiple Node SDK instances can coexist; no teardown is required before constructing another. Each request facade belongs to its creating instance.
 
+## Runtime Experience parameters
+
+Supply values per by-ID fetch. The Experience declares accepted IDs in
+`Experience.parameters`, and bindings read `$parameters/<id>`. Delivery enforces
+names, requiredness, fallbacks, and value validation.
+
+```ts
+const plan = await request.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 6, order: '-fields.title' } } },
+  { config: experienceConfig }
+);
+
+// Change parameters, refetch the same Experience, then replace the renderer's plan.
+const nextPlan = await request.fetchExperience(
+  { experienceId, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
+  { config: experienceConfig }
+);
+```
+
+Values are strings, numbers, or one-level Records of string/number leaves.
+Collection order is one signed `fields.<apiName>` or `sys.<id>` path, with `-`
+for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
+`ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
+GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
+extensions select POST with an unprefixed structured map. `locale` stays separate.
+Direct `preview: true` fetches accept the same option. Preview Sessions retain
+server-owned `context.parameters` and WebSocket updates.
+See the [render/refetch example](../../README.md#runtime-experience-parameters).
+
 ## Personalization
 
 Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:

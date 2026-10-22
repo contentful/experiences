@@ -7,7 +7,7 @@ import {
 import EventBuilder from './event-builder.js';
 
 describe('Runtime EventBuilder with Client fetchExperience', () => {
-  it('serializes built page and identify events for XDA without mutating them', async () => {
+  it('preserves runtime parameters while serializing built events without mutating them', async () => {
     const builder = new EventBuilder({
       channel: 'server',
       library: { name: '@contentful/experiences-runtime', version: '0.0.0' },
@@ -62,6 +62,7 @@ describe('Runtime EventBuilder with Client fetchExperience', () => {
         environmentId: 'master',
         experienceId: 'experience',
         locale: 'de-DE',
+        parameters: { featuredPosts: { limit: 6, order: '-fields.title' } },
         personalization,
       },
       { client },
@@ -73,6 +74,7 @@ describe('Runtime EventBuilder with Client fetchExperience', () => {
     expect(String(url)).toContain('/experiences/experience');
     expect(init?.method).toBe('POST');
     const body = JSON.parse(String(init?.body));
+    expect(body.parameters).toEqual({ featuredPosts: { limit: 6, order: '-fields.title' } });
     expect(body.extensions.personalization.profileId).toBe('profile-1');
     const [sentPage, sentIdentify] = body.extensions.personalization.events;
     expect(sentPage).toMatchObject({

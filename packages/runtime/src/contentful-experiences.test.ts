@@ -64,6 +64,36 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
 }
 
 describe('ContentfulExperiences', () => {
+  it('forwards per-fetch parameters to Delivery and Preview without retaining them', async () => {
+    mockFetchExperience.mockClear();
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      preview: { accessToken: 'preview' },
+      eventBuilder: { channel: 'server' },
+    });
+    const parameters = { featuredPosts: { limit: 6, order: '-fields.title' } };
+    await runtime.fetchExperience(
+      { experienceId: 'exp', parameters },
+      { config: { components: {} } }
+    );
+    await runtime.fetchExperience(
+      {
+        experienceId: 'exp',
+        parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } },
+        preview: true,
+      },
+      { config: { components: {} } }
+    );
+    await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
+    expect(mockFetchExperience.mock.calls.map(([options]) => options.parameters)).toEqual([
+      parameters,
+      { featuredPosts: { limit: 12, order: 'sys.createdAt' } },
+      undefined,
+    ]);
+  });
+
   it('constructs Optimization transport from the runtime Contentful identifiers', () => {
     mockApiClient.mockClear();
 

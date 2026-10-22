@@ -1,4 +1,4 @@
-import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
+import { resolveExperience, type ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLivePreviewClient, LivePreviewConnectionError } from './index';
 import {
@@ -236,6 +236,22 @@ describe('createLivePreviewClient', () => {
     await Promise.resolve();
     expect(source.getResult().data).toBe(validData);
     expect(sockets).toHaveLength(1);
+    unsubscribe();
+  });
+
+  it('resolves replacement content after a server-owned Session parameter update', async () => {
+    setBrowser();
+    const source = createLivePreviewClient(sourceOptions('session-id'), payload('product A'));
+    const unsubscribe = source.subscribe(vi.fn());
+    const first = await resolveExperience(source.getResult().data!, { components: { hero: {} } });
+
+    // The editor changes context.parameters.productId from A to B. The SDK
+    // receives the server's newly hydrated snapshot, without a mutation call.
+    sockets[0]?.emitMessage(message('next', payload('product B')));
+    const second = await resolveExperience(source.getResult().data!, { components: { hero: {} } });
+    expect(first.nodes[0]?.props.content).toEqual({ title: 'product A' });
+    expect(second.nodes[0]?.props.content).toEqual({ title: 'product B' });
+    expect(sockets[0]?.url).not.toContain('parameter.');
     unsubscribe();
   });
 
