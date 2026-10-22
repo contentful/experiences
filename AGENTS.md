@@ -122,6 +122,15 @@ outermost element. Preview fetches remain ordinary manual
 event-call contexts: a manually invoked event method still sends while preview
 is active.
 
+Web's `tracking` API follows Optimization's `enable`, `disable`, `enableElement`,
+`disableElement` and `clearElement` controls for `views`, `hovers` and `clicks`.
+Manual observation means developer registration of elements with real
+`TrackingAttribution` in `options.data`; the SDK measures interactions. It does
+not mean visitor-facing event buttons. Type-level disable preserves explicit
+element enables, consent withdrawal discards intervals but preserves overrides,
+and reset/destroy clear overrides. Keep these controls on the existing detector
+and consent/lifecycle path; do not add application-owned observers.
+
 By-ID fetch options accept per-call `parameters`: strings/numbers or one-level
 Records of string/number leaves. Experience.parameters declares IDs and bindings
 use `$parameters/<id>`; there is no dynamic flag. Client flattens GET values into

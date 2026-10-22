@@ -8,7 +8,7 @@ npm workspaces and declares its own dependencies and tools.
 Home and Page Two render live Experience plans through one Web SDK instance.
 Utilities provides Grant/Revoke consent, Identify, and Reset. Navigation supports
 direct URLs and back/forward. The Tracking sidebar observes SDK event attempts;
-automatic and manual interaction examples use the public SDK tracking/event APIs.
+automatic discovery and manual element registration use the public SDK tracking API.
 
 Code comments distinguish **Consumer integration** responsibilities (conditional where a
 feature is optional), **Reference app** demonstration choices, **Maintainer**
@@ -24,7 +24,7 @@ must have an SDK-owned profile before initialization continues; queue admission
 alone is not treated as successful delivery. If no profile becomes available,
 the app shows a recoverable initialization error and a Retry content action.
 
-Home fetches every configured Experience once, sequentially. Its manual section
+Home fetches every configured Experience once, sequentially. Its manually observed section
 reuses the first plan. Page Two fetches the last configured
 Experience for the automatic section and the first for the manual section. If
 these IDs coincide, it fetches once and renders both presentations. There is no
@@ -122,12 +122,16 @@ measurements through `sdk.reset()`; the explicit page/fetch cycle installs a fre
 session. Consent changes synchronize detectors through the SDK and do not refetch
 content.
 
-The manual section has no automatic tracking attributes. Its Record view actions
-use a real Experience/Fragment scope, a fresh view ID, and duration zero; Fragment
-scopes also offer Record click. The SDK still gates these calls by consent.
-The view result reports admission; click completion has no admission result.
-Neither UI message claims successful delivery. Page Two's Record custom action
-calls `sdk.track({ event: 'reference_custom_action' })` without fetching content.
+The manually observed section has no automatic tracking attributes or event buttons.
+After rendering, application code calls `sdk.tracking.clearElement('views', element)`
+and `sdk.tracking.enableElement('views', element, { data })`, following Optimization's
+manual registration example. Each card uses its innermost delivered scope as the
+single explicit target. Automatic tracking retains all root keys and groups shared
+multi-root occurrences; manual registration follows the API's per-element behavior.
+The SDK measures actual visibility, dwell and duration and applies consent and lifecycle
+rules for both presentations. No app-owned observer or fabricated zero-duration view
+is involved. Page Two's separate Record custom action calls
+`sdk.track({ event: 'reference_custom_action' })` without fetching content.
 
 The Tracking pill now counts every non-undefined notification from the public
 `states.eventStream`, including XDA-embedded identify events. These are attempts:
@@ -243,14 +247,15 @@ preflight workflow nor Node handoff.
   installed SDK's pure tracking-attribute helper and clickable constant; the UMD
   constructor distribution is unchanged.
 - `public/index.html` and `public/js/app.js`: common shell, route headers and shared
-  content layout. Native templates also supply cards, manual controls, event rows
+  content layout. Native templates also supply cards, event rows
   and status messages; `templates.js` clones their markup while the rendering
   modules fill dynamic text and wire actions.
   Stable navigation, utility, and sidebar `data-testid` conventions follow the
   Optimization reference. Experience-specific placeholders replace entry/Web
   Component semantics. `control-panel.js` owns utility display and consent
-  subscription cleanup; `experiences.js` owns DOM plan rendering and real-scope
-  manual controls; `tracking.js` owns the observable sidebar and its cleanup.
+  subscription cleanup; `experiences.js` owns DOM plan rendering and exposes manual
+  roots for registration after insertion; `tracking.js` owns the observable sidebar
+  and its cleanup.
 - `public/css/theme.css`: locally vendored Optimization theme from commit
   `59add9d6ebff503b9033a59a2eee0149d4b4e925`, `lib/e2e-web/src/theme.css` (MIT).
   This is stylesheet provenance, not a dependency on its testing package.
@@ -269,7 +274,8 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
 - Experiences renders XDA plans through application-owned DOM renderers rather
   than Optimization's entry Web Components. There is no producer-hidden readiness
   example; loading/errors belong to the actual rendered content. The manual copy
-  demonstrates an alternative event path alongside automatic tracking.
+  demonstrates explicit element registration alongside automatic discovery, using
+  the same SDK-owned measurement and consent mechanisms as Optimization.
 - XDA selects variants server-side. The explicit page/identify/fetch flow follows
   the [current XDA workarounds](#current-xda-limitations-and-workaround-removal),
   and there is no profile-driven content refresh, Live Updates or Preview Panel.
@@ -304,9 +310,9 @@ does not establish back/forward-cache behavior. Visual comparison uses the pinne
 Optimization source/theme rather than a running pixel comparison.
 
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current phase authorization and validation evidence. Phase 7 finalizes
-integrated verification and documentation; stop for final acceptance before
-publishing or further work.
+records current authorization and validation evidence. Phases 1–7 are accepted;
+the SDK/manual-observation correction is awaiting user review. Do not commit or
+push that correction before review and further authorization.
 
 ## Troubleshooting
 

@@ -5,6 +5,7 @@ export type {
   CurrentPageOptions,
   CoreConfigDefaults,
   ExperiencesWebConfig,
+  ExperiencesTrackingApi,
   HydrateAndTrackCurrentPageOptions,
   InteractionTrackingSession,
   InteractionTrackingStartOptions,
@@ -109,3 +110,22 @@ export {
   type ExperiencesSnapshot,
   type SnapshotRuntime,
 } from './runtime.js';
+
+export type {
+  AutoTrackEntryInteractionOptions,
+  EntryInteraction,
+  EntryElementInteraction,
+  EntryInteractionApi,
+  EntryInteractionTracker,
+  EntryInteractionTrackers,
+  EntryInteractionStartOptions,
+  EntryInteractionStartOptionsMap,
+  EntryInteractionElementOptions,
+  EntryInteractionElementOptionsMap,
+  EntryClickInteractionElementOptions,
+  EntryViewInteractionElementOptions,
+  EntryHoverInteractionElementOptions,
+  EntryViewInteractionStartOptions,
+} from './interaction-tracking.js';
+
+export { createWebSnapshotRuntime, type WebExperiencesRuntime } from './runtime.js';

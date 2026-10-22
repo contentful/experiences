@@ -20,9 +20,9 @@
  * be serializable data when rendering happens on the server and tracking in the
  * browser.
  *
- * Internal: not exported from the package entry. The public surface is meant
- * to be the configured runtime/root (`createExperiences({ optimization })` in
- * the consumer DX proposal), which will start and stop this itself.
+ * The coordinator stays internal; ContentfulExperiences exposes its imperative
+ * controls as `tracking` and supplies attribution through an optional session.
+ * Manual element data uses the same detectors with a private occurrence key.
  */
 
 import type { ContentfulExperiences } from './contentful-experiences.js';
@@ -30,11 +30,87 @@ import { isTrackedEntity, type TrackingAttribution } from './tracking/attributio
 import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
 import { createClickDetector } from './tracking/click/create-click-detector.js';
 import { createHoverDetector } from './tracking/hover/create-hover-detector.js';
-import { type InteractionDetector, toInteractionArgs } from './tracking/interaction-detector.js';
+import {
+  type InteractionDetector,
+  type InteractionKey,
+  toInteractionArgs,
+} from './tracking/interaction-detector.js';
 import { createViewDetector } from './tracking/view/create-view-detector.js';
 import type { ElementViewObserverOptions } from './tracking/view/element-view-observer-support.js';
 
 const SELECTOR = `[${TRACKING_SCOPES_ATTRIBUTE}]`;
+
+/** Optimization-compatible interaction controls. Manual data is Experiences attribution. */
+export type EntryInteraction = keyof EntryInteractionTrackers;
+export type EntryElementInteraction = EntryInteraction;
+export type AutoTrackEntryInteractionOptions = Partial<Record<EntryInteraction, boolean>>;
+export type EntryViewInteractionStartOptions = ElementViewObserverOptions;
+export interface EntryClickInteractionElementOptions {
+  /** Experiences TrackingAttribution; valid data overrides automatic scope attribution. */
+  readonly data?: unknown;
+}
+export interface EntryViewInteractionElementOptions {
+  /** Experiences TrackingAttribution for this element's view occurrence. Retained by reference. */
+  readonly data?: unknown;
+}
+export interface EntryHoverInteractionElementOptions {
+  /** Experiences Fragment TrackingAttribution for this element's hover occurrence. */
+  readonly data?: unknown;
+}
+export interface EntryInteractionStartOptionsMap {
+  clicks: undefined;
+  views: EntryViewInteractionStartOptions | undefined;
+  hovers: undefined;
+}
+export interface EntryInteractionElementOptionsMap {
+  clicks: EntryClickInteractionElementOptions;
+  views: EntryViewInteractionElementOptions;
+  hovers: EntryHoverInteractionElementOptions;
+}
+/** Minimal tracker contract for one interaction, matching Optimization. */
+export interface EntryInteractionTracker<TStartOptions = never, TElementOptions = never> {
+  start: (options?: TStartOptions) => void;
+  stop: () => void;
+  setAuto?: (enabled: boolean) => void;
+  enableElement?: (element: Element, options?: TElementOptions) => void;
+  disableElement?: (element: Element) => void;
+  clearElement?: (element: Element) => void;
+}
+
+/** Type contract for the three tracked interactions; no runtime registry is exposed. */
+export interface EntryInteractionTrackers {
+  clicks: EntryInteractionTracker<
+    EntryInteractionStartOptionsMap['clicks'],
+    EntryInteractionElementOptionsMap['clicks']
+  >;
+  views: EntryInteractionTracker<
+    EntryInteractionStartOptionsMap['views'],
+    EntryInteractionElementOptionsMap['views']
+  >;
+  hovers: EntryInteractionTracker<
+    EntryInteractionStartOptionsMap['hovers'],
+    EntryInteractionElementOptionsMap['hovers']
+  >;
+}
+
+export type EntryInteractionStartOptions<T extends EntryInteraction> =
+  EntryInteractionStartOptionsMap[T];
+export type EntryInteractionElementOptions<T extends EntryElementInteraction> =
+  EntryInteractionElementOptionsMap[T];
+export interface EntryInteractionApi {
+  enable<T extends EntryInteraction>(
+    interaction: T,
+    options?: EntryInteractionStartOptions<T>
+  ): void;
+  disable(interaction: EntryInteraction): void;
+  enableElement<T extends EntryElementInteraction>(
+    interaction: T,
+    element: Element,
+    options?: EntryInteractionElementOptions<T>
+  ): void;
+  disableElement(interaction: EntryElementInteraction, element: Element): void;
+  clearElement(interaction: EntryElementInteraction, element: Element): void;
+}
 
 export interface InteractionTrackingOptions {
   /**
@@ -66,11 +142,21 @@ export interface InteractionTrackingGate {
   getResetToken?(): unknown;
 }
 
+interface InteractionTrackingSettings {
+  auto: Record<EntryInteraction, boolean>;
+  viewOptions?: EntryViewInteractionStartOptions;
+}
+
 export interface InteractionTracking {
+  /** Carries SDK settings across a new attribution session without changing public APIs. */
+  getSettings(): InteractionTrackingSettings;
   /**
    * Re-resolves every discovered element against `resolveAttribution` — call
    * after the lookup's data changes (e.g. new attribution for the same DOM).
    */
+  readonly tracking: EntryInteractionApi;
+  /** Transfers caller-owned overrides when an automatic attribution session starts. */
+  transferOverridesTo(target: EntryInteractionApi): void;
   refresh(): void;
   /**
    * Starts or stops detectors to match what is currently permitted. Call after consent
@@ -78,7 +164,7 @@ export interface InteractionTracking {
    */
   syncConsent(): void;
   /** Discards measurements and stops detectors; refresh or consent sync can resume them. */
-  reset(): void;
+  reset(preserveOverrides?: boolean): void;
   /** Ends in-progress views/hovers, sending their final events, and awaits them. */
   endActive(): Promise<void>;
   /** Stops discovery and every detector. Call `endActive()` first to flush in-progress events. */
@@ -94,198 +180,296 @@ type TrackingEvents = Pick<ContentfulExperiences, 'trackView' | 'trackHover' | '
 export function createInteractionTracking(
   events: TrackingEvents,
   options: InteractionTrackingOptions,
-  gate: InteractionTrackingGate = { isAllowed: () => true }
+  gate: InteractionTrackingGate = { isAllowed: () => true },
+  initialSettings?: InteractionTrackingSettings
 ): InteractionTracking {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
     return {
-      refresh: () => undefined,
-      syncConsent: () => undefined,
-      reset: () => undefined,
+      getSettings: () => ({
+        auto: {
+          views:
+            options.views === undefined
+              ? (initialSettings?.auto.views ?? true)
+              : options.views !== false,
+          clicks: options.clicks ?? initialSettings?.auto.clicks ?? true,
+          hovers: options.hovers ?? initialSettings?.auto.hovers ?? true,
+        },
+        viewOptions:
+          typeof options.views === 'object'
+            ? options.views
+            : options.views === true
+              ? undefined
+              : initialSettings?.viewOptions,
+      }),
+      tracking: {
+        enable() {},
+        disable() {},
+        enableElement() {},
+        disableElement() {},
+        clearElement() {},
+      },
+      transferOverridesTo() {},
+      refresh() {},
+      syncConsent() {},
+      reset() {},
       endActive: async () => undefined,
-      destroy: () => undefined,
+      destroy() {},
     };
   }
 
   const root = options.root ?? document;
   let destroyed = false;
   let observing = false;
-
-  // The single path detectors read attribution through. Plan attribution is
-  // typed Experience | Fragment, so this is a defensive runtime check for
-  // lookups that return another kind: that is treated as "nothing to track" and
-  // its key is never observed.
-  const resolveKeyAttribution = (key: string): TrackingAttribution | undefined => {
-    const attribution = options.resolveAttribution(key);
-    return isTrackedEntity(attribution) ? attribution : undefined;
-  };
-
-  interface ManagedDetector {
-    readonly method: TrackedMethod;
-    readonly detector: InteractionDetector;
-    running: boolean;
+  interface Override {
+    enabled: boolean;
+    options?: EntryViewInteractionElementOptions;
+    key: symbol;
   }
-  const managed: ManagedDetector[] = [];
-  const add = (method: TrackedMethod, detector: InteractionDetector): void => {
-    managed.push({ method, detector, running: false });
+  interface ManagedDetector {
+    type: EntryInteraction;
+    method: TrackedMethod;
+    detector: InteractionDetector<InteractionKey>;
+    auto: boolean;
+    running: boolean;
+    overrides: Map<Element, Override>;
+    observed: Map<Element, Map<InteractionKey, string>>;
+  }
+  // Retain attribution lookup closures for draining sessions after stop().
+  const manualData = new Map<symbol, EntryViewInteractionElementOptions>();
+  const resolveKeyAttribution = (key: InteractionKey): TrackingAttribution | undefined => {
+    const manual = typeof key === 'symbol';
+    const data = manual ? manualData.get(key)?.data : options.resolveAttribution(key);
+    if (typeof data !== 'object' || data === null) return undefined;
+    const attribution = data as TrackingAttribution;
+    if (!isTrackedEntity(attribution)) return undefined;
+    // As with Optimization's explicit EntryData, manual data needs an entity id.
+    if (manual && (typeof attribution.entityId !== 'string' || !attribution.entityId.trim()))
+      return undefined;
+    return attribution;
   };
-  if (options.views !== false) {
-    const viewOptions = typeof options.views === 'object' ? options.views : undefined;
-    add(
-      'trackView',
-      createViewDetector(
+  let viewOptions =
+    typeof options.views === 'object'
+      ? options.views
+      : options.views === true
+        ? undefined
+        : initialSettings?.viewOptions;
+  const createDetector = (type: EntryInteraction): InteractionDetector<InteractionKey> => {
+    if (type === 'views')
+      return createViewDetector(
         (args) => events.trackView(args),
         resolveKeyAttribution,
         viewOptions,
         gate.getResetToken
-      )
-    );
-  }
-  if (options.hovers !== false) {
-    add(
-      'trackHover',
-      createHoverDetector(
+      );
+    if (type === 'hovers')
+      return createHoverDetector(
         (args) => events.trackHover(args),
         resolveKeyAttribution,
         gate.getResetToken
-      )
-    );
+      );
+    return createClickDetector((args) => events.trackClick(args), resolveKeyAttribution);
+  };
+  const managed = new Map<EntryInteraction, ManagedDetector>();
+  for (const type of ['clicks', 'views', 'hovers'] as const) {
+    managed.set(type, {
+      type,
+      method: type === 'views' ? 'trackView' : type === 'hovers' ? 'trackHover' : 'trackClick',
+      detector: createDetector(type),
+      auto:
+        options[type] === undefined
+          ? (initialSettings?.auto[type] ?? true)
+          : options[type] !== false,
+      running: false,
+      overrides: new Map(),
+      observed: new Map(),
+    });
   }
-  if (options.clicks !== false) {
-    add(
-      'trackClick',
-      createClickDetector((args) => events.trackClick(args), resolveKeyAttribution)
-    );
-  }
-  // Only detectors that are currently permitted observe anything. A detector that is
-  // not running holds no elements and no measurement.
-  const running = (): InteractionDetector[] =>
-    managed.filter((entry) => entry.running).map((entry) => entry.detector);
-
-  // Elements currently handed to the detectors: for each, the keys it was handed
-  // over under, with the entity each key resolved to.
-  const observed = new Map<Element, Map<string, string>>();
-
   const isInRoot = (element: Element): boolean =>
     element.isConnected && (root === document || root.contains(element));
-
-  /** Identifies what an interaction is reported against; any change is a different target. */
   const entityKey = (attribution: TrackingAttribution): string =>
     JSON.stringify(toInteractionArgs(attribution));
-
   const readKeys = (element: Element): string[] =>
     (element.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '').split(/\s+/).filter(Boolean);
-
-  /**
-   * Brings one element's detector state in line with the DOM and the lookup.
-   * A key that now names a different entity — the attribute changed, or
-   * `refresh()` resolved different attribution — is removed and re-added, so no
-   * view or hover is reported under two entities. The Optimization SDK does the
-   * same when an entry id attribute changes.
-   */
-  const reconcile = (element: Element): void => {
-    const next = new Map<string, string>();
-    if (isInRoot(element)) {
-      for (const key of readKeys(element)) {
+  const reconcile = (entry: ManagedDetector, element: Element): void => {
+    if (!entry.running) return;
+    const next = new Map<InteractionKey, string>();
+    const override = entry.overrides.get(element);
+    const attr = element.getAttribute(`data-ctfl-track-${entry.type}`)?.trim().toLowerCase();
+    const enabled =
+      override?.enabled ?? (attr === 'true' ? true : attr === 'false' ? false : entry.auto);
+    // Explicit registrations follow Optimization's document-wide element API;
+    // the session root bounds automatic discovery only.
+    if (enabled && (override?.enabled ? element.isConnected : isInRoot(element))) {
+      const manual = override?.enabled && resolveKeyAttribution(override.key);
+      const keys = manual ? [override.key] : readKeys(element);
+      for (const key of keys) {
         const attribution = resolveKeyAttribution(key);
         if (attribution) next.set(key, entityKey(attribution));
       }
     }
-    const current = observed.get(element) ?? new Map<string, string>();
-
+    const current = entry.observed.get(element) ?? new Map<InteractionKey, string>();
     for (const [key, entity] of current) {
-      if (next.get(key) === entity) continue;
-      for (const detector of running()) detector.onElementRemoved(element, key);
+      if (next.get(key) !== entity) entry.detector.onElementRemoved(element, key);
     }
     for (const [key, entity] of next) {
-      if (current.get(key) === entity) continue;
-      for (const detector of running()) detector.onElementAdded(element, key);
+      if (current.get(key) !== entity) entry.detector.onElementAdded(element, key);
     }
-
-    if (next.size > 0) observed.set(element, next);
-    else observed.delete(element);
+    if (next.size) entry.observed.set(element, next);
+    else entry.observed.delete(element);
   };
-
-  const collectCandidates = (node: Node, candidates: Set<Element>): void => {
-    if (!(node instanceof Element)) return;
-    if (node.hasAttribute(TRACKING_SCOPES_ATTRIBUTE)) candidates.add(node);
-    node.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
+  const reconcileAll = (entry: ManagedDetector): void => {
+    const candidates = new Set([...entry.observed.keys(), ...entry.overrides.keys()]);
+    if (root instanceof Element && root.matches(SELECTOR)) candidates.add(root);
+    root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
+    for (const element of candidates) reconcile(entry, element);
   };
-
-  // Reconciles each batch as a whole, so a node moved within one batch
-  // (removed then re-added) ends up observed rather than dropped.
   const mutationObserver = new MutationObserver((records) => {
     const candidates = new Set<Element>();
-    for (const record of records) {
-      if (record.type === 'attributes' && record.target instanceof Element) {
-        candidates.add(record.target);
-      }
-      record.addedNodes.forEach((node) => collectCandidates(node, candidates));
-      record.removedNodes.forEach((node) => collectCandidates(node, candidates));
-    }
-    for (const element of candidates) reconcile(element);
-  });
-
-  /**
-   * Brings each detector in line with what is permitted now. A detector that stops
-   * drops any measurement in progress; one that starts begins fresh over every
-   * (element, key) already observed, so time measured before permission is never
-   * reported.
-   */
-  const sync = (): void => {
-    if (destroyed) return;
-    for (const entry of managed) {
-      const allowed = gate.isAllowed(entry.method);
-      if (allowed && !entry.running) {
-        entry.running = true;
-        entry.detector.start();
-        for (const [element, keys] of observed) {
-          for (const key of keys.keys()) entry.detector.onElementAdded(element, key);
+    const collect = (node: Node): void => {
+      if (!(node instanceof Element)) return;
+      candidates.add(node);
+      node.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
+      // Manually registered elements need no discovery attribute.
+      for (const entry of managed.values()) {
+        for (const element of entry.overrides.keys()) {
+          if (node.contains(element)) candidates.add(element);
         }
-      } else if (!allowed && entry.running) {
-        entry.running = false;
-        entry.detector.stop();
       }
+    };
+    for (const record of records) {
+      if (record.type === 'attributes' && record.target instanceof Element)
+        candidates.add(record.target);
+      record.addedNodes.forEach(collect);
+      record.removedNodes.forEach(collect);
     }
-    if (!observing && managed.some((entry) => entry.running)) {
+    for (const entry of managed.values()) {
+      for (const element of candidates) reconcile(entry, element);
+    }
+  });
+  const syncEntry = (entry: ManagedDetector, restart = false): void => {
+    if (destroyed) return;
+    const allowed =
+      gate.isAllowed(entry.method) &&
+      (entry.auto || [...entry.overrides.values()].some((override) => override.enabled));
+    if (entry.running && (!allowed || restart)) {
+      entry.detector.stop();
+      entry.running = false;
+      entry.observed.clear();
+    }
+    if (allowed && !entry.running) {
+      if (entry.type === 'views') entry.detector = createDetector('views');
+      entry.detector.start();
+      entry.running = true;
+    }
+    reconcileAll(entry);
+    if (!observing && [...managed.values()].some((candidate) => candidate.running)) {
       observing = true;
-      mutationObserver.observe(root, {
+      mutationObserver.observe(document, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: [TRACKING_SCOPES_ATTRIBUTE],
+        attributeFilter: [
+          TRACKING_SCOPES_ATTRIBUTE,
+          'data-ctfl-track-views',
+          'data-ctfl-track-hovers',
+          'data-ctfl-track-clicks',
+        ],
       });
-      root.querySelectorAll(SELECTOR).forEach(reconcile);
+    } else if (observing && ![...managed.values()].some((candidate) => candidate.running)) {
+      mutationObserver.disconnect();
+      observing = false;
     }
   };
-
-  const reset = (preservePending = false): void => {
+  const sync = (): void => {
+    for (const entry of managed.values()) syncEntry(entry);
+  };
+  const reset = (preserveOverrides = false, preservePending = false): void => {
     mutationObserver.disconnect();
     observing = false;
-    for (const entry of managed) {
+    for (const entry of managed.values()) {
       entry.running = false;
       entry.detector.stop({ preservePending });
+      entry.observed.clear();
+      if (!preserveOverrides) entry.overrides.clear();
     }
-    observed.clear();
+    if (!preserveOverrides && !preservePending) manualData.clear();
   };
-
-  sync();
-
-  return {
-    refresh() {
+  const tracking: EntryInteractionApi = {
+    enable(type, startOptions) {
       if (destroyed) return;
-      sync();
-      const candidates = new Set<Element>(observed.keys());
-      root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
-      for (const element of candidates) reconcile(element);
+      const entry = managed.get(type)!;
+      entry.auto = true;
+      if (type === 'views') viewOptions = startOptions;
+      syncEntry(entry, true);
     },
+    disable(type) {
+      if (destroyed) return;
+      const entry = managed.get(type)!;
+      entry.auto = false;
+      syncEntry(entry);
+    },
+    enableElement(type, element, elementOptions) {
+      if (destroyed) return;
+      const entry = managed.get(type)!;
+      const previous = entry.overrides.get(element);
+      if (previous?.enabled && previous.options === elementOptions) return;
+      // Separate occurrence keys preserve the existing multi-root automatic grouping.
+      if (previous) manualData.delete(previous.key);
+      const key = Symbol();
+      if (elementOptions) manualData.set(key, elementOptions);
+      entry.overrides.set(element, { enabled: true, options: elementOptions, key });
+      syncEntry(entry);
+    },
+    disableElement(type, element) {
+      if (destroyed) return;
+      const entry = managed.get(type)!;
+      const previous = entry.overrides.get(element);
+      if (previous) manualData.delete(previous.key);
+      entry.overrides.set(element, { enabled: false, key: Symbol() });
+      syncEntry(entry);
+    },
+    clearElement(type, element) {
+      if (destroyed) return;
+      const entry = managed.get(type)!;
+      const previous = entry.overrides.get(element);
+      if (entry.overrides.delete(element)) {
+        if (previous) manualData.delete(previous.key);
+        syncEntry(entry);
+      }
+    },
+  };
+  sync();
+  return {
+    getSettings: () => ({
+      auto: {
+        clicks: managed.get('clicks')!.auto,
+        views: managed.get('views')!.auto,
+        hovers: managed.get('hovers')!.auto,
+      },
+      viewOptions,
+    }),
+    tracking,
+    transferOverridesTo(target) {
+      for (const entry of managed.values()) {
+        for (const [element, override] of entry.overrides) {
+          if (override.enabled) target.enableElement(entry.type, element, override.options);
+          else target.disableElement(entry.type, element);
+        }
+      }
+    },
+    refresh: sync,
     syncConsent: sync,
     reset,
     async endActive() {
-      await Promise.all(running().map((detector) => detector.endActive?.()));
+      await Promise.all(
+        [...managed.values()]
+          .filter((entry) => entry.running)
+          .map((entry) => entry.detector.endActive?.())
+      );
     },
     destroy() {
       destroyed = true;
-      reset(true);
+      reset(false, true);
     },
   };
 }

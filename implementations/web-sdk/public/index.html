@@ -99,17 +99,6 @@
       </article>
     </template>
 
-    <!-- Reference app: manual-event alternatives for illustration/verification.
-         The matching content is deliberately excluded from automatic tracking. -->
-    <template id="tpl-manual-actions">
-      <div class="entry-card__actions">
-        <span class="entry-card__id-label"></span>
-        <button class="btn btn--secondary btn--sm" data-action="view">Record view</button>
-        <button class="btn btn--secondary btn--sm" data-action="click">Record click</button>
-        <span class="entry-card__action-status" role="status"></span>
-      </div>
-    </template>
-
     <template id="tpl-experience">
       <section class="entry-grid">
         <div class="entry-card__ids">
@@ -158,10 +147,10 @@
         </section>
         <section class="page-section">
           <header class="page-section__header">
-            <h2>Manual events</h2>
+            <h2>Manually observed Experiences</h2>
             <p>
-              Record view or click attempts explicitly. This presentation is not automatically
-              tracked.
+              Elements are registered in code. The SDK measures their views as you scroll; automatic
+              discovery is not used for this presentation.
             </p>
           </header>
           <div class="entry-grid entry-grid--experiences" data-experiences="manual"></div>

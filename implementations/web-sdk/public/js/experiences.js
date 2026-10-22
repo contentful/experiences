@@ -67,54 +67,6 @@ function stampAutomaticTracking(card, roots, namespace) {
   }
 }
 
-// Reference app: explicit buttons exercise the public manual-event alternative.
-// Duration zero describes this button demonstration, not a measured impression;
-// real manual integrations supply their own interval/duration and real attribution.
-async function recordManualEvent(sdk, type, attribution, status) {
-  try {
-    if (type === 'view') {
-      const result = await sdk.trackView({
-        ...attribution,
-        viewId: window.crypto.randomUUID(),
-        viewDurationMs: 0,
-      });
-      status.textContent =
-        result?.accepted === false ? 'View not admitted.' : 'View admitted; delivery unconfirmed.';
-    } else {
-      await sdk.trackClick(attribution);
-      status.textContent = 'Click call completed; delivery unconfirmed.';
-    }
-  } catch {
-    status.textContent = `Unable to record ${type}.`;
-  }
-}
-
-// Reference app: one button group per scope, even for multi-root occurrences.
-// This presentation receives no automatic attributes, avoiding duplicate paths.
-function addManualControls(card, roots, identity, { sdk, scopes, manualScopes }) {
-  for (const root of roots) {
-    const scope = scopes[root.key];
-    if (!scope || manualScopes.has(root.key)) continue;
-    manualScopes.add(root.key);
-    // Scope occurrence keys are lookup metadata, not event-builder arguments.
-    const attribution = { ...scope };
-    delete attribution.key;
-    const actions = cloneTemplate('manual-actions').firstElementChild;
-    actions.querySelector('.entry-card__id-label').textContent = scope.entityKind;
-    const status = actions.querySelector('[role="status"]');
-    for (const button of actions.querySelectorAll('button')) {
-      const type = button.dataset.action;
-      if (type === 'click' && scope.entityKind !== 'ExperienceFragment') {
-        button.remove();
-        continue;
-      }
-      button.dataset.testid = `record-${type}-${identity}-${manualScopes.size}`;
-      button.addEventListener('click', () => recordManualEvent(sdk, type, attribution, status));
-    }
-    card.appendChild(actions);
-  }
-}
-
 function renderNode(node, identity, context, parentSlot) {
   const renderer = renderers[node.registration.kind]?.[node.registration.id] ?? renderUnknown;
   const card = renderer(node, identity);
@@ -122,7 +74,11 @@ function renderNode(node, identity, context, parentSlot) {
 
   const roots = node.attribution?.roots ?? [];
   if (context.section === 'auto') stampAutomaticTracking(card, roots, context.namespace);
-  else addManualControls(card, roots, identity, context);
+  else if (roots.length) {
+    // Consumer integration: one explicit element registration carries one target.
+    // Use its innermost delivered scope; automatic tracking retains every root key.
+    context.onManualRoot(card, roots.at(-1));
+  }
 
   for (const [name, children] of Object.entries(node.slots)) {
     // Consumer integration: recurse through delivered named slots; flat siblings stay flat.
@@ -137,14 +93,8 @@ function renderNode(node, identity, context, parentSlot) {
   return card;
 }
 
-export function renderExperience(plan, experienceId, section, { sdk, namespace }) {
-  const context = {
-    sdk,
-    namespace,
-    section,
-    scopes: plan.attribution?.scopes ?? {},
-    manualScopes: new Set(),
-  };
+export function renderExperience(plan, experienceId, section, { namespace, onManualRoot }) {
+  const context = { namespace, section, onManualRoot };
   const container = cloneTemplate('experience').firstElementChild;
   container.dataset.experienceId = experienceId;
   container.dataset.testid = `${section}-experience-${experienceId}`;

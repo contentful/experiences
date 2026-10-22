@@ -3,6 +3,7 @@ import type { HoverBuilderArgs } from '@contentful/experiences-runtime';
 import { createTimedDetector } from '../create-timed-detector.js';
 import {
   type InteractionDetector,
+  type InteractionKey,
   isFragment,
   type ResolveScopeAttribution,
   toInteractionArgs,
@@ -10,12 +11,12 @@ import {
 
 import { type ElementHoverCallbackInfo, ElementHoverObserver } from './element-hover-observer.js';
 
-export function createHoverDetector(
+export function createHoverDetector<TKey extends InteractionKey = string>(
   trackHover: (args: HoverBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveScopeAttribution,
+  resolveAttribution: ResolveScopeAttribution<TKey>,
   getResetToken?: () => unknown
-): InteractionDetector {
-  return createTimedDetector<ElementHoverCallbackInfo>({
+): InteractionDetector<TKey> {
+  return createTimedDetector<ElementHoverCallbackInfo, TKey>({
     resolveAttribution,
     getResetToken,
     isEligible: isFragment,

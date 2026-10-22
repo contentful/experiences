@@ -155,8 +155,8 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
   const destinations = new Map();
-  // Reference app: show automatic and manual alternatives side by side, reusing
-  // one fetched plan for each ID. Consumers normally choose one tracking path.
+  // Reference app: compare automatic discovery with explicit element registration,
+  // reusing one fetched plan for each ID. The SDK measures both presentations.
   for (const [index, section] of ['auto', 'manual'].entries()) {
     const parent = appMain.querySelector(`[data-experiences="${section}"]`);
     parent.id = route.grids[index];
@@ -223,13 +223,23 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
         const namespace = `plan-${++renderInstance}`;
         // Consumer integration, with multiple plans: local scope keys can collide. Prefix
         // them consistently in DOM/lookup, retaining shared keys within each plan.
+        const manualRoots = [];
         const rendered = targets.map(({ section }) =>
-          renderExperience(plan, experienceId, section, { sdk, namespace })
+          renderExperience(plan, experienceId, section, {
+            namespace,
+            onManualRoot: (element, data) => manualRoots.push({ element, data }),
+          })
         );
         for (const [key, scope] of Object.entries(plan.attribution?.scopes ?? {})) {
           attribution.set(`${namespace}:${key}`, scope);
         }
         targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
+        // Consumer integration: register after insertion, as in Optimization's
+        // manually observed section. SDK observers own consent, dwell and duration.
+        for (const { element, data } of manualRoots) {
+          sdk.tracking.clearElement('views', element);
+          sdk.tracking.enableElement('views', element, { data });
+        }
       } catch (error) {
         if (!isCurrent()) return;
         failed = true;

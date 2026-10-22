@@ -62,6 +62,8 @@ import {
   createInteractionTracking,
   type InteractionTracking,
   type InteractionTrackingOptions,
+  type AutoTrackEntryInteractionOptions,
+  type EntryInteractionApi,
 } from './interaction-tracking.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import { shouldApplyHandoffProfile } from './handoff-continuity.js';
@@ -88,6 +90,8 @@ export type CoreConfigDefaults = StatefulDefaults;
  * Long-lived, browser-oriented SDK configuration.
  */
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
+  /** Automatic interaction defaults; each omitted flag defaults to true. */
+  autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
   app?: EventBuilderConfig['app'];
   browserContext?: BrowserEventContextProviders;
@@ -146,6 +150,8 @@ type WebEventMethods = Pick<
   'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
+export type ExperiencesTrackingApi = EntryInteractionApi;
+
 export type InteractionTrackingStartOptions = InteractionTrackingOptions;
 
 export interface InteractionTrackingSession {
@@ -183,6 +189,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   protected readonly onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
   readonly #getAnonymousId: () => string | undefined;
   #interactionTracking: InteractionTracking | undefined;
+  #interactionSession = false;
+  /** Automatic and per-element interaction controls, matching Optimization. */
+  readonly tracking: ExperiencesTrackingApi = {
+    enable: (type, options) => this.#ensureInteractionTracking()?.tracking.enable(type, options),
+    disable: (type) => this.#ensureInteractionTracking()?.tracking.disable(type),
+    enableElement: (type, element, options) =>
+      this.#ensureInteractionTracking()?.tracking.enableElement(type, element, options),
+    disableElement: (type, element) =>
+      this.#ensureInteractionTracking()?.tracking.disableElement(type, element),
+    clearElement: (type, element) =>
+      this.#ensureInteractionTracking()?.tracking.clearElement(type, element),
+  };
   readonly #adoptedProfileId = signal<string | undefined>();
   #identityRevision = 0;
   #currentInitialization: HandoffInitialization | undefined;
@@ -353,11 +371,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       // Last-chance delivery when the page is hidden or unloaded: end in-progress views
       // and hovers so their final events are queued, then force a final attempt on both
       // queues. Only Analytics uses the Beacon API; each API keeps its own transport.
+      this.#ensureInteractionTracking();
       this.#cleanupVisibilityListener = createVisibilityChangeListener(async () => {
         await this.#interactionTracking?.endActive();
         await this.flushQueues({ force: true, beacon: beaconHandler });
       });
     } catch (error) {
+      this.#interactionTracking?.destroy();
       this.#disposeEffects();
       this.#cleanupVisibilityListener?.();
       if (typeof window !== 'undefined') {
@@ -437,7 +457,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         // Even allowlisted detectors must discard the previous lifecycle's intervals
         // and capture the new token. Sync explicitly: repeated denials do not change
         // the consent signal and therefore do not rerun its effect.
-        this.#interactionTracking?.reset();
+        this.#interactionTracking?.reset(true);
       }
       try {
         if (next.persistence === false) {
@@ -615,15 +635,44 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
   }
 
+  #createInteractionTracking(
+    options: InteractionTrackingOptions,
+    initialSettings?: ReturnType<InteractionTracking['getSettings']>
+  ): InteractionTracking {
+    return createInteractionTracking(
+      this,
+      options,
+      {
+        isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
+        getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
+      },
+      initialSettings
+    );
+  }
+
+  #ensureInteractionTracking(): InteractionTracking | undefined {
+    if (this.#destroyed) return undefined;
+    return (this.#interactionTracking ??= this.#createInteractionTracking({
+      resolveAttribution: () => undefined,
+      ...this.config.autoTrackEntryInteraction,
+    }));
+  }
+
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#interactionTracking) {
+    if (this.#interactionSession) {
       throw new Error('Interaction tracking is already running; stop it before starting again');
     }
-    const tracking = createInteractionTracking(this, options, {
-      isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
-      getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
-    });
+    const previous = this.#interactionTracking;
+    // A new attribution lookup needs its own draining callback ownership, while
+    // omitted session settings retain the SDK's current imperative decisions.
+    const tracking = this.#createInteractionTracking(
+      previous ? options : { ...this.config.autoTrackEntryInteraction, ...options },
+      previous?.getSettings()
+    );
+    previous?.transferOverridesTo(tracking.tracking);
+    previous?.destroy();
+    this.#interactionSession = true;
     this.#interactionTracking = tracking;
 
     let stopping: Promise<void> | undefined;
@@ -637,7 +686,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         // views and hovers before its first await, so the session can be torn
         // down and its slot released at once, and only the final events are
         // still in flight when a new session starts.
-        if (this.#interactionTracking === tracking) this.#interactionTracking = undefined;
+        if (this.#interactionTracking === tracking) {
+          this.#interactionTracking = undefined;
+          this.#interactionSession = false;
+        }
         const flushed = tracking.endActive();
         tracking.destroy();
         stopping = flushed;

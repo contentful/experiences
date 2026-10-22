@@ -1,6 +1,10 @@
 import type { TrackingAttribution } from './attribution.js';
 
-import type { InteractionDetector, ResolveScopeAttribution } from './interaction-detector.js';
+import type {
+  InteractionDetector,
+  InteractionKey,
+  ResolveScopeAttribution,
+} from './interaction-detector.js';
 
 interface TimedObserver {
   observe(element: Element): void;
@@ -9,8 +13,8 @@ interface TimedObserver {
   endActive(): Promise<void>;
 }
 
-interface CreateTimedDetectorOptions<TInfo> {
-  resolveAttribution: ResolveScopeAttribution;
+interface CreateTimedDetectorOptions<TInfo, TKey extends InteractionKey> {
+  resolveAttribution: ResolveScopeAttribution<TKey>;
   isSupported?: () => boolean;
   /** Defaults to every attribution being eligible. */
   isEligible?: (attribution: TrackingAttribution) => boolean;
@@ -31,7 +35,7 @@ interface Group {
   observer?: TimedObserver;
 }
 
-export function createTimedDetector<TInfo>({
+export function createTimedDetector<TInfo, TKey extends InteractionKey = string>({
   resolveAttribution,
   isSupported = () => true,
   isEligible = () => true,
@@ -39,11 +43,11 @@ export function createTimedDetector<TInfo>({
   createObserver,
   track,
   getResetToken = () => undefined,
-}: CreateTimedDetectorOptions<TInfo>): InteractionDetector {
-  const groups = new Map<string, Group>();
+}: CreateTimedDetectorOptions<TInfo, TKey>): InteractionDetector<TKey> {
+  const groups = new Map<TKey, Group>();
   let started = false;
 
-  const startGroup = (key: string, group: Group): void => {
+  const startGroup = (key: TKey, group: Group): void => {
     // A group's callbacks are serialised, so one session is in flight at a time.
     // Its final event keeps the attribution that qualified it: a slow send can
     // delay the final past a `refresh()` that re-points this key.
