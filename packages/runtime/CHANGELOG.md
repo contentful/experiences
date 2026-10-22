@@ -1,3 +1,13 @@
+## 0.2.2 (2026-10-22)
+
+### 🚀 Features
+
+- add runtime Experience parameters [ARC-2668] ([#235](https://github.com/contentful/experiences/pull/235))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.2
+
 ## 0.2.1 (2026-10-22)
 
 ### 🚀 Features

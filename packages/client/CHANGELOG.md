@@ -1,3 +1,9 @@
+## 0.10.2 (2026-10-22)
+
+### 🚀 Features
+
+- add runtime Experience parameters [ARC-2668] ([#235](https://github.com/contentful/experiences/pull/235))
+
 ## 0.10.1 (2026-10-22)
 
 ### 🚀 Features
