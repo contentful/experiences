@@ -1,3 +1,18 @@
+## 0.2.0 (2026-10-22)
+
+### 🚀 Features
+
+- ⚠️  [EXA-2582] rename Fragment entity kind to ExperienceFragment ([#253](https://github.com/contentful/experiences/pull/253))
+
+### ⚠️  Breaking Changes
+
+- [EXA-2582] rename Fragment entity kind to ExperienceFragment  ([#253](https://github.com/contentful/experiences/pull/253))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.0
+- Updated core to 0.13.0
+
 ## 0.1.3 (2026-10-21)
 
 ### 🩹 Fixes
