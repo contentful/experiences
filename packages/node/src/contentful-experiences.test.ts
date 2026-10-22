@@ -311,7 +311,7 @@ describe('Node ContentfulExperiences', () => {
     const request = runtime.forRequest();
 
     await expect(
-      request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+      request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
     ).rejects.toBeInstanceOf(EventProfileRequiredError);
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
@@ -336,8 +336,8 @@ describe('Node ContentfulExperiences', () => {
     await Promise.all([
       german.track({ event: 'viewed', locale: 'method-locale' }),
       french.track({ event: 'viewed' }),
-      german.trackClick({ entityId: 'german-entry', entityKind: 'InlineComponent' }),
-      french.trackClick({ entityId: 'french-entry', entityKind: 'InlineComponent' }),
+      german.trackClick({ entityId: 'german-entry', entityKind: 'Experience' }),
+      french.trackClick({ entityId: 'french-entry', entityKind: 'Experience' }),
     ]);
 
     expect(upsertProfile).toHaveBeenCalledWith(
@@ -489,7 +489,7 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile.mock.calls[1]?.[0]).toMatchObject({ profileId: 'updated-profile' });
     expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
     await expect(
-      request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+      request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
     ).resolves.toBeUndefined();
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
@@ -983,7 +983,7 @@ describe('Node ContentfulExperiences', () => {
         insightsOptions: { beacon },
       });
 
-      await request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' });
+      await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });
 
       expect(sendBatchEvents).toHaveBeenCalledWith(expect.any(Array), { beacon });
     });
@@ -992,7 +992,7 @@ describe('Node ContentfulExperiences', () => {
       const { runtime, sendBatchEvents } = createEventRuntime();
       const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
 
-      await request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' });
+      await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });
 
       expect(sendBatchEvents.mock.calls[0]).toHaveLength(1);
     });
@@ -1002,7 +1002,7 @@ describe('Node ContentfulExperiences', () => {
       const request = runtime.forRequest({ consent: true });
 
       await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
       ).rejects.toBeInstanceOf(EventProfileRequiredError);
       expect(sendBatchEvents).not.toHaveBeenCalled();
     });
@@ -1013,7 +1013,7 @@ describe('Node ContentfulExperiences', () => {
       const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
 
       await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
       ).resolves.toBeUndefined();
 
       expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -1028,7 +1028,7 @@ describe('Node ContentfulExperiences', () => {
       const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
 
       await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
       ).resolves.toBeUndefined();
     });
   });
@@ -1036,7 +1036,7 @@ describe('Node ContentfulExperiences', () => {
   describe('trackView acceptance result', () => {
     const view = {
       entityId: 'entry',
-      entityKind: 'InlineComponent' as const,
+      entityKind: 'Experience' as const,
       viewId: 'v1',
       viewDurationMs: 1000,
     };

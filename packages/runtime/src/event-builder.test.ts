@@ -87,13 +87,16 @@ describe('EventBuilder', () => {
   });
 
   it('builds baseline Fragment events with default own and parent variants', () => {
-    const events = buildInteractionEvents({ entityId: 'fragment-1', entityKind: 'Fragment' });
+    const events = buildInteractionEvents({
+      entityId: 'fragment-1',
+      entityKind: 'ExperienceFragment',
+    });
 
     expectApiCompatibleInteractionEvents(events);
     for (const event of events) {
       expect(event).toMatchObject({
         entityId: 'fragment-1',
-        entityKind: 'Fragment',
+        entityKind: 'ExperienceFragment',
         variantId: 'default',
         parentVariantId: 'default',
       });
@@ -101,14 +104,6 @@ describe('EventBuilder', () => {
       expect(event).not.toHaveProperty('variantIndex');
     }
   });
-
-  it.each(['InlineFragment', 'InlineComponent'] as const)(
-    'keeps absent variant IDs omitted on %s events',
-    (entityKind) => {
-      const events = buildInteractionEvents({ entityId: 'inline-1', entityKind });
-      for (const event of events) expect(event).not.toHaveProperty('variantId');
-    }
-  );
 
   it.each([
     [undefined, 'default'],
@@ -120,7 +115,7 @@ describe('EventBuilder', () => {
       const events = buildInteractionEvents({
         ...interaction,
         entityId: 'fragment-1',
-        entityKind: 'Fragment' as const,
+        entityKind: 'ExperienceFragment' as const,
         parentExperienceId: 'experience-1',
         parentVariantId,
       });
@@ -136,7 +131,7 @@ describe('EventBuilder', () => {
     }
   );
 
-  it.each(['Experience', 'Fragment'] as const)(
+  it.each(['Experience', 'ExperienceFragment'] as const)(
     'defaults an empty own variant on %s events',
     (entityKind) => {
       const events = buildInteractionEvents({ entityId: 'entity-1', entityKind, variantId: '' });

@@ -271,7 +271,7 @@ describe('RuntimeEventMethods', () => {
         await methods.page();
         await expect(methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
         await expect(
-          methods.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' })
+          methods.trackClick({ entityId: 'entry', entityKind: 'Experience' })
         ).resolves.toBeUndefined();
 
         expect(upsertProfile).toHaveBeenCalledTimes(1);
@@ -299,7 +299,7 @@ describe('RuntimeEventMethods', () => {
       });
 
       await methods.track({ event: 'purchase' });
-      await methods.trackClick({ entityId: 'entry', entityKind: 'InlineComponent' });
+      await methods.trackClick({ entityId: 'entry', entityKind: 'Experience' });
 
       expect(upsertProfile).toHaveBeenCalledTimes(1);
       expect(sendBatchEvents).toHaveBeenCalledTimes(1);

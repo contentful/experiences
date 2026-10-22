@@ -16,7 +16,7 @@ type PathSegment = string | number;
 
 const DEFINING_LAYER_KIND: Record<EntityKind, string> = {
   Experience: 'ExperienceTemplate',
-  Fragment: 'Component',
+  ExperienceFragment: 'Component',
 };
 
 function asRecord(value: unknown): Rec | undefined {
@@ -54,7 +54,7 @@ function parseLayer(value: unknown): Layer | undefined {
 
 function scopeKind(layer: Layer): EntityKind | undefined {
   if (layer.kind === 'Experience') return 'Experience';
-  if (layer.kind === 'ExperienceFragment') return 'Fragment';
+  if (layer.kind === 'ExperienceFragment') return 'ExperienceFragment';
   return undefined;
 }
 
@@ -164,7 +164,7 @@ function buildScope(
   if (scope.entityKindId !== undefined) {
     attribution.entityKindId = scope.entityKindId;
   }
-  if (scope.kind === 'Fragment' && parentExperience !== undefined) {
+  if (scope.kind === 'ExperienceFragment' && parentExperience !== undefined) {
     attribution.parentExperienceId = parentExperience.entityId;
     if (parentExperience.variantId !== undefined) {
       attribution.parentVariantId = parentExperience.variantId;

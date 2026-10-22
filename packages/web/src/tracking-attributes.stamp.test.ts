@@ -28,7 +28,9 @@ describe('tracking attributes with the runtime', () => {
       {
         views: false,
         resolveAttribution: (nodeId) =>
-          nodeId === 'node:hero' ? { entityId: 'hero', entityKind: 'Fragment' } : undefined,
+          nodeId === 'node:hero'
+            ? { entityId: 'hero', entityKind: 'ExperienceFragment' }
+            : undefined,
       }
     );
     card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
