@@ -1,0 +1,121 @@
+{
+  "name": "implementation-web-sdk",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "implementations/web-sdk/public",
+  "projectType": "application",
+  "tags": ["scope:implementation", "runtime:web"],
+  "targets": {
+    "install": {
+      "cache": false,
+      "dependsOn": [
+        {
+          "projects": ["web"],
+          "target": "pack"
+        }
+      ],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/install-implementation.ts implementations/web-sdk"
+      }
+    },
+    "setup": {
+      "cache": false,
+      "dependsOn": ["install"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run build --"
+      }
+    },
+    "build": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run build --"
+      }
+    },
+    "dev": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run dev --"
+      }
+    },
+    "serve": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run serve --"
+      }
+    },
+    "serve:stop": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run serve:stop --"
+      }
+    },
+    "restart": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run restart --"
+      }
+    },
+    "status": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run status --"
+      }
+    },
+    "logs": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run logs --"
+      }
+    },
+    "clean": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run clean --"
+      }
+    },
+    "typecheck": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run typecheck --"
+      }
+    },
+    "lint": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/web-sdk",
+        "command": "npm run lint --"
+      }
+    }
+  }
+}
