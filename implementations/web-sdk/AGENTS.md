@@ -3,8 +3,8 @@
 - Read `README.md`, parent implementation guidance, and the checkout-local
   `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
   explicit phase authorization and stop for user acceptance at each boundary.
-  Phase 5 is accepted. Phase 6 adds interaction tracking and the event sidebar;
-  Phase 7 requires separate acceptance and execution authorization.
+  Phases 1–6 are accepted. Phase 7 covers integrated verification and final
+  documentation; stop for final acceptance before publishing or further work.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.

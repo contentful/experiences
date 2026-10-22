@@ -264,6 +264,22 @@ local tarball overrides and the shared installer follow Experiences tooling.
 Vite bundles Rich Text and the pure public tracking helper; Web's accepted Rslib distribution
 is consumed unchanged. No adjacent checkout is needed to build or run this app.
 
+### Retained differences from Optimization
+
+- Experiences renders XDA plans through application-owned DOM renderers rather
+  than Optimization's entry Web Components. There is no producer-hidden readiness
+  example; loading/errors belong to the actual rendered content. The manual copy
+  demonstrates an alternative event path alongside automatic tracking.
+- XDA selects variants server-side. The explicit page/identify/fetch flow follows
+  the [current XDA workarounds](#current-xda-limitations-and-workaround-removal),
+  and there is no profile-driven content refresh, Live Updates or Preview Panel.
+  Attribution comes from source maps, with namespaced keys and a real scope lookup
+  for multiple plans; event labels use Experience/ExperienceFragment semantics.
+- npm/Nx, ESLint/Prettier, scoped PM2 and local tarball installation retain this
+  repository's maintained tooling. Vite prepares Rich Text/pure-helper assets;
+  the installed SDK keeps its accepted Rslib distribution. The theme is vendored
+  locally, and a narrow-screen layout stacks sidebar/content for usable phone widths.
+
 ## Validation and scope
 
 Use build, local lint/typecheck, actual artifact inspection and direct browser
@@ -275,14 +291,22 @@ included.
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. No Live Updates or Live Preview is included.
-Content fetching/rendering and explicit visitor actions are accepted Phase 5 work;
-interaction tracking and the sidebar belong to Phase 6. An event-stream notification denotes
+Content fetching/rendering, visitor actions, interaction tracking and the sidebar
+are accepted through Phase 6. An event-stream notification denotes
 an event attempt, not admission or successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
 
+Live verification has not reached empty-plan, missing-Experience, transport-failure
+or queued-page-without-profile recovery, offline/capacity refusal, retry, SDK pending-response
+isolation, subscriber-exception, or back/forward-cache suspension scenarios.
+Those paths have source-review evidence only; ordinary browser back navigation
+does not establish back/forward-cache behavior. Visual comparison uses the pinned
+Optimization source/theme rather than a running pixel comparison.
+
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current phase authorization and validation evidence. Stop for Phase 6
-acceptance before implementing Phase 7.
+records current phase authorization and validation evidence. Phase 7 finalizes
+integrated verification and documentation; stop for final acceptance before
+publishing or further work.
 
 ## Troubleshooting
 
