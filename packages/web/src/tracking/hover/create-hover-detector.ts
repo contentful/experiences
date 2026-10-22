@@ -12,10 +12,12 @@ import { type ElementHoverCallbackInfo, ElementHoverObserver } from './element-h
 
 export function createHoverDetector(
   trackHover: (args: HoverBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveScopeAttribution
+  resolveAttribution: ResolveScopeAttribution,
+  getResetToken?: () => unknown
 ): InteractionDetector {
   return createTimedDetector<ElementHoverCallbackInfo>({
     resolveAttribution,
+    getResetToken,
     isEligible: isFragment,
     isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementHoverObserver(callback),

@@ -22,7 +22,7 @@ import {
   type IdentifyBuilderArgs,
   type InitialPersonalizationEvent,
   type PageViewBuilderArgs,
-  type RuntimeEventBindings,
+  type RuntimeDirectEventBindings,
   type RuntimeEventMethods,
   type RuntimeFetchByDestinationNodeOptions,
   type RuntimeFetchByDestinationPathOptions,
@@ -138,13 +138,15 @@ export interface ExperiencesNodeRequest extends NodePersonalizationMethods, Node
 }
 
 /** Node SDK with stable transport configuration and request-local event state. */
-export class ContentfulExperiences extends RuntimeContentfulExperiences {
+export class ContentfulExperiences extends RuntimeContentfulExperiences<
+  ExperiencesNodeConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
+> {
   readonly #consentPolicy: ConsentPolicy;
 
   constructor(config: ExperiencesNodeConfig) {
-    const { app, allowedEventTypes, onEventBlocked, ...runtimeConfig } = config;
+    const { app, allowedEventTypes, onEventBlocked } = config;
     super({
-      ...runtimeConfig,
+      ...config,
       eventBuilder: {
         app,
         channel: 'server',
@@ -159,7 +161,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences {
       this,
       context,
       (profileId, events, options) =>
-        this.optimizationApi.personalization.upsertProfile(
+        this.api.experience.upsertProfile(
           { profileId, events: [...events] },
           { ...options, preflight: true }
         ),
@@ -192,7 +194,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     private readonly runtime: ContentfulExperiences,
     private readonly context: ExperiencesNodeRequestContext,
     private readonly preflightPersonalizationEvents: PreflightPersonalizationEvents,
-    createEventMethods: (bindings: RuntimeEventBindings) => RuntimeEventMethods,
+    createEventMethods: (bindings: RuntimeDirectEventBindings) => RuntimeEventMethods,
     private readonly consentPolicy: ConsentPolicy
   ) {
     const { experienceOptions, insightsOptions } = context;

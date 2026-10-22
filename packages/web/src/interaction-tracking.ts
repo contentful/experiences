@@ -62,6 +62,8 @@ export type TrackedMethod = 'trackView' | 'trackHover' | 'trackClick';
  */
 export interface InteractionTrackingGate {
   isAllowed(method: TrackedMethod): boolean;
+  /** Invalidates delayed callbacks across the owning runtime's lifecycle boundaries. */
+  getResetToken?(): unknown;
 }
 
 export interface InteractionTracking {
@@ -75,6 +77,8 @@ export interface InteractionTracking {
    * changes. A detector that becomes permitted starts a new measurement interval.
    */
   syncConsent(): void;
+  /** Discards measurements and stops detectors; refresh or consent sync can resume them. */
+  reset(): void;
   /** Ends in-progress views/hovers, sending their final events, and awaits them. */
   endActive(): Promise<void>;
   /** Stops discovery and every detector. Call `endActive()` first to flush in-progress events. */
@@ -96,12 +100,15 @@ export function createInteractionTracking(
     return {
       refresh: () => undefined,
       syncConsent: () => undefined,
+      reset: () => undefined,
       endActive: async () => undefined,
       destroy: () => undefined,
     };
   }
 
   const root = options.root ?? document;
+  let destroyed = false;
+  let observing = false;
 
   // The single path detectors read attribution through. Plan attribution is
   // typed Experience | Fragment, so this is a defensive runtime check for
@@ -125,13 +132,22 @@ export function createInteractionTracking(
     const viewOptions = typeof options.views === 'object' ? options.views : undefined;
     add(
       'trackView',
-      createViewDetector((args) => events.trackView(args), resolveKeyAttribution, viewOptions)
+      createViewDetector(
+        (args) => events.trackView(args),
+        resolveKeyAttribution,
+        viewOptions,
+        gate.getResetToken
+      )
     );
   }
   if (options.hovers !== false) {
     add(
       'trackHover',
-      createHoverDetector((args) => events.trackHover(args), resolveKeyAttribution)
+      createHoverDetector(
+        (args) => events.trackHover(args),
+        resolveKeyAttribution,
+        gate.getResetToken
+      )
     );
   }
   if (options.clicks !== false) {
@@ -216,6 +232,7 @@ export function createInteractionTracking(
    * reported.
    */
   const sync = (): void => {
+    if (destroyed) return;
     for (const entry of managed) {
       const allowed = gate.isAllowed(entry.method);
       if (allowed && !entry.running) {
@@ -229,34 +246,46 @@ export function createInteractionTracking(
         entry.detector.stop();
       }
     }
+    if (!observing && managed.some((entry) => entry.running)) {
+      observing = true;
+      mutationObserver.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: [TRACKING_SCOPES_ATTRIBUTE],
+      });
+      root.querySelectorAll(SELECTOR).forEach(reconcile);
+    }
+  };
+
+  const reset = (preservePending = false): void => {
+    mutationObserver.disconnect();
+    observing = false;
+    for (const entry of managed) {
+      entry.running = false;
+      entry.detector.stop({ preservePending });
+    }
+    observed.clear();
   };
 
   sync();
-  mutationObserver.observe(root, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: [TRACKING_SCOPES_ATTRIBUTE],
-  });
-  root.querySelectorAll(SELECTOR).forEach(reconcile);
 
   return {
     refresh() {
+      if (destroyed) return;
+      sync();
       const candidates = new Set<Element>(observed.keys());
       root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
       for (const element of candidates) reconcile(element);
     },
     syncConsent: sync,
+    reset,
     async endActive() {
       await Promise.all(running().map((detector) => detector.endActive?.()));
     },
     destroy() {
-      mutationObserver.disconnect();
-      for (const entry of managed) {
-        entry.running = false;
-        entry.detector.stop();
-      }
-      observed.clear();
+      destroyed = true;
+      reset(true);
     },
   };
 }

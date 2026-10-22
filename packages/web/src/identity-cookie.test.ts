@@ -38,7 +38,7 @@ function captureCookieWrites(jar = ''): { writes: string[]; restore: () => void 
 }
 
 function create(overrides: ConstructorParameters<typeof IdentityCookie>[1] = {}) {
-  const store = new LocalStore();
+  const store = LocalStore;
   const identity = new IdentityCookie(store, overrides);
   return { store, identity };
 }

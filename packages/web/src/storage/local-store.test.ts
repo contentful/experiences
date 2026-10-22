@@ -12,18 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedConsent } from '../test-fixtures/consent.js';
 import LocalStore from './local-store.js';
 
+beforeEach(() => window.localStorage.clear());
+afterEach(() => vi.restoreAllMocks());
+
 describe('LocalStore', () => {
-  let store: LocalStore;
-
-  beforeEach(() => {
-    window.localStorage.clear();
-    seedConsent({ persistence: true });
-    store = new LocalStore();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  const store = LocalStore;
 
   it('reads and writes the complete profile', () => {
     const profile = {
@@ -35,62 +28,10 @@ describe('LocalStore', () => {
 
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(store.profile).toEqual(profile);
-    const next = new LocalStore();
-    next.applyConsentDefaults({});
-    expect(next.profile).toEqual(profile);
-  });
-
-  it('clears the profile on reset', () => {
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'profile-id' }));
-
-    store.reset();
-
-    expect(store.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-
-  it('advances the profile revision when profile state changes', () => {
-    const initialRevision = store.profileRevision;
-
-    store.profile = { id: 'profile-id' };
-    expect(store.profileRevision).toBe(initialRevision + 1);
-
-    store.reset();
-    expect(store.profileRevision).toBe(initialRevision + 2);
-  });
-
-  it('updates the profile from a returned id at the expected revision', () => {
-    const revision = store.profileRevision;
-
-    store.updateProfileFromId('returned-profile', revision);
-
-    expect(store.profile).toEqual({ id: 'returned-profile' });
-  });
-
-  it('preserves a complete profile when the returned id is unchanged', () => {
-    const profile = { id: 'profile-id', traits: { plan: 'pro' } };
-    store.profile = profile;
-    const revision = store.profileRevision;
-
-    store.updateProfileFromId('profile-id', revision);
-
-    expect(store.profile).toEqual(profile);
-    expect(store.profileRevision).toBe(revision);
-  });
-
-  it('ignores a returned profile id after a newer profile change', () => {
-    const staleRevision = store.profileRevision;
-    store.profile = { id: 'current-profile' };
-
-    store.updateProfileFromId('stale-profile', staleRevision);
-
-    expect(store.profile).toEqual({ id: 'current-profile' });
   });
 
   it('deletes malformed profile JSON', () => {
     window.localStorage.setItem(PROFILE_CACHE_KEY, '{bad-json');
-    store = new LocalStore();
-    store.applyConsentDefaults({});
 
     expect(store.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
@@ -98,8 +39,6 @@ describe('LocalStore', () => {
 
   it('deletes profile values that fail schema validation', () => {
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ traits: {} }));
-    store = new LocalStore();
-    store.applyConsentDefaults({});
 
     expect(store.profile).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
@@ -109,9 +48,11 @@ describe('LocalStore', () => {
     vi.spyOn(window.Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('storage blocked');
     });
-    store = new LocalStore();
 
     expect(store.profile).toBeUndefined();
+    expect(store.consent).toBeUndefined();
+    expect(store.persistenceConsent).toBeUndefined();
+    expect(store.anonymousId).toBeUndefined();
   });
 
   it('swallows LocalStorage write failures', () => {
@@ -122,7 +63,7 @@ describe('LocalStore', () => {
     expect(() => {
       store.profile = { id: 'profile-id' };
     }).not.toThrow();
-    expect(store.profile).toEqual({ id: 'profile-id' });
+    expect(store.profile).toBeUndefined();
   });
 
   it('swallows LocalStorage removal failures', () => {
@@ -132,308 +73,18 @@ describe('LocalStore', () => {
 
     expect(() => store.reset()).not.toThrow();
   });
-
-  it('JSON-encodes non-string cache values', () => {
-    store.setCache('test-key', { ok: true });
-
-    expect(window.localStorage.getItem('test-key')).toBe('{"ok":true}');
-  });
-});
-
-describe('LocalStore consent', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  it('keeps the profile in memory only until persistence consent is granted', () => {
-    const store = new LocalStore();
-
-    store.profile = { id: 'visitor' };
-
-    expect(store.profile).toEqual({ id: 'visitor' });
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-
-    store.updateConsent({ persistence: true });
-    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({ id: 'visitor' });
-  });
-
-  it('removes the stored profile but keeps the in-memory one when persistence is denied', () => {
-    const store = new LocalStore();
-    store.updateConsent({ persistence: true });
-    store.profile = { id: 'visitor' };
-
-    store.updateConsent({ persistence: false });
-
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-    expect(store.profile).toEqual({ id: 'visitor' });
-  });
-
-  it('persists consent itself and restores it with the profile on the next load', () => {
-    const first = new LocalStore();
-    first.updateConsent({ events: true, persistence: true });
-    first.profile = { id: 'visitor' };
-
-    const second = new LocalStore();
-    second.applyConsentDefaults({});
-
-    expect(second.consent).toEqual({ events: true, persistence: true });
-    expect(second.profile).toEqual({ id: 'visitor' });
-  });
-
-  it('does not restore, but keeps, a stored profile while persistence is undecided', () => {
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'stored' }));
-
-    expect(new LocalStore().profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
-  });
-
-  it('removes a stored profile on load when persistence was denied', () => {
-    seedConsent({ persistence: false });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'stale' }));
-
-    const store = new LocalStore();
-    store.applyConsentDefaults({});
-
-    expect(store.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-});
-
-describe('LocalStore consent defaults (same precedence as the Optimization SDK)', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  it('writes the effective decisions to the shared consent keys', () => {
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ events: true, persistence: false });
-
-    expect(store.consent).toEqual({ events: true, persistence: false });
-    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('accepted');
-    expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('denied');
-  });
-
-  it('writes nothing for a visitor who has not decided and has no defaults', () => {
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({});
-
-    expect(store.consent).toEqual({});
-    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBeNull();
-    expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBeNull();
-  });
-
-  it('lets configured defaults override a stored decision', () => {
-    seedConsent({ events: false, persistence: false });
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ events: true, persistence: true });
-
-    expect(store.consent).toEqual({ events: true, persistence: true });
-  });
-
-  it('keeps the stored value for an axis the defaults leave unset', () => {
-    seedConsent({ events: false, persistence: true });
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({});
-
-    expect(store.consent).toEqual({ events: false, persistence: true });
-  });
-
-  it('lets a configured event default decide persistence too, over the stored value', () => {
-    seedConsent({ events: false, persistence: true });
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ events: true });
-
-    // `events` is configured; `persistence` falls back to it rather than to storage.
-    expect(store.consent).toEqual({ events: true, persistence: true });
-  });
-
-  it('makes a configured default the stored decision for the next load', () => {
-    seedConsent({ events: false, persistence: true });
-    new LocalStore().applyConsentDefaults({ events: true });
-
-    const later = new LocalStore();
-    later.applyConsentDefaults({});
-
-    // Removing the default does not return the visitor to their earlier choice.
-    expect(later.consent).toEqual({ events: true, persistence: true });
-  });
-
-  it('uses the event default as the persistence default when none is given', () => {
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ events: true });
-    expect(store.consent).toEqual({ events: true, persistence: true });
-
-    const denied = new LocalStore();
-    denied.applyConsentDefaults({ events: false });
-    expect(denied.consent).toEqual({ events: false, persistence: false });
-  });
-
-  it('prefers an explicit persistence default over the event default', () => {
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ events: true, persistence: false });
-
-    expect(store.consent).toEqual({ events: true, persistence: false });
-  });
-
-  it('leaves consent untouched when no defaults are configured', () => {
-    seedConsent({ events: true, persistence: false });
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({});
-
-    expect(store.consent).toEqual({ events: true, persistence: false });
-  });
-
-  it('restores a stored profile when defaults grant persistence', () => {
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const store = new LocalStore();
-    expect(store.profile).toBeUndefined();
-
-    store.applyConsentDefaults({ persistence: true });
-
-    expect(store.profile).toEqual({ id: 'visitor' });
-  });
-
-  it('clears the stored profile when defaults deny persistence', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const store = new LocalStore();
-    store.applyConsentDefaults({});
-    expect(store.profile).toEqual({ id: 'visitor' });
-
-    store.applyConsentDefaults({ persistence: false });
-
-    expect(store.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-
-  it('keeps a denial in force when the same SDK is recreated without the default', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    new LocalStore().applyConsentDefaults({ persistence: false });
-
-    const recreated = new LocalStore();
-    recreated.applyConsentDefaults({});
-
-    // The configured denial became the stored decision, so removing it does not bring the
-    // old acceptance or the old profile back.
-    expect(recreated.consent.persistence).toBe(false);
-    expect(recreated.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-
-  it('resolves consent before loading the profile, so a denied default never loads it', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ persistence: false });
-
-    expect(store.profile).toBeUndefined();
-  });
-
-  it('keeps the stored profile when defaults grant what was already granted', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const store = new LocalStore();
-
-    store.applyConsentDefaults({ persistence: true });
-
-    expect(store.profile).toEqual({ id: 'visitor' });
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
-  });
-});
-
-describe('LocalStore resolves consent before it touches the profile', () => {
-  const profileReads = (getItem: { mock: { calls: unknown[][] } }) =>
-    getItem.mock.calls.filter(([key]) => key === PROFILE_CACHE_KEY);
-
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('never reads the stored profile when a configured default denies persistence', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
-
-    const store = new LocalStore();
-    store.applyConsentDefaults({ persistence: false });
-
-    expect(profileReads(getItem)).toEqual([]);
-    expect(store.profile).toBeUndefined();
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-  });
-
-  it('reads the stored profile once when the effective decision grants persistence', () => {
-    seedConsent({ events: true, persistence: false });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
-
-    const store = new LocalStore();
-    store.applyConsentDefaults({ persistence: true });
-
-    expect(profileReads(getItem)).toHaveLength(1);
-    expect(store.profile).toEqual({ id: 'visitor' });
-  });
-
-  it('does not read the stored profile while persistence is undecided, and keeps it', () => {
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
-
-    const store = new LocalStore();
-    store.applyConsentDefaults({});
-
-    expect(profileReads(getItem)).toEqual([]);
-    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull();
-  });
-
-  it('loads nothing before the effective consent has been resolved', () => {
-    seedConsent({ events: true, persistence: true });
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
-    const getItem = vi.spyOn(window.Storage.prototype, 'getItem');
-
-    new LocalStore();
-
-    expect(profileReads(getItem)).toEqual([]);
-  });
 });
 
 describe('LocalStore anonymous id (shared with the Optimization SDK)', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
+  it('reads, writes, and clears the id under the shared key', () => {
+    const store = LocalStore;
 
-  it('is undefined when nothing is stored', () => {
-    expect(new LocalStore().anonymousId).toBeUndefined();
-  });
-
-  it('stores and reads the id under the shared key', () => {
-    const store = new LocalStore();
-
+    expect(store.anonymousId).toBeUndefined();
     store.anonymousId = 'visitor-1';
 
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('visitor-1');
-    expect(new LocalStore().anonymousId).toBe('visitor-1');
-  });
-
-  it('removes the stored id when cleared', () => {
-    const store = new LocalStore();
-    store.anonymousId = 'visitor-1';
-
+    expect(LocalStore.anonymousId).toBe('visitor-1');
     store.anonymousId = undefined;
-
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
     expect(store.anonymousId).toBeUndefined();
   });
@@ -441,7 +92,7 @@ describe('LocalStore anonymous id (shared with the Optimization SDK)', () => {
   it('reads the legacy key ahead of the current one, and removes it', () => {
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'current-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
-    const store = new LocalStore();
+    const store = LocalStore;
 
     // Same precedence as the Optimization SDK: the legacy value wins, and is migrated away.
     expect(store.anonymousId).toBe('legacy-id');
@@ -451,9 +102,99 @@ describe('LocalStore anonymous id (shared with the Optimization SDK)', () => {
 
   it('reads a legacy-only id once', () => {
     window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy-id');
-    const store = new LocalStore();
+    const store = LocalStore;
 
     expect(store.anonymousId).toBe('legacy-id');
     expect(store.anonymousId).toBeUndefined();
+  });
+});
+
+describe('LocalStore consent persistence', () => {
+  it.each([
+    [true, 'accepted'],
+    [false, 'denied'],
+    [undefined, null],
+  ] as const)('encodes event and persistence consent %s as %s', (value, encoded) => {
+    LocalStore.consent = value;
+    LocalStore.persistenceConsent = value;
+
+    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe(encoded);
+    expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe(encoded);
+    expect(LocalStore.consent).toBe(value);
+    expect(LocalStore.persistenceConsent).toBe(value);
+  });
+
+  it('reads the current stored decisions on every access', () => {
+    seedConsent({ events: true, persistence: false });
+    expect(LocalStore.consent).toBe(true);
+    expect(LocalStore.persistenceConsent).toBe(false);
+
+    seedConsent({ events: false, persistence: true });
+    expect(LocalStore.consent).toBe(false);
+    expect(LocalStore.persistenceConsent).toBe(true);
+  });
+
+  it('treats an unrecognized consent encoding as undecided without removing it', () => {
+    for (const key of [CONSENT_CACHE_KEY, PERSISTENCE_CONSENT_CACHE_KEY]) {
+      window.localStorage.setItem(key, 'unexpected');
+    }
+    expect(LocalStore.consent).toBeUndefined();
+    expect(LocalStore.persistenceConsent).toBeUndefined();
+    expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('unexpected');
+    expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('unexpected');
+  });
+
+  it('uses legacy accepted event consent as persistence consent', () => {
+    LocalStore.consent = true;
+    expect(LocalStore.persistenceConsent).toBe(true);
+
+    LocalStore.persistenceConsent = false;
+    expect(LocalStore.persistenceConsent).toBe(false);
+  });
+
+  it('leaves persistence undecided for legacy denied event consent', () => {
+    LocalStore.consent = false;
+    expect(LocalStore.persistenceConsent).toBeUndefined();
+  });
+
+  it('reads the stored profile independently of consent', () => {
+    LocalStore.persistenceConsent = false;
+    LocalStore.profile = { id: 'stored-profile' };
+
+    expect(LocalStore.profile).toEqual({ id: 'stored-profile' });
+  });
+
+  it('reset clears continuity and preserves consent decisions', () => {
+    seedConsent({ events: true, persistence: false });
+    LocalStore.profile = { id: 'stored-profile' };
+    window.localStorage.setItem(ANONYMOUS_ID_KEY, 'current');
+    window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy');
+
+    LocalStore.reset();
+
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
+    expect(window.localStorage.getItem(ANONYMOUS_ID_KEY_LEGACY)).toBeNull();
+    expect(LocalStore.consent).toBe(true);
+    expect(LocalStore.persistenceConsent).toBe(false);
+  });
+
+  it('works without a browser', () => {
+    vi.stubGlobal('window', undefined);
+    try {
+      expect(LocalStore.profile).toBeUndefined();
+      expect(LocalStore.consent).toBeUndefined();
+      expect(LocalStore.persistenceConsent).toBeUndefined();
+      expect(LocalStore.anonymousId).toBeUndefined();
+      expect(() => {
+        LocalStore.profile = { id: 'server' };
+        LocalStore.consent = true;
+        LocalStore.persistenceConsent = true;
+        LocalStore.anonymousId = 'server';
+        LocalStore.reset();
+      }).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

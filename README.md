@@ -166,6 +166,14 @@ request-local. Web owns mutable locale and browser context, persists its current
 profile in LocalStorage, and offers `reset()` for logout or a new visitor
 session.
 
+Web exposes current values and subscriptions through `states`, including
+`profile`, `locale`, `consent`, `persistenceConsent`, `experienceRequestState`,
+`eventStream`, and `blockedEventStream`. Read `states.profile.current` or subscribe
+to changes with `states.profile.subscribe(...)`; dispose the returned handle
+with `unsubscribe()` during application cleanup. See the [Web state and
+subscriptions reference](./packages/web/README.md#state-and-subscriptions) for
+snapshot, event publication, and lifecycle semantics. Node's profile remains request-local.
+
 Ordinary online Personalization calls send directly. Web accepts ordinary
 offline calls into an in-memory queue; a new offline call is refused when the
 queue is full rather than evicting accepted work. Analytics remains direct.
@@ -1087,7 +1095,7 @@ Two things to know before switching it on:
 
 When a plan carries a usable source map, the SDK resolves which reportable scopes each node belongs to: the Experience, and any persisted Fragment it sits in. Inline fragments are walked through and never reported. The result is plain serializable data:
 
-- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'Fragment'`), `variantId`, and the optional `entityKindId`, `parentExperienceId`, `parentVariantId`, `optimizationId`, `variantIndex` and `entryIds`. `variantId` is the scope's selected variant, or `default` when no variant ID is available; unavailable optimization and variant-index fields are omitted. Fragments inside an Experience carry the root Experience's `parentExperienceId` and selected or `default` `parentVariantId`, including when nested in another Fragment. Experiences omit both parent fields. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
+- `plan.attribution.scopes` maps an opaque, plan-local occurrence key to a scope: `entityId`, `entityKind` (`'Experience'` or `'ExperienceFragment'`), `variantId`, and the optional `entityKindId`, `parentExperienceId`, `parentVariantId`, `optimizationId`, `variantIndex` and `entryIds`. `variantId` is the scope's selected variant, or `default` when no variant ID is available; unavailable optimization and variant-index fields are omitted. Fragments inside an Experience carry the root Experience's `parentExperienceId` and selected or `default` `parentVariantId`, including when nested in another Fragment. Experiences omit both parent fields. `entryIds` holds the entries bound by the nodes that scope directly contains, so a nested Fragment's entries stay off its Experience.
 - `node.attribution` lists every scope the node belongs to (`scopes`, outer to inner), the ones it is a top-level node of (`roots`), and the entries its own content is bound to (`entryIds`).
 
 Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.

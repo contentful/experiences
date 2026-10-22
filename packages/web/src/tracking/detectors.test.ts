@@ -20,7 +20,7 @@ import { createViewDetector } from './view/create-view-detector.js';
 const EXPERIENCE: TrackingAttribution = { entityId: 'landing', entityKind: 'Experience' };
 const FRAGMENT: TrackingAttribution = {
   entityId: 'hero',
-  entityKind: 'Fragment',
+  entityKind: 'ExperienceFragment',
   entityKindId: 'hero-component',
   parentExperienceId: 'landing',
   parentVariantId: 'root-variant',
@@ -177,6 +177,34 @@ describe('createViewDetector', () => {
     const [first, second] = trackView.mock.calls.map(([args]) => args);
     expect(first).toMatchObject({ entityId: 'A' });
     expect(second).toMatchObject({ entityId: 'A', viewId: first.viewId });
+  });
+
+  it('cancels a pending final drain when its owner resets after the detector is stopped', async () => {
+    const io = installIOPolyfill();
+    const qualifying = deferred<boolean>();
+    const trackView = vi.fn().mockImplementation(() => qualifying.promise);
+    const element = makeElement();
+    let resetToken = {};
+    const detector = createViewDetector(
+      trackView,
+      lookup(new Map([[element, EXPERIENCE]])),
+      undefined,
+      () => resetToken
+    );
+    detector.onElementAdded(element, keyOf(element));
+    detector.start();
+    io.trigger(element, true);
+    await advance(1000);
+    expect(trackView).toHaveBeenCalledOnce();
+
+    // Session.stop starts its final drain before releasing the detector.
+    const drained = detector.endActive!();
+    detector.stop({ preservePending: true });
+    resetToken = {};
+    qualifying.resolve(true);
+    await drained;
+
+    expect(trackView).toHaveBeenCalledOnce();
   });
 });
 
@@ -404,7 +432,7 @@ describe('createClickDetector', () => {
     click(button);
 
     expect(trackClick).toHaveBeenCalledTimes(1);
-    expect(trackClick.mock.calls[0]![0].entityKind).toBe('Fragment');
+    expect(trackClick.mock.calls[0]![0].entityKind).toBe('ExperienceFragment');
   });
 
   it('never sends clicks for an Experience', () => {

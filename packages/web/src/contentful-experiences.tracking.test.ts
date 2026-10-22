@@ -6,13 +6,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
-import { advance, installIOPolyfill, setDocumentVisibility } from './test-fixtures/dom.js';
+import {
+  advance,
+  deferred,
+  installIOPolyfill,
+  setDocumentVisibility,
+} from './test-fixtures/dom.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
 
 const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
   'node:page': { entityId: 'landing', entityKind: 'Experience' },
-  'node:hero': { entityId: 'hero', entityKind: 'Fragment', parentExperienceId: 'landing' },
+  'node:hero': {
+    entityId: 'hero',
+    entityKind: 'ExperienceFragment',
+    parentExperienceId: 'landing',
+  },
 };
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -39,9 +48,7 @@ function render(nodeId: string, tag = 'div'): HTMLElement {
 
 /** Spies on the Analytics transport so tests see what would actually be sent. */
 function spyOnTransport(runtime: ContentfulExperiences) {
-  const analytics = (runtime as unknown as { optimizationApi: { analytics: InsightsApiClient } })
-    .optimizationApi.analytics;
-  const send = vi.spyOn(analytics, 'sendBatchEvents').mockResolvedValue(true);
+  const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true);
   transportOwners.set(send, runtime);
   return send;
 }
@@ -66,9 +73,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearIdentityCookies();
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
+  window.localStorage.clear();
+  clearIdentityCookies();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -227,6 +235,75 @@ describe('ContentfulExperiences interaction tracking', () => {
       .stop();
   });
 
+  it('drops active measurements on reset and reuses the session for fresh visitor measurements', async () => {
+    const io = installIOPolyfill();
+    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+      profile: { id: 'new-visitor' },
+    } as never);
+    const runtime = createRuntime({ defaults: { profile: { id: 'old-visitor' } } });
+    const qualifying = deferred<void>();
+    const intercept = vi.fn();
+    runtime.interceptors.event.add(async (event) => {
+      intercept(event);
+      if (event.type === 'exo_node_view' || event.type === 'exo_node_hover') {
+        await qualifying.promise;
+      }
+      return event;
+    });
+    const send = spyOnTransport(runtime);
+    const page = render('node:page', 'main');
+    const hero = render('node:hero', 'button');
+    const options = {
+      clicks: false,
+      resolveAttribution: (nodeId: string) => ATTRIBUTIONS[nodeId],
+    };
+    const session = runtime.startInteractionTracking(options);
+    const originalObserver = io.getLast();
+
+    io.trigger(page, true);
+    hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await advance(1500);
+    expect(intercept).toHaveBeenCalledTimes(2);
+    // Queue final durations behind the qualifying callbacks before resetting.
+    io.trigger(page, false);
+    hero.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    await advance(0);
+    runtime.reset();
+    await runtime.page();
+    expect(runtime.states.profile.current).toEqual({ id: 'new-visitor' });
+    qualifying.resolve();
+    await advance(0);
+
+    // Reset drops measurements rather than sending the previous visitor's duration.
+    // Late observer callbacks and pointer events cannot resume the stopped detectors.
+    originalObserver.trigger(hero, true);
+    await advance(3000);
+    hero.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    expect(await sentEvents(send)).toEqual([]);
+
+    // The original handle retains its configuration and resumes with fresh timers.
+    expect(() => runtime.startInteractionTracking(options)).toThrow('already running');
+    session.refresh();
+    io.trigger(page, true);
+    hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await advance(1400);
+    hero.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    await session.stop();
+
+    const events = await sentEvents(send);
+    expect(
+      events.filter((event) => event.type === 'exo_node_view').map((event) => event.viewDurationMs)
+    ).toEqual([1000, 1400]);
+    expect(
+      events
+        .filter((event) => event.type === 'exo_node_hover')
+        .map((event) => event.hoverDurationMs)
+    ).toEqual([1000, 1400]);
+    expect(
+      send.mock.calls.flatMap(([batches]) => batches.map((batch) => batch.profile.id))
+    ).toEqual(['new-visitor']);
+  });
+
   it('re-reads attribution on refresh', async () => {
     const runtime = createRuntime();
     const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
@@ -281,6 +358,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       resolveAttribution: (nodeId) => ATTRIBUTIONS[nodeId],
     });
     click(hero);
+    await vi.waitFor(() => expect(runtime.states.eventStream.current?.type).toBe('exo_node_click'));
     // The replay is held open on purpose, so start the flush and wait for Analytics.
     void runtime.flush();
     await vi.waitFor(() => expect(sendBatchEvents).toHaveBeenCalledOnce());
@@ -298,7 +376,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('drops clicks while event consent is denied and sends them once granted', async () => {
       seedConsent({ events: false });
       const onEventBlocked = vi.fn();
-      const runtime = createRuntime({ profile: { id: 'visitor' }, onEventBlocked });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } }, onEventBlocked });
       const send = spyOnTransport(runtime);
       const hero = render('node:hero', 'button');
 
@@ -316,7 +394,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
       // A manual call still reaches the gate, which stays as a backstop and reports.
       await expect(
-        runtime.trackClick({ entityId: 'hero', entityKind: 'Fragment' })
+        runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
       ).resolves.toBeUndefined();
       expect(onEventBlocked).toHaveBeenCalledWith(
         expect.objectContaining({ reason: 'consent', method: 'trackClick' })
@@ -334,7 +412,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('admits clicks under a click-only allow-list', async () => {
       seedConsent({ events: false });
       const runtime = createRuntime({
-        profile: { id: 'visitor' },
+        defaults: { profile: { id: 'visitor' } },
         allowedEventTypes: ['component_click'],
       });
       const send = spyOnTransport(runtime);
@@ -355,7 +433,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('does not observe views while event consent is denied, and starts once it is granted', async () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const page = render('node:page', 'main');
 
@@ -377,6 +455,123 @@ describe('ContentfulExperiences interaction tracking', () => {
   });
 
   describe('timed interactions across consent changes', () => {
+    it('keeps allowlisted views and hovers live across withdrawal, regrant and refresh', async () => {
+      const io = installIOPolyfill();
+      const runtime = createRuntime({
+        defaults: { profile: { id: 'visitor' } },
+        allowedEventTypes: ['component', 'component_hover'],
+      });
+      const send = spyOnTransport(runtime);
+      const page = render('node:page', 'main');
+      const hero = render('node:hero', 'button');
+      const session = runtime.startInteractionTracking({
+        clicks: false,
+        resolveAttribution: (key) => ATTRIBUTIONS[key],
+      });
+
+      for (const stage of ['initial', 'withdrawn', 'withdrawn again', 'regranted', 'refreshed']) {
+        if (stage.startsWith('withdrawn')) runtime.consent({ events: false });
+        if (stage === 'regranted') runtime.consent({ events: true });
+        if (stage === 'refreshed') session.refresh();
+        expect(runtime.hasConsent('trackView')).toBe(true);
+        expect(runtime.hasConsent('trackHover')).toBe(true);
+        send.mockClear();
+
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1400);
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+
+        const events = await sentEvents(send);
+        const views = events.filter((event) => event.type === 'exo_node_view');
+        const hovers = events.filter((event) => event.type === 'exo_node_hover');
+        expect(
+          views.map((event) => event.viewDurationMs),
+          stage
+        ).toEqual([1000, 1400]);
+        expect(
+          hovers.map((event) => event.hoverDurationMs),
+          stage
+        ).toEqual([1000, 1400]);
+        expect(views[1]?.viewId).toBe(views[0]?.viewId);
+        expect(hovers[1]?.hoverId).toBe(hovers[0]?.hoverId);
+      }
+      await session.stop();
+    });
+
+    it.each(['active', 'stopping'] as const)(
+      'discards pending allowlisted callbacks from an %s session at withdrawal',
+      async (lifecycle) => {
+        const io = installIOPolyfill();
+        const runtime = createRuntime({
+          defaults: { profile: { id: 'visitor' } },
+          allowedEventTypes: ['component', 'component_hover'],
+        });
+        const qualifying = deferred<void>();
+        runtime.interceptors.event.add(async (event) => {
+          await qualifying.promise;
+          return event;
+        });
+        const trackView = vi.spyOn(runtime, 'trackView');
+        const trackHover = vi.spyOn(runtime, 'trackHover');
+        const send = spyOnTransport(runtime);
+        const page = render('node:page', 'main');
+        const hero = render('node:hero', 'button');
+        const options = {
+          clicks: false,
+          resolveAttribution: (key: string) => ATTRIBUTIONS[key],
+        };
+        let session = runtime.startInteractionTracking(options);
+        const originalObserver = io.getLast();
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1500);
+        // Finals are serialised behind the still-pending qualifying callbacks.
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+        // A stopped session intentionally retains its pending finals. Withdrawal must
+        // invalidate those callbacks too, even though it no longer owns the session.
+        const stopping = lifecycle === 'stopping' ? session.stop() : undefined;
+        runtime.consent({ events: false });
+        if (stopping) session = runtime.startInteractionTracking(options);
+        qualifying.resolve();
+        await stopping;
+        await advance(0);
+        originalObserver.trigger(page, true);
+        await advance(3000);
+
+        expect(trackView).toHaveBeenCalledTimes(1);
+        expect(trackHover).toHaveBeenCalledTimes(1);
+        expect(await sentEvents(send)).toEqual([]);
+
+        // Neither the queued final nor the previous measurement crosses the boundary.
+        // The existing session starts fresh while consent remains denied.
+        io.trigger(page, true);
+        enter(hero);
+        await advance(1400);
+        io.trigger(page, false);
+        leave(hero);
+        await advance(0);
+        const events = await sentEvents(send);
+        expect(
+          events
+            .filter((event) => event.type === 'exo_node_view')
+            .map((event) => event.viewDurationMs)
+        ).toEqual([1000, 1400]);
+        expect(
+          events
+            .filter((event) => event.type === 'exo_node_hover')
+            .map((event) => event.hoverDurationMs)
+        ).toEqual([1000, 1400]);
+        expect(trackView).toHaveBeenCalledTimes(3);
+        expect(trackHover).toHaveBeenCalledTimes(3);
+        await session.stop();
+      }
+    );
+
     const enter = (element: Element): void => {
       element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     };
@@ -386,7 +581,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('measures a hover from the grant, not from before consent', async () => {
       seedConsent({ events: false });
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const hero = render('node:hero', 'button');
       const session = runtime.startInteractionTracking({
@@ -412,7 +607,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('starts a fresh view measurement at the grant, not at the earlier intersection', async () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const page = render('node:page', 'main');
       const session = runtime.startInteractionTracking({
@@ -439,7 +634,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('stops a view in progress when consent is withdrawn, and reports nothing afterwards', async () => {
       seedConsent({ events: true });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const page = render('node:page', 'main');
       const session = runtime.startInteractionTracking({
@@ -462,7 +657,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('stops a hover in progress when consent is withdrawn, and reports nothing afterwards', async () => {
       seedConsent({ events: true });
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const hero = render('node:hero', 'button');
       const session = runtime.startInteractionTracking({
@@ -484,7 +679,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('does not carry a hover across a withdrawal and a regrant', async () => {
       seedConsent({ events: true });
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const hero = render('node:hero', 'button');
       const session = runtime.startInteractionTracking({
@@ -512,7 +707,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('does not carry a view across a withdrawal and a regrant', async () => {
       seedConsent({ events: true });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const page = render('node:page', 'main');
       const session = runtime.startInteractionTracking({
@@ -547,7 +742,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('leaves a running interaction alone when only persistence consent changes', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'visitor' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
       const send = spyOnTransport(runtime);
       const hero = render('node:hero', 'button');
       const session = runtime.startInteractionTracking({
@@ -574,7 +769,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
       const runtime = createRuntime({
-        profile: { id: 'visitor' },
+        defaults: { profile: { id: 'visitor' } },
         allowedEventTypes: ['component_hover'],
       });
       const send = spyOnTransport(runtime);

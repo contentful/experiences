@@ -31,6 +31,7 @@ export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/expe
 export type {
   AllowedEventType,
   BlockedEvent,
+  BlockedEventReason,
   ConsentInput,
   ConsentState,
   EventMethod,

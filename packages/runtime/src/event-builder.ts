@@ -232,11 +232,11 @@ class EventBuilder {
     const { campaign, locale, location, page, screen, userAgent, ...interactionProperties } = args;
     const variantId =
       interactionProperties.entityKind === 'Experience' ||
-      interactionProperties.entityKind === 'Fragment'
+      interactionProperties.entityKind === 'ExperienceFragment'
         ? interactionProperties.variantId || 'default'
         : interactionProperties.variantId;
     const parentVariantId =
-      interactionProperties.entityKind === 'Fragment'
+      interactionProperties.entityKind === 'ExperienceFragment'
         ? interactionProperties.parentVariantId || 'default'
         : interactionProperties.parentVariantId;
 

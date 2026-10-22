@@ -2,15 +2,16 @@ import { defineConfig } from 'tsup';
 import packageJson from './package.json';
 
 export default defineConfig({
-  entry: ['src/**/*.ts', '!src/**/*.test.ts'],
-  format: ['esm'],
+  entry: ['src/index.ts', 'src/sdk-info.ts'],
+  format: ['esm', 'cjs'],
   dts: true,
   clean: true,
   sourcemap: true,
   target: 'es2022',
   outDir: 'dist',
   tsconfig: 'tsconfig.lib.json',
-  bundle: false,
+  bundle: true,
+  splitting: true,
   external: [/^@contentful\//],
   define: {
     __DEFAULT_EVENT_CONTEXT_LIBRARY_NAME__: JSON.stringify(packageJson.name),

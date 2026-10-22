@@ -1,20 +1,15 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: [
-    'src/**/*.ts',
-    'src/**/*.tsx',
-    '!src/**/*.test.ts',
-    '!src/**/*.test.tsx',
-    '!src/**/*.fixtures.ts',
-  ],
-  format: ['esm'],
+  entry: ['src/index.ts'],
+  format: ['esm', 'cjs'],
   dts: true,
   clean: true,
   sourcemap: true,
   target: 'es2022',
   outDir: 'dist',
   tsconfig: 'tsconfig.lib.json',
-  bundle: false,
+  bundle: true,
+  splitting: true,
   external: ['react', 'react-dom', /^@contentful\//],
 });

@@ -129,7 +129,7 @@ const evaluatedProfile = identified.accepted ? identified.data?.profile : undefi
 await experienceRequest.track({ event: 'checkout_started' });
 await experienceRequest.trackClick({
   entityId: 'checkout-button',
-  entityKind: 'InlineComponent',
+  entityKind: 'Experience',
 });
 ```
 

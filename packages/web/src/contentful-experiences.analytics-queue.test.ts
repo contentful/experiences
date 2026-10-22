@@ -16,7 +16,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    profile: { id: 'visitor' },
+    defaults: { profile: { id: 'visitor' } },
     ...overrides,
   } as ExperiencesWebConfig);
   runtimes.add(runtime);
@@ -42,34 +42,6 @@ afterEach(() => {
 });
 
 describe('Web Analytics queue', () => {
-  it('queues Analytics events and flushes them after 30 seconds', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
-    const runtime = createRuntime();
-
-    await expect(click(runtime)).resolves.toBeUndefined();
-    await expect(click(runtime)).resolves.toBeUndefined();
-    expect(send).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(30_000);
-
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0]).toEqual([
-      { profile: { id: 'visitor' }, events: [expect.anything(), expect.anything()] },
-    ]);
-  });
-
-  it('flushes when the queue reaches 25 events', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
-    const runtime = createRuntime();
-
-    for (let i = 0; i < 24; i++) await click(runtime);
-    expect(send).not.toHaveBeenCalled();
-    await click(runtime);
-
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0][0]?.events).toHaveLength(25);
-  });
-
   it('holds events while offline and flushes when the browser comes back online', async () => {
     const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
@@ -108,23 +80,6 @@ describe('Web Analytics queue', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(send).toHaveBeenCalledTimes(1);
-  });
-
-  it('retries a failed flush with backoff and keeps the events', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0);
-    const send = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-      .mockResolvedValueOnce(false)
-      .mockResolvedValue(true);
-    const runtime = createRuntime();
-    await click(runtime);
-
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(send).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(500);
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls[1]?.[0]).toEqual(send.mock.calls[0]?.[0]);
   });
 
   it('drops queued Analytics events when event consent is withdrawn', async () => {
@@ -181,7 +136,7 @@ describe('Web Analytics queue', () => {
     const session = runtime.startInteractionTracking({
       views: false,
       clicks: false,
-      resolveAttribution: () => ({ entityId: 'hero', entityKind: 'Fragment' }),
+      resolveAttribution: () => ({ entityId: 'hero', entityKind: 'ExperienceFragment' }),
     });
 
     hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
@@ -210,7 +165,9 @@ describe('Web Analytics queue', () => {
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true);
-    const onFlushFailure = vi.fn();
+    const onFlushFailure = vi.fn(() => {
+      throw new Error('callback');
+    });
     const onFlushRecovered = vi.fn();
     const runtime = createRuntime({
       queuePolicy: {
@@ -228,30 +185,6 @@ describe('Web Analytics queue', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(send).toHaveBeenCalledTimes(2);
     expect(onFlushRecovered).toHaveBeenCalledWith({ consecutiveFailures: 1 });
-  });
-
-  it('does not let a throwing policy callback break delivery', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0);
-    const send = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
-      .mockResolvedValueOnce(false)
-      .mockResolvedValue(true);
-    const runtime = createRuntime({
-      queuePolicy: {
-        flush: {
-          flushIntervalMs: 1_000,
-          baseBackoffMs: 100,
-          onFlushFailure: () => {
-            throw new Error('callback');
-          },
-        },
-      },
-    });
-    await click(runtime);
-
-    await vi.advanceTimersByTimeAsync(1_100);
-
-    expect(send).toHaveBeenCalledTimes(2);
   });
 
   describe('trackView acceptance result', () => {

@@ -3,6 +3,7 @@ export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   BrowserEventContextProviders,
   CurrentPageOptions,
+  CoreConfigDefaults,
   ExperiencesWebConfig,
   HydrateAndTrackCurrentPageOptions,
   InteractionTrackingSession,
@@ -32,6 +33,7 @@ export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/expe
 export type {
   AllowedEventType,
   BlockedEvent,
+  BlockedEventReason,
   ConsentInput,
   ConsentState,
   EventMethod,
@@ -39,7 +41,8 @@ export type {
   EventOptimizationData,
   EventProfile,
   ExperiencesHandoff,
-  PersonalizationDeliveryState,
+  ExperienceRequestState,
+  ExperienceRequestFailureReason,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
@@ -63,3 +66,46 @@ export type {
   PortableRenderPlan,
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
+
+export type { CoreStates } from './states.js';
+export {
+  batch,
+  effect,
+  signalFns,
+  signals,
+  toDistinctObservable,
+  toObservable,
+  type Observable,
+  type OptimizationEventStreamEvent,
+  type Signal,
+  type SignalFns,
+  type Signals,
+  type SnapshotFn,
+  type Subscription,
+} from './signals/index.js';
+export { normalizeLocale, normalizeExplicitLocale } from './locale.js';
+export {
+  InterceptorManager,
+  type Interceptor,
+  type InterceptorMerge,
+  type MaybePromise,
+} from './lib/interceptor/InterceptorManager.js';
+export {
+  mergeExperienceState,
+  type ExperienceState,
+  type LifecycleInterceptors,
+} from './interceptors.js';
+export {
+  resolveStatefulDefaults,
+  type StatefulDefaults,
+  type PersistedDefaultLoader,
+  type PersistedDefaultValue,
+  type PersistedStatefulDefaults,
+  type ResolvedStatefulDefaults,
+} from './stateful-defaults.js';
+export {
+  createSnapshotRuntime,
+  type ExperiencesRuntime,
+  type ExperiencesSnapshot,
+  type SnapshotRuntime,
+} from './runtime.js';

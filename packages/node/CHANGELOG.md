@@ -1,3 +1,43 @@
+## 0.7.1 (2026-10-22)
+
+### 🚀 Features
+
+- ⚠️  **web:** add interceptors and diagnostic streams [NT-4155] ([#251](https://github.com/contentful/experiences/pull/251))
+
+### ⚠️  Breaking Changes
+
+- **web:** add interceptors and diagnostic streams [NT-4155]  ([#251](https://github.com/contentful/experiences/pull/251))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.2.1
+- Updated client to 0.10.1
+- Updated core to 0.13.1
+
+## 0.7.0 (2026-10-22)
+
+### 🚀 Features
+
+- ⚠️  [EXA-2582] rename Fragment entity kind to ExperienceFragment ([#253](https://github.com/contentful/experiences/pull/253))
+
+### ⚠️  Breaking Changes
+
+- [EXA-2582] rename Fragment entity kind to ExperienceFragment  ([#253](https://github.com/contentful/experiences/pull/253))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.2.0
+- Updated client to 0.10.0
+- Updated core to 0.13.0
+
+## 0.6.4 (2026-10-21)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.1.3
+- Updated client to 0.9.7
+- Updated core to 0.12.6
+
 ## 0.6.3 (2026-10-18)
 
 ### 🧱 Updated Dependencies

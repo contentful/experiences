@@ -42,3 +42,4 @@ export type {
   ExperienceParameterRecord,
   ExperienceParameterOrder,
 } from './experience-parameters.js';
+export { serializePersonalization } from './personalization.js';

@@ -16,10 +16,12 @@ import { ElementViewObserver } from './element-view-observer.js';
 export function createViewDetector(
   trackView: (args: ViewBuilderArgs) => Promise<unknown>,
   resolveAttribution: ResolveScopeAttribution,
-  options?: ElementViewObserverOptions
+  options?: ElementViewObserverOptions,
+  getResetToken?: () => unknown
 ): InteractionDetector {
   return createTimedDetector<ElementViewCallbackInfo>({
     resolveAttribution,
+    getResetToken,
     isSupported: () => typeof IntersectionObserver !== 'undefined',
     isFinal: (info) => info.attempts === 2,
     createObserver: (callback) => new ElementViewObserver(callback, options),

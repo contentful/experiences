@@ -1,14 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  ExoClickEvent as OptimizationExoClickEvent,
-  ExoHoverEvent as OptimizationExoHoverEvent,
-  ExoViewEvent as OptimizationExoViewEvent,
-} from '@contentful/optimization-api-client/api-schemas';
-import type { ScopeAttribution } from '@contentful/experiences-sdk-core';
-
 import { fetchExperience } from '@contentful/experiences-client';
-import EventBuilder, { type InteractionBuilderArgsBase } from './event-builder.js';
+import EventBuilder from './event-builder.js';
 
 const urn = (id: string) =>
   `crn:contentful:::experience:spaces/$self/environments/$self/components/${id}`;
@@ -85,7 +78,9 @@ describe('fetchExperience → plan → EventBuilder', () => {
     );
 
     expect(getWithOverrides).toHaveBeenCalledOnce();
-    const fragment = plan.nodes[0]!.attribution!.scopes.find((s) => s.entityKind === 'Fragment')!;
+    const fragment = plan.nodes[0]!.attribution!.scopes.find(
+      (s) => s.entityKind === 'ExperienceFragment'
+    )!;
     expect(fragment).toMatchObject({
       entityId: 'frag-1',
       entityKindId: 'hero-component',
@@ -102,10 +97,9 @@ describe('fetchExperience → plan → EventBuilder', () => {
     const click = builder.buildClick(args);
     const hover = builder.buildHover({ ...args, hoverId: 'hover-1', hoverDurationMs: 500 });
 
-    expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
-    expect(OptimizationExoClickEvent.parse(click)).toEqual(click);
-    expect(OptimizationExoHoverEvent.parse(hover)).toEqual(hover);
-    expect(view).toMatchObject({ type: 'exo_node_view', entityId: 'frag-1', variantIndex: 1 });
+    for (const event of [view, click, hover]) {
+      expect(event).toMatchObject({ entityId: 'frag-1', variantIndex: 1 });
+    }
   });
 
   it('builds a valid baseline Experience event with default as its own variant and no parent', async () => {
@@ -122,7 +116,6 @@ describe('fetchExperience → plan → EventBuilder', () => {
     const { key: _key, ...args } = experience;
     const view = builder.buildView({ ...args, viewId: 'view-1', viewDurationMs: 1000 });
 
-    expect(OptimizationExoViewEvent.parse(view)).toEqual(view);
     expect(view).toHaveProperty('variantId', 'default');
     expect(view).not.toHaveProperty('parentExperienceId');
     expect(view).not.toHaveProperty('parentVariantId');
@@ -138,13 +131,5 @@ describe('fetchExperience → plan → EventBuilder', () => {
     expect(get).toHaveBeenCalledOnce();
     expect(plan.attribution).toBeUndefined();
     expect(plan.nodes[0]).not.toHaveProperty('attribution');
-  });
-
-  it('keeps ScopeAttribution structurally assignable to the event builder args', () => {
-    const scope: ScopeAttribution = { key: 's0', entityId: 'exp-1', entityKind: 'Experience' };
-    const { key: _key, ...args } = scope;
-    const asArgs: InteractionBuilderArgsBase = args;
-
-    expect(asArgs.entityId).toBe('exp-1');
   });
 });

@@ -16,6 +16,7 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
+import type { ApiClient } from '@contentful/optimization-api-client';
 import {
   createRuntimeDeliveryClient,
   type RuntimeDeliveryClientOptions,
@@ -28,9 +29,9 @@ import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import {
   createRuntimeEventMethods,
   type RuntimeEventBindings,
+  type RuntimeDirectEventBindings,
   type RuntimeEventDispatch,
   type RuntimeEventMethods,
-  type RuntimeOptimizationApiClient,
 } from './runtime-event-methods.js';
 
 export type RuntimeResolveOptions = {
@@ -116,7 +117,11 @@ export type ContentfulExperiencesConfig = {
   eventBuilder: RuntimeEventBuilderConfig;
 };
 
-export class ContentfulExperiences implements ExperienceRuntime {
+export class ContentfulExperiences<
+  TConfig extends ContentfulExperiencesConfig = ContentfulExperiencesConfig,
+> implements ExperienceRuntime {
+  readonly config: TConfig;
+  readonly api: ApiClient;
   readonly spaceId: string;
   readonly environmentId: string;
   readonly eventBuilder: EventBuilder;
@@ -124,11 +129,11 @@ export class ContentfulExperiences implements ExperienceRuntime {
   readonly #locale: string | undefined;
   readonly #deliveryClient: ContentfulViewDeliveryClient;
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
-  protected readonly optimizationApi: RuntimeOptimizationApiClient;
   readonly #resolveDefaults: RuntimeResolveDefaults;
   #destroyed = false;
 
-  constructor(config: ContentfulExperiencesConfig) {
+  constructor(config: TConfig) {
+    this.config = config;
     this.spaceId = config.spaceId;
     this.environmentId = config.environmentId;
     this.#locale = config.locale;
@@ -137,9 +142,10 @@ export class ContentfulExperiences implements ExperienceRuntime {
       config.preview === undefined
         ? undefined
         : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
-    this.optimizationApi = createRuntimeOptimizationClient({
+    this.api = createRuntimeOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
+      locale: config.locale,
       ...config.optimization,
     });
     this.#resolveDefaults = config.resolveDefaults ?? {};
@@ -162,14 +168,21 @@ export class ContentfulExperiences implements ExperienceRuntime {
   }
 
   protected createEventMethods(
-    bindings: RuntimeEventBindings,
-    dispatch?: RuntimeEventDispatch
+    ...args:
+      | [bindings: RuntimeDirectEventBindings]
+      | [bindings: RuntimeEventBindings, dispatch: RuntimeEventDispatch]
   ): RuntimeEventMethods {
+    if (args.length === 1) {
+      return createRuntimeEventMethods(this.api, this.eventBuilder, {
+        getLocale: () => this.locale,
+        ...args[0],
+      });
+    }
     return createRuntimeEventMethods(
-      this.optimizationApi,
+      this.api,
       this.eventBuilder,
-      { getLocale: () => this.locale, ...bindings },
-      dispatch
+      { getLocale: () => this.locale, ...args[0] },
+      args[1]
     );
   }
 

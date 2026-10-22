@@ -267,7 +267,7 @@ export interface ScopeAttribution {
   /** Opaque, plan-local occurrence key. Never parse it. */
   key: string;
   entityId: string;
-  entityKind: 'Experience' | 'Fragment';
+  entityKind: 'Experience' | 'ExperienceFragment';
   entityKindId?: string;
   optimizationId?: string;
   variantId?: string;

@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-react",
-  "version": "0.13.8",
+  "version": "0.14.1",
   "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
@@ -30,11 +30,11 @@
     "directory": "packages/adapter-react"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.9.6",
-    "@contentful/experiences-runtime": "0.1.2",
-    "@contentful/experiences-sdk-core": "0.12.5",
-    "@contentful/experiences-design": "0.12.5",
-    "@contentful/experiences-live-preview": "0.6.6"
+    "@contentful/experiences-client": "0.10.1",
+    "@contentful/experiences-runtime": "0.2.1",
+    "@contentful/experiences-sdk-core": "0.13.1",
+    "@contentful/experiences-design": "0.13.1",
+    "@contentful/experiences-live-preview": "0.7.1"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"

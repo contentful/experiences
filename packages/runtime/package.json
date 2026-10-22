@@ -1,17 +1,22 @@
 {
   "name": "@contentful/experiences-runtime",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "description": "Shared runtime and event construction for Contentful Experiences",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.mts",
   "sideEffects": false,
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
+        "types": "./dist/index.d.mts",
         "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       }
     },
     "./package.json": "./package.json"
@@ -29,10 +34,10 @@
     "directory": "packages/runtime"
   },
   "dependencies": {
-    "@contentful/experiences-client": "0.9.6",
-    "@contentful/experiences-sdk-core": "0.12.5",
-    "@contentful/optimization-api-client": "^2.1.0",
-    "es-toolkit": "^1.46.0",
+    "@contentful/experiences-client": "0.10.1",
+    "@contentful/experiences-sdk-core": "0.13.1",
+    "@contentful/optimization-api-client": "^2.2.1",
+    "es-toolkit": "^1.52.0",
     "zod": "^4.3.6"
   }
 }

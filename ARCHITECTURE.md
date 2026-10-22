@@ -252,11 +252,12 @@ commands in `project.json`, because the three adapters do not share a build tool
 
 | Package           | `build`                               | `test`                                                    |
 | ----------------- | ------------------------------------- | --------------------------------------------------------- |
-| `core`            | `tsup`                                | `vitest run`                                              |
+| `core`            | `tsup && emit-dual-dts`               | `vitest run`                                              |
 | `design`          | `tsup`                                | `vitest run`                                              |
-| `client`          | `tsup`                                | `vitest run`                                              |
+| `client`          | `tsup && emit-dual-dts`               | `vitest run`                                              |
+| `runtime`         | `tsup && emit-dual-dts`               | `vitest run`                                              |
 | `node`            | `tsup`                                | `vitest run`                                              |
-| `web`             | `tsup`                                | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
+| `web`             | `tsup && emit-dual-dts`               | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 | `live-preview`    | `tsup`                                | `vitest run`                                              |
 | `adapter-react`   | `tsup`                                | `vitest run`                                              |
 | `adapter-svelte`  | `svelte-package -i src -o dist`       | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
@@ -314,22 +315,21 @@ tsconfig when a package is added or renamed.
 
 ## Published artifact shape
 
-Every package publishes from its **project root**, not from `dist`:
-`package.json#files` is `["dist", "README.md", "CHANGELOG.md"]` and the
-`exports` map points at `./dist/index.js` / `./dist/index.d.ts`. This is load
-bearing — the release job restores `packages/*/dist` from the CI build cache
-without rebuilding after the version bump, so publishing from a generated
-`dist/package.json` would ship a stale version. The comment at the top of
+Every package publishes from its **project root**, not from `dist`. The release
+job restores `packages/*/dist` from the CI build cache without rebuilding after
+the version bump, so publishing from a generated `dist/package.json` would ship
+a stale version. The comment at the top of
 `packages/adapter-angular/tsconfig.lib.json` records this as the reason that
 package uses `ngc` instead of `ng-packagr`.
 
-All nine packages are ESM only — every manifest declares `"type": "module"` and
-`sideEffects: false`, and the seven `tsup` packages emit `format: ['esm']` and
-nothing else.
-
-The `tsup` packages set `bundle: false`, so `dist` mirrors `src` file for file.
-That preserves each file's `'use client'` directive, which the React adapter
-depends on under RSC — see the AGENTS.md gotcha before changing it.
+`core`, `client`, `runtime`, and `web` publish bundled ESM and CJS entries
+(`.js` and `.cjs`) with paired `.d.mts` and `.d.cts` declarations. Their build
+targets run `scripts/emit-dual-dts.ts` after tsup to generate the two declaration
+surfaces. Node and the framework adapters keep their existing ESM output; the
+React adapter remains unbundled so its per-file `'use client'` directives survive
+for RSC. Check each package manifest and build target before generalizing these
+formats to other packages. The four dual-format package export maps select the
+appropriate JavaScript and declaration file for `import` and `require`.
 
 ---
 

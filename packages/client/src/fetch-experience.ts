@@ -1,6 +1,6 @@
 import type { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
-import { GetWithOverridesExperienceRequestExtensionsPersonalization as personalizationSchema } from '@contentful/experience-delivery/serialization';
+import { serializePersonalization } from './personalization.js';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
 import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
 import { assertDestinationPreviewSupported } from './destination-guards.js';
@@ -191,16 +191,7 @@ async function fetchByExperienceId(
     options;
   const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
   if (personalization !== undefined) {
-    try {
-      // XDA rejects EventBuilder's context.gdpr with HTTP 422. Keep the original
-      // events intact and serialize to its generated schema. When upstream XDA and
-      // client types accept built events, verify compatibility and remove this if redundant.
-      requestExtensions.personalization = personalizationSchema.parseOrThrow(personalization, {
-        unrecognizedObjectKeys: 'strip',
-      });
-    } catch (cause) {
-      throw new TypeError('Invalid Experience personalization options', { cause });
-    }
+    requestExtensions.personalization = serializePersonalization(personalization);
   }
 
   try {

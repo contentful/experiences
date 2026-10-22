@@ -5,6 +5,11 @@ import type {
   PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
+import {
+  InsightsEvent as InsightsEventSchema,
+  parseWithFriendlyError as parseOptimizationSchema,
+} from '@contentful/optimization-api-client/api-schemas';
+import type { EventInterceptors } from './event-interceptors.js';
 import { QueueFlushRuntime, type ResolvedQueueFlushPolicy } from './lib/queue/index.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
@@ -13,14 +18,16 @@ const deliveryLogger = createScopedLogger('Experiences:AnalyticsDelivery');
 /** Optimization's InsightsQueue size limit: reaching it flushes immediately. */
 export const MAX_QUEUED_ANALYTICS_EVENTS = 25;
 
-type AnalyticsApi = RuntimeOptimizationApiClient['analytics'];
+type AnalyticsApi = RuntimeOptimizationApiClient['insights'];
 type QueuedProfileEvents = { profile: EventProfile; events: AnalyticsEvent[] };
 
 interface AnalyticsDeliveryOptions {
   readonly api: AnalyticsApi;
+  readonly eventInterceptors: EventInterceptors;
+  readonly publishEvent: (event: AnalyticsEvent) => void;
   readonly getOnline: () => boolean;
   /**
-   * The owning runtime's lifecycle token, as in Optimization's InsightsQueue. The owner
+   * The owning runtime's lifecycle token. The owner
    * replaces it to invalidate in-flight work and returns `undefined` once destroyed; the
    * queue has no lifecycle of its own.
    */
@@ -43,6 +50,8 @@ export interface AnalyticsFlushOptions extends InsightsApiClientRequestOptions {
  */
 export class AnalyticsDelivery {
   readonly #api: AnalyticsApi;
+  readonly #eventInterceptors: EventInterceptors;
+  readonly #publishEvent: AnalyticsDeliveryOptions['publishEvent'];
   readonly #getOnline: AnalyticsDeliveryOptions['getOnline'];
   readonly #maxEvents: number;
   readonly #flushIntervalMs: number;
@@ -54,6 +63,8 @@ export class AnalyticsDelivery {
 
   constructor(options: AnalyticsDeliveryOptions) {
     this.#api = options.api;
+    this.#eventInterceptors = options.eventInterceptors;
+    this.#publishEvent = options.publishEvent;
     this.#getOnline = options.getOnline;
     this.#getResetToken = options.getResetToken ?? (() => this);
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
@@ -86,13 +97,18 @@ export class AnalyticsDelivery {
   async send(event: AnalyticsEvent, profile: EventProfile): Promise<void> {
     const token = this.#getResetToken();
     if (token === undefined) return;
+    const intercepted = await this.#eventInterceptors.run(event);
+    if (token !== this.#getResetToken()) return;
+    const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
+    this.#publishEvent(validEvent);
+    if (token !== this.#getResetToken()) return;
 
     const queued = this.#queued.get(profile.id);
     if (queued) {
       queued.profile = profile;
-      queued.events.push(event);
+      queued.events.push(validEvent);
     } else {
-      this.#queued.set(profile.id, { profile, events: [event] });
+      this.#queued.set(profile.id, { profile, events: [validEvent] });
     }
 
     this.#ensurePeriodicTimer();
@@ -178,7 +194,7 @@ export class AnalyticsDelivery {
     this.#reconcilePeriodicTimer();
   }
 
-  /** Cancel the periodic flush timer, as Optimization's InsightsQueue does on destroy. */
+  /** Cancel the periodic flush timer when the owner ends its lifetime. */
   clearPeriodicFlushTimer(): void {
     this.#clearPeriodicTimer();
   }

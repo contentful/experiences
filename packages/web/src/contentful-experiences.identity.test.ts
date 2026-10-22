@@ -71,14 +71,14 @@ describe('writing the identity', () => {
   it('writes the cookie and stored id for a profile when persistence is granted', () => {
     seedConsent({ events: true, persistence: true });
 
-    createRuntime({ profile: { id: 'visitor-1' } });
+    createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('visitor-1');
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('visitor-1');
   });
 
   it('does not write the cookie or stored id when persistence is undecided', () => {
-    createRuntime({ profile: { id: 'visitor-1' } });
+    createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
@@ -87,7 +87,7 @@ describe('writing the identity', () => {
   it('does not write the cookie or stored id when persistence is denied', () => {
     seedConsent({ events: true, persistence: false });
 
-    createRuntime({ profile: { id: 'visitor-1' } });
+    createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
@@ -96,9 +96,9 @@ describe('writing the identity', () => {
   it('keeps the in-memory profile when persistence is denied', () => {
     seedConsent({ events: true, persistence: false });
 
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
-    expect(runtime.profile).toEqual({ id: 'visitor-1' });
+    expect(runtime.states.profile.current).toEqual({ id: 'visitor-1' });
   });
 
   it('writes the identity from a profile-producing response', async () => {
@@ -125,6 +125,10 @@ describe('writing the identity', () => {
     await runtime.fetchExperience({ experienceId: 'landing' }, { config: { components: {} } });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('xda-profile');
+    expect(runtime.states.profile.current).toEqual({ id: 'xda-profile' });
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
+      id: 'xda-profile',
+    });
   });
 
   it('applies the configured cookie scope', () => {
@@ -140,7 +144,7 @@ describe('writing the identity', () => {
     });
 
     createRuntime({
-      profile: { id: 'visitor-1' },
+      defaults: { profile: { id: 'visitor-1' } },
       cookie: { domain: 'example.com', path: '/shop', sameSite: 'lax', secure: true, expires: 7 },
     });
     Reflect.deleteProperty(document, 'cookie');
@@ -178,7 +182,7 @@ describe('deleting the identity in the scope it was written in', () => {
   it('withdrawing persistence deletes the cookie with the configured scope', () => {
     seedConsent({ events: true, persistence: true });
     const { writes, restore } = recordCookieWrites();
-    const runtime = createRuntime({ profile: { id: 'visitor-1' }, cookie: scope });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } }, cookie: scope });
 
     runtime.consent({ persistence: false });
     restore();
@@ -191,7 +195,7 @@ describe('deleting the identity in the scope it was written in', () => {
   it('reset() deletes the cookie with the configured scope', () => {
     seedConsent({ events: true, persistence: true });
     const { writes, restore } = recordCookieWrites();
-    const runtime = createRuntime({ profile: { id: 'visitor-1' }, cookie: scope });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } }, cookie: scope });
 
     runtime.reset();
     restore();
@@ -247,7 +251,7 @@ describe('adopting an identity the browser already holds', () => {
   });
 
   it('writes an identity already held in memory when persistence is granted later', () => {
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
 
     runtime.consent({ persistence: true });
@@ -271,9 +275,9 @@ describe('adopting an identity the browser already holds', () => {
     seedConsent({ events: true, persistence: true });
     setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
 
-    const runtime = createRuntime({ profile: { id: 'server-id' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'server-id' } } });
 
-    expect(runtime.profile).toEqual({ id: 'server-id' });
+    expect(runtime.states.profile.current).toEqual({ id: 'server-id' });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('server-id');
   });
 
@@ -284,7 +288,7 @@ describe('adopting an identity the browser already holds', () => {
 
     const runtime = createRuntime();
 
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('server-id');
   });
 });
@@ -317,7 +321,7 @@ describe('reconciling a server cookie with the identity held', () => {
     };
   }
 
-  it('synchronizes the profile, then resets and writes the captured cookie, as the Optimization constructor does', () => {
+  it('reconciles the cookie before persisting the profile, then restores the captured cookie as Optimization does', () => {
     seedConsent({ events: true, persistence: true });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'old-visitor' }));
     setCookie(ANONYMOUS_ID_COOKIE, 'server-id');
@@ -326,15 +330,16 @@ describe('reconciling a server cookie with the identity held', () => {
     const runtime = createRuntime();
     restore();
 
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     const identityWrites = cookieWrites
       .map((write) => write.split(';')[0] ?? '')
       .filter((write) => write.startsWith('ctfl-opt-aid='));
-    // The profile is synchronized first, then the reset clears it, then the cookie as it
-    // arrived is restored. The final state is the incoming visitor.
+    // Optimization registers its persistence-consent effect before its profile effect.
+    // The conflicting profile is reset before it can be persisted; the profile effect
+    // then synchronizes the incoming visitor's identity.
     expect(identityWrites).toEqual([
-      'ctfl-opt-aid=old-visitor',
       'ctfl-opt-aid=',
+      'ctfl-opt-aid=server-id',
       'ctfl-opt-aid=server-id',
     ]);
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('server-id');
@@ -357,12 +362,12 @@ describe('reconciling a server cookie with the identity held', () => {
   it('writes the active profile over a different stored identity when persistence is granted later', () => {
     setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
-    const runtime = createRuntime({ profile: { id: 'profile-id' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'profile-id' } } });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
 
     runtime.consent({ persistence: true });
 
-    expect(runtime.profile).toEqual({ id: 'profile-id' });
+    expect(runtime.states.profile.current).toEqual({ id: 'profile-id' });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('profile-id');
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('profile-id');
   });
@@ -372,10 +377,10 @@ describe('reconciling a server cookie with the identity held', () => {
     setCookie(ANONYMOUS_ID_COOKIE, 'cookie-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'cookie-id');
 
-    const runtime = createRuntime({ profile: { id: 'profile-id' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'profile-id' } } });
 
     // The incoming cookie was captured before the profile could overwrite it.
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('cookie-id');
   });
@@ -388,7 +393,7 @@ describe('reconciling a server cookie with the identity held', () => {
 
     const runtime = createRuntime();
 
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('cookie-id');
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('cookie-id');
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
@@ -399,9 +404,9 @@ describe('reconciling a server cookie with the identity held', () => {
     setCookie(ANONYMOUS_ID_COOKIE, 'same-id');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'same-id');
 
-    const runtime = createRuntime({ profile: { id: 'same-id' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'same-id' } } });
 
-    expect(runtime.profile).toEqual({ id: 'same-id' });
+    expect(runtime.states.profile.current).toEqual({ id: 'same-id' });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('same-id');
   });
 
@@ -415,26 +420,27 @@ describe('reconciling a server cookie with the identity held', () => {
     restore();
 
     const written = cookieWrites.filter((write) => write.startsWith('ctfl-opt-aid=legacy-id'));
-    expect(written).toHaveLength(2);
+    // Initial consent reconciliation, profile persistence, then the captured legacy cookie.
+    expect(written).toHaveLength(3);
   });
 });
 
 describe('withdrawing persistence consent', () => {
   it('removes the cookie and stored id but keeps the in-memory profile', () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('visitor-1');
 
     runtime.consent({ persistence: false });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
-    expect(runtime.profile).toEqual({ id: 'visitor-1' });
+    expect(runtime.states.profile.current).toEqual({ id: 'visitor-1' });
   });
 
   it('removes the legacy cookie too', () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
     setCookie(ANONYMOUS_ID_COOKIE_LEGACY, 'visitor-1');
 
     runtime.consent({ persistence: false });
@@ -444,7 +450,7 @@ describe('withdrawing persistence consent', () => {
 
   it('leaves event consent independent', async () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     runtime.consent({ persistence: false });
 
@@ -459,9 +465,10 @@ describe('withdrawing persistence consent', () => {
         finish = resolve;
       }) as never
     );
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
+    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
     runtime.consent({ persistence: false });
     finish({ profile: { id: 'late-profile' } });
     await pending;
@@ -478,22 +485,23 @@ describe('withdrawing persistence consent', () => {
         finish = resolve;
       }) as never
     );
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
+    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
     runtime.consent({ events: false });
     finish({ profile: { id: 'late-profile' } });
     await pending;
 
     // The live profile and its identity stay as they were; the late response changes neither.
-    expect(runtime.profile).toEqual({ id: 'visitor-1' });
+    expect(runtime.states.profile.current).toEqual({ id: 'visitor-1' });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('visitor-1');
   });
 });
 
 describe('startup defaults', () => {
   it('writes the identity when a default grants persistence', () => {
-    createRuntime({ profile: { id: 'visitor-1' }, defaults: { consent: true } });
+    createRuntime({ defaults: { profile: { id: 'visitor-1' }, consent: true } });
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('visitor-1');
   });
@@ -553,7 +561,7 @@ describe('handoff identity', () => {
     'does not let a profileless %s handoff erase an existing identity',
     async (_name, cache) => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+      const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
       await runtime.hydrateHandoffState(handoff({ cache }), {
         routeKey: '/first',
@@ -575,7 +583,7 @@ describe('handoff identity', () => {
       setCookie(ANONYMOUS_ID_COOKIE, 'visitor-1');
       window.localStorage.setItem(ANONYMOUS_ID_KEY, 'visitor-1');
       const runtime = createRuntime();
-      expect(runtime.profile).toBeUndefined();
+      expect(runtime.states.profile.current).toBeUndefined();
 
       await runtime.hydrateAndTrackCurrentPage(handoff({ cache }), { routeKey: '/first' });
 
@@ -588,7 +596,7 @@ describe('handoff identity', () => {
 
   it('does not replace an existing identity with a different one carried by a handoff', async () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'someone-else' }), {
       routeKey: '/first',
@@ -623,7 +631,7 @@ describe('the effective identity when only the stored id is held', () => {
 
   it('is not replaced by the identity an incoming handoff carries', async () => {
     const runtime = returningVisitor();
-    expect(runtime.profile).toBeUndefined();
+    expect(runtime.states.profile.current).toBeUndefined();
 
     await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'someone-else' }), {
       routeKey: '/first',
@@ -707,7 +715,7 @@ describe('clearing a legacy stored identity', () => {
 describe('reset and destroy', () => {
   it('reset() clears the cookie, the stored id and the stored profile', () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('visitor-1');
 
     runtime.reset();
@@ -719,7 +727,7 @@ describe('reset and destroy', () => {
 
   it('destroy() leaves the approved identity in place', () => {
     seedConsent({ events: true, persistence: true });
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     runtime.destroy();
 
@@ -736,9 +744,10 @@ describe('reset and destroy', () => {
         finish = resolve;
       }) as never
     );
-    const runtime = createRuntime({ profile: { id: 'visitor-1' } });
+    const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
+    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
     runtime.reset();
     finish({ profile: { id: 'late-profile' } });
     await pending;
