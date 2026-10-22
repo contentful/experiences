@@ -151,6 +151,13 @@ report HTTP delivery or retries. Blocked events are published after the
 `onEventBlocked` callback. `reset()` clears the profile, request outcome, and
 both event streams while retaining locale and consent decisions.
 
+Subscriber callbacks and snapshot functions run untracked: reading another SDK
+state does not subscribe to it or replay the current stream value when it changes.
+During event publication, synchronous `eventStream` subscriber errors are logged
+without interrupting delivery, fetching, or prepared-replay admission and deduplication.
+Publication order and subscriber-triggered reset/consent/destroy checks remain
+unchanged; errors from other observables still propagate to their caller.
+
 Lifecycle isolation is stronger than the [pinned Optimization
 reference](../../AGENTS.md#parity-with-the-optimization-sdk): reset and event-consent withdrawal invalidate queued work and in-flight state updates,
 so an older response cannot restore cleared state. Destruction and failed

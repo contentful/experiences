@@ -43,6 +43,7 @@ import {
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
   toObservable,
+  type OptimizationEventStreamEvent,
 } from './signals/index.js';
 import type { CoreStates } from './states.js';
 import { normalizeExplicitLocale } from './locale.js';
@@ -200,6 +201,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   readonly #handleOffline = (): void => {
     this.online = false;
   };
+  readonly #publishEvent = (event: OptimizationEventStreamEvent): void => {
+    try {
+      eventSignal.value = event;
+    } catch (error) {
+      console.warn('Event stream subscriber failed', error);
+    }
+  };
   readonly identify: WebEventMethods['identify'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.identify(...args);
   readonly page: WebEventMethods['page'] = (...args) =>
@@ -300,9 +308,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         maxEvents: resolvedQueuePolicy.offlineMaxEvents,
         experienceRequestState: experienceRequestStateSignal,
         eventInterceptors: this.interceptors.event,
-        publishEvent: (event) => {
-          eventSignal.value = event;
-        },
+        publishEvent: this.#publishEvent,
         applyOptimizationData: (data, isCurrent) =>
           this.#applyOptimizationDataToSignals(data, isCurrent),
       });
@@ -312,9 +318,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
         flushPolicy: resolvedQueuePolicy.flush,
         eventInterceptors: this.interceptors.event,
-        publishEvent: (event) => {
-          eventSignal.value = event;
-        },
+        publishEvent: this.#publishEvent,
       });
       this.#eventMethods = this.createEventMethods(
         {
@@ -504,7 +508,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const personalization =
       intercepted === undefined ? undefined : serializePersonalization(intercepted);
     for (const event of personalization?.events ?? []) {
-      eventSignal.value = event;
+      this.#publishEvent(event);
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
       if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
     }
@@ -739,7 +743,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (result.accepted && isCurrent()) {
       for (const event of admitted) {
         if (!isCurrent()) break;
-        eventSignal.value = event;
+        this.#publishEvent(event);
       }
       if (isCurrent() && profileSignal.value === undefined) {
         this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId.value);

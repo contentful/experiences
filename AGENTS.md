@@ -225,6 +225,12 @@ A difference is justified only when the content sources and their properties req
 Retained differences:
 
 - `onOfflineDrop` is not ported. It is deprecated and inactive in Optimization.
+- Observable snapshot functions and subscribers run untracked so callback reads
+  cannot add dependencies to a subscription. Event-stream publication reports
+  synchronous subscriber errors without interrupting delivery or prepared-replay
+  admission bookkeeping; other observable errors still propagate. These are local
+  corrections of the pinned reference's behavior, preserving publication order
+  and post-publication lifecycle checks.
 
 The pinned reference does not provide identical lifecycle isolation. At that
 commit, `CoreStateful.destroy()` marks the instance destroyed before flushing

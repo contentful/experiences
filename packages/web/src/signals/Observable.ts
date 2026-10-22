@@ -1,4 +1,4 @@
-import { effect } from '@preact/signals-core';
+import { effect, untracked } from '@preact/signals-core';
 import { cloneDeep } from 'es-toolkit';
 
 /**
@@ -116,7 +116,8 @@ export function toObservable<T>(
 
     subscribe(next) {
       const dispose = effect(() => {
-        next(snapshot(s.value));
+        const value = s.value;
+        untracked(() => next(snapshot(value)));
       });
 
       return { unsubscribe: dispose };
@@ -144,9 +145,10 @@ export function toObservable<T>(
 
         let callbackError: Error | null = null;
         try {
-          const snapshotValue = snapshot(value);
-          if (!isNonNullish(snapshotValue)) return;
-          next(snapshotValue);
+          untracked(() => {
+            const snapshotValue = snapshot(value);
+            if (isNonNullish(snapshotValue)) next(snapshotValue);
+          });
         } catch (error) {
           callbackError = toError(error);
         }

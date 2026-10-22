@@ -277,7 +277,9 @@ describe('Web public state subscriptions', () => {
     ]);
   });
 
-  it('streams ordinary and prepared events once across admission, deduplication and retry', async () => {
+  it('keeps delivery, prepared deduplication and retries independent of diagnostic errors', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = new Error('diagnostic subscriber failed');
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const upsert = vi
       .mocked(ExperienceApiClient.prototype.upsertProfile)
@@ -286,12 +288,21 @@ describe('Web public state subscriptions', () => {
     const runtime = createRuntime();
     const events = vi.fn();
     subscriptions.push(runtime.states.eventStream.subscribe(events));
+    subscriptions.push(
+      runtime.states.eventStream.subscribe((event) => {
+        if (event) throw error;
+      })
+    );
     window.dispatchEvent(new Event('offline'));
     await runtime.track({ event: 'queued' });
     await runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' });
     const handoff = preparedHandoff();
-    await runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/prepared' });
-    await runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/prepared' });
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/prepared' })
+    ).resolves.toEqual({ accepted: true });
+    await expect(
+      runtime.hydrateAndTrackCurrentPage(handoff, { routeKey: '/prepared' })
+    ).resolves.toEqual({ accepted: true });
     expect(events.mock.calls.map(([event]) => event?.type)).toEqual([
       undefined,
       'track',
@@ -305,6 +316,7 @@ describe('Web public state subscriptions', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(upsert).toHaveBeenCalledTimes(3);
     expect(events).toHaveBeenCalledTimes(5);
+    expect(warn).toHaveBeenCalledWith('Event stream subscriber failed', error);
   });
 
   it('streams valid ordinary events before queue capacity admission, as in Optimization', async () => {
@@ -444,8 +456,12 @@ describe('Web public state subscriptions', () => {
   });
 
   it('streams embedded events before Delivery and validates the whole batch before publication', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = new Error('diagnostic subscriber failed');
     const runtime = createRuntime();
-    const events = vi.fn();
+    const events = vi.fn((event) => {
+      if (event) throw error;
+    });
     subscriptions.push(runtime.states.eventStream.subscribe(events));
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -459,6 +475,7 @@ describe('Web public state subscriptions', () => {
       { config: { components: {} } }
     );
     expect(events.mock.calls[1]?.[0].messageId).toBe(page.messageId);
+    expect(warn).toHaveBeenCalledWith('Event stream subscriber failed', error);
     events.mockClear();
     // No partial stream publication when a later embedded event is invalid.
     await expect(
