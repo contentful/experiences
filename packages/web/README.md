@@ -97,6 +97,22 @@ origins outside explicit local development.
 
 Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
 
+## Delivery diagnostics
+
+Resolved plans expose optional `deliveryDiagnostics` for recognized upstream
+field-resolution errors. The public `ExperienceDeliveryDiagnostic` type contains
+readonly string `fieldPath` and `message` only; Core copies records in input order
+and omits `originalError` and extra fields. Raw resolve, by-ID, and destination
+fetches share that normalization. The existing local `diagnostics: Error[]`,
+profile adoption, exceptions, and Personalization `experienceRequestState` retain
+their meanings.
+
+This is a partial projection, not a personalization outcome signal. An absent
+field does not certify success or error-free delivery. Upstream strings can
+contain private information; display a generic warning/count while preserving
+content, inspect details explicitly, and keep them out of public bootstrap/handoff
+payloads and automatic logs. See the [shared guidance](../../README.md#delivery-diagnostics).
+
 ## Runtime Experience parameters
 
 Supply values per by-ID fetch. The Experience declares accepted IDs in

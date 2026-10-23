@@ -102,6 +102,16 @@ const plan = await request.fetchExperience(
 
 The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer uses the generated XDA schema to remove unsupported event fields, including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
 
+Plans can also expose optional `deliveryDiagnostics`, whose public
+`ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
+`message` from recognized upstream field-resolution errors. Raw resolution and
+by-ID/destination fetching share the same Core normalization. Useful content,
+profile adoption, exceptions, and existing local `diagnostics: Error[]` remain
+unchanged. Absence does not prove personalization success or error-free delivery.
+The strings may contain private information; show a generic warning/count and
+inspect details explicitly, keeping them out of logs and public bootstrap/handoff
+payloads. See the [delivery diagnostic guidance](../../README.md#delivery-diagnostics).
+
 Caller-built `personalization.events` must carry their intended page URL, path,
 query, referrer, user agent, and locale explicitly. `forRequest({ eventContext })`
 binds direct event methods; it does not merge that context into supplied events.

@@ -688,6 +688,35 @@ Every non-happy-path — a malformed payload, a throwing `resolveData`, an unres
 
 Each diagnostic is a plain `new Error(message)` — the message names the node/component/slot involved. When it wraps a real caught exception (a component that throws while rendering, or a `resolveData` that throws or rejects), `.cause` holds the original error, so the real stack trace stays reachable (`console.error(err)`, or `err.cause.stack`).
 
+### Delivery diagnostics
+
+Upstream field-resolution errors are separate from those local SDK diagnostics.
+The optional `plan.deliveryDiagnostics` field contains
+`readonly ExperienceDeliveryDiagnostic[]`, with only readonly string `fieldPath`
+and `message` on each record. Core copies recognized entries from `payload.errors`
+in order, omits `originalError` and unknown fields, and leaves the field absent
+when none are recognized. Raw `resolveExperience`, free fetch functions, Node,
+Web, and the framework adapters expose the same plan contract. Destination error
+records can be broader than by-ID errors, so the projection is not exhaustive.
+
+Keep rendering useful content when this field is present. A generic partial-content
+warning and `plan.deliveryDiagnostics.length` are suitable visitor-facing signals;
+inspect the typed fields explicitly when diagnosing a problem. Upstream strings
+are untrusted and may contain private information: stripping other fields and
+HTML escaping do not make them safe to disclose. Use normal text APIs for any
+explicit presentation, avoid automatic logging/display of raw messages, and omit
+diagnostics from public bootstrap/handoff payloads.
+
+The adapters' automatic debug JSON dumps omit `deliveryDiagnostics` as well;
+inspect that field explicitly through the typed plan when needed. Existing local
+error lists and the rest of the debug output remain unchanged.
+
+Absence does not establish personalization success or the absence of other
+upstream errors. This field does not change `plan.diagnostics: Error[]`, 404 and
+transport exceptions, profile adoption, or the Personalization request-state
+observable. `ExperienceDeliveryDiagnostic` is re-exported from Node, Web, and the
+React/Svelte/Angular adapters directly from its Core owner.
+
 ### Per-failure-mode behavior
 
 | Failure                                                                        | Behavior                                                                                                           | Override point             |
@@ -1189,7 +1218,8 @@ retain their message and original error (including status/body) as
 
 Direct by-ID preview fetches accept the same option and transport encoding.
 Preview can report missing/invalid values in the hydrated response's `errors`
-instead of failing the fetch. Preview Sessions continue to use their existing
+instead of failing the fetch; recognized entries appear in
+[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions continue to use their existing
 **unprefixed** `context.parameters` map, such as `{ productId: 'foo123' }`;
 the Session contract determines its supported values. The Contentful editor owns
 Session context changes, and the SDK consumes the new hydrated snapshots through

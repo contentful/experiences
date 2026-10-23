@@ -67,6 +67,7 @@ export type {
   ViewBuilderArgs,
 } from '@contentful/experiences-runtime';
 export type {
+  ExperienceDeliveryDiagnostic,
   ExperiencePayload,
   PortableRenderPlan,
   ResolverConfig,

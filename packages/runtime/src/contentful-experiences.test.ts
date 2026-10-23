@@ -64,6 +64,49 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
 }
 
 describe('ContentfulExperiences', () => {
+  it('preserves delivery diagnostics and resolved content through raw resolution', async () => {
+    const { resolveExperience } = await vi.importActual<
+      typeof import('@contentful/experiences-sdk-core')
+    >('@contentful/experiences-sdk-core');
+    mockResolveExperience.mockImplementationOnce(resolveExperience);
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const plan = await runtime.resolveExperience(
+      {
+        nodes: [
+          {
+            component: {
+              sys: {
+                type: 'ResourceLink',
+                linkType: 'Contentful:Component',
+                urn: 'components/hero',
+              },
+            },
+            contentProperties: { title: 'Available content' },
+          },
+        ],
+        errors: [
+          {
+            fieldPath: 'nodes[0].contentProperties.optional',
+            message: 'Unavailable field',
+            originalError: { secret: 'private' },
+          },
+        ],
+      },
+      { config: { components: { hero: {} } } }
+    );
+
+    expect(plan.deliveryDiagnostics).toEqual([
+      { fieldPath: 'nodes[0].contentProperties.optional', message: 'Unavailable field' },
+    ]);
+    expect(plan.nodes[0]?.props.content).toEqual({ title: 'Available content' });
+    expect(plan.diagnostics).toEqual([]);
+  });
+
   it('forwards per-fetch parameters to Delivery and Preview without retaining them', async () => {
     mockFetchExperience.mockClear();
     const runtime = createRuntime({
