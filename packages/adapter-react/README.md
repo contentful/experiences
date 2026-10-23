@@ -116,7 +116,7 @@ MissingComponent; // Default fallback for unregistered component types
 
 ### Primitives (`@contentful/experiences-react/primitives`)
 
-For hosts that walk the plan themselves, mainly islands frameworks such as Astro, where a component rendered inside `ServerExperienceRenderer` never hydrates. The host resolves each node with `resolveNodeProps`, renders static nodes with `ExperienceNode`, and passes `resolved.snapshot` to an island built with `createExperienceNode`, so only the components bound there ship to the browser. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`. The `ExperienceNode` component is unrelated to the `ExperienceNode` payload type re-exported from the main entry; alias one of them when a module imports both.
+For hosts that walk the plan themselves, mainly islands frameworks such as Astro, where a component rendered inside `ServerExperienceRenderer` never hydrates. The host resolves each node with `resolveNodeProps`, renders static nodes with `ExperienceNode`, and passes `resolved.snapshot` to an island built with `createExperienceNode`, so only the components bound there ship to the browser. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`.
 
 ```ts
 resolveNodeProps(node, config); // ResolvedNode: 'resolved' (component, props, design, contentful, snapshot) | 'unregistered'
