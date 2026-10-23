@@ -310,9 +310,8 @@ does not establish back/forward-cache behavior. Visual comparison uses the pinne
 Optimization source/theme rather than a running pixel comparison.
 
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current authorization and validation evidence. Phases 1–7 are accepted;
-the SDK/manual-observation correction is awaiting user review. Do not commit or
-push that correction before review and further authorization.
+records current authorization and validation evidence. Phases 1–7 and the
+manual-observation correction are accepted.
 
 ## Troubleshooting
 

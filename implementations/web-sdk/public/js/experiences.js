@@ -67,20 +67,17 @@ function stampAutomaticTracking(card, roots, namespace) {
   }
 }
 
-function renderNode(node, identity, context, parentSlot) {
-  const renderer = renderers[node.registration.kind]?.[node.registration.id] ?? renderUnknown;
-  const card = renderer(node, identity);
-  if (parentSlot !== undefined) markSlot(card, parentSlot);
-
-  const roots = node.attribution?.roots ?? [];
+function prepareTracking(card, roots, context) {
   if (context.section === 'auto') stampAutomaticTracking(card, roots, context.namespace);
   else if (roots.length) {
     // Consumer integration: one explicit element registration carries one target.
     // Use its innermost delivered scope; automatic tracking retains every root key.
     context.onManualRoot(card, roots.at(-1));
   }
+}
 
-  for (const [name, children] of Object.entries(node.slots)) {
+function appendSlots(card, slots, identity, context) {
+  for (const [name, children] of Object.entries(slots)) {
     // Consumer integration: recurse through delivered named slots; flat siblings stay flat.
     const slot = document.createElement('div');
     slot.className = 'entry-card__nested-children';
@@ -90,6 +87,14 @@ function renderNode(node, identity, context, parentSlot) {
     );
     card.appendChild(slot);
   }
+}
+
+function renderNode(node, identity, context, parentSlot) {
+  const renderer = renderers[node.registration.kind]?.[node.registration.id] ?? renderUnknown;
+  const card = renderer(node, identity);
+  if (parentSlot !== undefined) markSlot(card, parentSlot);
+  prepareTracking(card, node.attribution?.roots ?? [], context);
+  appendSlots(card, node.slots, identity, context);
   return card;
 }
 

@@ -3,8 +3,7 @@
 - Read `README.md`, parent implementation guidance, and the checkout-local
   `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
   explicit phase authorization and stop for user acceptance at each boundary.
-  Phases 1–7 are accepted. The user authorized the SDK/manual-observation
-  correction; do not commit or push it before user review.
+  Phases 1–7 and the manual-observation correction are accepted.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.
