@@ -571,7 +571,7 @@ experiences.tracking.clearElement('views', card);
 
 - `tracking.enable(type, options?)` enables automatic tracking; `type` is
   `'views' | 'hovers' | 'clicks'`. Views accept `{ root?: Element | Document | null,
-  rootMargin?: string }`. Repeated enables with unchanged effective options preserve
+rootMargin?: string }`. Repeated enables with unchanged effective options preserve
   active intervals. For views, omitted and `null` roots are equivalent, as are CSS
   `rootMargin` shorthands that expand to the same four sides; changed effective
   observer options restart view measurements.
