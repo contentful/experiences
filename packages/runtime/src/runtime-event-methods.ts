@@ -7,6 +7,8 @@ import type {
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
   PartialProfile as EventProfileSchema,
+  InsightsEvent as InsightsEventSchema,
+  parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
   type InsightsEvent as AnalyticsEvent,
   type OptimizationData as EventOptimizationData,
@@ -18,7 +20,10 @@ import {
   type ConsentState,
   type EventMethod,
   hasEventConsent,
+  hasEventTypeConsent,
+  methodForEventType,
 } from './consent.js';
+import { validatePersonalizationEvent, type EventInterceptors } from './event-interceptors.js';
 import type EventBuilder from './event-builder.js';
 import type { EventEmissionResult } from './event-emission-result.js';
 import { sendPersonalizationEvents } from './personalization-delivery.js';
@@ -64,7 +69,7 @@ export interface RuntimeEventDispatch {
     event: PersonalizationEvent,
     profile: EventProfile | undefined
   ): Promise<EventEmissionResult>;
-  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void>;
+  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
@@ -101,6 +106,8 @@ export interface RuntimeDirectEventBindings extends Omit<
   setProfile: (profile: EventProfile) => void;
   /** Changes when an external session boundary must invalidate an in-flight profile response. */
   getProfileRevision?: () => number;
+  /** Instance-owned transformation stage for direct Node emissions. */
+  eventInterceptors?: EventInterceptors;
 }
 
 /**
@@ -108,7 +115,7 @@ export interface RuntimeDirectEventBindings extends Omit<
  * Profile-producing calls are not globally serialized. Prepared replay uses
  * the same Personalization transport through the Web delivery queue. A
  * Personalization call blocked by consent resolves `{ accepted: false }`; a
- * blocked Analytics call resolves `false`.
+ * blocked view resolves `{ accepted: false }`; other Analytics methods resolve void.
  */
 export interface RuntimeEventMethods {
   readonly profile: EventProfile | undefined;
@@ -255,8 +262,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
       eventLogger.warn('Attempting to emit an event without an Optimization profile');
       return true;
     }
-    await this.dispatch.analytics(this.withConsent(event), profile);
-    return true;
+    const admitted = await this.dispatch.analytics(this.withConsent(event), profile);
+    return admitted !== false;
   }
 }
 
@@ -267,7 +274,14 @@ function createDirectEventDispatch(
   return {
     personalization: async (event, profile) => {
       const profileRevision = bindings.getProfileRevision?.();
-      const data = await sendPersonalizationEvents(api.experience, [event], profile?.id, {
+      const interceptors = bindings.eventInterceptors;
+      const intercepted =
+        interceptors === undefined || interceptors.count?.() === 0
+          ? event
+          : await interceptors.run(event);
+      const validEvent = validatePersonalizationEvent(intercepted);
+      if (!admitInterceptedEvent(validEvent, bindings)) return { accepted: false };
+      const data = await sendPersonalizationEvents(api.experience, [validEvent], profile?.id, {
         ...bindings.getExperienceOptions?.(),
         locale: bindings.getLocale?.(),
       });
@@ -277,13 +291,42 @@ function createDirectEventDispatch(
       return { accepted: true, data };
     },
     analytics: async (event, profile) => {
-      const batches = [{ profile, events: [event] }];
+      const interceptors = bindings.eventInterceptors;
+      const intercepted =
+        interceptors === undefined || interceptors.count?.() === 0
+          ? event
+          : await interceptors.run(event);
+      const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
+      if (!admitInterceptedEvent(validEvent, bindings)) return false;
+      const batches = [{ profile, events: [validEvent] }];
       const options = bindings.getInsightsOptions?.();
       // As in Optimization's stateless request, the options argument is omitted when unset.
       if (options === undefined) await api.insights.sendBatchEvents(batches);
       else await api.insights.sendBatchEvents(batches, options);
+      return undefined;
     },
   };
+}
+
+function admitInterceptedEvent(
+  event: PersonalizationEvent | AnalyticsEvent,
+  bindings: RuntimeDirectEventBindings
+): boolean {
+  if (
+    bindings.getConsent === undefined ||
+    hasEventTypeConsent(event.type, bindings.getConsent(), bindings.allowedEventTypes)
+  )
+    return true;
+  try {
+    bindings.onEventBlocked?.({
+      reason: 'consent',
+      method: methodForEventType(event.type) ?? event.type,
+      args: [event],
+    });
+  } catch {
+    // Diagnostic callbacks do not interrupt direct event admission.
+  }
+  return false;
 }
 
 export function createRuntimeEventMethods(

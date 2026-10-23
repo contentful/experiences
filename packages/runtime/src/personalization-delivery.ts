@@ -37,6 +37,8 @@ interface PersonalizationDeliveryOptions {
   readonly getLocale?: () => string | undefined;
   readonly eventInterceptors: EventInterceptors;
   readonly publishEvent: (event: ExperienceEvent) => void;
+  /** Owner consent check after interception/schema validation, before publication. */
+  readonly admitEvent?: (event: ExperienceEvent) => boolean;
   /** Publish the response and success state together while the request remains live. */
   readonly applyOptimizationData: (
     data: OptimizationData,
@@ -68,6 +70,7 @@ export class PersonalizationDelivery {
   readonly #applyOptimizationData: PersonalizationDeliveryOptions['applyOptimizationData'];
   readonly #eventInterceptors: EventInterceptors;
   readonly #publishEvent: PersonalizationDeliveryOptions['publishEvent'];
+  readonly #admitEvent: PersonalizationDeliveryOptions['admitEvent'];
   readonly #maxEvents: number;
   readonly #flushRuntime: QueueFlushRuntime;
   readonly #queue: QueuedBatch[] = [];
@@ -87,6 +90,7 @@ export class PersonalizationDelivery {
     this.#applyOptimizationData = options.applyOptimizationData;
     this.#eventInterceptors = options.eventInterceptors;
     this.#publishEvent = options.publishEvent;
+    this.#admitEvent = options.admitEvent;
     this.#maxEvents = options.maxEvents ?? OFFLINE_QUEUE_MAX_EVENTS;
     this.#flushRuntime = new QueueFlushRuntime({
       policy: options.flushPolicy,
@@ -113,6 +117,8 @@ export class PersonalizationDelivery {
     const intercepted = await this.#eventInterceptors.run(event);
     if (!this.#isLiveRequest(token)) return { accepted: false };
     const validEvent = parseOptimizationSchema(ExperienceEventSchema, intercepted);
+    if (this.#admitEvent?.(validEvent) === false || !this.#isLiveRequest(token))
+      return { accepted: false };
     this.#publishEvent(validEvent);
     if (!this.#isLiveRequest(token)) return { accepted: false };
     if (this.#getOnline()) {

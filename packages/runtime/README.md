@@ -28,9 +28,13 @@ The base owns one `EventBuilder`, configured with a default library identity of 
 
 Event methods build and validate arguments before consent admission or a
 missing-profile drop. `trackView` follows Optimization's early consent guard
-before its view-specific validation. Web queues then run event interceptors
-before wire-event revalidation, publication, and transport or queue admission;
-Node sends directly. `BlockedEvent.method` is typed as `string`, matching
+before its view-specific validation. Node and Web run event interceptors after the original consent gate and before
+wire-event revalidation. Valid transformed events pass a second gate using their
+final type and current consent before publication, transport, or queue admission.
+Invalid output is a schema failure rather than a consent refusal. Post-hook
+blocks report the transformed method/type: Personalization and `trackView` return
+`{ accepted: false }`; other Analytics methods retain void results. Node sends
+directly. `BlockedEvent.method` is typed as `string`, matching
 Optimization's public event payload contract.
 
 The generated Experience Delivery dependency is declared only by Client. Runtime directly declares its Optimization API client, `es-toolkit`, and `zod` dependencies. Its package metadata is injected into `sdk-info` during build and checked by `verify-release-artifact`.
@@ -38,6 +42,28 @@ The generated Experience Delivery dependency is declared only by Client. Runtime
 Direct Experience and ExperienceFragment interaction builders use `default` when `variantId` is omitted or empty. Fragment builders also use `default` when `parentVariantId` is omitted or empty; a supplied root Experience variant remains separate from the Fragment's own variant. Experience builders leave omitted parent fields unset.
 
 See the [Node](../node/README.md), [Web](../web/README.md), and [root paired replay guide](../../README.md#paired-server-to-browser-replay) for the current public operations and handoff handling.
+
+## Shared event interceptors
+
+Runtime owns `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
+`MaybePromise`, and the `OptimizationEventStreamEvent` union and exports them
+from its root. Node and Web re-export the same public names. The manager snapshots
+handlers for each run, clones inputs, awaits handlers in insertion order, and
+propagates handler errors. Node owns one event registry shared by its request
+facades; request state remains facade-local. Web keeps its existing event and
+state registries. Runtime owns no browser signals or state-interceptor registry.
+
+A chain runs once per admitted submission or prepared event. XDA uses
+`Promise.all` across event chains while preserving result order; preparation runs
+events sequentially. Destination validation precedes the final-type consent check.
+Valid consent-blocked XDA events are omitted without cancelling content fetching;
+hook/schema failures reject before transport. Prepared hook/schema failures or an
+invalid/blocked final page produce the existing event-free fallback, while a later
+preflight transport failure retains the evaluated replay. Retries and browser
+prepared replay never rerun event hooks; browser replay still applies browser
+consent and its metadata. Hooks preserve the existing transport boundaries, and
+stateless free fetch functions gain no global registry. This final-type gate is a
+local correction of the Optimization reference's original-type-only gate at `70dfa7f`.
 
 ## Shared handoff primitives
 
@@ -53,7 +79,15 @@ continuity unchanged. This helper does not run as part of an XDA content fetch.
 
 Cache warnings are advisory; `assertExperiencesCacheSafety` and the create/parse operations reject a public or static handoff containing a profile, continuation ID, or replay. `public-permutation` requires a nonempty application-owned key covering Experience identity and content revision, environment, locale, and every dimension that changes rendered output. A profileless `static` handoff needs no key. Runtime does not set response headers or prove that application-rendered content is safe to cache.
 
-`createRequestHandoffFromData` adds only the evaluated API profile to a private handoff. It does not commit a preflight result or copy selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
+Runtime's internal `createRequestHandoffFromData({ handoff, data? })` adds the
+evaluated API profile to an existing private handoff and can preserve its replay.
+Its existing shape and behavior remain unchanged. The distinct public Node free
+function `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
+constructs a state-only, private-request envelope through Runtime validation;
+it emits no replay or top-level continuation ID. It accepts an ID-only profile,
+omits `state` when no profile is supplied, and performs no events or network work.
+Profileless hydration preserves existing browser state. Neither helper commits a
+preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 
 The generated XDA request currently has no preflight option. Ordinary by-ID
 Experience fetches still pass profile IDs and events through Client's Delivery

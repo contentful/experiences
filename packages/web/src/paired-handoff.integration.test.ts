@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
+import { createRequestHandoffFromData } from '../../node/src/handoff.js';
 import {
   hasServerConsent,
   identitySetCookie,
@@ -65,6 +66,56 @@ afterEach(() => {
 });
 
 describe('paired Node preparation and Web delivery', () => {
+  it('packages final request state without evaluating hooks and replays prepared transformations exactly once', async () => {
+    const upsert = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'evaluated-profile' } } as never);
+    const server = node();
+    const serverHook = vi.fn((event) =>
+      event.type === 'track' ? { ...event, event: 'server-enriched' } : event
+    );
+    server.interceptors.event.add(serverHook);
+    const request = server.forRequest({ consent: true, profile: { id: 'original-profile' } });
+    const prepared = await request.prepareRequestHandoff({
+      routeKey: '/intercepted',
+      initialEvents: [{ type: 'track', event: 'original' }],
+    });
+    expect(serverHook).toHaveBeenCalledTimes(2);
+    expect(prepared.handoff.replay?.events).toEqual(upsert.mock.calls[0]?.[0].events);
+    expect(prepared.handoff.replay?.events[0]).toMatchObject({
+      type: 'track',
+      event: 'server-enriched',
+    });
+    const stateOnly = createRequestHandoffFromData({
+      spaceId: 'space',
+      environmentId: 'environment',
+      data: { profile: request.profile },
+    });
+    expect(stateOnly).toMatchObject({ state: { profile: { id: 'evaluated-profile' } } });
+    expect(stateOnly.replay).toBeUndefined();
+    expect(serverHook).toHaveBeenCalledTimes(2);
+    expect(upsert).toHaveBeenCalledTimes(1);
+
+    const browser = web();
+    const browserHook = vi.fn((event) => event);
+    browser.interceptors.event.add(browserHook);
+    await browser.hydrateHandoffState(JSON.parse(JSON.stringify(stateOnly)), {
+      routeKey: '/state',
+    });
+    expect(browser.states.profile.current?.id).toBe('evaluated-profile');
+    expect(browserHook).not.toHaveBeenCalled();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    await expect(
+      browser.hydrateAndTrackCurrentPage(JSON.parse(JSON.stringify(prepared.handoff)), {
+        routeKey: '/intercepted',
+      })
+    ).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(upsert.mock.calls[1]?.[0].events).toEqual(prepared.handoff.replay?.events);
+    expect(serverHook).toHaveBeenCalledTimes(2);
+    expect(browserHook).not.toHaveBeenCalled();
+  });
+
   it.each([
     { configuredLocale: 'en-US', requestLocale: 'de-DE', transportLocale: 'de-DE' },
     { configuredLocale: 'de-DE', requestLocale: undefined, transportLocale: 'de-DE' },
@@ -130,6 +181,10 @@ describe('paired Node preparation and Web delivery', () => {
     // Event consent is denied, but the prepared types are allow-listed, so the batch is
     // prepared and its events keep the denied flag through the replay.
     const server = node({ allowedEventTypes: ['identify', 'track', 'page'] });
+    const serverHook = vi.fn((event) =>
+      event.type === 'track' ? { ...event, event: 'server-evaluated' } : event
+    );
+    server.interceptors.event.add(serverHook);
     const request = server.forRequest({
       locale: 'de-DE',
       profile: { id: 'known-profile' },
@@ -163,6 +218,10 @@ describe('paired Node preparation and Web delivery', () => {
 
     server.destroy();
     const browser = web();
+    const browserHook = vi.fn((event) => event);
+    browser.interceptors.event.add(browserHook);
+    expect(serverHook).toHaveBeenCalledTimes(3);
+    expect(previewBody.events[1]).toMatchObject({ type: 'track', event: 'server-evaluated' });
     const handoff = JSON.parse(JSON.stringify(prepared.handoff));
     const admission = browser.hydrateAndTrackCurrentPage(handoff, {
       routeKey: '/products?sort=popular',
@@ -191,6 +250,8 @@ describe('paired Node preparation and Web delivery', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(upsert).toHaveBeenCalledTimes(3);
     expect(upsert.mock.calls[2]).toEqual([firstBody, firstOptions]);
+    expect(serverHook).toHaveBeenCalledTimes(3);
+    expect(browserHook).not.toHaveBeenCalled();
     secondDelivery.resolve({ profile: { id: 'committed-profile' } });
     await vi.waitFor(() =>
       expect(browser.states.profile.current).toEqual({ id: 'committed-profile' })

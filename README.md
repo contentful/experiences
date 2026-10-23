@@ -193,13 +193,138 @@ call. Browser event context can include URL, query, referrer, title, dimensions,
 and User-Agent; use context providers to redact those values before an event is
 built or sent.
 
+Node and Web expose `interceptors.event` to transform admitted direct events and
+caller-built XDA events before destination validation and a final check of current
+consent against the transformed event type. Invalid output fails schema validation;
+a valid consent-blocked transformed event is reported with its final method/type.
+Personalization and `trackView` refusals return `{ accepted: false }`; other
+Analytics methods keep their void contracts. Each explicit submission runs its
+chain once. XDA event chains may run concurrently while preserving array order;
+prepared events run sequentially. Retries and browser prepared replay reuse the
+evaluated events without rerunning hooks. See the [Node interceptor reference](./packages/node/README.md#event-interceptors)
+and [Web interceptor reference](./packages/web/README.md#interceptors).
+
+### Committed server rendering and state-only hydration
+
+For server-rendered personalized content, use the supported committed-server
+sequence below. It is separate from Personalization preparation/replay and does
+not provide noncommitting XDA content selection.
+
+1. Bind a Node request to explicit consent, permitted identity, locale, and event
+   context. Await one direct `request.page()` and require both its accepted result
+   and an API-issued `request.profile` before identity-dependent content fetching.
+2. If identification is requested, build one identify event for the cycle and
+   include it in each distinct sequential XDA fetch. Do not also send it directly
+   or attach the already-sent page to those fetches. Fetch each distinct Experience
+   once and reuse its plan for repeated presentations. Profile-only XDA selection
+   currently does not reliably apply audience membership.
+3. After the final fetch, produce a state-only handoff from the final
+   `request.profile`, render the plans with attribution, and safely serialize the
+   minimal public configuration and handoff into a private, no-store response.
+4. Construct Web with automatic interactions disabled and profile/consent defaults
+   omitted. Subscribe, await state hydration, then enable automatic tracking and
+   register manual elements. Initial activation sends no page and refetches no
+   content.
+
+```ts
+import { createRequestHandoffFromData } from '@contentful/experiences-node';
+
+// Inside a request handler; experiences is the process-long Node SDK.
+const request = experiences.forRequest({
+  profile: permittedProfile,
+  consent: visitorConsent,
+  locale: requestLocale,
+  eventContext: { page: pageProperties, userAgent },
+});
+const pageResult = await request.page({ properties: pageProperties });
+if (!pageResult.accepted || !request.profile) {
+  throw new Error('Page initialization did not establish a profile');
+}
+const identify = userId
+  ? experiences.eventBuilder.buildIdentify({
+      userId,
+      traits: { identified: true },
+      page: pageProperties,
+      userAgent,
+      locale: requestLocale,
+    })
+  : undefined;
+const plans = [];
+for (const experienceId of distinctExperienceIds) {
+  plans.push(
+    await request.fetchExperience(
+      { experienceId, personalization: { events: identify ? [identify] : [] } },
+      { config: experienceConfig }
+    )
+  );
+}
+const handoff = createRequestHandoffFromData({
+  spaceId,
+  environmentId,
+  data: { profile: request.profile },
+});
+```
+
+Caller-built XDA events require explicit context: `forRequest({ eventContext })`
+binds direct methods and does not merge page URL/path/query/referrer, user agent,
+or locale into supplied `personalization.events`. Keep those values in builder
+inputs rather than shared interceptor closures. Each identify-bearing fetch is a
+separate event submission; this flow adds no duplicate-delivery guarantee.
+
+The public Node producer accepts optional profile data and optional
+`cache: { scope: 'private-request' }` (the default). It validates the explicit
+space/environment scope and profile, accepts an ID-only profile, and packages no
+replay or top-level continuation ID. An absent profile omits `state` and preserves
+an existing browser profile on hydration. It performs no events or network work.
+The internal Runtime helper of the same name takes `{ handoff, data? }` and
+retains its separate replay-preserving behavior.
+
+```ts
+// In client-side lifecycle code, after safely reading the serialized handoff:
+const web = new WebContentfulExperiences({
+  spaceId,
+  environmentId,
+  delivery: publicDelivery,
+  autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
+});
+const subscription = web.states.profile.subscribe(renderProfile);
+await web.hydrateHandoffState(handoff, {
+  routeKey: window.location.pathname + window.location.search,
+});
+web.tracking.enable('views');
+web.tracking.enable('hovers');
+web.tracking.enable('clicks');
+// Register any manual elements now, using actual plan attribution.
+// During application cleanup: subscription.unsubscribe(); web.destroy();
+```
+
+Here `WebContentfulExperiences` is the `ContentfulExperiences` export from
+`@contentful/experiences-web`. Disabled automatic flags are not a global pause:
+discovery starts at construction. Initial HTML must have no positive
+`data-ctfl-track-views`, `data-ctfl-track-hovers`, or `data-ctfl-track-clicks`
+opt-ins, and manual registration must wait until hydration completes. State-only
+hydration does not mark the route tracked; ordinary `page()` remains direct.
+Use the same direct page/profile step on later navigation or reset before fetching
+content. An identify action joins pending initialization and explicitly refetches
+without an unrelated page; a separate custom action uses `track()`.
+
+On reset, invalidate stale application render work and remove or replace old
+attributed content synchronously in the same transition, before awaiting the new
+page/fetch cycle. SDK reset clears measurements and manual overrides, then resumes
+eligible discovery immediately. Register replacement manual elements after
+insertion; during ordinary navigation, let removed occurrences finalize before
+clearing their manual registrations. Dispose subscriptions in application cleanup.
+Safe serialization and preflight limitations are described below.
+
 ### Paired server-to-browser replay
 
 A Node request facade can prepare one ordered `identify`/`track` prefix plus a
 final `page` with `prepareRequestHandoff()`. It builds the events once and sends
 one Personalization API request with `preflight: true`, which evaluates the
-batch without committing it on Node. The result contains the exact replay and,
-on success, preview data. A preview transport failure retains the replay so the
+batch without committing it on Node. The result contains the exact evaluated replay and,
+on success, preview data. Hook/schema failures or an invalid/blocked final page
+produce an event-free handoff; blocked optional prefix events are omitted.
+A preview transport failure retains the evaluated replay so the
 application can choose a fallback. Ordinary Node event methods remain direct
 and are not staged into this batch.
 

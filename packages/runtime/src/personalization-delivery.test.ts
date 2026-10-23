@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { OptimizationData } from '@contentful/optimization-api-client/api-schemas';
+import type {
+  ExperienceEvent,
+  OptimizationData,
+} from '@contentful/optimization-api-client/api-schemas';
 import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
@@ -34,6 +37,7 @@ function fixture(
     online?: boolean;
     profileId?: string;
     maxEvents?: number;
+    admitEvent?: (event: ExperienceEvent) => boolean;
     experienceRequestState?: { value: ExperienceRequestState };
   } = {}
 ) {
@@ -56,6 +60,7 @@ function fixture(
     api: { upsertProfile },
     eventInterceptors,
     publishEvent,
+    admitEvent: options.admitEvent,
     experienceRequestState,
     getProfileId: () => profileId,
     getProfileRevision: () => revision,
@@ -96,6 +101,67 @@ afterEach(() => {
 });
 
 describe('PersonalizationDelivery', () => {
+  it.each([true, false])(
+    'validates before final admission and drops blocked events without publication (online: %s)',
+    async (online) => {
+      const admitEvent = vi.fn(() => false);
+      const f = fixture({ online, admitEvent });
+      const original = builder.buildPageView();
+      const rewritten = builder.buildTrack({ event: 'rewritten' });
+      f.eventInterceptors.run
+        .mockResolvedValueOnce({ type: 'track' })
+        .mockResolvedValueOnce(rewritten);
+
+      await expect(f.delivery.send(original)).rejects.toThrow();
+      expect(admitEvent).not.toHaveBeenCalled();
+      await expect(f.delivery.send(original)).resolves.toEqual({ accepted: false });
+      expect(admitEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+      expect(f.publishEvent).not.toHaveBeenCalled();
+      expect(f.delivery.queuedEventCount).toBe(0);
+      f.setOnline(true);
+      await f.delivery.flush({ force: true });
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+    }
+  );
+
+  it('rechecks its lifecycle after a final admission callback resets the delivery', async () => {
+    const admitEvent = vi.fn(() => {
+      f.delivery.reset();
+      return true;
+    });
+    const f = fixture({ admitEvent });
+
+    await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({ accepted: false });
+    expect(admitEvent).toHaveBeenCalledOnce();
+    expect(f.publishEvent).not.toHaveBeenCalled();
+    expect(f.upsertProfile).not.toHaveBeenCalled();
+    expect(f.delivery.queuedEventCount).toBe(0);
+  });
+
+  it('retries the admitted offline body with its original ID without rerunning hooks or admission', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const admitEvent = vi.fn(() => true);
+    const f = fixture({ online: false, admitEvent, profileId: 'visitor' });
+    const rewritten = builder.buildTrack({ event: 'rewritten' });
+    f.eventInterceptors.run.mockResolvedValueOnce(rewritten);
+    f.upsertProfile.mockRejectedValueOnce(new Error('network'));
+    await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({ accepted: true });
+    f.setOnline(true);
+    await f.delivery.flush();
+    const firstCall = f.upsertProfile.mock.calls[0];
+    expect(firstCall?.[0]).toEqual({ profileId: 'visitor', events: [rewritten] });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(f.upsertProfile).toHaveBeenCalledTimes(2);
+    expect(f.upsertProfile.mock.calls[1]).toEqual(firstCall);
+    expect(f.eventInterceptors.run).toHaveBeenCalledOnce();
+    expect(admitEvent).toHaveBeenCalledOnce();
+    expect(f.publishEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+    expect(f.delivery.queuedEventCount).toBe(0);
+  });
+
   it('validates and publishes intercepted events before transport, rejecting invalid rewrites', async () => {
     const f = fixture();
     const original = builder.buildTrack({ event: 'original' });
@@ -118,12 +184,15 @@ describe('PersonalizationDelivery', () => {
 
   it('admits a prepared batch before HTTP settles and preserves the exact events and GDPR metadata', async () => {
     const response = deferred<OptimizationData>();
-    const f = fixture({ profileId: 'profile-1' });
+    const admitEvent = vi.fn(() => false);
+    const f = fixture({ profileId: 'profile-1', admitEvent });
     f.upsertProfile.mockReturnValueOnce(response.promise);
     const events = prepared();
 
     expect(f.delivery.sendPrepared(events, { locale: 'fr-FR' })).toEqual({ accepted: true });
     expect(f.experienceRequestState.value.status).toBe('pending');
+    expect(f.eventInterceptors.run).not.toHaveBeenCalled();
+    expect(admitEvent).not.toHaveBeenCalled();
     expect(f.upsertProfile).toHaveBeenCalledWith(
       { profileId: 'profile-1', events },
       { preflight: false, locale: 'fr-FR' }

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AllowedEventType, BlockedEvent, ConsentState } from './consent.js';
 import EventBuilder from './event-builder.js';
+import type { EventInterceptors } from './event-interceptors.js';
 import {
   createRuntimeEventMethods,
   EventProfileRequiredError,
@@ -32,6 +33,7 @@ function optimizationData(profileId: string): EventOptimizationData {
 function createFixture(
   options: {
     profile?: EventProfile;
+    eventInterceptors?: EventInterceptors;
     consent?: ConsentState;
     allowedEventTypes?: readonly AllowedEventType[];
     onEventBlocked?: (event: BlockedEvent) => void;
@@ -73,6 +75,7 @@ function createFixture(
       ? createRuntimeEventMethods(api, eventBuilder, {
           ...bindings,
           setProfile,
+          eventInterceptors: options.eventInterceptors,
           getProfileRevision: () => revision,
           onEventBlocked: options.onEventBlocked,
         })
@@ -95,6 +98,126 @@ function createFixture(
 }
 
 describe('RuntimeEventMethods', () => {
+  describe('direct event interception', () => {
+    const builder = new EventBuilder({
+      channel: 'server',
+      library: { name: '@contentful/experiences-node', version: 'test' },
+    });
+
+    it('keeps the original consent gate before invoking hooks', async () => {
+      const run = vi.fn<EventInterceptors['run']>(async (event) => event);
+      const f = createFixture({ consent: { events: false }, eventInterceptors: { run } });
+      await expect(f.methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
+      expect(run).not.toHaveBeenCalled();
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+    });
+
+    it('blocks a valid final Personalization type and reports that type even when the callback throws', async () => {
+      const rewritten = builder.buildTrack({ event: 'purchase' });
+      const onEventBlocked = vi.fn(() => {
+        throw new Error('logger failed');
+      });
+      const run = vi.fn<EventInterceptors['run']>().mockResolvedValue(rewritten);
+      const f = createFixture({
+        consent: { events: false },
+        eventInterceptors: { run },
+        onEventBlocked,
+      });
+
+      await expect(f.methods.page()).resolves.toEqual({ accepted: false });
+      expect(run).toHaveBeenCalledOnce();
+      expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
+        reason: 'consent',
+        method: 'track',
+        args: [rewritten],
+      });
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+      expect(f.setProfile).not.toHaveBeenCalled();
+    });
+
+    it('blocks a rewritten Analytics type with an accurate view admission result', async () => {
+      const rewritten = builder.buildClick(interaction);
+      const onEventBlocked = vi.fn();
+      const run = vi.fn<EventInterceptors['run']>().mockResolvedValue(rewritten);
+      const f = createFixture({
+        consent: { events: false },
+        allowedEventTypes: ['component'],
+        profile: { id: 'visitor' },
+        eventInterceptors: { run },
+        onEventBlocked,
+      });
+
+      await expect(
+        f.methods.trackView({ ...interaction, viewId: 'view', viewDurationMs: 100 })
+      ).resolves.toEqual({ accepted: false });
+      expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
+        reason: 'consent',
+        method: 'trackClick',
+        args: [rewritten],
+      });
+      expect(f.sendBatchEvents).not.toHaveBeenCalled();
+    });
+
+    it.each(['personalization', 'analytics'] as const)(
+      'rejects invalid %s rewrites before final consent reporting',
+      async (transport) => {
+        const run = vi.fn<EventInterceptors['run']>().mockResolvedValue({ type: 'track' });
+        const onEventBlocked = vi.fn();
+        const f = createFixture({
+          profile: { id: 'visitor' },
+          allowedEventTypes: ['page', 'component'],
+          eventInterceptors: { run },
+          onEventBlocked,
+        });
+        const sending =
+          transport === 'personalization'
+            ? f.methods.page()
+            : f.methods.trackView({ ...interaction, viewId: 'view', viewDurationMs: 100 });
+        await expect(sending).rejects.toThrow();
+        expect(onEventBlocked).not.toHaveBeenCalled();
+        expect(f.upsertProfile).not.toHaveBeenCalled();
+        expect(f.sendBatchEvents).not.toHaveBeenCalled();
+      }
+    );
+
+    it('propagates hook errors without transport or profile publication', async () => {
+      const error = new Error('hook failed');
+      const run = vi.fn<EventInterceptors['run']>().mockRejectedValue(error);
+      const f = createFixture({ eventInterceptors: { run } });
+      await expect(f.methods.page()).rejects.toBe(error);
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+      expect(f.setProfile).not.toHaveBeenCalled();
+    });
+
+    it('captures the profile revision before awaiting hooks', async () => {
+      let release!: (event: unknown) => void;
+      const run = vi.fn<EventInterceptors['run']>(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          })
+      );
+      const f = createFixture({ profile: { id: 'visitor' }, eventInterceptors: { run } });
+      const sending = f.methods.page();
+      f.invalidateProfile();
+      release(builder.buildPageView());
+
+      await expect(sending).resolves.toMatchObject({ accepted: true });
+      expect(f.upsertProfile.mock.calls[0]?.[0].profileId).toBe('visitor');
+      expect(f.setProfile).not.toHaveBeenCalled();
+      expect(f.methods.profile).toEqual({ id: 'visitor' });
+    });
+
+    it('preserves immediate transport start with an empty registry', async () => {
+      const run = vi.fn<EventInterceptors['run']>(async (event) => event);
+      const f = createFixture({ eventInterceptors: { run, count: () => 0 } });
+      const sending = f.methods.page();
+      expect(f.upsertProfile).toHaveBeenCalledOnce();
+      expect(run).not.toHaveBeenCalled();
+      await sending;
+    });
+  });
+
   it('sends profile-producing events through Personalization and retains the returned profile', async () => {
     const onEventBlocked = vi.fn();
     const { methods, upsertProfile } = createFixture({

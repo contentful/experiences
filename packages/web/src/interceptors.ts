@@ -1,6 +1,8 @@
-import type { EventProfile } from '@contentful/experiences-runtime';
-import { InterceptorManager } from './lib/interceptor/InterceptorManager.js';
-import type { OptimizationEventStreamEvent } from './signals/index.js';
+import {
+  InterceptorManager,
+  type EventProfile,
+  type OptimizationEventStreamEvent,
+} from '@contentful/experiences-runtime';
 
 /** Incoming state available to state interceptors before it is committed. */
 export interface ExperienceState {

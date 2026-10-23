@@ -143,7 +143,10 @@ const plan = await experiences.fetchExperience(
 );
 ```
 
-Events built by the Web runtime use the `web` channel and the current browser context. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
+Events built by the Web runtime use the `web` channel and its browser context
+providers. Caller-built `personalization.events` must already contain the intended
+context; submitting an event does not merge missing page/user-agent/locale values
+into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
 
 The current XDA event-bearing POST has no noncommitting preflight option and
 may commit supplied events. A Node-prepared Personalization handoff does not
@@ -239,9 +242,33 @@ preview state in `states`.
 Register synchronous or asynchronous transforms with `add()`, retain its id for
 `remove()`, or use `clear()` to remove all transforms. They run in insertion order
 with a cloned input; registry changes do not affect a chain already running.
-Event interceptors run before wire-event revalidation, publication, and sending or
-queueing, including caller-built events embedded in an XDA fetch. Prepared server
-handoff replay keeps its evaluated event contents and bypasses event rewriting.
+Event interceptors run once per admitted submission after the original consent
+gate, including caller-built events embedded in an XDA fetch. The destination
+transport schema validates the transformed output, then the SDK checks its actual
+event type against current consent before publication, sending, or queueing.
+Invalid output is a schema failure, not a consent drop. A valid transformed event
+blocked by consent is reported with its transformed method/type through
+`onEventBlocked` and `blockedEventStream`. Personalization and `trackView` return
+`{ accepted: false }`; other Analytics methods retain their void contracts. This
+final-type gate corrects the original-type-only bypass in the Optimization reference at `70dfa7f`.
+
+XDA runs event chains concurrently with `Promise.all`, preserving the input array
+order; each event's handler chain remains sequential. Valid consent-blocked events
+are omitted without cancelling the profile/content fetch. Hook/schema failures
+reject before transport. Client owns the final XDA serialization, including removal
+of unsupported fields. Reusing a built event in another explicit fetch runs the
+chain again. Prepared server events are evaluated sequentially on Node; browser
+replay and transport retries preserve those bodies, IDs, and timestamps without
+rerunning event hooks. Browser replay still applies its current consent gate and
+metadata. State-only handoff production and hydration invoke no event hooks.
+Hooks transform supplied events and preserve Personalization, Analytics, and XDA
+transport boundaries.
+
+Runtime owns the shared manager and the `OptimizationEventStreamEvent` union;
+Web's root imports remain compatible, and Node exposes the same manager/type
+names with one event registry per SDK instance. Web retains its separate state
+registry. The `./runtime` entry and snapshot runtimes remain unchanged and expose
+no interceptor registry.
 
 State interceptors receive incoming `{ profile }` state from Personalization,
 XDA, and private handoff hydration before it is committed. A sparse result that
@@ -300,8 +327,9 @@ persisted and restored from LocalStorage once persistence consent is granted.
 precedence over the active profile id. The default provider reads the stored
 anonymous id only when persistence consent is `true`; an `undefined` result falls
 back to the current profile or adopted handoff identity.
-Runtime event methods run interceptors before validation, publication, and
-admission. `trackView` preserves Optimization's early consent check before its
+Runtime event methods retain the original consent gate, run interceptors, then
+validate transformed output and recheck its final type against current consent
+before publication or admission. `trackView` preserves Optimization's early consent check before its
 view-specific validation. `BlockedEvent.method` is a string, matching the
 reference's public payload type.
 Call `reset()` at logout or another browser session boundary. It clears queued
@@ -390,7 +418,8 @@ the Optimization SDK's consent model.
   Optimization names: `identify`, `page`, `track`, `component` (views),
   `component_click`, `component_hover`, and `flag` (flag views only; `component`
   also admits them). A blocked Personalization call resolves
-  `{ accepted: false }`; a blocked Analytics call resolves `false`.
+  `{ accepted: false }`; blocked `trackView` also resolves `{ accepted: false }`,
+  while `trackClick`, `trackHover`, and `trackFlagView` retain void results.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also
@@ -754,6 +783,37 @@ serialization into a private, no-store response, and never cache, log, or
 persist it. The application owns safe caching for profileless public/static
 handoffs and the rest of its rendered response. Queue retries cannot
 guarantee exactly-once delivery.
+
+### State-only hydration after committed server rendering
+
+The public Node `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
+packages final request profile state without replay, events, or network work. Call
+it after the last sequential server fetch, using `request.profile`; an earlier
+response can contain stale identity. Its private-request cache scope is the
+default and only accepted scope. An absent profile omits `state` entirely and
+preserves the current browser profile and continuity, including after a JSON round
+trip. This producer differs from Runtime's unchanged internal replay-preserving
+helper with the same name.
+
+For the committed-server flow, await a direct server page with an accepted result
+and API-issued profile, then make distinct sequential identify-bearing XDA fetches.
+Build identify with explicit request context, reuse each distinct plan for repeated
+presentations, and package the final profile. Construct Web with
+`autoTrackEntryInteraction: { views: false, hovers: false, clicks: false }` and no
+profile/consent defaults, subscribe, await `hydrateHandoffState()`, then enable
+automatic tracking and register manual elements. Initial activation performs no
+content refetch or page event. Hydration does not mark the route tracked.
+
+Discovery starts at construction even with automatic flags disabled. Initial HTML
+must have no positive `data-ctfl-track-views`, `data-ctfl-track-hovers`, or
+`data-ctfl-track-clicks` opt-ins, and manual registration must wait for hydration.
+On reset, synchronously invalidate pending application renders and replace old
+attributed content before awaiting a new page/profile and content cycle: reset
+resumes eligible discovery immediately. Register replacement manual elements after
+insertion, and unsubscribe application subscriptions during cleanup. See the
+[complete server/browser recipe](../../README.md#committed-server-rendering-and-state-only-hydration).
+Personalization preflight remains separate and does not provide noncommitting XDA
+content selection.
 
 ## SSR import safety
 

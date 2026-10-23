@@ -25,7 +25,13 @@ const event = (n: number): AnalyticsEvent => ({ ...baseEvent, componentId: `c${n
  * The queue has no lifecycle of its own; like Optimization's InsightsQueue it reads an
  * owner-provided reset token. This fixture plays that owner, as Web does.
  */
-function setup(options: { online?: boolean; maxEvents?: number } = {}) {
+function setup(
+  options: {
+    online?: boolean;
+    maxEvents?: number;
+    admitEvent?: (event: AnalyticsEvent) => boolean;
+  } = {}
+) {
   let online = options.online ?? true;
   let resetToken: object = {};
   let destroyed = false;
@@ -36,6 +42,7 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
     api: { sendBatchEvents } as never,
     eventInterceptors,
     publishEvent,
+    admitEvent: options.admitEvent,
     getOnline: () => online,
     getResetToken: () => (destroyed ? undefined : resetToken),
     flushPolicy: resolveQueueFlushPolicy(undefined),
@@ -69,6 +76,63 @@ function setup(options: { online?: boolean; maxEvents?: number } = {}) {
 }
 
 describe('AnalyticsDelivery', () => {
+  it('validates the rewritten event before final admission and refuses without publication or queueing', async () => {
+    const admitEvent = vi.fn(() => false);
+    const f = setup({ admitEvent });
+    const rewritten = builder.buildClick({ entityId: 'experience', entityKind: 'Experience' });
+    f.eventInterceptors.run
+      .mockResolvedValueOnce({ type: 'exo_node_click' })
+      .mockResolvedValueOnce(rewritten);
+
+    await expect(f.delivery.send(event(1), profile)).rejects.toThrow();
+    expect(admitEvent).not.toHaveBeenCalled();
+    await expect(f.delivery.send(event(1), profile)).resolves.toBe(false);
+    expect(admitEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+    expect(f.publishEvent).not.toHaveBeenCalled();
+    expect(f.delivery.queuedEventCount).toBe(0);
+    await f.delivery.flush({ force: true });
+    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+    await f.owner.destroy();
+  });
+
+  it('rechecks the owner token after a final admission callback resets the owner', async () => {
+    const admitEvent = vi.fn(() => {
+      f.owner.reset();
+      return true;
+    });
+    const f = setup({ admitEvent });
+    await f.delivery.send(event(1), profile);
+
+    expect(admitEvent).toHaveBeenCalledOnce();
+    expect(f.publishEvent).not.toHaveBeenCalled();
+    expect(f.delivery.queuedEventCount).toBe(0);
+    await f.owner.destroy();
+    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('preserves rewritten bodies across retries without rerunning hooks or admission', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const admitEvent = vi.fn(() => true);
+    const f = setup({ admitEvent });
+    const rewritten = builder.buildClick({ entityId: 'rewritten', entityKind: 'Experience' });
+    f.eventInterceptors.run.mockResolvedValueOnce(rewritten);
+    f.sendBatchEvents.mockResolvedValueOnce(false);
+
+    await f.delivery.send(event(1), profile);
+    await f.delivery.flush();
+    const firstBody = f.sendBatchEvents.mock.calls[0]?.[0];
+    expect(firstBody).toEqual([{ profile, events: [rewritten] }]);
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(f.sendBatchEvents).toHaveBeenCalledTimes(2);
+    expect(f.sendBatchEvents.mock.calls[1]?.[0]).toEqual(firstBody);
+    expect(f.eventInterceptors.run).toHaveBeenCalledOnce();
+    expect(admitEvent).toHaveBeenCalledOnce();
+    expect(f.publishEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+    await f.owner.destroy();
+  });
+
   it('discards an event when the owner resets during asynchronous interception', async () => {
     const f = setup();
     let resolve!: (value: AnalyticsEvent) => void;
