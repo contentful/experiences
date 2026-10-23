@@ -106,151 +106,23 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
   await stopTracking();
   if (!isCurrent()) return;
   const path = location.pathname;
-  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const route = routes[path];
-  for (const link of appNav.querySelectorAll('a')) {
-    const linkPath = new URL(link.href).pathname;
-    link.href = routeUrl(linkPath);
-    const active = linkPath === path;
-    link.classList.toggle('active', active);
-    if (active) link.setAttribute('aria-current', 'page');
-    else link.removeAttribute('aria-current');
-  }
-  document.title = `${route?.title ?? 'Page not found'} – Contentful Experiences`;
-  appMain.scrollTop = 0;
-  appMain.removeAttribute('aria-busy');
-  if (!route) {
-    const heading = document.createElement('h1');
-    heading.textContent = 'Page not found';
-    appMain.replaceChildren(heading);
-    return;
-  }
-  appMain.replaceChildren(
-    cloneTemplate(route.template),
-    cloneTemplate('utilities'),
-    cloneTemplate('content')
-  );
-  for (const link of appMain.querySelectorAll('a[href]'))
-    link.href = routeUrl(new URL(link.href).pathname);
-  controls.wire();
-  if (path === '/page-two') {
-    // Reference app: this button demonstrates a custom event independently of XDA.
-    appMain.querySelector('.sections-grid').dataset.testid = 'page-two-experiences';
-    const actions = appMain.querySelector('[data-custom-action]');
-    const status = actions.querySelector('[role="status"]');
-    actions.querySelector('button').addEventListener('click', async () => {
-      try {
-        const result = await sdk.track({ event: 'reference_custom_action' });
-        status.textContent = result.accepted
-          ? 'Custom event admitted; delivery unconfirmed.'
-          : 'Custom event not admitted.';
-      } catch {
-        status.textContent = 'Unable to record the custom action.';
-      }
-    });
-    appMain.querySelector('.control-panel').appendChild(actions);
-  }
-  if (focus) appMain.focus();
+  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
+  renderRouteShell(path, route);
+  if (!route) return;
 
+  wireRouteControls(path, focus);
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
-  const destinations = new Map();
-  // Reference app: compare automatic discovery with explicit element registration,
-  // reusing one fetched plan for each ID. The SDK measures both presentations.
-  for (const [index, section] of ['auto', 'manual'].entries()) {
-    const parent = appMain.querySelector(`[data-experiences="${section}"]`);
-    parent.id = route.grids[index];
-    for (const id of section === 'auto' ? route.auto : [experienceIds[0]]) {
-      const target = document.createElement('div');
-      Object.assign(target.dataset, { experienceId: id, section });
-      showStatus(target, 'Loading Experience content…');
-      parent.appendChild(target);
-      if (!destinations.has(id)) destinations.set(id, []);
-      destinations.get(id).push({ section, target });
-    }
-  }
+  const destinations = createDestinations(route);
 
   try {
-    if (sendPage) {
-      const pageRequest = ++pageGeneration;
-      const properties = { url: location.href, title: document.title };
-      // XDA workaround: establish SDK-owned identity first; initial XDA identify can time out.
-      // Remove the independent page only after initial event-bearing XDA fetches
-      // reliably create a profile and select the expected variant (README).
-      pendingPage = pendingPage
-        .catch(() => {})
-        .then(async () => {
-          if (disposed || pageRequest !== pageGeneration) return;
-          const result = await sdk.page({ properties });
-          if (!disposed && pageRequest === pageGeneration && !result.accepted)
-            throw new Error('Page event was not admitted.');
-        });
-    }
     // Identify joins any initial page; it does not emit another page or identify call.
-    await pendingPage;
+    await initializeVisitor(sendPage);
     if (!isCurrent()) return;
     if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
-    const identifyEvent = identifyRequested
-      ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-      : undefined;
-    const attribution = new Map();
-    // Consumer integration, when using automatic tracking: give the SDK the actual scrolling
-    // view root and a lookup for the scopes stamped by the renderer. Detectors,
-    // dwell times, consent and event delivery remain SDK-owned.
-    trackingSession = sdk.startInteractionTracking({
-      root: appMain,
-      views: { root: appMain },
-      resolveAttribution: (key) => attribution.get(key),
-    });
-    let failed = false;
-    for (const [experienceId, targets] of destinations) {
-      if (!isCurrent()) return;
-      try {
-        const plan = await sdk.fetchExperience(
-          {
-            experienceId,
-            // Consumer integration, when tracking: request source maps to obtain attribution.
-            extensions: { sourceMap: {} },
-            // XDA workaround: profile-only selection can return baseline. Reuse one built
-            // identify across this cycle's fetches until equivalent profile-only
-            // selection is verified; Client owns wire normalization (README).
-            ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-          },
-          resolveOptions
-        );
-        if (!isCurrent()) return;
-        // Build each presentation before committing, so a render failure stays local.
-        const namespace = `plan-${++renderInstance}`;
-        // Consumer integration, with multiple plans: local scope keys can collide. Prefix
-        // them consistently in DOM/lookup, retaining shared keys within each plan.
-        const manualRoots = [];
-        const rendered = targets.map(({ section }) =>
-          renderExperience(plan, experienceId, section, {
-            namespace,
-            onManualRoot: (element, data) => manualRoots.push({ element, data }),
-          })
-        );
-        for (const [key, scope] of Object.entries(plan.attribution?.scopes ?? {})) {
-          attribution.set(`${namespace}:${key}`, scope);
-        }
-        targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
-        // Consumer integration: register after insertion, as in Optimization's
-        // manually observed section. SDK observers own consent, dwell and duration.
-        for (const { element, data } of manualRoots) {
-          sdk.tracking.clearElement('views', element);
-          sdk.tracking.enableElement('views', element, { data });
-        }
-      } catch (error) {
-        if (!isCurrent()) return;
-        failed = true;
-        // The UMD may minify constructor names; Delivery exposes a stable statusCode.
-        const message =
-          error?.statusCode === 404
-            ? 'This Experience was not found.'
-            : 'This Experience could not be loaded or rendered. Retry the content request.';
-        targets.forEach(({ target }) => showStatus(target, message, { error: true }));
-      }
-    }
+
+    const failed = await loadExperiences(destinations, identifyRequested, isCurrent);
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
     if (failed) {
@@ -274,6 +146,163 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
         showStatus(target, 'Content is unavailable until visitor initialization succeeds.')
       );
     }
+  }
+}
+
+function renderRouteShell(path, route) {
+  for (const link of appNav.querySelectorAll('a')) {
+    const linkPath = new URL(link.href).pathname;
+    link.href = routeUrl(linkPath);
+    const active = linkPath === path;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  document.title = `${route?.title ?? 'Page not found'} – Contentful Experiences`;
+  appMain.scrollTop = 0;
+  appMain.removeAttribute('aria-busy');
+  if (!route) {
+    const heading = document.createElement('h1');
+    heading.textContent = 'Page not found';
+    appMain.replaceChildren(heading);
+  } else {
+    appMain.replaceChildren(
+      cloneTemplate(route.template),
+      cloneTemplate('utilities'),
+      cloneTemplate('content')
+    );
+  }
+}
+
+function wireRouteControls(path, focus) {
+  for (const link of appMain.querySelectorAll('a[href]'))
+    link.href = routeUrl(new URL(link.href).pathname);
+  controls.wire();
+  if (path === '/page-two') {
+    // Reference app: this button demonstrates a custom event independently of XDA.
+    appMain.querySelector('.sections-grid').dataset.testid = 'page-two-experiences';
+    const actions = appMain.querySelector('[data-custom-action]');
+    const status = actions.querySelector('[role="status"]');
+    actions.querySelector('button').addEventListener('click', async () => {
+      try {
+        const result = await sdk.track({ event: 'reference_custom_action' });
+        status.textContent = result.accepted
+          ? 'Custom event admitted; delivery unconfirmed.'
+          : 'Custom event not admitted.';
+      } catch {
+        status.textContent = 'Unable to record the custom action.';
+      }
+    });
+    appMain.querySelector('.control-panel').appendChild(actions);
+  }
+  if (focus) appMain.focus();
+}
+
+function createDestinations(route) {
+  const destinations = new Map();
+  // Reference app: compare automatic discovery with explicit element registration,
+  // reusing one fetched plan for each ID. The SDK measures both presentations.
+  for (const [index, section] of ['auto', 'manual'].entries()) {
+    const parent = appMain.querySelector(`[data-experiences="${section}"]`);
+    parent.id = route.grids[index];
+    for (const id of section === 'auto' ? route.auto : [experienceIds[0]]) {
+      const target = document.createElement('div');
+      Object.assign(target.dataset, { experienceId: id, section });
+      showStatus(target, 'Loading Experience content…');
+      parent.appendChild(target);
+      if (!destinations.has(id)) destinations.set(id, []);
+      destinations.get(id).push({ section, target });
+    }
+  }
+
+  return destinations;
+}
+
+function initializeVisitor(sendPage) {
+  if (sendPage) {
+    const pageRequest = ++pageGeneration;
+    const properties = { url: location.href, title: document.title };
+    // XDA workaround: establish SDK-owned identity first; initial XDA identify can time out.
+    // Remove the independent page only after initial event-bearing XDA fetches
+    // reliably create a profile and select the expected variant (README).
+    pendingPage = pendingPage
+      .catch(() => {})
+      .then(async () => {
+        if (disposed || pageRequest !== pageGeneration) return;
+        const result = await sdk.page({ properties });
+        if (!disposed && pageRequest === pageGeneration && !result.accepted)
+          throw new Error('Page event was not admitted.');
+      });
+  }
+  return pendingPage;
+}
+
+async function loadExperiences(destinations, identifyRequested, isCurrent) {
+  const identifyEvent = identifyRequested
+    ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
+    : undefined;
+  const attribution = new Map();
+  // Consumer integration, when using automatic tracking: give the SDK the actual scrolling
+  // view root and a lookup for the scopes stamped by the renderer. Detectors,
+  // dwell times, consent and event delivery remain SDK-owned.
+  trackingSession = sdk.startInteractionTracking({
+    root: appMain,
+    views: { root: appMain },
+    resolveAttribution: (key) => attribution.get(key),
+  });
+  let failed = false;
+  for (const [experienceId, targets] of destinations) {
+    if (!isCurrent()) return;
+    try {
+      const plan = await sdk.fetchExperience(
+        {
+          experienceId,
+          // Consumer integration, when tracking: request source maps to obtain attribution.
+          extensions: { sourceMap: {} },
+          // XDA workaround: profile-only selection can return baseline. Reuse one built
+          // identify across this cycle's fetches until equivalent profile-only
+          // selection is verified; Client owns wire normalization (README).
+          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
+        },
+        resolveOptions
+      );
+      if (!isCurrent()) return;
+      renderPresentations(plan, experienceId, targets, attribution);
+    } catch (error) {
+      if (!isCurrent()) return;
+      failed = true;
+      // The UMD may minify constructor names; Delivery exposes a stable statusCode.
+      const message =
+        error?.statusCode === 404
+          ? 'This Experience was not found.'
+          : 'This Experience could not be loaded or rendered. Retry the content request.';
+      targets.forEach(({ target }) => showStatus(target, message, { error: true }));
+    }
+  }
+  return failed;
+}
+
+function renderPresentations(plan, experienceId, targets, attribution) {
+  // Build each presentation before committing, so a render failure stays local.
+  const namespace = `plan-${++renderInstance}`;
+  // Consumer integration, with multiple plans: local scope keys can collide. Prefix
+  // them consistently in DOM/lookup, retaining shared keys within each plan.
+  const manualRoots = [];
+  const rendered = targets.map(({ section }) =>
+    renderExperience(plan, experienceId, section, {
+      namespace,
+      onManualRoot: (element, data) => manualRoots.push({ element, data }),
+    })
+  );
+  for (const [key, scope] of Object.entries(plan.attribution?.scopes ?? {})) {
+    attribution.set(`${namespace}:${key}`, scope);
+  }
+  targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
+  // Consumer integration: register after insertion, as in Optimization's
+  // manually observed section. SDK observers own consent, dwell and duration.
+  for (const { element, data } of manualRoots) {
+    sdk.tracking.clearElement('views', element);
+    sdk.tracking.enableElement('views', element, { data });
   }
 }
 
