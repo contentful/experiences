@@ -526,7 +526,7 @@ experiences.tracking.clearElement('views', card);
 
 - `tracking.enable(type, options?)` enables automatic tracking; `type` is
   `'views' | 'hovers' | 'clicks'`. Views accept `{ root?: Element | Document | null,
-  rootMargin?: string }`. Repeated enables with unchanged effective options preserve
+rootMargin?: string }`. Repeated enables with unchanged effective options preserve
   active intervals. For views, omitted and `null` roots are equivalent, as are CSS
   `rootMargin` shorthands that expand to the same four sides; changed effective
   observer options restart view measurements.
@@ -670,6 +670,8 @@ roots, and one root can belong to several scopes.
 - Node attributes carry opaque keys; the plan container carries their attribution.
   Removing or replacing an occurrence finishes its qualified view/hover intervals
   before disconnecting its last root. Unrelated occurrences continue measuring.
+  Disabling automatic tracking does not cancel finals already captured by removal;
+  reset and consent withdrawal still invalidate delayed work.
   This replaces the former application-owned stop-before-removal behavior; pinned
   Optimization drops intervals on unobserve, so this is an Experiences adaptation.
 - A node without an id cannot be tracked, and neither can a plan fetched without

@@ -994,55 +994,69 @@ describe('automatic attribution boundaries', () => {
   });
 
   it.each([
-    ['views', 'reset'],
-    ['hovers', 'reset'],
-    ['views', 'disable'],
-    ['hovers', 'disable'],
-  ] as const)('discards a retired %s drain on %s before restarting', async (type, action) => {
-    vi.useFakeTimers();
-    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
-    const io = installIOPolyfill();
-    const firstSend = deferred<boolean>();
-    const events = createEvents();
-    const method = type === 'views' ? events.trackView : events.trackHover;
-    method.mockImplementationOnce(() => firstSend.promise);
-    let resetToken = {};
-    const fragment = stamped('node-fragment');
-    document.body.append(fragment);
-    const tracking = createInteractionTracking(
-      events,
-      {},
-      {
-        isAllowed: () => true,
-        getResetToken: () => resetToken,
+    { type: 'views', action: 'reset', behavior: 'discards' },
+    { type: 'hovers', action: 'reset', behavior: 'discards' },
+    { type: 'views', action: 'disable', behavior: 'preserves' },
+    { type: 'hovers', action: 'disable', behavior: 'preserves' },
+  ] as const)(
+    '$behavior a retired $type drain on $action before restarting',
+    async ({ type, action }) => {
+      vi.useFakeTimers();
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+      const io = installIOPolyfill();
+      const firstSend = deferred<boolean>();
+      const events = createEvents();
+      const method = type === 'views' ? events.trackView : events.trackHover;
+      method.mockImplementationOnce(() => firstSend.promise);
+      let resetToken = {};
+      const fragment = stamped('node-fragment');
+      document.body.append(fragment);
+      const tracking = createInteractionTracking(
+        events,
+        {},
+        {
+          isAllowed: () => true,
+          getResetToken: () => resetToken,
+        }
+      );
+      if (type === 'views') io.trigger(fragment, true);
+      else fragment.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+      await vi.advanceTimersByTimeAsync(1200);
+      fragment.remove();
+      await vi.advanceTimersByTimeAsync(0);
+      if (action === 'reset') {
+        resetToken = {};
+        tracking.reset();
+        tracking.syncConsent();
+      } else {
+        tracking.tracking.disable(type);
+        tracking.tracking.enable(type);
       }
-    );
-    if (type === 'views') io.trigger(fragment, true);
-    else fragment.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
-    await vi.advanceTimersByTimeAsync(1200);
-    fragment.remove();
-    await vi.advanceTimersByTimeAsync(0);
-    if (action === 'reset') {
-      resetToken = {};
-      tracking.reset();
-      tracking.syncConsent();
-    } else {
-      tracking.tracking.disable(type);
-      tracking.tracking.enable(type);
+      let drained = false;
+      const pending = tracking.endActive().then(() => {
+        drained = true;
+      });
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        // Removal already captured the final interval. Changing automatic discovery
+        // keeps that drain; reset invalidates its previous visitor's callbacks.
+        expect(drained).toBe(action === 'reset');
+      } finally {
+        firstSend.resolve(true);
+        await vi.advanceTimersByTimeAsync(0);
+        await pending;
+        tracking.destroy();
+      }
+      if (action === 'reset') {
+        expect(method).toHaveBeenCalledOnce();
+      } else {
+        expect(method).toHaveBeenCalledTimes(2);
+        const [start, final] = method.mock.calls.map(([args]) => args);
+        const id = type === 'views' ? 'viewId' : 'hoverId';
+        const duration = type === 'views' ? 'viewDurationMs' : 'hoverDurationMs';
+        expect(final[id]).toBe(start[id]);
+        expect(final[duration]).toBe(1200);
+      }
     }
-    let drained = false;
-    const pending = tracking.endActive().then(() => {
-      drained = true;
-    });
-    try {
-      await vi.advanceTimersByTimeAsync(0);
-      expect(drained).toBe(true);
-    } finally {
-      firstSend.resolve(true);
-      await vi.advanceTimersByTimeAsync(0);
-      await pending;
-      tracking.destroy();
-    }
-    expect(method).toHaveBeenCalledOnce();
-  });
+  );
 });
