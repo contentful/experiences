@@ -116,19 +116,19 @@ MissingComponent; // Default fallback for unregistered component types
 
 ### Primitives (`@contentful/experiences-react/primitives`)
 
-For hosts that walk the plan themselves, mainly islands frameworks such as Astro, where a component rendered inside `ServerExperienceRenderer` never hydrates. The host resolves each node with `resolveNodeProps`, renders static nodes with `NodeView`, and passes `resolved.snapshot` to an island built with `createNodeView`, so only the components bound there ship to the browser. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `NodeView`.
+For hosts that walk the plan themselves, mainly islands frameworks such as Astro, where a component rendered inside `ServerExperienceRenderer` never hydrates. The host resolves each node with `resolveNodeProps`, renders static nodes with `ExperienceNode`, and passes `resolved.snapshot` to an island built with `createExperienceNode`, so only the components bound there ship to the browser. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`. The `ExperienceNode` component is unrelated to the `ExperienceNode` payload type re-exported from the main entry; alias one of them when a module imports both.
 
 ```ts
 resolveNodeProps(node, config); // ResolvedNode: 'resolved' (component, props, design, contentful, snapshot) | 'unregistered'
-NodeView; // Renders one resolved node or snapshot exactly as the SDK renderers do
-createNodeView(components, experienceTemplates?); // NodeView with its registry bound, for an island
-ExperienceProvider; // Raw context providers NodeView composes
+ExperienceNode; // Renders one resolved node or snapshot exactly as the SDK renderers do
+createExperienceNode(components, experienceTemplates?); // ExperienceNode with its registry bound, for an island
+ExperienceProvider; // Raw context providers ExperienceNode composes
 ContentfulComponentProvider;
 ContentfulExperienceTemplateProvider;
 ResolvedDesignProvider;
 type ResolvedNode, ResolvedComponentNode, ResolvedExperienceTemplateNode, UnregisteredNode;
 type NodeSnapshot, ComponentNodeSnapshot, ExperienceTemplateNodeSnapshot;
-type NodeViewProps, BoundNodeViewProps;
+type ExperienceNodeProps, BoundExperienceNodeProps;
 ```
 
 ### Styling + runtime context (hooks)

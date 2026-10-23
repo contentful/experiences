@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import { createNodeView, NodeView, resolveNodeProps } from './primitives';
+import { createExperienceNode, ExperienceNode, resolveNodeProps } from './primitives';
 import { ServerExperienceRenderer } from './server-renderer';
 import { defineComponent, type Config } from './types';
 import { useDesignValues } from './use-design-values';
@@ -69,10 +69,10 @@ const cardNode = planNode(
 );
 const experience = { debug: false, metadata: { slug: 'home' } };
 
-describe('NodeView', () => {
+describe('ExperienceNode', () => {
   it('renders a resolved node exactly as ServerExperienceRenderer does', () => {
     const host = renderToStaticMarkup(
-      <NodeView node={resolve(cardNode, config)} experience={experience} />
+      <ExperienceNode node={resolve(cardNode, config)} experience={experience} />
     );
     const sdk = renderToStaticMarkup(
       <ServerExperienceRenderer
@@ -91,11 +91,11 @@ describe('NodeView', () => {
     const snapshot = JSON.parse(JSON.stringify(resolved.snapshot));
 
     const fromSnapshot = renderToStaticMarkup(
-      <NodeView node={snapshot} components={config.components} experience={experience} />
+      <ExperienceNode node={snapshot} components={config.components} experience={experience} />
     );
 
     expect(fromSnapshot).toBe(
-      renderToStaticMarkup(<NodeView node={resolved} experience={experience} />)
+      renderToStaticMarkup(<ExperienceNode node={resolved} experience={experience} />)
     );
   });
 
@@ -123,7 +123,7 @@ describe('NodeView', () => {
 
   it('passes extra props and the slots prop through as slot props, slots winning', () => {
     const markup = renderToStaticMarkup(
-      <NodeView
+      <ExperienceNode
         node={resolve(cardNode, config)}
         experience={experience}
         title="from extra prop"
@@ -135,7 +135,7 @@ describe('NodeView', () => {
   });
 
   it('only publishes useExperience() when given an experience', () => {
-    expect(() => renderToStaticMarkup(<NodeView node={resolve(cardNode, config)} />)).toThrow(
+    expect(() => renderToStaticMarkup(<ExperienceNode node={resolve(cardNode, config)} />)).toThrow(
       /useExperience\(\) must be called inside/
     );
   });
@@ -143,30 +143,34 @@ describe('NodeView', () => {
   it('renders an experience template snapshot from experienceTemplates', () => {
     const pageNode = planNode('experienceTemplate', 'page', {}, { nodeId: 't1' });
     const { snapshot } = resolve(pageNode, config);
-    const IslandNodeView = createNodeView({}, config.experienceTemplates);
+    const IslandExperienceNode = createExperienceNode({}, config.experienceTemplates);
 
-    const markup = renderToStaticMarkup(<IslandNodeView node={snapshot} content={<p>body</p>} />);
+    const markup = renderToStaticMarkup(
+      <IslandExperienceNode node={snapshot} content={<p>body</p>} />
+    );
 
     expect(markup).toBe('<main data-template="page"><p>body</p></main>');
   });
 });
 
-describe('createNodeView', () => {
+describe('createExperienceNode', () => {
   it('binds the registry, so a snapshot renders with no components prop', () => {
-    const IslandNodeView = createNodeView({ card: Card });
+    const IslandExperienceNode = createExperienceNode({ card: Card });
     const { snapshot } = resolve(cardNode, config);
 
-    const markup = renderToStaticMarkup(<IslandNodeView node={snapshot} experience={experience} />);
+    const markup = renderToStaticMarkup(
+      <IslandExperienceNode node={snapshot} experience={experience} />
+    );
 
     expect(markup).toBe('<article data-node="c1" data-slug="home" style="color:red">Hi</article>');
   });
 
   it('throws a clear error when the bound registry is missing the snapshot id', () => {
-    const IslandNodeView = createNodeView({});
+    const IslandExperienceNode = createExperienceNode({});
     const { snapshot } = resolve(cardNode, config);
 
     expect(() =>
-      renderToStaticMarkup(<IslandNodeView node={snapshot} experience={experience} />)
+      renderToStaticMarkup(<IslandExperienceNode node={snapshot} experience={experience} />)
     ).toThrow(/snapshot of component "card" \(node "c1"\) but "card" is not in its components/);
   });
 });

@@ -32,7 +32,7 @@ interface NodeSnapshotBase {
 }
 
 /**
- * A resolved component node as plain data: everything `NodeView` needs
+ * A resolved component node as plain data: everything `ExperienceNode` needs
  * except the component itself, which the receiving side looks up by `id`.
  * Safe to pass anywhere props get serialized (an Astro island, a `'use client'`
  * boundary), provided the `resolveData` output it carries is plain data too.

@@ -9,7 +9,7 @@ import { Fragment, createElement, type ReactNode } from 'react';
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
 import type { ComponentErrorProps } from './component-error.js';
-import { NodeView } from './node-view.js';
+import { ExperienceNode } from './experience-node.js';
 import type { MissingComponentProps } from './missing-component.js';
 import { resolveNodeProps } from './resolve-node-props.js';
 import type { Config } from './types.js';
@@ -152,6 +152,6 @@ function NodeRenderer({
     return createElement(renderUnknown, { componentId: id, nodeId: node.nodeId });
   }
   // Slots go through the explicit `slots` prop so a slot can't collide with one
-  // of NodeView's own prop names.
-  return <NodeView node={resolved} renderError={renderError} slots={slotProps} />;
+  // of ExperienceNode's own prop names.
+  return <ExperienceNode node={resolved} renderError={renderError} slots={slotProps} />;
 }

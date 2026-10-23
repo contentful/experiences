@@ -40,8 +40,8 @@ import {
   type RenderContext,
 } from './types.js';
 
-/** Props shared by `NodeView` and the component `createNodeView` returns. */
-export interface BoundNodeViewProps {
+/** Props shared by `ExperienceNode` and the component `createExperienceNode` returns. */
+export interface BoundExperienceNodeProps {
   node: ResolvedComponentNode | ResolvedExperienceTemplateNode | NodeSnapshot;
   /**
    * Publishes `useExperience()` for this node and its descendants. Pass it when
@@ -52,7 +52,7 @@ export interface BoundNodeViewProps {
   /** Fallback rendered when the component throws. Defaults to `ComponentError`. */
   renderError?: RenderError;
   /**
-   * Slot props, keyed by slot name. Extra props on `NodeView` are treated
+   * Slot props, keyed by slot name. Extra props on `ExperienceNode` are treated
    * as slots too, which is how Astro passes slot content (`children`,
    * `content`, ...). Explicit `slots` win over extra props of the same name.
    */
@@ -60,14 +60,14 @@ export interface BoundNodeViewProps {
   [slot: string]: unknown;
 }
 
-export interface NodeViewProps extends BoundNodeViewProps {
+export interface ExperienceNodeProps extends BoundExperienceNodeProps {
   /** Registry the component of a snapshot `node` is looked up in. A subset of `config.components` works. */
   components?: Components;
   /** Same as `components`, for an Experience Template snapshot. */
   experienceTemplates?: ExperienceTemplates;
 }
 
-export function NodeView({
+export function ExperienceNode({
   node,
   components,
   experienceTemplates,
@@ -75,7 +75,7 @@ export function NodeView({
   renderError = ComponentError,
   slots,
   ...slotProps
-}: NodeViewProps): ReactNode {
+}: ExperienceNodeProps): ReactNode {
   const component =
     'component' in node ? node.component : lookupComponent(node, components, experienceTemplates);
 
@@ -106,25 +106,29 @@ export function NodeView({
 }
 
 /**
- * `NodeView` with its registries bound, for the receiving side of a
+ * `ExperienceNode` with its registries bound, for the receiving side of a
  * serialization boundary. Island props are serialized, so the component map
  * can't be one of them; binding it in a module the island imports is how the
  * component reaches the client. Only the components listed here ship to the
  * browser, so list the ones that hydrate, not the whole `config.components`.
  *
- *   export const IslandNodeView = createNodeView({ card: Card });
- *   <IslandNodeView client:visible node={resolved.snapshot} experience={experience} />
+ *   export const IslandExperienceNode = createExperienceNode({ card: Card });
+ *   <IslandExperienceNode client:visible node={resolved.snapshot} experience={experience} />
  */
-export function createNodeView(
+export function createExperienceNode(
   components: Components,
   experienceTemplates?: ExperienceTemplates
-): (props: BoundNodeViewProps) => ReactNode {
-  function BoundNodeView(props: BoundNodeViewProps): ReactNode {
+): (props: BoundExperienceNodeProps) => ReactNode {
+  function BoundExperienceNode(props: BoundExperienceNodeProps): ReactNode {
     return (
-      <NodeView {...props} components={components} experienceTemplates={experienceTemplates} />
+      <ExperienceNode
+        {...props}
+        components={components}
+        experienceTemplates={experienceTemplates}
+      />
     );
   }
-  return BoundNodeView;
+  return BoundExperienceNode;
 }
 
 function lookupComponent(
@@ -146,8 +150,8 @@ function lookupComponent(
 
 function missingMessage(node: NodeSnapshot, registry: string): string {
   return (
-    `[@contentful/experiences-react] NodeView received a snapshot of ${node.kind} "${node.id}"` +
+    `[@contentful/experiences-react] ExperienceNode received a snapshot of ${node.kind} "${node.id}"` +
     `${node.nodeId ? ` (node "${node.nodeId}")` : ''} but "${node.id}" is not in its ${registry}. ` +
-    `Add it to the map passed to createNodeView().`
+    `Add it to the map passed to createExperienceNode().`
   );
 }
