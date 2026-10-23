@@ -12,7 +12,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/web",
-        "command": "tsup && tsx ../../scripts/emit-dual-dts.ts dist"
+        "command": "rslib build && tsx ../../scripts/emit-dual-dts.ts dist"
       }
     },
     "test": {

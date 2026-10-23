@@ -43,7 +43,8 @@ experiences/
 │   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
 │   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
 ├── implementations/         # Standalone reference apps consuming local npm tarballs
-│   └── node-sdk/             # Express/EJS Node reference, managed through Nx
+│   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
+│   └── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 └── lib/
     └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
@@ -51,8 +52,9 @@ experiences/
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
 
 **`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
-Use `npx nx run implementation-node-sdk:setup` and `:dev`; root aggregate checks
-exclude implementations. Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
+Use `npx nx run implementation-node-sdk:setup` / `:dev` or
+`npx nx run implementation-web-sdk:setup` / `:dev`; root aggregate checks exclude
+implementations. Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
 and the app README for the package boundary, local `.env`, and lifecycle commands.
 
 ### Package roles
@@ -119,6 +121,23 @@ adapter stamps the attribute for you, so components spread it onto their
 outermost element. Preview fetches remain ordinary manual
 event-call contexts: a manually invoked event method still sends while preview
 is active.
+
+Web's `tracking` API follows Optimization's `enable`, `disable`, `enableElement`,
+`disableElement` and `clearElement` controls for `views`, `hovers` and `clicks`.
+Manual observation means developer registration of elements with real
+`TrackingAttribution` in `options.data`; the SDK measures interactions. It does
+not mean visitor-facing event buttons. Type-level disable preserves explicit
+element enables, consent withdrawal discards intervals but preserves overrides,
+and reset/destroy clear overrides. Repeated `enable` calls with unchanged
+effective options preserve intervals; view roots default to `null` and equivalent
+CSS `rootMargin` shorthands do not restart measurements. Changed effective view
+options restart them. Within an attribution session, dynamic
+`data-ctfl-track-views`, `data-ctfl-track-hovers`, and `data-ctfl-track-clicks`
+attributes can opt permitted elements in even when automatic tracking is disabled;
+explicit element overrides win. Standalone SDK construction does not start
+document discovery: attribution comes from a session or valid manual
+registration. Consent still gates all tracking. Keep these controls on the
+existing detector and consent/lifecycle path; do not add application-owned observers.
 
 By-ID fetch options accept per-call `parameters`: strings/numbers or one-level
 Records of string/number leaves. Experience.parameters declares IDs and bindings
@@ -272,15 +291,22 @@ Experiences safeguards below to that reference:
   teardown identity and joins the common drain; that drain follows only its own
   response identities, then cleans up its teardown authorization. This permits a
   best-effort final send while preventing late publications into a replacement.
-- As in Optimization, `reset()` stops interaction detectors while retaining the
-  tracking configuration and session. A later `session.refresh()` or consent
-  synchronization resumes fresh intervals. Experiences also invalidates pending
-  interaction callbacks with the owner's reset token, preventing old measurements
-  from being sent under the next visitor's identity. Event-consent withdrawal
-  discards active measurements and restarts permitted detectors with the new
-  token, including allowlisted views and hovers. This restart is required by
-  Experiences' additional token guard; the pinned reference retains permitted
-  detectors without that guard.
+- Experiences preserves active interaction intervals on repeated `enable` calls
+  with unchanged effective options, and lets dynamic element attributes opt in
+  even when automatic tracking is disabled. These are local corrections: the
+  pinned reference restarts on repeated enable and gates attribute opt-ins on
+  automatic tracking being enabled.
+- Experiences `reset()` clears manual overrides and old measurements, resets
+  visitor state and the owner's token, then immediately resumes eligible
+  automatic and attribute discovery with fresh intervals. It retains tracking
+  configuration and the session; no `session.refresh()` is needed. The pinned
+  reference stops detectors on reset. Experiences invalidates pending interaction
+  callbacks with the owner's reset token, preventing old measurements from being
+  sent under the next visitor's identity. Event-consent withdrawal discards active
+  measurements and restarts permitted detectors with the new token, including
+  allowlisted views and hovers. This restart is required by Experiences'
+  additional token guard; the pinned reference retains permitted detectors
+  without that guard.
 
 Ordinary `flush()`, reconnect, and visibility handling await Analytics before
 Personalization, following the reference order. Preserve the stated lifecycle
@@ -482,6 +508,13 @@ entries and emit paired `.d.mts`/`.d.cts` declarations through
 `scripts/emit-dual-dts.ts`. Node and the framework adapters remain ESM and keep
 their current output formats. Keep the React adapter's `'use client'` source
 directives intact; its current build remains unbundled for RSC compatibility.
+
+Only Web uses Rslib, following Optimization's ESM/CJS/UMD configuration pattern.
+Its UMD builds directly from `src/contentful-experiences.ts` and exposes the
+`ContentfulExperiences` constructor. Web emits per-file declarations so shared
+types retain their identity across public subpaths; the dual-declaration helper
+preserves the package's existing type entry paths. Other package builders remain
+unchanged. Rslib's generated `packages/web/.rstack/` directory is disposable.
 
 ---
 

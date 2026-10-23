@@ -1423,10 +1423,16 @@ uses these artifacts with its own dependencies and `.env`. Prepare it with
 `npx nx run implementation-node-sdk:dev`. Root aggregate checks exclude
 implementations; their README documents the explicit Nx commands.
 
+The [standalone Web reference implementation](./implementations/web-sdk/README.md)
+uses the packed Web UMD distribution with browser-owned state and direct live
+delivery. Run `npx nx run implementation-web-sdk:setup`, then
+`npx nx run implementation-web-sdk:dev`. Its README covers local environment
+configuration, consent, interaction tracking, and scoped validation commands.
+
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
 every process in the selected PM2 home. Use the implementation's scoped stop
-target when managing only the Node reference app.
+target when managing only one reference app.
 
 For deeper context (design decisions, multi-framework architecture notes, conventions, and gotchas), see [`AGENTS.md`](./AGENTS.md).
 

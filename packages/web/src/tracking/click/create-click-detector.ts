@@ -6,6 +6,7 @@ import {
 } from '../../tracking-attributes.js';
 import {
   type InteractionDetector,
+  type InteractionKey,
   isFragment,
   type ResolveScopeAttribution,
   toInteractionArgs,
@@ -33,16 +34,15 @@ const toEventTargetElement = (event: Event): Element | undefined => {
   return event.target instanceof Node ? (event.target.parentElement ?? undefined) : undefined;
 };
 
-export function createClickDetector(
+export function createClickDetector<TKey extends InteractionKey = string>(
   trackClick: (args: ClickBuilderArgs) => Promise<unknown>,
-  resolveAttribution: ResolveScopeAttribution
-): InteractionDetector {
+  resolveAttribution: ResolveScopeAttribution<TKey>
+): InteractionDetector<TKey> {
   /**
-   * Each tracked element with how many scope occurrence keys it was handed over
-   * under. The keys themselves are read from the element's attribute at click
-   * time: re-adding a key after a refresh must not change their outer-to-inner order.
+   * Admitted scope keys for each element, including attribute-free manual data.
+   * Automatic keys retain their DOM order so the innermost Fragment wins.
    */
-  const trackedElements = new Map<Element, number>();
+  const trackedElements = new Map<Element, Set<TKey>>();
   let listening = false;
 
   /** The nearest tracked element on the path, and whether the path is clickable. */
@@ -78,9 +78,19 @@ export function createClickDetector(
 
     // Clicks go to the innermost Fragment occurrence the nearest tracked element
     // roots
-    let attribution: ReturnType<ResolveScopeAttribution>;
-    const keys = trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '';
-    for (const key of keys.split(/\s+/).filter(Boolean)) {
+    let attribution: ReturnType<ResolveScopeAttribution<TKey>>;
+    const admitted = trackedElements.get(trackedElement)!;
+    const automaticOrder = (trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '').split(
+      /\s+/
+    );
+    const keys = [...admitted]
+      .filter((key) => typeof key !== 'string' || automaticOrder.includes(key))
+      .sort((left, right) =>
+        typeof left === 'string' && typeof right === 'string'
+          ? automaticOrder.indexOf(left) - automaticOrder.indexOf(right)
+          : 0
+      );
+    for (const key of keys) {
       const candidate = resolveAttribution(key);
       if (candidate && isFragment(candidate)) attribution = candidate;
     }
@@ -103,14 +113,15 @@ export function createClickDetector(
       listening = false;
       trackedElements.clear();
     },
-    onElementAdded(element) {
-      trackedElements.set(element, (trackedElements.get(element) ?? 0) + 1);
+    onElementAdded(element, key) {
+      const keys = trackedElements.get(element) ?? new Set<TKey>();
+      keys.add(key);
+      trackedElements.set(element, keys);
     },
-    onElementRemoved(element) {
-      const count = trackedElements.get(element);
-      if (count === undefined) return;
-      if (count > 1) trackedElements.set(element, count - 1);
-      else trackedElements.delete(element);
+    onElementRemoved(element, key) {
+      const keys = trackedElements.get(element);
+      keys?.delete(key);
+      if (keys?.size === 0) trackedElements.delete(element);
     },
   };
 }

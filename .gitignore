@@ -15,6 +15,7 @@ out/
 out-tsc/
 next-env.d.ts
 .svelte-kit/
+packages/web/.rstack/
 
 # Testing
 coverage/

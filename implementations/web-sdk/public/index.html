@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contentful Experiences – Web SDK</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/css/theme.css" />
+    <script data-env-placeholder></script>
+    <script src="/dist/contentful-experiences-web.umd.js"></script>
+  </head>
+  <body>
+    <!-- Reference app: navigation, templates and layout are presentation choices.
+         Maintainer: data-testid hooks support verification; the SDK does not read them. -->
+    <div class="app-shell">
+      <nav class="app-nav" id="app-nav" aria-label="Main navigation">
+        <a href="/" data-testid="link-home">Home</a>
+        <a href="/page-two" data-testid="link-page-two">Page Two</a>
+      </nav>
+      <div class="app-body">
+        <!-- Maintainer: optional attempt diagnostics, driven by tracking.js.
+             This table is not part of SDK delivery or automatic detection. -->
+        <aside class="app-sidebar" aria-label="Tracking">
+          <section class="tracking-log" data-testid="analytics-events-container">
+            <div class="tracking-log__header">
+              <h2>Tracking</h2>
+              <span class="tracking-log__badge">
+                <span data-testid="raw-events-count" id="raw-events-count">0</span> attempts
+              </span>
+            </div>
+            <p class="tracking-log__empty" data-testid="no-events-message" id="no-events-message">
+              No event attempts observed yet.
+            </p>
+            <p class="tracking-log__empty">
+              Attempts include XDA events and can precede queue refusal. They do not confirm
+              delivery.
+            </p>
+            <table class="tracking-log__table" id="tracking-table" style="display: none">
+              <thead class="tracking-log__thead">
+                <tr>
+                  <th>Type</th>
+                  <th>Value</th>
+                  <th>Dur</th>
+                  <th>Age</th>
+                  <th aria-label="Count"></th>
+                </tr>
+              </thead>
+              <tbody id="tracking-tbody"></tbody>
+            </table>
+          </section>
+        </aside>
+        <main class="app-main" id="app-main" tabindex="-1"></main>
+      </div>
+    </div>
+
+    <!-- Reference app: controls exercise real SDK consent/visitor actions.
+         Consumers provide their own consent and identity flows. -->
+    <template id="tpl-utilities">
+      <section class="control-panel" aria-label="Utilities">
+        <h2 class="control-panel__title">Utilities</h2>
+        <div class="control-panel__fields">
+          <span class="control-panel__row-label">Event consent</span>
+          <span class="control-panel__row-value" data-testid="consent-status">Not connected</span>
+          <span>
+            <button class="btn btn--sm btn--secondary" data-testid="consent-button">Grant</button>
+            <button class="btn btn--sm btn--secondary" data-testid="unconsent-button">
+              Revoke
+            </button>
+          </span>
+          <span class="control-panel__row-label">Persistence consent</span>
+          <span class="control-panel__row-value" data-testid="persistence-consent-status">
+            Not connected
+          </span>
+          <span></span>
+          <span class="control-panel__row-label">Identify requested</span>
+          <span class="control-panel__row-value" data-testid="identified-status"
+            >Not connected</span
+          >
+          <span>
+            <button class="btn btn--sm btn--secondary" data-testid="identify-button">
+              Identify
+            </button>
+            <button class="btn btn--sm btn--danger" data-testid="reset-button">Reset</button>
+          </span>
+        </div>
+        <p class="control-panel__note">
+          Grant/Revoke changes event and persistence consent together. The SDK allows identify and
+          page events before event consent. Identify requested describes URL intent, not confirmed
+          audience membership.
+        </p>
+      </section>
+    </template>
+
+    <template id="tpl-card">
+      <article class="entry-card">
+        <h3></h3>
+        <p></p>
+        <div class="rich-text"></div>
+      </article>
+    </template>
+
+    <template id="tpl-experience">
+      <section class="entry-grid">
+        <div class="entry-card__ids">
+          <span class="entry-card__id-label">Experience</span>
+          <span class="entry-card__id-value"></span>
+        </div>
+        <p>This Experience has no content.</p>
+      </section>
+    </template>
+
+    <template id="tpl-event-row">
+      <tr>
+        <td><span class="tracking-log__type"></span></td>
+        <td class="tracking-log__label"></td>
+        <td class="tracking-log__duration"></td>
+        <td class="tracking-log__time">0s</td>
+        <td class="tracking-log__count"></td>
+      </tr>
+    </template>
+
+    <template id="tpl-status">
+      <div class="placeholder-card" role="status"></div>
+      <button class="btn btn--sm btn--secondary" data-testid="retry-experiences-button">
+        Retry content
+      </button>
+    </template>
+
+    <template id="tpl-home">
+      <div class="page-header" data-testid="home-view">
+        <h1>Web SDK – Vanilla JS</h1>
+        <p class="page-header__subtitle">Reference implementation of @contentful/experiences-web</p>
+      </div>
+    </template>
+
+    <template id="tpl-content">
+      <div id="content-error" data-testid="content-error" hidden></div>
+      <div class="sections-grid sections-grid--split">
+        <section class="page-section">
+          <header class="page-section__header">
+            <h2>Automatically tracked Experiences</h2>
+            <p>
+              Views and hovers are measured by the SDK. Click a Fragment card to record its click.
+            </p>
+          </header>
+          <div class="entry-grid entry-grid--experiences" data-experiences="auto"></div>
+        </section>
+        <section class="page-section">
+          <header class="page-section__header">
+            <h2>Manually observed Experiences</h2>
+            <p>
+              Elements are registered in code. The SDK measures their views as you scroll; automatic
+              discovery is not used for this presentation.
+            </p>
+          </header>
+          <div class="entry-grid entry-grid--experiences" data-experiences="manual"></div>
+        </section>
+      </div>
+    </template>
+
+    <template id="tpl-page-two">
+      <div class="page-header" data-testid="page-two-view">
+        <a data-testid="link-back-home" href="/">Back to Home</a>
+        <h1>Page Two</h1>
+        <p class="page-header__subtitle">A second route in the standalone Web SDK reference.</p>
+      </div>
+      <div class="control-panel__actions" data-custom-action>
+        <button class="btn btn--secondary btn--sm" data-testid="track-custom-action-button">
+          Record custom action
+        </button>
+        <p class="control-panel__note" role="status"></p>
+      </div>
+    </template>
+
+    <noscript>This application requires JavaScript for navigation.</noscript>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

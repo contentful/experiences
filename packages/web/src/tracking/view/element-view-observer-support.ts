@@ -41,10 +41,16 @@ export interface ElementState {
 
 export const initElementViewObserverOptions = (
   options?: ElementViewObserverOptions
-): EffectiveObserverOptions => ({
-  root: options?.root ?? null,
-  rootMargin: options?.rootMargin ?? '0px',
-});
+): EffectiveObserverOptions => {
+  const margin = (options?.rootMargin ?? '0px').trim().split(/\s+/);
+  // IntersectionObserver expands CSS shorthand to four sides. Compare/store that
+  // effective value so equivalent enable calls do not reset a measured interval.
+  const [top, right = top, bottom = top, left = right] = margin;
+  return {
+    root: options?.root ?? null,
+    rootMargin: margin.length <= 4 ? `${top} ${right} ${bottom} ${left}` : margin.join(' '),
+  };
+};
 
 export const createElementState = (element: Element): ElementState => ({
   ...createElementRef(element),

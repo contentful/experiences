@@ -4,7 +4,9 @@
  * @packageDocumentation
  */
 
+import { NOOP_TRACKING } from './tracking/interaction-controls.js';
 import type { ContentfulExperiences } from './contentful-experiences.js';
+import { createSnapshotRuntime, type ExperiencesSnapshot } from './runtime/snapshot-runtime.js';
 
 type RuntimeMembers =
   | 'consent'
@@ -39,3 +41,14 @@ export {
   type ExperiencesSnapshot,
   type SnapshotRuntime,
 } from './runtime/snapshot-runtime.js';
+
+/** Browser tracking controls layered over the universal presentation runtime. */
+export interface WebExperiencesRuntime
+  extends ExperiencesRuntime, Pick<ContentfulExperiences, 'tracking'> {}
+
+/** Snapshot runtime with inert browser-only tracking controls, safe during SSR. */
+export function createWebSnapshotRuntime(snapshot?: ExperiencesSnapshot): WebExperiencesRuntime {
+  return Object.assign(createSnapshotRuntime(snapshot), {
+    tracking: NOOP_TRACKING,
+  });
+}
