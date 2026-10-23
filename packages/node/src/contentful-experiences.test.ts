@@ -9,6 +9,7 @@ import {
   EventProfileRequiredError,
   parseExperiencesHandoff,
 } from '@contentful/experiences-runtime';
+import { createRequestHandoffFromData } from './handoff.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -67,6 +68,116 @@ function createEventRuntime(
 }
 
 describe('Node ContentfulExperiences', () => {
+  it('preserves partial-result diagnostics through raw resolution and Delivery fetch without changing identity semantics', async () => {
+    const payload = {
+      sys: {
+        id: 'experience',
+        type: 'Experience',
+        space: { sys: { type: 'Link', linkType: 'Space', id: 'space' } },
+        environment: { sys: { type: 'Link', linkType: 'Environment', id: 'environment' } },
+        experienceTemplate: {
+          sys: {
+            type: 'ResourceLink' as const,
+            linkType: 'Contentful:ExperienceTemplate' as const,
+            urn: 'experience_templates/page',
+          },
+        },
+        createdAt: '2026-10-15T00:00:00.000Z',
+        updatedAt: '2026-10-15T00:00:00.000Z',
+        createdBy: { sys: { type: 'Link', linkType: 'User', id: 'user' } },
+        updatedBy: { sys: { type: 'Link', linkType: 'User', id: 'user' } },
+      },
+      nodes: [
+        {
+          component: {
+            sys: {
+              type: 'ResourceLink' as const,
+              linkType: 'Contentful:Component' as const,
+              urn: 'components/hero',
+            },
+          },
+          contentProperties: { title: 'Available content' },
+          designProperties: {},
+        },
+      ],
+      errors: [
+        {
+          fieldPath: 'nodes[0].contentProperties.optional',
+          message: 'Unavailable field',
+          originalError: { secret: 'private' },
+        },
+      ],
+      extensions: {
+        personalization: {
+          profile: {
+            id: 'xda-profile',
+            stableId: 'stable-profile',
+            random: 0.5,
+            audiences: [],
+            traits: {},
+            location: {},
+            session: {
+              isReturningVisitor: false,
+              landingPage: {
+                path: '/',
+                query: {},
+                referrer: '',
+                search: '',
+                url: 'https://example.test/',
+              },
+              count: 1,
+              activeSessionLength: 0,
+              averageSessionLength: 0,
+            },
+          },
+          experiences: [],
+          changes: [],
+        },
+      },
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
+      async () =>
+        new globalThis.Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    const config = { components: { hero: {} } };
+    const runtime = trackRuntime(
+      new ContentfulExperiences({
+        spaceId: 'space',
+        environmentId: 'environment',
+        delivery: { accessToken: 'delivery-token', fetch },
+      })
+    );
+    const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
+    const resolved = await request.resolveExperience(payload, { config, debug: false });
+    const fetched = await request.fetchExperience(
+      { experienceId: 'experience' },
+      { config, debug: false }
+    );
+
+    for (const plan of [resolved, fetched]) {
+      expect(plan.deliveryDiagnostics).toEqual([
+        { fieldPath: 'nodes[0].contentProperties.optional', message: 'Unavailable field' },
+      ]);
+      expect(plan.nodes[0]?.props.content).toEqual({ title: 'Available content' });
+      expect(plan.diagnostics).toEqual([]);
+      expect(plan.personalization).toEqual({ profileId: 'xda-profile' });
+    }
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(request.profile).toEqual({ id: 'xda-profile' });
+    const data = { profile: request.profile, deliveryDiagnostics: fetched.deliveryDiagnostics };
+    const handoff = createRequestHandoffFromData({
+      spaceId: runtime.spaceId,
+      environmentId: runtime.environmentId,
+      data,
+    });
+    expect(handoff.state).toEqual({ profile: { id: 'xda-profile' } });
+    expect(JSON.stringify(handoff)).not.toContain('deliveryDiagnostics');
+    expect(JSON.stringify(handoff)).not.toContain('Unavailable field');
+  });
+
   it('forwards changed parameters through request facades independently of event consent', async () => {
     const runtime = createRuntime();
     const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
