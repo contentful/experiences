@@ -9,13 +9,6 @@ const heroAssembly: DataAssemblyFixture = {
   tempId: 'assembly:hero',
   name: 'Hero from Promotion',
   description: 'Maps a promotion entry into the hero-plain Component',
-  // dataType MUST mirror hero-plain's contentProperties.
-  dataType: [
-    { id: 'title', name: 'Title', type: 'String', required: true },
-    { id: 'ctaLabel', name: 'CTA label', type: 'String' },
-    { id: 'ctaUrl', name: 'CTA URL', type: 'String' },
-    { id: 'image', name: 'Image URL', type: 'String' },
-  ],
   parameters: {
     promo: {
       name: 'Promotion entry',
@@ -51,14 +44,6 @@ const cardAssembly: DataAssemblyFixture = {
   tempId: 'assembly:card',
   name: 'Card from Promotion',
   description: 'Maps a promotion entry into the card Component',
-  // dataType MUST mirror card's contentProperties.
-  dataType: [
-    { id: 'title', name: 'Title', type: 'String', required: true },
-    { id: 'teaser', name: 'Teaser', type: 'String' },
-    { id: 'ctaLabel', name: 'CTA label', type: 'String' },
-    { id: 'ctaUrl', name: 'CTA URL', type: 'String' },
-    { id: 'image', name: 'Image URL', type: 'String' },
-  ],
   parameters: {
     promo: {
       name: 'Promotion entry',
