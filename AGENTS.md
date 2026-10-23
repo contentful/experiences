@@ -128,8 +128,16 @@ Manual observation means developer registration of elements with real
 `TrackingAttribution` in `options.data`; the SDK measures interactions. It does
 not mean visitor-facing event buttons. Type-level disable preserves explicit
 element enables, consent withdrawal discards intervals but preserves overrides,
-and reset/destroy clear overrides. Keep these controls on the existing detector
-and consent/lifecycle path; do not add application-owned observers.
+and reset/destroy clear overrides. Repeated `enable` calls with unchanged
+effective options preserve intervals; view roots default to `null` and equivalent
+CSS `rootMargin` shorthands do not restart measurements. Changed effective view
+options restart them. Within an attribution session, dynamic
+`data-ctfl-track-views`, `data-ctfl-track-hovers`, and `data-ctfl-track-clicks`
+attributes can opt permitted elements in even when automatic tracking is disabled;
+explicit element overrides win. Standalone SDK construction does not start
+document discovery: attribution comes from a session or valid manual
+registration. Consent still gates all tracking. Keep these controls on the
+existing detector and consent/lifecycle path; do not add application-owned observers.
 
 By-ID fetch options accept per-call `parameters`: strings/numbers or one-level
 Records of string/number leaves. Experience.parameters declares IDs and bindings
@@ -283,15 +291,22 @@ Experiences safeguards below to that reference:
   teardown identity and joins the common drain; that drain follows only its own
   response identities, then cleans up its teardown authorization. This permits a
   best-effort final send while preventing late publications into a replacement.
-- As in Optimization, `reset()` stops interaction detectors while retaining the
-  tracking configuration and session. A later `session.refresh()` or consent
-  synchronization resumes fresh intervals. Experiences also invalidates pending
-  interaction callbacks with the owner's reset token, preventing old measurements
-  from being sent under the next visitor's identity. Event-consent withdrawal
-  discards active measurements and restarts permitted detectors with the new
-  token, including allowlisted views and hovers. This restart is required by
-  Experiences' additional token guard; the pinned reference retains permitted
-  detectors without that guard.
+- Experiences preserves active interaction intervals on repeated `enable` calls
+  with unchanged effective options, and lets dynamic element attributes opt in
+  even when automatic tracking is disabled. These are local corrections: the
+  pinned reference restarts on repeated enable and gates attribute opt-ins on
+  automatic tracking being enabled.
+- Experiences `reset()` clears manual overrides and old measurements, resets
+  visitor state and the owner's token, then immediately resumes eligible
+  automatic and attribute discovery with fresh intervals. It retains tracking
+  configuration and the session; no `session.refresh()` is needed. The pinned
+  reference stops detectors on reset. Experiences invalidates pending interaction
+  callbacks with the owner's reset token, preventing old measurements from being
+  sent under the next visitor's identity. Event-consent withdrawal discards active
+  measurements and restarts permitted detectors with the new token, including
+  allowlisted views and hovers. This restart is required by Experiences'
+  additional token guard; the pinned reference retains permitted detectors
+  without that guard.
 
 Ordinary `flush()`, reconnect, and visibility handling await Analytics before
 Personalization, following the reference order. Preserve the stated lifecycle

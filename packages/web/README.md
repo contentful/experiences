@@ -506,7 +506,11 @@ Optimization-compatible type contracts. Runtime controls remain on `tracking`.
 
 Constructor `autoTrackEntryInteraction: { views, hovers, clicks }` flags each default
 to `true`. Use `false` to turn off automatic discovery for an interaction while
-retaining explicit per-element registrations:
+retaining explicit per-element registrations and per-element attribute opt-ins.
+A standalone SDK does not discover document elements until an attribution session
+starts or an element is manually registered with valid attribution. Automatic
+and attribute discovery require the session's attribution lookup; manual
+registration with valid `data` can run without a session:
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -523,17 +527,21 @@ experiences.tracking.clearElement('views', card);
 
 - `tracking.enable(type, options?)` enables automatic tracking; `type` is
   `'views' | 'hovers' | 'clicks'`. Views accept `{ root?: Element | Document | null,
-rootMargin?: string }` and restart with those IntersectionObserver options.
+rootMargin?: string }`. Repeated enables with unchanged effective options preserve
+  active intervals. For views, omitted and `null` roots are equivalent, as are CSS
+  `rootMargin` shorthands that expand to the same four sides; changed effective
+  observer options restart view measurements.
 - `tracking.disable(type)` disables automatic discovery and retains manually
   enabled elements. `enableElement(type, element, { data? })` explicitly enables
   an element; `disableElement(type, element)` explicitly disables it.
   `clearElement(type, element)` removes either override.
 - Explicit element overrides take precedence over `data-ctfl-track-views`,
   `data-ctfl-track-hovers`, and `data-ctfl-track-clicks` boolean attributes; those
-  attributes take precedence over automatic flags while that interaction runs.
-  Values are trimmed and case-insensitive; values other than `true`/`false` fall
-  back to automatic behavior. Disabling an interaction stops it unless it has a
-  manually enabled element.
+  attributes take precedence over automatic flags. Within an attribution session,
+  `true` starts tracking for a permitted element even when automatic tracking is
+  disabled. Attribute changes are observed dynamically. Values are trimmed and
+  case-insensitive; values other than `true`/`false` fall back to automatic
+  behavior. Attribute opt-ins and manual enables remain subject to consent.
 - Unlike Optimization's entry metadata, `data` is an Experiences
   `TrackingAttribution` (an actual value from `plan.attribution.scopes`). This is
   the content-model adaptation: views support Experiences and Fragments, while
@@ -553,9 +561,11 @@ rootMargin?: string }` and restart with those IntersectionObserver options.
 - Manual registrations use the same dwell timers, event methods, consent gate,
   queues, and lifecycle token as automatic tracking. Consent withdrawal discards
   active intervals and retains overrides; regrant starts fresh intervals.
-  `reset()` stops detectors and clears manual overrides while retaining automatic
-  settings; `destroy()` clears overrides and ends ownership. Delayed callbacks
-  cannot cross visitor/reset boundaries.
+  `reset()` discards old measurements and clears manual overrides, then immediately
+  resumes eligible automatic and attribute discovery with fresh intervals after
+  resetting visitor state and the lifecycle token. It retains automatic settings
+  and the session; `destroy()` clears overrides and ends ownership. Delayed
+  callbacks cannot cross visitor/reset boundaries.
 - `WebExperiencesRuntime` adds these browser-only controls to
   `ExperiencesRuntime`; `createWebSnapshotRuntime()` supplies inert controls for
   SSR. Imports remain safe without browser globals.
@@ -637,11 +647,11 @@ packages re-export it, and so does
   a source map.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
   so server-rendered components can import it.
-- `reset()` stops detectors and clears manual overrides, discarding in-progress
-  view and hover durations so they cannot cross visitor identities. It retains the
-  tracking configuration and session; a later `session.refresh()` or consent
-  synchronization can resume tracking with fresh intervals. This explicit
-  Experience/Fragment session boundary is specific to this SDK's attribution model.
+- `reset()` clears manual overrides and discards in-progress view and hover
+  durations so they cannot cross visitor identities. After resetting visitor
+  state and the lifecycle token, it immediately resumes eligible automatic and
+  attribute discovery with fresh intervals, retaining the tracking configuration
+  and session. No `session.refresh()` is needed; consent still gates tracking.
 - `startInteractionTracking` does nothing outside a browser. One session runs per
   runtime at a time. `stop()` frees it immediately, so a new session can start
   from a React effect whose cleanup cannot await; the stopped session finishes

@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 
+import { NOOP_TRACKING } from './tracking/interaction-controls.js';
 import type { ContentfulExperiences } from './contentful-experiences.js';
 import { createSnapshotRuntime, type ExperiencesSnapshot } from './runtime/snapshot-runtime.js';
 
@@ -48,12 +49,6 @@ export interface WebExperiencesRuntime
 /** Snapshot runtime with inert browser-only tracking controls, safe during SSR. */
 export function createWebSnapshotRuntime(snapshot?: ExperiencesSnapshot): WebExperiencesRuntime {
   return Object.assign(createSnapshotRuntime(snapshot), {
-    tracking: {
-      enable() {},
-      disable() {},
-      enableElement() {},
-      disableElement() {},
-      clearElement() {},
-    },
+    tracking: NOOP_TRACKING,
   });
 }

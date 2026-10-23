@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createInteractionTracking } from './interaction-tracking.js';
-import { installIOPolyfill } from './test-fixtures/dom.js';
+import { deferred, installIOPolyfill } from './test-fixtures/dom.js';
 import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
 
 import type { TrackingAttribution } from './tracking/attribution.js';
@@ -399,6 +399,240 @@ describe('createInteractionTracking', () => {
       expect(events.trackView).toHaveBeenCalledOnce();
       tracking.destroy();
     });
+  });
+});
+
+describe('createInteractionTracking — control transitions', () => {
+  const enter = (element: Element): void => {
+    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+  };
+  const leave = (element: Element): void => {
+    element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+  };
+  const setup = () => {
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    const io = installIOPolyfill();
+    const element = stamped('node-fragment');
+    document.body.append(element);
+    const events = createEvents();
+    const coordinator = createInteractionTracking(events, {
+      resolveAttribution: (key) => ATTRIBUTIONS[key],
+    });
+    onTestFinished(() => coordinator.destroy());
+    return { io, element, events, coordinator };
+  };
+
+  it.each([
+    ['0px', '0px 0px 0px 0px'],
+    ['10px', '10px 10px 10px 10px'],
+    ['10px 20px', '10px 20px 10px 20px'],
+    ['10px 20px 30px', '10px 20px 30px 20px'],
+  ])('keeps view and hover timers when %s is enabled again as %s', async (initial, equivalent) => {
+    const { io, element, events, coordinator } = setup();
+    coordinator.tracking.enable('views', { rootMargin: initial });
+    io.trigger(element, true);
+    enter(element);
+    await vi.advanceTimersByTimeAsync(600);
+    coordinator.tracking.enable('views', { root: null, rootMargin: equivalent });
+    coordinator.tracking.enable('hovers');
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(events.trackView).toHaveBeenCalledOnce();
+    expect(events.trackHover).toHaveBeenCalledOnce();
+    await coordinator.endActive();
+    for (const [method, id, duration] of [
+      [events.trackView, 'viewId', 'viewDurationMs'],
+      [events.trackHover, 'hoverId', 'hoverDurationMs'],
+    ] as const) {
+      const [first, final] = method.mock.calls.map(([args]) => args);
+      expect(method).toHaveBeenCalledTimes(2);
+      expect(final[id]).toBe(first[id]);
+      expect(final[duration]).toBe(1100);
+    }
+    coordinator.destroy();
+  });
+
+  it('preserves pending final durations when the already-enabled type is enabled again', async () => {
+    const { io, element, events, coordinator } = setup();
+    const pending = deferred<boolean>();
+    events.trackView.mockReturnValueOnce(pending.promise);
+    events.trackHover.mockReturnValueOnce(pending.promise);
+    io.trigger(element, true);
+    enter(element);
+    await vi.advanceTimersByTimeAsync(1400);
+    io.trigger(element, false);
+    leave(element);
+    await vi.advanceTimersByTimeAsync(0);
+    coordinator.tracking.enable('views');
+    coordinator.tracking.enable('hovers');
+    pending.resolve(true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    for (const [method, id, duration] of [
+      [events.trackView, 'viewId', 'viewDurationMs'],
+      [events.trackHover, 'hoverId', 'hoverDurationMs'],
+    ] as const) {
+      const [first, final] = method.mock.calls.map(([args]) => args);
+      expect(method).toHaveBeenCalledTimes(2);
+      expect(final[id]).toBe(first[id]);
+      expect(final[duration]).toBe(1400);
+    }
+    coordinator.destroy();
+  });
+
+  it.each(['root', 'rootMargin'] as const)(
+    'starts a new view interval when the effective %s changes',
+    async (option) => {
+      const { io, element, events, coordinator } = setup();
+      io.trigger(element, true);
+      await vi.advanceTimersByTimeAsync(1200);
+      const first = events.trackView.mock.calls[0]![0];
+      const root = document.createElement('section');
+      document.body.append(root);
+      coordinator.tracking.enable('views', option === 'root' ? { root } : { rootMargin: '10px' });
+      io.trigger(element, true);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(events.trackView).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(600);
+      expect(events.trackView).toHaveBeenCalledTimes(2);
+      expect(events.trackView.mock.calls[1]![0].viewId).not.toBe(first.viewId);
+      await coordinator.endActive();
+      expect(events.trackView.mock.calls[2]![0].viewDurationMs).toBe(1200);
+      coordinator.destroy();
+    }
+  );
+
+  it.each(['views', 'hovers', 'clicks'] as const)(
+    'discovers existing, inserted and changed DOM opt-ins while automatic %s are disabled',
+    async (type) => {
+      vi.useFakeTimers();
+      const io = installIOPolyfill();
+      const events = createEvents();
+      const existing = stamped('existing');
+      existing.setAttribute(`data-ctfl-track-${type}`, 'true');
+      document.body.append(existing);
+      const changed = stamped('changed');
+      const inserted = stamped('inserted');
+      const coordinator = createInteractionTracking(events, {
+        resolveAttribution: () => FRAGMENT,
+        views: false,
+        hovers: false,
+        clicks: false,
+      });
+      onTestFinished(() => coordinator.destroy());
+      const interact = async (element: Element) => {
+        io.trigger(element, true);
+        enter(element);
+        click(element);
+        await vi.advanceTimersByTimeAsync(1000);
+      };
+      await interact(existing);
+      inserted.setAttribute(`data-ctfl-track-${type}`, 'true');
+      document.body.append(inserted, changed);
+      await vi.advanceTimersByTimeAsync(0);
+      await interact(inserted);
+      changed.setAttribute(`data-ctfl-track-${type}`, 'true');
+      await vi.advanceTimersByTimeAsync(0);
+      await interact(changed);
+
+      const method =
+        type === 'views'
+          ? events.trackView
+          : type === 'hovers'
+            ? events.trackHover
+            : events.trackClick;
+      expect(method).toHaveBeenCalledTimes(3);
+      if (type !== 'clicks') {
+        coordinator.tracking.disableElement(type, existing);
+        coordinator.tracking.disableElement(type, inserted);
+        coordinator.tracking.disableElement(type, changed);
+      }
+      coordinator.destroy();
+    }
+  );
+
+  it('applies explicit enable/disable before DOM opt-ins and still respects consent', async () => {
+    const element = stamped('node-fragment');
+    element.setAttribute('data-ctfl-track-clicks', 'false');
+    document.body.append(element);
+    const events = createEvents();
+    installIOPolyfill();
+    let allowed = true;
+    const coordinator = createInteractionTracking(
+      events,
+      {
+        resolveAttribution: (key) => ATTRIBUTIONS[key],
+      },
+      { isAllowed: () => allowed }
+    );
+    onTestFinished(() => coordinator.destroy());
+    click(element);
+    expect(events.trackClick).not.toHaveBeenCalled();
+    coordinator.tracking.enableElement('clicks', element);
+    click(element);
+    expect(events.trackClick).toHaveBeenCalledOnce();
+    element.setAttribute('data-ctfl-track-clicks', 'true');
+    coordinator.tracking.disableElement('clicks', element);
+    await flushMutations();
+    click(element);
+    expect(events.trackClick).toHaveBeenCalledOnce();
+    coordinator.tracking.clearElement('clicks', element);
+    click(element);
+    expect(events.trackClick).toHaveBeenCalledTimes(2);
+    allowed = false;
+    coordinator.syncConsent();
+    coordinator.tracking.enableElement('clicks', element);
+    click(element);
+    expect(events.trackClick).toHaveBeenCalledTimes(2);
+    allowed = true;
+    coordinator.syncConsent();
+    click(element);
+    expect(events.trackClick).toHaveBeenCalledTimes(3);
+    coordinator.destroy();
+  });
+
+  it('discovers manual descendants on subtree attachment and removal without scanning overrides for unrelated roots', async () => {
+    const io = installIOPolyfill();
+    const events = createEvents();
+    const coordinator = createInteractionTracking(events, {
+      resolveAttribution: () => undefined,
+      views: false,
+      hovers: false,
+      clicks: false,
+    });
+    onTestFinished(() => coordinator.destroy());
+    const wrapper = document.createElement('section');
+    const manual = document.createElement('button');
+    wrapper.append(manual);
+    coordinator.tracking.enableElement('clicks', manual, { data: FRAGMENT });
+    coordinator.tracking.enableElement('views', manual, { data: FRAGMENT });
+    document.body.append(wrapper);
+    await flushMutations();
+    click(manual);
+    expect(events.trackClick).toHaveBeenCalledOnce();
+    const observer = io.getLast();
+    expect(observer.observed.has(manual)).toBe(true);
+
+    const unrelated = document.createElement('section');
+    const contains = vi.spyOn(unrelated, 'contains');
+    document.body.append(unrelated);
+    await flushMutations();
+    unrelated.remove();
+    await flushMutations();
+    expect(contains).not.toHaveBeenCalledWith(manual);
+
+    wrapper.remove();
+    await flushMutations();
+    expect(observer.observed.has(manual)).toBe(false);
+    click(manual);
+    expect(events.trackClick).toHaveBeenCalledOnce();
+    document.body.append(wrapper);
+    await flushMutations();
+    click(manual);
+    expect(events.trackClick).toHaveBeenCalledTimes(2);
+    expect(io.getLast().observed.has(manual)).toBe(true);
+    coordinator.destroy();
   });
 });
 

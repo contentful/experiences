@@ -36,7 +36,11 @@ import {
   toInteractionArgs,
 } from './tracking/interaction-detector.js';
 import { createViewDetector } from './tracking/view/create-view-detector.js';
-import type { ElementViewObserverOptions } from './tracking/view/element-view-observer-support.js';
+import {
+  initElementViewObserverOptions,
+  type ElementViewObserverOptions,
+} from './tracking/view/element-view-observer-support.js';
+import { INTERACTION_ATTRIBUTES, NOOP_TRACKING } from './tracking/interaction-controls.js';
 
 const SELECTOR = `[${TRACKING_SCOPES_ATTRIBUTE}]`;
 
@@ -181,33 +185,26 @@ export function createInteractionTracking(
   events: TrackingEvents,
   options: InteractionTrackingOptions,
   gate: InteractionTrackingGate = { isAllowed: () => true },
-  initialSettings?: InteractionTrackingSettings
+  initialSettings?: InteractionTrackingSettings,
+  discoverAutomatic = true
 ): InteractionTracking {
+  const auto = {
+    views:
+      options.views === undefined ? (initialSettings?.auto.views ?? true) : options.views !== false,
+    clicks: options.clicks ?? initialSettings?.auto.clicks ?? true,
+    hovers: options.hovers ?? initialSettings?.auto.hovers ?? true,
+  };
+  let viewOptions = initElementViewObserverOptions(
+    typeof options.views === 'object'
+      ? options.views
+      : options.views === true
+        ? undefined
+        : initialSettings?.viewOptions
+  );
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
     return {
-      getSettings: () => ({
-        auto: {
-          views:
-            options.views === undefined
-              ? (initialSettings?.auto.views ?? true)
-              : options.views !== false,
-          clicks: options.clicks ?? initialSettings?.auto.clicks ?? true,
-          hovers: options.hovers ?? initialSettings?.auto.hovers ?? true,
-        },
-        viewOptions:
-          typeof options.views === 'object'
-            ? options.views
-            : options.views === true
-              ? undefined
-              : initialSettings?.viewOptions,
-      }),
-      tracking: {
-        enable() {},
-        disable() {},
-        enableElement() {},
-        disableElement() {},
-        clearElement() {},
-      },
+      getSettings: () => ({ auto: { ...auto }, viewOptions }),
+      tracking: NOOP_TRACKING,
       transferOverridesTo() {},
       refresh() {},
       syncConsent() {},
@@ -236,6 +233,7 @@ export function createInteractionTracking(
   }
   // Retain attribution lookup closures for draining sessions after stop().
   const manualData = new Map<symbol, EntryViewInteractionElementOptions>();
+  const manualElements = new Set<Element>();
   const resolveKeyAttribution = (key: InteractionKey): TrackingAttribution | undefined => {
     const manual = typeof key === 'symbol';
     const data = manual ? manualData.get(key)?.data : options.resolveAttribution(key);
@@ -247,12 +245,6 @@ export function createInteractionTracking(
       return undefined;
     return attribution;
   };
-  let viewOptions =
-    typeof options.views === 'object'
-      ? options.views
-      : options.views === true
-        ? undefined
-        : initialSettings?.viewOptions;
   const createDetector = (type: EntryInteraction): InteractionDetector<InteractionKey> => {
     if (type === 'views')
       return createViewDetector(
@@ -275,10 +267,7 @@ export function createInteractionTracking(
       type,
       method: type === 'views' ? 'trackView' : type === 'hovers' ? 'trackHover' : 'trackClick',
       detector: createDetector(type),
-      auto:
-        options[type] === undefined
-          ? (initialSettings?.auto[type] ?? true)
-          : options[type] !== false,
+      auto: auto[type],
       running: false,
       overrides: new Map(),
       observed: new Map(),
@@ -294,7 +283,7 @@ export function createInteractionTracking(
     if (!entry.running) return;
     const next = new Map<InteractionKey, string>();
     const override = entry.overrides.get(element);
-    const attr = element.getAttribute(`data-ctfl-track-${entry.type}`)?.trim().toLowerCase();
+    const attr = element.getAttribute(INTERACTION_ATTRIBUTES[entry.type])?.trim().toLowerCase();
     const enabled =
       override?.enabled ?? (attr === 'true' ? true : attr === 'false' ? false : entry.auto);
     // Explicit registrations follow Optimization's document-wide element API;
@@ -319,28 +308,37 @@ export function createInteractionTracking(
   };
   const reconcileAll = (entry: ManagedDetector): void => {
     const candidates = new Set([...entry.observed.keys(), ...entry.overrides.keys()]);
-    if (root instanceof Element && root.matches(SELECTOR)) candidates.add(root);
-    root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
+    if (discoverAutomatic) {
+      if (root instanceof Element && root.matches(SELECTOR)) candidates.add(root);
+      root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
+    }
     for (const element of candidates) reconcile(entry, element);
   };
   const mutationObserver = new MutationObserver((records) => {
     const candidates = new Set<Element>();
-    const collect = (node: Node): void => {
-      if (!(node instanceof Element)) return;
-      candidates.add(node);
-      node.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
-      // Manually registered elements need no discovery attribute.
-      for (const entry of managed.values()) {
-        for (const element of entry.overrides.keys()) {
-          if (node.contains(element)) candidates.add(element);
-        }
-      }
+    const roots = new Set<Element>();
+    const addRoot = (node: Node): void => {
+      if (node instanceof Element) roots.add(node);
     };
     for (const record of records) {
       if (record.type === 'attributes' && record.target instanceof Element)
         candidates.add(record.target);
-      record.addedNodes.forEach(collect);
-      record.removedNodes.forEach(collect);
+      record.addedNodes.forEach(addRoot);
+      record.removedNodes.forEach(addRoot);
+    }
+    const collect = (element: Element): void => {
+      if (manualElements.has(element) || (discoverAutomatic && element.matches(SELECTOR)))
+        candidates.add(element);
+    };
+    for (const node of roots) {
+      // Mutation records may repeat a root or include both a parent and its child.
+      let parent = node.parentElement;
+      while (parent && !roots.has(parent)) parent = parent.parentElement;
+      if (parent) continue;
+      collect(node);
+      // A membership index finds attribute-free manual descendants without scanning
+      // every interaction's override map for every inserted or removed root.
+      node.querySelectorAll(manualElements.size ? '*' : SELECTOR).forEach(collect);
     }
     for (const entry of managed.values()) {
       for (const element of candidates) reconcile(entry, element);
@@ -350,7 +348,10 @@ export function createInteractionTracking(
     if (destroyed) return;
     const allowed =
       gate.isAllowed(entry.method) &&
-      (entry.auto || [...entry.overrides.values()].some((override) => override.enabled));
+      (discoverAutomatic ||
+        [...entry.overrides.values()].some(
+          (override) => override.enabled && resolveKeyAttribution(override.key)
+        ));
     if (entry.running && (!allowed || restart)) {
       entry.detector.stop();
       entry.running = false;
@@ -361,19 +362,14 @@ export function createInteractionTracking(
       entry.detector.start();
       entry.running = true;
     }
-    reconcileAll(entry);
+    if (entry.running) reconcileAll(entry);
     if (!observing && [...managed.values()].some((candidate) => candidate.running)) {
       observing = true;
       mutationObserver.observe(document, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: [
-          TRACKING_SCOPES_ATTRIBUTE,
-          'data-ctfl-track-views',
-          'data-ctfl-track-hovers',
-          'data-ctfl-track-clicks',
-        ],
+        attributeFilter: [TRACKING_SCOPES_ATTRIBUTE, ...Object.values(INTERACTION_ATTRIBUTES)],
       });
     } else if (observing && ![...managed.values()].some((candidate) => candidate.running)) {
       mutationObserver.disconnect();
@@ -392,15 +388,18 @@ export function createInteractionTracking(
       entry.observed.clear();
       if (!preserveOverrides) entry.overrides.clear();
     }
+    if (!preserveOverrides) manualElements.clear();
     if (!preserveOverrides && !preservePending) manualData.clear();
   };
   const tracking: EntryInteractionApi = {
     enable(type, startOptions) {
       if (destroyed) return;
       const entry = managed.get(type)!;
+      const next = type === 'views' ? initElementViewObserverOptions(startOptions) : viewOptions;
+      const restart = next.root !== viewOptions.root || next.rootMargin !== viewOptions.rootMargin;
       entry.auto = true;
-      if (type === 'views') viewOptions = startOptions;
-      syncEntry(entry, true);
+      viewOptions = next;
+      syncEntry(entry, restart);
     },
     disable(type) {
       if (destroyed) return;
@@ -418,6 +417,7 @@ export function createInteractionTracking(
       const key = Symbol();
       if (elementOptions) manualData.set(key, elementOptions);
       entry.overrides.set(element, { enabled: true, options: elementOptions, key });
+      manualElements.add(element);
       syncEntry(entry);
     },
     disableElement(type, element) {
@@ -426,6 +426,7 @@ export function createInteractionTracking(
       const previous = entry.overrides.get(element);
       if (previous) manualData.delete(previous.key);
       entry.overrides.set(element, { enabled: false, key: Symbol() });
+      manualElements.add(element);
       syncEntry(entry);
     },
     clearElement(type, element) {
@@ -433,6 +434,8 @@ export function createInteractionTracking(
       const entry = managed.get(type)!;
       const previous = entry.overrides.get(element);
       if (entry.overrides.delete(element)) {
+        if (![...managed.values()].some((candidate) => candidate.overrides.has(element)))
+          manualElements.delete(element);
         if (previous) manualData.delete(previous.key);
         syncEntry(entry);
       }

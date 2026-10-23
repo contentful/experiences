@@ -592,6 +592,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       eventSignal.value = undefined;
       blockedEventSignal.value = undefined;
       experienceRequestStateSignal.value = { status: 'idle' };
+      // Resume only after old work is invalidated and the new visitor token exists.
+      this.#interactionTracking?.syncConsent();
     });
   }
 
@@ -637,7 +639,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   #createInteractionTracking(
     options: InteractionTrackingOptions,
-    initialSettings?: ReturnType<InteractionTracking['getSettings']>
+    initialSettings?: ReturnType<InteractionTracking['getSettings']>,
+    discoverAutomatic = true
   ): InteractionTracking {
     return createInteractionTracking(
       this,
@@ -646,16 +649,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
       },
-      initialSettings
+      initialSettings,
+      discoverAutomatic
     );
   }
 
   #ensureInteractionTracking(): InteractionTracking | undefined {
     if (this.#destroyed) return undefined;
-    return (this.#interactionTracking ??= this.#createInteractionTracking({
-      resolveAttribution: () => undefined,
-      ...this.config.autoTrackEntryInteraction,
-    }));
+    return (this.#interactionTracking ??= this.#createInteractionTracking(
+      { resolveAttribution: () => undefined, ...this.config.autoTrackEntryInteraction },
+      undefined,
+      false
+    ));
   }
 
   startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {

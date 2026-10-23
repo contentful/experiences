@@ -84,6 +84,57 @@ afterEach(() => {
 });
 
 describe('ContentfulExperiences interaction tracking', () => {
+  it('defers document observation until a session or a valid manual registration exists', async () => {
+    const observe = vi.spyOn(MutationObserver.prototype, 'observe');
+    const query = vi.spyOn(document, 'querySelectorAll');
+    const runtime = createRuntime();
+    expect(observe).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalledWith('[data-ctfl-scopes]');
+    runtime.tracking.enable('clicks');
+    const manual = document.createElement('button');
+    document.body.append(manual);
+    runtime.tracking.enableElement('clicks', manual, { data: { entityId: '' } });
+    expect(observe).not.toHaveBeenCalled();
+    runtime.tracking.enableElement('clicks', manual, { data: ATTRIBUTIONS['node:hero'] });
+    expect(observe).toHaveBeenCalled();
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    click(manual);
+    expect(trackClick).toHaveBeenCalledOnce();
+    runtime.destroy();
+
+    observe.mockClear();
+    const replacement = createRuntime();
+    expect(observe).not.toHaveBeenCalled();
+    const session = replacement.startInteractionTracking({
+      resolveAttribution: (key) => ATTRIBUTIONS[key],
+    });
+    expect(observe).toHaveBeenCalled();
+    await session.stop();
+  });
+
+  it('clears explicit element overrides on reset while resuming the automatic session', async () => {
+    const runtime = createRuntime();
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const automatic = render('node:hero', 'button');
+    const manual = document.createElement('button');
+    document.body.append(manual);
+    const session = runtime.startInteractionTracking({
+      views: false,
+      resolveAttribution: (key) => ATTRIBUTIONS[key],
+    });
+    runtime.tracking.disableElement('clicks', automatic);
+    runtime.tracking.enableElement('clicks', manual, { data: ATTRIBUTIONS['node:hero'] });
+    click(automatic);
+    click(manual);
+    expect(trackClick).toHaveBeenCalledOnce();
+    runtime.reset();
+    click(manual);
+    expect(trackClick).toHaveBeenCalledOnce();
+    click(automatic);
+    expect(trackClick).toHaveBeenCalledTimes(2);
+    await session.stop();
+  });
+
   it('sends interactions through the runtime event methods', async () => {
     const runtime = createRuntime();
     const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
@@ -275,15 +326,14 @@ describe('ContentfulExperiences interaction tracking', () => {
     await advance(0);
 
     // Reset drops measurements rather than sending the previous visitor's duration.
-    // Late observer callbacks and pointer events cannot resume the stopped detectors.
-    originalObserver.trigger(hero, true);
+    // A callback from the previous observer cannot start a new visitor's interval.
+    originalObserver.trigger(page, true);
     await advance(3000);
     hero.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
     expect(await sentEvents(send)).toEqual([]);
 
-    // The original handle retains its configuration and resumes with fresh timers.
+    // The original handle resumes automatically with fresh timers after reset.
     expect(() => runtime.startInteractionTracking(options)).toThrow('already running');
-    session.refresh();
     io.trigger(page, true);
     hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     await advance(1400);
