@@ -8,21 +8,11 @@ import { Fragment, createElement, type ReactNode } from 'react';
 
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import { ComponentErrorBoundary } from './component-error-boundary.js';
 import type { ComponentErrorProps } from './component-error.js';
-import {
-  ContentfulComponentProvider,
-  ContentfulExperienceTemplateProvider,
-  ResolvedDesignProvider,
-} from './context.js';
+import { NodeView } from './node-view.js';
 import type { MissingComponentProps } from './missing-component.js';
-import {
-  normalizeComponentRegistration,
-  normalizeExperienceTemplateRegistration,
-  type ContentfulComponent,
-  type ContentfulExperienceTemplate,
-  type Config,
-} from './types.js';
+import { resolveNodeProps } from './resolve-node-props.js';
+import type { Config } from './types.js';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 export type RenderError = (props: ComponentErrorProps) => ReactNode;
@@ -138,8 +128,8 @@ function NodeRenderer({
     ));
   }
 
-  const entry = isExperienceTemplate ? config.experienceTemplates?.[id] : config.components[id];
-  if (!entry) {
+  const resolved = resolveNodeProps(node, config);
+  if (resolved.status === 'unregistered') {
     // An unregistered Experience Template would blank the page if we swapped
     // it for the missing-component box, so warn and render its slot children
     // unwrapped — the content survives, the diagnostic names what's missing.
@@ -161,61 +151,7 @@ function NodeRenderer({
     );
     return createElement(renderUnknown, { componentId: id, nodeId: node.nodeId });
   }
-  const registrationConfig = isExperienceTemplate
-    ? normalizeExperienceTemplateRegistration(entry)
-    : normalizeComponentRegistration(entry);
-
-  const tokenResolvedDesign = node.props.design;
-
-  // Merge precedence (last wins): defaults < design < content < resolveData < slots.
-  const composed = {
-    ...registrationConfig.defaults,
-    ...tokenResolvedDesign,
-    ...node.props.content,
-    ...node.props.resolved,
-    ...slotProps,
-  };
-
-  const element = (
-    <ResolvedDesignProvider value={tokenResolvedDesign}>
-      <ComponentErrorBoundary
-        fallback={createElement(renderError, { componentId: id, nodeId: node.nodeId })}
-        componentId={id}
-        kind={kind}
-        nodeId={node.nodeId}
-      >
-        {createElement(registrationConfig.component, composed)}
-      </ComponentErrorBoundary>
-    </ResolvedDesignProvider>
-  );
-
-  if (isExperienceTemplate) {
-    const contentful: ContentfulExperienceTemplate = {
-      experienceTemplateId: id,
-      nodeId: node.nodeId,
-      content: node.props.content,
-      design: node.props.designRaw,
-      resolved: node.props.resolved,
-      attribution: node.attribution,
-    };
-    return (
-      <ContentfulExperienceTemplateProvider value={contentful}>
-        {element}
-      </ContentfulExperienceTemplateProvider>
-    );
-  }
-
-  const contentful: ContentfulComponent = {
-    componentId: id,
-    nodeId: node.nodeId,
-    content: node.props.content,
-    design: node.props.designRaw,
-    resolved: node.props.resolved,
-    attribution: node.attribution,
-  };
-  return <ContentfulComponentProvider value={contentful}>{element}</ContentfulComponentProvider>;
+  // Slots go through the explicit `slots` prop so a slot can't collide with one
+  // of NodeView's own prop names.
+  return <NodeView node={resolved} renderError={renderError} slots={slotProps} />;
 }
-
-// `ComponentErrorBoundary` lives in its own `'use client'` file — see
-// component-error-boundary.tsx for why (it's a class component, which
-// Next.js's RSC bundler rejects from a directive-free file).
