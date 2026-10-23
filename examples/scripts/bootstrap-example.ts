@@ -473,13 +473,6 @@ async function seedDataAssembly(fixture: DataAssemblyFixture) {
   }
 
   const created = await cma.dataAssembly.create({}, {
-    sys: {
-      type: 'DataAssembly',
-      dataType: fixture.dataType.map((p) => ({
-        ...p,
-        required: p.required ?? false,
-      })),
-    },
     name: fixture.name,
     description: fixture.description ?? '',
     metadata: { tags: [] },

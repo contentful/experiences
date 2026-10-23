@@ -138,8 +138,6 @@ export type DataAssemblyFixture = {
   tempId: TempId;
   name: string;
   description?: string;
-  // dataType MUST mirror the Component's contentProperties this assembly targets.
-  dataType: ContentPropertyDef[];
   parameters: Record<
     string,
     {
