@@ -1,3 +1,16 @@
+## 0.8.3 (2026-10-23)
+
+### 🚀 Features
+
+- **web:** add standalone reference implementation and UMD distribution ([#254](https://github.com/contentful/experiences/pull/254))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.2.4
+- Updated client to 0.10.4
+- Updated core to 0.13.3
+- Updated node to 0.7.4
+
 ## 0.8.2 (2026-10-23)
 
 ### 🧱 Updated Dependencies

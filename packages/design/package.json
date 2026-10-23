@@ -1,6 +1,6 @@
 {
   "name": "@contentful/experiences-design",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "CSS property utilities for Contentful Experiences",
   "license": "MIT",
   "type": "module",
