@@ -50,8 +50,8 @@
     "pm2:delete:all": "pm2 delete all"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^10.0.1",
     "@nx/eslint": "^23.3.0",
     "@nx/js": "^23.3.0",
