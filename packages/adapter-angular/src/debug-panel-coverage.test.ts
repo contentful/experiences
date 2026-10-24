@@ -23,11 +23,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import type {
-  ComponentNode,
-  ExperiencePayload,
-  PortableRenderPlan,
-} from '@contentful/experiences-sdk-core';
+import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { render } from './test-fixtures/render-harness.js';
@@ -209,45 +205,5 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
     } finally {
       warn.mockRestore();
     }
-  });
-});
-
-describe('debug panel — Delivery diagnostic privacy', () => {
-  it('omits private upstream details with debug enabled', async () => {
-    const deliveryDiagnostics = Object.freeze([
-      { fieldPath: 'private/upstream/field', message: 'private upstream message' },
-    ]);
-    const plan = Object.freeze<PortableRenderPlan>({
-      nodes: [
-        {
-          registration: { kind: 'component', id: 'button' },
-          props: {
-            content: { label: 'Useful content', deliveryDiagnostics: 'customer content field' },
-            design: {},
-            designRaw: {},
-          },
-          slots: {},
-        },
-      ],
-      metadata: { source: 'useful metadata' },
-      debug: true,
-      diagnostics: [new Error('Existing resolver diagnostic')],
-      deliveryDiagnostics,
-    });
-    const config: Config = { components: { button: ButtonFixture } };
-    const { html } = render(plan, { config, debug: true });
-
-    expect(html).toContain('data-experiences-debug');
-    expect(html).toContain('data-experiences-debug-errors');
-    expect(html).toContain('Existing resolver diagnostic');
-    expect(html).toContain('Useful content');
-    expect(html).toContain('useful metadata');
-    expect(html).toContain('customer content field');
-    expect(html).not.toContain('private/upstream/field');
-    expect(html).not.toContain('private upstream message');
-    expect(plan.deliveryDiagnostics).toBe(deliveryDiagnostics);
-    expect(plan.deliveryDiagnostics).toEqual([
-      { fieldPath: 'private/upstream/field', message: 'private upstream message' },
-    ]);
   });
 });

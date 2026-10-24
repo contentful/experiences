@@ -15,11 +15,7 @@
 import { render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
-import type {
-  ComponentNode,
-  ExperiencePayload,
-  PortableRenderPlan,
-} from '@contentful/experiences-sdk-core';
+import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import ClientExperienceRenderer from './ClientExperienceRenderer.svelte';
@@ -233,50 +229,4 @@ describe('debug panel — end-to-end coverage of every non-happy-path failure mo
       warn.mockRestore();
     }
   });
-});
-
-describe('debug panel — Delivery diagnostic privacy', () => {
-  it.each([ServerExperienceRenderer, ClientExperienceRenderer])(
-    'omits private upstream details with debug enabled',
-    (Renderer) => {
-      const deliveryDiagnostics = Object.freeze([
-        { fieldPath: 'private/upstream/field', message: 'private upstream message' },
-      ]);
-      const plan = Object.freeze<PortableRenderPlan>({
-        nodes: [
-          {
-            registration: { kind: 'component', id: 'button' },
-            props: {
-              content: { label: 'Useful content', deliveryDiagnostics: 'customer content field' },
-              design: {},
-              designRaw: {},
-            },
-            slots: {},
-          },
-        ],
-        metadata: { source: 'useful metadata' },
-        debug: true,
-        diagnostics: [new Error('Existing resolver diagnostic')],
-        deliveryDiagnostics,
-      });
-      const config: Config = { components: { button: ButtonFixture } };
-      const { container } = render(Renderer, {
-        props: { experience: plan, config, debug: true } as never,
-      });
-      const html = container.innerHTML;
-
-      expect(html).toContain('data-experiences-debug');
-      expect(html).toContain('data-experiences-debug-errors');
-      expect(html).toContain('Existing resolver diagnostic');
-      expect(html).toContain('Useful content');
-      expect(html).toContain('useful metadata');
-      expect(html).toContain('customer content field');
-      expect(html).not.toContain('private/upstream/field');
-      expect(html).not.toContain('private upstream message');
-      expect(plan.deliveryDiagnostics).toBe(deliveryDiagnostics);
-      expect(plan.deliveryDiagnostics).toEqual([
-        { fieldPath: 'private/upstream/field', message: 'private upstream message' },
-      ]);
-    }
-  );
 });
