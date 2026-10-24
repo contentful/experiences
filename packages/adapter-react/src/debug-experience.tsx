@@ -123,7 +123,10 @@ function safeStringify(value: unknown): string {
   try {
     return JSON.stringify(
       value,
-      (_key, val) => {
+      function (this: unknown, key, val) {
+        // Delivery diagnostics can contain private upstream details. Keep them
+        // on the plan for explicit inspection, outside automatic debug output.
+        if (this === value && key === 'deliveryDiagnostics') return undefined;
         if (typeof val === 'object' && val !== null) {
           if (seen.has(val)) return '[Circular]';
           seen.add(val);

@@ -9,6 +9,7 @@ import { createDebugLogger, type DebugLogger } from './debug-logger.js';
 import type {
   DesignPropValue,
   ExperienceContext,
+  ExperienceDeliveryDiagnostic,
   ExperienceSourceMap,
   ExperienceNode,
   ExperiencePayload,
@@ -80,6 +81,21 @@ const DEFAULT_EXPERIENCE: ExperienceContext = {
   debug: false,
   metadata: {},
 };
+
+function normalizeDeliveryDiagnostics(
+  errors: unknown
+): readonly ExperienceDeliveryDiagnostic[] | undefined {
+  if (!Array.isArray(errors)) return undefined;
+  const diagnostics: ExperienceDeliveryDiagnostic[] = [];
+  for (const error of errors) {
+    if (error === null || typeof error !== 'object') continue;
+    const { fieldPath, message } = error as { fieldPath?: unknown; message?: unknown };
+    if (typeof fieldPath === 'string' && typeof message === 'string') {
+      diagnostics.push({ fieldPath, message });
+    }
+  }
+  return diagnostics.length > 0 ? diagnostics : undefined;
+}
 
 /**
  * Registry lookup for a built node. A node's `kind` decides which half of the
@@ -456,6 +472,10 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
+  const deliveryDiagnostics = normalizeDeliveryDiagnostics(
+    isPlainPayload ? payload.errors : undefined
+  );
+  if (deliveryDiagnostics) plan.deliveryDiagnostics = deliveryDiagnostics;
   const sourceMap =
     options.sourceMap ?? (isPlainPayload ? payload.extensions?.sourceMap : undefined);
   if (sourceMap) {

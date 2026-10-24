@@ -76,14 +76,23 @@ See the [render/refetch example](../../README.md#runtime-experience-parameters).
 Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
 
 ```ts
+const request = experiences.forRequest({
+  locale: requestLocale,
+  consent: visitorConsent,
+  eventContext: { page: pageProperties, userAgent },
+});
 const plan = await request.fetchExperience(
   {
     experienceId,
     personalization: {
       profileId,
       events: [
-        experiences.eventBuilder.buildIdentify({ userId }),
-        experiences.eventBuilder.buildPageView(),
+        request.eventBuilder.buildIdentify({
+          userId,
+        }),
+        request.eventBuilder.buildPageView({
+          properties: pageProperties,
+        }),
       ],
     },
   },
@@ -92,6 +101,36 @@ const plan = await request.fetchExperience(
 ```
 
 The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer uses the generated XDA schema to remove unsupported event fields, including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+
+Plans can also expose optional `deliveryDiagnostics`, whose public
+`ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
+`message` from recognized upstream field-resolution errors. Raw resolution and
+by-ID/destination fetching share the same Core normalization. Useful content,
+profile adoption, exceptions, and existing local `diagnostics: Error[]` remain
+unchanged. Absence does not prove personalization success or error-free delivery.
+The strings may contain private information; show a generic warning/count and
+inspect details explicitly, keeping them out of logs and public bootstrap/handoff
+payloads. See the [delivery diagnostic guidance](../../README.md#delivery-diagnostics).
+
+### Request-bound event construction
+
+`request.eventBuilder` exposes `buildIdentify`, `buildPageView`, and `buildTrack`,
+using the existing SDK builder with this request's context applied before event
+construction. Explicit event inputs override request context; `forRequest({ locale })`
+overrides `eventContext.locale`, followed by the SDK builder's existing defaults.
+The merge is shallow: a supplied page replaces the whole request page. An explicit
+`undefined` replaces the request field and uses the builder's normal fallback,
+matching direct event methods. Page-event `properties` remains a separate input;
+pass `properties: pageProperties` when it should describe the request page.
+
+The public `ExperiencesNodeEventBuilder` type exposes only those construction
+methods. Building does not submit events, apply consent admission, invoke event
+interceptors, or update profiles. Those operations happen on submission. The shared
+`experiences.eventBuilder` remains available for unbound construction. Submitting
+already-built `personalization.events` does not merge request context into them.
+Use the request builder rather than retaining visitor data in a shared interceptor
+closure. See the [committed server rendering recipe](../../README.md#committed-server-rendering-and-state-only-hydration)
+for the page-first, sequential-fetch flow.
 
 Current XDA behavior limits this integration: profile-only requests can return
 baseline content despite audience membership; initial identify requests without
@@ -146,7 +185,8 @@ fallback. An event's explicit locale changes its body only; it does not change c
 or the Personalization request locale.
 `consent.events` gates sending and sets `context.gdpr.isConsentGiven`. Until it is `true`, only
 `allowedEventTypes` (default `identify` and `page`) are sent; a blocked Personalization call
-resolves `{ accepted: false }` and a blocked Analytics call resolves `false`. Blocked events are
+resolves `{ accepted: false }`. A blocked `trackView` also resolves `{ accepted: false }`;
+the other Analytics methods retain their void result contracts. Blocked events are
 dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configure
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.
@@ -167,6 +207,84 @@ admits a batch that is already prepared whole or not at all.
 
 There is no request event queue: await `identify`, `page`, or `track` before
 starting another profile-producing or Analytics call on the same request facade.
+
+### Event interceptors
+
+`experiences.interceptors.event` is one SDK-instance-owned
+`InterceptorManager<OptimizationEventStreamEvent>`, shared by its request facades.
+Each facade keeps its own profile, consent, and event context. Node has no state
+interceptor registry. Register transforms with `add()` and retain the returned
+id for `remove()`; `clear()` removes all handlers and `count()` reports their
+number. Handlers run in insertion order, may be asynchronous, and receive cloned
+inputs. A running chain snapshots its handlers, so registry changes affect later
+submissions.
+
+```ts
+const interceptorId = experiences.interceptors.event.add((event) => {
+  // Each handler receives its own deep clone; caller-owned events stay unchanged.
+  event.context.userAgent = 'redacted';
+  return event;
+});
+// At the owning application's cleanup boundary:
+experiences.interceptors.event.remove(interceptorId);
+```
+
+The chain runs once for each admitted direct Personalization or Analytics event,
+for each explicit XDA event submission, or when preparing each replay event.
+XDA event chains run concurrently with `Promise.all`, preserving input array
+order; handlers within each chain remain sequential. Preparation processes events
+sequentially. Reusing a built identify in another fetch is another submission.
+Retries and browser prepared replay preserve the evaluated bodies, IDs, and
+timestamps without rerunning event hooks. The state-only producer below invokes
+no event hooks. Hooks transform events; direct methods keep their Personalization
+or Analytics transport and do not accumulate events awaiting an XDA fetch.
+
+The original consent gate runs before hooks. The SDK then validates transformed
+output against the destination schema and checks its final event type against
+current consent before publication or sending. Invalid output is a schema failure,
+not a consent refusal. A valid transformed event blocked by consent is reported
+through `onEventBlocked` with its transformed method/type and the existing blocked
+return contract. In XDA calls, those blocked events are removed while preserving
+order and the profile/content fetch; hook or schema errors reject before transport.
+Client remains responsible for XDA serialization and removing unsupported fields.
+This final-type check closes the original-type-only consent bypass in the Optimization reference at `70dfa7f`.
+
+The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
+`MaybePromise`, and `OptimizationEventStreamEvent`, using the same names as Web;
+Runtime owns their shared implementation and types. Stateless free fetch functions
+have no global interceptor registry.
+
+### Produce a state-only browser handoff
+
+After all sequential profile-producing operations finish, package the final
+`request.profile` with the public Node free function:
+
+```ts
+import { createRequestHandoffFromData } from '@contentful/experiences-node';
+
+const handoff = createRequestHandoffFromData({
+  spaceId,
+  environmentId,
+  data: { profile: request.profile },
+  // cache: { scope: 'private-request' }, // default; optional private key allowed
+});
+```
+
+The input requires explicit `spaceId` and `environmentId`, optional
+`data: { profile?: EventProfile }`, and an optional private-request cache value.
+An ID-only profile is valid. It returns a validated `ExperiencesHandoff` with
+`state.profile` when supplied, and no top-level `profileId` or replay. Missing data
+or `profile: undefined` omits `state` entirely, including after JSON serialization;
+hydrating it preserves an existing browser profile. An explicit non-private cache
+scope throws `TypeError`; Runtime's scope/profile validation errors propagate.
+
+This function packages data only: it emits no events, invokes no event hooks,
+makes no network requests, mutates no request state, and sets no cookies or
+headers. Use `hydrateHandoffState()` to consume it without a browser page event.
+The separate Runtime helper with the same name takes `{ handoff, data? }` and can
+preserve replay; that internal API remains unchanged. See the [complete startup
+sequence](../../README.md#committed-server-rendering-and-state-only-hydration)
+for serialization and tracking activation.
 
 ### Prepare a browser handoff
 
@@ -192,8 +310,11 @@ with at most 50 identify events and only identify/track events before that page.
 Validation rejects an invalid or oversized batch before preflight; the SDK
 does not split or truncate it. A valid handoff can still be refused by the
 browser when the whole batch does not fit its remaining queue capacity.
-Invalid input returns a private handoff without replay or preview data and logs
-a diagnostic. A failed preview retains the already-built replay with the same
+Invalid input, hook failure, or invalid transformed output returns a private
+handoff without replay or preview data and logs a diagnostic. Consent-blocked
+optional prefix events are omitted; the final event must remain a valid, admitted
+page or preparation uses that same event-free fallback. A failed preview transport
+retains the already-evaluated replay with the same
 event IDs and omits `data`, so the caller can render a fallback. A successful
 preview updates only request-local evaluated profile state; its data and
 continuation ID do not mean those events were committed. The handoff is

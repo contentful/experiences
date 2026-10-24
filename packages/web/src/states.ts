@@ -2,8 +2,9 @@ import type {
   BlockedEvent,
   EventProfile,
   ExperienceRequestState,
+  OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
-import type { Observable, OptimizationEventStreamEvent } from './signals/index.js';
+import type { Observable } from './signals/index.js';
 
 /**
  * Combined observable state exposed by the stateful core.

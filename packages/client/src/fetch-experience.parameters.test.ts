@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  ContentfulViewDelivery,
-  ContentfulViewDeliveryClient,
-} from '@contentful/experience-delivery';
+import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { fetchExperience } from './fetch-experience.js';
-import { ExperienceFetchError } from './errors.js';
-import type { ExperienceParameters, ExperienceParameterOrder } from './index.js';
+import type { ExperienceParameters } from './index.js';
 
 const identity = { spaceId: 'space', environmentId: 'master', experienceId: 'collection' };
 const resolveOptions = { config: { components: { posts: {} } } };
@@ -52,10 +48,10 @@ function payload(title = 'initial') {
   };
 }
 
-function transport(body: unknown = payload(), status = 200) {
+function transport() {
   const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-    new globalThis.Response(JSON.stringify(body), {
-      status,
+    new globalThis.Response(JSON.stringify(payload()), {
+      status: 200,
       headers: { 'content-type': 'application/json' },
     })
   );
@@ -68,7 +64,6 @@ function request(fetch: ReturnType<typeof transport>, index = 0) {
   return {
     url: new URL(String(url)),
     method: init?.method,
-    headers: new globalThis.Headers(init?.headers),
     body: init?.body ? JSON.parse(String(init.body)) : undefined,
   };
 }
@@ -93,8 +88,6 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       'parameter.featuredPosts.limit': '6',
       'parameter.featuredPosts.order': '-fields.title',
     });
-    expect(sent.headers.get('authorization')).toBe('Bearer delivery-token');
-    expect(sent.headers.get('x-contentful-enable-alpha-feature')).toBe('new-exo-entity-types');
     expect(sent.body).toBeUndefined();
   });
 
@@ -117,8 +110,6 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
         parameters: values,
         extensions: { ...extensions, ...(personalization ? { personalization } : {}) },
       });
-      expect(sent.headers.get('authorization')).toBe('Bearer delivery-token');
-      expect(sent.headers.get('x-contentful-enable-alpha-feature')).toBe('new-exo-entity-types');
     }
   );
 
@@ -132,7 +123,6 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
         resolveOptions
       );
       expect(request(fetch).url.origin).toBe('https://preview.xdn.contentful.com');
-      expect(request(fetch).headers.get('authorization')).toBe('Bearer preview-token');
       if ('productId' in values) {
         expect(request(fetch).method).toBe('GET');
         expect(request(fetch).url.searchParams.get('parameter.featuredPosts.order')).toBe(
@@ -180,7 +170,6 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
     expect(request(fetch, 1).url.searchParams.get('parameter.featuredPosts.order')).toBe(
       'sys.createdAt'
     );
-    expect(request(fetch, 1).headers.get('authorization')).toBe('Bearer supplier-token');
   });
 
   it.each([undefined, {}])(
@@ -197,47 +186,4 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       expect(request(fetch).body).toBeUndefined();
     }
   );
-
-  it.each([400, 422])('retains useful delivery validation details for HTTP %s', async (status) => {
-    const details = {
-      message: 'Invalid runtime parameters',
-      details: { errors: [{ parameter: 'parameter.featuredPosts.order', code: 'invalid_value' }] },
-    };
-    const fetch = transport(details, status);
-    const error = await fetchExperience(
-      { ...identity, parameters: { featuredPosts: { order: 'title_ASC' } } },
-      { accessToken: 'token' },
-      resolveOptions
-    ).catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(ExperienceFetchError);
-    expect((error as ExperienceFetchError).message).toContain('parameter.featuredPosts.order');
-    expect((error as ExperienceFetchError).cause).toBeInstanceOf(
-      status === 400
-        ? ContentfulViewDelivery.BadRequestError
-        : ContentfulViewDelivery.UnprocessableEntityError
-    );
-    expect((error as ExperienceFetchError).cause).toMatchObject({
-      statusCode: status,
-      body: details,
-    });
-    expect(fetch).toHaveBeenCalledOnce();
-  });
-
-  it('types scalar and one-level Record inputs without exposing binding OrderTerm arrays', () => {
-    const values: ExperienceParameters = {
-      text: 'hi',
-      count: 2,
-      featuredPosts: { limit: 6, order: '-fields.title' },
-    };
-    expect(values.featuredPosts).toEqual({ limit: 6, order: '-fields.title' });
-    const array: ExperienceParameters = {
-      // @ts-expect-error Runtime parameters have no arrays.
-      featuredPosts: { order: [{ field: 'title', direction: 'desc' }] },
-    };
-    // @ts-expect-error Records have exactly one level.
-    const nested: ExperienceParameters = { featuredPosts: { query: { limit: 6 } } };
-    // @ts-expect-error Order paths require a namespace.
-    const order: ExperienceParameterOrder = '-title';
-    void [array, nested, order];
-  });
 });

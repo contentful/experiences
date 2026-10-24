@@ -22,7 +22,10 @@ function safeStringify(value: unknown): string {
   try {
     return JSON.stringify(
       value,
-      (_key, val: unknown) => {
+      function (this: unknown, key, val: unknown) {
+        // Delivery diagnostics can contain private upstream details. Keep them
+        // on the plan for explicit inspection, outside automatic debug output.
+        if (this === value && key === 'deliveryDiagnostics') return undefined;
         if (typeof val === 'function') {
           return `[Function ${(val as { name?: string }).name || 'anonymous'}]`;
         }

@@ -39,6 +39,7 @@ export type {
   EventEmissionResult,
   EventOptimizationData,
   EventProfile,
+  OptimizationEventStreamEvent,
   ExperiencesHandoff,
   ExperienceRequestState,
   ExperienceRequestFailureReason,
@@ -61,6 +62,7 @@ export type {
   ViewBuilderArgs,
 } from '@contentful/experiences-runtime';
 export type {
+  ExperienceDeliveryDiagnostic,
   ExperiencePayload,
   PortableRenderPlan,
   ResolverConfig,
@@ -75,7 +77,6 @@ export {
   toDistinctObservable,
   toObservable,
   type Observable,
-  type OptimizationEventStreamEvent,
   type Signal,
   type SignalFns,
   type Signals,
@@ -88,7 +89,7 @@ export {
   type Interceptor,
   type InterceptorMerge,
   type MaybePromise,
-} from './lib/interceptor/InterceptorManager.js';
+} from '@contentful/experiences-runtime';
 export {
   mergeExperienceState,
   type ExperienceState,

@@ -66,6 +66,19 @@ const plan = await fetchExperience(
 
 Returns `PortableRenderPlan`. An empty-nodes payload (draft / unpublished / empty locale) resolves to a valid plan with `nodes: []` — it is not a 404. For the missing-experience case, catch `NotFoundError` (re-exported below).
 
+Successful responses can carry upstream field-resolution errors alongside useful
+content. Core projects recognized errors into optional `plan.deliveryDiagnostics`
+records with string `fieldPath` and `message`, preserving order and omitting
+`originalError` and unknown fields. Client retains the payload errors through
+by-ID GET/POST and destination conversion; generated-schema compatibility remains
+Client-owned, with a single normalization point in Core.
+
+Destination errors may have broader shapes, so this projection does not promise
+complete coverage. An absent field does not prove personalization success or the
+absence of other upstream errors. Existing `diagnostics: Error[]`, exceptions,
+404 handling, and profile behavior are unchanged. See the [delivery diagnostic
+guidance](../../README.md#delivery-diagnostics) for safe presentation and disclosure.
+
 #### Preview mode
 
 Configure both tokens up front and flip `preview: true` per call to hit the preview API.

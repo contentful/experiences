@@ -193,13 +193,137 @@ call. Browser event context can include URL, query, referrer, title, dimensions,
 and User-Agent; use context providers to redact those values before an event is
 built or sent.
 
+Node and Web expose `interceptors.event` to transform admitted direct events and
+caller-built XDA events before destination validation and a final check of current
+consent against the transformed event type. Invalid output fails schema validation;
+a valid consent-blocked transformed event is reported with its final method/type.
+Personalization and `trackView` refusals return `{ accepted: false }`; other
+Analytics methods keep their void contracts. Each explicit submission runs its
+chain once. XDA event chains may run concurrently while preserving array order;
+prepared events run sequentially. Retries and browser prepared replay reuse the
+evaluated events without rerunning hooks. See the [Node interceptor reference](./packages/node/README.md#event-interceptors)
+and [Web interceptor reference](./packages/web/README.md#interceptors).
+
+### Committed server rendering and state-only hydration
+
+For server-rendered personalized content, use the supported committed-server
+sequence below. It is separate from Personalization preparation/replay and does
+not provide noncommitting XDA content selection.
+
+1. Bind a Node request to explicit consent, permitted identity, locale, and event
+   context. Await one direct `request.page()` and require both its accepted result
+   and an API-issued `request.profile` before identity-dependent content fetching.
+2. If identification is requested, build one identify event for the cycle and
+   include it in each distinct sequential XDA fetch. Do not also send it directly
+   or attach the already-sent page to those fetches. Fetch each distinct Experience
+   once and reuse its plan for repeated presentations. Profile-only XDA selection
+   currently does not reliably apply audience membership.
+3. After the final fetch, produce a state-only handoff from the final
+   `request.profile`, render the plans with attribution, and safely serialize the
+   minimal public configuration and handoff into a private, no-store response.
+4. Construct Web with automatic interactions disabled and profile/consent defaults
+   omitted. Subscribe, await state hydration, then enable automatic tracking and
+   register manual elements. Initial activation sends no page and refetches no
+   content.
+
+```ts
+import { createRequestHandoffFromData } from '@contentful/experiences-node';
+
+// Inside a request handler; experiences is the process-long Node SDK.
+const request = experiences.forRequest({
+  profile: permittedProfile,
+  consent: visitorConsent,
+  locale: requestLocale,
+  eventContext: { page: pageProperties, userAgent },
+});
+const pageResult = await request.page({ properties: pageProperties });
+if (!pageResult.accepted || !request.profile) {
+  throw new Error('Page initialization did not establish a profile');
+}
+const identify = userId
+  ? request.eventBuilder.buildIdentify({
+      userId,
+      traits: { identified: true },
+    })
+  : undefined;
+const plans = [];
+for (const experienceId of distinctExperienceIds) {
+  plans.push(
+    await request.fetchExperience(
+      { experienceId, personalization: { events: identify ? [identify] : [] } },
+      { config: experienceConfig }
+    )
+  );
+}
+const handoff = createRequestHandoffFromData({
+  spaceId,
+  environmentId,
+  data: { profile: request.profile },
+});
+```
+
+Node's `request.eventBuilder` applies request page URL/path/query/referrer, user
+agent, and locale before building Personalization events. Explicit event inputs
+override request context. The shared `experiences.eventBuilder` remains unbound;
+fetching does not merge request context into already-built `personalization.events`.
+Use the request builder rather than shared interceptor closures for visitor data.
+Building sends nothing and invokes no hooks. Each identify-bearing fetch is a
+separate event submission; this flow adds no duplicate-delivery guarantee.
+
+The public Node producer accepts optional profile data and optional
+`cache: { scope: 'private-request' }` (the default). It validates the explicit
+space/environment scope and profile, accepts an ID-only profile, and packages no
+replay or top-level continuation ID. An absent profile omits `state` and preserves
+an existing browser profile on hydration. It performs no events or network work.
+The internal Runtime helper of the same name takes `{ handoff, data? }` and
+retains its separate replay-preserving behavior.
+
+```ts
+// In client-side lifecycle code, after safely reading the serialized handoff:
+const web = new WebContentfulExperiences({
+  spaceId,
+  environmentId,
+  delivery: publicDelivery,
+  autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
+});
+const subscription = web.states.profile.subscribe(renderProfile);
+await web.hydrateHandoffState(handoff, {
+  routeKey: window.location.pathname + window.location.search,
+});
+web.tracking.enable('views');
+web.tracking.enable('hovers');
+web.tracking.enable('clicks');
+// Register any manual elements now, using actual plan attribution.
+// During application cleanup: subscription.unsubscribe(); web.destroy();
+```
+
+Here `WebContentfulExperiences` is the `ContentfulExperiences` export from
+`@contentful/experiences-web`. Disabled automatic flags are not a global pause:
+discovery starts at construction. Initial HTML must have no positive
+`data-ctfl-track-views`, `data-ctfl-track-hovers`, or `data-ctfl-track-clicks`
+opt-ins, and manual registration must wait until hydration completes. State-only
+hydration does not mark the route tracked; ordinary `page()` remains direct.
+Use the same direct page/profile step on later navigation or reset before fetching
+content. An identify action joins pending initialization and explicitly refetches
+without an unrelated page; a separate custom action uses `track()`.
+
+On reset, invalidate stale application render work and remove or replace old
+attributed content synchronously in the same transition, before awaiting the new
+page/fetch cycle. SDK reset clears measurements and manual overrides, then resumes
+eligible discovery immediately. Register replacement manual elements after
+insertion; during ordinary navigation, let removed occurrences finalize before
+clearing their manual registrations. Dispose subscriptions in application cleanup.
+Safe serialization and preflight limitations are described below.
+
 ### Paired server-to-browser replay
 
 A Node request facade can prepare one ordered `identify`/`track` prefix plus a
 final `page` with `prepareRequestHandoff()`. It builds the events once and sends
 one Personalization API request with `preflight: true`, which evaluates the
-batch without committing it on Node. The result contains the exact replay and,
-on success, preview data. A preview transport failure retains the replay so the
+batch without committing it on Node. The result contains the exact evaluated replay and,
+on success, preview data. Hook/schema failures or an invalid/blocked final page
+produce an event-free handoff; blocked optional prefix events are omitted.
+A preview transport failure retains the evaluated replay so the
 application can choose a fallback. Ordinary Node event methods remain direct
 and are not staged into this batch.
 
@@ -562,6 +686,35 @@ Every non-happy-path — a malformed payload, a throwing `resolveData`, an unres
 | **Render-time**  | Per-framework, per-render                                | Merged into `<DebugExperience>`'s `errors` prop by the renderer        | unregistered component, unregistered experience template, a component that threw while rendering       |
 
 Each diagnostic is a plain `new Error(message)` — the message names the node/component/slot involved. When it wraps a real caught exception (a component that throws while rendering, or a `resolveData` that throws or rejects), `.cause` holds the original error, so the real stack trace stays reachable (`console.error(err)`, or `err.cause.stack`).
+
+### Delivery diagnostics
+
+Upstream field-resolution errors are separate from those local SDK diagnostics.
+The optional `plan.deliveryDiagnostics` field contains
+`readonly ExperienceDeliveryDiagnostic[]`, with only readonly string `fieldPath`
+and `message` on each record. Core copies recognized entries from `payload.errors`
+in order, omits `originalError` and unknown fields, and leaves the field absent
+when none are recognized. Raw `resolveExperience`, free fetch functions, Node,
+Web, and the framework adapters expose the same plan contract. Destination error
+records can be broader than by-ID errors, so the projection is not exhaustive.
+
+Keep rendering useful content when this field is present. A generic partial-content
+warning and `plan.deliveryDiagnostics.length` are suitable visitor-facing signals;
+inspect the typed fields explicitly when diagnosing a problem. Upstream strings
+are untrusted and may contain private information: stripping other fields and
+HTML escaping do not make them safe to disclose. Use normal text APIs for any
+explicit presentation, avoid automatic logging/display of raw messages, and omit
+diagnostics from public bootstrap/handoff payloads.
+
+The adapters' automatic debug JSON dumps omit `deliveryDiagnostics` as well;
+inspect that field explicitly through the typed plan when needed. Existing local
+error lists and the rest of the debug output remain unchanged.
+
+Absence does not establish personalization success or the absence of other
+upstream errors. This field does not change `plan.diagnostics: Error[]`, 404 and
+transport exceptions, profile adoption, or the Personalization request-state
+observable. `ExperienceDeliveryDiagnostic` is re-exported from Node, Web, and the
+React/Svelte/Angular adapters directly from its Core owner.
 
 ### Per-failure-mode behavior
 
@@ -1064,7 +1217,8 @@ retain their message and original error (including status/body) as
 
 Direct by-ID preview fetches accept the same option and transport encoding.
 Preview can report missing/invalid values in the hydrated response's `errors`
-instead of failing the fetch. Preview Sessions continue to use their existing
+instead of failing the fetch; recognized entries appear in
+[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions continue to use their existing
 **unprefixed** `context.parameters` map, such as `{ productId: 'foo123' }`;
 the Session contract determines its supported values. The Contentful editor owns
 Session context changes, and the SDK consumes the new hydrated snapshots through
