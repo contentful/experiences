@@ -32,7 +32,6 @@ import { ClientExperienceRenderer } from './client-renderer';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 
- 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
