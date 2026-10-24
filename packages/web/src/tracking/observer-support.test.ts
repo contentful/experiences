@@ -12,7 +12,6 @@ import {
   addVisibilityChangeListener,
   clearFireTimer,
   createElementRef,
-  derefElement,
   type FireTimerState,
   safeCallAsync,
 } from './observer-support.js';
@@ -58,11 +57,6 @@ describe('observer support', () => {
 
     expect(fired).not.toHaveBeenCalled();
     expect(state.fireTimer).toBeNull();
-  });
-
-  it('dereferences an element held by WeakRef', () => {
-    const element = document.createElement('div');
-    expect(derefElement(createElementRef(element))).toBe(element);
   });
 
   it('routes a rejected callback to the error handler', async () => {

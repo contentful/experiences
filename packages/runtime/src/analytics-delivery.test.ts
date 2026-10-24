@@ -121,6 +121,9 @@ describe('AnalyticsDelivery', () => {
 
     await f.delivery.send(event(1), profile);
     await f.delivery.flush();
+    expect(f.delivery.queuedEventCount).toBe(1);
+    await f.delivery.flush();
+    expect(f.sendBatchEvents).toHaveBeenCalledTimes(1);
     const firstBody = f.sendBatchEvents.mock.calls[0]?.[0];
     expect(firstBody).toEqual([{ profile, events: [rewritten] }]);
     await vi.advanceTimersByTimeAsync(500);
@@ -130,6 +133,7 @@ describe('AnalyticsDelivery', () => {
     expect(f.eventInterceptors.run).toHaveBeenCalledOnce();
     expect(admitEvent).toHaveBeenCalledOnce();
     expect(f.publishEvent).toHaveBeenCalledExactlyOnceWith(rewritten);
+    expect(f.delivery.queuedEventCount).toBe(0);
     await f.owner.destroy();
   });
 
@@ -206,22 +210,6 @@ describe('AnalyticsDelivery', () => {
     await delivery.send(event(1), profile);
     await delivery.flush({ force: true, beacon });
     expect(sendBatchEvents.mock.calls[0]?.[1]).toEqual({ beacon });
-    void owner.destroy();
-  });
-
-  it('keeps events and retries with backoff after a failed flush', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(Math, 'random').mockReturnValue(0);
-    const { delivery, owner, sendBatchEvents } = setup();
-    sendBatchEvents.mockResolvedValueOnce(false);
-    await delivery.send(event(1), profile);
-    await delivery.flush();
-    expect(delivery.queuedEventCount).toBe(1);
-    await delivery.flush();
-    expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(500);
-    expect(sendBatchEvents).toHaveBeenCalledTimes(2);
-    expect(delivery.queuedEventCount).toBe(0);
     void owner.destroy();
   });
 

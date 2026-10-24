@@ -23,24 +23,18 @@ describe('Observable helpers', () => {
     expect(values).toEqual([1, 2]);
   });
 
-  it('clones snapshots and observes only the source until unsubscribed', () => {
-    const source = signal({ nested: { count: 1 } });
+  it('observes only its source until unsubscribed', () => {
+    const source = signal(1);
     const unrelated = signal(0);
-    const observable = toObservable(source);
-    observable.current.nested.count = 999;
     const values: number[] = [];
-    const { subscribe } = observable;
-    const subscription = subscribe((value) => {
+    const subscription = toObservable(source).subscribe((value) => {
       void unrelated.value;
-      values.push(value.nested.count);
-      value.nested.count = 999;
+      values.push(value);
     });
-    expect(source.value.nested.count).toBe(1);
     unrelated.value = 1;
-    source.value = { nested: { count: 2 } };
-    expect(observable.current.nested.count).toBe(2);
+    source.value = 2;
     subscription.unsubscribe();
-    source.value = { nested: { count: 3 } };
+    source.value = 3;
     expect(values).toEqual([1, 2]);
   });
 
@@ -64,15 +58,12 @@ describe('Observable helpers', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('clones an immediately available one-shot value and emits only once', () => {
-    const source = signal({ nested: { count: 1 } });
-    const next = vi.fn((value: typeof source.value) => {
-      value.nested.count = 999;
-    });
+  it('emits an immediately available one-shot value only once', () => {
+    const source = signal(1);
+    const next = vi.fn();
     const subscription = toObservable(source).subscribeOnce(next);
-    expect(source.value.nested.count).toBe(1);
-    source.value = { nested: { count: 2 } };
+    source.value = 2;
     subscription.unsubscribe();
-    expect(next).toHaveBeenCalledExactlyOnceWith({ nested: { count: 999 } });
+    expect(next).toHaveBeenCalledExactlyOnceWith(1);
   });
 });

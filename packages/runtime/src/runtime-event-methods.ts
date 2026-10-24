@@ -275,13 +275,11 @@ function createDirectEventDispatch(
     personalization: async (event, profile) => {
       const profileRevision = bindings.getProfileRevision?.();
       const interceptors = bindings.eventInterceptors;
-      const intercepted =
-        interceptors === undefined || interceptors.count?.() === 0
-          ? event
-          : await interceptors.run(event);
-      const validEvent = validatePersonalizationEvent(intercepted);
-      if (!admitInterceptedEvent(validEvent, bindings)) return { accepted: false };
-      const data = await sendPersonalizationEvents(api.experience, [validEvent], profile?.id, {
+      if (interceptors !== undefined && interceptors.count?.() !== 0) {
+        event = validatePersonalizationEvent(await interceptors.run(event));
+        if (!admitInterceptedEvent(event, bindings)) return { accepted: false };
+      }
+      const data = await sendPersonalizationEvents(api.experience, [event], profile?.id, {
         ...bindings.getExperienceOptions?.(),
         locale: bindings.getLocale?.(),
       });
@@ -292,13 +290,11 @@ function createDirectEventDispatch(
     },
     analytics: async (event, profile) => {
       const interceptors = bindings.eventInterceptors;
-      const intercepted =
-        interceptors === undefined || interceptors.count?.() === 0
-          ? event
-          : await interceptors.run(event);
-      const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
-      if (!admitInterceptedEvent(validEvent, bindings)) return false;
-      const batches = [{ profile, events: [validEvent] }];
+      if (interceptors !== undefined && interceptors.count?.() !== 0) {
+        event = parseOptimizationSchema(InsightsEventSchema, await interceptors.run(event));
+        if (!admitInterceptedEvent(event, bindings)) return false;
+      }
+      const batches = [{ profile, events: [event] }];
       const options = bindings.getInsightsOptions?.();
       // As in Optimization's stateless request, the options argument is omitted when unset.
       if (options === undefined) await api.insights.sendBatchEvents(batches);

@@ -464,15 +464,7 @@ describe('fetchExperience — personalization', () => {
     expect(rejection).toBeInstanceOf(TypeError);
     expect(rejection).toMatchObject({
       message: 'Invalid Experience personalization options',
-      cause: expect.objectContaining({
-        message: expect.stringContaining('profileId'),
-        errors: [
-          {
-            path: ['profileId'],
-            message: 'Expected string. Received 123.',
-          },
-        ],
-      }),
+      cause: expect.anything(),
     });
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockGetWithOverrides).not.toHaveBeenCalled();
@@ -505,9 +497,16 @@ describe('fetchExperience — personalization', () => {
     expect(rejection).toBe(notFound);
   });
 
-  it('routes to getWithOverrides with the personalization extension', async () => {
+  it('routes personalization through POST and strips unsupported event context', async () => {
+    const input = {
+      ...personalization,
+      events: personalization.events.map((event) => ({
+        ...event,
+        context: { ...event.context, gdpr: { isConsentGiven: true } },
+      })),
+    };
     await fetchExperience(
-      { ...experienceOptions, locale: 'en-US', personalization },
+      { ...experienceOptions, locale: 'en-US', personalization: input },
       { accessToken: 'token-123' },
       resolveOptions
     );

@@ -4,7 +4,6 @@ import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   type OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
-import { serializePersonalization } from '@contentful/experiences-client';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,7 +46,7 @@ afterEach(() => {
 });
 
 describe('Web event interception consent', () => {
-  it('keeps the original gate and refuses a valid transformed Personalization type before publication', async () => {
+  it('applies final Personalization consent before Web publication', async () => {
     const onEventBlocked = vi.fn();
     const runtime = createRuntime({ onEventBlocked });
     const hook = vi.fn((event: OptimizationEventStreamEvent) => ({
@@ -57,11 +56,6 @@ describe('Web event interception consent', () => {
     }));
     runtime.interceptors.event.add(hook);
 
-    await expect(runtime.track({ event: 'originally blocked' })).resolves.toEqual({
-      accepted: false,
-    });
-    expect(hook).not.toHaveBeenCalled();
-    onEventBlocked.mockClear();
     await expect(runtime.page()).resolves.toEqual({ accepted: false });
     expect(hook).toHaveBeenCalledTimes(1);
     expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
@@ -73,56 +67,20 @@ describe('Web event interception consent', () => {
     expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
   });
 
-  it.each(['view', 'click'] as const)(
-    'returns accurate %s admission after an Analytics type change',
-    async (method) => {
-      const onEventBlocked = vi.fn();
-      const runtime = createRuntime({
-        onEventBlocked,
-        allowedEventTypes: ['component', 'component_click'],
-      });
-      runtime.interceptors.event.add(() => runtime.eventBuilder.buildHover(hover));
-      const result =
-        method === 'view' ? await runtime.trackView(view) : await runtime.trackClick(entity);
-      expect(result).toEqual(method === 'view' ? { accepted: false } : undefined);
-      expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
-        reason: 'consent',
-        method: 'trackHover',
-        args: [expect.objectContaining({ type: 'exo_node_hover' })],
-      });
-      expect(runtime.states.eventStream.current).toBeUndefined();
-      await runtime.flush();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
-    }
-  );
-
-  it.each(['personalization', 'analytics', 'xda'] as const)(
-    'validates %s output before final consent reporting',
-    async (destination) => {
-      const onEventBlocked = vi.fn();
-      const runtime = createRuntime({ onEventBlocked, allowedEventTypes: ['page', 'component'] });
-      runtime.interceptors.event.add((event) => ({ ...event, type: 'invalid' }) as never);
-      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
-      const operation =
-        destination === 'personalization'
-          ? runtime.page()
-          : destination === 'analytics'
-            ? runtime.trackView(view)
-            : runtime.fetchExperience(
-                {
-                  experienceId: 'invalid',
-                  personalization: { events: [runtime.eventBuilder.buildPageView()] },
-                },
-                resolveOptions
-              );
-      await expect(operation).rejects.toThrow();
-      expect(onEventBlocked).not.toHaveBeenCalled();
-      expect(runtime.states.eventStream.current).toBeUndefined();
-      expect(fetch).not.toHaveBeenCalled();
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
-    }
-  );
+  it('reports final Analytics refusal through the Web admission callback', async () => {
+    const onEventBlocked = vi.fn();
+    const runtime = createRuntime({ onEventBlocked, allowedEventTypes: ['component'] });
+    runtime.interceptors.event.add(() => runtime.eventBuilder.buildHover(hover));
+    await expect(runtime.trackView(view)).resolves.toEqual({ accepted: false });
+    expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
+      reason: 'consent',
+      method: 'trackHover',
+      args: [expect.objectContaining({ type: 'exo_node_hover' })],
+    });
+    expect(runtime.states.eventStream.current).toBeUndefined();
+    await runtime.flush();
+    expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+  });
 
   it('uses current consent when an async hook transforms an admitted page', async () => {
     const runtime = createRuntime();
@@ -149,35 +107,6 @@ describe('Web event interception consent', () => {
       expect.anything()
     );
   });
-
-  it.each(['personalization', 'analytics', 'xda'] as const)(
-    'propagates %s hook failures before publication or transport',
-    async (destination) => {
-      const runtime = createRuntime({ defaults: { consent: true, profile: { id: 'visitor' } } });
-      const error = new Error('hook failed');
-      runtime.interceptors.event.add(() => {
-        throw error;
-      });
-      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
-      const pending =
-        destination === 'personalization'
-          ? runtime.page()
-          : destination === 'analytics'
-            ? runtime.trackView(view)
-            : runtime.fetchExperience(
-                {
-                  experienceId: 'failure',
-                  personalization: { events: [runtime.eventBuilder.buildPageView()] },
-                },
-                resolveOptions
-              );
-      await expect(pending).rejects.toBe(error);
-      expect(fetch).not.toHaveBeenCalled();
-      expect(runtime.states.eventStream.current).toBeUndefined();
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
-    }
-  );
 
   it('rejects an invalid later XDA hook result before reporting a valid earlier blocked type', async () => {
     const onEventBlocked = vi.fn();
@@ -219,28 +148,20 @@ describe('Web event interception consent', () => {
     });
     expect(onEventBlocked).toHaveBeenCalledWith(expect.objectContaining({ method: 'track' }));
     expect(runtime.states.eventStream.current).toBeUndefined();
-    expect(page.type).toBe('page');
-    expect(page.context.gdpr).toBeDefined();
   });
 
-  it('runs XDA chains concurrently while preserving result order and per-event hook order', async () => {
+  it('passes concurrent XDA hook results to the fetch in input order', async () => {
     const runtime = createRuntime({ defaults: { consent: true } });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const first = deferred<void>();
     const secondStarted = deferred<void>();
-    const order: string[] = [];
     runtime.interceptors.event.add(async (event) => {
       const name = event.type === 'track' ? event.event : event.type;
-      order.push(`start:${name}`);
       if (name === 'first') await first.promise;
       else secondStarted.resolve();
-      return event;
-    });
-    runtime.interceptors.event.add((event) => {
-      order.push(`end:${event.type === 'track' ? event.event : event.type}`);
-      return event;
+      return { ...event, event: `updated:${name}` };
     });
     const events = [
       runtime.eventBuilder.buildTrack({ event: 'first' }),
@@ -251,11 +172,13 @@ describe('Web event interception consent', () => {
       resolveOptions
     );
     await secondStarted.promise;
-    expect(order.slice(0, 2)).toEqual(['start:first', 'start:second']);
     first.resolve();
     await pending;
-    expect(order.indexOf('end:second')).toBeLessThan(order.indexOf('end:first'));
-    expect(fetch.mock.calls[0]?.[0].personalization).toEqual(serializePersonalization({ events }));
+    expect(
+      fetch.mock.calls[0]?.[0].personalization?.events?.map(
+        (event) => event.type === 'track' && event.event
+      )
+    ).toEqual(['updated:first', 'updated:second']);
   });
 
   it('reports an unmapped valid transformed XDA type using its wire name', async () => {

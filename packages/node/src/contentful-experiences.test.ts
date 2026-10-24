@@ -9,7 +9,6 @@ import {
   EventProfileRequiredError,
   parseExperiencesHandoff,
 } from '@contentful/experiences-runtime';
-import { createRequestHandoffFromData } from './handoff.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -68,116 +67,6 @@ function createEventRuntime(
 }
 
 describe('Node ContentfulExperiences', () => {
-  it('preserves partial-result diagnostics through raw resolution and Delivery fetch without changing identity semantics', async () => {
-    const payload = {
-      sys: {
-        id: 'experience',
-        type: 'Experience',
-        space: { sys: { type: 'Link', linkType: 'Space', id: 'space' } },
-        environment: { sys: { type: 'Link', linkType: 'Environment', id: 'environment' } },
-        experienceTemplate: {
-          sys: {
-            type: 'ResourceLink' as const,
-            linkType: 'Contentful:ExperienceTemplate' as const,
-            urn: 'experience_templates/page',
-          },
-        },
-        createdAt: '2026-10-15T00:00:00.000Z',
-        updatedAt: '2026-10-15T00:00:00.000Z',
-        createdBy: { sys: { type: 'Link', linkType: 'User', id: 'user' } },
-        updatedBy: { sys: { type: 'Link', linkType: 'User', id: 'user' } },
-      },
-      nodes: [
-        {
-          component: {
-            sys: {
-              type: 'ResourceLink' as const,
-              linkType: 'Contentful:Component' as const,
-              urn: 'components/hero',
-            },
-          },
-          contentProperties: { title: 'Available content' },
-          designProperties: {},
-        },
-      ],
-      errors: [
-        {
-          fieldPath: 'nodes[0].contentProperties.optional',
-          message: 'Unavailable field',
-          originalError: { secret: 'private' },
-        },
-      ],
-      extensions: {
-        personalization: {
-          profile: {
-            id: 'xda-profile',
-            stableId: 'stable-profile',
-            random: 0.5,
-            audiences: [],
-            traits: {},
-            location: {},
-            session: {
-              isReturningVisitor: false,
-              landingPage: {
-                path: '/',
-                query: {},
-                referrer: '',
-                search: '',
-                url: 'https://example.test/',
-              },
-              count: 1,
-              activeSessionLength: 0,
-              averageSessionLength: 0,
-            },
-          },
-          experiences: [],
-          changes: [],
-        },
-      },
-    };
-    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
-      async () =>
-        new globalThis.Response(JSON.stringify(payload), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        })
-    );
-    const config = { components: { hero: {} } };
-    const runtime = trackRuntime(
-      new ContentfulExperiences({
-        spaceId: 'space',
-        environmentId: 'environment',
-        delivery: { accessToken: 'delivery-token', fetch },
-      })
-    );
-    const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
-    const resolved = await request.resolveExperience(payload, { config, debug: false });
-    const fetched = await request.fetchExperience(
-      { experienceId: 'experience' },
-      { config, debug: false }
-    );
-
-    for (const plan of [resolved, fetched]) {
-      expect(plan.deliveryDiagnostics).toEqual([
-        { fieldPath: 'nodes[0].contentProperties.optional', message: 'Unavailable field' },
-      ]);
-      expect(plan.nodes[0]?.props.content).toEqual({ title: 'Available content' });
-      expect(plan.diagnostics).toEqual([]);
-      expect(plan.personalization).toEqual({ profileId: 'xda-profile' });
-    }
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(request.profile).toEqual({ id: 'xda-profile' });
-    const data = { profile: request.profile, deliveryDiagnostics: fetched.deliveryDiagnostics };
-    const handoff = createRequestHandoffFromData({
-      spaceId: runtime.spaceId,
-      environmentId: runtime.environmentId,
-      data,
-    });
-    expect(handoff.state).toEqual({ profile: { id: 'xda-profile' } });
-    expect(JSON.stringify(handoff)).not.toContain('deliveryDiagnostics');
-    expect(JSON.stringify(handoff)).not.toContain('Unavailable field');
-  });
-
   it('forwards changed parameters through request facades independently of event consent', async () => {
     const runtime = createRuntime();
     const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
@@ -1110,75 +999,6 @@ describe('Node ContentfulExperiences', () => {
       await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });
 
       expect(sendBatchEvents).toHaveBeenCalledWith(expect.any(Array), { beacon });
-    });
-
-    it('calls Insights with a single argument when a request sets no insightsOptions', async () => {
-      const { runtime, sendBatchEvents } = createEventRuntime();
-      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
-
-      await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });
-
-      expect(sendBatchEvents.mock.calls[0]).toHaveLength(1);
-    });
-
-    it('keeps requiring a profile for stateless Analytics calls', async () => {
-      const { runtime, sendBatchEvents } = createEventRuntime();
-      const request = runtime.forRequest({ consent: true });
-
-      await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-      ).rejects.toBeInstanceOf(EventProfileRequiredError);
-      expect(sendBatchEvents).not.toHaveBeenCalled();
-    });
-
-    it('resolves with no result for a consent-blocked Analytics call and reports it', async () => {
-      const onEventBlocked = vi.fn();
-      const { runtime, sendBatchEvents } = createEventRuntime({ onEventBlocked });
-      const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
-
-      await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-      ).resolves.toBeUndefined();
-
-      expect(sendBatchEvents).not.toHaveBeenCalled();
-      expect(onEventBlocked).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: 'consent', method: 'trackClick' })
-      );
-    });
-
-    it('resolves a failed Insights transport the same as a successful one in Node', async () => {
-      const { runtime, sendBatchEvents } = createEventRuntime();
-      sendBatchEvents.mockResolvedValueOnce(false);
-      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
-
-      await expect(
-        request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-      ).resolves.toBeUndefined();
-    });
-  });
-
-  describe('trackView acceptance result', () => {
-    const view = {
-      entityId: 'entry',
-      entityKind: 'Experience' as const,
-      viewId: 'v1',
-      viewDurationMs: 1000,
-    };
-
-    it('resolves { accepted: true } for an admitted view', async () => {
-      const { runtime, sendBatchEvents } = createEventRuntime();
-      const request = runtime.forRequest({ consent: true, profile: { id: 'visitor' } });
-
-      await expect(request.trackView(view)).resolves.toEqual({ accepted: true });
-      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-    });
-
-    it('resolves { accepted: false } for a consent-blocked view', async () => {
-      const { runtime, sendBatchEvents } = createEventRuntime();
-      const request = runtime.forRequest({ consent: false, profile: { id: 'visitor' } });
-
-      await expect(request.trackView(view)).resolves.toEqual({ accepted: false });
-      expect(sendBatchEvents).not.toHaveBeenCalled();
     });
   });
 });

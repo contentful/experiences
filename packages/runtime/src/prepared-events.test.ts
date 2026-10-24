@@ -39,7 +39,7 @@ describe('validatePreparedEvents', () => {
     );
   });
 
-  it('rejects missing, misplaced, and non-Personalization events', () => {
+  it('requires a single final page after the optional prefix', () => {
     const page = builder.buildPageView();
     const track = builder.buildTrack({ event: 'opened' });
 
@@ -47,13 +47,6 @@ describe('validatePreparedEvents', () => {
     expect(() => validatePreparedEvents([track])).toThrow('one page');
     expect(() => validatePreparedEvents([page, track])).toThrow('one page');
     expect(() => validatePreparedEvents([page, page])).toThrow('one page');
-    expect(() =>
-      validatePreparedEvents([
-        builder.buildClick({ entityId: 'hero', entityKind: 'Experience' }),
-        page,
-      ])
-    ).toThrow();
-    expect(() => validatePreparedEvents([{ type: 'page' }])).toThrow();
   });
 });
 

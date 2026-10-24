@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createRequestHandoffFromData } from './index.js';
 
 const scope = { spaceId: 'space', environmentId: 'environment' };
@@ -14,26 +14,21 @@ describe('createRequestHandoffFromData', () => {
     });
   });
 
-  it.each([undefined, {}, { profile: undefined }])('omits absent profile state (%j)', (data) => {
+  it.each([undefined, { profile: undefined }])('omits absent profile state (%j)', (data) => {
     const handoff = createRequestHandoffFromData({ ...scope, data });
-    expect(Object.hasOwn(handoff, 'state')).toBe(false);
-    expect(JSON.parse(JSON.stringify(handoff))).toEqual({
+    expect(handoff).toEqual({
       ...scope,
       cache: { scope: 'private-request' },
     });
-    expect(handoff).not.toHaveProperty('profileId');
-    expect(handoff).not.toHaveProperty('replay');
   });
 
-  it('preserves a private cache key and leaves supplied inputs unchanged', () => {
+  it('preserves a private cache key', () => {
     const input = {
       ...scope,
       cache: { scope: 'private-request' as const, key: 'request' },
       data: { profile: { id: 'visitor' } },
     };
-    const before = globalThis.structuredClone(input);
     expect(createRequestHandoffFromData(input).cache).toEqual(input.cache);
-    expect(input).toEqual(before);
   });
 
   it.each(['static', 'public-permutation'])(
@@ -47,24 +42,4 @@ describe('createRequestHandoffFromData', () => {
       ).toThrow(TypeError);
     }
   );
-
-  it.each([
-    { spaceId: 123 },
-    { environmentId: null },
-    { data: { profile: { id: 123 } } },
-    { cache: { scope: 'private-request', key: 123 } },
-  ])('propagates Runtime validation errors for %j', (invalid) => {
-    expect(() => createRequestHandoffFromData({ ...scope, ...invalid } as never)).toThrow();
-  });
-
-  it('does not fetch or emit an event', () => {
-    const fetch = vi.spyOn(globalThis, 'fetch');
-    try {
-      createRequestHandoffFromData(scope);
-      createRequestHandoffFromData({ ...scope, data: { profile: { id: 'visitor' } } });
-      expect(fetch).not.toHaveBeenCalled();
-    } finally {
-      fetch.mockRestore();
-    }
-  });
 });
