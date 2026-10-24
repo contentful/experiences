@@ -123,24 +123,32 @@ describe('Node event interceptors', () => {
   );
 
   it('passes concurrent XDA hook results to its fetch path', async () => {
-    const { sdk } = setup();
+    const { sdk, upsert, analytics } = setup();
     const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
     const hold = deferred();
-    const started: string[] = [];
+    const started: [string, string | undefined][] = [];
     sdk.interceptors.event.add(async (event) => {
-      started.push(event.type);
+      started.push([event.type, event.context.userAgent]);
       if (event.type === 'identify') await hold.promise;
       event.context.userAgent = 'hook';
       return event;
     });
+    const request = sdk.forRequest({ consent: true, eventContext: { userAgent: 'request-agent' } });
     const events = [
-      sdk.eventBuilder.buildIdentify({ userId: 'user' }),
-      sdk.eventBuilder.buildPageView(),
+      request.eventBuilder.buildIdentify({ userId: 'user' }),
+      request.eventBuilder.buildPageView(),
     ];
-    const pending = sdk
-      .forRequest({ consent: true })
-      .fetchExperience({ experienceId: 'exp', personalization: { events } }, resolver);
-    expect(started).toEqual(['identify', 'page']);
+    expect(started).toEqual([]);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(analytics).not.toHaveBeenCalled();
+    const pending = request.fetchExperience(
+      { experienceId: 'exp', personalization: { events } },
+      resolver
+    );
+    expect(started).toEqual([
+      ['identify', 'request-agent'],
+      ['page', 'request-agent'],
+    ]);
     expect(fetch).not.toHaveBeenCalled();
     hold.resolve();
     await pending;

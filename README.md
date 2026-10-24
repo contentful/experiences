@@ -241,12 +241,9 @@ if (!pageResult.accepted || !request.profile) {
   throw new Error('Page initialization did not establish a profile');
 }
 const identify = userId
-  ? experiences.eventBuilder.buildIdentify({
+  ? request.eventBuilder.buildIdentify({
       userId,
       traits: { identified: true },
-      page: pageProperties,
-      userAgent,
-      locale: requestLocale,
     })
   : undefined;
 const plans = [];
@@ -265,10 +262,12 @@ const handoff = createRequestHandoffFromData({
 });
 ```
 
-Caller-built XDA events require explicit context: `forRequest({ eventContext })`
-binds direct methods and does not merge page URL/path/query/referrer, user agent,
-or locale into supplied `personalization.events`. Keep those values in builder
-inputs rather than shared interceptor closures. Each identify-bearing fetch is a
+Node's `request.eventBuilder` applies request page URL/path/query/referrer, user
+agent, and locale before building Personalization events. Explicit event inputs
+override request context. The shared `experiences.eventBuilder` remains unbound;
+fetching does not merge request context into already-built `personalization.events`.
+Use the request builder rather than shared interceptor closures for visitor data.
+Building sends nothing and invokes no hooks. Each identify-bearing fetch is a
 separate event submission; this flow adds no duplicate-delivery guarantee.
 
 The public Node producer accepts optional profile data and optional

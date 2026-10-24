@@ -76,22 +76,22 @@ See the [render/refetch example](../../README.md#runtime-experience-parameters).
 Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
 
 ```ts
+const request = experiences.forRequest({
+  locale: requestLocale,
+  consent: visitorConsent,
+  eventContext: { page: pageProperties, userAgent },
+});
 const plan = await request.fetchExperience(
   {
     experienceId,
     personalization: {
       profileId,
       events: [
-        experiences.eventBuilder.buildIdentify({
+        request.eventBuilder.buildIdentify({
           userId,
-          page: pageProperties,
-          userAgent,
-          locale: requestLocale,
         }),
-        experiences.eventBuilder.buildPageView({
+        request.eventBuilder.buildPageView({
           properties: pageProperties,
-          userAgent,
-          locale: requestLocale,
         }),
       ],
     },
@@ -112,11 +112,24 @@ The strings may contain private information; show a generic warning/count and
 inspect details explicitly, keeping them out of logs and public bootstrap/handoff
 payloads. See the [delivery diagnostic guidance](../../README.md#delivery-diagnostics).
 
-Caller-built `personalization.events` must carry their intended page URL, path,
-query, referrer, user agent, and locale explicitly. `forRequest({ eventContext })`
-binds direct event methods; it does not merge that context into supplied events.
-Use request-local builder inputs rather than retaining visitor data in a shared
-interceptor closure. See the [committed server rendering recipe](../../README.md#committed-server-rendering-and-state-only-hydration)
+### Request-bound event construction
+
+`request.eventBuilder` exposes `buildIdentify`, `buildPageView`, and `buildTrack`,
+using the existing SDK builder with this request's context applied before event
+construction. Explicit event inputs override request context; `forRequest({ locale })`
+overrides `eventContext.locale`, followed by the SDK builder's existing defaults.
+The merge is shallow: a supplied page replaces the whole request page. An explicit
+`undefined` replaces the request field and uses the builder's normal fallback,
+matching direct event methods. Page-event `properties` remains a separate input;
+pass `properties: pageProperties` when it should describe the request page.
+
+The public `ExperiencesNodeEventBuilder` type exposes only those construction
+methods. Building does not submit events, apply consent admission, invoke event
+interceptors, or update profiles. Those operations happen on submission. The shared
+`experiences.eventBuilder` remains available for unbound construction. Submitting
+already-built `personalization.events` does not merge request context into them.
+Use the request builder rather than retaining visitor data in a shared interceptor
+closure. See the [committed server rendering recipe](../../README.md#committed-server-rendering-and-state-only-hydration)
 for the page-first, sequential-fetch flow.
 
 Current XDA behavior limits this integration: profile-only requests can return

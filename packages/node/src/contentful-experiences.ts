@@ -19,6 +19,7 @@ import {
   type ConsentInput,
   type ConsentState,
   type ContentfulExperiencesConfig,
+  type EventBuilder,
   type EventBuilderConfig,
   type EventEmissionResult,
   type EventOptimizationData,
@@ -117,10 +118,18 @@ type NodeAnalyticsMethods = Pick<
   'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
+/** Personalization event construction with request-local context defaults. */
+export type ExperiencesNodeEventBuilder = Pick<
+  EventBuilder,
+  'buildIdentify' | 'buildPageView' | 'buildTrack'
+>;
+
 /** A request-bound facade; many facades may share the one Node SDK instance. */
 export interface ExperiencesNodeRequest extends NodePersonalizationMethods, NodeAnalyticsMethods {
   readonly locale: string | undefined;
   readonly profile: EventProfile | undefined;
+  /** Builds events without submitting them; explicit inputs override request context. */
+  readonly eventBuilder: ExperiencesNodeEventBuilder;
   /** Whether the host application may persist this request's profile id. */
   readonly canPersistProfile: boolean;
   resolveExperience(
@@ -181,6 +190,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
 class RequestBoundExperiences implements ExperiencesNodeRequest {
   readonly locale: string | undefined;
+  readonly eventBuilder: ExperiencesNodeEventBuilder;
   #profile: EventProfile | undefined;
   #profileRevision = 0;
   readonly #consent: ConsentState;
@@ -225,6 +235,15 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
     this.canPersistProfile = this.#consent.persistence === true;
+
+    this.eventBuilder = {
+      buildIdentify: (args) =>
+        runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+      buildPageView: (args = {}) =>
+        runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+      buildTrack: (args) =>
+        runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+    };
 
     const methods = createEventMethods({
       getProfile: () => this.#profile,

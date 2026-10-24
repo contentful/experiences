@@ -101,21 +101,74 @@ describe('Node ContentfulExperiences', () => {
     expect(second.forRequest({ locale: 'it-IT' }).locale).toBe('it-IT');
   });
 
-  it('applies stable Node attribution and creates distinct request facades', () => {
+  it('binds event construction to each request without changing the shared builder', () => {
     const runtime = createRuntime();
-    const first = runtime.forRequest({ locale: 'de-DE' });
-    const second = runtime.forRequest({ locale: 'fr-FR' });
+    const page = runtime.eventBuilder.getPageProperties();
+    const firstContext = {
+      locale: 'de-DE',
+      userAgent: 'first-agent',
+      page: { ...page, url: 'https://first.test' },
+    };
+    const secondContext = {
+      locale: 'fr-FR',
+      userAgent: 'second-agent',
+      page: { ...page, url: 'https://second.test' },
+    };
+    const first = runtime.forRequest({
+      locale: 'de-DE',
+      eventContext: { ...firstContext, locale: 'it-IT' },
+    });
+    const second = runtime.forRequest({ eventContext: secondContext });
 
     expect(first).not.toBe(second);
-    expect('eventBuilder' in first).toBe(false);
+    expect(first.eventBuilder.buildIdentify({ userId: 'first' }).context).toMatchObject(
+      firstContext
+    );
+    expect(second.eventBuilder.buildTrack({ event: 'second' }).context).toMatchObject(
+      secondContext
+    );
     expect(runtime.eventBuilder.channel).toBe('server');
     expect(runtime.eventBuilder.library).toEqual(DEFAULT_EVENT_CONTEXT_LIBRARY);
     expect(runtime.eventBuilder.buildTrack({ event: 'runtime' }).context).toMatchObject({
       app: { name: 'site', version: '1.0.0' },
       gdpr: { isConsentGiven: false },
       locale: 'en-US',
+      userAgent: undefined,
+      page: { url: '' },
       library: DEFAULT_EVENT_CONTEXT_LIBRARY,
     });
+  });
+
+  it('lets event inputs override request defaults across Personalization builders', () => {
+    const runtime = createRuntime();
+    const page = { ...runtime.eventBuilder.getPageProperties(), url: 'https://request.test' };
+    const request = runtime.forRequest({
+      locale: 'de-DE',
+      eventContext: { userAgent: 'request-agent', page },
+    });
+    const overrides = {
+      locale: 'es-ES',
+      userAgent: 'event-agent',
+      page: { ...page, url: 'https://event.test' },
+    };
+    const events = [
+      request.eventBuilder.buildIdentify({ ...overrides, userId: 'user' }),
+      request.eventBuilder.buildTrack({ ...overrides, event: 'action' }),
+      request.eventBuilder.buildPageView({ ...overrides, properties: overrides.page }),
+    ];
+    for (const event of events) expect(event.context).toMatchObject(overrides);
+    expect(request.eventBuilder.buildPageView({ properties: page }).context).toMatchObject({
+      locale: 'de-DE',
+      userAgent: 'request-agent',
+      page,
+    });
+    expect(
+      request.eventBuilder.buildTrack({
+        event: 'fallback',
+        locale: undefined,
+        userAgent: undefined,
+      }).context
+    ).toMatchObject({ locale: 'en-US', userAgent: undefined });
   });
 
   it('keeps concurrent request context isolated', async () => {
