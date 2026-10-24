@@ -153,7 +153,7 @@ adds no interim suppression.
 
 ## Browser-safe configuration
 
-Each browser fetch or resolve call receives its own `config`; event-only use does not need one. Keep `resolveData`, `resolveToken`, and component configuration browser-safe, without server-only imports, secrets, or privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging and source maps remain opt-in and can expose raw CMS data.
+Each browser fetch or resolve call receives its own `config`; event-only use does not need one. Keep `resolveData`, `resolveToken`, and component configuration browser-safe, without server-only imports, secrets, or privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging remains opt-in. Automatic interaction tracking requests source maps, which can expose raw CMS data.
 
 Locale is mutable browser state. Update it with `setLocale()` rather than sharing a request-scoped Node facade; browser navigation, language selection, and concurrent renders then observe the current client-side locale without leaking server request state. An explicit per-call locale still wins for that fetch.
 
@@ -496,9 +496,10 @@ consent })`, and uses `canPersistProfile` to write or expire the response cookie
 
 ## Interaction tracking
 
-> **Experimental.** `startInteractionTracking()` and its option and session types
-> may change or be removed without a major version bump. It is a lower layer for a
-> planned configured root that will start tracking and supply attribution itself.
+Automatic discovery uses rendered plan boundaries through the existing
+`getTrackingAttributes` helper. There is no separate tracking-session API. The
+five Optimization-compatible controls remain available for explicit configuration
+and manual observation.
 
 The SDK also exposes Optimization-compatible imperative controls on `experiences.tracking`.
 `EntryInteractionTracker` and `EntryInteractionTrackers` export the corresponding
@@ -507,10 +508,8 @@ Optimization-compatible type contracts. Runtime controls remain on `tracking`.
 Constructor `autoTrackEntryInteraction: { views, hovers, clicks }` flags each default
 to `true`. Use `false` to turn off automatic discovery for an interaction while
 retaining explicit per-element registrations and per-element attribute opt-ins.
-A standalone SDK does not discover document elements until an attribution session
-starts or an element is manually registered with valid attribution. Automatic
-and attribute discovery require the session's attribution lookup; manual
-registration with valid `data` can run without a session:
+Automatic and attribute discovery use rendered plan attribution. Manual
+registration with valid `data` works without a plan container:
 
 ```ts
 const experiences = new ContentfulExperiences({
@@ -537,7 +536,7 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
   `clearElement(type, element)` removes either override.
 - Explicit element overrides take precedence over `data-ctfl-track-views`,
   `data-ctfl-track-hovers`, and `data-ctfl-track-clicks` boolean attributes; those
-  attributes take precedence over automatic flags. Within an attribution session,
+  attributes take precedence over automatic flags. With rendered attribution,
   `true` starts tracking for a permitted element even when automatic tracking is
   disabled. Attribute changes are observed dynamically. Values are trimmed and
   case-insensitive; values other than `true`/`false` fall back to automatic
@@ -550,11 +549,11 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
   Invalid or absent data falls back to the element's automatic attribution.
   An element with manual data needs no `data-ctfl-scopes` attribute or lookup.
   Explicit registrations can observe any connected element, including headers or
-  portals outside a session's automatic discovery `root`. View `root` options
-  still configure IntersectionObserver independently of the discovery subtree.
+  portals outside rendered Experience containers. View `root` options configure
+  IntersectionObserver; automatic discovery follows the rendered boundaries.
   With valid explicit data, each manually registered element is one occurrence.
   Attribution fallback uses the automatic scope grouping; automatic multi-root
-  scope grouping remains available through the session API below.
+  scope grouping follows the rendered boundaries described below.
 - Options and `data` are retained by reference, following Optimization. Reuse of
   the same options object leaves an enabled registration unchanged; clear and
   enable it again to explicitly start a fresh measurement.
@@ -563,29 +562,32 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
   active intervals and retains overrides; regrant starts fresh intervals.
   `reset()` discards old measurements and clears manual overrides, then immediately
   resumes eligible automatic and attribute discovery with fresh intervals after
-  resetting visitor state and the lifecycle token. It retains automatic settings
-  and the session; `destroy()` clears overrides and ends ownership. Delayed
-  callbacks cannot cross visitor/reset boundaries.
+  resetting visitor state and the lifecycle token. It retains automatic settings;
+  `destroy()` clears overrides and ends ownership. Delayed callbacks cannot cross
+  visitor/reset boundaries.
 - `WebExperiencesRuntime` adds these browser-only controls to
   `ExperiencesRuntime`; `createWebSnapshotRuntime()` supplies inert controls for
   SSR. Imports remain safe without browser globals.
 
-The existing `startInteractionTracking()` API establishes an attribution session.
-Starting a session retains the SDK's effective automatic flags and view observer
-options unless the session explicitly supplies `views`, `hovers`, or `clicks`.
-It transfers existing explicit element overrides to the new session, retaining
-the caller's options/data references and document-wide manual registration. Measurements
-restart against the new session. Session stop clears those registrations and finishes
-its active events. A subsequent standalone tracking
-call uses the constructor defaults.
+The runtime discovers automatic tracking attributes when constructed. Web fetches
+request `sourceMap` when any automatic interaction type is enabled, preserving
+caller-supplied extension options. Attribution is requested independently of
+consent so granting consent later needs no content refetch. With every automatic
+type disabled, explicitly request `extensions: { sourceMap: {} }` if a later
+manual registration, attribute opt-in or automatic enable will need the
+attribution. Plans supplied by Node or free fetch functions also need an explicit
+source-map request.
 
-The runtime can track views, hovers, and clicks on rendered Experiences and
-Fragments automatically. Fetch with `extensions: { sourceMap: {} }`, mark the
-outermost element of each node with the scopes it roots, then start a tracking
-session with a lookup from scope key to attribution:
+Use the existing helper twice in your renderer: once for each rendered plan's
+container and once for each node's actual roots:
 
 ```tsx
 import { getTrackingAttributes, useContentfulComponent } from '@contentful/experiences-react';
+
+// The application's existing container, including for server-rendered plans.
+function TrackedExperience({ plan, children }) {
+  return <div {...getTrackingAttributes(plan.attribution)}>{children}</div>;
+}
 
 function Hero({ title }) {
   const contentful = useContentfulComponent();
@@ -593,28 +595,51 @@ function Hero({ title }) {
 }
 ```
 
+The plan form emits `data-ctfl-attribution`, containing only scope attribution;
+the node form emits opaque `data-ctfl-scopes` keys. The serialized scope records
+contain only event attribution fields, including bound entry IDs; duplicate keys
+and unrelated caller fields are omitted. The nearest attribution
+container supplies the lookup and occurrence identity. Two containers rendering
+the same plan remain independent; roots sharing a key inside one container remain
+one occurrence. No lookup map, namespace, session, refresh or automatic cleanup
+call is required. No framework adapter stamps either attribute for you.
+
+Use DOM attribute APIs or your framework's escaped attribute bindings; do not
+interpolate the JSON into unescaped HTML. Metadata is browser-visible, like the
+content being rendered. Do not add secrets, profiles or unrelated plan data.
+Malformed metadata is ignored; an invalid inner container never inherits an
+outer container's attribution. Metadata is parsed once per container/value and
+cached weakly. The SDK retains no fetched-plan registry or navigation history.
+
+HTML defines no portable per-attribute size ceiling. Practical limits are browser
+string/memory budgets and serialization/parsing cost, so attribution should stay
+small relative to rendered content. Only scope metadata is serialized, once per
+container; content, the full source map, profile and tokens are not included.
+There is no silent truncation or arbitrary SDK size limit that could change event
+attribution. Large Experiences should be measured in their target browsers. See
+the [HTML data-attribute contract](https://html.spec.whatwg.org/multipage/dom.html#embedding-custom-non-visible-data-with-the-data-*-attributes)
+and [implementation-defined resource limits](https://infra.spec.whatwg.org/#avoid-limits-on-algorithm-inputs).
+
+Use SDK-generated scope keys unchanged. Slot names are escaped when the SDK builds
+their opaque paths, keeping whitespace and path separators out of DOM tokens.
+The DOM container's identity separates cloned or repeated presentations; metadata
+changes start fresh occurrences without retaining previous plans.
+
+Optional view geometry still uses the existing tracking controls:
+
 ```ts
-const session = experiences.startInteractionTracking({
-  resolveAttribution: (key) => plan.attribution?.scopes[key],
-});
-
-// After the data behind the lookup changes, e.g. a new plan:
-session.refresh();
-
-// Before teardown (unmount, route change): sends the final events for
-// in-progress views and hovers, then stops.
-await session.stop();
+experiences.tracking.enable('views', { root: scrollingPanel });
 ```
 
-`getTrackingAttributes` adds `data-ctfl-scopes`, listing the key of every
-Experience or Fragment occurrence the node is a top-level node of. It renders
-nothing for a node in the middle of a scope. The React, Svelte, and Angular
-packages re-export it, and so does
-`@contentful/experiences-web/tracking-attributes`.
+The helper is re-exported by React, Svelte and Angular and by
+`@contentful/experiences-web/tracking-attributes`. Its implementation remains pure
+and SSR-safe. The DOM boundary is an Experiences content-model adaptation of
+Optimization's self-describing entry hosts: one Experience scope can span several
+roots, and one root can belong to several scopes.
 
 - **Views** apply to Experiences and Fragments. **Hovers and clicks** apply to
   Fragments only. Nothing else is tracked: as a defensive runtime check, a
-  lookup result with any other `entityKind` is ignored.
+  scope with any other `entityKind` is ignored.
 - Fragment attribution includes `parentExperienceId` and `parentVariantId`
   for the root Experience, including when the Fragment is nested in another Fragment.
   `variantId` identifies the Fragment's own variant. Experiences and Fragments always
@@ -625,8 +650,8 @@ packages re-export it, and so does
   are two, as long as something separates them: XDA gives both copies the same
   layer row and the same node ids, so copies placed directly next to each other
   cannot be told apart and report as one. A node inside both an Experience and a Fragment reports to both,
-  under the kind rules above. The occurrence key is opaque: only
-  `plan.attribution.scopes` can resolve it.
+  under the kind rules above. The occurrence key is opaque and resolved within its nearest plan container.
+  Separate containers always distinguish repeated presentations of the same plan.
 - A view counts after one second with any part of any of the occurrence's
   elements visible, and ends when none are. A hover counts after one second and
   ends when the pointer has left all of them. Each is reported when it qualifies
@@ -641,8 +666,14 @@ packages re-export it, and so does
   warning and does not stop tracking.
 - Withdrawing event consent discards active view/hover measurements and delayed
   callbacks. Detectors whose event types remain allowlisted restart with fresh
-  intervals immediately; they continue working through regrant and `session.refresh()`.
-- The attribute carries only opaque scope keys. Attribution never goes into the DOM.
+  intervals immediately; they continue working through regrant and later DOM updates.
+- Node attributes carry opaque keys; the plan container carries their attribution.
+  Removing or replacing an occurrence finishes its qualified view/hover intervals
+  before disconnecting its last root. Unrelated occurrences continue measuring.
+  Disabling automatic tracking does not cancel finals already captured by removal;
+  reset and consent withdrawal still invalidate delayed work.
+  This replaces the former application-owned stop-before-removal behavior; pinned
+  Optimization drops intervals on unobserve, so this is an Experiences adaptation.
 - A node without an id cannot be tracked, and neither can a plan fetched without
   a source map.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
@@ -650,18 +681,16 @@ packages re-export it, and so does
 - `reset()` clears manual overrides and discards in-progress view and hover
   durations so they cannot cross visitor identities. After resetting visitor
   state and the lifecycle token, it immediately resumes eligible automatic and
-  attribute discovery with fresh intervals, retaining the tracking configuration
-  and session. No `session.refresh()` is needed; consent still gates tracking.
-- `startInteractionTracking` does nothing outside a browser. One session runs per
-  runtime at a time. `stop()` frees it immediately, so a new session can start
-  from a React effect whose cleanup cannot await; the stopped session finishes
-  sending its final events in the background.
-
-The lookup is `plan.attribution.scopes`. Wherever the plan reaches the browser
-(client rendering, SvelteKit page data, Angular `TransferState`, React's
-`ClientExperienceRenderer`) build `resolveAttribution` from it. React's
-`ServerExperienceRenderer` keeps the plan on the server, so pass
-`plan.attribution.scopes` as a prop to the client component that starts tracking.
+  attribute discovery with fresh intervals, retaining the tracking configuration.
+  Consent still gates tracking.
+- Explicit manual registrations retain their supplied elements until cleared,
+  reset or destroyed. Clear them when their presentation is discarded. DOM removal
+  ends an active interval; removal/reinsertion can resume a retained registration.
+- Construction outside a browser starts no observers. `destroy()` ends SDK
+  ownership and disposes discovery and detectors; caller-owned state subscriptions
+  still require their own cleanup. Use destruction when replacing an SDK within
+  a live document. The SDK already handles hide/unload finalization; do not destroy
+  it synchronously in a page-hide handler and cancel its pending final durations.
 
 ## Server event handoff
 

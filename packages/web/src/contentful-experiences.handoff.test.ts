@@ -721,7 +721,10 @@ describe('Web handoff and current-page lifecycle', () => {
       await expect(pending).resolves.toEqual({ accepted: false });
       await fetchResult;
       if (action === 'reset') {
-        expect(fetch.mock.calls[0]?.[0]).toEqual({ experienceId: 'waiting' });
+        expect(fetch.mock.calls[0]?.[0]).toEqual({
+          experienceId: 'waiting',
+          extensions: { sourceMap: {} },
+        });
         await expect(
           runtime.hydrateAndTrackCurrentPage(
             handoff(runtime, '/new', { profileId: 'fresh-continuation' }),
@@ -806,7 +809,12 @@ describe('Web handoff and current-page lifecycle', () => {
       { experienceId: 'new' },
       { config: { components: {} } }
     );
-    await vi.waitFor(() => expect(fetch.mock.calls[1]?.[0]).toEqual({ experienceId: 'new' }));
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls[1]?.[0]).toEqual({
+        experienceId: 'new',
+        extensions: { sourceMap: {} },
+      })
+    );
     second.resolve({ nodes: [], personalization: { profileId: 'new-profile' } });
     await currentFetch;
     first.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });

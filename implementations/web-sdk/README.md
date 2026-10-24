@@ -103,24 +103,25 @@ Content 1 and Content 2. Compare actual rendered content when checking these pat
 
 ## Interaction tracking and event attempts
 
-Every existing content fetch requests `extensions: { sourceMap: {} }` so the SDK
-can provide Experience/ExperienceFragment attribution. This adds no content
-initialization fetch. The automatic section stamps only each node's scope roots,
-using the public `getTrackingAttributes` helper. Each rendered plan gets a unique
-prefix for its opaque scope keys and a lookup into that plan's original attribution.
-Repeated local keys across Experiences remain distinct; multiple root nodes sharing
-one scope key within a plan remain one occurrence. Plans are not mutated.
+The SDK requests source-map attribution in existing content fetches while an
+automatic interaction type is enabled; there is no initialization content fetch.
+The renderer calls the existing `getTrackingAttributes` helper once on each plan
+container and on each node's actual scope roots. The container carries attribution;
+node attributes contain opaque local keys. Only event attribution fields are
+serialized; duplicate scope keys and unrelated caller fields are excluded. The
+SDK encodes slot names when generating keys so whitespace cannot split a DOM token. DOM container identity separates repeated
+plans, while shared keys within one container preserve multi-root occurrences.
+Plans are unchanged. The former lookup, namespace and tracking-session API are
+removed rather than retained alongside another setup API.
 
-One `sdk.startInteractionTracking()` session discovers the active content subtree,
-with `views.root` pointing to the scrolling `.app-main` element. The SDK measures
-views for Experiences and Fragments, and hover/click interactions for Fragments.
-Fragment scope roots opt into card clicks with the public clickable attribute.
-Visibility thresholds, dwell, interval IDs, durations, consent gating, and retries
-remain SDK-owned. Route/action replacement awaits the old session's `stop()` while
-its attribution lookup is still available for final events. Reset discards existing
-measurements through `sdk.reset()`; the explicit page/fetch cycle installs a fresh
-session. Consent changes synchronize detectors through the SDK and do not refetch
-content.
+The SDK discovers these attributes automatically. The app calls
+`sdk.tracking.enable('views', { root: appMain })` only to configure its scrolling
+view geometry. Views apply to Experiences and Fragments; hover/click applies to
+Fragments. Fragment roots opt into card clicks with the public clickable attribute.
+Dwell, interval IDs, durations, consent and retries remain SDK-owned. DOM removal
+finishes qualified intervals without stopping unrelated occurrences. Reset discards
+measurements; later page/consent synchronization resumes fresh intervals. Consent
+changes do not refetch content.
 
 The manually observed section has no automatic tracking attributes or event buttons.
 After rendering, application code calls `sdk.tracking.clearElement('views', element)`
@@ -129,7 +130,9 @@ manual registration example. Each card uses its innermost delivered scope as the
 single explicit target. Automatic tracking retains all root keys and groups shared
 multi-root occurrences; manual registration follows the API's per-element behavior.
 The SDK measures actual visibility, dwell and duration and applies consent and lifecycle
-rules for both presentations. No app-owned observer or fabricated zero-duration view
+rules for both presentations. On route replacement the app releases its explicit
+manual registrations after DOM removal; automatic tracking needs no teardown.
+No app-owned observer or fabricated zero-duration view
 is involved. Page Two's separate Record custom action calls
 `sdk.track({ event: 'reference_custom_action' })` without fetching content.
 
@@ -145,7 +148,9 @@ so the attempt count can exceed the row count. Other events keep distinct rows.
 The table uses text APIs for event-derived values and displays entity kind/ID,
 duration and age. Rows persist across navigation and reset, following the pinned
 Optimization reference; an undefined reset notification adds no row. The app owns
-one subscription and one age timer and disposes both before SDK destruction.
+one subscription and one age timer and disposes both on document unload. The SDK
+owns its final hide/unload flush; explicit destruction is for replacing an SDK
+inside a live document.
 No extra event stream, interceptor demo, transport observer, queue, or timing
 implementation is added.
 
@@ -252,8 +257,10 @@ preflight workflow nor Node handoff.
   modules fill dynamic text and wire actions.
   Stable navigation, utility, and sidebar `data-testid` conventions follow the
   Optimization reference. Experience-specific placeholders replace entry/Web
-  Component semantics. `control-panel.js` owns utility display and consent
-  subscription cleanup; `experiences.js` owns DOM plan rendering and exposes manual
+  Component semantics. `app.js` separates route orchestration, shell/control setup, visitor initialization,
+  sequential content fetching and presentation insertion into focused functions.
+  `control-panel.js` owns utility display and consent subscription cleanup;
+  `experiences.js` owns DOM plan rendering and exposes manual
   roots for registration after insertion; `tracking.js` owns the observable sidebar
   and its cleanup.
 - `public/css/theme.css`: locally vendored Optimization theme from commit
@@ -279,8 +286,9 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
 - XDA selects variants server-side. The explicit page/identify/fetch flow follows
   the [current XDA workarounds](#current-xda-limitations-and-workaround-removal),
   and there is no profile-driven content refresh, Live Updates or Preview Panel.
-  Attribution comes from source maps, with namespaced keys and a real scope lookup
-  for multiple plans; event labels use Experience/ExperienceFragment semantics.
+  Attribution comes from source maps and is stamped once per rendered plan container,
+  adapting Optimization's self-describing entry hosts to multi-root scopes. Event
+  labels use Experience/ExperienceFragment semantics.
 - npm/Nx, ESLint/Prettier, scoped PM2 and local tarball installation retain this
   repository's maintained tooling. Vite prepares Rich Text/pure-helper assets;
   the installed SDK keeps its accepted Rslib distribution. The theme is vendored
@@ -305,13 +313,14 @@ and may need multiple attempts; HTTP 200 alone does not prove personalization.
 Live verification has not reached empty-plan, missing-Experience, transport-failure
 or queued-page-without-profile recovery, offline/capacity refusal, retry, SDK pending-response
 isolation, subscriber-exception, or back/forward-cache suspension scenarios.
-Those paths have source-review evidence only; ordinary browser back navigation
+Local SDK unit tests and source review cover those branches where applicable;
+they do not establish live service outcomes. Ordinary browser back navigation
 does not establish back/forward-cache behavior. Visual comparison uses the pinned
 Optimization source/theme rather than a running pixel comparison.
 
 The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current authorization and validation evidence. Phases 1–7 and the
-manual-observation correction are accepted.
+records current authorization and validation evidence. Phases 1–7 are accepted;
+automatic setup through rendered plan containers is the current standard.
 
 ## Troubleshooting
 

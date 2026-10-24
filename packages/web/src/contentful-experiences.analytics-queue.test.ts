@@ -125,7 +125,7 @@ describe('Web Analytics queue', () => {
 
   it('ends an in-progress hover before the hide flush, so its event is in the beacon', async () => {
     const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
-    const runtime = createRuntime();
+    createRuntime();
     const hero = document.createElement('div');
     for (const [name, value] of Object.entries(
       getTrackingAttributes({ roots: [{ key: 'node:hero' }] })
@@ -133,11 +133,15 @@ describe('Web Analytics queue', () => {
       hero.setAttribute(name, value);
     }
     document.body.append(hero);
-    const session = runtime.startInteractionTracking({
-      views: false,
-      clicks: false,
-      resolveAttribution: () => ({ entityId: 'hero', entityKind: 'ExperienceFragment' }),
-    });
+    hero.setAttribute(
+      'data-ctfl-attribution',
+      JSON.stringify({
+        scopes: {
+          'node:hero': { entityId: 'hero', entityKind: 'ExperienceFragment' },
+        },
+      })
+    );
+    await vi.advanceTimersByTimeAsync(0);
 
     hero.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     await vi.advanceTimersByTimeAsync(1_500);
@@ -156,7 +160,8 @@ describe('Web Analytics queue', () => {
       'exo_node_hover'
     );
     expect(options.beacon).toBeTypeOf('function');
-    await session.stop();
+    hero.remove();
+    await vi.advanceTimersByTimeAsync(0);
   });
 
   it('applies queuePolicy.flush: interval, backoff, and failure callbacks', async () => {

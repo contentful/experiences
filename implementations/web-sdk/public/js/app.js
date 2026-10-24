@@ -15,6 +15,9 @@ const sdk = new window.ContentfulExperiences({
   locale: env.LOCALE,
   delivery: { accessToken: env.CDA_TOKEN },
 });
+// Consumer integration: optional view geometry for this app's scrolling main panel.
+// Discovery and occurrence lifetimes follow the rendered tracking attributes.
+sdk.tracking.enable('views', { root: appMain });
 const experienceIds = env.EXPERIENCE_IDS;
 // Reference app: these routes and Experience selections form the demonstration.
 const routes = {
@@ -42,18 +45,7 @@ let generation = 0;
 let pageGeneration = 0;
 let disposed = false;
 let pendingPage = Promise.resolve();
-let trackingSession;
-let pendingTrackingStop = Promise.resolve();
-let renderInstance = 0;
-
-function stopTracking() {
-  if (trackingSession) {
-    const active = trackingSession;
-    trackingSession = undefined;
-    pendingTrackingStop = active.stop();
-  }
-  return pendingTrackingStop;
-}
+let manualElements = [];
 
 // Reference app: a fixed URL identity makes personalization easy to verify.
 // Consumers supply identity from their own application; this is not authentication.
@@ -97,27 +89,30 @@ function showStatus(target, text, { error = false, retry = false, initialize = f
   target.replaceChildren(content);
 }
 
+// Reference app: keep route orchestration separate from shell, visitor and content work.
 async function renderRoute({ sendPage = false, focus = false } = {}) {
   const current = ++generation;
   const isCurrent = () => !disposed && current === generation;
-  // Consumer integration, when tracking: stop before removing tracked DOM and retain the
-  // session's attribution lookup through its final events.
-  // A rapid second action joins an already-running stop before replacing DOM.
-  await stopTracking();
-  if (!isCurrent()) return;
   const path = location.pathname;
   const route = routes[path];
   const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
+  const previousManualElements = manualElements;
+  manualElements = [];
+
   renderRouteShell(path, route);
-  if (!route) return;
+  // Consumer integration, manual observation only: release explicit registrations.
+  // Let DOM removal finish measured intervals before clearing their overrides.
+  await Promise.resolve();
+  previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
+  if (!isCurrent() || !route) return;
 
   wireRouteControls(path, focus);
+  const destinations = createDestinations(route);
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
-  const destinations = createDestinations(route);
 
   try {
-    // Identify joins any initial page; it does not emit another page or identify call.
+    // Identify joins any initial page; it does not send a separate identify call.
     await initializeVisitor(sendPage);
     if (!isCurrent()) return;
     if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
@@ -241,15 +236,6 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
   const identifyEvent = identifyRequested
     ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
     : undefined;
-  const attribution = new Map();
-  // Consumer integration, when using automatic tracking: give the SDK the actual scrolling
-  // view root and a lookup for the scopes stamped by the renderer. Detectors,
-  // dwell times, consent and event delivery remain SDK-owned.
-  trackingSession = sdk.startInteractionTracking({
-    root: appMain,
-    views: { root: appMain },
-    resolveAttribution: (key) => attribution.get(key),
-  });
   let failed = false;
   for (const [experienceId, targets] of destinations) {
     if (!isCurrent()) return;
@@ -257,8 +243,6 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
       const plan = await sdk.fetchExperience(
         {
           experienceId,
-          // Consumer integration, when tracking: request source maps to obtain attribution.
-          extensions: { sourceMap: {} },
           // XDA workaround: profile-only selection can return baseline. Reuse one built
           // identify across this cycle's fetches until equivalent profile-only
           // selection is verified; Client owns wire normalization (README).
@@ -267,7 +251,7 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
         resolveOptions
       );
       if (!isCurrent()) return;
-      renderPresentations(plan, experienceId, targets, attribution);
+      renderPresentations(plan, experienceId, targets);
     } catch (error) {
       if (!isCurrent()) return;
       failed = true;
@@ -282,27 +266,21 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
   return failed;
 }
 
-function renderPresentations(plan, experienceId, targets, attribution) {
+function renderPresentations(plan, experienceId, targets) {
   // Build each presentation before committing, so a render failure stays local.
-  const namespace = `plan-${++renderInstance}`;
-  // Consumer integration, with multiple plans: local scope keys can collide. Prefix
-  // them consistently in DOM/lookup, retaining shared keys within each plan.
   const manualRoots = [];
   const rendered = targets.map(({ section }) =>
     renderExperience(plan, experienceId, section, {
-      namespace,
       onManualRoot: (element, data) => manualRoots.push({ element, data }),
     })
   );
-  for (const [key, scope] of Object.entries(plan.attribution?.scopes ?? {})) {
-    attribution.set(`${namespace}:${key}`, scope);
-  }
   targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
   // Consumer integration: register after insertion, as in Optimization's
   // manually observed section. SDK observers own consent, dwell and duration.
   for (const { element, data } of manualRoots) {
     sdk.tracking.clearElement('views', element);
     sdk.tracking.enableElement('views', element, { data });
+    manualElements.push(element);
   }
 }
 
@@ -326,20 +304,16 @@ document.addEventListener('click', (event) => {
   void renderRoute({ sendPage: true, focus: true });
 });
 window.addEventListener('popstate', () => void renderRoute({ sendPage: true, focus: true }));
-window.addEventListener('pagehide', async (event) => {
-  // Consumer integration: release caller-owned tracking/subscriptions before SDK destruction.
+window.addEventListener('pagehide', (event) => {
+  // Consumer integration: release caller-owned subscriptions on document unload.
   // A back/forward-cache suspension keeps this instance alive for resumption.
   if (event.persisted) return;
   disposed = true;
   generation += 1;
-  try {
-    await stopTracking();
-  } catch {
-    window.console.error('Unable to finish the interaction tracking session.');
-  } finally {
-    trackingLog.dispose();
-    controls.dispose();
-    sdk.destroy();
-  }
+  trackingLog.dispose();
+  controls.dispose();
+  // The SDK owns its hide/unload flush; destroying here would cancel pending final
+  // durations. Browser teardown releases this document's SDK. Explicitly destroy
+  // it when replacing the owner inside a still-live document instead.
 });
 void renderRoute({ sendPage: true });

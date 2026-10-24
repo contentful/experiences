@@ -61,7 +61,6 @@ import { getPageProperties, getUserAgent } from './browser-event-context.js';
 import {
   createInteractionTracking,
   type InteractionTracking,
-  type InteractionTrackingOptions,
   type AutoTrackEntryInteractionOptions,
   type EntryInteractionApi,
 } from './interaction-tracking.js';
@@ -152,13 +151,6 @@ type WebEventMethods = Pick<
 
 export type ExperiencesTrackingApi = EntryInteractionApi;
 
-export type InteractionTrackingStartOptions = InteractionTrackingOptions;
-
-export interface InteractionTrackingSession {
-  refresh(): void;
-  stop(): Promise<void>;
-}
-
 /**
  * Start the Personalization teardown drain and handle its completion.
  */
@@ -189,7 +181,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   protected readonly onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
   readonly #getAnonymousId: () => string | undefined;
   #interactionTracking: InteractionTracking | undefined;
-  #interactionSession = false;
   /** Automatic and per-element interaction controls, matching Optimization. */
   readonly tracking: ExperiencesTrackingApi = {
     enable: (type, options) => this.#ensureInteractionTracking()?.tracking.enable(type, options),
@@ -511,7 +502,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
     const generation = this.#generation;
-    const gated = this.#gatePersonalizationEvents(options);
+    const gated = this.#gatePersonalizationEvents(
+      this.#ensureInteractionTracking()?.hasAutoTracking()
+        ? {
+            ...options,
+            extensions: { ...options.extensions, sourceMap: options.extensions?.sourceMap ?? {} },
+          }
+        : options
+    );
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
     const intercepted =
@@ -637,70 +635,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
   }
 
-  #createInteractionTracking(
-    options: InteractionTrackingOptions,
-    initialSettings?: ReturnType<InteractionTracking['getSettings']>,
-    discoverAutomatic = true
-  ): InteractionTracking {
-    return createInteractionTracking(
+  #ensureInteractionTracking(): InteractionTracking | undefined {
+    if (this.#destroyed) return undefined;
+    return (this.#interactionTracking ??= createInteractionTracking(
       this,
-      options,
+      this.config.autoTrackEntryInteraction,
       {
         isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
-      },
-      initialSettings,
-      discoverAutomatic
-    );
-  }
-
-  #ensureInteractionTracking(): InteractionTracking | undefined {
-    if (this.#destroyed) return undefined;
-    return (this.#interactionTracking ??= this.#createInteractionTracking(
-      { resolveAttribution: () => undefined, ...this.config.autoTrackEntryInteraction },
-      undefined,
-      false
+      }
     ));
-  }
-
-  startInteractionTracking(options: InteractionTrackingStartOptions): InteractionTrackingSession {
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#interactionSession) {
-      throw new Error('Interaction tracking is already running; stop it before starting again');
-    }
-    const previous = this.#interactionTracking;
-    // A new attribution lookup needs its own draining callback ownership, while
-    // omitted session settings retain the SDK's current imperative decisions.
-    const tracking = this.#createInteractionTracking(
-      previous ? options : { ...this.config.autoTrackEntryInteraction, ...options },
-      previous?.getSettings()
-    );
-    previous?.transferOverridesTo(tracking.tracking);
-    previous?.destroy();
-    this.#interactionSession = true;
-    this.#interactionTracking = tracking;
-
-    let stopping: Promise<void> | undefined;
-    return {
-      refresh: () => {
-        if (this.#interactionTracking === tracking) tracking.refresh();
-      },
-      stop: () => {
-        if (stopping) return stopping;
-        // Everything but the sends is synchronous: `endActive()` ends in-progress
-        // views and hovers before its first await, so the session can be torn
-        // down and its slot released at once, and only the final events are
-        // still in flight when a new session starts.
-        if (this.#interactionTracking === tracking) {
-          this.#interactionTracking = undefined;
-          this.#interactionSession = false;
-        }
-        const flushed = tracking.endActive();
-        tracking.destroy();
-        stopping = flushed;
-        return stopping;
-      },
-    };
   }
 
   /** Adopt a validated handoff's profile state without sending its page. */

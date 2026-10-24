@@ -1,7 +1,13 @@
 import type { TrackingAttribution } from './attribution.js';
 
-/** Automatic scope strings and disjoint private per-element occurrence identities. */
-export type InteractionKey = string | symbol;
+/** Automatic occurrence objects and disjoint private per-element identities. */
+export type InteractionKey =
+  | string
+  | symbol
+  | {
+      readonly localKey: string;
+      readonly attribution: TrackingAttribution;
+    };
 
 /** Resolves automatic scope or private manual occurrence attribution. */
 export type ResolveScopeAttribution<TKey extends InteractionKey = string> = (
@@ -17,7 +23,7 @@ export interface InteractionDetector<TKey extends InteractionKey = string> {
   start(): void;
   stop(options?: { preservePending?: boolean }): void;
   onElementAdded(element: Element, key: TKey): void;
-  onElementRemoved(element: Element, key: TKey): void;
+  onElementRemoved(element: Element, key: TKey, options?: { finalize?: boolean }): void;
   endActive?(): Promise<void>;
 }
 

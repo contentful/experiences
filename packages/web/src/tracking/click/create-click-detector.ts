@@ -83,11 +83,13 @@ export function createClickDetector<TKey extends InteractionKey = string>(
     const automaticOrder = (trackedElement.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '').split(
       /\s+/
     );
+    const localKey = (key: TKey): string | undefined =>
+      typeof key === 'object' ? key.localKey : typeof key === 'string' ? key : undefined;
     const keys = [...admitted]
-      .filter((key) => typeof key !== 'string' || automaticOrder.includes(key))
+      .filter((key) => localKey(key) === undefined || automaticOrder.includes(localKey(key)!))
       .sort((left, right) =>
-        typeof left === 'string' && typeof right === 'string'
-          ? automaticOrder.indexOf(left) - automaticOrder.indexOf(right)
+        localKey(left) !== undefined && localKey(right) !== undefined
+          ? automaticOrder.indexOf(localKey(left)!) - automaticOrder.indexOf(localKey(right)!)
           : 0
       );
     for (const key of keys) {
