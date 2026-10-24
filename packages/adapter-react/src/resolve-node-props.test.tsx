@@ -1,0 +1,257 @@
+import { describe, expect, it } from 'vitest';
+import { memo } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import type { NodeAttribution, PortableRenderNode } from '@contentful/experiences-sdk-core';
+
+import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
+import {
+  ContentfulComponentProvider,
+  ContentfulExperienceTemplateProvider,
+  ExperienceProvider,
+  ResolvedDesignProvider,
+  resolveNodeProps,
+} from './primitives';
+import { ServerExperienceRenderer } from './server-renderer';
+import { defineComponent, type Config } from './types';
+import { useDesignValues } from './use-design-values';
+
+function planNode(
+  kind: 'component' | 'experienceTemplate',
+  id: string,
+  props: Partial<PortableRenderNode['props']> = {},
+  rest: Partial<PortableRenderNode> = {}
+): PortableRenderNode {
+  return {
+    registration: { kind, id },
+    props: { content: {}, design: {}, designRaw: {}, ...props },
+    slots: {},
+    ...rest,
+  };
+}
+
+const Noop = () => null;
+
+describe('resolveNodeProps', () => {
+  it('merges defaults < design < content < resolveData', () => {
+    const config: Config = {
+      components: {
+        card: defineComponent({
+          component: Noop,
+          defaults: { a: 'default', b: 'default', c: 'default', d: 'default' },
+        }),
+      },
+    };
+    const node = planNode('component', 'card', {
+      design: { b: 'design', c: 'design', d: 'design' },
+      content: { c: 'content', d: 'content' },
+      resolved: { d: 'resolved' },
+    });
+
+    const result = resolveNodeProps(node, config);
+
+    expect(result.status).toBe('resolved');
+    if (result.status !== 'resolved') return;
+    expect(result.props).toEqual({ a: 'default', b: 'design', c: 'content', d: 'resolved' });
+  });
+
+  it('does not add slot props; the host renders slots itself', () => {
+    const config: Config = { components: { section: Noop, text: Noop } };
+    const node = planNode(
+      'component',
+      'section',
+      {},
+      { slots: { children: [planNode('component', 'text')] } }
+    );
+
+    const result = resolveNodeProps(node, config);
+
+    expect(result.status).toBe('resolved');
+    if (result.status !== 'resolved') return;
+    expect(result.props).not.toHaveProperty('children');
+  });
+
+  it('resolves a bare component and a memo-wrapped component registration', () => {
+    const Memoized = memo(Noop);
+    const config: Config = { components: { bare: Noop, memoized: Memoized } };
+
+    const bare = resolveNodeProps(planNode('component', 'bare'), config);
+    const memoized = resolveNodeProps(planNode('component', 'memoized'), config);
+
+    expect(bare.status === 'resolved' && bare.component).toBe(Noop);
+    expect(memoized.status === 'resolved' && memoized.component).toBe(Memoized);
+  });
+
+  it('returns the component payload and design for the providers', () => {
+    const attribution: NodeAttribution = { scopes: [], roots: [], entryIds: ['entry-1'] };
+    const config: Config = { components: { card: Noop } };
+    const node = planNode(
+      'component',
+      'card',
+      {
+        content: { title: 'Hi' },
+        design: { color: 'red' },
+        designRaw: { color: { type: 'ManualDesignValue', value: 'red' } },
+        resolved: { badge: 'New' },
+      },
+      { nodeId: 'n1', attribution }
+    );
+
+    const result = resolveNodeProps(node, config);
+
+    expect(result).toMatchObject({
+      status: 'resolved',
+      kind: 'component',
+      id: 'card',
+      nodeId: 'n1',
+      design: { color: 'red' },
+      contentful: {
+        componentId: 'card',
+        nodeId: 'n1',
+        content: { title: 'Hi' },
+        design: { color: { type: 'ManualDesignValue', value: 'red' } },
+        resolved: { badge: 'New' },
+        attribution,
+      },
+    });
+  });
+
+  it('looks experience templates up in config.experienceTemplates', () => {
+    const Page = () => null;
+    const config: Config = {
+      components: { page: Noop },
+      experienceTemplates: { page: { component: Page, defaults: { title: 'Default' } } },
+    };
+
+    const result = resolveNodeProps(
+      planNode('experienceTemplate', 'page', { content: { slug: 'home' } }, { nodeId: 't1' }),
+      config
+    );
+
+    expect(result).toMatchObject({
+      status: 'resolved',
+      kind: 'experienceTemplate',
+      component: Page,
+      props: { title: 'Default', slug: 'home' },
+      contentful: { experienceTemplateId: 'page', nodeId: 't1', content: { slug: 'home' } },
+    });
+  });
+
+  it('reports an unregistered component or experience template instead of throwing', () => {
+    // A component registered under the same id must not satisfy a template lookup.
+    const config: Config = { components: { page: Noop } };
+
+    expect(
+      resolveNodeProps(planNode('component', 'missing', {}, { nodeId: 'n2' }), config)
+    ).toEqual({
+      status: 'unregistered',
+      kind: 'component',
+      id: 'missing',
+      nodeId: 'n2',
+    });
+    expect(resolveNodeProps(planNode('experienceTemplate', 'page'), config)).toEqual({
+      status: 'unregistered',
+      kind: 'experienceTemplate',
+      id: 'page',
+      nodeId: undefined,
+    });
+  });
+
+  it('gives a host-rendered node the same markup as ServerExperienceRenderer', () => {
+    function Card({ title, color, badge }: { title: string; color: string; badge: string }) {
+      return (
+        <article style={{ color }}>
+          {title} {badge}
+        </article>
+      );
+    }
+    const config: Config = {
+      components: { card: defineComponent({ component: Card, defaults: { badge: 'Featured' } }) },
+    };
+    const node = planNode('component', 'card', {
+      content: { title: 'Hi' },
+      design: { color: 'red' },
+    });
+
+    const result = resolveNodeProps(node, config);
+    if (result.status !== 'resolved') throw new Error('expected a resolved node');
+    const Component = result.component;
+    const hostMarkup = renderToStaticMarkup(<Component {...result.props} />);
+    const sdkMarkup = renderToStaticMarkup(
+      <ServerExperienceRenderer
+        experience={{ nodes: [node], metadata: {}, debug: false, diagnostics: [] }}
+        config={config}
+      />
+    );
+
+    expect(hostMarkup).toBe(sdkMarkup);
+  });
+});
+
+describe('primitives providers', () => {
+  it('make the SDK hooks work when a host wraps a component manually', () => {
+    let seen: unknown;
+    function Probe() {
+      seen = {
+        experience: useExperience(),
+        component: useContentfulComponent(),
+        template: useContentfulExperienceTemplate(),
+        design: useDesignValues(),
+      };
+      return null;
+    }
+    const config: Config = { components: { probe: Probe } };
+    const result = resolveNodeProps(
+      planNode(
+        'component',
+        'probe',
+        { content: { title: 'Hi' }, design: { color: 'red' } },
+        { nodeId: 'n1' }
+      ),
+      config
+    );
+    if (result.kind !== 'component' || result.status !== 'resolved') {
+      throw new Error('expected a resolved component');
+    }
+
+    renderToStaticMarkup(
+      <ExperienceProvider value={{ debug: false, metadata: { framework: 'astro' } }}>
+        <ContentfulComponentProvider value={result.contentful}>
+          <ResolvedDesignProvider value={result.design}>
+            <result.component {...result.props} />
+          </ResolvedDesignProvider>
+        </ContentfulComponentProvider>
+      </ExperienceProvider>
+    );
+
+    expect(seen).toEqual({
+      experience: { debug: false, metadata: { framework: 'astro' } },
+      component: result.contentful,
+      template: null,
+      design: { color: 'red' },
+    });
+  });
+
+  it('expose the experience template payload through its provider', () => {
+    let seen: unknown;
+    function Probe() {
+      seen = useContentfulExperienceTemplate();
+      return null;
+    }
+    const result = resolveNodeProps(planNode('experienceTemplate', 'page'), {
+      components: {},
+      experienceTemplates: { page: Probe },
+    });
+    if (result.kind !== 'experienceTemplate' || result.status !== 'resolved') {
+      throw new Error('expected a resolved experience template');
+    }
+
+    renderToStaticMarkup(
+      <ContentfulExperienceTemplateProvider value={result.contentful}>
+        <result.component {...result.props} />
+      </ContentfulExperienceTemplateProvider>
+    );
+
+    expect(seen).toEqual(result.contentful);
+  });
+});

@@ -114,6 +114,23 @@ ClientExperienceRenderer; // Client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
 ```
 
+### Primitives (`@contentful/experiences-react/primitives`)
+
+For hosts that walk the plan themselves, mainly islands frameworks such as Astro, where a component rendered inside `ServerExperienceRenderer` never hydrates. The host resolves each node with `resolveNodeProps`, renders static nodes with `ExperienceNode`, and passes `resolved.snapshot` to an island built with `createExperienceNode`, so only the components bound there ship to the browser. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`.
+
+```ts
+resolveNodeProps(node, config); // ResolvedNode: 'resolved' (component, props, design, contentful, snapshot) | 'unregistered'
+ExperienceNode; // Renders one resolved node or snapshot exactly as the SDK renderers do
+createExperienceNode(components, experienceTemplates?); // ExperienceNode with its registry bound, for an island
+ExperienceProvider; // Raw context providers ExperienceNode composes
+ContentfulComponentProvider;
+ContentfulExperienceTemplateProvider;
+ResolvedDesignProvider;
+type ResolvedNode, ResolvedComponentNode, ResolvedExperienceTemplateNode, UnregisteredNode;
+type NodeSnapshot, ComponentNodeSnapshot, ExperienceTemplateNodeSnapshot;
+type ExperienceNodeProps, BoundExperienceNodeProps;
+```
+
 ### Styling + runtime context (hooks)
 
 ```ts
