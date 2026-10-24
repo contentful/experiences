@@ -1,3 +1,14 @@
+## 0.2.5 (2026-10-24)
+
+### 🩹 Fixes
+
+- **deps:** update dependency zod to ^4.6.7 [security] ([#261](https://github.com/contentful/experiences/pull/261))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.5
+- Updated core to 0.13.4
+
 ## 0.2.4 (2026-10-23)
 
 ### 🧱 Updated Dependencies

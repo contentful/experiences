@@ -1,3 +1,13 @@
+## 0.14.5 (2026-10-24)
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.7.5
+- Updated runtime to 0.2.5
+- Updated client to 0.10.5
+- Updated design to 0.13.4
+- Updated core to 0.13.4
+
 ## 0.14.4 (2026-10-23)
 
 ### 🧱 Updated Dependencies
