@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> – Contentful Experiences Node + Web SDK</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/css/theme.css" />
+    <script defer src="/dist/contentful-experiences-web.umd.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <nav class="app-nav" id="app-nav" aria-label="Main navigation">
+        <a href="/" data-testid="link-home" <% if (path === '/') { %>aria-current="page" class="active"<% } %>>Home</a>
+        <a href="/page-two" data-testid="link-page-two" <% if (path === '/page-two') { %>aria-current="page" class="active"<% } %>>Page Two</a>
+      </nav>
+      <div class="app-body">
+        <aside class="app-sidebar" aria-label="Implementation status">
+          <section class="tracking-log">
+            <h2>Standalone foundation</h2>
+            <p>Phase 2: local packages, assets and hosting.</p>
+            <p>SDK activation and tracking are not connected.</p>
+          </section>
+        </aside>
+        <main class="app-main" id="app-main" tabindex="-1">
+          <header class="page-header">
+            <h1><%= title %></h1>
+            <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
+          </header>
+          <section class="page-section" aria-label="Reference implementation status">
+            <h2>Application foundation ready</h2>
+            <p>This route serves the Express/EJS shell. Experience fetching and rendering await the next accepted phase.</p>
+            <p>The installed Web SDK distribution is available; this page does not construct an SDK or send events.</p>
+            <p><a href="/health">Check local process health</a></p>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
