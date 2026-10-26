@@ -1,3 +1,9 @@
+## 0.14.7 (2026-10-26)
+
+### 🚀 Features
+
+- **react:** add ./custom-renderer export for host-rendered nodes [AIS-723] ([#260](https://github.com/contentful/experiences/pull/260))
+
 ## 0.14.6 (2026-10-26)
 
 ### 🚀 Features
