@@ -394,6 +394,6 @@ If the payload references an experience-template id that isn't registered, the r
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.
 
-The consent panel constructs the Web event runtime and recreates it when `preview_session_id`
-changes. Session preview skips manual/automatic events even with consent granted, while the
+The consent panel passes an `isPreview` boolean derived from `preview_session_id` to the Web
+event runtime and recreates it when entering or leaving Session preview. Preview skips manual/automatic events even with consent granted, while the
 existing Session fetch/render/subscription path continues. Mode is independent of socket status.

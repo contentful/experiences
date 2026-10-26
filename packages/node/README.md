@@ -15,21 +15,22 @@ Pass the incoming URL's Session ID before any event or handoff work:
 ```ts
 const url = new URL(incomingRequest.url);
 const request = sdk.forRequest({
-  previewSessionId: url.searchParams.get('preview_session_id') ?? undefined,
+  isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()),
   consent: visitorConsent,
 });
 await request.page(); // { accepted: false, reason: 'preview' } in Session preview
 ```
 
-A nonempty trimmed ID fixes read-only `request.isPreview` for this request, independently
-of consent, CPA configuration and socket status. All event calls skip before building or
+`isPreview: true` fixes read-only `request.isPreview` for this request, independently
+of consent, CPA configuration and socket status. It defaults to false; the host determines
+preview intent before calling `forRequest()`. All event calls skip before building or
 profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
 Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
 returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
 `canPersistProfile` still reflects persistence consent. With consent granted, the documented
 cookie helper leaves an existing identity untouched because the handoff has no profile ID.
-Static preview without a Session ID, raw `sdk.api` calls and standalone free fetches remain
-outside this policy.
+Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
+and standalone free fetches remain outside this policy.
 
 ## Create an SDK instance, then bind every request
 

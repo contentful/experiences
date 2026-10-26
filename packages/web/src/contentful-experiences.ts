@@ -89,8 +89,8 @@ export type CoreConfigDefaults = StatefulDefaults;
  * Long-lived, browser-oriented SDK configuration.
  */
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
-  /** Suppresses events for this instance; the browser URL's preview_session_id also activates preview. */
-  previewSessionId?: string;
+  /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
+  isPreview?: boolean;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -281,12 +281,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
       },
     });
-    this.#isPreview = Boolean(
-      config.previewSessionId?.trim() ||
-      (typeof window === 'undefined'
-        ? undefined
-        : new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim())
-    );
+    this.#isPreview =
+      config.isPreview ??
+      (typeof window !== 'undefined' &&
+        Boolean(
+          new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim()
+        ));
     // The lock is taken after the base class has validated its configuration, so a
     // failed construction never holds it. Construction is synchronous, so nothing
     // else can acquire it in between.

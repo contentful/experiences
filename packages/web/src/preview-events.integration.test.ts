@@ -149,9 +149,9 @@ describe('Session preview event isolation', () => {
   it('isolates concurrent Node delivery and skips preview preflight and browser replay', async () => {
     const fetch = http();
     const server = node();
-    const context = { previewSessionId: ' session-1 ', consent: true };
+    const context = { isPreview: true, consent: true };
     const preview = server.forRequest(context);
-    context.previewSessionId = '';
+    context.isPreview = false;
     const delivery = server.forRequest({ consent: true });
     const [results, admitted] = await Promise.all([allEvents(preview), delivery.page()]);
     expect(results).toEqual(Array(7).fill(skipped));
@@ -193,7 +193,7 @@ describe('Session preview event isolation', () => {
     const fetch = http();
     const sdk = web({ defaults: { profile: { id: 'browser' } } });
     const request = node().forRequest({
-      previewSessionId: 'session-1',
+      isPreview: true,
       consent: true,
       profile: { id: 'server' },
     });
@@ -289,17 +289,33 @@ describe('Session preview event isolation', () => {
     ]);
   });
 
-  it.each(['', '   '])('ignores empty IDs: %j', (previewSessionId) => {
-    window.history.replaceState({}, '', '/?preview_session_id=%20%20');
-    expect(web({ previewSessionId }).isPreview).toBe(false);
-    expect(node().forRequest({ previewSessionId }).isPreview).toBe(false);
+  it.each(['', '   '])('ignores empty URL IDs: %j', (sessionId) => {
+    window.history.replaceState({}, '', `/?preview_session_id=${encodeURIComponent(sessionId)}`);
+    expect(web().isPreview).toBe(false);
   });
 
-  it('accepts an explicit ID without a URL ID; an empty explicit ID cannot opt out of URL preview', () => {
-    const sdk = web({ previewSessionId: '' });
-    expect(sdk.isPreview).toBe(true);
-    sdk.destroy();
+  it.each([undefined, false])(
+    'keeps Node in delivery without isPreview: true (%j)',
+    (isPreview) => {
+      expect(node().forRequest({ isPreview }).isPreview).toBe(false);
+    }
+  );
+
+  it('accepts an explicit true without a URL ID', async () => {
+    const fetch = http();
     window.history.replaceState({}, '', '/');
-    expect(web({ previewSessionId: ' session-1 ' }).isPreview).toBe(true);
+    const sdk = web({ isPreview: true });
+    expect(sdk.isPreview).toBe(true);
+    expect(await allEvents(sdk)).toEqual(Array(7).fill(skipped));
+    await sdk.flush();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('honors explicit false over a URL Session ID', async () => {
+    const fetch = http();
+    const sdk = web({ isPreview: false });
+    expect(sdk.isPreview).toBe(false);
+    expect((await sdk.page()).accepted).toBe(true);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

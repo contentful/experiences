@@ -61,7 +61,7 @@ interface ConsentPanelProps {
  * LocalStorage. Both choices are stored in LocalStorage, so they survive a reload.
  */
 export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPanelProps) {
-  const previewSessionId = useSearchParams().get('preview_session_id')?.trim() || undefined;
+  const isPreview = Boolean(useSearchParams().get('preview_session_id')?.trim());
   const runtime = useRef<ContentfulExperiences | undefined>(undefined);
   const [consent, setConsent] = useState<Consent>({});
   const [profileId, setProfileId] = useState<string | undefined>();
@@ -74,7 +74,7 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
       spaceId,
       environmentId,
       delivery: { accessToken },
-      previewSessionId,
+      isPreview,
     });
     runtime.current = instance;
     const refreshStored = () =>
@@ -105,7 +105,7 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
       instance.destroy();
       runtime.current = undefined;
     };
-  }, [spaceId, environmentId, accessToken, previewSessionId]);
+  }, [spaceId, environmentId, accessToken, isPreview]);
 
   async function fire(name: string, send: () => Promise<unknown>) {
     try {

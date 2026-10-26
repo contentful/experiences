@@ -58,8 +58,8 @@ type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventB
 
 /** Context scoped to one incoming Node request. */
 export type ExperiencesNodeRequestContext = {
-  /** Session ID from the incoming preview URL; event sending is suppressed for this request. */
-  previewSessionId?: string;
+  /** Suppresses events for this request. Defaults to false. */
+  isPreview?: boolean;
   locale?: string;
   resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
@@ -221,7 +221,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     createEventMethods: (bindings: RuntimeDirectEventBindings) => RuntimeEventMethods,
     private readonly consentPolicy: ConsentPolicy
   ) {
-    this.#isPreview = Boolean(context.previewSessionId?.trim());
+    this.#isPreview = context.isPreview === true;
     const { experienceOptions, insightsOptions } = context;
     this.#experienceOptions =
       experienceOptions === undefined

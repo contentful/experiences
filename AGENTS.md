@@ -118,12 +118,12 @@ container, and sends through the same direct methods. Container DOM identity
 separates repeated presentations; shared keys retain multi-root grouping. `getTrackingAttributes` lives in core and is re-exported by every
 adapter and by the `@contentful/experiences-web/tracking-attributes` subpath; no
 adapter stamps attributes for you: renderers spread plan attribution onto each
-Experience container and node attribution onto its outermost elements. Web captures preview from
-an initial nonempty `preview_session_id` or explicit `previewSessionId`; Node integrations pass
-`previewSessionId` into `forRequest()`. Fixed read-only `isPreview` gates all events, automatic
+Experience container and node attribution onto its outermost elements. Web accepts an explicit
+`isPreview` boolean, falling back to initial nonempty `preview_session_id` detection when omitted.
+Node integrations pass `isPreview: true` into `forRequest()`. Fixed read-only `isPreview` gates all events, automatic
 tracking, embedded fetch personalization and handoff preparation/replay before event work.
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
-Static preview without a Session ID, raw `sdk.api` and free fetches remain outside it.
+Static preview without a Session ID requires explicit opt-in; raw `sdk.api` and free fetches remain outside it.
 
 Web's `tracking` API follows Optimization's `enable`, `disable`, `enableElement`,
 `disableElement` and `clearElement` controls for `views`, `hovers` and `clicks`.

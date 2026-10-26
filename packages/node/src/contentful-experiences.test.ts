@@ -518,7 +518,7 @@ describe('Node ContentfulExperiences', () => {
   it('preserves persistence consent and existing identity when Session preview skips handoff', async () => {
     const { runtime, upsertProfile, sendBatchEvents } = createEventRuntime();
     const request = runtime.forRequest({
-      previewSessionId: 'session',
+      isPreview: true,
       consent: true,
       profile: { id: 'existing-visitor' },
     });

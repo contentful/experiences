@@ -143,8 +143,9 @@ Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app n
 
 A connection starts only when both `previewToken` and `sessionId` are available.
 
-Session preview suppresses Web events from startup when the URL has a nonempty
-`preview_session_id`; Node integrations pass it to `forRequest({ previewSessionId })`.
+Both runtimes accept an explicit `isPreview` boolean. Web detects a nonempty URL
+`preview_session_id` when the option is omitted; Node integrations pass
+`isPreview: true` to `forRequest()` for preview requests.
 Calls return `{ accepted: false, reason: 'preview' }`, while rendering and Session updates continue.
 See the [Web](./packages/web/README.md#session-preview) and [Node](./packages/node/README.md#session-preview) contracts.
 

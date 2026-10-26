@@ -60,14 +60,14 @@ describe('Web interaction tracking on the server', () => {
 });
 
 describe('Session preview without browser globals', () => {
-  it('uses an explicit ID before any event work', async () => {
+  it('uses an explicit boolean before any event work', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const { ContentfulExperiences } = await import('./index.js');
     runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
       delivery: { accessToken: 'delivery-token' },
-      previewSessionId: ' session-1 ',
+      isPreview: true,
       defaults: { consent: true },
     });
     expect(runtime.isPreview).toBe(true);
