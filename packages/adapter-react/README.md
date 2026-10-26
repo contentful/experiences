@@ -114,6 +114,17 @@ ClientExperienceRenderer; // Client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
 ```
 
+### Custom renderer (`@contentful/experiences-react/custom-renderer`)
+
+For hosts that render a plan themselves instead of using `ServerExperienceRenderer`. `resolveNodeProps` returns each node's component and merged props, `ExperienceNode` renders it the way the SDK renderers do, and `createExperienceNode` renders a node's serializable `snapshot` where components can't be passed as props. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`.
+
+```ts
+resolveNodeProps(node, config); // ResolvedNode: 'resolved' (component, props, design, contentful, snapshot) | 'unregistered'
+ExperienceNode; // Renders one resolved node or snapshot exactly as the SDK renderers do
+createExperienceNode(components, experienceTemplates?); // ExperienceNode with its registry bound, for snapshots
+type ResolvedNode, NodeSnapshot, ExperienceNodeProps;
+```
+
 ### Styling + runtime context (hooks)
 
 ```ts

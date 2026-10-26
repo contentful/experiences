@@ -14,6 +14,12 @@
         "default": "./dist/index.js"
       }
     },
+    "./custom-renderer": {
+      "import": {
+        "types": "./dist/custom-renderer.d.ts",
+        "default": "./dist/custom-renderer.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
