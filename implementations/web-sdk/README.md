@@ -310,9 +310,8 @@ included.
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. No Live Updates or Live Preview is included.
-Content fetching/rendering, visitor actions, interaction tracking and the sidebar
-are accepted through Phase 6. An event-stream notification denotes
-an event attempt, not admission or successful delivery. XDA is currently unstable
+An event-stream notification denotes an event attempt, not admission or
+successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
 
 Live verification has not reached empty-plan, missing-Experience, transport-failure
@@ -323,9 +322,7 @@ they do not establish live service outcomes. Ordinary browser back navigation
 does not establish back/forward-cache behavior. Visual comparison uses the pinned
 Optimization source/theme rather than a running pixel comparison.
 
-The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current authorization and validation evidence. Phases 1–7 are accepted;
-automatic setup through rendered plan containers is the current standard.
+Automatic setup through rendered plan containers is the current standard.
 
 ## Troubleshooting
 

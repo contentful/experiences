@@ -90,7 +90,31 @@ function content(server) { %>
         <a href="/page-two" data-testid="link-page-two" <% if (path === '/page-two') { %>aria-current="page" class="active"<% } %>>Page Two</a>
       </nav>
       <div class="app-body">
-        <aside class="app-sidebar" aria-label="Tracking"></aside>
+        <!-- Maintainer: optional browser event attempts; server events are not replayed here. -->
+        <aside class="app-sidebar" aria-label="Tracking">
+          <section class="tracking-log" data-testid="analytics-events-container">
+            <div class="tracking-log__header">
+              <h2>Tracking</h2>
+              <span class="tracking-log__badge">
+                <span data-testid="raw-events-count" id="raw-events-count">0</span> attempts
+              </span>
+            </div>
+            <p class="tracking-log__empty" data-testid="no-events-message" id="no-events-message">No browser event attempts observed yet.</p>
+            <p class="tracking-log__empty">Attempts include XDA events and can precede queue refusal. They do not confirm delivery. Initial server events are not shown.</p>
+            <table class="tracking-log__table" id="tracking-table" style="display: none">
+              <thead class="tracking-log__thead">
+                <tr>
+                  <th>Type</th>
+                  <th>Value</th>
+                  <th>Dur</th>
+                  <th>Age</th>
+                  <th aria-label="Count"></th>
+                </tr>
+              </thead>
+              <tbody id="tracking-tbody"></tbody>
+            </table>
+          </section>
+        </aside>
         <main class="app-main" id="app-main" tabindex="-1">
           <div id="route-header">
             <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
@@ -136,7 +160,7 @@ function content(server) { %>
         </main>
       </div>
     </div>
-    <!-- These native templates are emitted by the same server-side markup functions. -->
+    <!-- Reference app: native templates reuse the SSR markup functions; no client EJS runtime. -->
     <template id="tpl-card">
       <% card(); %>
     </template>
@@ -154,6 +178,17 @@ function content(server) { %>
     </template>
     <template id="tpl-status"><div class="placeholder-card"><p role="status"></p><button type="button" class="btn btn--secondary" data-testid="retry-experiences-button" hidden>Retry content</button>
             </div></template>
+    <template id="tpl-event-row">
+      <tr>
+        <td><span class="tracking-log__type"></span></td>
+        <td class="tracking-log__label"></td>
+        <td class="tracking-log__duration"></td>
+        <td class="tracking-log__time">0s</td>
+        <td class="tracking-log__count"></td>
+      </tr>
+    </template>
+    <!-- Consumer integration: public configuration and final request profile only.
+         The server escapes '<' for this HTML context; exclude diagnostic strings/plans. -->
     <script type="application/json" id="experience-bootstrap"><%- bootstrap %></script>
     <script type="module" src="/js/app.js"></script>
   </body>

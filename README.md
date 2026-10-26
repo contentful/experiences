@@ -1597,6 +1597,13 @@ delivery. Run `npx nx run implementation-web-sdk:setup`, then
 `npx nx run implementation-web-sdk:dev`. Its README covers local environment
 configuration, consent, interaction tracking, and scoped validation commands.
 
+The [standalone Node + Web reference implementation](./implementations/node-sdk+web-sdk/README.md)
+renders initial Experience content through Express/EJS, adopts final server profile
+state in the browser, and supports Web SDK navigation and interactions. Run
+`npx nx run implementation-node-sdk-web-sdk:setup`, then
+`npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
+integration from demo UI and optional browser-attempt diagnostics.
+
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
 every process in the selected PM2 home. Use the implementation's scoped stop

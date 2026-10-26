@@ -2,11 +2,13 @@ import { createRoutes, pageContext } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { cloneTemplate } from './templates.js';
+import { createTrackingLog } from './tracking.js';
 
 const appMain = document.getElementById('app-main');
 const status = document.getElementById('browser-status');
 let sdk;
 let controls;
+let trackingLog;
 let disposed = false;
 let manualElements = [];
 let routes;
@@ -28,6 +30,7 @@ window.addEventListener('pagehide', (event) => {
   window.removeEventListener('popstate', onPopState);
   disposeRouteAction();
   controls?.dispose();
+  trackingLog?.dispose();
   // Consumer integration: the SDK owns hide/unload final measurements and flush.
   // Do not destroy it during document exit and cancel its pending final events.
   // A BFCache suspension retains this document's instance and subscriptions.
@@ -50,6 +53,9 @@ async function activate() {
       autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
+    // Maintainer: optional browser-attempt diagnostics; never synthesize Node's
+    // already-committed events. Observe before hydration or tracking enables.
+    trackingLog = createTrackingLog(sdk);
     controls = createControlPanel(sdk, {
       onIdentify,
       onReset,
@@ -79,6 +85,7 @@ async function activate() {
     status.textContent = 'Browser active. Server-rendered content retained.';
   } catch {
     controls?.dispose();
+    trackingLog?.dispose();
     if (disposed) return;
     // Failure leaves actual server content and ordinary links usable. Stop any
     // partial registration/SDK ownership; never compensate with a page or fetch.

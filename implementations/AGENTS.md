@@ -3,6 +3,11 @@
 Use Optimization's corresponding reference implementation as the example. Keep
 SDK operations in the public runtime and justify every departure from that example.
 
+Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
+[Node + Web](./node-sdk+web-sdk/README.md). Root `npm run implementation:install`
+prepares all three through their existing Nx setup targets; stop running apps with
+their scoped lifecycle targets before refreshing dependencies.
+
 For server-side personalization, send the page event directly to establish the
 SDK-owned visitor profile. Build the identify event with the SDK event builder
 and include it in `request.fetchExperience()` personalization options so XDA can

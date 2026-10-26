@@ -20,6 +20,8 @@ export function referenceNode(node: Node, identity: string, manual: boolean) {
     roots,
     manualRoot,
     clickable: roots.some((scope) => scope.entityKind === 'ExperienceFragment'),
+    // E2E compatibility: inspect real rendered output; these selectors do not
+    // participate in SDK interaction tracking or require a test runtime.
     attributes: {
       'data-testid': `content-${identity}`,
       'data-registration-kind': node.registration.kind,

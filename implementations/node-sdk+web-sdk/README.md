@@ -4,22 +4,16 @@ This standalone Express/EJS application consumes locally packed public
 `@contentful/experiences-node` and `@contentful/experiences-web` packages. It has its
 own dependencies and tools and stays outside root npm workspaces.
 
-The current implementation includes **Phase 5 client navigation and visitor
-actions, awaiting user acceptance**. Phases 1–4 are accepted. Home and Page Two render actual Experience
+Home and Page Two render actual Experience
 content as ordinary HTML, including named slots and Rich Text, with JavaScript
 disabled. With JavaScript enabled, one Web SDK adopts the final server profile and
 observes the existing HTML without a startup content fetch or page event. Utilities
 shows activation/profile availability and both consent decisions, with paired
 Grant/Revoke, Identify, Reset and Retry content controls. Client navigation and
 back/forward fetch and render through the same Web SDK; Page Two also has a separate
-custom-event action. The event-attempt sidebar remains in Phase 6. `/health` checks local process liveness only; it makes
+custom-event action. The optional sidebar displays browser event attempts.
+`/health` checks local process liveness only; it makes
 no API calls and does not establish upstream readiness.
-
-The checkout-local [implementation plan](../../tmp/node-sdk-web-sdk-reference-implementation-plan.md)
-defines the accepted design and phase gates. Phase 6 requires explicit acceptance
-of Phase 5. The committed-server event flow and XDA limitations in that plan remain
-authoritative. The original Phase 5 state is committed/pushed as `42405e0`.
-The compact shared-code, UMD-asset and layout corrections remain uncommitted.
 
 ## Server request flow
 
@@ -114,8 +108,8 @@ DOM hydration engine.
 
 SDK consent still gates automatic and manual measurements. The SDK owns dwell,
 intervals, event queues and delivery; a submission/attempt is not a delivery promise.
-There is no event-attempt sidebar in this phase. On a startup failure, the app
-shows an activation error, disables/disposes controls, releases any partial manual
+On a startup failure, the app shows an activation error, disables/disposes controls
+and diagnostics, releases any partial manual
 registrations and destroys the failed owner while preserving the server content
 and ordinary links. There is no compensating page/fetch or automatic recovery.
 Caller-owned subscriptions are disposed on final document exit; SDK hide/unload
@@ -181,6 +175,64 @@ admission alone. The action is never attached to XDA. On final document exit,
 caller-owned route/control listeners and subscriptions are disposed; a BFCache
 suspension retains the document's owner and state.
 
+## Optional browser attempt diagnostics
+
+`public/js/tracking.js` follows the Web reference's sidebar. One
+`sdk.states.eventStream` subscription starts before hydration and interaction
+enables, and persists across client routes. The counter counts every defined
+notification, including repeated identify messages submitted through distinct XDA
+fetches. It records attempts before transport/queue admission; neither a row nor
+its count confirms delivery. Consent-blocked calls are not eventStream attempts.
+
+Only view/hover duration updates with their actual interval IDs share a row;
+other notifications receive separate rows. The count can therefore exceed the
+visible row count. Event labels use text APIs, and the sidebar shows only event
+type, entity/identify/custom-action label, page pathname, duration and age, not
+full event, profile, handoff or delivery-diagnostic payloads. The age timer and
+subscription are disposed on failed activation or final document exit and retained
+for BFCache suspension. Reset clears the observable but retains displayed history.
+
+The initial server page and embedded server identify are absent from this browser
+stream. State-only hydration does not replay them; an empty sidebar after startup
+is expected until the browser attempts an event. With consent, SDK measurements
+on the existing server HTML can produce those attempts. Diagnostics render failures
+show only a generic console message and do not interrupt event submission.
+
+## What consumers should copy
+
+The comments mark responsibilities: `Consumer integration` is the host/SDK
+boundary, `Reference app` is demo presentation, `Maintainer` is optional local
+inspection, `E2E compatibility` identifies real observable output, and
+`Known limitation` / `XDA workaround` explain current constraints.
+
+| Responsibility                 | Files to inspect                                                                    | What to adapt                                                                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Server SDK and state handoff   | `src/app.ts`, `src/cookies.ts`                                                      | Request-local context/consent/identity, page/fetch order, final state-only producer, cookie scope and private HTML-safe response |
+| Browser adoption and lifecycle | `public/js/app.js`, `public/js/control-panel.js`                                    | One Web instance, hydration before measurement, effective-consent mirrors and caller-owned subscription cleanup                  |
+| Content and attribution        | `src/index.ejs`, `public/js/experiences.js`, `src/shared.ts`                        | Your registrations, bindings, named slots, renderers and real automatic/manual attribution                                       |
+| Demo UI                        | `src/index.ejs`, `public/js/control-panel.js`, route handlers in `public/js/app.js` | Replace fixed `userId=charles`, routes and buttons with your own visitor experience                                              |
+| Optional diagnostics           | `public/js/tracking.js`, sidebar and `tpl-event-row` in `src/index.ejs`             | Omit the module, its create/dispose calls and markup if attempt inspection is unnecessary                                        |
+| Local repository preparation   | `project.json`, `package.json`, `scripts/build-assets.ts`                           | This reference's tarball/Nx workflow; a consumer normally uses its own package installation and build                            |
+
+The browser SDK constructor comes from the installed classic UMD. The small shared
+module has type-only SDK imports; Rich Text and pure tracking helpers are a separate
+asset. Do not bundle a second stateful SDK when adapting this renderer. Native
+templates and EJS are presentation choices, not requirements of profile hydration.
+`data-testid` selectors inspect actual UI and have no role in SDK tracking, which
+uses the real attribution attributes or explicit element registration.
+
+`PortableRenderPlan` types the tree and attribution, while `props.content` remains
+`Record<string, unknown>`. Generated CDA declarations describe source fields and do
+not automatically type transformed bindings. This app adds no duplicate content
+schema or generator; its TypeScript check does not check EJS or browser property
+accesses. Adapt content mappings to the configured bindings and inspect live output.
+
+Optimization's pinned hybrid reference previews an initial event batch and lets
+the browser hydrate/replay it. Here XDA lacks noncommitting content preflight, so
+Node commits page before fetching and embeds identify in each distinct fetch;
+Web adopts only final profile state. Do not copy Optimization's replay path into
+this committed-server flow or add suppression/compensating requests.
+
 ## Current live behavior and limits
 
 Both routes displayed baseline content in direct JavaScript-disabled browser
@@ -197,39 +249,27 @@ noncommitting content preflight. This app uses state-only hydration data for a
 committed server request; it does not exercise prepared replay or introduce a
 suppression mechanism.
 
-Direct live checks covered both server routes, baseline/identify output, attribution,
-bootstrap shape, cookie grant/return/denial and headers. Accepted Phase 4 checks
-confirmed unchanged startup DOM, hydration-before-measurement, cookie continuity
-and real Analytics view/click/hover submissions. Startup remains separate from
-client rendering; the Phase 5 reload showed no browser XDA or Personalization call.
+Live verification did not encounter empty/missing-Experience, transport/render/
+initialization or startup failures. Client partial-warning handling, HTTPS cookies,
+final-exit subscription/timer disposal and BFCache restoration were reviewed in
+source but not observed live. These are validation limits, not diagnosed defects.
+TypeScript does not check EJS or browser content property accesses/live binding shapes.
 
-Phase 5's client retry matched all 13 rendered server nodes for registration kind/ID,
-stable identity, title/text, Rich Text and named slots. Retry made three distinct
-XDA fetches with no page. Navigation sent one page before two Page Two fetches;
-back/forward sent two pages and five total Home/Page Two fetches. Identify produced
-only identify-bearing XDA calls with context/source maps and selected the inspected
-variants. The custom action was refused without consent and then admitted with a
-200 API response after Grant, without a content fetch.
+## DX assessment
 
-A debugger inspection confirmed that Identify joined an actually pending navigation
-page (one page, three Home fetches). Reset detached all old attributed/manual DOM
-before `sdk.reset()`, cleared intent and produced a new visitor identity with baseline
-content. In a live navigation/Reset overlap, the fresh visitor page started before
-the old page response; only the current route's two content fetches followed.
-Analytics view submissions for the newly rendered automatic Experience and all three
-manual roots returned 200. A real reload retained the consented identity. Revoke
-left the client-rendered content unchanged, made no request, and mirrored denial;
-the checked browser is left with consent revoked. No browser error logs were observed
-in these checks, and the read-only source review found no actionable defect.
+The public SDKs support this committed SSR flow, final-profile adoption, real
+attribution, consent and interaction measurement. A consumer supplies the HTTP
+cookie/consent bridge, private HTML-safe serialization, content renderers/bindings,
+and route/action sequencing with lifecycle guards. The file mappings above expose
+these application responsibilities; the sidebar remains optional.
 
-No failing empty/missing-content, transport/render/initialization or startup case was
-encountered during these checks. Those paths, client partial-warning handling,
-HTTPS cookies and BFCache restoration have source review but no corresponding live
-observation. Server partial-delivery warnings were observed in the accepted server
-phase. These are validation limits, not discovered defects; no fixtures, mocks,
-test-only hooks or forced failures were introduced. Temporary debugger breakpoints
-were removed and no live handoff payloads were saved. TypeScript does not check EJS
-or authored browser JavaScript property accesses/live binding shapes.
+Local package refresh now has one aggregate command, while focused setup remains
+available. The remaining friction is the explicit page-before-fetch and repeated
+embedded identify required by current XDA behavior, the absence of noncommitting
+preflight and DOM hydration, and unknown-valued content through plans. EJS/browser
+property accesses require live inspection because the app typecheck does not cover
+them. Existing service-selection variability and unobserved failure/HTTPS/BFCache
+paths limit the evidence; the reference adds no alternate mechanism to hide them.
 
 ## Setup and refresh
 
@@ -347,8 +387,8 @@ Health returns `ok`; missing assets and unknown routes must return 404.
 No automated tests, verification harnesses, mocks, fixtures or test-only hooks
 are included. Installed public exports/types and the copied UMD distribution
 remain required artifact checks after installation refreshes. Live checks must
-inspect delivered content, not just HTTP success. Current results and unverified
-paths are recorded in the local plan.
+inspect delivered content, not just HTTP success. The live verification limits
+are described above.
 
 ## Files and provenance
 
@@ -374,6 +414,8 @@ paths are recorded in the local plan.
 - `public/js/control-panel.js`: SDK state subscriptions, one-way app consent-cookie
   mirrors, profile availability and intent display; paired Grant/Revoke plus explicit
   Identify/Reset/Retry callbacks owned by route orchestration.
+- `public/js/tracking.js`: optional browser-attempt sidebar, actual interval display
+  grouping, safe text, age timer and caller-owned subscription cleanup.
 - `scripts/build-assets.ts`: copies only the installed Web UMD/map and built shared
   module to generated `public/dist`, then uses Vite with `emptyOutDir: false`
   to build `rich-text.js`. No environment settings or source checkout paths are

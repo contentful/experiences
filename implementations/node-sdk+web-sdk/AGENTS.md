@@ -1,9 +1,6 @@
 # Node + Web SDK reference implementation
 
-- Read the parent implementation instructions, this app's README, and the entire
-  checkout-local `tmp/node-sdk-web-sdk-reference-implementation-plan.md` before
-  editing. The plan defines scope and acceptance gates. Phases 1–4 are accepted;
-  Phase 5 client rendering/actions are implemented; stop for acceptance before Phase 6.
+- Read the parent implementation instructions and this app's README before editing.
 - Keep this application outside root workspaces. Consume installed local tarballs
   of the public Node/Web SDKs with Client, Runtime and Core overrides. Use the
   maintained installer and pack both dependency chains. No workspace source aliases,
@@ -24,10 +21,10 @@
 - Server integration is actual EJS SSR. Browser activation adopts state without
   startup refetch/page or DOM replacement, then enables SDK-owned tracking. It uses
   the committed server page and embedded identify flow, not prepared replay.
-  Follow the plan for request-bound event construction, separate consent cookies,
+  Preserve request-bound event construction, separate consent cookies,
   permitted identity, HTML-safe bootstrap, private/no-store caching and diagnostics.
   The sibling Node cookie prohibition and Web static-host rule are sibling-local.
-- Phase 3 uses one Node SDK with a facade per request: await direct page admission
+- Use one Node SDK with a facade per request: await direct page admission
   and SDK-owned profile, build identify with `request.eventBuilder`, fetch distinct
   IDs sequentially once with source maps, and package the final profile through
   the public Node producer. Keep diagnostic strings out of automatic UI/logs/bootstrap.
@@ -53,8 +50,10 @@
 - index.ejs owns both SSR markup and native template elements. Reuse its markup
   functions; the client clones native templates and never compiles/renders EJS.
 - Match the Web reference theme, main-pane Utilities and split content layout.
-- The event-attempt sidebar and full Phase 6 guidance remain later-phase work.
-  Do not scaffold the sidebar before acceptance.
+- Keep the event-attempt sidebar optional and browser-owned: subscribe before
+  hydration, retain it across routes, and dispose its subscription/age timer on
+  final exit or failed activation. Preserve it for BFCache. Never fabricate server
+  events or expose handoff/profile payloads. Group only actual interval IDs.
 - No tests, test infrastructure, mocks, fixtures, simulated upstreams, verification
   runners, test-only hooks, transport workarounds, Live Preview or Live Updates.
   Validate using the actual install/build/lint/typecheck commands, installed exports
@@ -63,5 +62,3 @@
   when present. EJS and browser content property accesses are not typechecked.
 - Stop/restart/status/logs must target only `experiences-node-web-sdk-app`.
   Preserve siblings, unrelated processes, local credentials and stack metadata.
-  The user authorized committing/pushing the accepted Phase 2 foundation. Later
-  phase commits/pushes and PR creation require separate authorization.

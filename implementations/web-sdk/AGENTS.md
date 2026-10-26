@@ -1,10 +1,7 @@
 # Web SDK reference implementation
 
-- Read `README.md`, parent implementation guidance, and the checkout-local
-  `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
-  explicit phase authorization and stop for user acceptance at each boundary.
-  Phases 1–7 and the manual-observation correction are accepted. Automatic setup
-  through rendered plan containers is the user-selected standard.
+- Read `README.md` and parent implementation guidance before changing this app.
+  Use automatic setup through rendered plan containers.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.

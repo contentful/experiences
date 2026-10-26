@@ -6,7 +6,7 @@ import {
 import { referenceNode } from '/dist/shared.js';
 import { cloneTemplate } from './templates.js';
 
-// Output adapter: fixed markup comes from the HTML response; the shared module
+// Reference app: fixed markup comes from the HTML response; the shared module
 // prepares data only. CMS text uses text APIs, Rich Text its Contentful renderer.
 function renderNode(node, identity, context, slotName) {
   const p = referenceNode(node, identity, context.section === 'manual');
@@ -60,7 +60,8 @@ export function renderExperience(plan, experienceId, section, { onManualRoot } =
     for (const [name, value] of Object.entries(getTrackingAttributes(plan.attribution)))
       container.setAttribute(name, value);
   container.querySelector('.entry-card__id-value').textContent = experienceId;
-  // Never disclose upstream diagnostic strings; retain useful partial content.
+  // Consumer integration: retain partial content and show only diagnostic counts.
+  // Known limitation: their absence does not establish personalization success.
   const partial = container.querySelector('[data-partial]');
   if (plan.deliveryDiagnostics?.length) {
     partial.hidden = false;
