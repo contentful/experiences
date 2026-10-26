@@ -32,8 +32,7 @@ before its view-specific validation. Node and Web run event interceptors after t
 wire-event revalidation. Valid transformed events pass a second gate using their
 final type and current consent before publication, transport, or queue admission.
 Invalid output is a schema failure rather than a consent refusal. Post-hook
-blocks report the transformed method/type: Personalization and `trackView` return
-`{ accepted: false }`; other Analytics methods retain void results. Node sends
+blocks report the transformed method/type; every event method returns `{ accepted: false }`. Node sends
 directly. `BlockedEvent.method` is typed as `string`, matching
 Optimization's public event payload contract.
 

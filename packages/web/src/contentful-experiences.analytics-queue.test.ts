@@ -117,8 +117,8 @@ describe('Web Analytics queue', () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(removed).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
-    // After destroy a call resolves with no result and queues nothing.
-    await expect(click(runtime)).resolves.toBeUndefined();
+    // After destroy a call reports no admission and queues nothing.
+    await expect(click(runtime)).resolves.toEqual({ accepted: false });
     await vi.advanceTimersByTimeAsync(30_000);
     expect(send).toHaveBeenCalledTimes(1);
   });

@@ -556,7 +556,7 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
     await expect(
       request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
 

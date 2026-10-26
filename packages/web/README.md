@@ -264,8 +264,8 @@ transport schema validates the transformed output, then the SDK checks its actua
 event type against current consent before publication, sending, or queueing.
 Invalid output is a schema failure, not a consent drop. A valid transformed event
 blocked by consent is reported with its transformed method/type through
-`onEventBlocked` and `blockedEventStream`. Personalization and `trackView` return
-`{ accepted: false }`; other Analytics methods retain their void contracts. This
+`onEventBlocked` and `blockedEventStream`. Every event method returns
+`{ accepted: false }` for consent refusal. This
 final-type gate corrects the original-type-only bypass in the Optimization reference at `70dfa7f`.
 
 XDA runs event chains concurrently with `Promise.all`, preserving the input array
@@ -395,10 +395,8 @@ failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
-are queued in memory rather than sent one by one, and follow Optimization's return contracts:
-`trackView` resolves `{ accepted: true }` when consent admits it and `{ accepted: false }` when
-consent blocks it or the SDK is destroyed, while `trackClick`, `trackHover` and `trackFlagView`
-resolve with no result. Acceptance is consent admission, not delivery. Without a profile
+are queued in memory rather than sent one by one. Every Analytics method resolves
+`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a profile
 or an adopted continuation ID, such as a new visitor's call made while the first profile request is
 still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
@@ -434,8 +432,7 @@ the Optimization SDK's consent model.
   Optimization names: `identify`, `page`, `track`, `component` (views),
   `component_click`, `component_hover`, and `flag` (flag views only; `component`
   also admits them). A blocked Personalization call resolves
-  `{ accepted: false }`; blocked `trackView` also resolves `{ accepted: false }`,
-  while `trackClick`, `trackHover`, and `trackFlagView` retain void results.
+  `{ accepted: false }`; blocked Analytics calls resolve the same result.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also

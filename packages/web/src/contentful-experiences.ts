@@ -226,11 +226,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   readonly trackView: WebEventMethods['trackView'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackView(...args);
   readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
-    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackClick(...args);
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackClick(...args);
   readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
-    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackHover(...args);
+    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackHover(...args);
   readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
-    this.#destroyed ? Promise.resolve() : this.#eventMethods.trackFlagView(...args);
+    this.#destroyed
+      ? Promise.resolve({ accepted: false })
+      : this.#eventMethods.trackFlagView(...args);
 
   /** Observable state shared with application subscriptions and internal effects. */
   readonly states: CoreStates = {

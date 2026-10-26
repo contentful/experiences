@@ -197,8 +197,8 @@ Node and Web expose `interceptors.event` to transform admitted direct events and
 caller-built XDA events before destination validation and a final check of current
 consent against the transformed event type. Invalid output fails schema validation;
 a valid consent-blocked transformed event is reported with its final method/type.
-Personalization and `trackView` refusals return `{ accepted: false }`; other
-Analytics methods keep their void contracts. Each explicit submission runs its
+Every event method reports admission through `EventEmissionResult`; consent refusals
+return `{ accepted: false }`. Each explicit submission runs its
 chain once. XDA event chains may run concurrently while preserving array order;
 prepared events run sequentially. Retries and browser prepared replay reuse the
 evaluated events without rerunning hooks. See the [Node interceptor reference](./packages/node/README.md#event-interceptors)

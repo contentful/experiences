@@ -83,19 +83,16 @@ class SnapshotRuntime implements ExperiencesRuntime {
     return await Promise.resolve(this.inertEventEmission());
   }
 
-  async trackClick(): Promise<void> {
-    this.warnInert();
-    await Promise.resolve();
+  async trackClick(): Promise<EventEmissionResult> {
+    return await Promise.resolve(this.inertEventEmission());
   }
 
-  async trackHover(): Promise<void> {
-    this.warnInert();
-    await Promise.resolve();
+  async trackHover(): Promise<EventEmissionResult> {
+    return await Promise.resolve(this.inertEventEmission());
   }
 
-  async trackFlagView(): Promise<void> {
-    this.warnInert();
-    await Promise.resolve();
+  async trackFlagView(): Promise<EventEmissionResult> {
+    return await Promise.resolve(this.inertEventEmission());
   }
 
   consent(): void {
