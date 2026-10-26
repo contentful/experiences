@@ -37,6 +37,6 @@ if (preview) Astro.response.headers.set('cache-control', 'no-store');
     <title>{experienceId}</title>
   </head>
   <body>
-    <ExperienceNodes nodes={plan.nodes} />
+    <ExperienceNodes nodes={plan.nodes} experience={{ debug: plan.debug, metadata: plan.metadata }} />
   </body>
 </html>

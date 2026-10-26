@@ -9,14 +9,18 @@
  * - Send `children` through the default slot. As a named slot it is overwritten
  *   with `undefined` when an island hydrates.
  */
-import type { PortableRenderNode } from '@contentful/experiences-react';
+import type { PortableRenderNode, RenderContext } from '@contentful/experiences-react';
 import { ExperienceNode, resolveNodeProps } from '@contentful/experiences-react/custom-renderer';
 
 import { ChatWidget } from '../components/ChatWidget';
 import { experienceConfig } from '../lib/experience-config';
 import ClientExperienceNode, { clientComponents } from './ClientExperienceNode';
 
-const { nodes } = Astro.props as { nodes: PortableRenderNode[] };
+const { nodes, experience } = Astro.props as {
+  nodes: PortableRenderNode[];
+  // Read by useExperience(). Context doesn't cross islands, so every node gets it.
+  experience: RenderContext;
+};
 
 // The host owns the walk, so it can render its own components between authored
 // nodes. Here: a chat widget right after the hero.
@@ -26,31 +30,34 @@ const insertChatAfter = 'hero-plain';
 {
   nodes.map((node) => {
     const resolved = resolveNodeProps(node, experienceConfig);
-    if (resolved.status === 'unregistered') return null;
+    if (resolved.status === 'unregistered') {
+      console.warn(`No component registered for "${resolved.id}" (node ${resolved.nodeId})`);
+      return null;
+    }
 
     const slots = Object.entries(node.slots);
 
     const view =
       resolved.id in clientComponents ? (
-        <ClientExperienceNode client:visible node={resolved.snapshot}>
+        <ClientExperienceNode client:visible node={resolved.snapshot} experience={experience}>
           {slots.map(([name, children]) =>
             name === 'children' ? (
-              <Astro.self nodes={children} />
+              <Astro.self nodes={children} experience={experience} />
             ) : (
               <Fragment slot={name}>
-                <Astro.self nodes={children} />
+                <Astro.self nodes={children} experience={experience} />
               </Fragment>
             )
           )}
         </ClientExperienceNode>
       ) : (
-        <ExperienceNode node={resolved}>
+        <ExperienceNode node={resolved} experience={experience}>
           {slots.map(([name, children]) =>
             name === 'children' ? (
-              <Astro.self nodes={children} />
+              <Astro.self nodes={children} experience={experience} />
             ) : (
               <Fragment slot={name}>
-                <Astro.self nodes={children} />
+                <Astro.self nodes={children} experience={experience} />
               </Fragment>
             )
           )}
