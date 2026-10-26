@@ -1,0 +1,67 @@
+---
+/**
+ * Renders plan nodes. Components in `clientComponents` become islands with a
+ * native `client:*` directive; everything else is static HTML with no JS.
+ *
+ * Slots follow two Astro rules:
+ * - Keep `<Fragment slot>` inline under the component tag. Built in a variable,
+ *   it lands in the default slot.
+ * - Send `children` through the default slot. As a named slot it is overwritten
+ *   with `undefined` when an island hydrates.
+ */
+import type { PortableRenderNode } from '@contentful/experiences-react';
+import { ExperienceNode, resolveNodeProps } from '@contentful/experiences-react/custom-renderer';
+
+import { ChatWidget } from '../components/ChatWidget';
+import { experienceConfig } from '../lib/experience-config';
+import ClientExperienceNode, { clientComponents } from './ClientExperienceNode';
+
+const { nodes } = Astro.props as { nodes: PortableRenderNode[] };
+
+// The host owns the walk, so it can render its own components between authored
+// nodes. Here: a chat widget right after the hero.
+const insertChatAfter = 'hero-plain';
+---
+
+{
+  nodes.map((node) => {
+    const resolved = resolveNodeProps(node, experienceConfig);
+    if (resolved.status === 'unregistered') return null;
+
+    const slots = Object.entries(node.slots);
+
+    const view =
+      resolved.id in clientComponents ? (
+        <ClientExperienceNode client:visible node={resolved.snapshot}>
+          {slots.map(([name, children]) =>
+            name === 'children' ? (
+              <Astro.self nodes={children} />
+            ) : (
+              <Fragment slot={name}>
+                <Astro.self nodes={children} />
+              </Fragment>
+            )
+          )}
+        </ClientExperienceNode>
+      ) : (
+        <ExperienceNode node={resolved}>
+          {slots.map(([name, children]) =>
+            name === 'children' ? (
+              <Astro.self nodes={children} />
+            ) : (
+              <Fragment slot={name}>
+                <Astro.self nodes={children} />
+              </Fragment>
+            )
+          )}
+        </ExperienceNode>
+      );
+
+    return (
+      <>
+        {view}
+        {resolved.id === insertChatAfter && <ChatWidget client:idle />}
+      </>
+    );
+  })
+}
