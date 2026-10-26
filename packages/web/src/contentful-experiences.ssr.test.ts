@@ -58,3 +58,25 @@ describe('Web interaction tracking on the server', () => {
     }).not.toThrow();
   });
 });
+
+describe('Session preview without browser globals', () => {
+  it('uses an explicit ID before any event work', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    const { ContentfulExperiences } = await import('./index.js');
+    runtime = new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'environment',
+      delivery: { accessToken: 'delivery-token' },
+      previewSessionId: ' session-1 ',
+      defaults: { consent: true },
+    });
+    expect(runtime.isPreview).toBe(true);
+    await expect(runtime.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
+    await expect(
+      runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
+    ).resolves.toEqual({ accepted: false, reason: 'preview' });
+    await runtime.flush();
+    runtime.destroy();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});

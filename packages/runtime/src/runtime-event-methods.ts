@@ -75,6 +75,8 @@ export interface RuntimeEventDispatch {
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
 export interface RuntimeEventBindings {
   getProfile: () => EventProfile | undefined;
+  /** Fixed preview intent of the owning instance/request. */
+  getIsPreview?: () => boolean;
   getEventContext?: () => UniversalEventBuilderArgs;
   /** Content/request locale for Personalization; event context does not override it. */
   getLocale?: () => string | undefined;
@@ -153,6 +155,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('identify', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'identify',
       args,
@@ -161,6 +165,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('page', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'page',
       args,
@@ -169,6 +175,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('track', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'track',
       args,
@@ -182,6 +190,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
    * delivery result, so a view dropped later for want of a profile is still accepted.
    */
   async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackView', args);
+    if (skipped) return skipped;
     if (!this.admit('trackView', [args])) return { accepted: false };
 
     return this.sendAnalyticsEvent(
@@ -192,6 +202,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async trackClick(args: ClickBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackClick', args);
+    if (skipped) return skipped;
     return this.sendAnalyticsEvent(
       'trackClick',
       args,
@@ -200,6 +212,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async trackHover(args: HoverBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackHover', args);
+    if (skipped) return skipped;
     return this.sendAnalyticsEvent(
       'trackHover',
       args,
@@ -208,11 +222,19 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async trackFlagView(args: FlagViewBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackFlagView', args);
+    if (skipped) return skipped;
     return this.sendAnalyticsEvent(
       'trackFlagView',
       args,
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
+  }
+
+  private skipPreview(method: EventMethod, args: unknown): EventEmissionResult | undefined {
+    if (this.bindings.getIsPreview?.() !== true) return undefined;
+    this.bindings.reportBlockedEvent?.({ reason: 'preview', method, args: [args] });
+    return { accepted: false, reason: 'preview' };
   }
 
   private withEventContext<TArgs extends UniversalEventBuilderArgs>(args: TArgs): TArgs {

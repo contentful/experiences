@@ -89,6 +89,8 @@ export type CoreConfigDefaults = StatefulDefaults;
  * Long-lived, browser-oriented SDK configuration.
  */
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
+  /** Suppresses events for this instance; the browser URL's preview_session_id also activates preview. */
+  previewSessionId?: string;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -171,6 +173,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   ExperiencesWebConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
 > {
   readonly #singletonOwner: string;
+  readonly #isPreview: boolean;
   #profileRevision = 0;
   readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
@@ -278,6 +281,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
       },
     });
+    this.#isPreview = Boolean(
+      config.previewSessionId?.trim() ||
+      (typeof window === 'undefined'
+        ? undefined
+        : new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim())
+    );
     // The lock is taken after the base class has validated its configuration, so a
     // failed construction never holds it. Construction is synchronous, so nothing
     // else can acquire it in between.
@@ -340,6 +349,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             return profileSignal.value ?? (id === undefined ? undefined : { id });
           },
           getConsent: () => this.#getConsent(),
+          getIsPreview: () => this.isPreview,
           allowedEventTypes: this.allowedEventTypes,
           reportBlockedEvent: (event) => this.#reportBlockedEvent(event),
         },
@@ -395,6 +405,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       }
       throw error;
     }
+  }
+
+  get isPreview(): boolean {
+    return this.#isPreview;
   }
 
   override get locale(): string | undefined {
@@ -476,7 +490,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     options: AnalyticsFlushOptions = {},
     isCurrent: () => boolean = () => true
   ): Promise<void> {
-    if (!isCurrent()) return;
+    if (this.isPreview || !isCurrent()) return;
     await this.insightsQueue.flush(options);
     if (!isCurrent()) return;
     await this.experienceQueue.flush({ force: options.force });
@@ -550,7 +564,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
       if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
     }
-    const profileId = personalization?.profileId ?? this.#requestIdentity();
+    const profileId = this.isPreview
+      ? undefined
+      : (personalization?.profileId ?? this.#requestIdentity());
     const plan = await super.fetchExperience(
       profileId === undefined
         ? { ...gated, personalization }
@@ -562,6 +578,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     );
     if (
       !this.#destroyed &&
+      !this.isPreview &&
       options.preview !== true &&
       this.#identityRevision === identityRevision
     ) {
@@ -622,13 +639,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     // then end the lifetime and cancel the queue timers. The
     // Analytics request captures the live token, so it is sent, and its late result no
     // longer applies once the token reads `undefined`.
-    void this.insightsQueue.flush({ force: true }).catch((error: unknown) => {
-      console.warn(
-        '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
-        error
-      );
-    });
-    flushPersonalizationOnDestroy(this.experienceQueue);
+    if (!this.isPreview) {
+      void this.insightsQueue.flush({ force: true }).catch((error: unknown) => {
+        console.warn(
+          '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
+          error
+        );
+      });
+      flushPersonalizationOnDestroy(this.experienceQueue);
+    }
     this.#destroyed = true;
     this.#disposeEffects();
     this.insightsQueue.clearPeriodicFlushTimer();
@@ -661,7 +680,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this,
       this.config.autoTrackEntryInteraction,
       {
-        isAllowed: (method) => hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
+        isAllowed: (method) =>
+          !this.isPreview && hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
       }
     ));
@@ -672,7 +692,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     handoff: ExperiencesHandoff,
     { routeKey }: { readonly routeKey: string }
   ): Promise<void> {
-    if (this.#destroyed) return;
+    if (this.#destroyed || this.isPreview) return;
     this.#requireRouteKey(routeKey);
     const parsed = parseExperiencesHandoff(handoff, this);
     const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
@@ -685,6 +705,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     buildPayload,
   }: CurrentPageOptions): Promise<EventEmissionResult> {
     if (this.#destroyed) return { accepted: false };
+    if (this.isPreview) return this.#skipPreviewEvent('trackCurrentPage', [routeKey]);
     this.#requireRouteKey(routeKey);
     this.#clearHandoffInitialization(routeKey);
     return await this.#currentPage.emitIfNeeded(routeKey, () =>
@@ -698,6 +719,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     { routeKey, buildPayload }: HydrateAndTrackCurrentPageOptions
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return { accepted: false };
+    if (this.isPreview) return this.#skipPreviewEvent('hydrateAndTrackCurrentPage', [routeKey]);
     this.#requireRouteKey(routeKey);
     const parsed = parseExperiencesHandoffEnvelope(handoff, this);
     const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
@@ -756,6 +778,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     locale?: string
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
+    if (this.isPreview)
+      return Promise.resolve(this.#skipPreviewEvent('sendPreparedExperienceEvents', [events]));
     const generation = this.#generation;
     const isCurrent = (): boolean => !this.#destroyed && this.#generation === generation;
     const admitted = this.#admitPreparedEvents(events);
@@ -775,10 +799,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   /** Whether an already-built event may be emitted; reports it to `onEventBlocked` otherwise. */
   #admitEvent(event: { type: string }, reportUnmapped = false): boolean {
-    if (hasEventTypeConsent(event.type, this.#getConsent(), this.allowedEventTypes)) return true;
+    if (
+      !this.isPreview &&
+      hasEventTypeConsent(event.type, this.#getConsent(), this.allowedEventTypes)
+    )
+      return true;
     const method = methodForEventType(event.type);
     if (method !== undefined || reportUnmapped) {
-      this.#reportBlockedEvent({ reason: 'consent', method: method ?? event.type, args: [event] });
+      this.#reportBlockedEvent({
+        reason: this.isPreview ? 'preview' : 'consent',
+        method: method ?? event.type,
+        args: [event],
+      });
     }
     return false;
   }
@@ -790,6 +822,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #gatePersonalizationEvents(
     options: RuntimeFetchExperienceOptions
   ): RuntimeFetchExperienceOptions {
+    if (this.isPreview) {
+      for (const event of options.personalization?.events ?? []) this.#admitEvent(event, true);
+      return { ...options, personalization: undefined };
+    }
     const events = options.personalization?.events;
     if (events === undefined) return options;
 
@@ -957,6 +993,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       }
       experienceRequestStateSignal.value = { status: 'success' };
     });
+  }
+
+  #skipPreviewEvent(method: string, args: readonly unknown[]): EventEmissionResult {
+    this.#reportBlockedEvent({ reason: 'preview', method, args });
+    return { accepted: false, reason: 'preview' };
   }
 
   #reportBlockedEvent(event: BlockedEvent): void {

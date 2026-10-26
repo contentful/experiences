@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 
 import { ConsentPanel } from '@/components/ConsentPanel';
 
@@ -20,11 +20,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         }}
       >
         {children}
-        <ConsentPanel
-          spaceId={process.env.SPACE_ID ?? ''}
-          environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
-          accessToken={process.env.CDA_TOKEN ?? ''}
-        />
+        <Suspense fallback={null}>
+          <ConsentPanel
+            spaceId={process.env.SPACE_ID ?? ''}
+            environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
+            accessToken={process.env.CDA_TOKEN ?? ''}
+          />
+        </Suspense>
       </body>
     </html>
   );

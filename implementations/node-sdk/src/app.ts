@@ -66,7 +66,12 @@ app.get('/', async (req, res) => {
     page,
     userAgent: req.get('user-agent') ?? 'node-js-server',
   };
-  const request = sdk.forRequest({ consent: true, locale, eventContext });
+  const request = sdk.forRequest({
+    consent: true,
+    locale,
+    eventContext,
+    previewSessionId: url.searchParams.get('preview_session_id') ?? undefined,
+  });
   // XDA can time out when identify creates a profile in the initial content fetch.
   // Once that is fixed, include page in the first fetch instead of sending it here.
   await request.page({ properties: page });

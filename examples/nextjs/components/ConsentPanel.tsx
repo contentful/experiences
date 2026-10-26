@@ -2,6 +2,7 @@
 
 import { ContentfulExperiences, type BlockedEvent } from '@contentful/experiences-web';
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type Consent = { events?: boolean; persistence?: boolean };
 
@@ -60,6 +61,7 @@ interface ConsentPanelProps {
  * LocalStorage. Both choices are stored in LocalStorage, so they survive a reload.
  */
 export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPanelProps) {
+  const previewSessionId = useSearchParams().get('preview_session_id')?.trim() || undefined;
   const runtime = useRef<ContentfulExperiences | undefined>(undefined);
   const [consent, setConsent] = useState<Consent>({});
   const [profileId, setProfileId] = useState<string | undefined>();
@@ -72,6 +74,7 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
       spaceId,
       environmentId,
       delivery: { accessToken },
+      previewSessionId,
     });
     runtime.current = instance;
     const refreshStored = () =>
@@ -95,15 +98,14 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
     ];
 
     // Views, hovers, and clicks on rendered nodes go through the same consent gate.
-    const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
+    // The constructor discovers rendered attribution; preview intent gates every detector.
     return () => {
-      void session.stop();
       subscriptions.forEach((subscription) => subscription.unsubscribe());
       // Only one Web SDK may be live at a time; release it so a remount can construct another.
       instance.destroy();
       runtime.current = undefined;
     };
-  }, []);
+  }, [spaceId, environmentId, accessToken, previewSessionId]);
 
   async function fire(name: string, send: () => Promise<unknown>) {
     try {

@@ -6,6 +6,23 @@ The browser SDK for fetching and resolving [Contentful Experiences](https://www.
 
 Only one live Experiences Web SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the Web owner lock. Experiences Web and Optimization Web are alternative product SDKs and are not supported together on one page. Applications must choose one; the SDKs do not coordinate with each other.
 
+## Session preview
+
+A nonempty, trimmed `preview_session_id` in the initial browser URL or explicit
+`previewSessionId` fixes read-only `sdk.isPreview` at construction, before tracking starts.
+All event methods return `{ accepted: false, reason: 'preview' }` and report through
+`onEventBlocked`/`blockedEventStream`, without building, publishing or queueing events.
+Consent stays unchanged; automatic and explicitly enabled interaction tracking stays inactive.
+
+Preview fetches omit personalization and do not attach or adopt a profile. Handoff hydration
+and replay are ignored; current-page methods return the same skipped result. Flush,
+reconnect, page hide/Beacon and destroy send no preview events. Rendering and Session updates continue.
+
+Mode stays fixed through reset, consent, URL changes and socket failure. Destroy and recreate
+before entering/leaving Session preview in a SPA. CPA configuration, `preview: true` and `debug`
+do not select this policy. Static preview without a Session ID, raw `sdk.api` calls and
+standalone free fetches remain outside it.
+
 ## Install
 
 ```sh

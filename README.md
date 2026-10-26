@@ -143,9 +143,10 @@ Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app n
 
 A connection starts only when both `previewToken` and `sessionId` are available.
 
-Live Preview does not trigger or suppress analytics automatically. A manually
-invoked event method still sends while a direct CPA preview fetch or Preview
-Session is active.
+Session preview suppresses Web events from startup when the URL has a nonempty
+`preview_session_id`; Node integrations pass it to `forRequest({ previewSessionId })`.
+Calls return `{ accepted: false, reason: 'preview' }`, while rendering and Session updates continue.
+See the [Web](./packages/web/README.md#session-preview) and [Node](./packages/node/README.md#session-preview) contracts.
 
 ---
 
@@ -184,8 +185,7 @@ consent is granted only `allowedEventTypes` are sent, and the application decide
 when to grant consent. Web's
 automatic interaction tracking sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
-no framework adapter stamps tracked attributes yet. Manually invoked methods
-still send during direct CPA preview or Live Preview.
+Session preview gates automatic and manual tracking. CPA fetching alone does not select that policy.
 
 An ordinary event call does not wait for every queued handoff. If a later call
 needs a profile produced by `identify`, `page`, or `track`, await the earlier

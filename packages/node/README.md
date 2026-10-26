@@ -8,6 +8,27 @@ The Node.js SDK for fetching and resolving [Contentful Experiences](https://www.
 npm install @contentful/experiences-node
 ```
 
+## Session preview
+
+Pass the incoming URL's Session ID before any event or handoff work:
+
+```ts
+const url = new URL(incomingRequest.url);
+const request = sdk.forRequest({
+  previewSessionId: url.searchParams.get('preview_session_id') ?? undefined,
+  consent: visitorConsent,
+});
+await request.page(); // { accepted: false, reason: 'preview' } in Session preview
+```
+
+A nonempty trimmed ID fixes read-only `request.isPreview` for this request, independently
+of consent, CPA configuration and socket status. All event calls skip before building or
+profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
+Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
+returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
+`canPersistProfile` is false. Static preview without a Session ID, raw `sdk.api` calls and
+standalone free fetches remain outside this policy.
+
 ## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.
