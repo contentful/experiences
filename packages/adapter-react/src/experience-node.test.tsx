@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import { createExperienceNode, ExperienceNode, resolveNodeProps } from './primitives';
+import { createExperienceNode, ExperienceNode, resolveNodeProps } from './custom-renderer';
 import { ServerExperienceRenderer } from './server-renderer';
 import { defineComponent, type Config } from './types';
 import { useDesignValues } from './use-design-values';

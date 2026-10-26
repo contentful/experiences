@@ -14,10 +14,10 @@
         "default": "./dist/index.js"
       }
     },
-    "./primitives": {
+    "./custom-renderer": {
       "import": {
-        "types": "./dist/primitives.d.ts",
-        "default": "./dist/primitives.js"
+        "types": "./dist/custom-renderer.d.ts",
+        "default": "./dist/custom-renderer.js"
       }
     },
     "./package.json": "./package.json"

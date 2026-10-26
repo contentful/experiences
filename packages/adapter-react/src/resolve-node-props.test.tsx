@@ -11,7 +11,7 @@ import {
   ExperienceProvider,
   ResolvedDesignProvider,
   resolveNodeProps,
-} from './primitives';
+} from './custom-renderer';
 import { ServerExperienceRenderer } from './server-renderer';
 import { defineComponent, type Config } from './types';
 import { useDesignValues } from './use-design-values';
@@ -188,7 +188,7 @@ describe('resolveNodeProps', () => {
   });
 });
 
-describe('primitives providers', () => {
+describe('custom-renderer providers', () => {
   it('make the SDK hooks work when a host wraps a component manually', () => {
     let seen: unknown;
     function Probe() {

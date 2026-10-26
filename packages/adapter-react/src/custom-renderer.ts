@@ -1,6 +1,6 @@
 /*
- * `@contentful/experiences-react/primitives` — the building blocks the SDK
- * renderers are made of, for hosts that walk the plan themselves.
+ * `@contentful/experiences-react/custom-renderer` — the building blocks the
+ * SDK renderers are made of, for hosts that build their own renderer.
  *
  * The main use is islands architectures (Astro): the host walks the plan,
  * renders each node with `resolveNodeProps` + `ExperienceNode`, and hydrates

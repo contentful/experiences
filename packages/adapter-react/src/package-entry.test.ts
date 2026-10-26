@@ -6,7 +6,7 @@ const entryUrl = (file: string): string =>
   pathToFileURL(fileURLToPath(new URL(`../dist/${file}`, import.meta.url))).href;
 
 describe('published package entry points', () => {
-  it.each(['index.js', 'primitives.js'])('%s imports under Node ESM resolution', (file) => {
+  it.each(['index.js', 'custom-renderer.js'])('%s imports under Node ESM resolution', (file) => {
     expect(() =>
       execFileSync(process.execPath, [
         '--input-type=module',
