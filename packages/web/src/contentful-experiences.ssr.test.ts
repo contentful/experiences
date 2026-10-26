@@ -43,7 +43,7 @@ describe('Web public entry on the server', () => {
 });
 
 describe('Web interaction tracking on the server', () => {
-  it('starts and stops as a no-op without a DOM', async () => {
+  it('automatically initializes and accepts tracking controls without a DOM', async () => {
     const { ContentfulExperiences } = await import('./index.js');
     runtime = new ContentfulExperiences({
       spaceId: 'space',
@@ -51,8 +51,11 @@ describe('Web interaction tracking on the server', () => {
       delivery: { accessToken: 'delivery-token' },
     });
 
-    const session = runtime.startInteractionTracking({ resolveAttribution: () => undefined });
-    session.refresh();
-    await expect(session.stop()).resolves.toBeUndefined();
+    expect(() => {
+      runtime!.tracking.disable('views');
+      runtime!.tracking.enable('views');
+      runtime!.reset();
+      runtime!.destroy();
+    }).not.toThrow();
   });
 });

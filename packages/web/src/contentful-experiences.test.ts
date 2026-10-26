@@ -154,16 +154,97 @@ describe('Web ContentfulExperiences', () => {
       frenchResolveOptions
     );
 
-    expect(fetch).toHaveBeenNthCalledWith(1, { experienceId: 'default' }, defaultResolveOptions);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      { experienceId: 'default', extensions: { sourceMap: {} } },
+      defaultResolveOptions
+    );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       {
         experienceId: 'per-call',
         locale: 'fr-FR',
+        extensions: { sourceMap: {} },
       },
       frenchResolveOptions
     );
   });
+
+  it.each(['clicks', 'views', 'hovers'] as const)(
+    'requests attribution when only automatic %s are enabled, regardless of event consent',
+    async (interaction) => {
+      seedConsent({ events: false });
+      const runtime = createRuntime({
+        autoTrackEntryInteraction: {
+          clicks: false,
+          views: false,
+          hovers: false,
+          [interaction]: true,
+        },
+      });
+      const fetch = vi
+        .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const resolveOptions = { config: { components: {} } };
+
+      expect(runtime.hasConsent('trackClick')).toBe(false);
+      await runtime.fetchExperience({ experienceId: 'automatic' }, resolveOptions);
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(
+        { experienceId: 'automatic', extensions: { sourceMap: {} } },
+        resolveOptions
+      );
+    }
+  );
+
+  it('requests attribution only while an automatic interaction is enabled', async () => {
+    const runtime = createRuntime({
+      autoTrackEntryInteraction: { clicks: false, views: false, hovers: false },
+    });
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const resolveOptions = { config: { components: {} } };
+    const options = { experienceId: 'controlled' };
+
+    await runtime.fetchExperience(options, resolveOptions);
+    runtime.tracking.enable('clicks');
+    await runtime.fetchExperience(options, resolveOptions);
+    runtime.tracking.disable('clicks');
+    await runtime.fetchExperience(options, resolveOptions);
+
+    expect(fetch).toHaveBeenNthCalledWith(1, options, resolveOptions);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      { ...options, extensions: { sourceMap: {} } },
+      resolveOptions
+    );
+    expect(fetch).toHaveBeenNthCalledWith(3, options, resolveOptions);
+    expect(options).toEqual({ experienceId: 'controlled' });
+  });
+
+  it.each([true, false])(
+    'preserves caller source-map options with automatic tracking %s',
+    async (automatic) => {
+      const runtime = createRuntime({
+        autoTrackEntryInteraction: { clicks: automatic, views: automatic, hovers: automatic },
+      });
+      const fetch = vi
+        .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const sourceMap = Object.freeze({});
+      const extensions = Object.freeze({ sourceMap });
+      const options = Object.freeze({ experienceId: 'explicit-map', extensions });
+      const resolveOptions = { config: { components: {} } };
+
+      await runtime.fetchExperience(options, resolveOptions);
+
+      expect(fetch).toHaveBeenCalledExactlyOnceWith(options, resolveOptions);
+      expect(fetch.mock.calls[0]?.[0].extensions?.sourceMap).toBe(sourceMap);
+      expect(options.extensions).toBe(extensions);
+      expect(options).toEqual({ experienceId: 'explicit-map', extensions: { sourceMap: {} } });
+    }
+  );
 
   it('forwards personalization with Web event context', async () => {
     const runtime = createRuntime();
@@ -183,7 +264,11 @@ describe('Web ContentfulExperiences', () => {
 
     expect(page.channel).toBe('web');
     expect(fetch).toHaveBeenCalledWith(
-      { experienceId: 'personalized', personalization: serializePersonalization(personalization) },
+      {
+        experienceId: 'personalized',
+        extensions: { sourceMap: {} },
+        personalization: serializePersonalization(personalization),
+      },
       { config: { components: {} } }
     );
   });
@@ -206,6 +291,7 @@ describe('Web ContentfulExperiences', () => {
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
+        extensions: { sourceMap: {} },
         personalization: { profileId: 'stored-profile' },
       },
       { config: { components: {} } }
@@ -231,6 +317,7 @@ describe('Web ContentfulExperiences', () => {
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
+        extensions: { sourceMap: {} },
         personalization: { profileId: 'explicit-profile' },
       },
       { config: { components: {} } }
@@ -314,7 +401,10 @@ describe('Web ContentfulExperiences', () => {
 
     await runtime.fetchExperience(options, { config: { components: {} } });
 
-    expect(fetch).toHaveBeenCalledWith(options, { config: { components: {} } });
+    expect(fetch).toHaveBeenCalledWith(
+      { ...options, extensions: { sourceMap: {} } },
+      { config: { components: {} } }
+    );
   });
 
   it('updates and persists the complete profile from Personalization events', async () => {
@@ -579,6 +669,7 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
+        extensions: { sourceMap: {} },
         personalization: serializePersonalization({ profileId: 'profile-1', events: [page] }),
       },
       { config: { components: {} } }
@@ -607,6 +698,7 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
+        extensions: { sourceMap: {} },
         personalization: serializePersonalization({ events: [track] }),
       },
       { config: { components: {} } }

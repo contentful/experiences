@@ -57,10 +57,8 @@ function markSlot(card, name) {
 // Consumer integration, when tracking automatically: stamp actual scope roots using the
 // public helper. Only Fragment roots opt into clicks; child content inherits the
 // SDK's scope resolution. data-testid attributes play no role here.
-function stampAutomaticTracking(card, roots, namespace) {
-  const attributes = getTrackingAttributes({
-    roots: roots.map((scope) => ({ key: `${namespace}:${scope.key}` })),
-  });
+function stampAutomaticTracking(card, roots) {
+  const attributes = getTrackingAttributes({ roots });
   for (const [name, value] of Object.entries(attributes)) card.setAttribute(name, value);
   if (roots.some((scope) => scope.entityKind === 'ExperienceFragment')) {
     card.setAttribute(TRACKING_CLICKABLE_ATTRIBUTE, 'true');
@@ -68,7 +66,7 @@ function stampAutomaticTracking(card, roots, namespace) {
 }
 
 function prepareTracking(card, roots, context) {
-  if (context.section === 'auto') stampAutomaticTracking(card, roots, context.namespace);
+  if (context.section === 'auto') stampAutomaticTracking(card, roots);
   else if (roots.length) {
     // Consumer integration: one explicit element registration carries one target.
     // Use its innermost delivered scope; automatic tracking retains every root key.
@@ -98,9 +96,16 @@ function renderNode(node, identity, context, parentSlot) {
   return card;
 }
 
-export function renderExperience(plan, experienceId, section, { namespace, onManualRoot }) {
-  const context = { namespace, section, onManualRoot };
+export function renderExperience(plan, experienceId, section, { onManualRoot } = {}) {
+  const context = { section, onManualRoot };
   const container = cloneTemplate('experience').firstElementChild;
+  // Consumer integration: each rendered plan container supplies its attribution once.
+  // The SDK discovers its roots and distinguishes repeated presentations by this DOM
+  // boundary; consumers need no lookup, namespace, session or tracking teardown.
+  if (section === 'auto') {
+    for (const [name, value] of Object.entries(getTrackingAttributes(plan.attribution)))
+      container.setAttribute(name, value);
+  }
   container.dataset.experienceId = experienceId;
   container.dataset.testid = `${section}-experience-${experienceId}`;
   container.querySelector('.entry-card__id-value').textContent = experienceId;

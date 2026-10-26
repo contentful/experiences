@@ -3,7 +3,8 @@
 - Read `README.md`, parent implementation guidance, and the checkout-local
   `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
   explicit phase authorization and stop for user acceptance at each boundary.
-  Phases 1–7 and the manual-observation correction are accepted.
+  Phases 1–7 and the manual-observation correction are accepted. Automatic setup
+  through rendered plan containers is the user-selected standard.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.
@@ -47,17 +48,18 @@
   Consent subscriptions update Utilities only and remain caller-owned. Show
   initialization failure when admission produces no profile; do not equate event
   admission, an event attempt, or HTTP 200 with delivered/personalized success.
-- Request source maps in existing content fetches. Stamp only scope roots in the
-  automatic section with the public tracking helper; namespace opaque keys per
-  rendered plan and retain shared keys within multi-root occurrences. Keep plans
-  unchanged. Never automatically stamp the manual section.
-- Start one SDK interaction session with the actual scrolling `.app-main` view
-  root. Await stop before replacing tracked DOM, retaining its lookup through final
-  events. Let reset/consent use the SDK lifecycle; do not reimplement detectors.
+- Automatic tracking uses the existing getTrackingAttributes helper on each plan
+  container and each node's roots. Web fetches request source maps automatically
+  while any automatic type is enabled. Do not restore application lookup maps,
+  namespaces or the removed session API, or add a parallel public setup API.
+- Configure the scrolling `.app-main` visibility root with tracking.enable views.
+  The SDK discovers boundaries and finalizes removed occurrences; preserve its
+  consent/reset guards and multi-root grouping. No app-owned automatic teardown.
 - The manual section registers elements through `sdk.tracking.enableElement('views',
 element, { data })` after DOM insertion, following Optimization. Use each card's
   innermost real scope; there are no Record view/click controls or automatic scope
-  attributes. The SDK owns measurement and consent; do not add app observers.
+  attributes. Release explicit registrations after DOM removal when replacing
+  content. The SDK owns measurement and consent; do not add app observers.
   Page Two's separate custom action uses `sdk.track`. An attempt is not delivery success.
 - Subscribe to eventStream before initial page and retain that one sidebar
   subscription across routes. Count notifications, including repeated XDA messages,

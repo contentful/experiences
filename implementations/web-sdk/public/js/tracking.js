@@ -2,7 +2,7 @@ import { cloneTemplate } from './templates.js';
 
 // Maintainer: this entire module is optional event-attempt diagnostics. Its rows,
 // counter, grouping and age timer do not submit events or measure interactions;
-// the SDK tracking session/event calls work without this sidebar subscription.
+// SDK interaction tracking/event calls work without this sidebar subscription.
 function timeAgo(startMs) {
   const seconds = Math.floor((Date.now() - startMs) / 1000);
   if (seconds < 60) return `${seconds}s`;

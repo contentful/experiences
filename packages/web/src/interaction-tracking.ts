@@ -1,32 +1,18 @@
 /*
- * Automatic view/hover/click tracking for rendered Experience/Fragment scopes,
- * keyed by one generic DOM attribute.
- *
- * An element renders `TRACKING_SCOPES_ATTRIBUTE` listing the occurrence key of
- * every scope it is a top-level element of. This module discovers those
- * elements — an initial scan plus a `MutationObserver`, so nodes added after
- * first paint (client navigation, lazy content) are picked up — and hands them
- * to the view/hover/click detectors once per key. Elements sharing a key are
- * one scope occurrence and report as one series: a Fragment with several root
- * elements is one view, and two copies of a Fragment are two unless they sit
- * directly next to each other (XDA gives both the same layer row and node ids,
- * so only position can separate them). Detectors resolve a
- * key's attribution through the caller's lookup when an event fires, and apply
- * scope-kind rules themselves: views for Experiences and Fragments, hovers and
- * clicks for Fragments only.
- *
- * Attribution never lives in the DOM: the attribute holds opaque keys, and the
- * caller owns the key → attribution lookup (`plan.attribution.scopes`). It must
- * be serializable data when rendering happens on the server and tracking in the
- * browser.
- *
- * The coordinator stays internal; ContentfulExperiences exposes its imperative
- * controls as `tracking` and supplies attribution through an optional session.
- * Manual element data uses the same detectors with a private occurrence key.
+ * Automatic view/hover/click discovery uses scope-root attributes and the nearest
+ * container's serialized attribution. Container identity keeps repeated renders
+ * independent; roots sharing a scope key within it form one measured occurrence.
+ * The initial scan and existing MutationObserver also cover SSR and later DOM
+ * updates. Views apply to Experiences and Fragments; hovers/clicks to Fragments.
+ * Explicit element registrations use the same detectors with private keys.
  */
 
 import type { ContentfulExperiences } from './contentful-experiences.js';
 import { isTrackedEntity, type TrackingAttribution } from './tracking/attribution.js';
+import {
+  readAutomaticKeys,
+  TRACKING_ATTRIBUTION_ATTRIBUTE,
+} from './tracking/automatic-attribution.js';
 import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
 import { createClickDetector } from './tracking/click/create-click-detector.js';
 import { createHoverDetector } from './tracking/hover/create-hover-detector.js';
@@ -116,22 +102,6 @@ export interface EntryInteractionApi {
   clearElement(interaction: EntryElementInteraction, element: Element): void;
 }
 
-export interface InteractionTrackingOptions {
-  /**
-   * Resolves a stamped scope occurrence key to its attribution. Return
-   * `undefined` for a key with nothing to track — it is then left unobserved.
-   */
-  resolveAttribution: (key: string) => TrackingAttribution | undefined;
-  /** Subtree to discover elements in. Defaults to `document`. */
-  root?: Document | Element;
-  /** `false` disables view tracking; an object sets the view root/rootMargin. Defaults to enabled. */
-  views?: boolean | ElementViewObserverOptions;
-  /** `false` disables hover tracking. Defaults to enabled. */
-  hovers?: boolean;
-  /** `false` disables click tracking. Defaults to enabled. */
-  clicks?: boolean;
-}
-
 /** The event methods interaction tracking sends through, which consent can gate. */
 export type TrackedMethod = 'trackView' | 'trackHover' | 'trackClick';
 
@@ -146,28 +116,15 @@ export interface InteractionTrackingGate {
   getResetToken?(): unknown;
 }
 
-interface InteractionTrackingSettings {
-  auto: Record<EntryInteraction, boolean>;
-  viewOptions?: EntryViewInteractionStartOptions;
-}
-
 export interface InteractionTracking {
-  /** Carries SDK settings across a new attribution session without changing public APIs. */
-  getSettings(): InteractionTrackingSettings;
-  /**
-   * Re-resolves every discovered element against `resolveAttribution` — call
-   * after the lookup's data changes (e.g. new attribution for the same DOM).
-   */
+  hasAutoTracking(): boolean;
   readonly tracking: EntryInteractionApi;
-  /** Transfers caller-owned overrides when an automatic attribution session starts. */
-  transferOverridesTo(target: EntryInteractionApi): void;
-  refresh(): void;
   /**
    * Starts or stops detectors to match what is currently permitted. Call after consent
    * changes. A detector that becomes permitted starts a new measurement interval.
    */
   syncConsent(): void;
-  /** Discards measurements and stops detectors; refresh or consent sync can resume them. */
+  /** Discards measurements and stops detectors; consent synchronization can resume them. */
   reset(preserveOverrides?: boolean): void;
   /** Ends in-progress views/hovers, sending their final events, and awaits them. */
   endActive(): Promise<void>;
@@ -183,30 +140,19 @@ type TrackingEvents = Pick<ContentfulExperiences, 'trackView' | 'trackHover' | '
  */
 export function createInteractionTracking(
   events: TrackingEvents,
-  options: InteractionTrackingOptions,
-  gate: InteractionTrackingGate = { isAllowed: () => true },
-  initialSettings?: InteractionTrackingSettings,
-  discoverAutomatic = true
+  options: AutoTrackEntryInteractionOptions = {},
+  gate: InteractionTrackingGate = { isAllowed: () => true }
 ): InteractionTracking {
   const auto = {
-    views:
-      options.views === undefined ? (initialSettings?.auto.views ?? true) : options.views !== false,
-    clicks: options.clicks ?? initialSettings?.auto.clicks ?? true,
-    hovers: options.hovers ?? initialSettings?.auto.hovers ?? true,
+    clicks: options.clicks ?? true,
+    views: options.views ?? true,
+    hovers: options.hovers ?? true,
   };
-  let viewOptions = initElementViewObserverOptions(
-    typeof options.views === 'object'
-      ? options.views
-      : options.views === true
-        ? undefined
-        : initialSettings?.viewOptions
-  );
+  let viewOptions = initElementViewObserverOptions();
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
     return {
-      getSettings: () => ({ auto: { ...auto }, viewOptions }),
+      hasAutoTracking: () => Object.values(auto).some(Boolean),
       tracking: NOOP_TRACKING,
-      transferOverridesTo() {},
-      refresh() {},
       syncConsent() {},
       reset() {},
       endActive: async () => undefined,
@@ -214,7 +160,6 @@ export function createInteractionTracking(
     };
   }
 
-  const root = options.root ?? document;
   let destroyed = false;
   let observing = false;
   interface Override {
@@ -231,12 +176,16 @@ export function createInteractionTracking(
     overrides: Map<Element, Override>;
     observed: Map<Element, Map<InteractionKey, string>>;
   }
-  // Retain attribution lookup closures for draining sessions after stop().
+  // Explicit element registrations retain their supplied attribution by reference.
   const manualData = new Map<symbol, EntryViewInteractionElementOptions>();
   const manualElements = new Set<Element>();
   const resolveKeyAttribution = (key: InteractionKey): TrackingAttribution | undefined => {
     const manual = typeof key === 'symbol';
-    const data = manual ? manualData.get(key)?.data : options.resolveAttribution(key);
+    const data = manual
+      ? manualData.get(key)?.data
+      : typeof key === 'object'
+        ? key.attribution
+        : undefined;
     if (typeof data !== 'object' || data === null) return undefined;
     const attribution = data as TrackingAttribution;
     if (!isTrackedEntity(attribution)) return undefined;
@@ -273,12 +222,8 @@ export function createInteractionTracking(
       observed: new Map(),
     });
   }
-  const isInRoot = (element: Element): boolean =>
-    element.isConnected && (root === document || root.contains(element));
   const entityKey = (attribution: TrackingAttribution): string =>
     JSON.stringify(toInteractionArgs(attribution));
-  const readKeys = (element: Element): string[] =>
-    (element.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '').split(/\s+/).filter(Boolean);
   const reconcile = (entry: ManagedDetector, element: Element): void => {
     if (!entry.running) return;
     const next = new Map<InteractionKey, string>();
@@ -286,11 +231,9 @@ export function createInteractionTracking(
     const attr = element.getAttribute(INTERACTION_ATTRIBUTES[entry.type])?.trim().toLowerCase();
     const enabled =
       override?.enabled ?? (attr === 'true' ? true : attr === 'false' ? false : entry.auto);
-    // Explicit registrations follow Optimization's document-wide element API;
-    // the session root bounds automatic discovery only.
-    if (enabled && (override?.enabled ? element.isConnected : isInRoot(element))) {
+    if (enabled && element.isConnected) {
       const manual = override?.enabled && resolveKeyAttribution(override.key);
-      const keys = manual ? [override.key] : readKeys(element);
+      const keys = manual ? [override.key] : readAutomaticKeys(element);
       for (const key of keys) {
         const attribution = resolveKeyAttribution(key);
         if (attribution) next.set(key, entityKey(attribution));
@@ -298,7 +241,10 @@ export function createInteractionTracking(
     }
     const current = entry.observed.get(element) ?? new Map<InteractionKey, string>();
     for (const [key, entity] of current) {
-      if (next.get(key) !== entity) entry.detector.onElementRemoved(element, key);
+      if (next.get(key) !== entity)
+        entry.detector.onElementRemoved(element, key, {
+          finalize: !element.isConnected || enabled,
+        });
     }
     for (const [key, entity] of next) {
       if (current.get(key) !== entity) entry.detector.onElementAdded(element, key);
@@ -308,10 +254,7 @@ export function createInteractionTracking(
   };
   const reconcileAll = (entry: ManagedDetector): void => {
     const candidates = new Set([...entry.observed.keys(), ...entry.overrides.keys()]);
-    if (discoverAutomatic) {
-      if (root instanceof Element && root.matches(SELECTOR)) candidates.add(root);
-      root.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
-    }
+    document.querySelectorAll(SELECTOR).forEach((element) => candidates.add(element));
     for (const element of candidates) reconcile(entry, element);
   };
   const mutationObserver = new MutationObserver((records) => {
@@ -321,14 +264,15 @@ export function createInteractionTracking(
       if (node instanceof Element) roots.add(node);
     };
     for (const record of records) {
-      if (record.type === 'attributes' && record.target instanceof Element)
-        candidates.add(record.target);
+      if (record.type === 'attributes' && record.target instanceof Element) {
+        if (record.attributeName === TRACKING_ATTRIBUTION_ATTRIBUTE) roots.add(record.target);
+        else candidates.add(record.target);
+      }
       record.addedNodes.forEach(addRoot);
       record.removedNodes.forEach(addRoot);
     }
     const collect = (element: Element): void => {
-      if (manualElements.has(element) || (discoverAutomatic && element.matches(SELECTOR)))
-        candidates.add(element);
+      if (manualElements.has(element) || element.matches(SELECTOR)) candidates.add(element);
     };
     for (const node of roots) {
       // Mutation records may repeat a root or include both a parent and its child.
@@ -346,12 +290,8 @@ export function createInteractionTracking(
   });
   const syncEntry = (entry: ManagedDetector, restart = false): void => {
     if (destroyed) return;
-    const allowed =
-      gate.isAllowed(entry.method) &&
-      (discoverAutomatic ||
-        [...entry.overrides.values()].some(
-          (override) => override.enabled && resolveKeyAttribution(override.key)
-        ));
+    // Discovery remains available for dynamic attribute opt-ins even with auto off.
+    const allowed = gate.isAllowed(entry.method);
     if (entry.running && (!allowed || restart)) {
       entry.detector.stop();
       entry.running = false;
@@ -369,7 +309,11 @@ export function createInteractionTracking(
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: [TRACKING_SCOPES_ATTRIBUTE, ...Object.values(INTERACTION_ATTRIBUTES)],
+        attributeFilter: [
+          TRACKING_SCOPES_ATTRIBUTE,
+          TRACKING_ATTRIBUTION_ATTRIBUTE,
+          ...Object.values(INTERACTION_ATTRIBUTES),
+        ],
       });
     } else if (observing && ![...managed.values()].some((candidate) => candidate.running)) {
       mutationObserver.disconnect();
@@ -443,24 +387,8 @@ export function createInteractionTracking(
   };
   sync();
   return {
-    getSettings: () => ({
-      auto: {
-        clicks: managed.get('clicks')!.auto,
-        views: managed.get('views')!.auto,
-        hovers: managed.get('hovers')!.auto,
-      },
-      viewOptions,
-    }),
+    hasAutoTracking: () => [...managed.values()].some((entry) => entry.auto),
     tracking,
-    transferOverridesTo(target) {
-      for (const entry of managed.values()) {
-        for (const [element, override] of entry.overrides) {
-          if (override.enabled) target.enableElement(entry.type, element, override.options);
-          else target.disableElement(entry.type, element);
-        }
-      }
-    },
-    refresh: sync,
     syncConsent: sync,
     reset,
     async endActive() {
