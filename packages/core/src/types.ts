@@ -293,6 +293,12 @@ export interface PlanAttribution {
   scopes: Record<string, ScopeAttribution>;
 }
 
+/** Recognized upstream field-resolution information copied from the Delivery payload. */
+export interface ExperienceDeliveryDiagnostic {
+  readonly fieldPath: string;
+  readonly message: string;
+}
+
 /**
  * The interpreted experience tree.
  *
@@ -321,6 +327,13 @@ export interface PortableRenderPlan {
     /** Profile id to use for subsequent personalized requests. */
     profileId: string;
   };
+  /**
+   * Recognized Delivery field-resolution errors, copied as serializable records.
+   * Absent when no supported records were returned; absence does not establish
+   * personalization success or the absence of other upstream errors. Strings
+   * come from upstream and may contain private information.
+   */
+  deliveryDiagnostics?: readonly ExperienceDeliveryDiagnostic[];
   /**
    * Resolve-time diagnostics collected while building this plan — malformed
    * payload/slot shapes, an unidentifiable node, a failing `resolveData`, an

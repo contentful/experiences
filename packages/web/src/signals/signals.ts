@@ -1,20 +1,10 @@
 import type {
   BlockedEvent,
   EventProfile,
-  ExperienceEvent,
   ExperienceRequestState,
-  InsightsEvent,
+  OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
 import { batch, computed, effect, signal, type Signal, untracked } from '@preact/signals-core';
-import type { PersonalizationOptions } from '@contentful/experiences-client';
-
-/**
- * Event payload emitted through the stateful SDK event stream.
- *
- * @public
- */
-export type OptimizationEventStreamEvent =
-  ExperienceEvent | InsightsEvent | NonNullable<PersonalizationOptions['events']>[number];
 
 /**
  * Most recent blocked-event metadata produced by consent/runtime guards.

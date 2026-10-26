@@ -25,6 +25,8 @@ interface AnalyticsDeliveryOptions {
   readonly api: AnalyticsApi;
   readonly eventInterceptors: EventInterceptors;
   readonly publishEvent: (event: AnalyticsEvent) => void;
+  /** Owner consent check after interception/schema validation, before publication. */
+  readonly admitEvent?: (event: AnalyticsEvent) => boolean;
   readonly getOnline: () => boolean;
   /**
    * The owning runtime's lifecycle token. The owner
@@ -52,6 +54,7 @@ export class AnalyticsDelivery {
   readonly #api: AnalyticsApi;
   readonly #eventInterceptors: EventInterceptors;
   readonly #publishEvent: AnalyticsDeliveryOptions['publishEvent'];
+  readonly #admitEvent: AnalyticsDeliveryOptions['admitEvent'];
   readonly #getOnline: AnalyticsDeliveryOptions['getOnline'];
   readonly #maxEvents: number;
   readonly #flushIntervalMs: number;
@@ -65,6 +68,7 @@ export class AnalyticsDelivery {
     this.#api = options.api;
     this.#eventInterceptors = options.eventInterceptors;
     this.#publishEvent = options.publishEvent;
+    this.#admitEvent = options.admitEvent;
     this.#getOnline = options.getOnline;
     this.#getResetToken = options.getResetToken ?? (() => this);
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
@@ -93,13 +97,16 @@ export class AnalyticsDelivery {
    * Queue one event. Reaching the size limit awaits the triggered flush, as Optimization's
    * InsightsQueue does. Like Optimization, the call resolves with no result: a failed
    * flush keeps its events for retry and is not reported through the return value.
+   * A post-interception consent refusal returns an internal false admission signal.
    */
-  async send(event: AnalyticsEvent, profile: EventProfile): Promise<void> {
+  async send(event: AnalyticsEvent, profile: EventProfile): Promise<void | false> {
     const token = this.#getResetToken();
     if (token === undefined) return;
     const intercepted = await this.#eventInterceptors.run(event);
     if (token !== this.#getResetToken()) return;
     const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
+    if (this.#admitEvent?.(validEvent) === false) return false;
+    if (token !== this.#getResetToken()) return;
     this.#publishEvent(validEvent);
     if (token !== this.#getResetToken()) return;
 

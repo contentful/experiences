@@ -1,7 +1,9 @@
+export { createRequestHandoffFromData } from './handoff.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   ExperiencesNodeConfig,
   ExperiencesNodeRequest,
+  ExperiencesNodeEventBuilder,
   ExperiencesNodeExperienceOptions,
   ExperiencesNodeInsightsOptions,
   ExperiencesNodeRequestContext,
@@ -27,8 +29,16 @@ export type {
   ExperienceParameterOrder,
   PersonalizationOptions,
 } from '@contentful/experiences-client';
-export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
+export {
+  ANONYMOUS_ID_COOKIE,
+  EventProfileRequiredError,
+  InterceptorManager,
+} from '@contentful/experiences-runtime';
 export type {
+  Interceptor,
+  InterceptorMerge,
+  MaybePromise,
+  OptimizationEventStreamEvent,
   AllowedEventType,
   BlockedEvent,
   BlockedEventReason,
@@ -58,6 +68,7 @@ export type {
   ViewBuilderArgs,
 } from '@contentful/experiences-runtime';
 export type {
+  ExperienceDeliveryDiagnostic,
   ExperiencePayload,
   PortableRenderPlan,
   ResolverConfig,

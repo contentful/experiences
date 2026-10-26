@@ -1,7 +1,14 @@
-import type { DestinationRedirectResult } from '@contentful/experiences-client';
+import {
+  serializePersonalization,
+  type DestinationRedirectResult,
+} from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   buildPreparedEvents,
+  InterceptorManager,
+  validatePersonalizationEvent,
+  validatePreparedEvents,
+  type OptimizationEventStreamEvent,
   createExperiencesHandoff,
   hasEventConsent,
   hasEventTypeConsent,
@@ -12,6 +19,7 @@ import {
   type ConsentInput,
   type ConsentState,
   type ContentfulExperiencesConfig,
+  type EventBuilder,
   type EventBuilderConfig,
   type EventEmissionResult,
   type EventOptimizationData,
@@ -110,10 +118,18 @@ type NodeAnalyticsMethods = Pick<
   'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
+/** Personalization event construction with request-local context defaults. */
+export type ExperiencesNodeEventBuilder = Pick<
+  EventBuilder,
+  'buildIdentify' | 'buildPageView' | 'buildTrack'
+>;
+
 /** A request-bound facade; many facades may share the one Node SDK instance. */
 export interface ExperiencesNodeRequest extends NodePersonalizationMethods, NodeAnalyticsMethods {
   readonly locale: string | undefined;
   readonly profile: EventProfile | undefined;
+  /** Builds events without submitting them; explicit inputs override request context. */
+  readonly eventBuilder: ExperiencesNodeEventBuilder;
   /** Whether the host application may persist this request's profile id. */
   readonly canPersistProfile: boolean;
   resolveExperience(
@@ -142,6 +158,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   ExperiencesNodeConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
 > {
   readonly #consentPolicy: ConsentPolicy;
+  readonly interceptors = { event: new InterceptorManager<OptimizationEventStreamEvent>() };
 
   constructor(config: ExperiencesNodeConfig) {
     const { app, allowedEventTypes, onEventBlocked } = config;
@@ -173,6 +190,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
 class RequestBoundExperiences implements ExperiencesNodeRequest {
   readonly locale: string | undefined;
+  readonly eventBuilder: ExperiencesNodeEventBuilder;
   #profile: EventProfile | undefined;
   #profileRevision = 0;
   readonly #consent: ConsentState;
@@ -218,6 +236,15 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
     this.canPersistProfile = this.#consent.persistence === true;
 
+    this.eventBuilder = {
+      buildIdentify: (args) =>
+        runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+      buildPageView: (args = {}) =>
+        runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+      buildTrack: (args) =>
+        runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+    };
+
     const methods = createEventMethods({
       getProfile: () => this.#profile,
       setProfile: (profile) => this.setProfile(profile),
@@ -230,6 +257,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       getConsent: () => this.#consent,
       allowedEventTypes: consentPolicy.allowedEventTypes,
       onEventBlocked: consentPolicy.onEventBlocked,
+      eventInterceptors: runtime.interceptors.event,
     });
 
     this.identify = methods.identify.bind(methods);
@@ -252,6 +280,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     page,
   }: PrepareRequestHandoffOptions): Promise<PrepareRequestHandoffResult> {
     const incomingProfileId = this.#profile?.id;
+    const profileRevision = this.#profileRevision;
     const handoff = createExperiencesHandoff({
       spaceId: this.runtime.spaceId,
       environmentId: this.runtime.environmentId,
@@ -275,6 +304,20 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
         eventContext: this.getRequestEventContext(),
         eventConsent: this.#consent.events === true,
       });
+      if (this.runtime.interceptors.event.count() !== 0) {
+        const transformed: PreparedPersonalizationEvent[] = [];
+        for (const [index, event] of events.entries()) {
+          const valid = validatePersonalizationEvent(
+            await this.runtime.interceptors.event.run(event)
+          );
+          if (!this.admitEvent(valid, true)) {
+            if (index === events.length - 1) return { handoff };
+            continue;
+          }
+          transformed.push(valid);
+        }
+        events = validatePreparedEvents(transformed);
+      }
     } catch {
       console.warn(
         '[@contentful/experiences] Invalid request handoff inputs; no replay was prepared.'
@@ -288,7 +331,6 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       ...handoff,
       replay: { routeKey, events, locale },
     };
-    const profileRevision = this.#profileRevision;
     try {
       const data = await this.preflightPersonalizationEvents(incomingProfileId, events, {
         ...this.#experienceOptions,
@@ -325,8 +367,13 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const profileRevision = this.#profileRevision;
-    const gated = this.gatePersonalizationEvents(options);
-    const profileId = gated.personalization?.profileId ?? this.#profile?.id;
+    const incomingProfileId = this.#profile?.id;
+    const initiallyGated = this.gatePersonalizationEvents(options);
+    const gated =
+      this.runtime.interceptors.event.count() === 0
+        ? initiallyGated
+        : await this.interceptPersonalizationEvents(initiallyGated);
+    const profileId = gated.personalization?.profileId ?? incomingProfileId;
     const resolvedOptions =
       profileId === undefined
         ? gated
@@ -372,19 +419,41 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     const events = options.personalization?.events;
     if (events === undefined) return options;
 
+    const admitted = events.filter((event) => this.admitEvent(event));
+    return { ...options, personalization: { ...options.personalization, events: admitted } };
+  }
+
+  private async interceptPersonalizationEvents(
+    options: RuntimeFetchExperienceOptions
+  ): Promise<RuntimeFetchExperienceOptions> {
+    const personalization = options.personalization;
+    if (personalization?.events === undefined) return options;
+    const events = await Promise.all(
+      personalization.events.map((event) => this.runtime.interceptors.event.run(event))
+    );
+    const valid = serializePersonalization({ ...personalization, events });
+    return {
+      ...options,
+      personalization: {
+        ...valid,
+        events: valid.events?.filter((event) => this.admitEvent(event, true)),
+      },
+    };
+  }
+
+  /** Validate the final transport type before applying this request's consent policy. */
+  private admitEvent(event: { readonly type: string }, transformed = false): boolean {
     const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
-    const admitted = events.filter((event) => {
-      if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
-      const method = methodForEventType(event.type);
-      if (method === undefined) return false;
+    if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
+    const method = methodForEventType(event.type) ?? (transformed ? event.type : undefined);
+    if (method !== undefined) {
       try {
         onEventBlocked?.({ reason: 'consent', method, args: [event] });
       } catch {
         // A failing diagnostic callback must not break event delivery.
       }
-      return false;
-    });
-    return { ...options, personalization: { ...options.personalization, events: admitted } };
+    }
+    return false;
   }
 
   /** Whether one prepared method may be sent; reports it to `onEventBlocked` when it may not. */

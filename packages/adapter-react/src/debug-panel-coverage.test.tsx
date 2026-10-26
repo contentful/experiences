@@ -32,7 +32,6 @@ import { ClientExperienceRenderer } from './client-renderer';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {

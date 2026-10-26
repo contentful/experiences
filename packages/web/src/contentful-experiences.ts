@@ -3,6 +3,7 @@ import {
   type AnalyticsFlushOptions,
   ContentfulExperiences as RuntimeContentfulExperiences,
   PersonalizationDelivery,
+  InterceptorManager,
   DEFAULT_ALLOWED_EVENT_TYPES,
   type AllowedEventType,
   type BlockedEvent,
@@ -12,6 +13,7 @@ import {
   type EventBuilderConfig,
   type EventEmissionResult,
   type ExperiencesHandoff,
+  type OptimizationEventStreamEvent,
   type PageViewBuilderArgs,
   type QueuePolicy,
   resolveQueuePolicy,
@@ -43,11 +45,9 @@ import {
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
   toObservable,
-  type OptimizationEventStreamEvent,
 } from './signals/index.js';
 import type { CoreStates } from './states.js';
 import { normalizeExplicitLocale } from './locale.js';
-import { InterceptorManager } from './lib/interceptor/InterceptorManager.js';
 import {
   mergeExperienceState,
   type ExperienceState,
@@ -318,6 +318,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         experienceRequestState: experienceRequestStateSignal,
         eventInterceptors: this.interceptors.event,
         publishEvent: this.#publishEvent,
+        admitEvent: (event) => this.#admitEvent(event, true),
         applyOptimizationData: (data, isCurrent) =>
           this.#applyOptimizationDataToSignals(data, isCurrent),
       });
@@ -328,6 +329,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         flushPolicy: resolvedQueuePolicy.flush,
         eventInterceptors: this.interceptors.event,
         publishEvent: this.#publishEvent,
+        admitEvent: (event) => this.#admitEvent(event, true),
       });
       this.#eventMethods = this.createEventMethods(
         {
@@ -523,8 +525,24 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           };
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
-    const personalization =
+    const serialized =
       intercepted === undefined ? undefined : serializePersonalization(intercepted);
+    const personalization =
+      serialized?.events === undefined
+        ? serialized
+        : // Client validates the whole batch before any final-type consent callback runs.
+          {
+            ...serialized,
+            events: serialized.events.filter((event) => {
+              const admitted = this.#admitEvent(event, true);
+              if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+              if (this.#generation !== generation)
+                throw new Error('Experiences fetch was superseded');
+              return admitted;
+            }),
+          };
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
     for (const event of personalization?.events ?? []) {
       this.#publishEvent(event);
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
@@ -754,11 +772,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   /** Whether an already-built event may be emitted; reports it to `onEventBlocked` otherwise. */
-  #admitEvent(event: { type: string }): boolean {
+  #admitEvent(event: { type: string }, reportUnmapped = false): boolean {
     if (hasEventTypeConsent(event.type, this.#getConsent(), this.allowedEventTypes)) return true;
     const method = methodForEventType(event.type);
-    if (method !== undefined) {
-      this.#reportBlockedEvent({ reason: 'consent', method, args: [event] });
+    if (method !== undefined || reportUnmapped) {
+      this.#reportBlockedEvent({ reason: 'consent', method: method ?? event.type, args: [event] });
     }
     return false;
   }

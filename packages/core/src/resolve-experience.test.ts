@@ -875,6 +875,88 @@ describe('resolveExperience — render context carried on the plan', () => {
   });
 });
 
+describe('resolveExperience — delivery diagnostics', () => {
+  it('copies supported records in order, excludes private fields, and survives JSON serialization', async () => {
+    const first = {
+      fieldPath: 'nodes[0].contentProperties.title',
+      message: 'Using fallback title',
+      originalError: { privateToken: 'secret' },
+      privateField: 'private detail',
+    };
+    const second = { fieldPath: '', message: '', code: 'unknown' };
+    const errors = [first, null, { message: 'missing path' }, second];
+    const payload: ExperiencePayload = { nodes: [], errors };
+    const original = JSON.stringify(payload);
+
+    const plan = await resolveExperience(payload, emptyConfig);
+    const expected = [
+      { fieldPath: first.fieldPath, message: first.message },
+      { fieldPath: '', message: '' },
+    ];
+
+    expect(plan.deliveryDiagnostics).toEqual(expected);
+    expect(plan.deliveryDiagnostics).not.toBe(errors);
+    expect(plan.deliveryDiagnostics![0]).not.toBe(first);
+    expect(plan.deliveryDiagnostics![1]).not.toBe(second);
+    expect(JSON.stringify(payload)).toBe(original);
+
+    first.message = 'changed upstream';
+    second.fieldPath = 'changed upstream';
+    errors.length = 0;
+    expect(plan.deliveryDiagnostics).toEqual(expected);
+    expect(plan.diagnostics).toEqual([]);
+  });
+
+  it.each([
+    undefined,
+    'not-an-array',
+    [],
+    [
+      null,
+      {},
+      { fieldPath: 'title' },
+      { message: 'error' },
+      { fieldPath: 1, message: 'error' },
+      { fieldPath: 'title', message: null },
+    ],
+  ])('omits the field when errors has no recognized records (%j)', async (errors) => {
+    const payload = { nodes: [], errors } as unknown as ExperiencePayload;
+    const plan = await resolveExperience(payload, emptyConfig);
+
+    expect(plan).not.toHaveProperty('deliveryDiagnostics');
+  });
+
+  it('preserves fallback content and resolve-time Error diagnostics alongside Delivery records', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cause = new Error('resolver failure');
+    const payload: ExperiencePayload = {
+      nodes: [componentNode('broken', { contentProperties: { title: 'Fallback title' } })],
+      errors: [{ fieldPath: 'nodes[0].contentProperties.title', message: 'Using fallback' }],
+    };
+    try {
+      const plan = await resolveExperience(payload, {
+        components: {
+          broken: {
+            resolveData: () => {
+              throw cause;
+            },
+          },
+        },
+      });
+
+      expect(plan.deliveryDiagnostics).toEqual(payload.errors);
+      expect(plan.nodes[0]!.props.content).toEqual({ title: 'Fallback title' });
+      expect(plan.nodes[0]!.props.resolved).toBeUndefined();
+      expect(plan.diagnostics).toHaveLength(1);
+      expect(plan.diagnostics[0]).toBeInstanceOf(Error);
+      expect(plan.diagnostics[0]!.cause).toBe(cause);
+      expect(plan.diagnostics[0]!.message).toContain('resolver failure');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('resolveExperience — diagnostics', () => {
   it('is an empty array on a fully happy path (regression guard)', async () => {
     const payload: ExperiencePayload = {
@@ -907,13 +989,14 @@ describe('resolveExperience — diagnostics', () => {
     }
   });
 
-  it.each([null, undefined])(
+  it.each([null, undefined, 'invalid', 42, false])(
     'does not throw on a %s payload — degrades to an empty plan with a single diagnostic',
     async (payload) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const plan = await resolveExperience(payload as unknown as ExperiencePayload, emptyConfig);
         expect(plan.nodes).toEqual([]);
+        expect(plan).not.toHaveProperty('deliveryDiagnostics');
         expect(plan.diagnostics).toHaveLength(1);
         expect(plan.diagnostics[0]).toBeInstanceOf(Error);
         expect(plan.diagnostics[0]!.message).toContain('payload is');

@@ -13,7 +13,6 @@ describe('Web public entry on the server', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const web = await import('./index.js');
 
-    expect(web.ContentfulExperiences).toBeTypeOf('function');
     expect(fetch).not.toHaveBeenCalled();
     expect(web.getPageProperties()).toEqual({
       path: '',

@@ -60,7 +60,14 @@ export type {
   ExperienceRequestState,
   ExperienceRequestFailureReason,
 } from './experience-request-state.js';
-export type { EventInterceptors } from './event-interceptors.js';
+export { validatePersonalizationEvent } from './event-interceptors.js';
+export type { EventInterceptors, OptimizationEventStreamEvent } from './event-interceptors.js';
+export {
+  InterceptorManager,
+  type Interceptor,
+  type InterceptorMerge,
+  type MaybePromise,
+} from './lib/interceptor/InterceptorManager.js';
 export type {
   ExperienceEvent,
   InsightsEvent,
