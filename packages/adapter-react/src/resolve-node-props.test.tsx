@@ -4,17 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { NodeAttribution, PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import {
-  ContentfulComponentProvider,
-  ContentfulExperienceTemplateProvider,
-  ExperienceProvider,
-  ResolvedDesignProvider,
-  resolveNodeProps,
-} from './custom-renderer';
+import { resolveNodeProps } from './custom-renderer';
 import { ServerExperienceRenderer } from './server-renderer';
 import { defineComponent, type Config } from './types';
-import { useDesignValues } from './use-design-values';
 
 function planNode(
   kind: 'component' | 'experienceTemplate',
@@ -185,73 +177,5 @@ describe('resolveNodeProps', () => {
     );
 
     expect(hostMarkup).toBe(sdkMarkup);
-  });
-});
-
-describe('custom-renderer providers', () => {
-  it('make the SDK hooks work when a host wraps a component manually', () => {
-    let seen: unknown;
-    function Probe() {
-      seen = {
-        experience: useExperience(),
-        component: useContentfulComponent(),
-        template: useContentfulExperienceTemplate(),
-        design: useDesignValues(),
-      };
-      return null;
-    }
-    const config: Config = { components: { probe: Probe } };
-    const result = resolveNodeProps(
-      planNode(
-        'component',
-        'probe',
-        { content: { title: 'Hi' }, design: { color: 'red' } },
-        { nodeId: 'n1' }
-      ),
-      config
-    );
-    if (result.kind !== 'component' || result.status !== 'resolved') {
-      throw new Error('expected a resolved component');
-    }
-
-    renderToStaticMarkup(
-      <ExperienceProvider value={{ debug: false, metadata: { framework: 'custom' } }}>
-        <ContentfulComponentProvider value={result.contentful}>
-          <ResolvedDesignProvider value={result.design}>
-            <result.component {...result.props} />
-          </ResolvedDesignProvider>
-        </ContentfulComponentProvider>
-      </ExperienceProvider>
-    );
-
-    expect(seen).toEqual({
-      experience: { debug: false, metadata: { framework: 'custom' } },
-      component: result.contentful,
-      template: null,
-      design: { color: 'red' },
-    });
-  });
-
-  it('expose the experience template payload through its provider', () => {
-    let seen: unknown;
-    function Probe() {
-      seen = useContentfulExperienceTemplate();
-      return null;
-    }
-    const result = resolveNodeProps(planNode('experienceTemplate', 'page'), {
-      components: {},
-      experienceTemplates: { page: Probe },
-    });
-    if (result.kind !== 'experienceTemplate' || result.status !== 'resolved') {
-      throw new Error('expected a resolved experience template');
-    }
-
-    renderToStaticMarkup(
-      <ContentfulExperienceTemplateProvider value={result.contentful}>
-        <result.component {...result.props} />
-      </ContentfulExperienceTemplateProvider>
-    );
-
-    expect(seen).toEqual(result.contentful);
   });
 });

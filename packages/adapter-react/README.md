@@ -122,13 +122,7 @@ For hosts that render a plan themselves instead of using `ServerExperienceRender
 resolveNodeProps(node, config); // ResolvedNode: 'resolved' (component, props, design, contentful, snapshot) | 'unregistered'
 ExperienceNode; // Renders one resolved node or snapshot exactly as the SDK renderers do
 createExperienceNode(components, experienceTemplates?); // ExperienceNode with its registry bound, for snapshots
-ExperienceProvider; // Raw context providers ExperienceNode composes
-ContentfulComponentProvider;
-ContentfulExperienceTemplateProvider;
-ResolvedDesignProvider;
-type ResolvedNode, ResolvedComponentNode, ResolvedExperienceTemplateNode, UnregisteredNode;
-type NodeSnapshot, ComponentNodeSnapshot, ExperienceTemplateNodeSnapshot;
-type ExperienceNodeProps, BoundExperienceNodeProps;
+type ResolvedNode, NodeSnapshot, ExperienceNodeProps;
 ```
 
 ### Styling + runtime context (hooks)
