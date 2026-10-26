@@ -1,3 +1,4 @@
+import { createRoutes } from '../dist/shared.js';
 import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -42,8 +43,4 @@ export const config = {
 };
 
 // Reference app: route presentations reuse plans; fetch each distinct ID once.
-const ids = config.publicEnvironment.EXPERIENCE_IDS;
-export const routes = {
-  '/': { title: 'Home', automatic: ids, manual: ids.slice(0, 1) },
-  '/page-two': { title: 'Page Two', automatic: ids.slice(-1), manual: ids.slice(0, 1) },
-};
+export const routes = createRoutes(config.publicEnvironment.EXPERIENCE_IDS);

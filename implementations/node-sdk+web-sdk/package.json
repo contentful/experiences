@@ -10,16 +10,17 @@
   },
   "scripts": {
     "build": "npm run clean && npm run build:assets",
-    "build:assets": "tsx scripts/build-assets.ts",
+    "build:assets": "npm run build:shared && tsx scripts/build-assets.ts",
     "dev": "npm run build && tsx src/app.ts",
     "serve": "npm run build && pm2 start ./node_modules/tsx/dist/cli.mjs --name experiences-node-web-sdk-app -- src/app.ts",
     "serve:stop": "pm2 delete experiences-node-web-sdk-app",
-    "restart": "pm2 restart experiences-node-web-sdk-app",
+    "restart": "npm run build && pm2 restart experiences-node-web-sdk-app",
     "status": "pm2 show experiences-node-web-sdk-app",
     "logs": "pm2 logs experiences-node-web-sdk-app",
-    "clean": "rimraf ./public/dist",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint --config eslint.config.ts ."
+    "clean": "rimraf ./dist ./public/dist",
+    "typecheck": "npm run build:shared && tsc --noEmit",
+    "lint": "eslint --config eslint.config.ts .",
+    "build:shared": "tsc src/shared.ts --outDir dist --module NodeNext --target es2022 --declaration --skipLibCheck"
   },
   "dependencies": {
     "@contentful/experiences-node": "file:../../pkgs/contentful-experiences-node-local.tgz",

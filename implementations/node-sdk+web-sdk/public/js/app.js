@@ -1,3 +1,4 @@
+import { createRoutes, pageContext } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { cloneTemplate } from './templates.js';
@@ -37,11 +38,7 @@ async function activate() {
     const bootstrap = JSON.parse(document.getElementById('experience-bootstrap').textContent);
     environment = bootstrap.environment;
     const { handoff } = bootstrap;
-    const ids = environment.EXPERIENCE_IDS;
-    routes = {
-      '/': { title: 'Home', automatic: ids, manual: ids.slice(0, 1) },
-      '/page-two': { title: 'Page Two', automatic: ids.slice(-1), manual: ids.slice(0, 1) },
-    };
+    routes = createRoutes(environment.EXPERIENCE_IDS);
     // Consumer integration: one Web runtime, no consent/profile defaults, and no
     // eligible automatic or manually registered elements before state hydration.
     // Public SDK discovery may run already; measurement starts only after adoption.
@@ -175,10 +172,12 @@ function renderRouteShell(route, focus) {
   header.querySelector('h1').textContent = route?.title ?? 'Page not found';
   // Consumer integration: removing attributed content ends old presentations.
   // Reset calls SDK.reset only AFTER this synchronous replacement.
-  appMain.replaceChildren(header);
+  document.getElementById('route-header').replaceChildren(header);
+  const content = document.getElementById('route-content');
+  content.replaceChildren();
+  appMain.querySelector('[data-custom-action]').hidden = location.pathname !== '/page-two';
   if (route) {
-    if (location.pathname === '/page-two') appMain.appendChild(cloneTemplate('custom-action'));
-    appMain.appendChild(cloneTemplate('content'));
+    content.appendChild(cloneTemplate('content'));
   }
   appMain.scrollTop = 0;
   appMain.removeAttribute('aria-busy');
@@ -207,7 +206,7 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
   const current = ++generation;
   const isCurrent = () => !disposed && generation === current;
   const route = routes[location.pathname];
-  const page = pageContext();
+  const page = pageContext(new URL(location.href), document.referrer);
   const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const previousManual = manualElements;
   manualElements = [];
@@ -263,17 +262,6 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
       );
     status.textContent = 'Visitor initialization failed. Retry content to try again.';
   }
-}
-
-function pageContext() {
-  const url = new URL(location.href);
-  return {
-    path: url.pathname,
-    query: Object.fromEntries(url.searchParams),
-    referrer: document.referrer,
-    search: url.search,
-    url: url.href,
-  };
 }
 
 function initializeVisitor(sendPage, page) {
@@ -356,12 +344,13 @@ async function loadExperiences(destinations, identifyRequested, page, isCurrent)
 function wireRouteAction() {
   disposeRouteAction();
   const actions = appMain.querySelector('[data-custom-action]');
-  if (!actions) {
+  if (!actions || actions.hidden) {
     disposeRouteAction = () => {};
     return;
   }
   const button = actions.querySelector('button');
   const feedback = actions.querySelector('[role="status"]');
+  feedback.textContent = '';
   const current = generation;
   const isCurrent = () => !disposed && current === generation;
   button.disabled = false;

@@ -1,3 +1,4 @@
+import { referenceNode, pageContext } from '../dist/shared.js';
 import {
   ContentfulExperiences,
   createRequestHandoffFromData,
@@ -37,6 +38,7 @@ app.enable('case sensitive routing');
 app.set('view engine', 'ejs');
 app.set('views', import.meta.dirname);
 app.locals.documentToHtmlString = documentToHtmlString;
+app.locals.referenceNode = referenceNode;
 app.locals.getTrackingAttributes = getTrackingAttributes;
 app.locals.TRACKING_CLICKABLE_ATTRIBUTE = TRACKING_CLICKABLE_ATTRIBUTE;
 app.use((request, response, next) => {
@@ -71,13 +73,7 @@ app.use(cookieParser());
 for (const [path, route] of Object.entries(routes)) {
   app.get(path, async (req, res) => {
     const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
-    const page = {
-      path: req.path,
-      query: Object.fromEntries(url.searchParams),
-      referrer: req.get('referer') ?? '',
-      search: url.search,
-      url: url.href,
-    };
+    const page = pageContext(url, req.get('referer') ?? '');
     const visitor = readVisitor(req.cookies);
     const request = sdk.forRequest({
       ...visitor,

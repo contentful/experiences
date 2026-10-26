@@ -173,7 +173,10 @@ survive setup, installation, and asset cleanup. Populate the local file before
 starting the server.
 
 After SDK source changes, run setup again to rebuild/repack and refresh installed
-artifacts. `build` alone uses the already installed artifacts and does not install:
+artifacts, or use root `npm run implementation:install` to refresh all references.
+Stop running apps with their scoped `serve:stop` targets before refreshing
+dependencies, then relaunch with `serve` or `dev`. `build` alone uses the already
+installed artifacts and does not install:
 
 ```sh
 npx nx run implementation-web-sdk:install
@@ -206,6 +209,8 @@ npx nx run implementation-web-sdk:serve:stop
 PM2 manages only `experiences-web-sdk-app` through the local tsx CLI. Stop deletes
 that named process and reports an error if absent. Run one checkout with that
 name at a time. Avoid global PM2 stop/delete commands when managing this app.
+`dev`, `serve`, and `restart` build browser assets from installed packages before
+launching; a failed build prevents restart. They do not refresh SDK dependencies.
 
 ## Environment and direct browser delivery
 
@@ -244,8 +249,8 @@ preflight workflow nor Node handoff.
   API-free health, safe configuration injection, extensionless SPA fallback.
   Missing assets return 404; dot paths, traversal and public symlinks escaping
   the public directory are rejected. Other methods return 405.
-- `scripts/build-assets.ts`: cleans `public/dist`, copies the installed Web
-  package's complete dist (including UMD/source map), then uses Vite's library
+- `scripts/build-assets.ts`: cleans `public/dist`, copies only the installed Web
+  UMD and its source map, then uses Vite's library
   build to create `rich-text.js` from `scripts/rich-text.ts` with
   `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
   and renders live Rich Text documents. The same tiny ES module also exports the

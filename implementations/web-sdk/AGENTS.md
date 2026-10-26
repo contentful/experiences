@@ -25,7 +25,8 @@
   errors, extensionless SPA fallback, loopback binding and API-free `/health`.
   Delivery goes directly from browser to default live services; no proxy or
   simulated upstream. CORS OPTIONS is not Experience API noncommitting preflight.
-- Build assets from the installed Web dist and the Contentful Rich Text renderer.
+- Copy only the installed Web UMD/map; bundle Rich Text and the public pure tracking
+  helper separately. Refresh setup after SDK changes to avoid stale installed UMDs.
   `public/dist` is generated; the vendored theme is authored local source with
   pinned provenance. No adjacent Optimization checkout/package runtime dependency.
 - No Live Updates, Live Preview, preview controls/assets, mocks, fixtures,

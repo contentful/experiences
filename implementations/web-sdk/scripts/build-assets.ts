@@ -11,9 +11,12 @@ const dist = resolve(root, 'public/dist');
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 // Copy installed artifacts, never workspace sources or an adjacent checkout.
-await cp(resolve(root, 'node_modules/@contentful/experiences-web/dist'), dist, {
-  recursive: true,
-});
+const umd = 'contentful-experiences-web.umd.js';
+for (const file of [umd, `${umd}.map`])
+  await cp(
+    resolve(root, 'node_modules/@contentful/experiences-web/dist', file),
+    resolve(dist, file)
+  );
 
 await build({
   // Reference app: bundle Rich Text and pure tracking helpers for native ES modules;

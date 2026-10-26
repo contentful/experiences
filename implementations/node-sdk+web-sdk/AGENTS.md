@@ -9,8 +9,10 @@
   maintained installer and pack both dependency chains. No workspace source aliases,
   internal Runtime imports, SDK changes, or adjacent Optimization runtime dependency.
 - Use app-local npm tools through `implementation-node-sdk-web-sdk` Nx targets.
-  Refresh setup/install after SDK artifact changes; asset build copies the installed
-  Web distribution unchanged and bundles only Rich Text and pure tracking helpers.
+  Refresh setup/install after SDK artifact changes; asset build copies only the
+  installed Web UMD/map and bundles Rich Text/pure tracking helpers separately.
+  Build shared.ts once to private dist; copy the same JS bytes for browser use.
+  Shared SDK references are type-only; SDK execution stays in runtime adapters.
   `public/dist` is generated; the local Web theme retains its pinned provenance.
 - Runtime reads only this app's ignored `.env` via dotenv. Preserve it during
   installation and cleanup. Keep `.env.example` credential-free. The sole public
@@ -48,6 +50,9 @@
 - Preserve EJS/DOM registration, named-slot, prop and real attribution parity. Keep
   client partial content with generic diagnostic counts; never dump the strings.
   Custom track is separate from XDA and its admission label does not promise delivery.
+- index.ejs owns both SSR markup and native template elements. Reuse its markup
+  functions; the client clones native templates and never compiles/renders EJS.
+- Match the Web reference theme, main-pane Utilities and split content layout.
 - The event-attempt sidebar and full Phase 6 guidance remain later-phase work.
   Do not scaffold the sidebar before acceptance.
 - No tests, test infrastructure, mocks, fixtures, simulated upstreams, verification

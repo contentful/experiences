@@ -18,8 +18,8 @@ no API calls and does not establish upstream readiness.
 The checkout-local [implementation plan](../../tmp/node-sdk-web-sdk-reference-implementation-plan.md)
 defines the accepted design and phase gates. Phase 6 requires explicit acceptance
 of Phase 5. The committed-server event flow and XDA limitations in that plan remain
-authoritative. The accepted Phase 2 foundation is committed/pushed as `5095185`;
-Phase 3–5 changes remain available for review in the working tree.
+authoritative. The original Phase 5 state is committed/pushed as `42405e0`.
+The compact shared-code, UMD-asset and layout corrections remain uncommitted.
 
 ## Server request flow
 
@@ -170,6 +170,10 @@ can join the correct page. Already submitted SDK requests/events are not undone.
 The SDK continues to own profile updates, consent, detectors, queues and lifecycle
 isolation; the app adds no alternate profile store, event queue or observer.
 
+`src/shared.ts` holds only common route, node-preparation and page-context rules.
+Its SDK imports are type-only. Both adapters use the same compiled JavaScript;
+server EJS and browser DOM operations remain separate.
+
 Page Two's Record custom action calls `sdk.track({ event: 'reference_custom_action' })`
 independently of content. It waits for any pending page, disables the button while
 submitting, and reports admission/refusal/failure without claiming delivery from
@@ -248,7 +252,10 @@ Direct third-party dependencies reuse exact pins from the sibling manifests.
 Registry transitive dependencies resolve on each install; this development
 workflow does not provide lockfile-level reproducibility.
 
-After SDK source/artifact changes, run `setup` again. For separate steps:
+After SDK source/artifact changes, run `setup` again, or use root
+`npm run implementation:install` to refresh all references. Stop running apps with
+their scoped `serve:stop` targets before refreshing dependencies, then relaunch
+with `serve` or `dev`. For separate steps:
 
 ```sh
 npx nx run implementation-node-sdk-web-sdk:install
@@ -309,7 +316,8 @@ npx nx run implementation-node-sdk-web-sdk:restart
 npx nx run implementation-node-sdk-web-sdk:serve:stop
 ```
 
-`dev` and `serve` build installed browser assets before launch. Both read the same
+`dev`, `serve`, and `restart` build installed browser assets before launch; a failed
+build prevents restart. They do not refresh SDK dependencies. All read the same
 local `.env`. PM2 commands target only `experiences-node-web-sdk-app`; stop deletes
 that named process and reports an error when absent. Run only one checkout with
 that name at a time. Choose another local `PORT` if occupied; preserve unrelated
@@ -326,8 +334,9 @@ npx nx run implementation-node-sdk-web-sdk:clean
 
 Root aggregate checks exclude implementations. Each target invokes ordinary local
 npm scripts, so app-directory `npm run build`, `npm run lint`, `npm run typecheck`
-and `npm run dev` also work. `clean` removes only generated `public/dist`, leaving
-configuration, dependencies and processes intact. TypeScript checks `src/**/*.ts`
+and `npm run dev` also work. `clean` removes generated `public/dist` and private
+`dist`, leaving configuration, dependencies and processes intact.
+Typecheck first builds the shared module, then checks `src/**/*.ts`
 and `scripts/**/*.ts`; ESLint also covers authored `public/js/**/*.js` when present.
 Authored browser JavaScript is linted. EJS and browser property accesses are
 not validated by the server typecheck.
@@ -351,10 +360,12 @@ paths are recorded in the local plan.
   configuration allowlist and route presentation selection.
 - `src/cookies.ts`: host adapter for independent consent decisions, permitted incoming
   identity and writing/expiring final SDK-owned identity.
-- `src/index.ejs`: shared shell, route title, semantic document navigation, real
-  content sections, initially disabled visitor controls and HTML-safe bootstrap.
-- `src/browser-templates.ejs`, `public/js/templates.js`: native fixed browser
-  markup and cloning for client route headers, cards, content/status and custom action.
+- `src/index.ejs`: shell and common server-side card/Experience/content functions,
+  used for SSR and native `<template>` elements in the same HTML response. Utilities
+  uses the Web reference's main-pane field grid; content uses its split layout/theme.
+- `src/shared.ts`: SDK-type-only common preparation, compiled once to `dist/shared.js`
+  with private declarations; identical JS is copied to `public/dist/shared.js`.
+- `public/js/templates.js`: native template cloning; no client EJS renderer.
 - `public/js/app.js`: state-only startup adoption before automatic/manual observation;
   later route/page/content orchestration, visitor actions, stale guards, registration
   release, failure feedback and document exit cleanup.
@@ -363,10 +374,8 @@ paths are recorded in the local plan.
 - `public/js/control-panel.js`: SDK state subscriptions, one-way app consent-cookie
   mirrors, profile availability and intent display; paired Grant/Revoke plus explicit
   Identify/Reset/Retry callbacks owned by route orchestration.
-- `src/experience.ejs`, `src/nodes.ejs`: public plan/node attribution, named-slot
-  recursion, reference binding rendering, empty content and generic partial warning.
-- `scripts/build-assets.ts`: copies the installed Web package's complete `dist`
-  unchanged to generated `public/dist`, then uses Vite with `emptyOutDir: false`
+- `scripts/build-assets.ts`: copies only the installed Web UMD/map and built shared
+  module to generated `public/dist`, then uses Vite with `emptyOutDir: false`
   to build `rich-text.js`. No environment settings or source checkout paths are
   used as bundle inputs.
 - `scripts/rich-text.ts`: Contentful Rich Text HTML renderer and the public Web

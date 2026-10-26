@@ -1571,6 +1571,20 @@ versions, publish to a registry, or install a reference implementation.
 Run the packaging helper's checks with `npx nx test package-tools` and
 `npx nx lint package-tools`. They also participate in the root test/lint commands.
 
+After SDK changes, refresh all standalone reference implementations together:
+
+```sh
+npm run implementation:install
+```
+
+This runs each implementation's existing `setup` target: build and pack its SDK
+dependency chain, reinstall its local packages, and build browser assets where
+applicable. It preserves existing app-local `.env` files and does not start apps.
+Stop running reference apps with their scoped `serve:stop` targets before this
+dependency refresh, then relaunch them with `serve` or `dev`. Focused per-app
+`setup` targets remain available. The CI Build job prepares all implementations
+and runs their lint/typecheck targets after the SDK build.
+
 The [standalone Node reference implementation](./implementations/node-sdk/README.md)
 uses these artifacts with its own dependencies and `.env`. Prepare it with
 `npx nx run implementation-node-sdk:setup`, then run

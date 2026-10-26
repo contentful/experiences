@@ -1,3 +1,78 @@
+<% function card(node, identity, automatic, slotName) {
+  const p = node && referenceNode(node, identity, !automatic);
+  const attributes = {
+    ...p?.attributes,
+    ...(node && automatic ? getTrackingAttributes(node.attribution) : {}),
+  };
+  if (automatic && p?.clickable) attributes[TRACKING_CLICKABLE_ATTRIBUTE] = 'true';
+%>
+  <article class="entry-card<%= slotName === undefined ? '' : ' entry-card--slotted' %>"
+    <% for (const [name, value] of Object.entries(attributes)) { %>
+      <%= name %>="<%= value %>"
+    <% } %>>
+    <% if (slotName !== undefined) { %>
+      <span class="entry-card__badge entry-card__badge--slot">Slot: <%= slotName %></span>
+    <% } %>
+    <% if (!p || p.registered) { %>
+      <h3><%= p?.props.title ?? '' %></h3>
+      <p <% if (p) { %>data-testid="experience-text-<%= identity %>"<% } %>><%= p?.props.text ?? '' %></p>
+      <% if (!p || p.props.richText?.document) { %>
+        <div class="rich-text"><%- p ? documentToHtmlString(p.props.richText.document) : '' %></div>
+      <% } %>
+    <% } else { %>
+      <p>Unregistered <%= node.registration.kind %>: <%= node.registration.id %></p>
+    <% } %>
+    <% for (const [name, children] of Object.entries(node?.slots ?? {})) { %>
+      <div class="entry-card__nested-children" data-slot="<%= name %>"><% nodes(children, `${identity}-${name}`, automatic, name); %></div>
+    <% } %>
+  </article>
+<% }
+function nodes(list, identity, automatic, slotName) {
+  list.forEach((node, index) => card(node, `${identity}-${index}`, automatic, slotName));
+}
+function experience(plan, experienceId, section) {
+  const attributes = plan && section === 'auto' ? getTrackingAttributes(plan.attribution) : {};
+  const issues = plan?.deliveryDiagnostics?.length ?? 0;
+%>
+  <section class="entry-grid" <% if (plan) { %>data-experience-id="<%= experienceId %>" data-testid="<%= section %>-experience-<%= experienceId %>"<% } %>
+    <% for (const [name, value] of Object.entries(attributes)) { %>
+      <%= name %>="<%= value %>"
+    <% } %>>
+    <div class="entry-card__ids">
+      <span class="entry-card__id-label">Experience</span>
+      <span class="entry-card__id-value"><%= experienceId ?? '' %></span>
+    </div>
+    <% if (!plan || issues) { %>
+      <p class="page-status" role="status" data-partial <% if (!plan) { %>hidden<% } else { %>data-testid="<%= section %>-experience-partial"<% } %>><% if (issues) { %>
+        Some content could not be resolved (<%= issues %> delivery issues).
+      <% } %></p>
+    <% } %>
+    <% if (!plan || !plan.nodes.length) { %>
+      <p data-empty <% if (plan) { %>data-testid="<%= section %>-experience-empty"<% } %>>This Experience has no content.</p>
+    <% } else {
+      nodes(plan.nodes, `${section}-${experienceId}`, section === 'auto');
+    } %>
+  </section>
+<% }
+function content(server) { %>
+  <div id="content-error" data-testid="content-error" hidden></div>
+  <div class="sections-grid sections-grid--split">
+    <% for (const section of ['auto', 'manual']) {
+      const automatic = section === 'auto';
+      const label = automatic ? 'Automatically tracked Experiences' : 'Manually observed Experiences';
+    %>
+      <section class="page-section" aria-label="<%= label %>">
+        <header class="page-section__header">
+          <h2><%= label %></h2>
+          <p><%= automatic ? 'Views and hovers are measured by the SDK. Click a Fragment card to record its click.' : 'Elements are registered in code. The SDK measures their views as you scroll; automatic discovery is not used for this presentation.' %></p>
+        </header>
+        <div class="entry-grid entry-grid--experiences" data-experiences="<%= section %>">
+          <% if (server) for (const id of automatic ? route.automatic : route.manual) experience(plans.get(id), id, section); %>
+        </div>
+      </section>
+    <% } %>
+  </div>
+<% } %>
 <!doctype html>
 <html lang="en">
   <head>
@@ -15,73 +90,70 @@
         <a href="/page-two" data-testid="link-page-two" <% if (path === '/page-two') { %>aria-current="page" class="active"<% } %>>Page Two</a>
       </nav>
       <div class="app-body">
-        <aside class="app-sidebar" aria-label="Implementation status">
-          <section class="tracking-log">
-            <h2>Server and browser</h2>
-            <p>Node renders the initial Experience content.</p>
-            <p id="browser-status" role="status">Browser activation has not completed. Server content is ready.</p>
-            <p>Identify requested: <strong data-testid="identified-status"><%= identifyRequested ? 'Yes' : 'No' %></strong>.</p>
-            <p>This describes URL intent, not confirmed traits or audience membership.</p>
-          </section>
-          <section class="tracking-log" aria-label="Utilities">
-            <h2>Utilities</h2>
-            <p>Event consent: <strong data-testid="consent-status">Not connected</strong></p>
-            <p>Persistence consent: <strong data-testid="persistence-consent-status">Not connected</strong></p>
-            <p>SDK profile: <strong data-testid="profile-status">Not connected</strong></p>
-            <div class="control-panel__actions">
-              <button type="button" class="btn btn--secondary" data-testid="consent-button" disabled>Grant</button>
-              <button type="button" class="btn btn--secondary" data-testid="unconsent-button" disabled>Revoke</button>
-            </div>
-            <div class="control-panel__actions">
-              <button type="button" class="btn btn--secondary" data-testid="identify-button" disabled>Identify</button>
-              <button type="button" class="btn btn--danger" data-testid="reset-button" disabled>Reset</button>
-            </div>
-            <div class="control-panel__actions">
-              <button type="button" class="btn btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
-            </div>
-            <p class="control-panel__note">Grant/Revoke changes both consent decisions. The SDK permits identify and page by default even without event consent.</p>
-          </section>
-        </aside>
+        <aside class="app-sidebar" aria-label="Tracking"></aside>
         <main class="app-main" id="app-main" tabindex="-1">
-          <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
+          <div id="route-header">
+            <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
             <h1><%= title %></h1>
-            <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
+              <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
           </header>
-          <% if (path === '/page-two') { %>
-            <section class="control-panel__actions" aria-label="Custom event" data-custom-action>
-              <button type="button" class="btn btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
+          </div>
+          <section class="control-panel" aria-label="Utilities">
+            <h2 class="control-panel__title">Utilities</h2>
+            <div class="control-panel__fields">
+              <span class="control-panel__row-label">SDK status</span>
+              <span class="control-panel__row-value" id="browser-status" role="status" style="grid-column: 2 / -1; white-space: normal">Browser activation has not completed. Server content is ready.</span>
+              <span hidden></span>
+              <span class="control-panel__row-label">SDK profile</span>
+              <span class="control-panel__row-value" data-testid="profile-status">Not connected</span>
+              <span></span>
+              <span class="control-panel__row-label">Event consent</span>
+              <span class="control-panel__row-value" data-testid="consent-status">Not connected</span>
+              <span>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="consent-button" disabled>Grant</button>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="unconsent-button" disabled>Revoke</button>
+              </span>
+              <span class="control-panel__row-label">Persistence consent</span>
+              <span class="control-panel__row-value" data-testid="persistence-consent-status">Not connected</span>
+              <span></span>
+              <span class="control-panel__row-label">Identify requested</span>
+              <span class="control-panel__row-value" data-testid="identified-status"><%= identifyRequested ? 'Yes' : 'No' %></span>
+              <span>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="identify-button" disabled>Identify</button>
+                <button type="button" class="btn btn--sm btn--danger" data-testid="reset-button" disabled>Reset</button>
+              </span>
+            </div>
+            <div class="control-panel__actions">
+              <button type="button" class="btn btn--sm btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
+            </div>
+            <section class="control-panel__actions" aria-label="Custom event" data-custom-action <% if (path !== '/page-two') { %>hidden<% } %>>
+              <button type="button" class="btn btn--sm btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
               <p class="control-panel__note" role="status"></p>
             </section>
-          <% } %>
-          <div id="content-error" data-testid="content-error" hidden></div>
-          <section class="page-section" aria-label="Automatically observed Experiences">
-            <header class="page-section__header">
-              <h2>Automatically observed Experiences</h2>
-              <p>Server markup carries real plan attribution. The SDK measures permitted views, clicks and hovers after profile adoption.</p>
-            </header>
-            <div class="entry-grid entry-grid--experiences" data-experiences="auto">
-              <% for (const experienceId of route.automatic) { %>
-                <%- include('experience', { plan: plans.get(experienceId), experienceId, section: 'auto' }) %>
-              <% } %>
-            </div>
+            <p class="control-panel__note">Grant/Revoke changes event and persistence consent together. The SDK allows identify and page events before event consent. Identify requested describes URL intent, not confirmed audience membership.</p>
           </section>
-          <section class="page-section" aria-label="Manually observed Experiences">
-            <header class="page-section__header">
-              <h2>Manually observed Experiences</h2>
-              <p>Elements register their real attribution after profile adoption. The SDK measures permitted views; this presentation has no automatic scope attributes.</p>
-            </header>
-            <div class="entry-grid entry-grid--experiences" data-experiences="manual">
-              <% for (const experienceId of route.manual) { %>
-                <%- include('experience', { plan: plans.get(experienceId), experienceId, section: 'manual' }) %>
-              <% } %>
-            </div>
-          </section>
+          <div id="route-content"><% content(true); %></div>
         </main>
       </div>
     </div>
-    <%- include('browser-templates') %>
-    <!-- Consumer integration: public configuration and final request profile only.
-         Escape '<' for this HTML context; do not add diagnostic strings or plans. -->
+    <!-- These native templates are emitted by the same server-side markup functions. -->
+    <template id="tpl-card">
+      <% card(); %>
+    </template>
+    <template id="tpl-experience">
+      <% experience(); %>
+    </template>
+    <template id="tpl-content">
+      <% content(false); %>
+    </template>
+    <template id="tpl-route-header">
+      <header class="page-header">
+        <h1></h1>
+        <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
+      </header>
+    </template>
+    <template id="tpl-status"><div class="placeholder-card"><p role="status"></p><button type="button" class="btn btn--secondary" data-testid="retry-experiences-button" hidden>Retry content</button>
+            </div></template>
     <script type="application/json" id="experience-bootstrap"><%- bootstrap %></script>
     <script type="module" src="/js/app.js"></script>
   </body>
