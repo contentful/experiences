@@ -614,9 +614,12 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
   `ExperiencesRuntime`; `createWebSnapshotRuntime()` supplies inert controls for
   SSR. Imports remain safe without browser globals.
 
-The runtime discovers automatic tracking attributes when constructed. Web fetches
-request `sourceMap` when any automatic interaction type is enabled, preserving
-caller-supplied extension options. Attribution is requested independently of
+The runtime discovers automatic tracking attributes when constructed, including
+existing server-rendered HTML, and observes later DOM changes. Tracking does not
+wait for server-profile handoff hydration. Manual registration with valid `data`
+can also start immediately after construction and needs no automatic tracking
+attributes. Web fetches request `sourceMap` when any automatic interaction type is
+enabled, preserving caller-supplied extension options. Attribution is requested independently of
 consent so granting consent later needs no content refetch. With every automatic
 type disabled, explicitly request `extensions: { sourceMap: {} }` if a later
 manual registration, attribute opt-in or automatic enable will need the
@@ -706,9 +709,10 @@ roots, and one root can belong to several scopes.
   innermost Fragment occurrence of the nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
-  current profile or an adopted handoff continuation ID. They do not wait for
-  prepared Personalization HTTP delivery. A rejected call is logged as a
-  warning and does not stop tracking.
+  current profile identity at event emission, which can come from persisted
+  browser state, a cookie adopted at construction, or handoff state. They do not
+  wait for handoff hydration or prepared Personalization HTTP delivery. A rejected
+  call is logged as a warning and does not stop tracking.
 - Withdrawing event consent discards active view/hover measurements and delayed
   callbacks. Detectors whose event types remain allowlisted restart with fresh
   intervals immediately; they continue working through regrant and later DOM updates.
@@ -814,15 +818,15 @@ helper with the same name.
 For the committed-server flow, await a direct server page with an accepted result
 and API-issued profile, then make distinct sequential identify-bearing XDA fetches.
 Build identify with explicit request context, reuse each distinct plan for repeated
-presentations, and package the final profile. Construct Web with
-`autoTrackEntryInteraction: { views: false, hovers: false, clicks: false }` and no
-profile/consent defaults, subscribe, await `hydrateHandoffState()`, then enable
-automatic tracking and register manual elements. Initial activation performs no
-content refetch or page event. Hydration does not mark the route tracked.
+presentations, and package the final profile. Construct Web with no profile/consent
+defaults. Automatic tracking uses the existing attributed HTML from construction;
+register manual elements immediately. Subscribe and await `hydrateHandoffState()`
+independently to adopt the final server profile.
+Initial activation performs no content refetch or page event. Hydration does not
+mark the route tracked.
 
-Discovery starts at construction even with automatic flags disabled. Initial HTML
-must have no positive `data-ctfl-track-views`, `data-ctfl-track-hovers`, or
-`data-ctfl-track-clicks` opt-ins, and manual registration must wait for hydration.
+Automatic tracking, attribute opt-ins, and explicit per-element controls coexist
+and remain subject to consent. None requires handoff hydration before measurement.
 On reset, synchronously invalidate pending application renders and replace old
 attributed content before awaiting a new page/profile and content cycle: reset
 resumes eligible discovery immediately. Register replacement manual elements after

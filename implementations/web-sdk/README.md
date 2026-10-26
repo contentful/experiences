@@ -114,9 +114,9 @@ plans, while shared keys within one container preserve multi-root occurrences.
 Plans are unchanged. The former lookup, namespace and tracking-session API are
 removed rather than retained alongside another setup API.
 
-The SDK discovers these attributes automatically. The app calls
-`sdk.tracking.enable('views', { root: appMain })` only to configure its scrolling
-view geometry. Views apply to Experiences and Fragments; hover/click applies to
+The SDK discovers these attributes automatically with tracking enabled by default.
+Views use the default viewport root, which accounts for scroll-container clipping.
+Views apply to Experiences and Fragments; hover/click applies to
 Fragments. Fragment roots opt into card clicks with the public clickable attribute.
 Dwell, interval IDs, durations, consent and retries remain SDK-owned. DOM removal
 finishes qualified intervals without stopping unrelated occurrences. Reset discards

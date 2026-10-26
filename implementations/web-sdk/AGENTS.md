@@ -50,7 +50,7 @@
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,
   namespaces or the removed session API, or add a parallel public setup API.
-- Configure the scrolling `.app-main` visibility root with tracking.enable views.
+- Use default automatic tracking and viewport view geometry, including scroll-container clipping.
   The SDK discovers boundaries and finalizes removed occurrences; preserve its
   consent/reset guards and multi-root grouping. No app-owned automatic teardown.
 - The manual section registers elements through `sdk.tracking.enableElement('views',

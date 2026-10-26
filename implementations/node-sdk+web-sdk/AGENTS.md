@@ -19,8 +19,9 @@
 - Serve only public assets, explicit Home/Page Two routes, and API-free health.
   Bind to loopback. Missing routes/assets return 404; never serve the app directory.
 - Server integration is actual EJS SSR. Browser activation adopts state without
-  startup refetch/page or DOM replacement, then enables SDK-owned tracking. It uses
-  the committed server page and embedded identify flow, not prepared replay.
+  startup refetch/page or DOM replacement. SDK-owned tracking observes existing SSR
+  HTML independently of state hydration. It uses the committed server page and
+  embedded identify flow, not prepared replay.
   Preserve request-bound event construction, separate consent cookies,
   permitted identity, HTML-safe bootstrap, private/no-store caching and diagnostics.
   The sibling Node cookie prohibition and Web static-host rule are sibling-local.
@@ -28,10 +29,14 @@
   and SDK-owned profile, build identify with `request.eventBuilder`, fetch distinct
   IDs sequentially once with source maps, and package the final profile through
   the public Node producer. Keep diagnostic strings out of automatic UI/logs/bootstrap.
-- Construct Web with all automatic interaction flags false and profile/consent
-  defaults omitted. Subscribe, await state-only hydration, then enable views on
-  app-main plus hovers/clicks and register manual roots from their real data.
-  Preserve SSR on failure. Never add positive SSR opt-ins before hydration.
+- Construct Web with profile/consent defaults omitted and automatic interactions
+  enabled by default. Register manual roots from their real data before awaiting
+  state-only hydration. Tracking observes existing SSR HTML and later DOM changes
+  without a hydration gate; explicit
+  per-element controls coexist with automatic tracking and remain consent-gated.
+  Attach optional diagnostics/control subscriptions early; they do not gate tracking.
+  Analytics requires current profile identity at emission, which may come from
+  persisted browser state, an adopted cookie, or the handoff. Preserve SSR on failure.
 - Browser consent comes from SDK observables; mirror effective snapshots one way
   to independent app cookies. Grant/Revoke changes both axes with SDK commands,
   without content fetch/page calls. Release subscriptions on final exit and preserve

@@ -42,41 +42,36 @@ async function activate() {
     environment = bootstrap.environment;
     const { handoff } = bootstrap;
     routes = createRoutes(environment.EXPERIENCE_IDS);
-    // Consumer integration: one Web runtime, no consent/profile defaults, and no
-    // eligible automatic or manually registered elements before state hydration.
-    // Public SDK discovery may run already; measurement starts only after adoption.
+    // Consumer integration: one Web runtime discovers existing SSR attribution
+    // and later DOM changes. Tracking uses SDK consent and current identity.
     sdk = new window.ContentfulExperiences({
       spaceId: environment.SPACE_ID,
       environmentId: environment.ENVIRONMENT_ID,
       locale: environment.LOCALE,
       delivery: { accessToken: environment.CDA_TOKEN },
-      autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
     // Maintainer: optional browser-attempt diagnostics; never synthesize Node's
-    // already-committed events. Observe before hydration or tracking enables.
+    // already-committed events. Observing does not gate SDK tracking.
     trackingLog = createTrackingLog(sdk);
     controls = createControlPanel(sdk, {
       onIdentify,
       onReset,
       onRetry: () => void renderRoute(),
     });
-    status.textContent = 'Adopting server profile…';
-    // The server already committed its page and selected content. State-only
-    // hydration neither reselects nor replaces HTML and sends no browser page.
-    await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
-    if (disposed) return;
-
-    sdk.tracking.enable('views', { root: appMain });
-    sdk.tracking.enable('hovers');
-    sdk.tracking.enable('clicks');
     for (const element of appMain.querySelectorAll('[data-reference-view-attribution]')) {
       const data = JSON.parse(element.getAttribute('data-reference-view-attribution'));
-      // Consumer integration: real element-local attribution, after DOM insertion
-      // and hydration. The SDK owns visibility, dwell, consent and delivery.
+      // Consumer integration: manual roots use real data independently of
+      // automatic attributes and hydration. The SDK owns measurement and delivery.
       sdk.tracking.enableElement('views', element, { data });
       manualElements.push(element);
     }
+    status.textContent = 'Adopting server profile…';
+    // The server already committed its page and selected content. State-only
+    // hydration neither gates tracking nor replaces HTML and sends no browser page.
+    await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
+    if (disposed) return;
+
     controls.activate();
     updateNavigation();
     wireRouteAction();

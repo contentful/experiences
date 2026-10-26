@@ -221,10 +221,10 @@ not provide noncommitting XDA content selection.
 3. After the final fetch, produce a state-only handoff from the final
    `request.profile`, render the plans with attribution, and safely serialize the
    minimal public configuration and handoff into a private, no-store response.
-4. Construct Web with automatic interactions disabled and profile/consent defaults
-   omitted. Subscribe, await state hydration, then enable automatic tracking and
-   register manual elements. Initial activation sends no page and refetches no
-   content.
+4. Construct Web with profile/consent defaults omitted. Automatic tracking starts
+   on the existing attributed HTML; register manual elements immediately.
+   Subscribe and adopt the final server profile through state-only hydration
+   independently. Initial activation sends no page and refetches no content.
 
 ```ts
 import { createRequestHandoffFromData } from '@contentful/experiences-node';
@@ -284,25 +284,24 @@ const web = new WebContentfulExperiences({
   spaceId,
   environmentId,
   delivery: publicDelivery,
-  autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
 });
+// Defaults enable automatic views, hovers, and clicks on the existing HTML.
+// Register manual elements now, using actual plan attribution in options.data.
 const subscription = web.states.profile.subscribe(renderProfile);
 await web.hydrateHandoffState(handoff, {
   routeKey: window.location.pathname + window.location.search,
 });
-web.tracking.enable('views');
-web.tracking.enable('hovers');
-web.tracking.enable('clicks');
-// Register any manual elements now, using actual plan attribution.
 // During application cleanup: subscription.unsubscribe(); web.destroy();
 ```
 
 Here `WebContentfulExperiences` is the `ContentfulExperiences` export from
-`@contentful/experiences-web`. Disabled automatic flags are not a global pause:
-discovery starts at construction. Initial HTML must have no positive
-`data-ctfl-track-views`, `data-ctfl-track-hovers`, or `data-ctfl-track-clicks`
-opt-ins, and manual registration must wait until hydration completes. State-only
-hydration does not mark the route tracked; ordinary `page()` remains direct.
+`@contentful/experiences-web`. Discovery starts at construction and observes
+existing HTML and later DOM changes without a hydration prerequisite. Automatic
+tracking, attribute opt-ins, and manual registration remain subject to consent.
+Analytics needs a current profile identity when emitting an event; the constructor
+can adopt persisted profile or cookie identity, and the server handoff is another
+source. State-only hydration does not mark the route tracked; ordinary `page()`
+remains direct.
 Use the same direct page/profile step on later navigation or reset before fetching
 content. An identify action joins pending initialization and explicitly refetches
 without an unrelated page; a separate custom action uses `track()`.

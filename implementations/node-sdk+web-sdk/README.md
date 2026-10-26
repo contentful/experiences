@@ -39,9 +39,10 @@ does not read management exports or maintain duplicate content schemas.
 Automatic plan containers and node roots use the public Web tracking-attributes
 helper. Manual roots instead carry only their real innermost attribution as
 attribute-escaped `data-reference-view-attribution` JSON. Repeated presentations
-have separate DOM boundaries. No positive interaction opt-ins or manual
-registrations are active before browser hydration. Browser activation uses the
-existing SDK detectors; the application adds no interaction observer.
+have separate DOM boundaries. Automatic tracking observes the existing SSR HTML
+from SDK construction; manual roots are registered before state hydration. Browser
+activation uses the existing SDK detectors; the application adds no interaction
+observer.
 
 After the last fetch, public Node `createRequestHandoffFromData()` packages final
 `request.profile` into a private-request, state-only handoff. The non-executable
@@ -89,22 +90,27 @@ read by this server.
 ## Browser activation
 
 `public/js/app.js` reads the non-executable bootstrap and constructs one Web SDK
-with the public configuration, all three `autoTrackEntryInteraction` flags false,
-and no consent/profile defaults. SDK storage resolves existing browser decisions.
+with the public configuration and no consent/profile defaults. Automatic views,
+hovers and clicks use their enabled defaults. SDK storage resolves existing browser
+decisions.
 The identity cookie config matches the server: host-only, `/`, `lax`, HTTPS-only
-Secure, 365 days. SDK discovery can be active already; the initial HTML has no
-positive interaction opt-ins and manual elements are not registered yet.
+Secure, 365 days. Views use the SDK's default viewport root, which accounts for
+scroll-container clipping. The app registers manual views from each element's
+actual `data-reference-view-attribution`. Valid manual data needs no automatic
+tracking attributes. The SDK observes existing SSR elements and later DOM changes
+without waiting for handoff hydration.
 
 The control panel subscribes to consent, persistence consent and profile before
 hydration. It mirrors each consent snapshot and shows profile availability without
 printing profile data or claiming confirmed identification. Controls remain disabled
-until activation completes. The app awaits `hydrateHandoffState()` for the visible
-pathname plus search, then enables views with the scrolling `#app-main` as root,
-hovers and clicks, and registers manual views from each element's actual
-`data-reference-view-attribution`. It never calls `page()`, `trackCurrentPage()` or
-`fetchExperience()` during startup and does not replace or rerender the server DOM.
+until activation completes. Independently of tracking, the app awaits
+`hydrateHandoffState()` for the visible pathname plus search. It never calls
+`page()`, `trackCurrentPage()` or `fetchExperience()` during startup and does not
+replace or rerender the server DOM.
 State hydration transfers profile state; it does not select content or provide a
-DOM hydration engine.
+DOM hydration engine. Analytics needs a current profile identity at event emission;
+the constructor can adopt persisted profile or cookie identity, and the server
+handoff is another source.
 
 SDK consent still gates automatic and manual measurements. The SDK owns dwell,
 intervals, event queues and delivery; a submission/attempt is not a delivery promise.
@@ -178,8 +184,8 @@ suspension retains the document's owner and state.
 ## Optional browser attempt diagnostics
 
 `public/js/tracking.js` follows the Web reference's sidebar. One
-`sdk.states.eventStream` subscription starts before hydration and interaction
-enables, and persists across client routes. The counter counts every defined
+`sdk.states.eventStream` subscription starts during initial tracking setup, before
+hydration, and persists across client routes. The counter counts every defined
 notification, including repeated identify messages submitted through distinct XDA
 fetches. It records attempts before transport/queue admission; neither a row nor
 its count confirms delivery. Consent-blocked calls are not eventStream attempts.
@@ -208,7 +214,7 @@ inspection, `E2E compatibility` identifies real observable output, and
 | Responsibility                 | Files to inspect                                                                    | What to adapt                                                                                                                    |
 | ------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Server SDK and state handoff   | `src/app.ts`, `src/cookies.ts`                                                      | Request-local context/consent/identity, page/fetch order, final state-only producer, cookie scope and private HTML-safe response |
-| Browser adoption and lifecycle | `public/js/app.js`, `public/js/control-panel.js`                                    | One Web instance, hydration before measurement, effective-consent mirrors and caller-owned subscription cleanup                  |
+| Browser adoption and lifecycle | `public/js/app.js`, `public/js/control-panel.js`                                    | One Web instance, immediate SSR observation, independent state hydration, effective-consent mirrors and subscription cleanup     |
 | Content and attribution        | `src/index.ejs`, `public/js/experiences.js`, `src/shared.ts`                        | Your registrations, bindings, named slots, renderers and real automatic/manual attribution                                       |
 | Demo UI                        | `src/index.ejs`, `public/js/control-panel.js`, route handlers in `public/js/app.js` | Replace fixed `userId=charles`, routes and buttons with your own visitor experience                                              |
 | Optional diagnostics           | `public/js/tracking.js`, sidebar and `tpl-event-row` in `src/index.ejs`             | Omit the module, its create/dispose calls and markup if attempt inspection is unnecessary                                        |
