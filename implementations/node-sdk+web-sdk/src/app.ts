@@ -131,6 +131,10 @@ for (const [path, route] of Object.entries(routes)) {
 // symlinks that resolve outside it; .env, templates and dependencies stay private.
 app.use(async (request, response, next) => {
   const file = resolve(publicRoot, `.${decodeURIComponent(request.path)}`);
+  if (!file.startsWith(`${publicRoot}${sep}`)) {
+    response.status(404).type('text/plain').send('Not found.');
+    return;
+  }
   try {
     const actual = await realpath(file);
     if (!actual.startsWith(`${publicRoot}${sep}`)) {
