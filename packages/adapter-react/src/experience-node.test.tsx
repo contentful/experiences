@@ -143,11 +143,9 @@ describe('ExperienceNode', () => {
   it('renders an experience template snapshot from experienceTemplates', () => {
     const pageNode = planNode('experienceTemplate', 'page', {}, { nodeId: 't1' });
     const { snapshot } = resolve(pageNode, config);
-    const IslandExperienceNode = createExperienceNode({}, config.experienceTemplates);
+    const BoundNode = createExperienceNode({}, config.experienceTemplates);
 
-    const markup = renderToStaticMarkup(
-      <IslandExperienceNode node={snapshot} content={<p>body</p>} />
-    );
+    const markup = renderToStaticMarkup(<BoundNode node={snapshot} content={<p>body</p>} />);
 
     expect(markup).toBe('<main data-template="page"><p>body</p></main>');
   });
@@ -155,22 +153,20 @@ describe('ExperienceNode', () => {
 
 describe('createExperienceNode', () => {
   it('binds the registry, so a snapshot renders with no components prop', () => {
-    const IslandExperienceNode = createExperienceNode({ card: Card });
+    const BoundNode = createExperienceNode({ card: Card });
     const { snapshot } = resolve(cardNode, config);
 
-    const markup = renderToStaticMarkup(
-      <IslandExperienceNode node={snapshot} experience={experience} />
-    );
+    const markup = renderToStaticMarkup(<BoundNode node={snapshot} experience={experience} />);
 
     expect(markup).toBe('<article data-node="c1" data-slug="home" style="color:red">Hi</article>');
   });
 
   it('throws a clear error when the bound registry is missing the snapshot id', () => {
-    const IslandExperienceNode = createExperienceNode({});
+    const BoundNode = createExperienceNode({});
     const { snapshot } = resolve(cardNode, config);
 
     expect(() =>
-      renderToStaticMarkup(<IslandExperienceNode node={snapshot} experience={experience} />)
+      renderToStaticMarkup(<BoundNode node={snapshot} experience={experience} />)
     ).toThrow(/snapshot of component "card" \(node "c1"\) but "card" is not in its components/);
   });
 });

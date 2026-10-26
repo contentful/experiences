@@ -215,7 +215,7 @@ describe('custom-renderer providers', () => {
     }
 
     renderToStaticMarkup(
-      <ExperienceProvider value={{ debug: false, metadata: { framework: 'astro' } }}>
+      <ExperienceProvider value={{ debug: false, metadata: { framework: 'custom' } }}>
         <ContentfulComponentProvider value={result.contentful}>
           <ResolvedDesignProvider value={result.design}>
             <result.component {...result.props} />
@@ -225,7 +225,7 @@ describe('custom-renderer providers', () => {
     );
 
     expect(seen).toEqual({
-      experience: { debug: false, metadata: { framework: 'astro' } },
+      experience: { debug: false, metadata: { framework: 'custom' } },
       component: result.contentful,
       template: null,
       design: { color: 'red' },

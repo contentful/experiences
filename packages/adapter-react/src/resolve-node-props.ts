@@ -1,10 +1,6 @@
 /*
- * The per-node prop merge `NodeRenderer` runs, exported so a host that walks
- * the plan itself (an Astro page emitting one island per interactive node, for
- * example) renders each node with exactly the props the SDK renderer would.
- *
- * Hook-free and directive-free on purpose: it has to be callable from a React
- * Server Component, from Astro frontmatter, or from any plain server module.
+ * Registry lookup and prop merge for one plan node, shared by the SDK renderers
+ * and custom renderers. Hook- and directive-free so any server module can call it.
  */
 
 import type { ComponentType } from 'react';
@@ -22,31 +18,23 @@ import {
 interface NodeSnapshotBase {
   id: string;
   nodeId?: string;
-  /**
-   * Merged props, last wins: defaults < design < content < resolveData. Slot
-   * props are not included; the host renders each slot and spreads it on top.
-   */
+  /** Merged props (defaults < design < content < resolveData), without slots. */
   props: Record<string, unknown>;
-  /** Token-resolved design values. The value for `ResolvedDesignProvider`. */
+  /** Token-resolved design values. */
   design: Record<string, unknown>;
 }
 
 /**
- * A resolved component node as plain data: everything `ExperienceNode` needs
- * except the component itself, which the receiving side looks up by `id`.
- * Safe to pass anywhere props get serialized (an Astro island, a `'use client'`
- * boundary), provided the `resolveData` output it carries is plain data too.
+ * A resolved node as plain data, without its component. Serializable as long
+ * as the `resolveData` output it carries is.
  */
 export interface ComponentNodeSnapshot extends NodeSnapshotBase {
   kind: 'component';
-  /** The value for `ContentfulComponentProvider`. */
   contentful: ContentfulComponent;
 }
 
-/** `ComponentNodeSnapshot` for a node registered in `config.experienceTemplates`. */
 export interface ExperienceTemplateNodeSnapshot extends NodeSnapshotBase {
   kind: 'experienceTemplate';
-  /** The value for `ContentfulExperienceTemplateProvider`. */
   contentful: ContentfulExperienceTemplate;
 }
 
@@ -54,26 +42,19 @@ export type NodeSnapshot = ComponentNodeSnapshot | ExperienceTemplateNodeSnapsho
 
 interface ResolvedNodeExtras<S extends NodeSnapshot> {
   status: 'resolved';
-  /** The registered implementation, from the bare or `{ component }` registration. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the registry erases per-entry prop types; see `Components`.
   component: ComponentType<any>;
-  /** This node without `component` and `status`, for crossing a serialization boundary. */
+  /** This node as plain data, for passing across a serialization boundary. */
   snapshot: S;
 }
 
-/** A node whose id is registered in `config.components`. */
 export type ResolvedComponentNode = ComponentNodeSnapshot &
   ResolvedNodeExtras<ComponentNodeSnapshot>;
 
-/** A node whose id is registered in `config.experienceTemplates`. */
 export type ResolvedExperienceTemplateNode = ExperienceTemplateNodeSnapshot &
   ResolvedNodeExtras<ExperienceTemplateNodeSnapshot>;
 
-/**
- * A node whose id has no registration. Returned rather than thrown so the
- * host chooses the fallback: the SDK renderer shows the missing-component box
- * for a component and renders an Experience Template's slot children unwrapped.
- */
+/** A node whose id has no registration. Returned, not thrown, so the caller picks the fallback. */
 export interface UnregisteredNode {
   status: 'unregistered';
   kind: 'component' | 'experienceTemplate';
@@ -84,11 +65,7 @@ export interface UnregisteredNode {
 export type ResolvedNode =
   ResolvedComponentNode | ResolvedExperienceTemplateNode | UnregisteredNode;
 
-/**
- * Look a plan node up in `config` and merge its props the way the SDK
- * renderer does. Covers both `config.components` and
- * `config.experienceTemplates`, selected by `node.registration.kind`.
- */
+/** Look a node up in `config.components` or `config.experienceTemplates` and merge its props. */
 export function resolveNodeProps(node: PortableRenderNode, config: Config): ResolvedNode {
   const { kind, id } = node.registration;
   const { nodeId } = node;
