@@ -26,8 +26,10 @@ of consent, CPA configuration and socket status. All event calls skip before bui
 profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
 Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
 returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
-`canPersistProfile` is false. Static preview without a Session ID, raw `sdk.api` calls and
-standalone free fetches remain outside this policy.
+`canPersistProfile` still reflects persistence consent. With consent granted, the documented
+cookie helper leaves an existing identity untouched because the handoff has no profile ID.
+Static preview without a Session ID, raw `sdk.api` calls and standalone free fetches remain
+outside this policy.
 
 ## Create an SDK instance, then bind every request
 

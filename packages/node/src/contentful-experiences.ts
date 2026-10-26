@@ -241,7 +241,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     this.#profile = context.profile;
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
-    this.canPersistProfile = !this.isPreview && this.#consent.persistence === true;
+    this.canPersistProfile = this.#consent.persistence === true;
 
     this.eventBuilder = {
       buildIdentify: (args) =>

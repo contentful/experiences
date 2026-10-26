@@ -157,7 +157,7 @@ describe('Session preview event isolation', () => {
     expect(results).toEqual(Array(7).fill(skipped));
     expect(admitted.accepted).toBe(true);
     expect(preview.isPreview).toBe(true);
-    expect(preview.canPersistProfile).toBe(false);
+    expect(preview.canPersistProfile).toBe(true);
     expect(preview.profile).toBeUndefined();
     expect((await allEvents(delivery)).every((result) => result.accepted)).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(8);
