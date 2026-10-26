@@ -1,3 +1,16 @@
+## 0.14.6 (2026-10-26)
+
+### 🚀 Features
+
+- improve Node/Web handoffs, event APIs, and diagnostics ([#264](https://github.com/contentful/experiences/pull/264))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.7.6
+- Updated runtime to 0.2.6
+- Updated client to 0.10.6
+- Updated core to 0.13.5
+
 ## 0.14.5 (2026-10-24)
 
 ### 🧱 Updated Dependencies

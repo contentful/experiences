@@ -1,3 +1,17 @@
+## 0.8.5 (2026-10-26)
+
+### 🚀 Features
+
+- improve Node/Web handoffs, event APIs, and diagnostics ([#264](https://github.com/contentful/experiences/pull/264))
+- **web:** automate interaction tracking setup ([#255](https://github.com/contentful/experiences/pull/255))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.2.6
+- Updated client to 0.10.6
+- Updated core to 0.13.5
+- Updated node to 0.7.6
+
 ## 0.8.4 (2026-10-24)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,10 @@
+## 0.13.5 (2026-10-26)
+
+### 🚀 Features
+
+- improve Node/Web handoffs, event APIs, and diagnostics ([#264](https://github.com/contentful/experiences/pull/264))
+- **web:** automate interaction tracking setup ([#255](https://github.com/contentful/experiences/pull/255))
+
 ## 0.13.4 (2026-10-24)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
