@@ -17,24 +17,72 @@
       <div class="app-body">
         <aside class="app-sidebar" aria-label="Implementation status">
           <section class="tracking-log">
-            <h2>Standalone foundation</h2>
-            <p>Phase 2: local packages, assets and hosting.</p>
-            <p>SDK activation and tracking are not connected.</p>
+            <h2>Server and browser</h2>
+            <p>Node renders the initial Experience content.</p>
+            <p id="browser-status" role="status">Browser activation has not completed. Server content is ready.</p>
+            <p>Identify requested: <strong data-testid="identified-status"><%= identifyRequested ? 'Yes' : 'No' %></strong>.</p>
+            <p>This describes URL intent, not confirmed traits or audience membership.</p>
+          </section>
+          <section class="tracking-log" aria-label="Utilities">
+            <h2>Utilities</h2>
+            <p>Event consent: <strong data-testid="consent-status">Not connected</strong></p>
+            <p>Persistence consent: <strong data-testid="persistence-consent-status">Not connected</strong></p>
+            <p>SDK profile: <strong data-testid="profile-status">Not connected</strong></p>
+            <div class="control-panel__actions">
+              <button type="button" class="btn btn--secondary" data-testid="consent-button" disabled>Grant</button>
+              <button type="button" class="btn btn--secondary" data-testid="unconsent-button" disabled>Revoke</button>
+            </div>
+            <div class="control-panel__actions">
+              <button type="button" class="btn btn--secondary" data-testid="identify-button" disabled>Identify</button>
+              <button type="button" class="btn btn--danger" data-testid="reset-button" disabled>Reset</button>
+            </div>
+            <div class="control-panel__actions">
+              <button type="button" class="btn btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
+            </div>
+            <p class="control-panel__note">Grant/Revoke changes both consent decisions. The SDK permits identify and page by default even without event consent.</p>
           </section>
         </aside>
         <main class="app-main" id="app-main" tabindex="-1">
-          <header class="page-header">
+          <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
             <h1><%= title %></h1>
             <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
           </header>
-          <section class="page-section" aria-label="Reference implementation status">
-            <h2>Application foundation ready</h2>
-            <p>This route serves the Express/EJS shell. Experience fetching and rendering await the next accepted phase.</p>
-            <p>The installed Web SDK distribution is available; this page does not construct an SDK or send events.</p>
-            <p><a href="/health">Check local process health</a></p>
+          <% if (path === '/page-two') { %>
+            <section class="control-panel__actions" aria-label="Custom event" data-custom-action>
+              <button type="button" class="btn btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
+              <p class="control-panel__note" role="status"></p>
+            </section>
+          <% } %>
+          <div id="content-error" data-testid="content-error" hidden></div>
+          <section class="page-section" aria-label="Automatically observed Experiences">
+            <header class="page-section__header">
+              <h2>Automatically observed Experiences</h2>
+              <p>Server markup carries real plan attribution. The SDK measures permitted views, clicks and hovers after profile adoption.</p>
+            </header>
+            <div class="entry-grid entry-grid--experiences" data-experiences="auto">
+              <% for (const experienceId of route.automatic) { %>
+                <%- include('experience', { plan: plans.get(experienceId), experienceId, section: 'auto' }) %>
+              <% } %>
+            </div>
+          </section>
+          <section class="page-section" aria-label="Manually observed Experiences">
+            <header class="page-section__header">
+              <h2>Manually observed Experiences</h2>
+              <p>Elements register their real attribution after profile adoption. The SDK measures permitted views; this presentation has no automatic scope attributes.</p>
+            </header>
+            <div class="entry-grid entry-grid--experiences" data-experiences="manual">
+              <% for (const experienceId of route.manual) { %>
+                <%- include('experience', { plan: plans.get(experienceId), experienceId, section: 'manual' }) %>
+              <% } %>
+            </div>
           </section>
         </main>
       </div>
     </div>
+    <%- include('browser-templates') %>
+    <!-- Consumer integration: public configuration and final request profile only.
+         Escape '<' for this HTML context; do not add diagnostic strings or plans. -->
+    <script type="application/json" id="experience-bootstrap"><%- bootstrap %></script>
+    <script type="module" src="/js/app.js"></script>
   </body>
 </html>

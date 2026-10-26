@@ -30,9 +30,8 @@ if (!experienceIds.length) throw new Error('EXPERIENCE_IDS must contain an Exper
 
 export const config = {
   port,
-  // Consumer integration: this is the complete allowlist for later browser
+  // Consumer integration: this is the complete allowlist for browser
   // bootstrap. CDA_TOKEN must be suitable for public browser use. Never spread env.
-  // Phase 2 serves no bootstrap data; the handoff belongs to server integration.
   publicEnvironment: {
     SPACE_ID: required('SPACE_ID'),
     ENVIRONMENT_ID: env.ENVIRONMENT_ID?.trim() || 'master',
@@ -40,4 +39,11 @@ export const config = {
     LOCALE: env.LOCALE?.trim() || 'en-US',
     EXPERIENCE_IDS: [...new Set(experienceIds)],
   },
+};
+
+// Reference app: route presentations reuse plans; fetch each distinct ID once.
+const ids = config.publicEnvironment.EXPERIENCE_IDS;
+export const routes = {
+  '/': { title: 'Home', automatic: ids, manual: ids.slice(0, 1) },
+  '/page-two': { title: 'Page Two', automatic: ids.slice(-1), manual: ids.slice(0, 1) },
 };

@@ -1,0 +1,22 @@
+<% const automatic = section === 'auto'; %>
+<section class="entry-grid" data-experience-id="<%= experienceId %>" data-testid="<%= section %>-experience-<%= experienceId %>"
+  <% if (automatic) { for (const [name, value] of Object.entries(getTrackingAttributes(plan.attribution))) { %>
+    <%= name %>="<%= value %>"
+  <% } } %>>
+  <div class="entry-card__ids">
+    <span class="entry-card__id-label">Experience</span>
+    <span class="entry-card__id-value"><%= experienceId %></span>
+  </div>
+  <% if (plan.deliveryDiagnostics?.length) { %>
+    <!-- Consumer integration: preserve useful content; upstream diagnostic strings
+         may contain private data. Only the count belongs in automatic UI. -->
+    <p role="status" class="page-status" data-testid="<%= section %>-experience-partial">
+      Some content could not be resolved (<%= plan.deliveryDiagnostics.length %> delivery issues).
+    </p>
+  <% } %>
+  <% if (plan.nodes.length === 0) { %>
+    <p data-testid="<%= section %>-experience-empty">This Experience has no content.</p>
+  <% } else { %>
+    <%- include('nodes', { nodes: plan.nodes, identity: `${section}-${experienceId}`, automatic, slotName: undefined }) %>
+  <% } %>
+</section>

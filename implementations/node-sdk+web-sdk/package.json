@@ -25,6 +25,7 @@
     "@contentful/experiences-node": "file:../../pkgs/contentful-experiences-node-local.tgz",
     "@contentful/experiences-web": "file:../../pkgs/contentful-experiences-web-local.tgz",
     "@contentful/rich-text-html-renderer": "17.1.6",
+    "cookie-parser": "1.4.7",
     "dotenv": "17.4.2",
     "ejs": "6.0.1",
     "express": "5.2.1",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/cookie-parser": "1.4.10",
     "@types/express": "5.0.6",
     "@types/node": "24.19.2",
     "@typescript-eslint/eslint-plugin": "8.71.2",
