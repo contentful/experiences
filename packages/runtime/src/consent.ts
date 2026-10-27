@@ -54,7 +54,7 @@ export interface ConsentState {
 export type ConsentInput = boolean | ConsentState;
 
 /** Reasons why an event was blocked before being sent. */
-export type BlockedEventReason = 'consent';
+export type BlockedEventReason = 'consent' | 'preview';
 
 /** Why an event was dropped at the SDK boundary. Blocked events are never replayed. */
 export interface BlockedEvent {

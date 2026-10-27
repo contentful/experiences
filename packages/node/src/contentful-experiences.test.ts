@@ -515,6 +515,27 @@ describe('Node ContentfulExperiences', () => {
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 
+  it('preserves persistence consent and existing identity when Session preview skips handoff', async () => {
+    const { runtime, upsertProfile, sendBatchEvents } = createEventRuntime();
+    const request = runtime.forRequest({
+      isPreview: true,
+      consent: true,
+      profile: { id: 'existing-visitor' },
+    });
+    const result = await request.prepareRequestHandoff({
+      routeKey: '/?preview_session_id=session',
+    });
+
+    expect(request.canPersistProfile).toBe(true);
+    expect(request.profile).toEqual({ id: 'existing-visitor' });
+    expect(result.skipped).toBe('preview');
+    expect(result.handoff.profileId).toBeUndefined();
+    expect(result.handoff.replay).toBeUndefined();
+    expect(result.data).toBeUndefined();
+    expect(upsertProfile).not.toHaveBeenCalled();
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+  });
+
   it('previews the full 100-event prepared batch with its exact replay bodies', async () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ locale: 'de-DE' });
@@ -556,7 +577,7 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
     await expect(
       request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     expect(sendBatchEvents).toHaveBeenCalledOnce();
   });
 

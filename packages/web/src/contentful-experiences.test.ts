@@ -432,7 +432,7 @@ describe('Web ContentfulExperiences', () => {
 
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     await runtime.flush();
 
     expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
@@ -452,7 +452,7 @@ describe('Web ContentfulExperiences', () => {
     // A new visitor has no identity yet: the call resolves instead of rejecting, and sends nothing.
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
 
     respond({ profile: { id: 'issued-profile' } });
     await pending;
@@ -476,7 +476,7 @@ describe('Web ContentfulExperiences', () => {
     runtime.reset();
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     await runtime.flush();
     expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
 
@@ -556,14 +556,14 @@ describe('Web ContentfulExperiences', () => {
 
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: false });
     await runtime.flush();
     expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
 
     runtime.consent({ events: true });
     await expect(
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: true });
     await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([

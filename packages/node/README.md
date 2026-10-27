@@ -8,6 +8,30 @@ The Node.js SDK for fetching and resolving [Contentful Experiences](https://www.
 npm install @contentful/experiences-node
 ```
 
+## Session preview
+
+Pass the incoming URL's Session ID before any event or handoff work:
+
+```ts
+const url = new URL(incomingRequest.url);
+const request = sdk.forRequest({
+  isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()),
+  consent: visitorConsent,
+});
+await request.page(); // { accepted: false, reason: 'preview' } in Session preview
+```
+
+`isPreview: true` fixes read-only `request.isPreview` for this request, independently
+of consent, CPA configuration and socket status. It defaults to false; the host determines
+preview intent before calling `forRequest()`. All event calls skip before building or
+profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
+Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
+returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
+`canPersistProfile` still reflects persistence consent. With consent granted, the documented
+cookie helper leaves an existing identity untouched because the handoff has no profile ID.
+Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
+and standalone free fetches remain outside this policy.
+
 ## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.
@@ -173,11 +197,10 @@ await experienceRequest.trackClick({
 ```
 
 `identify`, `page`, and `track` send directly and return `{ accepted: true, data }` on success; transport errors reject. Their result type also permits accepted work without response data for a future queued sender. These calls update the request profile from the Personalization API response.
-`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and follow
-Optimization's return contracts. `trackView` resolves an acceptance result: `{ accepted: true }`
-when consent admits it and `{ accepted: false }` when consent blocks it. `trackClick`, `trackHover`,
-and `trackFlagView` resolve with no result. A transport failure is not reported through either
-return value, and a blocked call is reported to `onEventBlocked`. All four require a current profile,
+`trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and return
+`EventEmissionResult`: `{ accepted: true }` when admitted and `{ accepted: false }` when consent
+blocks them. Acceptance does not report transport success. A blocked call is reported to
+`onEventBlocked`. All four require a current profile,
 because a stateless request is bound to one; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as
@@ -185,8 +208,7 @@ fallback. An event's explicit locale changes its body only; it does not change c
 or the Personalization request locale.
 `consent.events` gates sending and sets `context.gdpr.isConsentGiven`. Until it is `true`, only
 `allowedEventTypes` (default `identify` and `page`) are sent; a blocked Personalization call
-resolves `{ accepted: false }`. A blocked `trackView` also resolves `{ accepted: false }`;
-the other Analytics methods retain their void result contracts. Blocked events are
+resolves `{ accepted: false }`. Blocked Analytics calls resolve the same result. Blocked events are
 dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configure
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.

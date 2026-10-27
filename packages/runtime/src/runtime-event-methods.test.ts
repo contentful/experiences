@@ -310,7 +310,7 @@ describe('RuntimeEventMethods', () => {
     expect(methods.profile).toEqual({ id: 'current-profile' });
   });
 
-  it('sends each interaction immediately through Analytics and resolves with no result, even when the transport reports failure', async () => {
+  it('sends each interaction immediately through Analytics and reports admission even when the transport fails', async () => {
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
       profile: { id: 'profile-1' },
@@ -361,7 +361,7 @@ describe('RuntimeEventMethods', () => {
       () => methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 }),
       () => methods.trackFlagView({ componentId: 'flag-1' }),
     ]) {
-      await expect(call()).resolves.toBeUndefined();
+      await expect(call()).resolves.toEqual({ accepted: true });
     }
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
@@ -448,7 +448,7 @@ describe('RuntimeEventMethods', () => {
         await expect(methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
         await expect(
           methods.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({ accepted: false });
 
         expect(upsertProfile).toHaveBeenCalledTimes(1);
         expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -498,11 +498,7 @@ describe('RuntimeEventMethods', () => {
           trackHover: { ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 },
         }[method];
         // The argument shape differs per method; each is valid for its own method here.
-        // Views report consent admission, as in Optimization; clicks and hovers resolve void.
-        const [admitted, blocked] =
-          method === 'trackView'
-            ? [{ accepted: true }, { accepted: false }]
-            : [undefined, undefined];
+        const [admitted, blocked] = [{ accepted: true }, { accepted: false }];
         await expect(allowed.methods[method](args as never)).resolves.toEqual(admitted);
         await expect(denied.methods[method](args as never)).resolves.toEqual(blocked);
         expect(allowed.sendBatchEvents).toHaveBeenCalledTimes(1);
@@ -516,14 +512,14 @@ describe('RuntimeEventMethods', () => {
 
       for (const allowedEventTypes of [['flag'], ['component']] as const) {
         const { methods, sendBatchEvents } = createFixture({ allowedEventTypes, profile });
-        await expect(methods.trackFlagView(args)).resolves.toBeUndefined();
+        await expect(methods.trackFlagView(args)).resolves.toEqual({ accepted: true });
         expect(sendBatchEvents).toHaveBeenCalledTimes(1);
       }
       const { methods, sendBatchEvents } = createFixture({
         allowedEventTypes: ['component_click'],
         profile,
       });
-      await expect(methods.trackFlagView(args)).resolves.toBeUndefined();
+      await expect(methods.trackFlagView(args)).resolves.toEqual({ accepted: false });
       expect(sendBatchEvents).not.toHaveBeenCalled();
     });
 

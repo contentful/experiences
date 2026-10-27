@@ -223,3 +223,8 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 
 - [Node SDK](../../packages/node/README.md)
 - [Local package artifacts](../../README.md#local-npm-artifacts)
+
+The reference converts the incoming `preview_session_id` to an `isPreview` boolean
+and passes it to `forRequest()` before page/fetch work.
+Session-marked requests skip events and omit embedded personalization; delivery requests keep
+the existing flow. This reference adds no Session rendering/subscription.

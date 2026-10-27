@@ -6,6 +6,25 @@ The browser SDK for fetching and resolving [Contentful Experiences](https://www.
 
 Only one live Experiences Web SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the Web owner lock. Experiences Web and Optimization Web are alternative product SDKs and are not supported together on one page. Applications must choose one; the SDKs do not coordinate with each other.
 
+## Session preview
+
+Set `isPreview: true` to suppress events or `isPreview: false` to select delivery.
+When omitted, the SDK detects a nonempty, trimmed `preview_session_id` in the initial
+browser URL. The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
+All event methods return `{ accepted: false, reason: 'preview' }` and report through
+`onEventBlocked`/`blockedEventStream`, without building, publishing or queueing events.
+Consent stays unchanged; automatic and explicitly enabled interaction tracking stays inactive.
+
+Preview fetches omit personalization and do not attach or adopt a profile. Handoff hydration
+and replay are ignored; current-page methods return the same skipped result. Flush,
+reconnect, page hide/Beacon and destroy send no preview events. Rendering and Session updates continue.
+
+Mode stays fixed through reset, consent, URL changes and socket failure. Destroy and recreate
+before entering/leaving Session preview in a SPA. CPA configuration, `preview: true` and `debug`
+do not select this policy. Static preview without a Session ID is not detected automatically;
+applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
+fetches remain outside it.
+
 ## Install
 
 ```sh
@@ -264,8 +283,8 @@ transport schema validates the transformed output, then the SDK checks its actua
 event type against current consent before publication, sending, or queueing.
 Invalid output is a schema failure, not a consent drop. A valid transformed event
 blocked by consent is reported with its transformed method/type through
-`onEventBlocked` and `blockedEventStream`. Personalization and `trackView` return
-`{ accepted: false }`; other Analytics methods retain their void contracts. This
+`onEventBlocked` and `blockedEventStream`. Every event method returns
+`{ accepted: false }` for consent refusal. This
 final-type gate corrects the original-type-only bypass in the Optimization reference at `70dfa7f`.
 
 XDA runs event chains concurrently with `Promise.all`, preserving the input array
@@ -395,10 +414,8 @@ failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
-are queued in memory rather than sent one by one, and follow Optimization's return contracts:
-`trackView` resolves `{ accepted: true }` when consent admits it and `{ accepted: false }` when
-consent blocks it or the SDK is destroyed, while `trackClick`, `trackHover` and `trackFlagView`
-resolve with no result. Acceptance is consent admission, not delivery. Without a profile
+are queued in memory rather than sent one by one. Every Analytics method resolves
+`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a profile
 or an adopted continuation ID, such as a new visitor's call made while the first profile request is
 still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
@@ -434,8 +451,7 @@ the Optimization SDK's consent model.
   Optimization names: `identify`, `page`, `track`, `component` (views),
   `component_click`, `component_hover`, and `flag` (flag views only; `component`
   also admits them). A blocked Personalization call resolves
-  `{ accepted: false }`; blocked `trackView` also resolves `{ accepted: false }`,
-  while `trackClick`, `trackHover`, and `trackFlagView` retain void results.
+  `{ accepted: false }`; blocked Analytics calls resolve the same result.
   `gdpr.isConsentGiven` follows `events`. Blocked events are dropped, never
   replayed after consent is granted, and reported to `onEventBlocked`.
 - **Withdrawing consent.** `consent(false)` or `consent({ events: false })` also

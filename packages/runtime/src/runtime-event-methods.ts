@@ -75,6 +75,8 @@ export interface RuntimeEventDispatch {
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
 export interface RuntimeEventBindings {
   getProfile: () => EventProfile | undefined;
+  /** Fixed preview intent of the owning instance/request. */
+  getIsPreview?: () => boolean;
   getEventContext?: () => UniversalEventBuilderArgs;
   /** Content/request locale for Personalization; event context does not override it. */
   getLocale?: () => string | undefined;
@@ -115,7 +117,7 @@ export interface RuntimeDirectEventBindings extends Omit<
  * Profile-producing calls are not globally serialized. Prepared replay uses
  * the same Personalization transport through the Web delivery queue. A
  * Personalization call blocked by consent resolves `{ accepted: false }`; a
- * blocked view resolves `{ accepted: false }`; other Analytics methods resolve void.
+ * blocked Analytics call resolves `{ accepted: false }`.
  */
 export interface RuntimeEventMethods {
   readonly profile: EventProfile | undefined;
@@ -123,9 +125,9 @@ export interface RuntimeEventMethods {
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
   trackView(args: ViewBuilderArgs): Promise<EventEmissionResult>;
-  trackClick(args: ClickBuilderArgs): Promise<void>;
-  trackHover(args: HoverBuilderArgs): Promise<void>;
-  trackFlagView(args: FlagViewBuilderArgs): Promise<void>;
+  trackClick(args: ClickBuilderArgs): Promise<EventEmissionResult>;
+  trackHover(args: HoverBuilderArgs): Promise<EventEmissionResult>;
+  trackFlagView(args: FlagViewBuilderArgs): Promise<EventEmissionResult>;
 }
 
 /** Thrown when an Analytics event is triggered before a profile is available. */
@@ -153,6 +155,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('identify', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'identify',
       args,
@@ -161,6 +165,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('page', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'page',
       args,
@@ -169,6 +175,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 
   async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('track', args);
+    if (skipped) return skipped;
     return this.sendPersonalizationEvent(
       'track',
       args,
@@ -182,38 +190,51 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
    * delivery result, so a view dropped later for want of a profile is still accepted.
    */
   async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackView', args);
+    if (skipped) return skipped;
     if (!this.admit('trackView', [args])) return { accepted: false };
 
-    const accepted = await this.sendAnalyticsEvent(
+    return this.sendAnalyticsEvent(
       'trackView',
       args,
       this.eventBuilder.buildView(this.withEventContext(args))
     );
-    return { accepted };
   }
 
-  async trackClick(args: ClickBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent(
+  async trackClick(args: ClickBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackClick', args);
+    if (skipped) return skipped;
+    return this.sendAnalyticsEvent(
       'trackClick',
       args,
       this.eventBuilder.buildClick(this.withEventContext(args))
     );
   }
 
-  async trackHover(args: HoverBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent(
+  async trackHover(args: HoverBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackHover', args);
+    if (skipped) return skipped;
+    return this.sendAnalyticsEvent(
       'trackHover',
       args,
       this.eventBuilder.buildHover(this.withEventContext(args))
     );
   }
 
-  async trackFlagView(args: FlagViewBuilderArgs): Promise<void> {
-    await this.sendAnalyticsEvent(
+  async trackFlagView(args: FlagViewBuilderArgs): Promise<EventEmissionResult> {
+    const skipped = this.skipPreview('trackFlagView', args);
+    if (skipped) return skipped;
+    return this.sendAnalyticsEvent(
       'trackFlagView',
       args,
       this.eventBuilder.buildFlagView(this.withEventContext(args))
     );
+  }
+
+  private skipPreview(method: EventMethod, args: unknown): EventEmissionResult | undefined {
+    if (this.bindings.getIsPreview?.() !== true) return undefined;
+    this.bindings.reportBlockedEvent?.({ reason: 'preview', method, args: [args] });
+    return { accepted: false, reason: 'preview' };
   }
 
   private withEventContext<TArgs extends UniversalEventBuilderArgs>(args: TArgs): TArgs {
@@ -252,18 +273,18 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     method: AnalyticsEventMethod,
     args: unknown,
     event: AnalyticsEvent
-  ): Promise<boolean> {
-    if (!this.admit(method, [args])) return false;
+  ): Promise<EventEmissionResult> {
+    if (!this.admit(method, [args])) return { accepted: false };
     const profile = this.profile;
     if (profile === undefined) {
       // Stateless requests are bound to a profile, so a missing one is a caller error.
       // Stateful runtimes follow Optimization's queue: warn and drop the event.
       if (this.bindings.requireProfile === true) throw new EventProfileRequiredError(method);
       eventLogger.warn('Attempting to emit an event without an Optimization profile');
-      return true;
+      return { accepted: true };
     }
     const admitted = await this.dispatch.analytics(this.withConsent(event), profile);
-    return admitted !== false;
+    return { accepted: admitted !== false };
   }
 }
 

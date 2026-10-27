@@ -99,7 +99,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     const runtime = createRuntime({
       autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
     });
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     click(existing);
     expect(trackClick).toHaveBeenCalledOnce();
     const later = await render('node:hero', 'button');
@@ -118,7 +118,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('clears explicit element overrides on reset while resuming automatic tracking', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     const automatic = await render('node:hero', 'button');
     const manual = document.createElement('button');
     document.body.append(manual);
@@ -137,7 +137,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('sends interactions through the runtime event methods', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     const hero = await render('node:hero', 'button');
 
     runtime.tracking.disable('views');
@@ -166,7 +166,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('stops tracking detached roots and discovers their replacements', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     const oldHero = await render('node:hero', 'button');
     click(oldHero);
     oldHero.remove();
@@ -185,7 +185,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       .spyOn(runtime, 'trackView')
       .mockResolvedValueOnce({ accepted: true })
       .mockReturnValueOnce(finalSend.promise);
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     const page = await render('node:page', 'main');
     const oldHero = await render('node:hero', 'button');
     io.trigger(page, true);
@@ -208,14 +208,16 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('discovers roots on a replacement SDK after destroy', async () => {
     const first = createRuntime();
     const hero = await render('node:hero', 'button');
-    const firstClick = vi.spyOn(first, 'trackClick').mockResolvedValue(undefined);
+    const firstClick = vi.spyOn(first, 'trackClick').mockResolvedValue({ accepted: true });
     click(hero);
     first.destroy();
     click(hero);
     expect(firstClick).toHaveBeenCalledOnce();
 
     const replacement = createRuntime();
-    const replacementClick = vi.spyOn(replacement, 'trackClick').mockResolvedValue(undefined);
+    const replacementClick = vi
+      .spyOn(replacement, 'trackClick')
+      .mockResolvedValue({ accepted: true });
     click(hero);
     expect(replacementClick).toHaveBeenCalledOnce();
   });
@@ -285,7 +287,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('re-reads attribution when a boundary changes', async () => {
     const runtime = createRuntime();
-    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue(undefined);
+    const trackClick = vi.spyOn(runtime, 'trackClick').mockResolvedValue({ accepted: true });
     const hero = await render('node:hero', 'button');
     hero.setAttribute('data-ctfl-attribution', JSON.stringify({ scopes: {} }));
     await advance(0);
@@ -363,7 +365,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       // A manual call still reaches the gate, which stays as a backstop and reports.
       await expect(
         runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ accepted: false });
       expect(onEventBlocked).toHaveBeenCalledWith(
         expect.objectContaining({ reason: 'consent', method: 'trackClick' })
       );

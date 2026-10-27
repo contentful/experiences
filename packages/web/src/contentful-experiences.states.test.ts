@@ -551,7 +551,7 @@ describe('Web public state subscriptions', () => {
       } else {
         await expect(
           runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({ accepted: true });
       }
       expect(handled).toBe(true);
       if (action === 'reset') {

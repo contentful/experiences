@@ -143,9 +143,11 @@ Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app n
 
 A connection starts only when both `previewToken` and `sessionId` are available.
 
-Live Preview does not trigger or suppress analytics automatically. A manually
-invoked event method still sends while a direct CPA preview fetch or Preview
-Session is active.
+Both runtimes accept an explicit `isPreview` boolean. Web detects a nonempty URL
+`preview_session_id` when the option is omitted; Node integrations pass
+`isPreview: true` to `forRequest()` for preview requests.
+Calls return `{ accepted: false, reason: 'preview' }`, while rendering and Session updates continue.
+See the [Web](./packages/web/README.md#session-preview) and [Node](./packages/node/README.md#session-preview) contracts.
 
 ---
 
@@ -184,8 +186,7 @@ consent is granted only `allowedEventTypes` are sent, and the application decide
 when to grant consent. Web's
 automatic interaction tracking sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
-no framework adapter stamps tracked attributes yet. Manually invoked methods
-still send during direct CPA preview or Live Preview.
+Session preview gates automatic and manual tracking. CPA fetching alone does not select that policy.
 
 An ordinary event call does not wait for every queued handoff. If a later call
 needs a profile produced by `identify`, `page`, or `track`, await the earlier
@@ -197,8 +198,8 @@ Node and Web expose `interceptors.event` to transform admitted direct events and
 caller-built XDA events before destination validation and a final check of current
 consent against the transformed event type. Invalid output fails schema validation;
 a valid consent-blocked transformed event is reported with its final method/type.
-Personalization and `trackView` refusals return `{ accepted: false }`; other
-Analytics methods keep their void contracts. Each explicit submission runs its
+Every event method reports admission through `EventEmissionResult`; consent refusals
+return `{ accepted: false }`. Each explicit submission runs its
 chain once. XDA event chains may run concurrently while preserving array order;
 prepared events run sequentially. Retries and browser prepared replay reuse the
 evaluated events without rerunning hooks. See the [Node interceptor reference](./packages/node/README.md#event-interceptors)

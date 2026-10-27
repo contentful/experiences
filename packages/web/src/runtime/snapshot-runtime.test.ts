@@ -42,7 +42,7 @@ describe('SnapshotRuntime', () => {
     await expect(runtime.page()).resolves.toEqual({ accepted: false });
     await expect(
       runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: false });
     runtime.consent(true);
     runtime.reset();
     expect(runtime.setLocale('de-DE')).toBe('en-US');

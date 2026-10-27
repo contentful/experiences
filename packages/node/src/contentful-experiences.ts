@@ -58,6 +58,8 @@ type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventB
 
 /** Context scoped to one incoming Node request. */
 export type ExperiencesNodeRequestContext = {
+  /** Suppresses events for this request. Defaults to false. */
+  isPreview?: boolean;
   locale?: string;
   resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
@@ -98,6 +100,8 @@ export type PrepareRequestHandoffResult = {
   readonly handoff: ExperiencesHandoff;
   /** Preflight response; absent on invalid input or preview transport failure. */
   readonly data?: EventOptimizationData;
+  /** Preview preparation sends nothing and returns no profile or replay. */
+  readonly skipped?: 'preview';
 };
 
 type PreparedPersonalizationEvent = NonNullable<ExperiencesHandoff['replay']>['events'][number];
@@ -126,6 +130,7 @@ export type ExperiencesNodeEventBuilder = Pick<
 
 /** A request-bound facade; many facades may share the one Node SDK instance. */
 export interface ExperiencesNodeRequest extends NodePersonalizationMethods, NodeAnalyticsMethods {
+  readonly isPreview: boolean;
   readonly locale: string | undefined;
   readonly profile: EventProfile | undefined;
   /** Builds events without submitting them; explicit inputs override request context. */
@@ -189,6 +194,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 }
 
 class RequestBoundExperiences implements ExperiencesNodeRequest {
+  readonly #isPreview: boolean;
   readonly locale: string | undefined;
   readonly eventBuilder: ExperiencesNodeEventBuilder;
   #profile: EventProfile | undefined;
@@ -215,6 +221,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     createEventMethods: (bindings: RuntimeDirectEventBindings) => RuntimeEventMethods,
     private readonly consentPolicy: ConsentPolicy
   ) {
+    this.#isPreview = context.isPreview === true;
     const { experienceOptions, insightsOptions } = context;
     this.#experienceOptions =
       experienceOptions === undefined
@@ -247,6 +254,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
     const methods = createEventMethods({
       getProfile: () => this.#profile,
+      getIsPreview: () => this.isPreview,
       setProfile: (profile) => this.setProfile(profile),
       getProfileRevision: () => this.#profileRevision,
       getLocale: () => this.#personalizationLocale,
@@ -269,6 +277,10 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     this.trackFlagView = methods.trackFlagView.bind(methods);
   }
 
+  get isPreview(): boolean {
+    return this.#isPreview;
+  }
+
   get profile(): EventProfile | undefined {
     return this.#profile;
   }
@@ -279,6 +291,16 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     initialEvents,
     page,
   }: PrepareRequestHandoffOptions): Promise<PrepareRequestHandoffResult> {
+    if (this.isPreview) {
+      return {
+        handoff: createExperiencesHandoff({
+          spaceId: this.runtime.spaceId,
+          environmentId: this.runtime.environmentId,
+          cache: { scope: 'private-request' },
+        }),
+        skipped: 'preview',
+      };
+    }
     const incomingProfileId = this.#profile?.id;
     const profileRevision = this.#profileRevision;
     const handoff = createExperiencesHandoff({
@@ -373,7 +395,9 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       this.runtime.interceptors.event.count() === 0
         ? initiallyGated
         : await this.interceptPersonalizationEvents(initiallyGated);
-    const profileId = gated.personalization?.profileId ?? incomingProfileId;
+    const profileId = this.isPreview
+      ? undefined
+      : (gated.personalization?.profileId ?? incomingProfileId);
     const resolvedOptions =
       profileId === undefined
         ? gated
@@ -383,7 +407,11 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
     const returnedProfileId = plan.personalization?.profileId;
-    if (returnedProfileId !== undefined && this.#profileRevision === profileRevision) {
+    if (
+      !this.isPreview &&
+      returnedProfileId !== undefined &&
+      this.#profileRevision === profileRevision
+    ) {
       this.setProfile({ id: returnedProfileId });
     }
     return plan;
@@ -416,6 +444,10 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   private gatePersonalizationEvents(
     options: RuntimeFetchExperienceOptions
   ): RuntimeFetchExperienceOptions {
+    if (this.isPreview) {
+      for (const event of options.personalization?.events ?? []) this.admitEvent(event);
+      return { ...options, personalization: undefined };
+    }
     const events = options.personalization?.events;
     if (events === undefined) return options;
 
@@ -444,11 +476,12 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   /** Validate the final transport type before applying this request's consent policy. */
   private admitEvent(event: { readonly type: string }, transformed = false): boolean {
     const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
-    if (hasEventTypeConsent(event.type, this.#consent, allowedEventTypes)) return true;
+    if (!this.isPreview && hasEventTypeConsent(event.type, this.#consent, allowedEventTypes))
+      return true;
     const method = methodForEventType(event.type) ?? (transformed ? event.type : undefined);
     if (method !== undefined) {
       try {
-        onEventBlocked?.({ reason: 'consent', method, args: [event] });
+        onEventBlocked?.({ reason: this.isPreview ? 'preview' : 'consent', method, args: [event] });
       } catch {
         // A failing diagnostic callback must not break event delivery.
       }

@@ -334,3 +334,7 @@ Automatic setup through rendered plan containers is the current standard.
   locations. Install with `npm install --workspaces=false --package-lock=false
 --ignore-scripts` there, then use local npm commands; no root tool is needed to
   build/check/run an already configured copy.
+
+A nonempty initial `preview_session_id` makes the Web SDK skip events when `isPreview` is omitted. This reference requires
+a page-produced profile and can therefore show its existing initialization error; the Next.js
+example provides Session rendering. A fresh navigation without the ID restores delivery.

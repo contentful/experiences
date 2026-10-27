@@ -127,12 +127,11 @@ The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. The server layout
 reaches the browser, so use a read-only delivery token. The panel only sends events
 and never fetches an Experience.
 
-The interaction buttons send a fixed demo entity. The panel also starts
-`startInteractionTracking()`, but no rendered node is stamped for it yet, so views,
-hovers and clicks on the page are not tracked automatically. Stamping rendered nodes
-is waiting on the scope-based attribution in
-[#225](https://github.com/contentful/experiences/pull/225), which replaces
-`data-ctfl-node-id`.
+The interaction buttons send a fixed demo entity. The Web SDK starts interaction
+discovery during construction. Automatic views, hovers and clicks require elements
+with `data-ctfl-scopes` inside a `data-ctfl-attribution` plan container; use
+`getTrackingAttributes` when wiring rendered attribution. Session preview suppresses
+both automatic tracking and these manual calls.
 
 ### Optional: preview mode
 
@@ -394,3 +393,7 @@ export const experienceConfig: Config = { components, experienceTemplates };
 If the payload references an experience-template id that isn't registered, the renderer
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.
+
+The consent panel passes an `isPreview` boolean derived from `preview_session_id` to the Web
+event runtime and recreates it when entering or leaving Session preview. Preview skips manual/automatic events even with consent granted, while the
+existing Session fetch/render/subscription path continues. Mode is independent of socket status.
