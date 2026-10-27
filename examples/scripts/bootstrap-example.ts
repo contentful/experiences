@@ -530,6 +530,9 @@ async function linkDataAssembliesToComponents() {
       contentProperties: current.contentProperties,
       designProperties: current.designProperties,
       slots: current.slots,
+      // XMA rejects an omitted componentTree. Fixture components are coded, so
+      // the stored value is `null`; normalise a missing one the same way.
+      componentTree: current.componentTree ?? null,
       dataAssemblies: newLinks,
     } as never);
     await cma.component.publish({
