@@ -1,0 +1,30 @@
+{
+  "name": "@contentful/experiences-example-astro",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Astro example rendering Contentful Experiences with @contentful/experiences-react/custom-renderer and native islands",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.9",
+    "@astrojs/react": "^7.1.1",
+    "@contentful/experiences-react": "*",
+    "astro": "^7.4.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.11",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.3"
+  }
+}

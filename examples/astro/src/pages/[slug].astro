@@ -1,0 +1,42 @@
+---
+import { fetchExperience, NotFoundError } from '@contentful/experiences-react';
+
+import ExperienceNodes from '../exo/ExperienceNodes.astro';
+import { experienceConfig } from '../lib/experience-config';
+
+const experienceId = Astro.params.slug!;
+// ?preview=true fetches draft content from the Content Preview API (needs CPA_TOKEN).
+const preview = Astro.url.searchParams.get('preview') === 'true';
+
+let plan;
+try {
+  plan = await fetchExperience(
+    {
+      spaceId: import.meta.env.SPACE_ID,
+      environmentId: import.meta.env.ENVIRONMENT_ID ?? 'master',
+      experienceId,
+    },
+    { accessToken: import.meta.env.CDA_TOKEN, previewToken: import.meta.env.CPA_TOKEN, preview },
+    { config: experienceConfig, metadata: { slug: experienceId } }
+  );
+} catch (error) {
+  if (error instanceof NotFoundError) {
+    return new Response(`Experience "${experienceId}" not found`, { status: 404 });
+  }
+  throw error;
+}
+
+if (preview) Astro.response.headers.set('cache-control', 'no-store');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{experienceId}</title>
+  </head>
+  <body>
+    <ExperienceNodes nodes={plan.nodes} experience={{ debug: plan.debug, metadata: plan.metadata }} />
+  </body>
+</html>
