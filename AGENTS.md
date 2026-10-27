@@ -496,6 +496,25 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 
 **When the delivery SDK regenerates, re-check that mirror.** `packages/core/src/types.ts` is the only place it lives; `client:typecheck` is what catches a drift, because that assertion stops compiling if the shapes diverge.
 
+### Customer-facing documentation
+
+Customer docs live on the Contentful docs site, in the `contentful/contentful-docs` repo under `fern/docs/pages/experience-orchestration/experiences-sdk/` ([published here](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/overview)). The READMEs keep install steps, a quick start, each package's export list, and repo-local material (examples, contributor setup). They link to the docs instead of repeating them.
+
+When a change alters public behavior, update the matching docs page in a `contentful-docs` PR alongside the SDK PR:
+
+| Topic                                                                                             | Docs page                           |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Install, register, fetch, render walkthrough (Next.js)                                            | `get-started.mdx`                   |
+| Registry keys, `defineComponent`, slots, templates, merge order, node payload                     | `register-components.mdx`           |
+| `fetchExperience` options, errors, preview, parameters, source maps, destinations, `createClient` | `fetch-experiences.mdx`             |
+| Renderers, renderer props, render context, client re-rendering                                    | `render-experiences.mdx`            |
+| Design props, `resolveToken`, design-values escape hatch, `toCss`                                 | `style-components.mdx`              |
+| Debug mode, diagnostics, delivery diagnostics, failure table, fallbacks, SSR/CSR                  | `errors-and-debugging.mdx`          |
+| Live preview                                                                                      | `live-preview.mdx`                  |
+| Custom renderer, Astro, frameworks without an adapter                                             | `astro.mdx`, `other-frameworks.mdx` |
+
+Personalization, events, consent, and handoffs are not on the docs site yet; they stay in the root, `node`, and `web` READMEs.
+
 ### File naming
 
 - React components in design-system + adapter packages: `PascalCase.tsx`
@@ -615,7 +634,7 @@ The Component Domain Model RFC describes `defineComponent({ props: { resolve, me
 
 ### Svelte: no SSR recovery for `component-render-error`
 
-`<svelte:boundary onerror failed>` doesn't run its catching machinery under `svelte/server` — a throw during SvelteKit's server render propagates and fails the entire page; the boundary only catches client-side. React and Angular don't share this gap (React's per-node `<Suspense>` boundary degrades gracefully under streaming SSR too; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](./README.md#error-handling--troubleshooting) section for the full per-framework table.
+`<svelte:boundary onerror failed>` doesn't run its catching machinery under `svelte/server` — a throw during SvelteKit's server render propagates and fails the entire page; the boundary only catches client-side. React and Angular don't share this gap (React's per-node `<Suspense>` boundary degrades gracefully under streaming SSR too; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging) section for the full per-framework table.
 
 This is upstream Svelte behavior, not something fixable at the adapter level — `svelte/server` exposes no per-node recovery primitive below its single top-level `render()` call. The README's mitigation is a `handleError` hook, which turns the crash into a controlled response without giving per-node isolation. Revisit if Svelte ships SSR-aware error boundaries.
 

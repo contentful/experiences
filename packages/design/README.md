@@ -15,7 +15,7 @@ CSS-shaped values.
 `toCss` is a companion to the design-hook escape hatch, not part of the
 recommended styling path. Components should style from their auto-filled
 design props, where they read the keys they declared and there is nothing to
-filter — see [Styling components](../../README.md#styling-components).
+filter — see [Styling components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/style-components).
 
 The adapters' `toCss` helper keeps only keys whose normalized form is in
 `CSS_PROPERTIES` and **drops everything else** — that's how semantic design

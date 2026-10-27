@@ -137,7 +137,7 @@ getTrackingAttributes(attribution); // Props to spread on a node's outermost ele
 type ToCssOptions;
 ```
 
-Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from those props is the one recommended path. `useDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from those props is the one recommended path. `useDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/style-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -158,103 +158,24 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 
 ---
 
-## Quick reference
+## Documentation
 
-```tsx
-// components/Button.tsx: content + resolved design both arrive as props
-'use client';
+The Experiences SDK documentation covers the React adapter alongside the other adapters:
 
-interface ButtonProps {
-  label?: string;
-  url?: string;
-  backgroundColor?: string; // resolved design, auto-filled
-  color?: string;
-}
+| Topic                                                                             | Page                                                                                                                             |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Install, register, fetch, and render, step by step                                | [Get started](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/get-started)                   |
+| Registry keys, `defineComponent`, slots, experience templates, merge order        | [Register components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/register-components)   |
+| `fetchExperience` options, preview, runtime parameters, source maps, destinations | [Fetch experiences](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/fetch-experiences)       |
+| Server and client renderers, renderer props, render context                       | [Render experiences](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/render-experiences)     |
+| Styling from design props, design tokens, the design-values escape hatch          | [Style components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/style-components)         |
+| Debug mode, diagnostics, fallbacks, server/client differences                     | [Errors and debugging](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging) |
+| Live preview                                                                      | [Set up live preview](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/live-preview)          |
 
-export function Button({ label, url, backgroundColor, color }: ButtonProps) {
-  return (
-    <a href={url} style={{ background: backgroundColor, color }}>
-      {label}
-    </a>
-  );
-}
-```
-
-```tsx
-// lib/experience-config.tsx
-import {
-  defineComponent,
-  type Components,
-  type Config,
-  type ResolveToken,
-} from '@contentful/experiences-react';
-
-import { Button } from './components/Button';
-
-const components: Components = {
-  // Bare component, or defineComponent({...}) when you need defaults/resolveData.
-  Button: defineComponent({
-    resolveData: ({ content }) => ({ url: ensureScheme(content.url) }),
-    component: Button,
-  }),
-};
-
-const resolveToken: ResolveToken = (token) => designTokens[token.value];
-
-export const experienceConfig: Config = { components, resolveToken };
-```
-
-```tsx
-// app/[slug]/page.tsx: in a server component
-import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
-
-const experience = await fetchExperience(
-  { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
-  { accessToken: process.env.CDA_TOKEN! },
-  { config: experienceConfig }
-);
-return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
-```
-
-### Slot children
-
-Every slot arrives as a prop named after the slot, holding an **array of pre-rendered nodes** (`ReactNode[]`) keyed by the renderer — not a single wrapping node. Drop the array straight into JSX for the common "just render them" case (React renders keyed arrays), or `map` / `filter` over it to wrap, reorder, or drop children individually.
-
-```tsx
-// components/Section.tsx
-import type { ReactNode } from 'react';
-
-export function Section({ children }: { children?: ReactNode[] }) {
-  // Common case — render them all:
-  return <div>{children}</div>;
-
-  // Or take control of each child:
-  // return (
-  //   <div>
-  //     {children?.map((child, i) => (
-  //       <div className="cell" key={i}>{child}</div>
-  //     ))}
-  //   </div>
-  // );
-}
-```
-
-`children` is not special — it is simply the conventional name for the default slot. **Every** slot is merged into props under its own name, each as its own `ReactNode[]`, so a component with a `header` slot just declares `header?: ReactNode[]` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` prop.
-
-For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+The export list above is the reference for this package's API surface.
 
 ---
 
 ## License
 
 MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.
-
-## Runtime Experience parameters
-
-By-ID `fetchExperience` accepts `parameters`, for example
-`{ featuredPosts: { limit: 6, order: '-fields.title' } }`. Scalars are strings or
-numbers; Record leaves have one level. Order is one signed `fields.<apiName>` or
-`sys.<id>` path. Refetch with changed values, then replace the renderer's plan.
-Exports include `ExperienceParameters`, `ExperienceParameterValue`,
-`ExperienceParameterRecord`, and `ExperienceParameterOrder`.
-See the [collection/refetch example](../../README.md#runtime-experience-parameters).
