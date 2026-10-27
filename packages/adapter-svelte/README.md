@@ -125,7 +125,7 @@ getTrackingAttributes(attribution); // Attributes to spread on a node's outermos
 type ToCssOptions;
 ```
 
-Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from `$props()` is the one recommended path. `getDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](../../README.md#styling-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
+Resolved design values are **auto-filled onto your component's props** by key, alongside content. Styling from `$props()` is the one recommended path. `getDesignValues()` exposes the same record as an escape hatch. Reach for it only for a nested child that isn't itself a registered component, or for design needed outside the render path (an effect, an imperative measurement) — see [Styling components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/style-components). Token resolution is configured with `resolveToken` on your `Config` (`type ResolveToken`).
 
 ### Re-exported types and utilities
 
@@ -155,107 +155,24 @@ type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOpt
 
 ---
 
-## Quick reference
+## Documentation
 
-```svelte
-<!-- Button.svelte: content + resolved design both arrive as props -->
-<script lang="ts">
-  interface ButtonProps {
-    label?: string;
-    url?: string;
-    backgroundColor?: string; // resolved design, auto-filled
-    color?: string;
-  }
+The Experiences SDK documentation covers the Svelte adapter alongside the other adapters:
 
-  let { label = 'Button', url, backgroundColor, color }: ButtonProps = $props();
-</script>
-{#if url}
-  <a href={url} style="background: {backgroundColor}; color: {color};">{label}</a>
-{:else}
-  <button type="button" style="background: {backgroundColor}; color: {color};">{label}</button>
-{/if}
-```
+| Topic                                                                             | Page                                                                                                                             |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Install, register, fetch, and render, step by step                                | [Get started](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/get-started)                   |
+| Registry keys, `defineComponent`, slots, experience templates, merge order        | [Register components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/register-components)   |
+| `fetchExperience` options, preview, runtime parameters, source maps, destinations | [Fetch experiences](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/fetch-experiences)       |
+| Server and client renderers, renderer props, render context                       | [Render experiences](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/render-experiences)     |
+| Styling from design props, design tokens, the design-values escape hatch          | [Style components](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/style-components)         |
+| Debug mode, diagnostics, fallbacks, server/client differences                     | [Errors and debugging](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging) |
+| Live preview                                                                      | [Set up live preview](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/live-preview)          |
 
-```ts
-// experience-config.ts
-import {
-  defineComponent,
-  type Components,
-  type Config,
-  type ResolveToken,
-} from '@contentful/experiences-svelte';
-import Button from './components/Button.svelte';
-import type { ButtonProps } from './components/Button.svelte';
-
-const components: Components = {
-  // Bare component, or defineComponent({...}) when you need defaults/resolveData.
-  Button: defineComponent<ButtonProps>({
-    resolveData: ({ content }) => ({ url: ensureScheme(content.url) }),
-    component: Button,
-  }),
-};
-
-const resolveToken: ResolveToken = (token) => designTokens[token.value];
-
-export const experienceConfig: Config = { components, resolveToken };
-```
-
-```svelte
-<!-- +page.svelte -->
-<script lang="ts">
-  import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
-  let { data } = $props();
-</script>
-<ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
-```
-
-### Slot children
-
-Every slot arrives as a prop named after the slot, holding an **array of Snippets** (`Snippet[]`), one per child — not a single wrapping Snippet. For the common "just render them" case, iterate the array with `{#each}` and `{@render}`; to wrap, reorder, or drop children individually, do it inside that loop.
-
-```svelte
-<!-- Section.svelte -->
-<script lang="ts">
-  import type { Snippet } from 'svelte';
-
-  let { children }: { children?: Snippet[] } = $props();
-</script>
-
-<!-- Common case — render them all: -->
-<div>
-  {#each children ?? [] as child}
-    {@render child()}
-  {/each}
-</div>
-
-<!-- Or take control of each child: -->
-<!--
-<div>
-  {#each children ?? [] as child, i}
-    <div class="cell">{@render child()}</div>
-  {/each}
-</div>
--->
-```
-
-`children` is not special — it is simply the conventional name for the default slot. **Every** slot in the payload becomes a same-named `Snippet[]` prop, so a component with a `header` slot just declares `header?: Snippet[]` and renders it the same way. This applies identically to coded Experience Templates: a template with a `content` slot receives a `content` prop.
-
-If you'd rather render a slot's raw nodes yourself, they are still on the payload at `getContentfulComponent().slots` (a `Record<string, PortableRenderNode[]>`) — hand them to `NodesRenderer`.
-
-For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
+The export list above is the reference for this package's API surface.
 
 ---
 
 ## License
 
 MIT. See the repository [`LICENSE`](../../LICENSE) and [`NOTICE`](../../NOTICE) for full attribution.
-
-## Runtime Experience parameters
-
-By-ID `fetchExperience` accepts `parameters`, for example
-`{ featuredPosts: { limit: 6, order: '-fields.title' } }`. Scalars are strings or
-numbers; Record leaves have one level. Order is one signed `fields.<apiName>` or
-`sys.<id>` path. Refetch with changed values, then replace the renderer's plan.
-Exports include `ExperienceParameters`, `ExperienceParameterValue`,
-`ExperienceParameterRecord`, and `ExperienceParameterOrder`.
-See the [collection/refetch example](../../README.md#runtime-experience-parameters).

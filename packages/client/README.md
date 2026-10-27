@@ -26,7 +26,7 @@ POST, with structured, unprefixed `parameters` in the body. dev.10 supports that
 body through serializer passthrough, although its generated type omits the key;
 the SDK uses a local typed request extension. Authentication and rename headers
 remain owned by the generated client. Refetch with changed values and replace
-the renderer's plan; see the [runtime parameters example](../../README.md#runtime-experience-parameters).
+the renderer's plan; see the [runtime parameters example](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/fetch-experiences#pass-runtime-parameters).
 
 Three positional args group by concern:
 
@@ -77,7 +77,7 @@ Destination errors may have broader shapes, so this projection does not promise
 complete coverage. An absent field does not prove personalization success or the
 absence of other upstream errors. Existing `diagnostics: Error[]`, exceptions,
 404 handling, and profile behavior are unchanged. See the [delivery diagnostic
-guidance](../../README.md#delivery-diagnostics) for safe presentation and disclosure.
+guidance](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging#delivery-diagnostics) for safe presentation and disclosure.
 
 #### Preview mode
 

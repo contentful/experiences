@@ -68,9 +68,7 @@ An SDK instance retains only stable configuration and reusable delivery transpor
 
 ## Runtime Experience parameters
 
-Supply values per by-ID fetch. The Experience declares accepted IDs in
-`Experience.parameters`, and bindings read `$parameters/<id>`. Delivery enforces
-names, requiredness, fallbacks, and value validation.
+Pass `parameters` on a by-ID `request.fetchExperience` to resolve an Experience with caller-selected values, then refetch with new values and replace the renderer's plan:
 
 ```ts
 const plan = await request.fetchExperience(
@@ -85,15 +83,7 @@ const nextPlan = await request.fetchExperience(
 );
 ```
 
-Values are strings, numbers, or one-level Records of string/number leaves.
-Collection order is one signed `fields.<apiName>` or `sys.<id>` path, with `-`
-for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
-`ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
-GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
-extensions select POST with an unprefixed structured map. `locale` stays separate.
-Direct `preview: true` fetches accept the same option. Preview Sessions retain
-server-owned `context.parameters` and WebSocket updates.
-See the [render/refetch example](../../README.md#runtime-experience-parameters).
+For value types, collection ordering, preview behavior, and refetching, see [Fetch experiences: Pass runtime parameters](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/fetch-experiences#pass-runtime-parameters).
 
 ## Personalization
 
@@ -134,7 +124,7 @@ profile adoption, exceptions, and existing local `diagnostics: Error[]` remain
 unchanged. Absence does not prove personalization success or error-free delivery.
 The strings may contain private information; show a generic warning/count and
 inspect details explicitly, keeping them out of logs and public bootstrap/handoff
-payloads. See the [delivery diagnostic guidance](../../README.md#delivery-diagnostics).
+payloads. See the [delivery diagnostic guidance](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging#delivery-diagnostics).
 
 ### Request-bound event construction
 

@@ -118,25 +118,11 @@ Preview here means a direct, by-ID CPA fetch through the shared runtime. It is n
 
 ## Delivery diagnostics
 
-Resolved plans expose optional `deliveryDiagnostics` for recognized upstream
-field-resolution errors. The public `ExperienceDeliveryDiagnostic` type contains
-readonly string `fieldPath` and `message` only; Core copies records in input order
-and omits `originalError` and extra fields. Raw resolve, by-ID, and destination
-fetches share that normalization. The existing local `diagnostics: Error[]`,
-profile adoption, exceptions, and Personalization `experienceRequestState` retain
-their meanings.
-
-This is a partial projection, not a personalization outcome signal. An absent
-field does not certify success or error-free delivery. Upstream strings can
-contain private information; display a generic warning/count while preserving
-content, inspect details explicitly, and keep them out of public bootstrap/handoff
-payloads and automatic logs. See the [shared guidance](../../README.md#delivery-diagnostics).
+Resolved plans expose optional `deliveryDiagnostics` for fields the Experience Delivery API couldn't resolve. Upstream messages can contain private information, so show a generic warning or count by default and keep the details out of logs and public payloads. See [Errors and debugging: Delivery diagnostics](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/errors-and-debugging#delivery-diagnostics).
 
 ## Runtime Experience parameters
 
-Supply values per by-ID fetch. The Experience declares accepted IDs in
-`Experience.parameters`, and bindings read `$parameters/<id>`. Delivery enforces
-names, requiredness, fallbacks, and value validation.
+Pass `parameters` on a by-ID `fetchExperience` to resolve an Experience with caller-selected values, then refetch with new values and replace the renderer's plan:
 
 ```ts
 const plan = await experiences.fetchExperience(
@@ -151,15 +137,7 @@ const nextPlan = await experiences.fetchExperience(
 );
 ```
 
-Values are strings, numbers, or one-level Records of string/number leaves.
-Collection order is one signed `fields.<apiName>` or `sys.<id>` path, with `-`
-for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
-`ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
-GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
-extensions select POST with an unprefixed structured map. `locale` stays separate.
-Direct `preview: true` fetches accept the same option. Preview Sessions retain
-server-owned `context.parameters` and WebSocket updates.
-See the [render/refetch example](../../README.md#runtime-experience-parameters).
+For value types, collection ordering, preview behavior, and refetching, see [Fetch experiences: Pass runtime parameters](https://www.contentful.com/developers/docs/experience-orchestration/experiences-sdk/fetch-experiences#pass-runtime-parameters).
 
 ## Personalization
 
