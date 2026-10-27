@@ -1,3 +1,9 @@
+## 0.8.6 (2026-10-27)
+
+### 🚀 Features
+
+- **implementations:** add Node + Web SDK reference app ([#267](https://github.com/contentful/experiences/pull/267))
+
 ## 0.8.5 (2026-10-26)
 
 ### 🚀 Features
