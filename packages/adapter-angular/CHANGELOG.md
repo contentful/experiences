@@ -1,3 +1,9 @@
+## 0.8.0 (2026-10-27)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.0
+
 ## 0.7.6 (2026-10-26)
 
 ### 🚀 Features

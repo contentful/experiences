@@ -1,3 +1,50 @@
+## 0.3.0 (2026-10-27)
+
+### 🚀 Features
+
+- ⚠️  suppress SDK events in Session preview [NT-4337] ([#268](https://github.com/contentful/experiences/pull/268))
+
+### ⚠️  Breaking Changes
+
+- suppress SDK events in Session preview [NT-4337]  ([#268](https://github.com/contentful/experiences/pull/268))
+  trackClick, trackHover and trackFlagView now return
+  Promise<EventEmissionResult> instead of Promise<void>. Acceptance is admission,
+  not confirmation of HTTP delivery.
+  * feat: suppress runtime events in Session preview
+  Capture preview intent once per Web instance or Node request. Reject direct and
+  automatic events before building or queueing, omit fetch personalization, and
+  skip handoff preflight/replay. Keep queue internals and delivery semantics unchanged.
+  Refs: NT-4337
+  * fix: preserve visitor identity in Session preview
+  * refactor: accept explicit preview booleans"
+  M	AGENTS.md
+  M	README.md
+  M	examples/nextjs/README.md
+  M	examples/nextjs/app/layout.tsx
+  M	examples/nextjs/components/ConsentPanel.tsx
+  M	implementations/node-sdk/README.md
+  M	implementations/node-sdk/src/app.ts
+  M	implementations/web-sdk/README.md
+  M	packages/node/README.md
+  M	packages/node/src/contentful-experiences.test.ts
+  M	packages/node/src/contentful-experiences.ts
+  M	packages/runtime/README.md
+  M	packages/runtime/src/consent.ts
+  M	packages/runtime/src/event-emission-result.ts
+  M	packages/runtime/src/runtime-event-methods.test.ts
+  M	packages/runtime/src/runtime-event-methods.ts
+  M	packages/web/README.md
+  M	packages/web/src/contentful-experiences.analytics-queue.test.ts
+  M	packages/web/src/contentful-experiences.delivery.test.ts
+  M	packages/web/src/contentful-experiences.ssr.test.ts
+  M	packages/web/src/contentful-experiences.states.test.ts
+  M	packages/web/src/contentful-experiences.test.ts
+  M	packages/web/src/contentful-experiences.tracking.test.ts
+  M	packages/web/src/contentful-experiences.ts
+  A	packages/web/src/preview-events.integration.test.ts
+  M	packages/web/src/runtime/snapshot-runtime.test.ts
+  M	packages/web/src/runtime/snapshot-runtime.ts
+
 ## 0.2.6 (2026-10-26)
 
 ### 🚀 Features

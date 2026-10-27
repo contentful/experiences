@@ -1,3 +1,9 @@
+## 0.15.0 (2026-10-27)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.0
+
 ## 0.14.7 (2026-10-26)
 
 ### 🚀 Features
