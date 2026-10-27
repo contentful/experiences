@@ -44,7 +44,8 @@ experiences/
 │   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
 ├── implementations/         # Standalone reference apps consuming local npm tarballs
 │   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
-│   └── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
+│   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
+│   └── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
 └── lib/
     └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
@@ -52,9 +53,11 @@ experiences/
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
 
 **`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
-Use `npx nx run implementation-node-sdk:setup` / `:dev` or
-`npx nx run implementation-web-sdk:setup` / `:dev`; root aggregate checks exclude
-implementations. Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
+Use `npm run implementation:install` to prepare all references, or scoped
+`implementation-node-sdk`, `implementation-web-sdk`, or
+`implementation-node-sdk-web-sdk` Nx `setup` / `dev` targets. Root aggregate checks
+exclude implementations; the Build CI job explicitly prepares and checks them.
+Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
 and the app README for the package boundary, local `.env`, and lifecycle commands.
 
 ### Package roles

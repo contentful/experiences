@@ -15,9 +15,6 @@ const sdk = new window.ContentfulExperiences({
   locale: env.LOCALE,
   delivery: { accessToken: env.CDA_TOKEN },
 });
-// Consumer integration: optional view geometry for this app's scrolling main panel.
-// Discovery and occurrence lifetimes follow the rendered tracking attributes.
-sdk.tracking.enable('views', { root: appMain });
 const experienceIds = env.EXPERIENCE_IDS;
 // Reference app: these routes and Experience selections form the demonstration.
 const routes = {

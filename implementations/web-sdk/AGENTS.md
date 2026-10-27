@@ -1,10 +1,7 @@
 # Web SDK reference implementation
 
-- Read `README.md`, parent implementation guidance, and the checkout-local
-  `tmp/web-sdk-reference-implementation-plan.md` before changing this app. Respect
-  explicit phase authorization and stop for user acceptance at each boundary.
-  Phases 1–7 and the manual-observation correction are accepted. Automatic setup
-  through rendered plan containers is the user-selected standard.
+- Read `README.md` and parent implementation guidance before changing this app.
+  Use automatic setup through rendered plan containers.
 - Keep the application outside root workspaces and consume installed local SDK
   tarballs. Use the existing install helper and explicit Nx/npm targets. Refresh
   setup/install after SDK artifacts change; do not add workspace source aliases.
@@ -25,7 +22,8 @@
   errors, extensionless SPA fallback, loopback binding and API-free `/health`.
   Delivery goes directly from browser to default live services; no proxy or
   simulated upstream. CORS OPTIONS is not Experience API noncommitting preflight.
-- Build assets from the installed Web dist and the Contentful Rich Text renderer.
+- Copy only the installed Web UMD/map; bundle Rich Text and the public pure tracking
+  helper separately. Refresh setup after SDK changes to avoid stale installed UMDs.
   `public/dist` is generated; the vendored theme is authored local source with
   pinned provenance. No adjacent Optimization checkout/package runtime dependency.
 - No Live Updates, Live Preview, preview controls/assets, mocks, fixtures,
@@ -52,7 +50,7 @@
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,
   namespaces or the removed session API, or add a parallel public setup API.
-- Configure the scrolling `.app-main` visibility root with tracking.enable views.
+- Use default automatic tracking and viewport view geometry, including scroll-container clipping.
   The SDK discovers boundaries and finalizes removed occurrences; preserve its
   consent/reset guards and multi-root grouping. No app-owned automatic teardown.
 - The manual section registers elements through `sdk.tracking.enableElement('views',

@@ -1,0 +1,60 @@
+{
+  "name": "@implementation/experiences-node-web-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone Node and Web SDK reference implementation for Contentful Experiences",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "npm run clean && npm run build:assets",
+    "build:assets": "npm run build:shared && tsx scripts/build-assets.ts",
+    "dev": "npm run build && tsx src/app.ts",
+    "serve": "npm run build && pm2 start ./node_modules/tsx/dist/cli.mjs --name experiences-node-web-sdk-app -- src/app.ts",
+    "serve:stop": "pm2 delete experiences-node-web-sdk-app",
+    "restart": "npm run build && pm2 restart experiences-node-web-sdk-app",
+    "status": "pm2 show experiences-node-web-sdk-app",
+    "logs": "pm2 logs experiences-node-web-sdk-app",
+    "clean": "rimraf ./dist ./public/dist",
+    "typecheck": "npm run build:shared && tsc --noEmit",
+    "lint": "eslint --config eslint.config.ts .",
+    "build:shared": "tsc src/shared.ts --outDir dist --module NodeNext --target es2022 --declaration --skipLibCheck"
+  },
+  "dependencies": {
+    "@contentful/experiences-node": "file:../../pkgs/contentful-experiences-node-local.tgz",
+    "@contentful/experiences-web": "file:../../pkgs/contentful-experiences-web-local.tgz",
+    "@contentful/rich-text-html-renderer": "17.1.6",
+    "cookie-parser": "1.4.7",
+    "dotenv": "17.4.2",
+    "ejs": "6.0.1",
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "@typescript-eslint/eslint-plugin": "8.71.2",
+    "@typescript-eslint/parser": "8.71.2",
+    "eslint": "10.12.0",
+    "jiti": "2.6.1",
+    "pm2": "7.0.4",
+    "rimraf": "6.1.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "6.4.4"
+  },
+  "overrides": {
+    "@contentful/experiences-node": "$@contentful/experiences-node",
+    "@contentful/experiences-web": "$@contentful/experiences-web",
+    "@contentful/experiences-client": "file:../../pkgs/contentful-experiences-client-local.tgz",
+    "@contentful/experiences-runtime": "file:../../pkgs/contentful-experiences-runtime-local.tgz",
+    "@contentful/experiences-sdk-core": "file:../../pkgs/contentful-experiences-sdk-core-local.tgz"
+  },
+  "nx": {
+    "includedScripts": []
+  }
+}

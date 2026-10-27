@@ -114,9 +114,9 @@ plans, while shared keys within one container preserve multi-root occurrences.
 Plans are unchanged. The former lookup, namespace and tracking-session API are
 removed rather than retained alongside another setup API.
 
-The SDK discovers these attributes automatically. The app calls
-`sdk.tracking.enable('views', { root: appMain })` only to configure its scrolling
-view geometry. Views apply to Experiences and Fragments; hover/click applies to
+The SDK discovers these attributes automatically with tracking enabled by default.
+Views use the default viewport root, which accounts for scroll-container clipping.
+Views apply to Experiences and Fragments; hover/click applies to
 Fragments. Fragment roots opt into card clicks with the public clickable attribute.
 Dwell, interval IDs, durations, consent and retries remain SDK-owned. DOM removal
 finishes qualified intervals without stopping unrelated occurrences. Reset discards
@@ -173,7 +173,10 @@ survive setup, installation, and asset cleanup. Populate the local file before
 starting the server.
 
 After SDK source changes, run setup again to rebuild/repack and refresh installed
-artifacts. `build` alone uses the already installed artifacts and does not install:
+artifacts, or use root `npm run implementation:install` to refresh all references.
+Stop running apps with their scoped `serve:stop` targets before refreshing
+dependencies, then relaunch with `serve` or `dev`. `build` alone uses the already
+installed artifacts and does not install:
 
 ```sh
 npx nx run implementation-web-sdk:install
@@ -206,6 +209,8 @@ npx nx run implementation-web-sdk:serve:stop
 PM2 manages only `experiences-web-sdk-app` through the local tsx CLI. Stop deletes
 that named process and reports an error if absent. Run one checkout with that
 name at a time. Avoid global PM2 stop/delete commands when managing this app.
+`dev`, `serve`, and `restart` build browser assets from installed packages before
+launching; a failed build prevents restart. They do not refresh SDK dependencies.
 
 ## Environment and direct browser delivery
 
@@ -244,8 +249,8 @@ preflight workflow nor Node handoff.
   API-free health, safe configuration injection, extensionless SPA fallback.
   Missing assets return 404; dot paths, traversal and public symlinks escaping
   the public directory are rejected. Other methods return 405.
-- `scripts/build-assets.ts`: cleans `public/dist`, copies the installed Web
-  package's complete dist (including UMD/source map), then uses Vite's library
+- `scripts/build-assets.ts`: cleans `public/dist`, copies only the installed Web
+  UMD and its source map, then uses Vite's library
   build to create `rich-text.js` from `scripts/rich-text.ts` with
   `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
   and renders live Rich Text documents. The same tiny ES module also exports the
@@ -305,9 +310,8 @@ included.
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. No Live Updates or Live Preview is included.
-Content fetching/rendering, visitor actions, interaction tracking and the sidebar
-are accepted through Phase 6. An event-stream notification denotes
-an event attempt, not admission or successful delivery. XDA is currently unstable
+An event-stream notification denotes an event attempt, not admission or
+successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
 
 Live verification has not reached empty-plan, missing-Experience, transport-failure
@@ -318,9 +322,7 @@ they do not establish live service outcomes. Ordinary browser back navigation
 does not establish back/forward-cache behavior. Visual comparison uses the pinned
 Optimization source/theme rather than a running pixel comparison.
 
-The durable checkout-local plan at `tmp/web-sdk-reference-implementation-plan.md`
-records current authorization and validation evidence. Phases 1–7 are accepted;
-automatic setup through rendered plan containers is the current standard.
+Automatic setup through rendered plan containers is the current standard.
 
 ## Troubleshooting
 

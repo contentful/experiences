@@ -26,6 +26,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Prepare reference implementations
+        run: npm run implementation:install
+
+      - name: Check reference implementations
+        run: npx nx run-many -t lint,typecheck --projects=tag:scope:implementation
+
       - name: Check build artifacts
         run: ls -la packages/*/dist/
 

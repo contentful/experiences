@@ -1,0 +1,195 @@
+<% function card(node, identity, automatic, slotName) {
+  const p = node && referenceNode(node, identity, !automatic);
+  const attributes = {
+    ...p?.attributes,
+    ...(node && automatic ? getTrackingAttributes(node.attribution) : {}),
+  };
+  if (automatic && p?.clickable) attributes[TRACKING_CLICKABLE_ATTRIBUTE] = 'true';
+%>
+  <article class="entry-card<%= slotName === undefined ? '' : ' entry-card--slotted' %>"
+    <% for (const [name, value] of Object.entries(attributes)) { %>
+      <%= name %>="<%= value %>"
+    <% } %>>
+    <% if (slotName !== undefined) { %>
+      <span class="entry-card__badge entry-card__badge--slot">Slot: <%= slotName %></span>
+    <% } %>
+    <% if (!p || p.registered) { %>
+      <h3><%= p?.props.title ?? '' %></h3>
+      <p <% if (p) { %>data-testid="experience-text-<%= identity %>"<% } %>><%= p?.props.text ?? '' %></p>
+      <% if (!p || p.props.richText?.document) { %>
+        <div class="rich-text"><%- p ? documentToHtmlString(p.props.richText.document) : '' %></div>
+      <% } %>
+    <% } else { %>
+      <p>Unregistered <%= node.registration.kind %>: <%= node.registration.id %></p>
+    <% } %>
+    <% for (const [name, children] of Object.entries(node?.slots ?? {})) { %>
+      <div class="entry-card__nested-children" data-slot="<%= name %>"><% nodes(children, `${identity}-${name}`, automatic, name); %></div>
+    <% } %>
+  </article>
+<% }
+function nodes(list, identity, automatic, slotName) {
+  list.forEach((node, index) => card(node, `${identity}-${index}`, automatic, slotName));
+}
+function experience(plan, experienceId, section) {
+  const attributes = plan && section === 'auto' ? getTrackingAttributes(plan.attribution) : {};
+  const issues = plan?.deliveryDiagnostics?.length ?? 0;
+%>
+  <section class="entry-grid" <% if (plan) { %>data-experience-id="<%= experienceId %>" data-testid="<%= section %>-experience-<%= experienceId %>"<% } %>
+    <% for (const [name, value] of Object.entries(attributes)) { %>
+      <%= name %>="<%= value %>"
+    <% } %>>
+    <div class="entry-card__ids">
+      <span class="entry-card__id-label">Experience</span>
+      <span class="entry-card__id-value"><%= experienceId ?? '' %></span>
+    </div>
+    <% if (!plan || issues) { %>
+      <p class="page-status" role="status" data-partial <% if (!plan) { %>hidden<% } else { %>data-testid="<%= section %>-experience-partial"<% } %>><% if (issues) { %>
+        Some content could not be resolved (<%= issues %> delivery issues).
+      <% } %></p>
+    <% } %>
+    <% if (!plan || !plan.nodes.length) { %>
+      <p data-empty <% if (plan) { %>data-testid="<%= section %>-experience-empty"<% } %>>This Experience has no content.</p>
+    <% } else {
+      nodes(plan.nodes, `${section}-${experienceId}`, section === 'auto');
+    } %>
+  </section>
+<% }
+function content(server) { %>
+  <div id="content-error" data-testid="content-error" hidden></div>
+  <div class="sections-grid sections-grid--split">
+    <% for (const section of ['auto', 'manual']) {
+      const automatic = section === 'auto';
+      const label = automatic ? 'Automatically tracked Experiences' : 'Manually observed Experiences';
+    %>
+      <section class="page-section" aria-label="<%= label %>">
+        <header class="page-section__header">
+          <h2><%= label %></h2>
+          <p><%= automatic ? 'Views and hovers are measured by the SDK. Click a Fragment card to record its click.' : 'Elements are registered in code. The SDK measures their views as you scroll; automatic discovery is not used for this presentation.' %></p>
+        </header>
+        <div class="entry-grid entry-grid--experiences" data-experiences="<%= section %>">
+          <% if (server) for (const id of automatic ? route.automatic : route.manual) experience(plans.get(id), id, section); %>
+        </div>
+      </section>
+    <% } %>
+  </div>
+<% } %>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> – Contentful Experiences Node + Web SDK</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/css/theme.css" />
+    <script defer src="/dist/contentful-experiences-web.umd.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <nav class="app-nav" id="app-nav" aria-label="Main navigation">
+        <a href="/" data-testid="link-home" <% if (path === '/') { %>aria-current="page" class="active"<% } %>>Home</a>
+        <a href="/page-two" data-testid="link-page-two" <% if (path === '/page-two') { %>aria-current="page" class="active"<% } %>>Page Two</a>
+      </nav>
+      <div class="app-body">
+        <!-- Maintainer: optional browser event attempts; server events are not replayed here. -->
+        <aside class="app-sidebar" aria-label="Tracking">
+          <section class="tracking-log" data-testid="analytics-events-container">
+            <div class="tracking-log__header">
+              <h2>Tracking</h2>
+              <span class="tracking-log__badge">
+                <span data-testid="raw-events-count" id="raw-events-count">0</span> attempts
+              </span>
+            </div>
+            <p class="tracking-log__empty" data-testid="no-events-message" id="no-events-message">No browser event attempts observed yet.</p>
+            <p class="tracking-log__empty">Attempts include XDA events and can precede queue refusal. They do not confirm delivery. Initial server events are not shown.</p>
+            <table class="tracking-log__table" id="tracking-table" style="display: none">
+              <thead class="tracking-log__thead">
+                <tr>
+                  <th>Type</th>
+                  <th>Value</th>
+                  <th>Dur</th>
+                  <th>Age</th>
+                  <th aria-label="Count"></th>
+                </tr>
+              </thead>
+              <tbody id="tracking-tbody"></tbody>
+            </table>
+          </section>
+        </aside>
+        <main class="app-main" id="app-main" tabindex="-1">
+          <div id="route-header">
+            <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
+            <h1><%= title %></h1>
+              <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
+          </header>
+          </div>
+          <section class="control-panel" aria-label="Utilities">
+            <h2 class="control-panel__title">Utilities</h2>
+            <div class="control-panel__fields">
+              <span class="control-panel__row-label">SDK status</span>
+              <span class="control-panel__row-value" id="browser-status" role="status" style="grid-column: 2 / -1; white-space: normal">Browser activation has not completed. Server content is ready.</span>
+              <span hidden></span>
+              <span class="control-panel__row-label">SDK profile</span>
+              <span class="control-panel__row-value" data-testid="profile-status">Not connected</span>
+              <span></span>
+              <span class="control-panel__row-label">Event consent</span>
+              <span class="control-panel__row-value" data-testid="consent-status">Not connected</span>
+              <span>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="consent-button" disabled>Grant</button>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="unconsent-button" disabled>Revoke</button>
+              </span>
+              <span class="control-panel__row-label">Persistence consent</span>
+              <span class="control-panel__row-value" data-testid="persistence-consent-status">Not connected</span>
+              <span></span>
+              <span class="control-panel__row-label">Identify requested</span>
+              <span class="control-panel__row-value" data-testid="identified-status"><%= identifyRequested ? 'Yes' : 'No' %></span>
+              <span>
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="identify-button" disabled>Identify</button>
+                <button type="button" class="btn btn--sm btn--danger" data-testid="reset-button" disabled>Reset</button>
+              </span>
+            </div>
+            <div class="control-panel__actions">
+              <button type="button" class="btn btn--sm btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
+            </div>
+            <section class="control-panel__actions" aria-label="Custom event" data-custom-action <% if (path !== '/page-two') { %>hidden<% } %>>
+              <button type="button" class="btn btn--sm btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
+              <p class="control-panel__note" role="status"></p>
+            </section>
+            <p class="control-panel__note">Grant/Revoke changes event and persistence consent together. The SDK allows identify and page events before event consent. Identify requested describes URL intent, not confirmed audience membership.</p>
+          </section>
+          <div id="route-content"><% content(true); %></div>
+        </main>
+      </div>
+    </div>
+    <!-- Reference app: native templates reuse the SSR markup functions; no client EJS runtime. -->
+    <template id="tpl-card">
+      <% card(); %>
+    </template>
+    <template id="tpl-experience">
+      <% experience(); %>
+    </template>
+    <template id="tpl-content">
+      <% content(false); %>
+    </template>
+    <template id="tpl-route-header">
+      <header class="page-header">
+        <h1></h1>
+        <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
+      </header>
+    </template>
+    <template id="tpl-status"><div class="placeholder-card"><p role="status"></p><button type="button" class="btn btn--secondary" data-testid="retry-experiences-button" hidden>Retry content</button>
+            </div></template>
+    <template id="tpl-event-row">
+      <tr>
+        <td><span class="tracking-log__type"></span></td>
+        <td class="tracking-log__label"></td>
+        <td class="tracking-log__duration"></td>
+        <td class="tracking-log__time">0s</td>
+        <td class="tracking-log__count"></td>
+      </tr>
+    </template>
+    <!-- Consumer integration: public configuration and final request profile only.
+         The server escapes '<' for this HTML context; exclude diagnostic strings/plans. -->
+    <script type="application/json" id="experience-bootstrap"><%- bootstrap %></script>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

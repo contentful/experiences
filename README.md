@@ -221,10 +221,10 @@ not provide noncommitting XDA content selection.
 3. After the final fetch, produce a state-only handoff from the final
    `request.profile`, render the plans with attribution, and safely serialize the
    minimal public configuration and handoff into a private, no-store response.
-4. Construct Web with automatic interactions disabled and profile/consent defaults
-   omitted. Subscribe, await state hydration, then enable automatic tracking and
-   register manual elements. Initial activation sends no page and refetches no
-   content.
+4. Construct Web with profile/consent defaults omitted. Automatic tracking starts
+   on the existing attributed HTML; register manual elements immediately.
+   Subscribe and adopt the final server profile through state-only hydration
+   independently. Initial activation sends no page and refetches no content.
 
 ```ts
 import { createRequestHandoffFromData } from '@contentful/experiences-node';
@@ -284,25 +284,24 @@ const web = new WebContentfulExperiences({
   spaceId,
   environmentId,
   delivery: publicDelivery,
-  autoTrackEntryInteraction: { views: false, hovers: false, clicks: false },
 });
+// Defaults enable automatic views, hovers, and clicks on the existing HTML.
+// Register manual elements now, using actual plan attribution in options.data.
 const subscription = web.states.profile.subscribe(renderProfile);
 await web.hydrateHandoffState(handoff, {
   routeKey: window.location.pathname + window.location.search,
 });
-web.tracking.enable('views');
-web.tracking.enable('hovers');
-web.tracking.enable('clicks');
-// Register any manual elements now, using actual plan attribution.
 // During application cleanup: subscription.unsubscribe(); web.destroy();
 ```
 
 Here `WebContentfulExperiences` is the `ContentfulExperiences` export from
-`@contentful/experiences-web`. Disabled automatic flags are not a global pause:
-discovery starts at construction. Initial HTML must have no positive
-`data-ctfl-track-views`, `data-ctfl-track-hovers`, or `data-ctfl-track-clicks`
-opt-ins, and manual registration must wait until hydration completes. State-only
-hydration does not mark the route tracked; ordinary `page()` remains direct.
+`@contentful/experiences-web`. Discovery starts at construction and observes
+existing HTML and later DOM changes without a hydration prerequisite. Automatic
+tracking, attribute opt-ins, and manual registration remain subject to consent.
+Analytics needs a current profile identity when emitting an event; the constructor
+can adopt persisted profile or cookie identity, and the server handoff is another
+source. State-only hydration does not mark the route tracked; ordinary `page()`
+remains direct.
 Use the same direct page/profile step on later navigation or reset before fetching
 content. An identify action joins pending initialization and explicitly refetches
 without an unrelated page; a separate custom action uses `track()`.
@@ -1571,6 +1570,20 @@ versions, publish to a registry, or install a reference implementation.
 Run the packaging helper's checks with `npx nx test package-tools` and
 `npx nx lint package-tools`. They also participate in the root test/lint commands.
 
+After SDK changes, refresh all standalone reference implementations together:
+
+```sh
+npm run implementation:install
+```
+
+This runs each implementation's existing `setup` target: build and pack its SDK
+dependency chain, reinstall its local packages, and build browser assets where
+applicable. It preserves existing app-local `.env` files and does not start apps.
+Stop running reference apps with their scoped `serve:stop` targets before this
+dependency refresh, then relaunch them with `serve` or `dev`. Focused per-app
+`setup` targets remain available. The CI Build job prepares all implementations
+and runs their lint/typecheck targets after the SDK build.
+
 The [standalone Node reference implementation](./implementations/node-sdk/README.md)
 uses these artifacts with its own dependencies and `.env`. Prepare it with
 `npx nx run implementation-node-sdk:setup`, then run
@@ -1582,6 +1595,13 @@ uses the packed Web UMD distribution with browser-owned state and direct live
 delivery. Run `npx nx run implementation-web-sdk:setup`, then
 `npx nx run implementation-web-sdk:dev`. Its README covers local environment
 configuration, consent, interaction tracking, and scoped validation commands.
+
+The [standalone Node + Web reference implementation](./implementations/node-sdk+web-sdk/README.md)
+renders initial Experience content through Express/EJS, adopts final server profile
+state in the browser, and supports Web SDK navigation and interactions. Run
+`npx nx run implementation-node-sdk-web-sdk:setup`, then
+`npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
+integration from demo UI and optional browser-attempt diagnostics.
 
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
