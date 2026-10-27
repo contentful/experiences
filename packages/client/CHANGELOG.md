@@ -1,3 +1,9 @@
+## 0.10.7 (2026-10-27)
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.13.6
+
 ## 0.10.6 (2026-10-26)
 
 ### 🚀 Features

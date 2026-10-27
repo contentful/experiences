@@ -1,3 +1,11 @@
+## 0.8.1 (2026-10-27)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.1
+- Updated client to 0.10.7
+- Updated core to 0.13.6
+
 ## 0.8.0 (2026-10-27)
 
 ### 🚀 Features
