@@ -37,6 +37,14 @@ const sdk = new ContentfulExperiences({
   spaceId: required('SPACE_ID'),
   environmentId: required('ENVIRONMENT_ID'),
   delivery: { accessToken: required('CDA_TOKEN') },
+  ...(process.env.LIVE_PREVIEW_ENABLED === 'true'
+    ? {
+        preview: {
+          accessToken: required('PREVIEW_TOKEN'),
+          host: process.env.PREVIEW_HOST?.trim() || undefined,
+        },
+      }
+    : {}),
   locale,
 });
 
@@ -66,35 +74,66 @@ app.get('/', async (req, res) => {
     page,
     userAgent: req.get('user-agent') ?? 'node-js-server',
   };
+  const sessionId = url.searchParams.has('preview_session_id')
+    ? url.searchParams.get('preview_session_id')?.trim()
+    : process.env.LIVE_PREVIEW_SESSION_ID?.trim();
+  const previewExperienceId =
+    url.searchParams.get('preview_experience_id')?.trim() ||
+    process.env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() ||
+    experienceIds[0];
+  const livePreview =
+    process.env.LIVE_PREVIEW_ENABLED === 'true' && sessionId
+      ? async () => {
+          return {
+            experienceId: previewExperienceId,
+            sessionId,
+            resourceResolution: process.env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+            implementation: await import('@contentful/experiences-live-preview'),
+          };
+        }
+      : undefined;
   const request = sdk.forRequest({
     consent: true,
     locale,
     eventContext,
-    isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()),
+    livePreview,
+    // A session URL still suppresses events if this deployment disables preview.
+    ...(livePreview
+      ? {}
+      : { isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()) }),
   });
-  // XDA can time out when identify creates a profile in the initial content fetch.
-  // Once that is fixed, include page in the first fetch instead of sending it here.
-  await request.page({ properties: page });
-  const identifyEvent = userId
-    ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
-    : undefined;
-  const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+  try {
+    // XDA can time out when identify creates a profile in the initial content fetch.
+    // Once that is fixed, include page in the first fetch instead of sending it here.
+    if (!request.isPreview) await request.page({ properties: page });
+    const identifyEvent =
+      !request.isPreview && userId
+        ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
+        : undefined;
+    const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 
-  const experiences: { id: string; plan: PortableRenderPlan }[] = [];
-  for (const experienceId of experienceIds) {
-    const plan = await request.fetchExperience(
-      {
-        experienceId,
-        // XDA currently returns baseline for profile-only fetches. Include identify
-        // until that is fixed; later fetches can then use the established profile alone.
-        ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-      },
-      resolveOptions
-    );
-    experiences.push({ id: experienceId, plan });
+    const experiences: { id: string; plan: PortableRenderPlan }[] = [];
+    for (const experienceId of experienceIds) {
+      const plan = await request.fetchExperience(
+        {
+          experienceId,
+          // XDA currently returns baseline for profile-only fetches. Include identify
+          // until that is fixed; later fetches can then use the established profile alone.
+          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
+        },
+        resolveOptions
+      );
+      experiences.push({ id: experienceId, plan });
+    }
+
+    res.render('index', {
+      isPreview: request.isPreview,
+      identifyRequested: Boolean(identifyEvent),
+      experiences,
+    });
+  } finally {
+    request.destroy();
   }
-
-  res.render('index', { identifyRequested: Boolean(userId), experiences });
 });
 
 app.use((error: unknown, _request: Request, response: Response, next: NextFunction) => {

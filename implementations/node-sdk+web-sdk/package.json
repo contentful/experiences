@@ -52,9 +52,13 @@
     "@contentful/experiences-web": "$@contentful/experiences-web",
     "@contentful/experiences-client": "file:../../pkgs/contentful-experiences-client-local.tgz",
     "@contentful/experiences-runtime": "file:../../pkgs/contentful-experiences-runtime-local.tgz",
-    "@contentful/experiences-sdk-core": "file:../../pkgs/contentful-experiences-sdk-core-local.tgz"
+    "@contentful/experiences-sdk-core": "file:../../pkgs/contentful-experiences-sdk-core-local.tgz",
+    "@contentful/experiences-live-preview": "$@contentful/experiences-live-preview"
   },
   "nx": {
     "includedScripts": []
+  },
+  "optionalDependencies": {
+    "@contentful/experiences-live-preview": "file:../../pkgs/contentful-experiences-live-preview-local.tgz"
   }
 }

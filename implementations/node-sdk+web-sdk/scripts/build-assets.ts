@@ -1,6 +1,8 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'vite';
+import { readFileSync } from 'node:fs';
+import { parse } from 'dotenv';
 
 // Maintainer: prepare this standalone reference from locally packed/installed SDK
 // artifacts, so verification exercises the consumer distribution. A consumer's
@@ -35,6 +37,28 @@ await build({
       entry: resolve(root, 'scripts/rich-text.ts'),
       formats: ['es'],
       fileName: () => 'rich-text.js',
+    },
+  },
+});
+
+// Build and host use the same app-local deployment setting. Disabled builds
+// tree-shake the optional package and its protocol dependencies.
+const previewEnabled = parse(readFileSync(resolve(root, '.env'))).LIVE_PREVIEW_ENABLED === 'true';
+// Preview ships unbundled ESM, so prepare a browser-loadable asset alongside the Web UMD.
+await build({
+  configFile: false,
+  root,
+  publicDir: false,
+  define: { __LIVE_PREVIEW_ENABLED__: JSON.stringify(previewEnabled) },
+  build: {
+    outDir: dist,
+    emptyOutDir: false,
+    target: 'es2022',
+    sourcemap: true,
+    lib: {
+      entry: resolve(root, 'scripts/preview.ts'),
+      formats: ['es'],
+      fileName: () => 'preview.js',
     },
   },
 });

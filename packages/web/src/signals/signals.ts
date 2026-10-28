@@ -4,7 +4,11 @@ import type {
   ExperienceRequestState,
   OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
+import type { PreviewState } from '../states.js';
 import { batch, computed, effect, signal, type Signal, untracked } from '@preact/signals-core';
+
+/** Bound Preview Session source; absent when preview integration is disabled. */
+export const preview = signal<PreviewState | undefined>();
 
 /**
  * Most recent blocked-event metadata produced by consent/runtime guards.
@@ -74,6 +78,8 @@ export const experienceRequestState: Signal<ExperienceRequestState> =
  * @public
  */
 export interface Signals {
+  /** Current preview payload and source status. */
+  preview: typeof preview;
   /** Most recent blocked-event metadata. */
   blockedEvent: typeof blockedEvent;
   /** Current consent signal. */
@@ -114,6 +120,7 @@ export interface SignalFns {
  * @public
  */
 export const signals: Signals = {
+  preview,
   blockedEvent,
   consent,
   event,

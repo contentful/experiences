@@ -125,7 +125,18 @@ export class PersonalizationDelivery {
       const data = await this.#upsert([validEvent], undefined, undefined);
       return data === undefined ? { accepted: true } : { accepted: true, data };
     }
-    if (this.queuedEventCount >= this.#maxEvents) return { accepted: false };
+    if (this.queuedEventCount >= this.#maxEvents) {
+      // Prepared replay is indivisible; only an ordinary-only queue may evict old events.
+      const first = this.#queue[0];
+      if (first === undefined || this.#queue.some((batch) => batch.request !== undefined)) {
+        return { accepted: false };
+      }
+      const dropCount = this.queuedEventCount - this.#maxEvents + 1;
+      first.events.splice(0, dropCount);
+      deliveryLogger.warn(
+        `Dropped ${dropCount} oldest offline event(s) due to queue limit (${this.#maxEvents})`
+      );
+    }
     this.#enqueueOrdinary(validEvent);
     return { accepted: true };
   }

@@ -28,6 +28,7 @@ const sdk = new ContentfulExperiences({
   environmentId: environment.ENVIRONMENT_ID,
   locale: environment.LOCALE,
   delivery: { accessToken: environment.CDA_TOKEN },
+  preview: config.preview,
 });
 
 const publicRoot = resolve(import.meta.dirname, '../public');
@@ -74,20 +75,47 @@ for (const [path, route] of Object.entries(routes)) {
   app.get(path, async (req, res) => {
     const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
     const page = pageContext(url, req.get('referer') ?? '');
-    const visitor = readVisitor(req.cookies);
+    const preview = environment.LIVE_PREVIEW;
+    const sessionId = url.searchParams.has('preview_session_id')
+      ? url.searchParams.get('preview_session_id')?.trim()
+      : preview?.sessionId;
+    const experienceId =
+      url.searchParams.get('preview_experience_id')?.trim() || preview?.experienceId;
+    const binding =
+      config.livePreviewEnabled && sessionId && experienceId
+        ? {
+            experienceId,
+            sessionId,
+            resourceResolution: preview?.resourceResolution,
+            sessionHost: preview?.sessionHost,
+          }
+        : undefined;
+    const livePreview = binding
+      ? async () => {
+          return {
+            ...binding,
+            implementation: await import('@contentful/experiences-live-preview'),
+          };
+        }
+      : undefined;
     const request = sdk.forRequest({
-      ...visitor,
+      // Preview content has no visitor identity/handoff prerequisite.
+      ...(livePreview || sessionId ? {} : readVisitor(req.cookies)),
       locale: environment.LOCALE,
       eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
+      livePreview,
+      ...(livePreview ? {} : { isPreview: Boolean(sessionId) }),
     });
     try {
       // XDA workaround: an initial identify-bearing fetch can time out without a
       // profile. Await the committed page and require actual SDK-owned identity.
-      const pageResult = await request.page({ properties: page });
-      if (!pageResult.accepted || !request.profile?.id) {
-        throw new Error('Page initialization did not establish a profile.');
+      if (!request.isPreview) {
+        const pageResult = await request.page({ properties: page });
+        if (!pageResult.accepted || !request.profile?.id) {
+          throw new Error('Page initialization did not establish a profile.');
+        }
       }
-      const identifyRequested = req.query.userId === 'charles';
+      const identifyRequested = !request.isPreview && req.query.userId === 'charles';
       const identify = identifyRequested
         ? request.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
         : undefined;
@@ -101,7 +129,8 @@ for (const [path, route] of Object.entries(routes)) {
           await request.fetchExperience(
             {
               experienceId,
-              extensions: { sourceMap: {} },
+              // Session parameters/extensions belong to the server-owned session.
+              ...(binding?.experienceId === experienceId ? {} : { extensions: { sourceMap: {} } }),
               ...(identify ? { personalization: { events: [identify] } } : {}),
             },
             { config: { components: {}, experienceTemplates: {} } }
@@ -110,19 +139,41 @@ for (const [path, route] of Object.entries(routes)) {
       }
       // Consumer integration: package only final SDK request state, after every
       // sequential fetch. This public producer sends nothing and creates no replay.
-      const handoff = createRequestHandoffFromData({
-        spaceId: environment.SPACE_ID,
-        environmentId: environment.ENVIRONMENT_ID,
-        data: { profile: request.profile },
-      });
-      const bootstrap = JSON.stringify({ environment, handoff }).replaceAll('<', '\\u003c');
-      writeIdentity(res, request, req.secure);
+      const handoff = request.isPreview
+        ? undefined
+        : createRequestHandoffFromData({
+            spaceId: environment.SPACE_ID,
+            environmentId: environment.ENVIRONMENT_ID,
+            data: { profile: request.profile },
+          });
+      const initialPlans = request.isPreview
+        ? Object.fromEntries(
+            [...plans].map(([id, plan]) => [
+              id,
+              {
+                ...plan,
+                // Keep diagnostic counts without visitor profiles or upstream strings.
+                personalization: undefined,
+                deliveryDiagnostics: plan.deliveryDiagnostics?.map(() => ({})),
+                diagnostics: plan.diagnostics.map(() => ({})),
+              },
+            ])
+          )
+        : undefined;
+      const bootstrap = JSON.stringify({
+        environment,
+        handoff,
+        preview: request.isPreview ? { binding, initialPlans } : undefined,
+      }).replaceAll('<', '\\u003c');
+      if (!request.isPreview) writeIdentity(res, request, req.secure);
       res.render('index', { title: route.title, path, route, plans, identifyRequested, bootstrap });
     } catch (error) {
       // The SDK owns profile updates; the HTTP host alone writes response cookies.
       // Also expire denied identity when an upstream request fails.
-      writeIdentity(res, request, req.secure);
+      if (!request.isPreview) writeIdentity(res, request, req.secure);
       throw error;
+    } finally {
+      request.destroy();
     }
   });
 }
