@@ -30,7 +30,7 @@ jobs:
         run: npm run implementation:install
 
       - name: Check reference implementations
-        run: npx nx run-many -t lint,typecheck --projects=tag:scope:implementation
+        run: npx nx run-many -t build,lint,typecheck --projects=tag:scope:implementation
 
       - name: Check build artifacts
         run: ls -la packages/*/dist/
