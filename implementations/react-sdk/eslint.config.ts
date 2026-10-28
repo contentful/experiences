@@ -13,6 +13,8 @@ export default [
   },
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    languageOptions: { globals: { window: 'readonly', document: 'readonly' } },
+    languageOptions: {
+      globals: { window: 'readonly', document: 'readonly', HTMLElement: 'readonly' },
+    },
   },
 ];
