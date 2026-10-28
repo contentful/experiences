@@ -10,6 +10,31 @@ npm install @contentful/experiences-react
 
 This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
+## Import entries
+
+| Import                                          | Available APIs                                                                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`        |
+| `@contentful/experiences-react/client`          | `ClientExperienceRenderer` (`ExperienceRenderer`), render-context/design hooks, `useExperiencePlan`, shared registry/types/utilities |
+| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                          |
+| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                        |
+
+Client APIs previously imported from the root move to `/client`. The root and
+`/server` do not load the live Web SDK. The unbundled ESM build preserves each
+module's client directive. Next.js is not a React dependency or peer.
+
+The standalone `useLivePreview` and `useLivePreviewExperience` hooks and their
+option/result types are no longer exported. Preview Session functions, errors,
+client/session types and `PREVIEW_WEBSOCKET_HOST` move to direct imports from
+`@contentful/experiences-live-preview`. Install that optional package only when
+using it; ordinary adapter imports and declarations do not require it. Its
+existing standalone APIs are unchanged. General supplied-plan rendering and
+`useExperiencePlan` remain available on `/client`.
+
+Managed runtime providers and Experience loading components are planned in the
+subsequent runtime integration phases. This package increment establishes the
+entry boundaries; direct Web runtime use is already available through `/web-sdk`.
+
 ---
 
 ## Public API
@@ -25,23 +50,20 @@ defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Tem
 
 ```ts
 fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async; fetches from XDA and resolves in one call
-fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions) // Async; fetches and resolves a Preview Session Experience
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID doesn't exist
-PreviewSessionFetchError                   // Thrown when fetching a Preview Session fails
-LivePreviewConnectionError                 // Reported when the live-preview connection fails
 ContentfulViewDelivery                      // Full error namespace from the delivery client
-type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,
-  PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
+type ExperienceOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
-Use `fetchPreviewSession` for the initial render when the Contentful app
-provides a `preview_session_id`. It fetches the current Preview Session
-snapshot and resolves it into a `PortableRenderPlan`. Use `useLivePreview` to
-receive subsequent WebSocket updates:
+For direct standalone snapshot loading, import `fetchPreviewSession` from the
+optional package. It fetches the current Preview Session snapshot and resolves
+it into a `PortableRenderPlan`:
 
 ```tsx
+import { fetchPreviewSession } from '@contentful/experiences-live-preview';
+
 const plan = await fetchPreviewSession(
   { spaceId, environmentId, sessionId },
   { previewToken },
@@ -50,8 +72,9 @@ const plan = await fetchPreviewSession(
 ```
 
 If the Preview Session references resources from other spaces, pass the same
-encoded `resourceResolution` value in the `previewSessionOptions` passed to
-`fetchPreviewSession` and `useLivePreview`.
+encoded `resourceResolution` value in the options passed to standalone snapshot
+and subscription APIs. Runtime preview applies the supported configuration mapping
+described in the [Runtime limits](../runtime/README.md#optional-runtime-live-preview).
 
 ### Resolver
 
@@ -61,36 +84,55 @@ resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolv
 
 ### Live preview
 
-Use `useLivePreview` when the app should subscribe to Preview Session updates,
-resolve each payload, and render the resulting plan from `data`:
+Use runtime-owned preview through the public Web SDK. A conditional initializer
+binds one Experience ID to a session, while ordinary requests for other IDs keep
+their Delivery source. The application owns the SDK lifetime when using it
+directly, constructs it after browser commit, and disposes its subscriptions
+before destruction:
 
-```tsx
-const livePreview = useLivePreview({
-  previewSessionOptions,
-  initialPayload,
-  initialPlan,
-  resolveOptions: { config: experienceConfig },
+```ts
+import { ContentfulExperiences } from '@contentful/experiences-react/web-sdk';
+
+const sdk = new ContentfulExperiences({
+  ...browserConfig,
+  livePreview:
+    previewEnabled && sessionId
+      ? async () => ({
+          experienceId,
+          sessionId,
+          implementation: await import('@contentful/experiences-live-preview'),
+        })
+      : undefined,
 });
 
-<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
+const plan = await sdk.fetchExperience({ experienceId }, { config: experienceConfig });
+presentPlan(plan);
+const subscription = sdk.subscribeToPreview(
+  experienceId,
+  { config: experienceConfig },
+  ({ data, error }) => {
+    if (data) presentPlan(data);
+    showError(error);
+  }
+);
+// On final exit: subscription.unsubscribe(); sdk.destroy();
 ```
 
-For separate access to the raw payload and rendered plan, use
-`useLivePreviewExperience` and `useExperiencePlan`:
+Render supplied initial plans before subscribing, without another startup
+snapshot fetch. The update binding does not fetch snapshots or own presentation
+state. `states.preview` carries status, payload, revision and errors; updates can
+contain both a usable plan and an error. Runtime policy suppresses preview
+visitor events. Preview setup, credential/endpoint mapping and transport limits
+are documented in [Web](../web/README.md#shared-source-and-optional-live-preview) and
+[Runtime](../runtime/README.md#optional-runtime-live-preview).
+
+For application-supplied payloads, `useExperiencePlan` remains a general helper:
 
 ```tsx
-const livePreview = useLivePreviewExperience({
-  previewSessionOptions: {
-    spaceId,
-    environmentId,
-    previewToken,
-    sessionId,
-  },
-  initialPayload,
-});
+import { ClientExperienceRenderer, useExperiencePlan } from '@contentful/experiences-react/client';
 
 const plan = useExperiencePlan({
-  payload: livePreview.data,
+  payload,
   initialPlan,
   resolveOptions: { config: experienceConfig },
 });
@@ -98,19 +140,14 @@ const plan = useExperiencePlan({
 <ClientExperienceRenderer experience={plan.data} config={experienceConfig} />;
 ```
 
-`useLivePreviewExperience` returns the latest raw Experience payload.
-`initialPayload` seeds the first value. `useExperiencePlan` turns that payload
-into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
-experience while an update is being resolved.
-
-The live-preview results also expose `error` when the Preview Session connection
-fails. The last valid `data` remains available.
+It keeps the current rendered plan while resolving an update. It does not create
+a runtime or a preview connection.
 
 ### Renderers
 
 ```ts
-ServerExperienceRenderer; // RSC-friendly renderer
-ClientExperienceRenderer; // Client renderer, alias: ExperienceRenderer
+ServerExperienceRenderer; // /server (also root): RSC-friendly renderer
+ClientExperienceRenderer; // /client: client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
 ```
 
@@ -125,7 +162,10 @@ createExperienceNode(components, experienceTemplates?); // ExperienceNode with i
 type ResolvedNode, NodeSnapshot, ExperienceNodeProps;
 ```
 
-### Styling + runtime context (hooks)
+### Styling + render context (hooks)
+
+Import hooks from `/client`; pure `toCss` and `getTrackingAttributes` are also
+available from the root and `/server`.
 
 ```ts
 useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
