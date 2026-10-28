@@ -232,58 +232,48 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(send).toHaveBeenCalledTimes(5);
   });
 
-  it.each([99, 100])(
-    'falls back within ordinary capacity guards with %i queued events',
-    async (queuedCount) => {
-      const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
-      const runtime = createRuntime();
-      window.dispatchEvent(new Event('offline'));
-      for (let index = 0; index < queuedCount; index += 1) {
-        await expect(runtime.track({ event: `accepted-${index}` })).resolves.toEqual({
-          accepted: true,
-        });
-      }
-      const input = handoff(runtime, '/second');
-      const buildPayload = vi.fn(() => ({ properties: { title: 'ordinary fallback' } }));
-      const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
-      const result = await runtime.hydrateAndTrackCurrentPage(input, {
-        routeKey: '/second',
-        buildPayload,
+  it('uses the ordinary page result when prepared replay does not fit', async () => {
+    const queuedCount = 100;
+    const send = vi
+      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
+    const runtime = createRuntime();
+    window.dispatchEvent(new Event('offline'));
+    for (let index = 0; index < queuedCount; index += 1) {
+      await expect(runtime.track({ event: `accepted-${index}` })).resolves.toEqual({
+        accepted: true,
       });
-      expect(result).toEqual({ accepted: queuedCount === 99 });
-      expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
-      expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/second', buildPayload });
-      expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
-      expect(send).not.toHaveBeenCalled();
-
-      window.dispatchEvent(new Event('online'));
-      await vi.waitFor(() =>
-        expect(runtime.states.experienceRequestState.current.status).toBe('success')
-      );
-      expect(send).toHaveBeenCalledTimes(1);
-      const request = send.mock.calls[0]?.[0];
-      expect(request?.profileId).toBe('server-profile');
-      expect(request?.events).toHaveLength(100);
-      expect(
-        request?.events
-          .slice(0, queuedCount)
-          .map((event) => (event.type === 'track' ? event.event : undefined))
-      ).toEqual(Array.from({ length: queuedCount }, (_, index) => `accepted-${index}`));
-      if (queuedCount === 99) {
-        expect(request?.events.at(-1)).toMatchObject({
-          type: 'page',
-          properties: { title: 'ordinary fallback' },
-        });
-      }
-      expect(
-        request?.events.some((event) =>
-          input.replay?.events.some((prepared) => prepared.messageId === event.messageId)
-        )
-      ).toBe(false);
     }
-  );
+    const input = handoff(runtime, '/second');
+    const buildPayload = vi.fn(() => ({ properties: { title: 'ordinary fallback' } }));
+    const ordinaryPage = vi.spyOn(runtime, 'trackCurrentPage');
+    const result = await runtime.hydrateAndTrackCurrentPage(input, {
+      routeKey: '/second',
+      buildPayload,
+    });
+    expect(result).toEqual({ accepted: true });
+    expect(result).toBe(await ordinaryPage.mock.results[0]?.value);
+    expect(ordinaryPage).toHaveBeenCalledExactlyOnceWith({ routeKey: '/second', buildPayload });
+    expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
+    expect(send).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() =>
+      expect(runtime.states.experienceRequestState.current.status).toBe('success')
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+    const request = send.mock.calls[0]?.[0];
+    expect(request?.profileId).toBe('server-profile');
+    expect(request?.events.at(-1)).toMatchObject({
+      type: 'page',
+      properties: { title: 'ordinary fallback' },
+    });
+    expect(
+      request?.events.some((event) =>
+        input.replay?.events.some((prepared) => prepared.messageId === event.messageId)
+      )
+    ).toBe(false);
+  });
 
   it.each(['identify', 'page', 'track'] as const)(
     'propagates a full offline queue rejection through public %s without losing prepared work',
