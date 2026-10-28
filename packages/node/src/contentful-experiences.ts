@@ -6,6 +6,9 @@ import {
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   buildPreparedEvents,
+  assertRuntimePreviewRequest,
+  fetchRuntimePreviewSession,
+  initializeRuntimeLivePreview,
   InterceptorManager,
   validatePersonalizationEvent,
   validatePreparedEvents,
@@ -39,6 +42,8 @@ import {
   type FetchResolveOptions,
   type ResolveDefaults,
   type ResolveOptions,
+  type RuntimeLivePreviewInitializer,
+  type RuntimeLivePreviewBinding,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-runtime';
@@ -61,6 +66,8 @@ type ConsentPolicy = Pick<Config, 'allowedEventTypes' | 'onEventBlocked'>;
 export type RequestContext = {
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
+  /** Lazily binds one Experience to a Preview Session; establishes preview policy immediately. */
+  livePreview?: RuntimeLivePreviewInitializer;
   locale?: string;
   resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
@@ -130,6 +137,8 @@ export type RequestEventBuilder = Pick<
 
 /** A request-bound facade; many facades may share the one Node SDK instance. */
 export interface RequestRuntime extends NodePersonalizationMethods, NodeAnalyticsMethods {
+  /** Invalidates unfinished request work without destroying the shared SDK. */
+  destroy(): void;
   readonly isPreview: boolean;
   readonly locale: string | undefined;
   readonly profile: EventProfile | undefined;
@@ -199,6 +208,9 @@ class RequestBoundExperiences implements RequestRuntime {
   readonly eventBuilder: RequestEventBuilder;
   #profile: EventProfile | undefined;
   #profileRevision = 0;
+  #destroyed = false;
+  readonly #previewInitializer: RuntimeLivePreviewInitializer | undefined;
+  #previewInitialization: Promise<RuntimeLivePreviewBinding> | undefined;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
   /** Copied at construction so a caller mutating the originals cannot leak into this request. */
@@ -221,7 +233,11 @@ class RequestBoundExperiences implements RequestRuntime {
     createEventMethods: (bindings: DirectEventBindings) => RuntimeEventMethods,
     private readonly consentPolicy: ConsentPolicy
   ) {
-    this.#isPreview = context.isPreview === true;
+    if (context.livePreview !== undefined && context.isPreview === false) {
+      throw new TypeError('livePreview cannot be combined with isPreview: false');
+    }
+    this.#previewInitializer = context.livePreview;
+    this.#isPreview = context.livePreview !== undefined || context.isPreview === true;
     const { personalizationOptions, analyticsOptions } = context;
     this.#personalizationOptions =
       personalizationOptions === undefined
@@ -257,6 +273,7 @@ class RequestBoundExperiences implements RequestRuntime {
       getIsPreview: () => this.isPreview,
       setProfile: (profile) => this.setProfile(profile),
       getProfileRevision: () => this.#profileRevision,
+      isActive: () => this.isActive(),
       getLocale: () => this.#personalizationLocale,
       getEventContext: () => this.getRequestEventContext(),
       getPersonalizationOptions: () => this.#personalizationOptions,
@@ -268,13 +285,34 @@ class RequestBoundExperiences implements RequestRuntime {
       eventInterceptors: runtime.interceptors.event,
     });
 
-    this.identify = methods.identify.bind(methods);
-    this.page = methods.page.bind(methods);
-    this.track = methods.track.bind(methods);
-    this.trackView = methods.trackView.bind(methods);
-    this.trackClick = methods.trackClick.bind(methods);
-    this.trackHover = methods.trackHover.bind(methods);
-    this.trackFlagView = methods.trackFlagView.bind(methods);
+    this.identify = (args) =>
+      this.isActive() ? methods.identify(args) : Promise.resolve({ accepted: false });
+    this.page = (args) =>
+      this.isActive() ? methods.page(args) : Promise.resolve({ accepted: false });
+    this.track = (args) =>
+      this.isActive() ? methods.track(args) : Promise.resolve({ accepted: false });
+    this.trackView = (args) =>
+      this.isActive() ? methods.trackView(args) : Promise.resolve({ accepted: false });
+    this.trackClick = (args) =>
+      this.isActive() ? methods.trackClick(args) : Promise.resolve({ accepted: false });
+    this.trackHover = (args) =>
+      this.isActive() ? methods.trackHover(args) : Promise.resolve({ accepted: false });
+    this.trackFlagView = (args) =>
+      this.isActive() ? methods.trackFlagView(args) : Promise.resolve({ accepted: false });
+  }
+
+  destroy(): void {
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    this.#previewInitialization = undefined;
+  }
+
+  private isActive(): boolean {
+    return !this.#destroyed;
+  }
+
+  private assertActive(): void {
+    if (!this.isActive()) throw new Error('The Node request has been destroyed');
   }
 
   get isPreview(): boolean {
@@ -291,6 +329,7 @@ class RequestBoundExperiences implements RequestRuntime {
     initialEvents,
     page,
   }: PrepareRequestHandoffOptions): Promise<PrepareRequestHandoffResult> {
+    this.assertActive();
     if (this.isPreview) {
       return {
         handoff: createExperiencesHandoff({
@@ -318,7 +357,10 @@ class RequestBoundExperiences implements RequestRuntime {
       // The initial identify and track inputs are optional, and removing one still
       // leaves a batch that ends in one page, so each is checked on its own. The page is
       // not optional: without a permitted page there is no batch to prepare.
-      if (!this.admitMethod('page', page ?? {})) return { handoff };
+      if (!this.admitMethod('page', page ?? {})) {
+        this.assertActive();
+        return { handoff };
+      }
       events = buildPreparedEvents({
         eventBuilder: this.runtime.eventBuilder,
         initialEvents: initialEvents?.filter((input) => this.admitMethod(input.type, input)),
@@ -332,7 +374,9 @@ class RequestBoundExperiences implements RequestRuntime {
           const valid = validatePersonalizationEvent(
             await this.runtime.interceptors.event.run(event)
           );
+          this.assertActive();
           if (!this.admitEvent(valid, true)) {
+            this.assertActive();
             if (index === events.length - 1) return { handoff };
             continue;
           }
@@ -341,6 +385,7 @@ class RequestBoundExperiences implements RequestRuntime {
         events = validatePreparedEvents(transformed);
       }
     } catch {
+      this.assertActive();
       console.warn(
         '[@contentful/experiences] Invalid request handoff inputs; no replay was prepared.'
       );
@@ -348,6 +393,7 @@ class RequestBoundExperiences implements RequestRuntime {
     }
 
     const locale = this.#personalizationLocale;
+    this.assertActive();
     // The envelope and batch have already been validated; retain the prepared bodies.
     const preparedHandoff: ExperiencesHandoff = {
       ...handoff,
@@ -358,6 +404,7 @@ class RequestBoundExperiences implements RequestRuntime {
         ...this.#personalizationOptions,
         locale,
       });
+      this.assertActive();
       if (this.#profileRevision === profileRevision) this.setProfile(data.profile);
       return {
         handoff: {
@@ -367,6 +414,7 @@ class RequestBoundExperiences implements RequestRuntime {
         data,
       };
     } catch {
+      this.assertActive();
       console.warn(
         '[@contentful/experiences] Request preview failed; prepared replay remains available.'
       );
@@ -374,20 +422,44 @@ class RequestBoundExperiences implements RequestRuntime {
     }
   }
 
-  resolveExperience(
+  async resolveExperience(
     payload: ExperiencePayload,
     resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan> {
-    return this.runtime.resolveExperience(
+    this.assertActive();
+    const plan = await this.runtime.resolveExperience(
       payload,
       mergeResolveOptions(this.context.resolveOptions, resolveOptions)
     );
+    this.assertActive();
+    return plan;
   }
 
-  fetchExperience(
+  async fetchExperience(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
+    this.assertActive();
+    if (this.#previewInitializer !== undefined) {
+      // Share success or failure for this request. Decide the source only after initialization.
+      const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
+        this.#previewInitializer
+      ));
+      this.assertActive();
+      if (options.experienceId === binding.experienceId) {
+        assertRuntimePreviewRequest(options);
+        this.gatePersonalizationEvents(options);
+        this.assertActive();
+        const plan = await fetchRuntimePreviewSession(
+          binding,
+          this.runtime.config,
+          mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+        );
+        // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
+        this.assertActive();
+        return plan;
+      }
+    }
     return this.fetchPersonalized(options, (final) =>
       this.runtime.fetchExperience(
         { ...final, locale: options.locale ?? this.locale },
@@ -429,6 +501,7 @@ class RequestBoundExperiences implements RequestRuntime {
     TOptions extends { personalization?: PersonalizationOptions },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(options: TOptions, send: (options: TOptions) => Promise<TResult>): Promise<TResult> {
+    this.assertActive();
     const profileRevision = this.#profileRevision;
     const incomingProfileId = this.#profile?.id;
     const initiallyGated = this.gatePersonalizationEvents(options);
@@ -436,6 +509,7 @@ class RequestBoundExperiences implements RequestRuntime {
       this.runtime.interceptors.event.count() === 0
         ? initiallyGated
         : await this.interceptPersonalizationEvents(initiallyGated);
+    this.assertActive();
     const profileId = this.isPreview
       ? undefined
       : (gated.personalization?.profileId ?? incomingProfileId);
@@ -444,6 +518,7 @@ class RequestBoundExperiences implements RequestRuntime {
         ? gated
         : { ...gated, personalization: { ...gated.personalization, profileId } }
     );
+    this.assertActive();
     // A Destination redirect carries no personalization.
     const returnedProfileId =
       'personalization' in result ? result.personalization?.profileId : undefined;

@@ -114,6 +114,8 @@ export interface DirectEventBindings extends Omit<RuntimeEventBindings, 'reportB
   setProfile: (profile: EventProfile) => void;
   /** Changes when an external session boundary must invalidate an in-flight profile response. */
   getProfileRevision?: () => number;
+  /** Request disposal guard for transport admission and late profile publication. */
+  isActive?: () => boolean;
   /** Instance-owned transformation stage for direct Node emissions. */
   eventInterceptors?: EventInterceptors;
 }
@@ -312,11 +314,15 @@ function createDirectEventDispatch(
         event = validatePersonalizationEvent(await interceptors.run(event));
         if (!admitInterceptedEvent(event, bindings)) return { accepted: false };
       }
+      if (bindings.isActive?.() === false) return { accepted: false };
       const data = await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
         ...bindings.getPersonalizationOptions?.(),
         locale: bindings.getLocale?.(),
       });
-      if (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision) {
+      if (
+        bindings.isActive?.() !== false &&
+        (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision)
+      ) {
         bindings.setProfile(data.profile);
       }
       return { accepted: true, data };
@@ -327,6 +333,7 @@ function createDirectEventDispatch(
         event = parseOptimizationSchema(AnalyticsEventSchema, await interceptors.run(event));
         if (!admitInterceptedEvent(event, bindings)) return false;
       }
+      if (bindings.isActive?.() === false) return false;
       const batches = [{ profile, events: [event] }];
       const options = bindings.getAnalyticsOptions?.();
       // As in Optimization's stateless request, the options argument is omitted when unset.

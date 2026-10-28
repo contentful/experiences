@@ -45,7 +45,7 @@ activation uses the existing SDK detectors; the application adds no interaction
 observer.
 
 After the last fetch, public Node `createRequestHandoffFromData()` packages final
-`request.profile` into a private-request, state-only handoff. The non-executable
+`request.profile` into a private-request, state-only handoff. For ordinary requests, the non-executable
 `experience-bootstrap` JSON script contains exactly `{ environment, handoff }`;
 serialization escapes `<` as `\u003c`. It contains no replay, content plans,
 delivery diagnostics, server event journal or private server settings. Responses
@@ -58,6 +58,41 @@ from local `plan.diagnostics` and thrown errors; an absent warning does not prov
 personalization success. Missing Experiences produce a generic 404; other
 service/render failures produce a generic 502 without exposing response details.
 Empty plans retain their own empty-content message.
+
+## Optional runtime Live Preview
+
+Configure the existing local `.env` and run `npm run dev` after setup:
+
+```dotenv
+LIVE_PREVIEW_ENABLED=true
+PREVIEW_TOKEN=<server-only preview token>
+BROWSER_PREVIEW_TOKEN=<preview token approved for browser exposure>
+# BROWSER_PREVIEW_HOST=https://...  # optional browser snapshot endpoint
+# LIVE_PREVIEW_SESSION_HOST=wss://... # optional socket endpoint
+```
+
+Use `?preview_session_id=<session>` and optional `preview_experience_id` (any
+Experience ID, default: first presentation ID), or configure
+`LIVE_PREVIEW_SESSION_ID` / `LIVE_PREVIEW_EXPERIENCE_ID`. Optional
+`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Other IDs use Delivery. Optional `PREVIEW_HOST` sets the server snapshot endpoint.
+Node uses request-local `livePreview` and `request.destroy()`. Web retains SSR
+markup and serialized `initialPlans`, then attaches `subscribeToPreview()` without
+a startup fetch, page event or visitor handoff. Navigation and Retry use
+`fetchExperience()` before attaching listeners; `states.preview` exposes connection status.
+Preview skips visitor initialization and disables Identify. Navigation inherits
+the current binding only when the destination omits it; explicit destination
+preview parameters take precedence. Binding changes within preview use
+`replaceLivePreview`; entering or leaving preview reloads the document to create
+a new SDK owner. An explicit empty `preview_session_id` leaves preview, including
+when a default session is configured. The presentation ID list stays unchanged.
+Ordinary `build`, `dev`, `serve`, and `restart` commands read app-local
+`LIVE_PREVIEW_ENABLED`: `true` includes optional preview assets and enables host
+configuration; other values exclude them. Rebuild after changing this deployment
+setting. Only explicit browser preview settings enter HTML. Preview errors retain
+usable content, replace failed loading placeholders, and offer Retry content;
+successful updates clear recovered errors. Initial plans with diagnostics retain
+usable content and show a generic error.
+See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
 
 ## Server consent and identity
 
@@ -338,12 +373,12 @@ The default Experience IDs are `3fLAdFb3BYAuImRhcW8k4t` (Coded),
 
 `src/config.ts` parses only this app's `.env` using dotenv. It does not merge
 `process.env` or fall back to sibling/mock configuration. `PORT` overrides belong
-in this file. The explicit public projection contains only `SPACE_ID`,
+in this file. The ordinary explicit public projection contains only `SPACE_ID`,
 `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved `EXPERIENCE_IDS`.
 Only that projection and the final SDK profile handoff are serialized into the
-HTML-safe bootstrap. Never copy management/preview tokens or expose unrelated
+HTML-safe bootstrap. Never copy management or server-only preview tokens or expose unrelated
 settings. No values are baked into
-browser assets. Runtime configuration does not select alternate SDK endpoints.
+browser assets. Optional preview endpoint settings are described above.
 
 ## Run and stop
 

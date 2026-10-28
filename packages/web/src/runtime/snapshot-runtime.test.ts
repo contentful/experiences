@@ -18,6 +18,7 @@ describe('SnapshotRuntime', () => {
       Object.fromEntries(Object.entries(runtime.states).map(([key, state]) => [key, state.current]))
     ).toEqual({
       flag: undefined,
+      preview: undefined,
       profile: { id: 'server-visitor' },
       locale: 'de-DE',
       consent: false,

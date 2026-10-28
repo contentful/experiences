@@ -32,6 +32,36 @@ cookie helper leaves an existing identity untouched because the handoff has no p
 Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
 and standalone free fetches remain outside this policy.
 
+For session snapshots, install the optional Live Preview package and configure
+`preview.accessToken` on the SDK. When preview is enabled, bind the request once:
+
+```ts
+const request = sdk.forRequest({
+  livePreview: async () => ({
+    experienceId,
+    sessionId,
+    implementation: await import('@contentful/experiences-live-preview'),
+  }),
+});
+try {
+  const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
+  renderPlan(plan);
+} finally {
+  request.destroy();
+}
+```
+
+The initializer sets preview policy immediately and runs lazily once per request;
+`isPreview: false` conflicts with it. Matching IDs load session plans with Runtime →
+request → operation metadata/debug precedence; other IDs and destinations retain their
+sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
+`request.destroy()` invalidates unfinished content results and prevents late profile
+writes without affecting sibling requests. Event calls disposed before transport return
+`{ accepted: false }`; successful transports retain acceptance and Personalization response
+data after disposal. See Runtime's
+[shared limitations](../runtime/README.md#shared-limitations) for session-owned options,
+credentials, cancellation, and packaging.
+
 ## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.

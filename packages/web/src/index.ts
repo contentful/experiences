@@ -64,6 +64,11 @@ export type {
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
+  RuntimeLivePreviewInitializer,
+  RuntimeLivePreviewBinding,
+  RuntimeLivePreviewModule,
+  RuntimePreviewClient,
+  RuntimePreviewStatus,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
@@ -75,7 +80,7 @@ export type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 
-export type { States } from './states.js';
+export type { States, PreviewState, PreviewUpdate } from './states.js';
 export {
   batch,
   effect,

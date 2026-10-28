@@ -4,17 +4,37 @@ import type {
   EventProfile,
   PersonalizationRequestState,
   OptimizationEventStreamEvent,
+  RuntimePreviewStatus,
 } from '@contentful/experiences-runtime';
+import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { Observable } from './signals/index.js';
 
 /**
- * Combined observable state exposed by the stateful core.
+ * Current Preview Session source, shared as read-only state.
  *
  * @public
  */
+export interface PreviewState {
+  readonly experienceId?: string;
+  readonly sessionId?: string;
+  readonly data: ExperiencePayload | undefined;
+  readonly error: Error | undefined;
+  readonly status: RuntimePreviewStatus | undefined;
+  readonly revision: number;
+}
+
+/** A resolved update or error; the view retains its own displayed plan. */
+export interface PreviewUpdate {
+  readonly data?: PortableRenderPlan;
+  readonly error?: Error;
+}
+
+/** Combined observable state exposed by the Web SDK. */
 export interface States {
   /** Key-scoped Custom Flag value. Reads and subscriptions track exposure. */
   flag: (name: string) => Observable<Json | undefined>;
+  /** Current bound preview source. Payloads are shared read-only references. */
+  preview: Observable<PreviewState | undefined>;
   /** Current consent value (if any). */
   consent: Observable<boolean | undefined>;
   /** Current durable profile-continuity persistence consent value (if any). */
