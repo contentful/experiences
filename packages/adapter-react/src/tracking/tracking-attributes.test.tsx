@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { useContentfulComponent } from './context';
-import { getTrackingAttributes, ServerExperienceRenderer } from './index';
-import type { Config } from './types';
+import { useContentfulComponent } from '../rendering/context';
+import { getTrackingAttributes, ServerExperienceRenderer } from '../index';
+import type { Config } from '../registry/types';
 
 const sourceMap = {
   version: 1,

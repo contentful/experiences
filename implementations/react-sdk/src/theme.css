@@ -704,6 +704,23 @@ main {
   font-size: 0.825rem;
 }
 
+/* React supplied-plan presentations; the vendored theme above is retained. */
+.experience-presentation {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.experience-presentation__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 @media (max-width: 760px) {
   .app-body {
     grid-template-columns: minmax(0, 1fr);

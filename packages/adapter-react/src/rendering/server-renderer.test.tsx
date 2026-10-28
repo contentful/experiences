@@ -15,11 +15,11 @@ import type {
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import { toCss } from './design-utils';
+import { toCss } from '../design/design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
-import type { Config } from './types';
-import { useDesignValues } from './use-design-values';
-import { minimalSourceMap } from './test-fixtures/source-map.js';
+import type { Config } from '../registry/types';
+import { useDesignValues } from '../hooks/use-design-values';
+import { minimalSourceMap } from '../test-fixtures/source-map.js';
 
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
 
@@ -221,7 +221,9 @@ describe('ServerExperienceRenderer', () => {
       <ServerExperienceRenderer experience={planWithMissing} config={justContainer} />
     );
     expect(productionHtml).not.toContain('data-experiences-missing');
-    expect(productionHtml).toBe('<div></div>');
+    expect(productionHtml).toBe(
+      '<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents"><div></div></div>'
+    );
 
     warn.mockRestore();
   });
@@ -261,7 +263,10 @@ describe('ServerExperienceRenderer', () => {
   });
 
   it("declares MissingComponent as a client component ('use client')", () => {
-    const source = readFileSync(new URL('./missing-component.tsx', import.meta.url), 'utf8');
+    const source = readFileSync(
+      new URL('../diagnostics/missing-component.tsx', import.meta.url),
+      'utf8'
+    );
     expect(source).toMatch(/^\s*['"]use client['"];/m);
   });
 
@@ -379,11 +384,11 @@ describe('ServerExperienceRenderer', () => {
     expect(html).toContain('<span>inside</span>');
   });
 
-  it('renders a composite experience unwrapped — sys.experienceTemplate is ignored', async () => {
+  it('renders composite siblings without a template wrapper — sys.experienceTemplate is ignored', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     // `hero` is registered as a template, but the nodes are plain components,
-    // so nothing may wrap them.
+    // so no template may wrap them; only the Experience boundary is added.
     const cfg: Config = {
       components: { item: Item },
       experienceTemplates: {
@@ -401,7 +406,9 @@ describe('ServerExperienceRenderer', () => {
       cfg
     );
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toBe('<span>one</span><span>two</span>');
+    expect(html).toBe(
+      '<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents"><span>one</span><span>two</span></div>'
+    );
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -507,7 +514,9 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
       cfg
     );
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toBe('<div><span>one</span><span>two</span></div>');
+    expect(html).toBe(
+      '<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents"><div><span>one</span><span>two</span></div></div>'
+    );
   });
 
   it('lets a component filter the children array', async () => {
@@ -553,7 +562,9 @@ describe('ServerExperienceRenderer — bare-component registrations', () => {
       cfg
     );
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toBe('<p data-from="bare">hi</p>');
+    expect(html).toBe(
+      '<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents"><p data-from="bare">hi</p></div>'
+    );
   });
 
   it('accepts a bare component for a experienceTemplate', async () => {

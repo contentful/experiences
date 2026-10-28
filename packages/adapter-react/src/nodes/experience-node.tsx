@@ -5,17 +5,23 @@
  */
 
 import { createElement, type ReactNode } from 'react';
+import { getNodeTrackingAttributes } from '../tracking/node-tracking-attributes.js';
 
-import { ComponentError } from './component-error.js';
+import { BoundNodeRoots } from '../tracking/bound-node-roots.js';
+import { ComponentError } from '../diagnostics/component-error.js';
 // A class component, so it lives in its own `'use client'` file.
-import { ComponentErrorBoundary } from './component-error-boundary.js';
+import { ComponentErrorBoundary } from '../diagnostics/component-error-boundary.js';
 import {
   ContentfulComponentProvider,
   ContentfulExperienceTemplateProvider,
   ExperienceProvider,
   ResolvedDesignProvider,
-} from './context.js';
-import type { RenderError } from './nodes-renderer.js';
+} from '../rendering/context.js';
+import type { RenderError } from '../rendering/nodes-renderer.js';
+import type {
+  ExperienceTrackingOptions,
+  OnExperienceNodeRoot,
+} from '../tracking/root-binding-types.js';
 import type {
   NodeSnapshot,
   ResolvedComponentNode,
@@ -27,10 +33,10 @@ import {
   type Components,
   type ExperienceTemplates,
   type RenderContext,
-} from './types.js';
+} from '../registry/types.js';
 
 /** Props of `ExperienceNode` and of the component `createExperienceNode` returns. */
-export interface BoundExperienceNodeProps {
+export interface BoundExperienceNodeProps extends ExperienceTrackingOptions {
   node: ResolvedComponentNode | ResolvedExperienceTemplateNode | NodeSnapshot;
   /** Publishes `useExperience()`. Needed outside an SDK renderer; context doesn't cross serialization boundaries. */
   experience?: RenderContext;
@@ -38,6 +44,8 @@ export interface BoundExperienceNodeProps {
   renderError?: RenderError;
   /** Slot props by name. Extra props are treated as slots too; `slots` wins on a clash. */
   slots?: Record<string, unknown>;
+  /** Client-owned root registration. Return cleanup for plan replacement or removal. */
+  onNodeRoot?: OnExperienceNodeRoot;
   [slot: string]: unknown;
 }
 
@@ -54,10 +62,47 @@ export function ExperienceNode({
   experience,
   renderError = ComponentError,
   slots,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
   ...slotProps
 }: ExperienceNodeProps): ReactNode {
-  const component =
-    'component' in node ? node.component : lookupComponent(node, components, experienceTemplates);
+  const registration =
+    'component' in node
+      ? { component: node.component, root: node.root }
+      : lookupRegistration(node, components, experienceTemplates);
+  const { component } = registration;
+  const rootProp = registration.root?.prop ?? node.root?.prop;
+  const snapshot = 'snapshot' in node ? node.snapshot : node;
+  const props = { ...node.props, ...slotProps, ...slots };
+  delete props['data-ctfl-scopes'];
+  const content =
+    rootProp || onNodeRoot ? (
+      <BoundNodeRoots
+        component={component}
+        props={props}
+        node={snapshot}
+        rootProp={rootProp}
+        clickable={clickable}
+        trackClicks={trackClicks}
+        trackHovers={trackHovers}
+        trackViews={trackViews}
+        onNodeRoot={onNodeRoot}
+      />
+    ) : (
+      // Only serializable attributes cross the default Server→Client component boundary.
+      createElement(component, {
+        ...props,
+        ...getNodeTrackingAttributes(node.contentful.attribution, {
+          clickable,
+          trackClicks,
+          trackHovers,
+          trackViews,
+        }),
+      })
+    );
 
   const element = (
     <ResolvedDesignProvider value={node.design}>
@@ -67,7 +112,7 @@ export function ExperienceNode({
         kind={node.kind}
         nodeId={node.nodeId}
       >
-        {createElement(component, { ...node.props, ...slotProps, ...slots })}
+        {content}
       </ComponentErrorBoundary>
     </ResolvedDesignProvider>
   );
@@ -104,7 +149,7 @@ export function createExperienceNode(
   return BoundExperienceNode;
 }
 
-function lookupComponent(
+function lookupRegistration(
   node: NodeSnapshot,
   components: Components | undefined,
   experienceTemplates: ExperienceTemplates | undefined
@@ -113,11 +158,11 @@ function lookupComponent(
   if (node.kind === 'experienceTemplate') {
     const entry = experienceTemplates?.[node.id];
     if (!entry) throw new Error(missingMessage(node, 'experienceTemplates'));
-    return normalizeExperienceTemplateRegistration(entry).component;
+    return normalizeExperienceTemplateRegistration(entry);
   }
   const entry = components?.[node.id];
   if (!entry) throw new Error(missingMessage(node, 'components'));
-  return normalizeComponentRegistration(entry).component;
+  return normalizeComponentRegistration(entry);
 }
 
 function missingMessage(node: NodeSnapshot, registry: string): string {

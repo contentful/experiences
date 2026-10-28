@@ -6,19 +6,27 @@ import type { ReactNode } from 'react';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { ComponentError } from './component-error.js';
-import { DebugExperience } from './debug-experience.js';
+import { ExperienceBoundary, type ExperienceBoundaryOptions } from './experience-boundary.js';
+import type { ExperienceRootProps } from '../tracking/root-binding-types.js';
+
+import { ComponentError } from '../diagnostics/component-error.js';
+import { DebugExperience } from '../diagnostics/debug-experience.js';
 import { ExperienceProvider } from './context.js';
-import { MissingComponent } from './missing-component.js';
+import { MissingComponent } from '../diagnostics/missing-component.js';
 import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer.js';
-import type { Config, RenderContext } from './types.js';
+import type { Config, RenderContext } from '../registry/types.js';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   debug: false,
   metadata: {},
 };
 
-export interface ServerExperienceRendererProps {
+export interface ServerExperienceRendererProps extends Omit<
+  ExperienceBoundaryOptions,
+  'rootProps'
+> {
+  /** DOM refs belong to the client rendering path. */
+  rootProps?: Omit<ExperienceRootProps, 'ref'>;
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
@@ -41,6 +49,12 @@ export function ServerExperienceRenderer({
   config,
   metadata,
   debug,
+  as,
+  rootProps,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
   renderUnknown = MissingComponent,
   renderError = ComponentError,
 }: ServerExperienceRendererProps): ReactNode {
@@ -82,6 +96,10 @@ export function ServerExperienceRenderer({
       renderUnknown={renderUnknown}
       renderError={renderError}
       onDiagnostic={onDiagnostic}
+      clickable={clickable}
+      trackClicks={trackClicks}
+      trackHovers={trackHovers}
+      trackViews={trackViews}
     />
   );
 
@@ -91,10 +109,12 @@ export function ServerExperienceRenderer({
   // any descendant had a chance to push into it, and always see it empty.
   return (
     <ExperienceProvider value={renderContext}>
-      {tree}
-      {resolvedDebug ? (
-        <DebugExperience experience={experience} errors={renderDiagnostics} />
-      ) : null}
+      <ExperienceBoundary experience={experience} as={as} rootProps={rootProps}>
+        {tree}
+        {resolvedDebug ? (
+          <DebugExperience experience={experience} errors={renderDiagnostics} />
+        ) : null}
+      </ExperienceBoundary>
     </ExperienceProvider>
   );
 }
