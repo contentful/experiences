@@ -1,0 +1,29 @@
+{
+  "name": "adapter-nextjs",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/adapter-nextjs/src",
+  "projectType": "library",
+  "tags": ["scope:adapter", "runtime:react", "framework:nextjs"],
+  "targets": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-nextjs",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["build", "^build"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/adapter-nextjs",
+        "command": "vitest run"
+      }
+    },
+    "pack": {}
+  }
+}
