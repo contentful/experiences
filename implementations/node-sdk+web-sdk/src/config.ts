@@ -28,9 +28,17 @@ const experienceIds = (env.EXPERIENCE_IDS?.trim() || defaultExperienceIds.join('
   .map((id) => id.trim())
   .filter(Boolean);
 if (!experienceIds.length) throw new Error('EXPERIENCE_IDS must contain an Experience ID.');
+const previewEnabled = env.LIVE_PREVIEW_ENABLED === 'true';
 
 export const config = {
   port,
+  livePreviewEnabled: previewEnabled,
+  preview: previewEnabled
+    ? {
+        accessToken: required('PREVIEW_TOKEN'),
+        host: env.PREVIEW_HOST?.trim() || undefined,
+      }
+    : undefined,
   // Consumer integration: this is the complete allowlist for browser
   // bootstrap. CDA_TOKEN must be suitable for public browser use. Never spread env.
   publicEnvironment: {
@@ -39,6 +47,18 @@ export const config = {
     CDA_TOKEN: required('CDA_TOKEN'),
     LOCALE: env.LOCALE?.trim() || 'en-US',
     EXPERIENCE_IDS: [...new Set(experienceIds)],
+    ...(previewEnabled
+      ? {
+          LIVE_PREVIEW: {
+            accessToken: required('BROWSER_PREVIEW_TOKEN'),
+            host: env.BROWSER_PREVIEW_HOST?.trim() || undefined,
+            experienceId: env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() || experienceIds[0],
+            sessionId: env.LIVE_PREVIEW_SESSION_ID?.trim() || undefined,
+            sessionHost: env.LIVE_PREVIEW_SESSION_HOST?.trim() || undefined,
+            resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+          },
+        }
+      : {}),
   },
 };
 

@@ -17,6 +17,19 @@ These choices compensate for current XDA behavior. Follow the Node reference's
 [workaround removal criteria](./node-sdk/README.md#current-xda-limitations-and-workaround-removal)
 when XDA/client support changes instead of treating the flow as a permanent API requirement.
 
+## Optional Preview Sessions
+
+Use conditional Node/Web `livePreview` initialization from the installed optional
+package. Branch on `isPreview` before visitor work; destroy Node request facades
+in `finally`. Web uses `fetchExperience()` then `subscribeToPreview()` for updates
+and `states.preview` for status; hybrid retains SSR plans/DOM without a startup
+refetch or profile handoff. Release subscriptions on route
+replacement/final exit, retaining them for BFCache. Preview content must not write
+identity cookies. Keep `.env` intact and browser config explicitly allowlisted.
+Build and host both read app-local `LIVE_PREVIEW_ENABLED` from `.env`; preserve
+tarball setup and pack the existing optional preview artifact without rebuilding it.
+See each app README and [Runtime limits](../packages/runtime/README.md#shared-limitations).
+
 All reference implementations use the same hard-coded default Experience IDs:
 
 - `3fLAdFb3BYAuImRhcW8k4t` — Coded Experience

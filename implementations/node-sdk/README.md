@@ -31,6 +31,27 @@ application-level errors that the runtime does not surface remain an SDK limitat
 Responses are private/no-store and profiles remain request-local. The rate limiter
 matches Optimization's 1000 requests per 30 seconds.
 
+## Optional Preview Session snapshots
+
+Configure the existing local `.env`:
+
+```dotenv
+LIVE_PREVIEW_ENABLED=true
+PREVIEW_TOKEN=<server-only preview token>
+# PREVIEW_HOST=https://...          # optional snapshot endpoint
+```
+
+Visit `/?preview_session_id=<session>`; optional `preview_experience_id` selects
+any Experience ID (default: first presentation ID). The binding can also come from
+`LIVE_PREVIEW_SESSION_ID` / `LIVE_PREVIEW_EXPERIENCE_ID`; optional
+`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. An explicit empty
+`preview_session_id` leaves preview, including when a default session is configured.
+The presentation ID list stays unchanged; other IDs use Delivery.
+`forRequest({ livePreview })` imports the installed optional package, skips
+page/identify work and fetches the snapshot through the normal renderer.
+`request.destroy()` runs in `finally`. Reload for another snapshot.
+See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
+
 ## Current XDA limitations and workaround removal
 
 The request flow compensates for three observed XDA issues. Recheck the behavior
@@ -124,7 +145,8 @@ Run from the repository root:
 npx nx run implementation-node-sdk:setup
 ```
 
-Nx builds, checks, and packs the Node SDK's local dependency chain, then installs
+Nx builds, checks, and packs the Node SDK's local dependency chain and packs the
+optional preview package through `package-tools:pack-preview`, then installs
 this app's dependencies and prepares the local environment file. Installation uses npm with
 workspace participation, lifecycle scripts, and package-lock generation disabled.
 It removes only this app's `node_modules` before installing, so rebuilt tarballs
@@ -223,8 +245,3 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 
 - [Node SDK](../../packages/node/README.md)
 - [Local package artifacts](../../README.md#local-npm-artifacts)
-
-The reference converts the incoming `preview_session_id` to an `isPreview` boolean
-and passes it to `forRequest()` before page/fetch work.
-Session-marked requests skip events and omit embedded personalization; delivery requests keep
-the existing flow. This reference adds no Session rendering/subscription.
