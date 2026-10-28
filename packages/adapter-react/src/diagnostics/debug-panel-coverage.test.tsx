@@ -28,9 +28,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
-import { ClientExperienceRenderer } from './client-renderer';
-import { ServerExperienceRenderer } from './server-renderer';
-import type { Config } from './types';
+import { ClientExperienceRenderer } from '../rendering/client-renderer';
+import { ServerExperienceRenderer } from '../rendering/server-renderer';
+import type { Config } from '../registry/types';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

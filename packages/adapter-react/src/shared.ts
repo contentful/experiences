@@ -1,18 +1,18 @@
 /* Shared public rendering, authoring, delivery and design exports. */
 
-export { MissingComponent } from './missing-component.js';
-export type { MissingComponentProps } from './missing-component.js';
+export { MissingComponent } from './diagnostics/missing-component.js';
+export type { MissingComponentProps } from './diagnostics/missing-component.js';
 
-export { ComponentError } from './component-error.js';
-export type { ComponentErrorProps } from './component-error.js';
+export { ComponentError } from './diagnostics/component-error.js';
+export type { ComponentErrorProps } from './diagnostics/component-error.js';
 
-export { DebugExperience } from './debug-experience.js';
-export type { DebugExperienceProps } from './debug-experience.js';
+export { DebugExperience } from './diagnostics/debug-experience.js';
+export type { DebugExperienceProps } from './diagnostics/debug-experience.js';
 
-export type { DiagnosticReporter, RenderError, RenderUnknown } from './nodes-renderer.js';
+export type { DiagnosticReporter, RenderError, RenderUnknown } from './rendering/nodes-renderer.js';
 
-export { toCss } from './design-utils.js';
-export type { ToCssOptions } from './design-utils.js';
+export { toCss } from './design/design-utils.js';
+export type { ToCssOptions } from './design/design-utils.js';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
@@ -20,7 +20,7 @@ export {
   defineExperienceTemplate,
   normalizeComponentRegistration,
   normalizeExperienceTemplateRegistration,
-} from './types.js';
+} from './registry/types.js';
 export type {
   ComponentConfig,
   Components,
@@ -33,7 +33,7 @@ export type {
   Registration,
   RenderContext,
   ResolveToken,
-} from './types.js';
+} from './registry/types.js';
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
 export { resolveExperience } from '@contentful/experiences-sdk-core';
@@ -119,3 +119,17 @@ export type {
   ResolveOptions,
   SitemapPathItem,
 } from '@contentful/experiences-client';
+
+export type { ExperienceBoundaryOptions } from './rendering/experience-boundary.js';
+export type {
+  ExperienceTrackingOptions,
+  ExperienceRootProps,
+  ExperienceRootBinding,
+  ExperienceNodeRoot,
+  OnExperienceNodeRoot,
+} from './tracking/root-binding-types.js';
+export type {
+  NodeAttribution,
+  PlanAttribution,
+  ScopeAttribution,
+} from '@contentful/experiences-sdk-core';

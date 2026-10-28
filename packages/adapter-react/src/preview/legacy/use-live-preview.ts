@@ -4,7 +4,10 @@ import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experien
 import type { PreviewSessionOptions } from '@contentful/experiences-live-preview';
 
 import { useLivePreviewExperience } from './use-live-preview-experience.js';
-import { useExperiencePlan, type ExperiencePlanResolveOptions } from './use-experience-plan.js';
+import {
+  useExperiencePlan,
+  type ExperiencePlanResolveOptions,
+} from '../../hooks/use-experience-plan.js';
 
 export interface UseLivePreviewOptions {
   previewSessionOptions?: PreviewSessionOptions;

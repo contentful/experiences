@@ -10,7 +10,11 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 
-import type { ContentfulComponent, ContentfulExperienceTemplate, RenderContext } from './types.js';
+import type {
+  ContentfulComponent,
+  ContentfulExperienceTemplate,
+  RenderContext,
+} from '../registry/types.js';
 
 const ExperienceContext = createContext<RenderContext | null>(null);
 const ContentfulComponentContext = createContext<ContentfulComponent | null>(null);
