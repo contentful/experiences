@@ -1,7 +1,7 @@
 {
   "name": "@contentful/experiences-react",
   "version": "0.16.0",
-  "description": "React adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
+  "description": "React adapter for Contentful Experiences \u2014 Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,25 @@
         "default": "./dist/custom-renderer.js"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server": {
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.js"
+      }
+    },
+    "./web-sdk": {
+      "import": {
+        "types": "./dist/web-sdk.d.ts",
+        "default": "./dist/web-sdk.js"
+      }
+    }
   },
   "files": [
     "dist",
@@ -40,10 +58,11 @@
     "@contentful/experiences-runtime": "0.4.0",
     "@contentful/experiences-sdk-core": "0.13.14",
     "@contentful/experiences-design": "0.13.13",
-    "@contentful/experiences-live-preview": "0.7.16"
+    "@contentful/experiences-web": "0.10.0"
   },
   "devDependencies": {
-    "jsdom": "^30.1.3"
+    "jsdom": "^30.1.3",
+    "@contentful/experiences-live-preview": "0.7.16"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
