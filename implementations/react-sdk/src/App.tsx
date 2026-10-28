@@ -1,6 +1,29 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-export function App({ pathname }: { pathname: string }) {
+import type { PublicEnvironment } from '../public-config';
+import { getRouteExperienceIds, type PageContent } from './content-loader';
+import { ExperiencePresentation } from './ExperiencePresentation';
+
+export function App({
+  pathname,
+  environment,
+  content,
+}: {
+  pathname: string;
+  environment: PublicEnvironment;
+  content: Promise<PageContent>;
+}) {
+  const [loaded, setLoaded] = useState<PageContent>();
+  const ids = getRouteExperienceIds(environment, pathname);
+  useEffect(() => {
+    let active = true;
+    void content.then((result) => {
+      if (active) setLoaded(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [content]);
   const home = pathname === '/';
   const pageTwo = pathname === '/page-two';
   const title = home ? 'React SDK' : pageTwo ? 'Page Two' : 'Page not found';
@@ -35,8 +58,8 @@ export function App({ pathname }: { pathname: string }) {
               <h2>Tracking</h2>
             </div>
             <p className="tracking-log__empty">
-              Event observation becomes available with the runtime integration. This shell does not
-              submit or observe events.
+              Event observation becomes available with the runtime integration. This reference does
+              not submit or observe events.
             </p>
           </section>
         </aside>
@@ -53,7 +76,7 @@ export function App({ pathname }: { pathname: string }) {
             <h1>{title}</h1>
             <p className="page-header__subtitle">
               {home || pageTwo
-                ? 'Standalone React reference foundation for @contentful/experiences-react.'
+                ? 'Standalone React rendering reference for @contentful/experiences-react.'
                 : 'This reference has Home and Page Two routes.'}
             </p>
           </div>
@@ -62,28 +85,54 @@ export function App({ pathname }: { pathname: string }) {
               <section className="control-panel" aria-label="Utilities">
                 <h2 className="control-panel__title">Utilities</h2>
                 <p className="control-panel__note">
-                  Consent and visitor actions will accompany SDK ownership. The foundation runs
-                  without credentials and creates no SDK instance.
+                  Content uses the application-owned free fetch path. No Web SDK instance is
+                  created; consent and visitor actions are not available yet.
                 </p>
               </section>
               <div className="sections-grid sections-grid--split">
                 <section className="page-section">
                   <header className="page-section__header">
-                    <h2>Automatically tracked Experiences</h2>
+                    <h2>Experiences with automatic tracking defaults</h2>
                     <p>
-                      Experience rendering and automatic tracking follow in the renderer and runtime
-                      integrations.
+                      Standard rendering stamps source-map attribution on actual DOM roots.
+                      Interaction measurement requires a Web SDK instance, which is not connected
+                      yet.
                     </p>
                   </header>
+                  <div className="entry-grid entry-grid--experiences">
+                    {ids.automatic.map((id) => (
+                      <ExperiencePresentation key={id} experienceId={id} result={loaded?.[id]} />
+                    ))}
+                  </div>
                 </section>
                 <section className="page-section">
                   <header className="page-section__header">
-                    <h2>Manually observed Experiences</h2>
+                    <h2>Experiences for manual view registration</h2>
                     <p>
-                      Manual root registration follows once real plans and SDK tracking are
-                      available.
+                      The first plan is reused twice with distinct DOM roots. Attribution is
+                      retained and automatic views, hovers and clicks are disabled. Manual
+                      registration and measurement are not connected yet.
                     </p>
                   </header>
+                  <div className="entry-grid entry-grid--experiences">
+                    {ids.manual.map((id) => (
+                      <ExperiencePresentation
+                        key={id}
+                        experienceId={id}
+                        result={loaded?.[id]}
+                        manual
+                      />
+                    ))}
+                    {ids.manual.map((id) => (
+                      <ExperiencePresentation
+                        key={`${id}-repeat`}
+                        experienceId={id}
+                        result={loaded?.[id]}
+                        manual
+                        repeated
+                      />
+                    ))}
+                  </div>
                 </section>
               </div>
             </>

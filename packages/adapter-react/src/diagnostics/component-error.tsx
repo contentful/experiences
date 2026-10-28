@@ -12,7 +12,7 @@
 
 import type { ReactNode } from 'react';
 
-import { useExperience } from './context.js';
+import { useExperience } from '../rendering/context.js';
 
 export interface ComponentErrorProps {
   componentId: string;
