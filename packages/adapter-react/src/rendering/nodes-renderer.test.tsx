@@ -21,7 +21,6 @@ import { ClientExperienceRenderer } from './client-renderer';
 import type { Config } from '../registry/types';
 import { fetchExperience, type ExperienceParameters } from '../index';
 
- 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
