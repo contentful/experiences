@@ -72,11 +72,13 @@ export type RuntimeFetchExperienceOptions = {
 export type RuntimeFetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
+  personalization?: PersonalizationOptions;
 };
 
 export type RuntimeFetchByDestinationPathOptions = {
   destinationId: string;
   path: string;
+  personalization?: PersonalizationOptions;
 };
 
 /** Structural contract implemented by the shared runtime. */
@@ -239,7 +241,12 @@ export class ContentfulExperiences<
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
-      { spaceId: this.spaceId, destinationId: options.destinationId, nodeId: options.nodeId },
+      {
+        spaceId: this.spaceId,
+        destinationId: options.destinationId,
+        nodeId: options.nodeId,
+        personalization: options.personalization,
+      },
       { client: this.#deliveryClient },
       { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
@@ -251,7 +258,12 @@ export class ContentfulExperiences<
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
-      { spaceId: this.spaceId, destinationId: options.destinationId, path: options.path },
+      {
+        spaceId: this.spaceId,
+        destinationId: options.destinationId,
+        path: options.path,
+        personalization: options.personalization,
+      },
       { client: this.#deliveryClient },
       { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
