@@ -10,6 +10,7 @@ const {
   mockGet,
   mockGetWithOverrides,
   mockResolveByNodeId,
+  mockResolveByNodeIdWithOverrides,
   mockResolveByPath,
   mockPayload,
   mockDestinationExperience,
@@ -52,6 +53,9 @@ const {
   const mockResolveByNodeId = vi
     .fn()
     .mockResolvedValue({ experiences: [{ path: '/', experience: mockDestinationExperience }] });
+  const mockResolveByNodeIdWithOverrides = vi
+    .fn()
+    .mockResolvedValue({ experiences: [{ path: '/', experience: mockDestinationExperience }] });
   const mockResolveByPath = vi
     .fn()
     .mockResolvedValue({ experiences: [{ path: '/', experience: mockDestinationExperience }] });
@@ -60,6 +64,7 @@ const {
     mockGet,
     mockGetWithOverrides,
     mockResolveByNodeId,
+    mockResolveByNodeIdWithOverrides,
     mockResolveByPath,
     mockPayload,
     mockDestinationExperience,
@@ -88,6 +93,7 @@ vi.mock('@contentful/experience-delivery', () => {
       },
       destination: {
         resolveByNodeId: mockResolveByNodeId,
+        resolveByNodeIdWithOverrides: mockResolveByNodeIdWithOverrides,
         resolveByPath: mockResolveByPath,
       },
     })),
@@ -822,5 +828,129 @@ describe('fetchExperience — destinationId + path', () => {
       { accessToken: 'token-123' },
       resolveOptions
     );
+  });
+});
+
+describe('fetchExperience — destination personalization', () => {
+  const nodeOptions = { spaceId: 'space-1', destinationId: 'dest-1', nodeId: 'node-1' };
+  const pathOptions = { spaceId: 'space-1', destinationId: 'dest-1', path: '/products' };
+  const destinationResponse = {
+    experiences: [{ path: '/', experience: mockDestinationExperience }],
+  };
+  // The Destinations API takes the by-id shape: `query` stays a Record.
+  const pageEvent = {
+    type: 'page',
+    channel: 'server',
+    context: { library: { name: 'test', version: '1.0.0' } },
+    messageId: 'page-message-1',
+    timestamp: '2026-10-09T00:00:00.000Z',
+    properties: {
+      path: '/',
+      query: { utm: ['a', 'b'], q: 'x y' },
+      referrer: '',
+      search: '',
+      url: '/',
+    },
+  } as const satisfies NonNullable<PersonalizationOptions['events']>[number];
+  const destinationPersonalization: PersonalizationOptions = {
+    profileId: 'profile-1',
+    events: [pageEvent],
+  };
+  const expectedExtensions = { personalization: destinationPersonalization };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveByNodeId.mockResolvedValue(destinationResponse);
+    mockResolveByNodeIdWithOverrides.mockResolvedValue(destinationResponse);
+    mockResolveByPath.mockResolvedValue(destinationResponse);
+  });
+
+  it('keeps the cacheable GET for node id when personalization is not set', async () => {
+    await fetchExperience(nodeOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
+  });
+
+  it('routes node id to resolveByNodeIdWithOverrides with the personalization extension', async () => {
+    await fetchExperience(
+      { ...nodeOptions, personalization: destinationPersonalization },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockResolveByNodeId).not.toHaveBeenCalled();
+    expect(mockResolveByNodeIdWithOverrides).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1', {
+      extensions: expectedExtensions,
+    });
+  });
+
+  it('sends only path when personalization is not set on a path fetch', async () => {
+    await fetchExperience(pathOptions, { accessToken: 'token-123' }, resolveOptions);
+
+    expect(mockResolveByPath).toHaveBeenCalledWith('space-1', 'dest-1', { path: '/products' });
+  });
+
+  it('passes the personalization extension to resolveByPath', async () => {
+    await fetchExperience(
+      { ...pathOptions, personalization: destinationPersonalization },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockResolveByPath).toHaveBeenCalledWith('space-1', 'dest-1', {
+      path: '/products',
+      extensions: expectedExtensions,
+    });
+  });
+
+  it('forwards a profile id on its own, with no events', async () => {
+    await fetchExperience(
+      { ...pathOptions, personalization: { profileId: 'profile-1' } },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(mockResolveByPath).toHaveBeenCalledWith('space-1', 'dest-1', {
+      path: '/products',
+      extensions: { personalization: { profileId: 'profile-1' } },
+    });
+  });
+
+  it('rejects invalid personalization with a TypeError before calling Delivery', async () => {
+    const rejection: unknown = await fetchExperience(
+      {
+        ...pathOptions,
+        personalization: { profileId: 123 } as unknown as PersonalizationOptions,
+      },
+      { accessToken: 'token-123' },
+      resolveOptions
+    ).catch((error) => error);
+
+    expect(rejection).toBeInstanceOf(TypeError);
+    expect(mockResolveByPath).not.toHaveBeenCalled();
+  });
+
+  it('returns a redirect unchanged for a personalized request', async () => {
+    mockResolveByPath.mockResolvedValue({ redirect: { path: '/new-path' } });
+
+    const result = await fetchExperience(
+      { ...pathOptions, personalization: { profileId: 'profile-1' } },
+      { accessToken: 'token-123' },
+      resolveOptions
+    );
+
+    expect(result).toEqual({ redirect: { path: '/new-path' } });
+  });
+
+  it('still rejects preview for a personalized Destination fetch', async () => {
+    const rejection: unknown = await fetchExperience(
+      { ...pathOptions, personalization: { profileId: 'profile-1' } },
+      { accessToken: 'token-123', previewToken: 'preview-1', preview: true },
+      resolveOptions
+    ).catch((error) => error);
+
+    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
+    expect(mockResolveByPath).not.toHaveBeenCalled();
   });
 });

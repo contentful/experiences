@@ -48,12 +48,15 @@ export type ByIdExperienceOptions = {
 /**
  * Resolve an Experience by the Destination Node instead of `experienceId`
  * The destinations delivery endpoints are space-scoped only and have no locale
- * param, unlike the by-id path.
+ * param, unlike the by-id path. Supplying `personalization` switches the
+ * request from the cacheable GET to the POST that carries it.
  */
 export type ByDestinationNodeIdExperienceOptions = {
   spaceId: string;
   destinationId: string;
   nodeId: string;
+  /** Profile and events used by XDA to personalize the resolved Experience. */
+  personalization?: PersonalizationOptions;
 };
 
 /**
@@ -66,6 +69,8 @@ export type ByDestinationPathExperienceOptions = {
   destinationId: string;
   /** Absolute path to resolve. Must start with `/`. */
   path: string;
+  /** Profile and events used by XDA to personalize the resolved Experience. */
+  personalization?: PersonalizationOptions;
 };
 
 export type ExperienceOptions =
@@ -143,20 +148,32 @@ export async function fetchExperience(
   const client = resolveDeliveryClient(clientOptions, log, 'fetchExperience');
 
   if ('nodeId' in experienceOptions) {
-    const { spaceId, destinationId, nodeId } = experienceOptions;
+    const { spaceId, destinationId, nodeId, personalization } = experienceOptions;
+    // Serialize before the request so invalid input is a TypeError, as on the by-id path.
+    const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: nodeId },
-      () => client.destination.resolveByNodeId(spaceId, destinationId, nodeId),
+      () =>
+        extensions === undefined
+          ? client.destination.resolveByNodeId(spaceId, destinationId, nodeId)
+          : client.destination.resolveByNodeIdWithOverrides(spaceId, destinationId, nodeId, {
+              extensions,
+            }),
       log,
       { config, metadata, debug }
     );
   }
 
   if ('path' in experienceOptions) {
-    const { spaceId, destinationId, path } = experienceOptions;
+    const { spaceId, destinationId, path, personalization } = experienceOptions;
+    const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: path },
-      () => client.destination.resolveByPath(spaceId, destinationId, { path }),
+      () =>
+        client.destination.resolveByPath(spaceId, destinationId, {
+          path,
+          ...(extensions === undefined ? {} : { extensions }),
+        }),
       log,
       { config, metadata, debug }
     );
@@ -307,6 +324,13 @@ async function fetchByDestination(
     metadata,
     debug,
   });
+}
+
+function destinationExtensions(
+  personalization: PersonalizationOptions | undefined
+): ContentfulViewDelivery.DestinationExperiencesExtensions | undefined {
+  if (personalization === undefined) return undefined;
+  return { personalization: serializePersonalization(personalization) };
 }
 
 function hasRequestExtensions(
