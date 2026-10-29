@@ -10,7 +10,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *
  * `@contentful/experience-delivery` no longer ships request schemas (dev.11 removed
  * `./serialization`, AIS-809), so this checks the fields every event shares rather
- * than each event type's full shape.
+ * than each event type's full shape. Keep this validation after Node/Web event
+ * interception and before final consent callbacks and Web event publication.
+ * If upstream accepts/converts the built shape, simplify redundant normalization
+ * while retaining input immutability and wire-contract coverage. See the Node
+ * reference's XDA workaround removal criteria.
  */
 export function serializePersonalization(personalization: unknown): PersonalizationOptions {
   try {

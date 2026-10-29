@@ -23,9 +23,15 @@
   behavior. Fragment-only card clickability belongs in a registration wrapper using
   public node context, forwarding `data-ctfl-clickable` without extra DOM wrappers.
   Construct no Web runtime in Phase 4; add no root collector, placeholder callback,
-  registration, measurement, initialization, events or fake provider. Future managed
-  loading/context integration will add actual manual registration using SDK-normalized
-  `onNodeRoot` data and its existing cleanup lifecycle; Phases 5 and 6 remain pending.
+  registration, measurement, initialization, events or fake provider in Phase 4.
+  Phase 5 uses a registry-bound managed root, context-based manual registration
+  with SDK-normalized `onNodeRoot` data and returned cleanup, independent consent
+  controls and early attempt diagnostics. Keep startup consent/profile defaults
+  unset. Keep the owner and attributed roots alive for Web's final hide drain;
+  document teardown releases them. Deliberate unmount/replacement within a live
+  document uses renderer/provider cleanup; persisted pagehide retains ownership.
+  Managed loading, navigation,
+  page/identify/reset/retry sequences and preview content remain Phase 6 work.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy
