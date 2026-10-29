@@ -148,6 +148,7 @@ export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
+  DestinationPreviewNotSupportedError,
   ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
@@ -175,6 +176,7 @@ export type {
   ExperienceResponse,
   FetchDestinationSitemapOptions,
   FetchDestinationSitemapPaginationOptions,
+  PersonalizationOptions,
   ResolveOptions,
   SitemapPathItem,
 } from '@contentful/experiences-client';

@@ -166,7 +166,7 @@ unprefixed `context.parameters` and server-owned WebSocket updates.
 
 By-ID fetch options can also carry first-class personalization with a profile id
 and caller-built events; Client maps it to XDA's extension body, and Node
-proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. The current generated XDA request has no
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id take the same `personalization`: Client sends it with `resolveByPath`, or with `resolveByNodeIdWithOverrides` when it is set (the cacheable GET otherwise), and Node and Web run all three fetches through one helper so consent, interceptors and profile handling cannot drift. The current generated XDA request has no
 noncommitting preflight option. Independent Personalization preparation and an
 event-bearing XDA fetch may duplicate events; this PR adds no interim
 suppression or placeholder API. Typed XDA preflight integration follows upstream
