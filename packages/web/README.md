@@ -96,7 +96,7 @@ const draft = await experiences.fetchExperience(
 experiences.setLocale('de-DE');
 ```
 
-The generated delivery client must be able to reach the selected endpoint from the browser using its Authorization and feature headers. Validate CORS/preflight behavior in the browsers you support before deployment. If direct browser access is not appropriate, use a trusted same-origin client or an application BFF.
+The generated delivery client must be able to reach the selected endpoint from the browser using its Authorization, feature, and `X-Contentful-User-Agent` headers. Validate CORS/preflight behavior in the browsers you support before deployment. If direct browser access is not appropriate, use a trusted same-origin client or an application BFF.
 
 For a tokenless same-origin proxy, provide an explicit `host` without an
 `accessToken`; the proxy owns the token and generated bearer authentication is

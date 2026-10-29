@@ -1,5 +1,6 @@
 import {
   ContentfulViewDeliveryClient,
+  createUserAgentHeaders,
   fetchExperience,
   PREVIEW_HOST,
   type DestinationRedirectResult,
@@ -137,11 +138,17 @@ export class ContentfulExperiences<
     this.spaceId = config.spaceId;
     this.environmentId = config.environmentId;
     this.#locale = config.locale;
-    this.#deliveryClient = createRuntimeDeliveryClient(config.delivery);
+    const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
+    const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
+    this.#deliveryClient = createRuntimeDeliveryClient(
+      config.delivery,
+      undefined,
+      userAgentHeaders
+    );
     this.#previewClient =
       config.preview === undefined
         ? undefined
-        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST);
+        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST, userAgentHeaders);
     this.api = createRuntimeOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
@@ -152,7 +159,7 @@ export class ContentfulExperiences<
 
     this.eventBuilder = new EventBuilder({
       ...config.eventBuilder,
-      library: { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library },
+      library,
       getLocale: config.eventBuilder.getLocale ?? (() => this.locale),
     });
   }

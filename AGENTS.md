@@ -46,11 +46,15 @@ experiences/
 │   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   └── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
+├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
+│   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
     └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
 
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
+
+**`skills/`** holds agent-invokable guides in the `SKILL.md` format. When asked to render Experiences in a framework without a first-party adapter (Vue, Nuxt, Solid, Lit, Qwik, ...), follow [skills/implement-framework-adapter/SKILL.md](./skills/implement-framework-adapter/SKILL.md). Keep it in sync when adapter behavior changes (merge order, fallbacks, context, diagnostics).
 
 **`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped
@@ -392,7 +396,13 @@ wins over the delivery/preview default. The `{ client }` branch ignores
 
 The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`). A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
 
-**We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` sets no headers at all. Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
+**We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` does not set the alpha header. The one header it does set is `X-Contentful-User-Agent` (see below). Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
+
+### How does the SDK report its version?
+
+Every Delivery and Preview request carries `X-Contentful-User-Agent`, the header `contentful.js` and `contentful-management.js` send, built by a copy of `getUserAgentHeader()` from `contentful-sdk-core` in `packages/client/src/user-agent.ts`. It is copied rather than imported so `lodash`, `qs`, `fast-copy`, and the `process` polyfill stay out of the browser bundle; keep the format in sync with upstream. `packages/client` owns the builder (`createUserAgentHeaders`). The Node and Web runtimes report the leaf package plus the configured `app`, e.g. `app my-site/1.0.0; sdk experiences-node/0.6.0; platform node.js/v22.17.0; os macOS/v22.17.0;`. `createClient`, and the free `fetchExperience` path that uses it, report `sdk experiences-client/<version>`. A caller-supplied `headers` entry with the same name wins. A raw `ContentfulViewDeliveryClient` sends nothing. Event payloads keep reporting `context.library`; the header does not replace it.
+
+Package versions come from the `RELEASE_VERSION`/`package.json` build defines, so source and test runs report `0.0.0`. Both release workflows run `scripts/release.ts`, which writes versions, rebuilds every package without the cache, and runs `verify-release-artifact` before anything is committed, tagged, or published. The restored build-job folders still embed the previous versions. Recovery steps are in CONTRIBUTING.md. Both XDA hosts allow the header in CORS preflight. A customer proxy has to allow it as well.
 
 One sharp edge in the generated merge order: `mergeHeaders(authHeaders, this._options.headers, <per-request default>, requestOptions.headers)`, later wins. The per-request default lands **after** client-level `headers`, so a `createClient({ headers: { 'x-contentful-enable-alpha-feature': … } })` entry is silently clobbered. Only `requestOptions.headers` (or `requestOptions.xContentfulEnableAlphaFeature`) can override it. Do not document client-level `headers` as an override path for this key.
 

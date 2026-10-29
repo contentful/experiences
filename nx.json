@@ -88,13 +88,14 @@
         "renderOptions": {
           "authors": false
         }
+      },
+      "git": {
+        "commit": true,
+        "tag": true,
+        "commitMessage": "chore(release): publish {version} [skip ci]",
+        "tagMessage": "Release {version}",
+        "push": true
       }
-    },
-    "git": {
-      "commit": true,
-      "tag": true,
-      "commitMessage": "chore(release): publish {version} [skip ci]",
-      "tagMessage": "Release {version}"
     },
     "releaseTag": {
       "pattern": "{projectName}@{version}",

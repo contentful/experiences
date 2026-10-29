@@ -21,12 +21,20 @@ export type RuntimeDeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
       }
   );
 
-/** Constructs a runtime-owned client, disabling generated auth for a tokenless proxy. */
+/**
+ * Constructs a runtime-owned client, disabling generated auth for a tokenless proxy.
+ * `defaultHeaders` sit beneath any caller-configured `headers`.
+ */
 export function createRuntimeDeliveryClient(
   options: RuntimeDeliveryClientOptions,
-  defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>
+  defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
+  defaultHeaders?: Record<string, string>
 ): ContentfulViewDeliveryClient {
-  const { accessToken, host, ...rest } = options;
+  const { accessToken, host, ...configured } = options;
+  const rest =
+    defaultHeaders === undefined
+      ? configured
+      : { ...configured, headers: { ...defaultHeaders, ...configured.headers } };
   if (accessToken === undefined && host === undefined) {
     throw new Error(
       'Runtime delivery configuration requires accessToken unless an explicit proxy host is provided'

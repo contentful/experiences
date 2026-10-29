@@ -143,15 +143,31 @@ Package boundaries matter — see the "Conventions" section of [`AGENTS.md`](./A
 
 CI runs on every push and PR via `.github/workflows/main.yaml`, which orchestrates:
 
-| Job         | When                                 | What it does                                         |
-| ----------- | ------------------------------------ | ---------------------------------------------------- |
-| **Build**   | All pushes and PRs                   | `npm ci` → `npm run build`, caches `packages/*/dist` |
-| **Check**   | After Build                          | lint → typecheck → format check → tests              |
-| **Release** | Push to `main` (after Build + Check) | Nx Release → publish → GitHub release                |
+| Job         | When                                 | What it does                                                                              |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| **Build**   | All pushes and PRs                   | `npm ci` → `npm run build`, caches `packages/*/dist`                                      |
+| **Check**   | After Build                          | lint → typecheck → format check → tests                                                   |
+| **Release** | Push to `main` (after Build + Check) | `scripts/release.ts`: version → rebuild → verify → changelog/tag/GitHub release → publish |
 
 ## Releases
 
 Releases are automated with [Nx Release](https://nx.dev/features/manage-releases) driven by conventional-commit history. Maintainers don't cut releases by hand — merging a `feat:`/`fix:` commit to `main` is what drives the version bump, changelog, and publish.
+
+`scripts/release.ts` runs the steps in this order:
+
+1. `releaseVersion` writes new versions to disk. Nothing is committed or tagged yet.
+2. Every package is rebuilt without the Nx cache. Built packages embed their own version (event `context.library`, `X-Contentful-User-Agent`), and the cached build-job output still carries the previous one.
+3. `verify-release-artifact` checks each built version against `package.json`.
+4. `releaseChangelog` writes changelogs, commits, tags, pushes, and creates the GitHub Releases.
+5. `releasePublish` publishes to GitHub Packages.
+
+The prerelease workflow runs the same script with `--specifier prerelease --preid dev --tag dev`. `npx tsx scripts/release.ts --dry-run` previews a release locally without writing anything.
+
+### Recovering a failed release
+
+- **Failed in steps 1–3** (versioning, rebuild, verification): nothing was committed, tagged, pushed, or published. Fix the cause on `main` and the next push releases normally.
+- **Failed in step 4** (changelog, tag, or push): check whether the `chore(release): publish` commit and `<project>@<version>` tags reached `origin`. If they did not, nothing is published and the next push retries. If they did, continue as for step 5.
+- **Failed in step 5** (publish): the release commit, tags, and GitHub Releases exist, but some packages are missing from the registry. **Do not re-run the release job.** It checks out the commit before the release commit and would version again. Instead, check out the release commit (`git checkout <project>@<version>`), then run `npm ci`, `npm run build`, `npx nx run-many -t verify-release-artifact`, and `npx nx release publish` with a package-write token in `~/.npmrc` (see the `Setup npmrc file` step in `release.yaml`). `nx release publish` skips versions that already exist in the registry, so it is safe to repeat.
 
 ## Support & questions
 
