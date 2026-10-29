@@ -20,15 +20,20 @@
   Bind to loopback. Missing routes/assets return 404; never serve the app directory.
 - Server integration is actual EJS SSR. Browser activation adopts state without
   startup refetch/page or DOM replacement. SDK-owned tracking observes existing SSR
-  HTML independently of state hydration. It uses the committed server page and
-  embedded identify flow, not prepared replay.
+  HTML independently of state hydration. The server owns the initial page attempt and
+  ordinary identify action. This app commits ordinary XPAPI events on the server
+  before profile-only content and uses state-only hydration; hydration does not
+  finalize a provisional XDA profile. The SDK’s prepared replay remains supported.
+  This flow does not demonstrate XDA server preview followed by browser submission.
   Preserve request-bound event construction, separate consent cookies,
   permitted identity, HTML-safe bootstrap, private/no-store caching and diagnostics.
   The sibling Node cookie prohibition and Web static-host rule are sibling-local.
-- Use one Node SDK with a facade per request: await direct page admission
-  and SDK-owned profile, build identify with `request.eventBuilder`, fetch distinct
-  IDs sequentially once with source maps, and package the final profile through
-  the public Node producer. Keep diagnostic strings out of automatic UI/logs/bootstrap.
+- Use one Node SDK with a facade per request: submit requested identify once
+  through `request.identify()`, then attempt the owned page. Content uses the SDK’s
+  evaluated identity when available, without a page-result/profile eligibility gate.
+  Fetch independent distinct IDs concurrently once with source maps and capture
+  response state through the public Node producer after those requests settle.
+  Keep diagnostic strings out of automatic UI/logs/bootstrap.
 - Construct Web with profile/consent defaults omitted and automatic interactions
   enabled by default. Register manual roots from their real data before awaiting
   state-only hydration. Tracking observes existing SSR HTML and later DOM changes
@@ -42,11 +47,20 @@
   without content fetch/page calls. Release subscriptions on final exit and preserve
   the owner for BFCache; let the SDK finish its own hide/unload measurements.
 - Keep startup separate from client route rendering. Navigation/back/forward sends
-  one page before distinct sequential fetches; Identify/Retry joins a pending page.
-  Build one contextual identify per explicit content cycle and include it in each
-  distinct XDA fetch, never independently or together with the already-committed page.
+  one page before concurrent independent distinct fetches. Identify submits one
+  ordinary contextual SDK action per explicit intent; navigation and content Retry
+  join pending visitor work without repeating identify. Retry emits no extra page
+  for missing identity or a failed page. Offline admission is not evaluated identity;
+  valid baseline content can still render. Preserve URL intent without claiming
+  confirmed identification. Event-bearing XDA forces XPAPI preflight; new profile
+  IDs are provisional. Strict hybrid multi-Experience preview still needs client
+  reconciliation of multiple preview IDs/results, even with a future toggle, or
+  server finalization that breaks the server-preview/client-submit contract.
+  Sequential fetching, one facade or selecting one profile does not resolve this.
+  See [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization);
+  do not choose an architecture or invent a shared preflight transaction API.
 - Reset must synchronously invalidate app work, replace old attributed DOM, detach
-  the pending page chain, then reset the SDK and start a fresh page/fetch cycle.
+  the pending visitor work, then reset the SDK and start a fresh page/fetch cycle.
   Normal removal finalizes before manual overrides are cleared; register new roots
   only after insertion. Check ownership after awaits and before further fetch/UI work.
 - Preserve EJS/DOM registration, named-slot, prop and real attribution parity. Keep

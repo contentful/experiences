@@ -10,16 +10,19 @@
 - Use `npx nx run implementation-node-sdk:<target>` from the root. Run setup or
   install after SDK artifacts change; never add workspace source aliases to bypass
   a failed installation.
-- Keep one runtime and a facade per request. Send the page event
-  directly with `request.page()`. Build the optional identify event with
-  `sdk.eventBuilder`, including `traits: { identified: true }`, and pass it in
-  `fetchExperience()` personalization options. Fetch each Experience only once per
-  app request; do not send identify independently. XDA selects content using the
-  fetch’s identify event. Profile IDs come from API responses
-  and stay SDK-managed; do not add manual profile input, cookies, or sessions.
-- Follow the README's [XDA workaround removal criteria](./README.md#current-xda-limitations-and-workaround-removal)
-  when upstream behavior changes. Verify profile-only selection, initial-profile
-  identification, and built-event compatibility before simplifying the flow.
+- Keep one runtime and a facade per request. Submit explicit identify intent once
+  through `request.identify()`, including `traits: { identified: true }`, then
+  attempt the owned `request.page()` operation. Await identity evaluation when
+  content selection depends on it; event refusal/failure or missing profile does
+  not reject otherwise valid content. Fetch distinct independent Experiences
+  concurrently once and reuse their plans. Do not attach identify to every fetch.
+  Profile IDs remain SDK-managed; do not add manual profile input, cookies or sessions.
+- Event-bearing XDA forces XPAPI preflight; returned new IDs are provisional.
+  This reference uses ordinary committing XPAPI events before profile-only content;
+  independent reads with an already-concrete profile can run concurrently. See
+  [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+  Actual Personalization API preflight and prepared replay remain supported.
+  See the README's [personalization contract](./README.md#personalization-contract-and-validation-limits).
 - Use the public runtime for SDK operations. Do not inspect raw responses or
   compensate for runtime gaps with application-level transport adapters.
 - Preserve Optimization's EJS shell and styling. Keep the shell in `index.ejs`

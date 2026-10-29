@@ -96,7 +96,9 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const ui = createReactExperiences({ config: experienceConfig });
+const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } = createReactExperiences({
+  config: experienceConfig,
+});
 
 function ConsentControls() {
   const consent = useConsentState();
@@ -110,10 +112,10 @@ function ConsentControls() {
 
 function App({ plan }: { plan: PortableRenderPlan }) {
   return (
-    <ui.ExperiencesRoot {...browserConfig}>
+    <ExperiencesRoot {...browserConfig}>
       <ConsentControls />
-      <ui.ExperienceRenderer experience={plan} />
-    </ui.ExperiencesRoot>
+      <ExperienceRenderer experience={plan} />
+    </ExperiencesRoot>
   );
 }
 ```
@@ -152,7 +154,7 @@ hydration and passive child effects, and may return subscription cleanup.
 Its callback is captured for the binding; use a replacement owner/provider when
 changing application subscription setup.
 
-Inject an application-owned SDK through `<ui.ExperiencesProvider sdk={sdk}>`.
+Inject an application-owned SDK through `<ExperiencesProvider sdk={sdk}>`.
 Without snapshot/initialization it is immediately available; replacement rebinds
 subscriptions and manual refs. The provider never destroys an injected SDK.
 Independent React roots can share one explicit `/host` binding and each use an
@@ -381,7 +383,7 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const ui = createReactExperiences({ config: registry });
+const { ExperienceRenderer } = createReactExperiences({ config: registry });
 
 function ManualContent({ plan }: { plan: PortableRenderPlan }) {
   const sdk = useExperiences();
@@ -393,7 +395,7 @@ function ManualContent({ plan }: { plan: PortableRenderPlan }) {
     },
     [sdk]
   );
-  return <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+  return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
 }
 ```
 
@@ -404,12 +406,12 @@ SDK registration remains supported. Neither path performs attribution
 selection or root collection. Web owns measurement, consent and delivery, and
 measures each manual element independently. The reference's single-root components
 use ordinary forwarding, with no root-count/readiness panel. Context SDK access
-and registry binding are available now; Phase 6 carries the same per-kind and
+and registry binding are available now; Phase 7 carries the same per-kind and
 optional root callback props through managed `Experience` loading. That managed
 loading API remains planned. The implementation plan
 requires concise consumer examples and checks rather than SDK prop threading,
-root maps or consumer fetch/subscription/page orchestration. XDA workarounds do
-not require root/ref boilerplate.
+root maps or consumer fetch/subscription/page orchestration. Ordinary identity
+and content flows require no extra root/ref boilerplate.
 
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
 

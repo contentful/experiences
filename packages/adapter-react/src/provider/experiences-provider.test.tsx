@@ -681,7 +681,9 @@ describe('React runtime ownership and activation', () => {
           probe: (props: HTMLAttributes<HTMLElement>) => <article {...props}>Manual view</article>,
         },
       };
-      const ui = createReactExperiences({ config: registry });
+      const { ExperienceRenderer, ExperiencesProvider } = createReactExperiences({
+        config: registry,
+      });
       const plan = await resolveExperience(
         {
           nodes: [
@@ -715,9 +717,7 @@ describe('React runtime ownership and activation', () => {
           },
           [sdk]
         );
-        return (
-          <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />
-        );
+        return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />;
       }
       await act(async () =>
         view.render(

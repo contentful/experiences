@@ -198,12 +198,11 @@ describe('Session preview event isolation', () => {
       profile: { id: 'server' },
     });
     const page = sdk.eventBuilder.buildPageView();
-    const { gdpr: _gdpr, ...context } = page.context;
     const input = {
       experienceId: 'exp',
       parameters: { productId: 'sku' },
       extensions: { sourceMap: {} },
-      personalization: { profileId: 'input', events: [{ ...page, context }] },
+      personalization: { profileId: 'input', events: [page] },
     };
     const original = globalThis.structuredClone(input);
     const plans = await Promise.all([

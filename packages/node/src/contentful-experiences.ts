@@ -11,6 +11,7 @@ import {
   InterceptorManager,
   validatePersonalizationEvent,
   validatePreparedEvents,
+  withEventConsent,
   type OptimizationEventStreamEvent,
   createExperiencesHandoff,
   hasEventConsent,
@@ -261,11 +262,20 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
     this.eventBuilder = {
       buildIdentify: (args) =>
-        runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
       buildPageView: (args = {}) =>
-        runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
       buildTrack: (args) =>
-        runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
     };
 
     const methods = createEventMethods({
@@ -405,6 +415,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
         locale,
       });
       this.assertActive();
+      // Preflight state is evaluated, not committed; local adoption does not finalize it.
       if (this.#profileRevision === profileRevision) this.setProfile(data.profile);
       return {
         handoff: {
@@ -480,6 +491,8 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
     );
     this.assertActive();
+    // XDA always preflights events. A newly returned ID may be provisional;
+    // adopting it locally does not make a later XPAPI profile-only lookup valid.
     const returnedProfileId = plan.personalization?.profileId;
     if (
       !this.isPreview &&
@@ -532,7 +545,13 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     if (events === undefined) return options;
 
     const admitted = events.filter((event) => this.admitEvent(event));
-    return { ...options, personalization: { ...options.personalization, events: admitted } };
+    return {
+      ...options,
+      personalization: {
+        ...options.personalization,
+        events: admitted.map((event) => withEventConsent(event, this.#consent.events === true)),
+      },
+    };
   }
 
   private async interceptPersonalizationEvents(

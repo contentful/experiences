@@ -46,10 +46,9 @@ const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 // A framework/router may own equivalent cancellation and lifecycle handling.
 let generation = 0;
 let pageGeneration = 0;
+let visitorGeneration = 0;
 let disposed = false;
-let pagePending = false;
-let pageFailed = false;
-let pendingPage = Promise.resolve();
+let pendingVisitorWork = Promise.resolve();
 let manualElements = [];
 let previewSubscriptions = [];
 
@@ -60,17 +59,14 @@ const controls = createControlPanel(sdk, {
     const url = new URL(location.href);
     url.searchParams.set('userId', 'charles');
     history.replaceState(null, '', url.pathname + url.search);
+    identifyVisitor();
     void renderRoute();
   },
   onReset() {
     const url = new URL(location.href);
     url.searchParams.delete('userId');
     history.replaceState(null, '', url.pathname + url.search);
-    if (sdk.isPreview) void renderRoute({ reset: true });
-    else {
-      sdk.reset();
-      void renderRoute({ sendPage: true });
-    }
+    void renderRoute({ sendPage: true, reset: true });
   },
 });
 
@@ -96,13 +92,13 @@ function showStatus(target, text, { error = false, retry = false } = {}) {
   message.textContent = text;
   const button = content.querySelector('button');
   if (retry) {
-    button.addEventListener('click', () => void renderRoute({ retry: true }));
+    button.addEventListener('click', () => void renderRoute());
   } else button.remove();
   target.replaceChildren(content);
 }
 
 // Reference app: keep route orchestration separate from shell, visitor and content work.
-async function renderRoute({ sendPage = false, retry = false, focus = false, reset = false } = {}) {
+async function renderRoute({ sendPage = false, focus = false, reset = false } = {}) {
   const nextBinding = getPreviewBinding(env, location.href);
   const nextIsPreview = Boolean(
     nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
@@ -116,16 +112,24 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
   const isCurrent = () => !disposed && current === generation;
   const path = location.pathname;
   const route = routes[path];
-  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const previousManualElements = manualElements;
   manualElements = [];
 
   renderRouteShell(path, route);
-  if (reset) sdk.reset();
+  if (reset) {
+    // SDK reset resumes discovery immediately; old attributed DOM is already removed.
+    // Detach obsolete visitor work so it cannot delay the fresh page.
+    visitorGeneration += 1;
+    pendingVisitorWork = Promise.resolve();
+    sdk.reset();
+  }
+  const visitorWork = !sdk.isPreview && route ? settleVisitorActions(sendPage) : undefined;
   // Consumer integration, manual observation only: release explicit registrations.
   // Let DOM removal finish measured intervals before clearing their overrides.
+  // Reset already discarded the old measurements and overrides.
   await Promise.resolve();
-  previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
+  if (!reset)
+    previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
   if (!isCurrent() || !route) return;
 
   wireRouteControls(path, focus);
@@ -141,12 +145,11 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
         previewBinding = nextBinding;
       }
     } else {
-      // Identify joins any initial page; it does not send a separate identify call.
-      await initializeVisitor(sendPage, retry, isCurrent);
+      await visitorWork;
       if (!isCurrent()) return;
     }
 
-    const failed = await loadExperiences(destinations, identifyRequested, isCurrent);
+    const failed = await loadExperiences(destinations, isCurrent);
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
     if (failed && !sdk.isPreview) {
@@ -164,7 +167,7 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
       errorPanel,
       sdk.isPreview
         ? 'Preview content could not be loaded. Check the session and retry.'
-        : 'A visitor profile could not be established. Check your connection and retry.',
+        : 'Experience content could not be loaded. Retry content to try again.',
       { error: true, retry: true }
     );
     for (const targets of destinations.values()) {
@@ -173,7 +176,7 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
           target,
           sdk.isPreview
             ? 'Preview content is unavailable. Retry content to try again.'
-            : 'Content is unavailable until visitor initialization succeeds.'
+            : 'Experience content is unavailable. Retry content to try again.'
         )
       );
     }
@@ -249,83 +252,70 @@ function createDestinations(route) {
   return destinations;
 }
 
-// XDA workaround: the standalone page, pre-fetch profile prerequisite and
-// page-specific recovery jointly compensate for initial identify-bearing XDA timeouts.
-// Reassess them together when the first event-bearing fetch can establish identity
-// and select the expected variant (README); retain route ownership/lifetime checks.
-async function initializeVisitor(sendPage, retry, isCurrent) {
-  if (sendPage || (retry && !pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
-    const pageRequest = ++pageGeneration;
-    const properties = { url: location.href, title: document.title };
-    pagePending = true;
-    pageFailed = false;
-    pendingPage = pendingPage
-      .catch(() => {})
-      .then(async () => {
-        if (disposed || pageRequest !== pageGeneration) return;
-        try {
-          const result = await sdk.page({ properties });
-          if (disposed || pageRequest !== pageGeneration) return;
-          if (!result.accepted) throw new Error('Page event was not admitted.');
-        } catch (error) {
-          if (!disposed && pageRequest === pageGeneration) pageFailed = true;
-          throw error;
-        } finally {
-          if (pageRequest === pageGeneration) pagePending = false;
-        }
-      });
-  }
-  await pendingPage;
-  // An admitted offline page can acquire a profile later. Keep content eligibility
-  // separate from the shared page promise so a later content action can proceed.
-  if (isCurrent()) {
-    if (!sdk.states.profile.current?.id) {
-      pageFailed = true;
-      throw new Error('Visitor profile is not available.');
+// Consumer integration: identify once for actual application intent. Online completion
+// applies evaluated state before dependent content; offline admission does not prove
+// evaluation. Navigation joins this work; reset invalidates an unsent old intent.
+function identifyVisitor() {
+  const visitor = visitorGeneration;
+  pendingVisitorWork = pendingVisitorWork.then(async () => {
+    if (disposed || visitor !== visitorGeneration) return;
+    try {
+      await sdk.identify({ userId: 'charles', traits: { identified: true } });
+    } catch {
+      if (!disposed && visitor === visitorGeneration)
+        window.console.warn('Unable to complete the identify event.');
     }
-    pageFailed = false;
-  }
+  });
 }
 
-async function loadExperiences(destinations, identifyRequested, isCurrent) {
-  const identifyEvent =
-    !sdk.isPreview && identifyRequested
-      ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-      : undefined;
+// Reference app: retain normal owned page sequencing through terminal outcomes.
+// Refusal, rejection and offline admission do not make baseline content ineligible.
+function settleVisitorActions(sendPage) {
+  if (sendPage) {
+    const visitor = visitorGeneration;
+    const pageRequest = ++pageGeneration;
+    const properties = { url: location.href, title: document.title };
+    pendingVisitorWork = pendingVisitorWork.then(async () => {
+      if (disposed || visitor !== visitorGeneration || pageRequest !== pageGeneration) return;
+      try {
+        await sdk.page({ properties });
+      } catch {
+        if (!disposed && visitor === visitorGeneration && pageRequest === pageGeneration)
+          window.console.warn('Unable to complete the page event.');
+      }
+    });
+  }
+  return pendingVisitorWork;
+}
+
+async function loadExperiences(destinations, isCurrent) {
   const failures = new Set();
   const rendered = new Set();
-  // Repeated identify makes these requests potentially profile-producing; later
-  // fetches can depend on earlier SDK profile updates. Reassess serialization when
-  // repeated identify is removed, retaining only actual dependencies (README).
-  for (const [experienceId, targets] of destinations) {
-    if (!isCurrent()) return;
-    try {
-      const plan = await sdk.fetchExperience(
-        {
-          experienceId,
-          // XDA workaround: profile-only selection can return baseline. Reuse one built
-          // identify across this cycle's fetches until equivalent profile-only
-          // selection is verified; Client owns wire normalization (README).
-          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-        },
-        resolveOptions
-      );
+  // Each ID uses the SDK's current identity after visitor actions settle. These
+  // content requests have no dependency on another plan's result; the SDK guards
+  // concurrent profile effects. Repeated presentations reuse the same fetched plan.
+  await Promise.all(
+    Array.from(destinations, async ([experienceId, targets]) => {
       if (!isCurrent()) return;
-      renderPresentations(plan, experienceId, targets);
-      rendered.add(experienceId);
-      if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
+      try {
+        const plan = await sdk.fetchExperience({ experienceId }, resolveOptions);
+        if (!isCurrent()) return;
+        renderPresentations(plan, experienceId, targets);
+        rendered.add(experienceId);
+        if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
+          failures.add(experienceId);
+      } catch (error) {
+        if (!isCurrent()) return;
         failures.add(experienceId);
-    } catch (error) {
-      if (!isCurrent()) return;
-      failures.add(experienceId);
-      // The UMD may minify constructor names; Delivery exposes a stable statusCode.
-      const message =
-        error?.statusCode === 404
-          ? 'This Experience was not found.'
-          : 'This Experience could not be loaded or rendered. Retry the content request.';
-      targets.forEach(({ target }) => showStatus(target, message, { error: true }));
-    }
-  }
+        // The UMD may minify constructor names; Delivery exposes a stable statusCode.
+        const message =
+          error?.statusCode === 404
+            ? 'This Experience was not found.'
+            : 'This Experience could not be loaded or rendered. Retry the content request.';
+        targets.forEach(({ target }) => showStatus(target, message, { error: true }));
+      }
+    })
+  );
   if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
   return failures.size > 0;
 }
@@ -380,7 +370,6 @@ window.addEventListener('pagehide', (event) => {
   // A back/forward-cache suspension keeps this instance alive for resumption.
   if (event.persisted) return;
   disposed = true;
-  generation += 1;
   releasePreviewSubscriptions();
   trackingLog.dispose();
   controls.dispose();
@@ -388,6 +377,8 @@ window.addEventListener('pagehide', (event) => {
   // durations. Browser teardown releases this document's SDK. Explicitly destroy
   // it when replacing the owner inside a still-live document instead.
 });
+if (!sdk.isPreview && new URL(location.href).searchParams.get('userId') === 'charles')
+  identifyVisitor();
 void renderRoute({ sendPage: true });
 
 function releasePreviewSubscriptions() {

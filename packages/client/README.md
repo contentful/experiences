@@ -14,15 +14,30 @@ The primary fetch + resolve entry point. Fetches an Experience payload from the 
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
-`serializePersonalization` validates the final XDA request shape and currently
-normalizes unsupported event fields: XDA rejects EventBuilder's `context.gdpr`
-with HTTP 422, so the generated schema strips it without mutating caller input.
-That normalization is temporary; final-shape validation remains required after
-Node/Web event interception, before final consent callbacks and Web event
-publication. Once upstream accepts the built shape or performs its conversion,
-simplify only redundant conversion, retaining validation, caller-input immutability,
-and coverage of the supported wire contract. Follow the Node reference's
-[XDA workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal).
+The Client boundary validates the final personalization request without mutating
+caller input. Built event fields, including `context.gdpr` and `context.page.title`,
+are preserved by Client's stateless validation/passthrough. Node/Web separately
+stamp admitted events with owner consent before interception, preserving caller
+input and allowing explicit interceptor transforms. They validate transformed
+events after interception and before final consent callbacks or Web event
+publication; malformed transformed fields
+reject before transport. With `@contentful/experience-delivery@1.0.0-dev.10`, the
+generated serializer preserves these fields through passthrough but does not
+validate them. Client supplements generated validation with checks for only
+`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
+using local primitive constraints in `zod/mini`.
+The generated XDA schema continues to validate existing context fields and event
+types, including `page.query` values of `string | string[]`. Client retains the
+generated passthrough result; the supplemental checks do not replace it or impose
+the full Optimization context contract. Client directly declares `zod` at the
+existing workspace version; it does not depend on the Optimization API client or
+import Runtime.
+
+Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
+commit events or profile changes. Newly returned IDs are provisional, and
+profile-only XDA uses XPAPI GET internally even when SDK-to-XDA uses POST.
+See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
+for finalization requirements and the subsequent GET limitation.
 
 By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
 `{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
@@ -198,6 +213,7 @@ const client = new ContentfulViewDeliveryClient({
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
 - Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
+- Keep generated XDA validation for existing event/context fields. Supplement only `context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string) with local `zod/mini` constraints; do not add an Optimization API client dependency or import Runtime or `EventBuilder` into Client.
 - Name mappings between SDK options and delivery-client options live in `create-delivery-client.ts` — one place to change.
 
 ## License

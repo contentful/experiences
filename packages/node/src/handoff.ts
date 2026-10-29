@@ -4,7 +4,7 @@ import {
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
 
-/** Package completed request profile data without emitting events or making requests. */
+/** Package supplied profile data; this neither commits nor confirms an XPAPI profile. */
 export function createRequestHandoffFromData(input: {
   readonly spaceId: string;
   readonly environmentId: string;

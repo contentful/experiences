@@ -48,21 +48,5 @@ export function buildPagePersonalization(options: {
     properties: page,
   });
 
-  // EventBuilder targets the full Optimization API schema. XDA embeds a
-  // deliberately narrower page-event schema: consent is not accepted here,
-  // and context.page excludes title (properties.title remains supported).
-  const { gdpr: _gdpr, page: contextPage, ...context } = event.context;
-  const { title: _title, ...xdaContextPage } = contextPage;
-
-  return {
-    events: [
-      {
-        ...event,
-        context: {
-          ...context,
-          page: xdaContextPage,
-        },
-      },
-    ],
-  };
+  return { events: [event] };
 }

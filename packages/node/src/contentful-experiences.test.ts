@@ -248,16 +248,23 @@ describe('Node ContentfulExperiences', () => {
     const first = runtime.forRequest({
       locale: 'de-DE',
       eventContext: { ...firstContext, locale: 'it-IT' },
+      consent: true,
     });
-    const second = runtime.forRequest({ eventContext: secondContext });
+    const second = runtime.forRequest({ eventContext: secondContext, consent: false });
 
     expect(first).not.toBe(second);
-    expect(first.eventBuilder.buildIdentify({ userId: 'first' }).context).toMatchObject(
-      firstContext
+    expect(first.eventBuilder.buildIdentify({ userId: 'first' }).context).toMatchObject({
+      ...firstContext,
+      gdpr: { isConsentGiven: true },
+    });
+    expect(first.eventBuilder.buildPageView().context.gdpr.isConsentGiven).toBe(true);
+    expect(first.eventBuilder.buildTrack({ event: 'first' }).context.gdpr.isConsentGiven).toBe(
+      true
     );
-    expect(second.eventBuilder.buildTrack({ event: 'second' }).context).toMatchObject(
-      secondContext
-    );
+    expect(second.eventBuilder.buildTrack({ event: 'second' }).context).toMatchObject({
+      ...secondContext,
+      gdpr: { isConsentGiven: false },
+    });
     expect(runtime.eventBuilder.channel).toBe('server');
     expect(runtime.eventBuilder.library).toEqual(DEFAULT_EVENT_CONTEXT_LIBRARY);
     expect(runtime.eventBuilder.buildTrack({ event: 'runtime' }).context).toMatchObject({
@@ -1049,6 +1056,7 @@ describe('Node ContentfulExperiences', () => {
         .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
         .mockResolvedValue({ nodes: [] } as never);
       const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+      const original = globalThis.structuredClone(track);
 
       await runtime
         .forRequest({ consent: true })
@@ -1057,7 +1065,11 @@ describe('Node ContentfulExperiences', () => {
           { config: resolverConfig }
         );
 
-      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({ events: [track] });
+      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({
+        events: [{ ...track, context: { ...track.context, gdpr: { isConsentGiven: true } } }],
+      });
+      expect(track).toEqual(original);
+      expect(track.context.gdpr.isConsentGiven).toBe(false);
     });
   });
 

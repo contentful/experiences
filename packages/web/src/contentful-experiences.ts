@@ -767,6 +767,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         options.preview !== true &&
         this.#identityRevision === identityRevision
       ) {
+        // XDA may return a provisional preflight ID. Local adoption/persistence
+        // does not create the XPAPI profile or commit its evaluated changes.
         const nextProfileId = plan.personalization?.profileId;
         if (
           nextProfileId !== undefined &&
@@ -920,7 +922,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
     // Begin the current attempt by checking and publishing identity synchronously.
     // Once visible to other operations, navigation retains this continuation.
-    // Fetches can join this boundary without waiting for hydration or replay HTTP.
+    // This is local identity readiness, not XPAPI commit completion. Current fetches
+    // do not await replay HTTP; provisional-ID profile-only lookups can therefore fail.
+    // See Runtime README's XDA preflight and profile finalization contract.
     const identityReady = Promise.resolve().then(() =>
       initialization.isCurrent() ? this.#adoptHandoffIdentity(parsed) : undefined
     );
@@ -1023,7 +1027,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (events === undefined) return options;
 
     const admitted = events.filter((event) => this.#admitEvent(event));
-    return { ...options, personalization: { ...options.personalization, events: admitted } };
+    return {
+      ...options,
+      personalization: {
+        ...options.personalization,
+        events: admitted.map((event) => withEventConsent(event, consentSignal.value === true)),
+      },
+    };
   }
 
   /**

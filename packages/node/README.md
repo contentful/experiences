@@ -154,7 +154,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer uses the generated XDA schema to remove unsupported event fields, including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with XPAPI GET 404. Supplying a profile or events switches the XDA call to POST. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for the limits on composing handoff preparation with these fetches.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -176,30 +176,37 @@ The merge is shallow: a supplied page replaces the whole request page. An explic
 `undefined` replaces the request field and uses the builder's normal fallback,
 matching direct event methods. Page-event `properties` remains a separate input;
 pass `properties: pageProperties` when it should describe the request page.
+The request builder sets `context.gdpr.isConsentGiven` from this facade's event
+consent (`true` only when granted), without changing the shared builder or another
+request's metadata.
 
 The public `ExperiencesNodeEventBuilder` type exposes only those construction
 methods. Building does not submit events, apply consent admission, invoke event
 interceptors, or update profiles. Those operations happen on submission. The shared
 `experiences.eventBuilder` remains available for unbound construction. Submitting
-already-built `personalization.events` does not merge request context into them.
+already-built `personalization.events` preserves their supplied page/user-agent/
+locale context and stamps the receiving request's event consent before interception.
 Use the request builder rather than retaining visitor data in a shared interceptor
 closure. See the [committed server rendering recipe](../../README.md#committed-server-rendering-and-state-only-hydration)
-for the page-first, sequential-fetch flow.
+for an ordinary identify/page flow followed by profile-based content fetching.
 
-Current XDA behavior limits this integration: profile-only requests can return
-baseline content despite audience membership; initial identify requests without
-a profile can return a personalization timeout; and unmodified EventBuilder
-consent context is rejected. The Node reference establishes its profile with a
-direct page event, includes identify with each personalized fetch, and relies on
-Client's generated-schema serialization. See the reference's
-[workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-before removing these accommodations after upstream fixes.
+Submit identify once for actual identification intent. Successful ordinary
+`request.identify()` commits through XPAPI; an initial identify in
+`prepareRequestHandoff()` only previews and requires successful browser
+commit/replay to finalize. A profile-only content fetch can use an already-concrete
+profile; a page-created profile is not a universal content prerequisite. Await
+real evaluated profile dependencies and successful commit when a new identity is
+needed. Fetch independent distinct Experiences concurrently with an
+already-concrete profile and reuse plans for repeated presentations. Event-free
+fetches may still return profile effects, so establish independence from actual
+data dependencies rather than the absence of events.
 
-The current XDA client has no noncommitting preflight option for that POST.
-`prepareRequestHandoff()` previews events through the separate Personalization
-API; it does not make a later XDA fetch render those uncommitted changes. An
-application that independently sends the same events through both operations
-may duplicate them. The SDK does not suppress or deduplicate those calls.
+Event-bearing XDA forces XPAPI preflight and returns provisional new IDs, which
+local facade adoption does not finalize. Multiple server previews require
+reconciliation or server finalization; sharing this facade or fetching sequentially
+does not resolve that limitation. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization).
+The current Node/Web/hybrid references commit ordinary XPAPI events before
+profile-only content fetching.
 
 ## Request-scoped events
 
@@ -257,8 +264,9 @@ permitted `page` from being previewed and replayed. The batch always ends in one
 page itself is not admitted nothing is prepared and the handoff has no replay. The browser still
 admits a batch that is already prepared whole or not at all.
 
-There is no request event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Analytics call on the same request facade.
+There is no request event queue. Await `identify`, `page`, or `track` when a
+later call needs its evaluated profile; sequence profile changes whose results
+depend on each other. Independent content fetches need no blanket serialization.
 
 ### Event interceptors
 
@@ -291,14 +299,18 @@ timestamps without rerunning event hooks. The state-only producer below invokes
 no event hooks. Hooks transform events; direct methods keep their Personalization
 or Analytics transport and do not accumulate events awaiting an XDA fetch.
 
-The original consent gate runs before hooks. The SDK then validates transformed
-output against the destination schema and checks its final event type against
+The original consent gate runs before hooks. For XDA events, the SDK immutably
+stamps request event consent into admitted inputs' `context.gdpr.isConsentGiven`,
+overwriting any caller-supplied flag. Hooks receive that default metadata and may
+explicitly transform it, following direct-event policy. The SDK then validates
+transformed output against the destination schema and checks its final event type against
 current consent before publication or sending. Invalid output is a schema failure,
 not a consent refusal. A valid transformed event blocked by consent is reported
 through `onEventBlocked` with its transformed method/type and the existing blocked
 return contract. In XDA calls, those blocked events are removed while preserving
 order and the profile/content fetch; hook or schema errors reject before transport.
-Client remains responsible for XDA serialization and removing unsupported fields.
+Client remains responsible for XDA request validation and serialization, preserving
+the full supported event shape and caller input.
 This final-type check closes the original-type-only consent bypass in the Optimization reference at `70dfa7f`.
 
 The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
@@ -308,8 +320,8 @@ have no global interceptor registry.
 
 ### Produce a state-only browser handoff
 
-After all sequential profile-producing operations finish, package the final
-`request.profile` with the public Node free function:
+After the operations whose profile results the response needs have finished,
+package the current `request.profile` with the public Node free function:
 
 ```ts
 import { createRequestHandoffFromData } from '@contentful/experiences-node';
@@ -342,7 +354,9 @@ for serialization and tracking activation.
 
 Call `prepareRequestHandoff` on the request facade to build an ordered
 `identify` / `track` prefix and one final `page`. It previews the complete batch
-with `preflight: true` once, without committing events from Node:
+with Personalization API `preflight: true` once, without committing events from
+Node. This prepared-replay capability is an Experiences contract, not a direct
+port of Optimization at `59add9d6ebff503b9033a59a2eee0149d4b4e925`:
 
 ```ts
 const { handoff, data } = await experienceRequest.prepareRequestHandoff({

@@ -16,7 +16,7 @@ React commits. Utilities expose event and persistence consent; the optional
 Tracking sidebar reports actual event-attempt notifications. Credentials are
 unnecessary to build and start; content loading requires the app-local space and
 browser-approved Delivery token. Managed content/navigation/preview and
-page/identify/reset/retry sequences remain Phase 6 work. See the
+page/identify/reset/retry sequences remain Phase 7 work. See the
 [implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-5-implement-react-ownership-providers-and-hooks)
 and [accepted design](../../tmp/react-next-runtime-phase-1-design.md).
 
@@ -251,7 +251,7 @@ A profileless `trackView` can return `{ accepted: true }` with no `eventStream`
 notification or network request. The sidebar counts actual notifications, which
 do not establish successful transport delivery.
 Page/identify/reset/retry and managed preview
-content are deferred to Phase 6.
+content are deferred to Phase 7.
 
 The stable `onStatesReady` callback attaches the optional sidebar's retained
 subscription during activation, before root-driven work. It ignores the immediate
@@ -278,7 +278,7 @@ commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `OptimizationProvider`,
 Web `presentation/optimizationRootRuntime.ts`, and the maintained React reference's
 `main.tsx`, `ControlPanel.tsx` and `AnalyticsEventDisplay.tsx`. The retained
 Experiences differences are supplied XDA plans rather than local CDA variant
-resolution, no route-page work until Phase 6, SDK-normalized attribution data,
+resolution, no route-page work until Phase 7, SDK-normalized attribution data,
 and skipping historical notifications when attaching diagnostics. The pinned
 reference is evidence only, with no adjacent-checkout runtime dependency.
 

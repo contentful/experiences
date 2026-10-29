@@ -11,20 +11,22 @@ direct URLs and back/forward. The Tracking sidebar observes SDK event attempts;
 automatic discovery and manual element registration use the public SDK tracking API.
 
 Code comments distinguish **Consumer integration** responsibilities (conditional where a
-feature is optional), **Reference app** demonstration choices, **Maintainer**
-diagnostics/verification support, and temporary **XDA workaround** behavior.
+feature is optional), **Reference app** demonstration choices, and **Maintainer**
+diagnostics/verification support.
 The sidebar, utility buttons, selectors, sample routes and local artifact workflow
 are not prerequisites for a consumer integration. The calls they demonstrate use
 the real public SDK; consumers provide their own UI, hosting and build tooling.
 
 ## Content and visitor actions
 
-On navigation, the app awaits `sdk.page()` before fetching content. A new visitor
-must have an SDK-owned profile before initialization continues; queue admission
-alone is not treated as successful delivery. If no profile becomes available,
-the app shows a recoverable initialization error and a Retry content action.
+Initial load and navigation retain one owned `sdk.page()` operation and await its
+terminal outcome before fetching content. Refusal, rejection, or offline admission
+allow content loading to continue with the SDK's available identity, including
+baseline content without a profile. Queue admission alone does not establish
+successful delivery or evaluated identity. Event failures are reported separately
+in the console; they do not become content initialization errors.
 
-Home fetches every configured Experience once, sequentially. Its manually observed section
+Home fetches each distinct configured Experience once, concurrently. Its manually observed section
 reuses the first plan. Page Two fetches the last configured
 Experience for the automatic section and the first for the manual section. If
 these IDs coincide, it fetches once and renders both presentations. There is no
@@ -39,16 +41,23 @@ plan's `node.slots` map, which preserves XDA's named slot structure. Root cards 
 the purple accent. This identifies only slots present in the delivered tree;
 flattened composed nodes are not assigned an inferred slot or hierarchy.
 
-Identify sets `?userId=charles` using `history.replaceState`, waits for any pending
-navigation page, and explicitly fetches the current route's content. Only that
-fixed demonstration value requests identification. Navigation preserves it and
-reload reads it. The URL represents application intent, not an API-issued profile
+Identify sets `?userId=charles` using `history.replaceState`, joins any pending
+navigation page, and submits one ordinary
+`sdk.identify({ userId: 'charles', traits: { identified: true } })` before explicitly
+fetching the current route's content. Initial URL intent submits identify once
+before the initial page. Online identify completion applies evaluated state before
+these dependent requests; offline admission leaves evaluation unconfirmed. Only
+that fixed demonstration value requests identification. Navigation preserves the
+URL intent and joins pending identify work without resubmitting it; reload reads
+it as initial intent. Fetches use SDK-owned identity without embedded identify events.
+The URL represents application intent, not an API-issued profile
 ID or authentication state. Utilities therefore says **Identify requested**;
 it does not claim confirmed traits or audience membership. No full profile is
 rendered, manually entered, or copied into an application-owned store.
 
-Reset removes the identify parameter, calls `sdk.reset()`, awaits a fresh page,
-and explicitly fetches baseline content. Grant/Revoke calls `sdk.consent(true/false)`
+Reset removes the identify parameter and old attributed DOM, then calls `sdk.reset()`
+before fresh SDK discovery, awaits a fresh page, and explicitly fetches baseline
+content. Grant/Revoke calls `sdk.consent(true/false)`
 to change event and persistence consent together. Effective values come from the
 SDK observables, with startup defaults left unset so stored decisions are respected.
 The SDK permits identify/page by default even without event consent. Consent
@@ -56,11 +65,16 @@ subscriptions update only Utilities; they do not fetch or rerender content or se
 page events. The SDK owns persistence, cookies, profile IDs, consent filtering,
 queues, and transport retries.
 
-Each route/action cycle invalidates older render work and stops scheduling its
-remaining fetches. Already submitted events are not undone. Identify joins the
-pending page rather than creating another page or sending an independent identify.
-Content retry starts a new content cycle; only missing/failed initialization also
-requires a page. Loading, empty plans, not-found errors, and other fetch/render
+Each route/action cycle invalidates older render work. Already submitted events
+and concurrent fetches are not undone; their stale completions cannot replace the
+current route. Identify and page operations share one ordered visitor-work chain;
+navigation cancels unsent older pages while retaining identify work. Reset
+invalidates unsent page and identify work and detaches the pending chain so
+obsolete work cannot delay the next visitor; the SDK guards
+already pending responses. Identify does not create another page.
+Content Retry fetches the current route's content without submitting another page
+or identify, even when no profile is available. Loading, empty plans, not-found errors,
+and other fetch/render
 failures are separate states. Each Experience presentation shows its own loading
 or error feedback, tied to fetch/render completion rather than the SDK's
 Personalization request-state observable. There is no separate readiness example:
@@ -88,7 +102,7 @@ Experience ID, default: first presentation ID), or configure
 Web passes `livePreview` at initialization and uses `fetchExperience()` for initial
 content and Retry. After loading/rendering, `subscribeToPreview()` applies new
 plans/errors; `states.preview` exposes connection status.
-Preview skips visitor initialization and disables Identify. Navigation inherits
+Preview skips visitor actions and disables Identify. Navigation inherits
 the current binding only when the destination omits it; explicit destination
 preview parameters take precedence. Binding changes within preview use
 `replaceLivePreview`; entering or leaving preview reloads the document to create
@@ -103,43 +117,34 @@ successful updates clear recovered errors. Initial plans with diagnostics retain
 usable content and show a generic error.
 See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
 
-## Current XDA limitations and workaround removal
+## XDA contract and validation
 
-The current flow follows the Node reference's documented upstream workarounds:
+XDA selects content with the SDK-owned profile after ordinary visitor actions.
+The reference does not attach identify to each fetch or strip built-event consent
+context or page titles. The configured content requests do not depend on another
+plan's result, so distinct IDs load concurrently after pending visitor actions
+settle. SDK response revision guards own concurrent profile effects.
 
-1. **Profile-only fetches can return baseline for identified visitors.** Build one
-   fresh identify event with `userId: 'charles'` and `traits: { identified: true }`
-   per content cycle, then include that event in each distinct Experience fetch.
-   Do not send it independently through `sdk.identify()`. Once the same established
-   profile selects equivalent content without the repeated event, remove repeated
-   inclusion while keeping identify where the visitor is actually identified or
-   their traits change. Repeated inclusion does not guarantee exactly-once event
-   processing. These requests are potentially profile-producing, so later fetches
-   can depend on earlier SDK profile updates. Reassess serialization when repeated
-   identify is removed; retain only actual dependencies.
-2. **XDA rejects unsupported built-event consent context such as `context.gdpr`.**
-   Client already normalizes against the generated wire schema. The application
-   must not strip fields again or remove consent metadata from ordinary SDK events.
-   Revisit Client normalization only when upstream/generated types support the
-   built shape; verify built events end to end before removing redundant conversion.
-3. **Initial identification inside XDA can time out without an established profile.**
-   A direct page first establishes SDK-owned identity. `initializeVisitor` owns
-   this standalone page, the pre-fetch profile prerequisite, and page-specific
-   recovery for missing or failed identity on explicit Retry, even if an older
-   profile remains after failure; Identify/Retry joins pending page work.
-   Reassess these accommodations together. Move page into the first
-   event-bearing XDA fetch only after that initial fetch reliably creates the
-   profile, applies identify traits, matches the audience, and selects the expected
-   variant. Preserve one fetch per distinct Experience and route ownership/lifetime
-   checks.
+Event-bearing XDA forces XPAPI `preflight: true`, without an override, and commits
+neither events nor profile creation/changes. New returned IDs are provisional;
+current SDK auto-adoption, localStorage and cookies do not finalize them. See
+[XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+This browser reference uses ordinary committing XPAPI visitor actions before
+profile-only content and does not embed those events in content requests.
+Independent reads with an already-concrete profile remain viable. Admission,
+`identityReady`, flush resolution and generic SDK success alone do not prove
+commit completion. Personalization API preflight remains supported; this app
+implements no handoff or preflight compensation.
 
-XDA is currently unstable and may require multiple attempts. HTTP 200 and a returned
-profile ID alone do not prove personalization. Plans do not expose all raw XDA
-errors. Keep direct API diagnosis outside application runtime; do not intercept or
-rewrite responses, silently retry content fetches, or simulate successful selection.
-The coded and composed Experiences should change their personalized fragment from
-baseline to variant content; the third Experience's identified variant reverses
-Content 1 and Content 2. Compare actual rendered content when checking these paths.
+HTTP 200 and a returned profile ID alone do not prove personalization. Plans do
+not expose all raw XDA errors. Keep direct API diagnosis outside application
+runtime; do not intercept or rewrite responses, silently retry content fetches,
+or simulate successful selection. The coded and composed Experiences should
+change their personalized fragment from baseline to variant content; the third
+Experience's identified variant reverses Content 1 and Content 2. Compare actual
+rendered content when checking these paths. Live confirmation of the cleaned flow
+must use refreshed installed SDK artifacts; source changes alone are not evidence
+of service behavior.
 
 ## Interaction tracking and event attempts
 
@@ -177,11 +182,11 @@ is involved. Page Two's separate Record custom action calls
 `sdk.track({ event: 'reference_custom_action' })` without fetching content.
 
 The Tracking pill now counts every non-undefined notification from the public
-`states.eventStream`, including XDA-embedded identify events. These are attempts:
+`states.eventStream`, including ordinary identify and page events. These are attempts:
 ordinary notifications can precede queue capacity refusal, and neither observation
 nor admission confirms HTTP delivery. Blocked calls do not enter this counter;
-transport completion/retries do not add notifications. Repeated XDA notifications
-are counted separately even when they reuse one built event's message ID.
+transport completion/retries do not add notifications. Separate notifications
+are counted separately even when they carry the same message ID.
 
 View/hover duration updates share a table row only when their interval IDs match,
 so the attempt count can exceed the row count. Other events keep distinct rows.
@@ -281,8 +286,8 @@ direct browser delivery using the SDK's default live endpoints and
 `delivery: { accessToken: window.ENVIRONMENT.CDA_TOKEN }`, with the injected space,
 environment and locale. There is no delivery proxy, alternate endpoint selector,
 or server-side SDK. Browser HTTP CORS preflight is separate from the Experience
-API's noncommitting Personalization preflight; this app implements neither a
-preflight workflow nor Node handoff.
+Delivery API's forced XPAPI preflight for event-bearing requests and the supported
+Personalization API preflight; this app implements neither a preflight workflow nor Node handoff.
 
 ## Files, assets, and source provenance
 
@@ -303,8 +308,8 @@ preflight workflow nor Node handoff.
   modules fill dynamic text and wire actions.
   Stable navigation, utility, and sidebar `data-testid` conventions follow the
   Optimization reference. Experience-specific placeholders replace entry/Web
-  Component semantics. `app.js` separates route orchestration, shell/control setup, visitor initialization,
-  sequential content fetching and presentation insertion into focused functions.
+  Component semantics. `app.js` separates route orchestration, shell/control setup,
+  visitor actions, concurrent content fetching and presentation insertion into focused functions.
   `control-panel.js` owns utility display and consent subscription cleanup;
   `experiences.js` owns DOM plan rendering and exposes manual
   roots for registration after insertion; `tracking.js` owns the observable sidebar
@@ -329,9 +334,9 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
   example; loading/errors belong to the actual rendered content. The manual copy
   demonstrates explicit element registration alongside automatic discovery, using
   the same SDK-owned measurement and consent mechanisms as Optimization.
-- XDA selects variants server-side. The explicit page/identify/fetch flow follows
-  the [current XDA workarounds](#current-xda-limitations-and-workaround-removal),
-  and there is no profile-driven ordinary content refresh, Optimization Live Updates or Preview Panel.
+- XDA selects variants server-side after ordinary visitor actions. Content refresh
+  is explicit; there is no profile-driven ordinary content refresh, Optimization
+  Live Updates or Preview Panel.
   Attribution comes from source maps and is stamped once per rendered plan container,
   adapting Optimization's self-describing entry hosts to multi-root scopes. Event
   labels use Experience/ExperienceFragment semantics.
@@ -352,11 +357,12 @@ Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
 selectors for compatibility. Optimization Live Updates is outside this reference; Preview Sessions use the optional runtime integration above.
 An event-stream notification denotes an event attempt, not admission or
-successful delivery. XDA is currently unstable
-and may need multiple attempts; HTTP 200 alone does not prove personalization.
+successful delivery. HTTP 200 alone does not prove personalization; compare the
+actual selected content and report service failures without compensating retries.
 
 Live verification has not reached empty-plan, missing-Experience, transport-failure
-or queued-page-without-profile recovery, offline/capacity refusal, retry, SDK pending-response
+or content loading after queued page admission without a profile, offline/capacity
+refusal, retry, SDK pending-response
 isolation, subscriber-exception, or back/forward-cache suspension scenarios.
 Local SDK unit tests and source review cover those branches where applicable;
 they do not establish live service outcomes. Ordinary browser back navigation

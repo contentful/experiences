@@ -5,7 +5,7 @@
 - Phase 3 owns the React/Vite shell, local configuration/assets, tarball manifest,
   Nx and scoped lifecycle. Phase 4 adds application-owned free fetching and
   supplied-plan rendering; retain this supported path. SDK ownership/controls and
-  managed content/events/preview belong to Phases 5 and 6. Do not bridge
+  managed content/events/preview belong to Phases 5 and 7. Do not bridge
   unavailable capabilities with fake controls, loading or orchestration.
 - Keep the app private and outside npm workspaces. Use the existing installer,
   installed local tarballs and internal-chain overrides; no workspace aliases,
@@ -31,7 +31,7 @@
   document teardown releases them. Deliberate unmount/replacement within a live
   document uses renderer/provider cleanup; persisted pagehide retains ownership.
   Managed loading, navigation,
-  page/identify/reset/retry sequences and preview content remain Phase 6 work.
+  page/identify/reset/retry sequences and preview content remain Phase 7 work.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy

@@ -40,14 +40,26 @@
 - Keep one SDK instance, SDK-owned profile/consent/persistence, and empty SDK resolver
   registries. Render the two current registration kinds through the app DOM
   registry and actual named slots recursively; do not invent composed hierarchy.
-- Follow README/D5: await page on navigation, build one identify per explicit
-  content cycle and embed it in each distinct sequential fetch, never send identify
-  independently. URL `?userId=charles` is intent only. Reset clears that intent and
-  SDK state, then page/fetches again. No profile subscription may refresh content.
-- Retain current XDA workaround comments/removal criteria and stale-action guards.
-  Consent subscriptions update Utilities only and remain caller-owned. Show
-  initialization failure when admission produces no profile; do not equate event
-  admission, an event attempt, or HTTP 200 with delivered/personalized success.
+- Submit one ordinary `sdk.identify` for explicit Identify or initial URL intent;
+  await its terminal completion before dependent content and the initial page.
+  Explicit Identify joins an already pending page. Keep normal initial/navigation
+  page ownership and terminal sequencing. URL `?userId=charles` is intent only;
+  preserving it across routes does not request another identify. Reset removes old
+  attributed DOM, invalidates page/identify owners and detaches the pending visitor chain,
+  then resets SDK state synchronously before fresh discovery and page/fetch work.
+- Content Retry retries content without another page or identify. Missing profiles,
+  event refusal/rejection and offline admission must not block valid baseline content.
+  Distinct configured IDs have independent plan results and load concurrently after
+  pending visitor actions settle; reuse each plan for repeated presentations. SDK
+  revision/lifecycle guards own response profile effects; retain stale-action guards.
+- Consent subscriptions update Utilities only and remain caller-owned. No profile
+  subscription may refresh content. Do not equate event admission, an event attempt,
+  profile presence or HTTP 200 with evaluated identity or personalized success.
+  Keep per-ID content errors separate from event outcomes. Event-bearing XDA forces
+  XPAPI preflight; new IDs remain provisional despite current SDK auto-adoption.
+  This reference uses ordinary committing XPAPI events before profile-only content.
+  See [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+  Actual Personalization preflight stays supported.
 - Automatic tracking uses the existing getTrackingAttributes helper on each plan
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,
@@ -62,7 +74,7 @@ element, { data })` after DOM insertion, following Optimization. Use each card's
   content. The SDK owns measurement and consent; do not add app observers.
   Page Two's separate custom action uses `sdk.track`. An attempt is not delivery success.
 - Subscribe to eventStream before initial page and retain that one sidebar
-  subscription across routes. Count notifications, including repeated XDA messages,
+  subscription across routes. Count every actual notification, including repeated message IDs,
   and group only actual view/hover interval IDs. Keep event text safe and dispose
   caller-owned subscription/age timer before destroying the SDK.
 

@@ -3,29 +3,29 @@
 This standalone Express/EJS implementation consumes `@contentful/experiences-node`
 from locally built npm tarballs. It has its own dependencies, configuration, and
 tooling, outside the root npm workspaces. It follows Optimization's Express/EJS
-layout and request-facade pattern. A page event establishes the visitor profile;
-an optional built identify event accompanies each Experience fetch so XDA selects
-the content before rendering. `GET /health` makes no API calls.
+layout and request-facade pattern. An optional identify action and an owned page
+operation precede concurrent Experience loading. `GET /health` makes no API calls.
 
 ## Request flow
 
-`GET /` sends one page event through `request.page()` to establish the visitor
-profile, then fetches each configured Experience once. `GET /?userId=charles`
-also builds an identify event with `sdk.eventBuilder`, that user ID, and
-`traits: { identified: true }`. Each Experience fetch includes the built identify
-event in `personalization.events`, so XDA evaluates it while selecting content.
-The application does not independently call `identify()` or fetch an Experience
-twice in the same app request.
+`GET /` attempts one page event through `request.page()`, then fetches each
+distinct configured Experience once, concurrently, reusing plans for repeated
+presentations. `GET /?userId=charles` first calls `request.identify()` once with
+that user ID and `traits: { identified: true }`. The SDK inherits locale, page and
+user agent from the request context. Content selection waits for that operation
+and uses the profile the SDK holds; identify is not attached to content fetches.
+Refused or failed visitor events do not prevent valid content from rendering,
+and page acceptance or profile presence is not a content eligibility check.
 A fixed identify user ID is acceptable; it is distinct from the API-issued profile ID.
 
-Profiles come only from Experience API/XDA responses. The SDK carries the profile
-between fetches on the request facade. The app does not accept a profile-ID input,
+Profiles come only from Personalization API/XDA responses. The SDK owns the
+profile on the request facade; concurrent content loads share established state. The app does not accept a profile-ID input,
 persist profiles, or add cookies or sessions. Requests assume `consent: true`, like
 the Optimization reference; this is not a consent-management implementation.
 
-The page shows whether an identify event was included and renders the Experience
-content. Fetch results expose a profile ID, not profile traits, so that label does
-not assert a separately confirmed identification result. SDK exceptions
+The page shows identify intent and renders the Experience content. A profile ID
+does not confirm traits or audience membership, so that label does not assert a
+confirmed identification result. Content or rendering exceptions
 produce a short error response. The app does not inspect raw XDA responses;
 application-level errors that the runtime does not surface remain an SDK limitation.
 Responses are private/no-store and profiles remain request-local. The rate limiter
@@ -52,69 +52,48 @@ page/identify work and fetches the snapshot through the normal renderer.
 `request.destroy()` runs in `finally`. Reload for another snapshot.
 See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
 
-## Current XDA limitations and workaround removal
+## Personalization contract and validation limits
 
-The request flow compensates for three observed XDA issues. Recheck the behavior
-below when XDA or the generated Delivery client is updated; do not preserve these
-workarounds merely because the reference already uses them.
+The earlier cleanup recorded user-reported fixes to XDA profile-only selection,
+initial identification and full SDK-built event acceptance; those were deployment
+premises, not new live observations. The user now explains the previously observed
+GET failure for an XDA-created profile by forced preflight: the new ID was
+provisional and a later profile-only XDA request internally used XPAPI GET, yielding
+404 for the uncommitted ID. The SDK-to-XDA request can still be POST. The separate
+`context.page.title` 422 remains unresolved.
 
-1. **An identified profile ID alone does not select personalized content.** A
-   profile can be confirmed identified and in the intended audience, yet a
-   profile-only Experience fetch returns baseline content with no response errors.
-   Including the identify event returns the variant. The reference therefore
-   includes its built identify event, with `traits: { identified: true }`, in each
-   Experience fetch. Once a profile-only fetch selects the same variant for that
-   same established profile, stop including identify in subsequent content fetches.
-   Retain the identify event where the visitor is actually identified or their
-   traits change.
-2. **XDA rejects SDK-built consent context.** Sending an unmodified EventBuilder
-   event containing `context.gdpr` produces HTTP 422 (`ValidationFailed`,
-   `unrecognized_keys`). Client serializes personalization through the generated
-   XDA schema, removing unsupported fields without mutating the original events.
-   This is an SDK/API contract incompatibility; strict rejection itself may be
-   intentional. Once upstream XDA and generated client types support the built
-   event shape, or the generated client performs the required conversion, verify
-   built page and identify events end to end and remove the extra Client
-   normalization if redundant. Keep consent metadata on ordinary SDK events and
-   retain coverage of the supported wire contract and caller-input immutability.
-   Preserve final-shape validation after Node/Web event interception, before final
-   consent callbacks and Web event publication; removing redundant conversion
-   does not mean deleting validation wholesale.
-3. **Initial identification without a profile can time out.** An initial XDA
-   request containing identify, including a page/identify batch, can return HTTP
-   200 with a personalization `TimeoutError`, baseline content, and no profile.
-   The reference sends page directly first so the facade holds an API-issued
-   profile, then fetches each Experience once with identify. Once an initial
-   event-bearing fetch can create the profile, apply `identified: true`, match the
-   audience, and return the variant without errors, move the page event into the
-   first Experience fetch and remove the independent page call. Preserve one fetch
-   per Experience and keep profile ownership in the SDK.
-   Reconsider the standalone page call, the pre-fetch profile prerequisite, and
-   any page-specific recovery together when the initial-identification timeout is
-   fixed; they must not keep the old initialization flow mandatory independently.
+Event-bearing XDA always invokes XPAPI with `preflight: true`, without an override,
+and commits neither events nor profile creation/changes. New IDs are provisional;
+an existing concrete ID can remain concrete while previewed changes stay uncommitted.
+See [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+This app uses ordinary committing XPAPI identify/page actions before profile-only
+content and does not exercise replay. Independent reads with an already-concrete
+profile remain viable. The SDK currently auto-adopts returned IDs; adoption is not
+finalization. Ordinary committing XPAPI identify/page/track or successful browser
+replay finalizes; hydration, localStorage and cookies do not. Personalization API
+preflight and prepared handoff/replay remain supported.
 
-The reference currently serializes potentially profile-producing fetches,
-including repeated identify, so each next fetch uses the facade's updated profile.
-After the repeated-identify workaround is removed, serialize only when a preceding
-operation changes input needed by the next operation, retaining demonstrated
-dependencies. Fetching each distinct Experience once and reusing its plan for
-repeated presentations remain durable requirements.
+Retain final transformed-event validation, consent metadata and caller-input
+immutability in the SDK. Await an identity operation when later selection needs
+its evaluated result; admission, `identityReady`, flush resolution or generic SDK
+success alone does not prove a commit.
+Only serialize content requests with an actual dependency on a preceding result.
+The configured distinct loads here share established request state and are
+independent; repeated presentations reuse the same plan.
 
-Verify the delivered variant and personalization result during these checks;
-HTTP 200 alone is insufficient. The render plan does not currently expose all raw
-XDA personalization errors. Keep any direct API diagnosis outside the app rather
-than adding response interception to its runtime flow.
-
-The SDK's required-`userId` return type on `buildIdentify()` is a typing correction,
-not a temporary XDA workaround, and should remain when the server issues are fixed.
+Live validation must inspect delivered variants and personalization outcomes;
+HTTP 200 or profile presence alone is insufficient. The render plan does not
+expose all raw XDA personalization errors. Keep direct API diagnosis outside the
+app rather than adding response interception to its runtime flow. The SDK's
+required-`userId` return type on `buildIdentify()` remains a typing contract.
 
 ## Rendering and differences from Optimization
 
 The EJS shell uses Optimization's CSS, including its font stack, 1040px width,
 spacing, centered gray panels, and fixed 75dvh rows. Branding and the Experiences
-section label reflect this SDK. The States link includes an identify event on the
-next request. Unlike Optimization’s separate event and CDA-resolution flow, XDA
-evaluates these events while selecting the Experience content.
+section label reflect this SDK. The States link requests one identify action on
+the next request. XDA selects Experience content using the established SDK profile
+after the ordinary Personalization operations.
 
 Experiences returns nested plans instead of CDA entries. The recursive `nodes.ejs` partial
 renders this space's `title`, plain `text`, `richText.document`, and slot children.

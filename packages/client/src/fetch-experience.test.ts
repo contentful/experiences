@@ -451,11 +451,25 @@ describe('fetchExperience — personalization', () => {
     mockGetWithOverrides.mockResolvedValue(mockPayload);
   });
 
-  it('rejects invalid personalization with a TypeError before calling Delivery', async () => {
+  it.each([
+    { profileId: 123 },
+    {
+      events: personalization.events.map((event) => ({
+        ...event,
+        context: { ...event.context, gdpr: { isConsentGiven: 'yes' } },
+      })),
+    },
+    {
+      events: personalization.events.map((event) => ({
+        ...event,
+        context: { ...event.context, page: { ...event.properties, title: 123 } },
+      })),
+    },
+  ])('rejects invalid personalization with a TypeError before calling Delivery', async (input) => {
     const rejection: unknown = await fetchExperience(
       {
         ...experienceOptions,
-        personalization: { profileId: 123 } as unknown as PersonalizationOptions,
+        personalization: input as unknown as PersonalizationOptions,
       },
       { accessToken: 'token-123' },
       resolveOptions
@@ -497,14 +511,19 @@ describe('fetchExperience — personalization', () => {
     expect(rejection).toBe(notFound);
   });
 
-  it('routes personalization through POST and strips unsupported event context', async () => {
+  it('routes personalization through POST with intact event context and caller input', async () => {
     const input = {
       ...personalization,
       events: personalization.events.map((event) => ({
         ...event,
-        context: { ...event.context, gdpr: { isConsentGiven: true } },
+        context: {
+          ...event.context,
+          gdpr: { isConsentGiven: true },
+          page: { ...event.properties, title: 'Experience page' },
+        },
       })),
     };
+    const original = globalThis.structuredClone(input);
     await fetchExperience(
       { ...experienceOptions, locale: 'en-US', personalization: input },
       { accessToken: 'token-123' },
@@ -514,8 +533,9 @@ describe('fetchExperience — personalization', () => {
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
       locale: 'en-US',
-      extensions: { personalization },
+      extensions: { personalization: input },
     });
+    expect(input).toEqual(original);
   });
 
   it('forwards personalization and source-map extensions together', async () => {

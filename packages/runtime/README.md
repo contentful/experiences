@@ -12,7 +12,10 @@ type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
 
-Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperience`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. Core remains dependency-free.
+Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperience`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It supplements generated XDA validation only for
+`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
+using local primitive constraints in `zod/mini`. Existing XDA event/context
+contracts and the generated passthrough result are preserved. Core remains dependency-free.
 
 ## Shared base
 
@@ -97,8 +100,10 @@ propagates handler errors. Node owns one event registry shared by its request
 facades; request state remains facade-local. Web keeps its existing event and
 state registries. Runtime owns no browser signals or state-interceptor registry.
 
-A chain runs once per admitted submission or prepared event. XDA uses
-`Promise.all` across event chains while preserving result order; preparation runs
+A chain runs once per admitted submission or prepared event. Node/Web validate
+admitted XDA input, then immutably stamp owner event consent before interception.
+Hooks may explicitly transform valid metadata, following direct-event policy.
+XDA uses `Promise.all` across event chains while preserving result order; preparation runs
 events sequentially. Destination validation precedes the final-type consent check.
 Valid consent-blocked XDA events are omitted without cancelling content fetching;
 hook/schema failures reject before transport. Prepared hook/schema failures or an
@@ -133,12 +138,44 @@ omits `state` when no profile is supplied, and performs no events or network wor
 Profileless hydration preserves existing browser state. Neither helper commits a
 preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 
-The generated XDA request currently has no preflight option. Ordinary by-ID
-Experience fetches still pass profile IDs and events through Client's Delivery
-boundary, using its event-bearing POST when supplied. Runtime exposes no
-XDA-backed noncommitting content-preparation stub or duplicate-event
-workaround. Once XDA and the generated client support preflight, map the real
-request field through Client before adding a content-and-handoff operation.
+## XDA preflight and profile finalization
+
+Event-bearing XDA always invokes the Personalization API (XPAPI) with
+`preflight: true`; there is no override. It evaluates events and profile changes
+without committing event or profile creation or mutation. A newly returned profile
+ID is provisional. An existing concrete ID may remain concrete, but the previewed
+changes remain uncommitted. Profile-only XDA invokes XPAPI GET internally, which
+returns 404 for an uncommitted ID. The SDK-to-XDA request can still be POST;
+that method does not describe the separate XDA-to-XPAPI hop.
+
+Successful ordinary committing XPAPI `identify`, `page`, or `track`, or actual
+browser replay, finalizes upstream state. Handoff state hydration, LocalStorage,
+and cookies do not. Queue admission, `identityReady`, `flush()` resolution, and
+generic SDK success are not proof of commit. Node and Web currently auto-adopt
+XDA-returned IDs locally; this behavior does not finalize provisional IDs or
+make them usable for a later profile-only fetch. The previously observed GET
+failure for an XDA-created profile is explained by forced preflight, as confirmed
+by the user. The observed `context.page.title` 422 is a separate, unresolved issue.
+
+`prepareRequestHandoff()` also previews without committing. A strict hybrid flow
+that previews on the server and submits on the client requires successful browser
+commit/replay even for a single request; state-only hydration is insufficient.
+Same-ID binding between preview and commit, and commit completion, are not
+currently proved by the SDK handoff flow.
+
+Multiple server Experience evaluations in that strict hybrid contract require
+client reconciliation of multiple preview profile IDs/results, or server
+finalization that breaks the server-preview/client-submit contract. This remains
+true even with a future preflight toggle. Sequential fetching, a shared request
+facade, or selecting one profile does not solve it. There is no shared preflight
+transaction API to assume, and no architecture is selected here. Independent
+profile-only reads using an already-concrete profile remain viable.
+
+The current Node, Web, and hybrid references commit ordinary XPAPI events before
+profile-only content fetching. Event-bearing XDA and preparation do not themselves
+commit duplicate events; retry ambiguity remains for actual XPAPI commits. The
+prepared-replay family is an Experiences capability, not a direct port of
+Optimization at `59add9d6ebff503b9033a59a2eee0149d4b4e925`.
 
 ## Personalization delivery
 

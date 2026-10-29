@@ -9,14 +9,25 @@ Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
-For server-side personalization, send the page event directly to establish the
-SDK-owned visitor profile. Build the identify event with the SDK event builder
-and include it in `request.fetchExperience()` personalization options so XDA can
-select content for the identified visitor. Fetch each Experience once per app
-request; do not send identify independently or add an initialization content fetch.
-These choices compensate for current XDA behavior. Follow the Node reference's
-[workaround removal criteria](./node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-when XDA/client support changes instead of treating the flow as a permanent API requirement.
+For server-side personalization, submit identify once for actual intent through
+`request.identify()` or handoff preparation and retain the ordinary owned page
+operation. Use the resulting profile for content fetching; page acceptance and
+profile presence are not universal loader prerequisites. Await evaluated identity
+or another profile result when selection depends on it. Fetch independent distinct
+Experiences concurrently and reuse plans for repeated presentations; event-free
+responses can still have profile effects, so sequence real data dependencies.
+Refresh and content Retry do not emit a recovery page solely for missing identity.
+
+Keep both state-only handoffs after ordinary server commits and prepared browser
+replay supported. Event-bearing XDA always invokes XPAPI with `preflight: true`,
+without an override; new profile IDs are provisional and previewed changes are
+uncommitted. Ordinary committing XPAPI events or successful browser replay finalize
+them; hydration, persistence and SDK success alone do not. Already-concrete
+profile-only independent reads remain viable. See
+[XDA preflight and profile finalization](../packages/runtime/README.md#xda-preflight-and-profile-finalization)
+for current ID auto-adoption limits and unresolved hybrid reconciliation; do not
+choose a new architecture or add suppression or deduplication here.
+See the [Node personalization contract](../packages/node/README.md#personalization).
 
 ## Optional Preview Sessions
 
@@ -40,7 +51,8 @@ All reference implementations use the same hard-coded default Experience IDs:
 An implementation-local override is optional; configuring IDs must not be required
 to use the reference data. Keep implementations standalone rather than adding a
 shared runtime configuration dependency. Profile IDs are distinct: they must come
-from Experience API/XDA responses and remain SDK-managed, with no manual entry.
+from Personalization API/XDA responses and remain SDK-managed, with no manual entry.
+An XDA-returned ID alone does not establish a committed profile.
 
 ## Content typing
 

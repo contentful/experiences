@@ -235,13 +235,23 @@ const plan = await experiences.fetchExperience(
 Events built by the Web runtime use the `web` channel and its browser context
 providers. Caller-built `personalization.events` must already contain the intended
 context; submitting an event does not merge missing page/user-agent/locale values
-into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
+into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and is adopted locally, with persistence subject to consent. Adoption and LocalStorage do not finalize a newly previewed ID; a subsequent profile-only fetch can fail with XPAPI GET 404.
 
-The current XDA event-bearing POST has no noncommitting preflight option and
-may commit supplied events. A Node-prepared Personalization handoff does not
-make a separate XDA fetch render its uncommitted mutations. Applications that
-independently use both paths for the same events may duplicate them; the SDK
-adds no interim suppression.
+Profile-only fetches use the current SDK profile unless explicitly overridden;
+a page event is not a universal content prerequisite, but the supplied ID must be
+concrete upstream. Submit ordinary identify once for actual intent. When selection
+depends on it, consume its evaluated response and successful XPAPI commit;
+offline queue admission alone proves neither evaluation nor commit. Independent
+distinct Experience requests can run concurrently with an already-concrete
+profile. Event-free responses can still have profile effects; await real data
+dependencies. Refresh and content Retry fetch content without adding a recovery
+page solely because a profile is missing.
+
+Built XDA events retain `context.gdpr` and `context.page.title`; caller input is
+unchanged. Event-bearing XDA forces XPAPI preflight and does not commit events or
+profile changes. Node handoff preparation likewise only previews; successful
+browser commit/replay is required to finalize. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
+for provisional IDs and the multiple-preview reconciliation limitation.
 
 ## Browser-safe configuration
 
@@ -346,9 +356,9 @@ final-type gate corrects the original-type-only bypass in the Optimization refer
 XDA runs event chains concurrently with `Promise.all`, preserving the input array
 order; each event's handler chain remains sequential. Valid consent-blocked events
 are omitted without cancelling the profile/content fetch. Hook/schema failures
-reject before transport. Client owns the final XDA serialization, including removal
-of unsupported fields. Reusing a built event in another explicit fetch runs the
-chain again. Prepared server events are evaluated sequentially on Node; browser
+reject before transport. Client owns final XDA request validation and serialization,
+preserving supported event fields and caller input. Reusing a built event in another
+explicit fetch runs the chain again. Prepared server events are evaluated sequentially on Node; browser
 replay and transport retries preserve those bodies, IDs, and timestamps without
 rerunning event hooks. Browser replay still applies its current consent gate and
 metadata. State-only handoff production and hydration invoke no event hooks.
@@ -567,8 +577,14 @@ The same gate applies to events that are already built:
   event consent, not the value the server stamped, so the flag always matches the
   decision that admitted it.
 - Events passed in `fetchExperience({ personalization: { events } })` are filtered
-  before the request, and the `profileId` still travels. They are not re-stamped,
-  because XDA's embedded event schema has no consent field.
+  before the request, and the `profileId` still travels. The SDK copies the browser's
+  current event consent into admitted inputs' `context.gdpr.isConsentGiven` before
+  interception, overwriting any caller-supplied flag and leaving caller input
+  unchanged.
+  Thus an allowlisted page submitted after withdrawal defaults to `false`, even
+  if it was built with `true`. Interceptors may explicitly transform valid metadata,
+  following direct-event policy; final output validation and current-consent
+  admission still apply. Stateless free fetches do not stamp browser consent.
 
 Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
 `trackClick`, `exo_node_hover` to `trackHover`, `component` to `trackFlagView`).
@@ -866,8 +882,12 @@ remains available for events and later navigation until a legitimate profile
 update or an explicit reset/destroy boundary; navigation never rolls it back.
 Supersession suppresses pending hydration and replay, but leaves already accepted
 queue work intact. A concurrent `fetchExperience()` joins the current identity
-initialization boundary without waiting for replay HTTP. Evaluated profile-state
-hydration remains separate from the captured replay target.
+initialization boundary without waiting for replay HTTP. This is current SDK
+behavior, not proof that the adopted identity is concrete upstream; a profile-only
+fetch using an uncommitted ID can fail. `identityReady`, admission, hydration,
+and generic SDK success do not prove commit, and same-ID binding and commit
+completion are not currently proved. Evaluated profile-state hydration remains
+separate from the captured replay target. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 A private handoff containing a profile, identity, or replay is browser-visible
 sensitive data: escape its
@@ -880,18 +900,20 @@ guarantee exactly-once delivery.
 
 The public Node `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
 packages final request profile state without replay, events, or network work. Call
-it after the last sequential server fetch, using `request.profile`; an earlier
-response can contain stale identity. Its private-request cache scope is the
-default and only accepted scope. An absent profile omits `state` entirely and
+it after the operations whose profile results the response needs have finished,
+using `request.profile`; an earlier response can contain stale identity. Its
+private-request cache scope is the default and only accepted scope. An absent profile omits `state` entirely and
 preserves the current browser profile and continuity, including after a JSON round
 trip. This producer differs from Runtime's unchanged internal replay-preserving
 helper with the same name.
 
-For the committed-server flow, await a direct server page with an accepted result
-and API-issued profile, then make distinct sequential identify-bearing XDA fetches.
-Build identify with explicit request context, reuse each distinct plan for repeated
-presentations, and package the final profile. Construct Web with no profile/consent
-defaults. Automatic tracking uses the existing attributed HTML from construction;
+For the committed-server flow, submit one direct identify if requested and retain
+the ordinary owned page operation. Await evaluated outcomes when later selection
+needs them; page acceptance/profile presence is not a universal content gate.
+Fetch independent distinct Experiences concurrently with an already-concrete
+profile after successful ordinary XPAPI commit when a new identity is needed,
+reuse plans for repeated presentations, and capture the current profile at the
+response boundary. Construct Web with no profile/consent defaults. Automatic tracking uses the existing attributed HTML from construction;
 register manual elements immediately. Subscribe and await `hydrateHandoffState()`
 independently to adopt the final server profile.
 Initial activation performs no content refetch or page event. Hydration does not
@@ -900,12 +922,16 @@ mark the route tracked.
 Automatic tracking, attribute opt-ins, and explicit per-element controls coexist
 and remain subject to consent. None requires handoff hydration before measurement.
 On reset, synchronously invalidate pending application renders and replace old
-attributed content before awaiting a new page/profile and content cycle: reset
+attributed content before awaiting new visitor or content work: reset
 resumes eligible discovery immediately. Register replacement manual elements after
 insertion, and unsubscribe application subscriptions during cleanup. See the
 [complete server/browser recipe](../../README.md#committed-server-rendering-and-state-only-hydration).
-Personalization preflight remains separate and does not provide noncommitting XDA
-content selection.
+Prepared replay is also supported; it is an Experiences capability rather than a
+direct port of the pinned Optimization contract. Event-bearing XDA forces
+preflight; state-only hydration cannot finalize preview results. The current
+Node/Web/hybrid references commit ordinary XPAPI events before profile-only
+content fetching. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
+for the limits of strict server-preview/client-submit flows.
 
 ## SSR import safety
 

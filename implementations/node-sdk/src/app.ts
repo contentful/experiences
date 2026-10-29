@@ -2,7 +2,6 @@ import {
   ContentfulExperiences,
   EXPERIENCES_NODE_SDK_VERSION,
   NotFoundError,
-  type PortableRenderPlan,
 } from '@contentful/experiences-node';
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -103,35 +102,28 @@ app.get('/', async (req, res) => {
       : { isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()) }),
   });
   try {
-    // XDA can time out when identify creates a profile in the initial content fetch.
-    // Once that is fixed, include page in the first fetch instead of sending it here.
-    if (!request.isPreview) await request.page({ properties: page });
-    const identifyEvent =
-      !request.isPreview && userId
-        ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
-        : undefined;
-    const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
-
-    const experiences: { id: string; plan: PortableRenderPlan }[] = [];
-    // Serialize potentially profile-producing requests (including repeated identify)
-    // so the next fetch uses the facade's updated profile. Once repeated identify
-    // is unnecessary, revisit this ordering and retain only demonstrated dependencies.
-    for (const experienceId of experienceIds) {
-      const plan = await request.fetchExperience(
-        {
-          experienceId,
-          // XDA currently returns baseline for profile-only fetches. Include identify
-          // until that is fixed; later fetches can then use the established profile alone.
-          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-        },
-        resolveOptions
-      );
-      experiences.push({ id: experienceId, plan });
+    const identifyRequested = !request.isPreview && Boolean(userId);
+    if (!request.isPreview) {
+      // Await explicit identity evaluation before selecting content. Event failure
+      // still permits content with the profile the SDK currently holds.
+      if (identifyRequested && userId)
+        await request.identify({ userId, traits: { identified: true } }).catch(() => {});
+      await request.page({ properties: page }).catch(() => {});
     }
+    const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+    const plans = new Map(
+      await Promise.all(
+        [...new Set(experienceIds)].map(
+          async (experienceId) =>
+            [experienceId, await request.fetchExperience({ experienceId }, resolveOptions)] as const
+        )
+      )
+    );
+    const experiences = experienceIds.map((id) => ({ id, plan: plans.get(id)! }));
 
     res.render('index', {
       isPreview: request.isPreview,
-      identifyRequested: Boolean(identifyEvent),
+      identifyRequested,
       experiences,
     });
   } finally {

@@ -107,41 +107,38 @@ for (const [path, route] of Object.entries(routes)) {
       ...(livePreview ? {} : { isPreview: Boolean(sessionId) }),
     });
     try {
-      // XDA workaround: an initial identify-bearing fetch can time out without a
-      // profile. Await the committed page and require actual SDK-owned identity.
-      if (!request.isPreview) {
-        const pageResult = await request.page({ properties: page });
-        if (!pageResult.accepted || !request.profile?.id) {
-          throw new Error('Page initialization did not establish a profile.');
-        }
-      }
       const identifyRequested = !request.isPreview && req.query.userId === 'charles';
-      const identify = identifyRequested
-        ? request.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-        : undefined;
-      const plans = new Map<string, PortableRenderPlan>();
-      // Repeated identify makes these requests potentially profile-producing; later
-      // fetches can depend on earlier SDK profile updates. Reassess serialization when
-      // repeated identify is removed, retaining only actual dependencies (README).
-      for (const experienceId of new Set([...route.automatic, ...route.manual])) {
-        // XDA workaround: profile-only selection can return baseline for an
-        // identified visitor. Reuse this cycle's bound identify per distinct fetch;
-        // never independently send identify or reattach the committed page.
-        plans.set(
-          experienceId,
-          await request.fetchExperience(
-            {
-              experienceId,
-              // Session parameters/extensions belong to the server-owned session.
-              ...(binding?.experienceId === experienceId ? {} : { extensions: { sourceMap: {} } }),
-              ...(identify ? { personalization: { events: [identify] } } : {}),
-            },
-            { config: { components: {}, experienceTemplates: {} } }
-          )
-        );
+      if (!request.isPreview) {
+        // Await explicit identity evaluation before content selection. Refused or
+        // failed events do not make otherwise valid content ineligible.
+        if (identifyRequested)
+          await request
+            .identify({ userId: 'charles', traits: { identified: true } })
+            .catch(() => {});
+        await request.page({ properties: page }).catch(() => {});
       }
-      // Consumer integration: package only final SDK request state, after all
-      // profile-producing operations. This public producer sends nothing and creates no replay.
+      const plans = new Map<string, PortableRenderPlan>(
+        await Promise.all(
+          [...new Set([...route.automatic, ...route.manual])].map(
+            async (experienceId) =>
+              [
+                experienceId,
+                await request.fetchExperience(
+                  {
+                    experienceId,
+                    // Session parameters/extensions belong to the server-owned session.
+                    ...(binding?.experienceId === experienceId
+                      ? {}
+                      : { extensions: { sourceMap: {} } }),
+                  },
+                  { config: { components: {}, experienceTemplates: {} } }
+                ),
+              ] as const
+          )
+        )
+      );
+      // Consumer integration: capture the SDK state used by this response
+      // after its content requests settle. The state-only producer sends no events.
       const handoff = request.isPreview
         ? undefined
         : createRequestHandoffFromData({
@@ -168,16 +165,21 @@ for (const [path, route] of Object.entries(routes)) {
         handoff,
         preview: request.isPreview ? { binding, initialPlans } : undefined,
       }).replaceAll('<', '\\u003c');
-      if (!request.isPreview) writeIdentity(res, request, req.secure);
-      res.render('index', { title: route.title, path, route, plans, identifyRequested, bootstrap });
-    } catch (error) {
+      Object.assign(res.locals, {
+        title: route.title,
+        path,
+        route,
+        plans,
+        identifyRequested,
+        bootstrap,
+      });
+    } finally {
+      request.destroy();
       // The SDK owns profile updates; the HTTP host alone writes response cookies.
       // Also expire denied identity when an upstream request fails.
       if (!request.isPreview) writeIdentity(res, request, req.secure);
-      throw error;
-    } finally {
-      request.destroy();
     }
+    res.render('index');
   });
 }
 

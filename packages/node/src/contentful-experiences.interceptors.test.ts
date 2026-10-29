@@ -129,15 +129,19 @@ describe('Node event interceptors', () => {
     const started: [string, string | undefined][] = [];
     sdk.interceptors.event.add(async (event) => {
       started.push([event.type, event.context.userAgent]);
+      expect(event.context).toMatchObject({ gdpr: { isConsentGiven: true } });
       if (event.type === 'identify') await hold.promise;
       event.context.userAgent = 'hook';
+      Object.assign(event.context, { gdpr: { isConsentGiven: false } });
       return event;
     });
     const request = sdk.forRequest({ consent: true, eventContext: { userAgent: 'request-agent' } });
     const events = [
-      request.eventBuilder.buildIdentify({ userId: 'user' }),
-      request.eventBuilder.buildPageView(),
+      sdk.eventBuilder.buildIdentify({ userId: 'user', userAgent: 'request-agent' }),
+      sdk.eventBuilder.buildPageView({ userAgent: 'request-agent' }),
     ];
+    Object.assign(events[0]!.context.gdpr, { isConsentGiven: 'yes' });
+    const original = globalThis.structuredClone(events);
     expect(started).toEqual([]);
     expect(upsert).not.toHaveBeenCalled();
     expect(analytics).not.toHaveBeenCalled();
@@ -154,7 +158,11 @@ describe('Node event interceptors', () => {
     await pending;
     const sent = fetch.mock.calls[0]?.[0].personalization?.events;
     expect(sent?.map((event) => event.type)).toEqual(['identify', 'page']);
-    expect(sent?.[0]?.context).toMatchObject({ userAgent: 'hook' });
+    expect(sent?.[0]?.context).toMatchObject({
+      userAgent: 'hook',
+      gdpr: { isConsentGiven: false },
+    });
+    expect(events).toEqual(original);
   });
 
   it('keeps XDA profile/content fetch while dropping original and transformed blocked events', async () => {
@@ -180,22 +188,41 @@ describe('Node event interceptors', () => {
     expect(onEventBlocked).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects invalid XDA hook output before final consent and transport', async () => {
-    const onEventBlocked = vi.fn();
-    const { sdk } = setup({ onEventBlocked });
-    const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
-    sdk.interceptors.event.add(() => ({ type: 'track' }) as never);
-    await expect(
-      sdk
-        .forRequest()
-        .fetchExperience(
-          { experienceId: 'exp', personalization: { events: [sdk.eventBuilder.buildPageView()] } },
+  it.each(['missing fields', 'gdpr', 'title', 'context'])(
+    'rejects invalid final XDA hook output (%s) before final consent and transport',
+    async (field) => {
+      const onEventBlocked = vi.fn();
+      const { sdk } = setup({ onEventBlocked });
+      const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
+      const page = sdk.eventBuilder.buildPageView();
+      const hook = vi.fn((event: OptimizationEventStreamEvent) => {
+        if (field === 'missing fields') return { type: 'track' } as never;
+        if (field === 'context') return { ...event, context: null } as never;
+        return {
+          ...event,
+          context: {
+            ...event.context,
+            ...(field === 'gdpr'
+              ? { gdpr: { isConsentGiven: 'yes' } }
+              : { page: { ...page.context.page, title: 123 } }),
+          },
+        } as never;
+      });
+      sdk.interceptors.event.add(hook);
+      await expect(
+        sdk.forRequest().fetchExperience(
+          {
+            experienceId: 'exp',
+            personalization: { events: [page] },
+          },
           resolver
         )
-    ).rejects.toThrow();
-    expect(fetch).not.toHaveBeenCalled();
-    expect(onEventBlocked).not.toHaveBeenCalled();
-  });
+      ).rejects.toThrow();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(onEventBlocked).not.toHaveBeenCalled();
+      expect(hook).toHaveBeenCalledOnce();
+    }
+  );
 });
 
 describe('Node prepared event interception', () => {

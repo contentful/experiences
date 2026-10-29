@@ -324,7 +324,10 @@ export interface PortableRenderPlan {
   attribution?: PlanAttribution;
   /** Present when XDA returned personalization state for this Experience. */
   personalization?: {
-    /** Profile id to use for subsequent personalized requests. */
+    /**
+     * ID returned by XDA evaluation; a newly previewed profile is not committed.
+     * Profile-only requests require a concrete XPAPI profile and committed state.
+     */
     profileId: string;
   };
   /**

@@ -126,7 +126,8 @@ describe('published package entry points', () => {
           type CoreStates, type RuntimeLivePreviewInitializer }
           from '@contentful/experiences-react/web-sdk';
 
-        const ui = createReactExperiences({ config: { components: {} } });
+        const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } =
+          createReactExperiences({ config: { components: {} } });
         declare const config: ExperiencesWebConfig;
         declare const livePreview: RuntimeLivePreviewInitializer;
         declare const plan: PortableRenderPlan;
@@ -146,10 +147,10 @@ describe('published package entry points', () => {
           const track: WebExperiencesRuntime['track'] = trackEvent;
           const locale: WebExperiencesRuntime['setLocale'] = setLocale;
           void [consent, preview, context, track, locale, setConsent];
-          return <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+          return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
         }
-        const owned = <ui.ExperiencesRoot {...config} livePreview={livePreview}><ManualContent /></ui.ExperiencesRoot>;
-        const injected = <ui.ExperiencesProvider sdk={sdk}><ManualContent /></ui.ExperiencesProvider>;
+        const owned = <ExperiencesRoot {...config} livePreview={livePreview}><ManualContent /></ExperiencesRoot>;
+        const injected = <ExperiencesProvider sdk={sdk}><ManualContent /></ExperiencesProvider>;
         const binding = createExperiencesRootSdkBinding({ sdk });
         const concrete: ContentfulExperiences = binding.sdk;
         disposeExperiencesRootSdkBinding(binding);
@@ -157,7 +158,7 @@ describe('published package entry points', () => {
         // @ts-expect-error Destruction belongs to the SDK owner.
         useExperiencesActions().destroy();
         // @ts-expect-error Managed content loading belongs to the next phase.
-        ui.Experience;
+        createReactExperiences({ config: { components: {} } }).Experience;
       `;
       const options: ts.CompilerOptions = {
         target: ts.ScriptTarget.ES2023,

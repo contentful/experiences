@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { createAttemptLog } from './attempt-log';
 import { loadPageContent } from './content-loader';
-import { experiences } from './experiences';
+import { ExperiencesRoot } from './experiences';
 import type { PublicEnvironment } from '../public-config';
 import './theme.css';
 
@@ -25,7 +25,7 @@ const environment = window.ENVIRONMENT;
 const reactRoot = createRoot(root);
 reactRoot.render(
   <StrictMode>
-    <experiences.ExperiencesRoot
+    <ExperiencesRoot
       spaceId={environment.SPACE_ID}
       environmentId={environment.ENVIRONMENT_ID}
       locale={environment.LOCALE}
@@ -33,7 +33,7 @@ reactRoot.render(
       onStatesReady={log.onStatesReady}
     >
       <App pathname={pathname} environment={environment} content={content} log={log} />
-    </experiences.ExperiencesRoot>
+    </ExperiencesRoot>
   </StrictMode>
 );
 // Web owns interaction completion and its final hide/unload flush. Keep the
