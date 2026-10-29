@@ -1,0 +1,20 @@
+<main
+  style="max-width: 720px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;"
+>
+  <h1 style="margin-top: 0;">Contentful Experiences — Vite + Svelte example</h1>
+  <p style="color: #4b5563;">
+    This app fetches, resolves, and renders a Contentful Experience entirely in the browser with
+    <code>@contentful/experiences-svelte</code>. There is no server.
+  </p>
+  <a
+    href="/landing"
+    style="display: inline-block; padding: 10px 16px; border-radius: 8px; background: #4f39f6; color: #ffffff; text-decoration: none; font-weight: 500;"
+  >
+    View the demo experience
+  </a>
+  <p style="color: #9ca3af; font-size: 13px; margin-top: 24px; margin-bottom: 0;">
+    <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
+    default. Replace it in the URL with any other Experience id from your space. Append
+    <code>?debug=true</code> for SDK logging and a dump of the resolved plan.
+  </p>
+</main>
