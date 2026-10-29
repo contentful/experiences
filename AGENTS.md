@@ -46,11 +46,15 @@ experiences/
 │   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   └── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
+├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
+│   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
     └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
 ```
 
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
+
+**`skills/`** holds agent-invokable guides in the `SKILL.md` format. When asked to render Experiences in a framework without a first-party adapter (Vue, Nuxt, Solid, Lit, Qwik, ...), follow [skills/implement-framework-adapter/SKILL.md](./skills/implement-framework-adapter/SKILL.md). Keep it in sync when adapter behavior changes (merge order, fallbacks, context, diagnostics).
 
 **`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped

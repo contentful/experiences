@@ -27,6 +27,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 - [Error handling & troubleshooting](#error-handling--troubleshooting)
 - [Svelte / SvelteKit](#svelte--sveltekit)
 - [Angular](#angular)
+- [Other frameworks](#other-frameworks)
 - [Examples](#examples)
 - [API reference](#api-reference)
 - [Design system stays portable](#design-system-stays-portable)
@@ -1015,6 +1016,14 @@ export class ExperiencePageComponent {
 ```
 
 `PortableRenderPlan` is plain JSON — component classes live in `experienceConfig`, never in the plan — so relaying it to the browser through `TransferState` for hydration works without special handling. See [`examples/angular`](./examples/angular) for the full wiring and [`packages/adapter-angular/README.md`](./packages/adapter-angular/README.md) for the complete API surface and parity table.
+
+---
+
+## Other frameworks
+
+React, Svelte, and Angular have first-party adapters. For a React-based framework that needs its own render walk, such as Astro islands, use [`@contentful/experiences-react/custom-renderer`](./packages/adapter-react/README.md#custom-renderer-contentfulexperiences-reactcustom-renderer) (see [`examples/astro`](./examples/astro)).
+
+For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-framework-adapter skill](./skills/implement-framework-adapter/SKILL.md) walks you, or an AI coding assistant, through building a renderer on `@contentful/experiences-node` and `@contentful/experiences-web`: the render-layer responsibilities every adapter implements, how they map to your framework, and the tests an adapter should pass. Point your assistant at the file, or copy the `skills/implement-framework-adapter/` folder into your project's skills directory.
 
 ---
 
