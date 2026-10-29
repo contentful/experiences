@@ -100,7 +100,14 @@ jobs:
         run: npx nx release --specifier prerelease --preid dev --skip-publish
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
-          CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT: 'true'
+
+      - name: Rebuild with released versions
+        # The restored build folders embed the previous versions in SDK
+        # metadata (event `context.library`, `X-Contentful-User-Agent`).
+        run: npx nx run-many -t build --exclude=tag:scope:implementation --skip-nx-cache
+
+      - name: Verify release artifacts
+        run: npx nx run-many -t verify-release-artifact --skip-nx-cache
 
       - name: NX Publish
         # Explicit `--tag dev` ensures the `latest` dist-tag on npm is never
