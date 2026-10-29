@@ -76,7 +76,10 @@ workarounds merely because the reference already uses them.
    event shape, or the generated client performs the required conversion, verify
    built page and identify events end to end and remove the extra Client
    normalization if redundant. Keep consent metadata on ordinary SDK events and
-   retain coverage of the supported wire contract.
+   retain coverage of the supported wire contract and caller-input immutability.
+   Preserve final-shape validation after Node/Web event interception, before final
+   consent callbacks and Web event publication; removing redundant conversion
+   does not mean deleting validation wholesale.
 3. **Initial identification without a profile can time out.** An initial XDA
    request containing identify, including a page/identify batch, can return HTTP
    200 with a personalization `TimeoutError`, baseline content, and no profile.
@@ -86,6 +89,16 @@ workarounds merely because the reference already uses them.
    audience, and return the variant without errors, move the page event into the
    first Experience fetch and remove the independent page call. Preserve one fetch
    per Experience and keep profile ownership in the SDK.
+   Reconsider the standalone page call, the pre-fetch profile prerequisite, and
+   any page-specific recovery together when the initial-identification timeout is
+   fixed; they must not keep the old initialization flow mandatory independently.
+
+The reference currently serializes potentially profile-producing fetches,
+including repeated identify, so each next fetch uses the facade's updated profile.
+After the repeated-identify workaround is removed, serialize only when a preceding
+operation changes input needed by the next operation, retaining demonstrated
+dependencies. Fetching each distinct Experience once and reusing its plan for
+repeated presentations remain durable requirements.
 
 Verify the delivered variant and personalization result during these checks;
 HTTP 200 alone is insufficient. The render plan does not currently expose all raw

@@ -12,12 +12,13 @@ This is the only rendering SDK package you install. It re-exports everything you
 
 ## Import entries
 
-| Import                                          | Available APIs                                                                                                                       |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`        |
-| `@contentful/experiences-react/client`          | `ClientExperienceRenderer` (`ExperienceRenderer`), render-context/design hooks, `useExperiencePlan`, shared registry/types/utilities |
-| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                          |
-| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                        |
+| Import                                          | Available APIs                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                         |
+| `@contentful/experiences-react/client`          | Bound factory, managed root, injected provider, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks, `useExperiencePlan`, shared registry/types/utilities |
+| `@contentful/experiences-react/host`            | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                    |
+| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                                                                           |
+| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                         |
 
 Client APIs previously imported from the root move to `/client`. The root and
 `/server` do not load the live Web SDK. The unbundled ESM build preserves each
@@ -31,9 +32,10 @@ using it; ordinary adapter imports and declarations do not require it. Its
 existing standalone APIs are unchanged. General supplied-plan rendering and
 `useExperiencePlan` remain available on `/client`.
 
-Managed runtime providers and Experience loading components are planned in the
-subsequent runtime integration phases. This package increment establishes the
-entry boundaries; direct Web runtime use is already available through `/web-sdk`.
+Managed runtime ownership and state/action hooks are available on `/client`.
+Managed Experience loading, resolved preview-update presentation and route-page
+coordination follow in the next integration phase. Supplied-plan rendering and
+application-owned fetching remain supported.
 
 ---
 
@@ -82,6 +84,108 @@ described in the [Runtime limits](../runtime/README.md#optional-runtime-live-pre
 resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
 
+### Runtime ownership, state and actions
+
+Bind the registry once, then mount a managed root around supplied-plan rendering:
+
+```tsx
+import {
+  createReactExperiences,
+  useConsentState,
+  useExperiencesActions,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+const ui = createReactExperiences({ config: experienceConfig });
+
+function ConsentControls() {
+  const consent = useConsentState();
+  const { setConsent } = useExperiencesActions();
+  return (
+    <button onClick={() => setConsent(true)} disabled={consent === true}>
+      Grant consent
+    </button>
+  );
+}
+
+function App({ plan }: { plan: PortableRenderPlan }) {
+  return (
+    <ui.ExperiencesRoot {...browserConfig}>
+      <ConsentControls />
+      <ui.ExperienceRenderer experience={plan} />
+    </ui.ExperiencesRoot>
+  );
+}
+```
+
+The factory is pure and safe at module scope. The managed root constructs Web
+after browser commit and destroys it during cleanup, including Strict Mode
+effect replay. Conflicting owners surface the Web singleton error through context.
+Structural configuration is captured for the mounted owner; use a deliberate
+React `key` replacement to change credentials, endpoints, preview policy or the
+initializer. Locale props use `setLocale`; consent and other mutable commands use
+actions. Within fixed preview mode, explicit `sdk.replaceLivePreview()` remains
+available on an application-owned concrete Web instance.
+
+`useExperiences()` returns the current `WebExperiencesRuntime` for SDK actions and
+tracking. It is distinct from singular `useExperience()`, the render context.
+`useExperiencesContext()` returns `{ sdk, error, isLive, isContentReady }`. Managed
+SSR and initial hydration use a cached inert snapshot; setup failure retains that
+snapshot and supplied content with `error`. `isLive` means a concrete SDK is bound.
+`isContentReady` means activation/state hydration has settled, including failure;
+it does not assert content, visitor identity or preview connection success.
+Supplied-plan rendering preserves content while either flag is false.
+Locale prop failures remain visible when hydration settles. Correcting or removing
+the locale prop clears its failure while preserving any activation/hydration error.
+
+Provide `snapshot` for stable server/browser state. Optional
+`initialization={{ handoff, routeKey }}` applies state through Web's
+`hydrateHandoffState` after activation. It emits no page or prepared replay.
+Handoff cache safety and receiving scope are asserted before SSR children render;
+unsafe public/static handoffs and mismatched space/environment IDs throw before
+their profile state can reach presentation. Scope follows the captured managed
+configuration or the actual injected SDK.
+Hydration rejection retains the live binding and exposes its error. Snapshot and
+handoff state never become startup `defaults`, which have separate persistence
+and consent semantics. `onStatesReady(states)` runs after commit, before this
+hydration and passive child effects, and may return subscription cleanup.
+Its callback is captured for the binding; use a replacement owner/provider when
+changing application subscription setup.
+
+Inject an application-owned SDK through `<ui.ExperiencesProvider sdk={sdk}>`.
+Without snapshot/initialization it is immediately available; replacement rebinds
+subscriptions and manual refs. The provider never destroys an injected SDK.
+Independent React roots can share one explicit `/host` binding and each use an
+injected provider. Activate the host outside React render with
+`createExperiencesRootSdkBinding({ config, onStatesReady })`, then unmount its
+React roots before `disposeExperiencesRootSdkBinding(binding)` during deliberate
+host replacement or teardown within a live document.
+`{ sdk }` creates a borrowed binding whose disposal leaves SDK destruction to the
+application. During document exit, keep the owner and attributed roots alive for
+Web's interaction completion and final hide flush; browser teardown releases that
+document. Persisted BFCache `pagehide` retains ownership for resumption.
+
+The state hooks are `useProfileState`, `useLocaleState`, `useConsentState`,
+`usePersistenceConsentState`, `useExperienceRequestState`, `useEventStreamState`,
+`useBlockedEventStreamState`, and `usePreviewState`. They preserve SDK value types,
+including `undefined` and `false`, and cache observable emissions for React.
+Event state reads the last attempt; it is not a new attempt notification. For an
+attempt log, subscribe early with `onStatesReady` and omit the subscription's
+immediate historical value when counting new attempts.
+
+`useExperiencesActions()` exposes receiver-safe `setConsent`, `flushEvents`,
+`identifyUser`, `trackPageView`, `resetUser`, `trackEvent`, `setLocale`, `trackView`,
+`trackClick`, `trackHover`, and `trackFlagView`. These preserve the underlying
+arguments, results, errors and runtime policy. Direct identify/page actions do not
+refresh content or coordinate navigation. Destruction remains an owner operation.
+
+Pass the optional `livePreview` initializer directly to the managed root's Web
+configuration. It is invoked by SDK setup after commit, and `usePreviewState`
+observes the shared source. Pending initialization, source errors, static preview
+and session replacement do not change root readiness. Preview errors remain in
+`states.preview.error`; undefined means disabled or initializing. No initial
+fetch or per-view resolved update binding is introduced by a provider.
+
 ### Live preview
 
 Use runtime-owned preview through the public Web SDK. A conditional initializer
@@ -115,7 +219,8 @@ const subscription = sdk.subscribeToPreview(
     showError(error);
   }
 );
-// On final exit: subscription.unsubscribe(); sdk.destroy();
+// On explicit replacement/teardown within a live document:
+// subscription.unsubscribe(); sdk.destroy();
 ```
 
 Render supplied initial plans before subscribing, without another startup
@@ -268,25 +373,40 @@ unavailable. Stable rerenders and per-kind option changes preserve manual root
 registration. Disable automatic views while explicitly registering manual views:
 
 ```tsx
-<ExperienceRenderer
-  experience={plan}
-  config={registry}
-  trackViews={false}
-  onNodeRoot={({ element, data }) => {
-    if (!data) return;
-    sdk.tracking.enableElement('views', element, { data });
-    return () => sdk.tracking.clearElement('views', element);
-  }}
-/>
+import { useCallback } from 'react';
+import {
+  createReactExperiences,
+  useExperiences,
+  type OnExperienceNodeRoot,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+const ui = createReactExperiences({ config: registry });
+
+function ManualContent({ plan }: { plan: PortableRenderPlan }) {
+  const sdk = useExperiences();
+  const registerView = useCallback<OnExperienceNodeRoot>(
+    ({ element, data }) => {
+      if (!data) return;
+      sdk.tracking.enableElement('views', element, { data });
+      return () => sdk.tracking.clearElement('views', element);
+    },
+    [sdk]
+  );
+  return <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+}
 ```
 
-This explicit example uses an application-owned `sdk`; it performs no attribution
+Mount `ManualContent` under the managed root or an injected provider. Snapshot-to-live
+activation and injected SDK replacement change the memoized callback, cleaning
+the old registration before attaching the current SDK. Direct application-owned
+SDK registration remains supported. Neither path performs attribution
 selection or root collection. Web owns measurement, consent and delivery, and
 measures each manual element independently. The reference's single-root components
-use ordinary forwarding, with no root-count/readiness panel. Phase 5 must provide
-context SDK access and a registry bound once; Phase 6 must carry the same per-kind
-and optional root callback props through managed `Experience` loading. Those
-managed/context APIs are planned, not available yet. The implementation plan
+use ordinary forwarding, with no root-count/readiness panel. Context SDK access
+and registry binding are available now; Phase 6 carries the same per-kind and
+optional root callback props through managed `Experience` loading. That managed
+loading API remains planned. The implementation plan
 requires concise consumer examples and checks rather than SDK prop threading,
 root maps or consumer fetch/subscription/page orchestration. XDA workarounds do
 not require root/ref boilerplate.
@@ -434,11 +554,13 @@ Implementation and colocated tests are grouped by responsibility:
 - `nodes/`: node composition, snapshots and prop resolution.
 - `tracking/`: DOM-root bindings, refs and attribution types.
 - `diagnostics/`: error boundaries, fallbacks and the debug panel.
-- `hooks/`: general supplied-plan and design hooks.
+- `hooks/`: supplied-plan, design, observable state and bound event/command hooks.
+- `provider/`: owned/injected activation, SDK binding and pure registry factory.
+- `context/`: SDK access and activation/readiness state.
 - `design/`: CSS conversion utilities.
 - `registry/`: registration definitions, normalization and types.
 - `preview/legacy/`: retained standalone preview hooks/tests, excluded from publication.
-- `test-fixtures/`: existing shared test data.
+- `test/`: shared test utilities and fixture data, excluded from publication.
 
 The build remains unbundled and preserves nested module paths and client directives.
 Package entry checks cover the full source tree and its emitted declarations.

@@ -113,6 +113,9 @@ app.get('/', async (req, res) => {
     const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 
     const experiences: { id: string; plan: PortableRenderPlan }[] = [];
+    // Serialize potentially profile-producing requests (including repeated identify)
+    // so the next fetch uses the facade's updated profile. Once repeated identify
+    // is unnecessary, revisit this ordering and retain only demonstrated dependencies.
     for (const experienceId of experienceIds) {
       const plan = await request.fetchExperience(
         {

@@ -120,6 +120,9 @@ for (const [path, route] of Object.entries(routes)) {
         ? request.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
         : undefined;
       const plans = new Map<string, PortableRenderPlan>();
+      // Repeated identify makes these requests potentially profile-producing; later
+      // fetches can depend on earlier SDK profile updates. Reassess serialization when
+      // repeated identify is removed, retaining only actual dependencies (README).
       for (const experienceId of new Set([...route.automatic, ...route.manual])) {
         // XDA workaround: profile-only selection can return baseline for an
         // identified visitor. Reuse this cycle's bound identify per distinct fetch;
@@ -137,8 +140,8 @@ for (const [path, route] of Object.entries(routes)) {
           )
         );
       }
-      // Consumer integration: package only final SDK request state, after every
-      // sequential fetch. This public producer sends nothing and creates no replay.
+      // Consumer integration: package only final SDK request state, after all
+      // profile-producing operations. This public producer sends nothing and creates no replay.
       const handoff = request.isPreview
         ? undefined
         : createRequestHandoffFromData({

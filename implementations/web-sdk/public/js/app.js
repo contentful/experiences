@@ -47,6 +47,8 @@ const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 let generation = 0;
 let pageGeneration = 0;
 let disposed = false;
+let pagePending = false;
+let pageFailed = false;
 let pendingPage = Promise.resolve();
 let manualElements = [];
 let previewSubscriptions = [];
@@ -87,22 +89,20 @@ function routeUrl(path) {
   return url.pathname + url.search;
 }
 
-function showStatus(target, text, { error = false, retry = false, initialize = false } = {}) {
+function showStatus(target, text, { error = false, retry = false } = {}) {
   const content = cloneTemplate('status');
   const message = content.firstElementChild;
   message.setAttribute('role', error ? 'alert' : 'status');
   message.textContent = text;
   const button = content.querySelector('button');
   if (retry) {
-    button.addEventListener('click', () => {
-      void renderRoute({ sendPage: initialize || !sdk.states.profile.current?.id });
-    });
+    button.addEventListener('click', () => void renderRoute({ retry: true }));
   } else button.remove();
   target.replaceChildren(content);
 }
 
 // Reference app: keep route orchestration separate from shell, visitor and content work.
-async function renderRoute({ sendPage = false, focus = false, reset = false } = {}) {
+async function renderRoute({ sendPage = false, retry = false, focus = false, reset = false } = {}) {
   const nextBinding = getPreviewBinding(env, location.href);
   const nextIsPreview = Boolean(
     nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
@@ -142,9 +142,8 @@ async function renderRoute({ sendPage = false, focus = false, reset = false } = 
       }
     } else {
       // Identify joins any initial page; it does not send a separate identify call.
-      await initializeVisitor(sendPage);
+      await initializeVisitor(sendPage, retry, isCurrent);
       if (!isCurrent()) return;
-      if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
     }
 
     const failed = await loadExperiences(destinations, identifyRequested, isCurrent);
@@ -166,7 +165,7 @@ async function renderRoute({ sendPage = false, focus = false, reset = false } = 
       sdk.isPreview
         ? 'Preview content could not be loaded. Check the session and retry.'
         : 'A visitor profile could not be established. Check your connection and retry.',
-      { error: true, retry: true, initialize: true }
+      { error: true, retry: true }
     );
     for (const targets of destinations.values()) {
       targets.forEach(({ target }) =>
@@ -250,23 +249,42 @@ function createDestinations(route) {
   return destinations;
 }
 
-function initializeVisitor(sendPage) {
-  if (sendPage) {
+// XDA workaround: the standalone page, pre-fetch profile prerequisite and
+// page-specific recovery jointly compensate for initial identify-bearing XDA timeouts.
+// Reassess them together when the first event-bearing fetch can establish identity
+// and select the expected variant (README); retain route ownership/lifetime checks.
+async function initializeVisitor(sendPage, retry, isCurrent) {
+  if (sendPage || (retry && !pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
     const pageRequest = ++pageGeneration;
     const properties = { url: location.href, title: document.title };
-    // XDA workaround: establish SDK-owned identity first; initial XDA identify can time out.
-    // Remove the independent page only after initial event-bearing XDA fetches
-    // reliably create a profile and select the expected variant (README).
+    pagePending = true;
+    pageFailed = false;
     pendingPage = pendingPage
       .catch(() => {})
       .then(async () => {
         if (disposed || pageRequest !== pageGeneration) return;
-        const result = await sdk.page({ properties });
-        if (!disposed && pageRequest === pageGeneration && !result.accepted)
-          throw new Error('Page event was not admitted.');
+        try {
+          const result = await sdk.page({ properties });
+          if (disposed || pageRequest !== pageGeneration) return;
+          if (!result.accepted) throw new Error('Page event was not admitted.');
+        } catch (error) {
+          if (!disposed && pageRequest === pageGeneration) pageFailed = true;
+          throw error;
+        } finally {
+          if (pageRequest === pageGeneration) pagePending = false;
+        }
       });
   }
-  return pendingPage;
+  await pendingPage;
+  // An admitted offline page can acquire a profile later. Keep content eligibility
+  // separate from the shared page promise so a later content action can proceed.
+  if (isCurrent()) {
+    if (!sdk.states.profile.current?.id) {
+      pageFailed = true;
+      throw new Error('Visitor profile is not available.');
+    }
+    pageFailed = false;
+  }
 }
 
 async function loadExperiences(destinations, identifyRequested, isCurrent) {
@@ -276,6 +294,9 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
       : undefined;
   const failures = new Set();
   const rendered = new Set();
+  // Repeated identify makes these requests potentially profile-producing; later
+  // fetches can depend on earlier SDK profile updates. Reassess serialization when
+  // repeated identify is removed, retaining only actual dependencies (README).
   for (const [experienceId, targets] of destinations) {
     if (!isCurrent()) return;
     try {

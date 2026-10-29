@@ -14,6 +14,16 @@ The primary fetch + resolve entry point. Fetches an Experience payload from the 
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
+`serializePersonalization` validates the final XDA request shape and currently
+normalizes unsupported event fields: XDA rejects EventBuilder's `context.gdpr`
+with HTTP 422, so the generated schema strips it without mutating caller input.
+That normalization is temporary; final-shape validation remains required after
+Node/Web event interception, before final consent callbacks and Web event
+publication. Once upstream accepts the built shape or performs its conversion,
+simplify only redundant conversion, retaining validation, caller-input immutability,
+and coverage of the supported wire contract. Follow the Node reference's
+[XDA workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal).
+
 By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
 `{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
 `Experience.parameters` and referenced by `$parameters/<id>`. Delivery validates
