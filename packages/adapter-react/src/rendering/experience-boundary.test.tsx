@@ -8,7 +8,7 @@ import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ClientExperienceRenderer } from './client-renderer.js';
 import { ServerExperienceRenderer } from './server-renderer.js';
-import { minimalSourceMap } from '../test-fixtures/source-map.js';
+import { minimalSourceMap } from '../test/source-map.js';
 import type { Config } from '../registry/types.js';
 import type {
   ExperienceRootBinding,
