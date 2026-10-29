@@ -159,11 +159,11 @@ for the page-first, sequential-fetch flow.
 Current XDA behavior limits this integration: profile-only requests can return
 baseline content despite audience membership; initial identify requests without
 a profile can return a personalization timeout; and unmodified EventBuilder
-consent context is rejected. The Node reference establishes its profile with a
-direct page event, includes identify with each personalized fetch, and relies on
-Client's generated-schema serialization. See the reference's
-[workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-before removing these accommodations after upstream fixes.
+consent context is rejected. Until XDA fixes these, establish the profile with a
+direct page event and include identify with each personalized fetch; the SDK
+relies on Client's generated-schema serialization for the consent context. These
+accommodations are expected to go away once XDA and the client fix the
+underlying behavior.
 
 The current XDA client has no noncommitting preflight option for that POST.
 `prepareRequestHandoff()` previews events through the separate Personalization

@@ -64,7 +64,7 @@ npx nx show project adapter-react     # see a project's available targets
 
 ### Running an example app
 
-The `examples/` directory has a Next.js, a SvelteKit, and an Angular app that render live XDA payloads — the fastest way to see a change end to end.
+The `examples/` directory has Next.js, SvelteKit, Angular, and Astro apps that render live XDA payloads — the fastest way to see a change end to end. They read the demo Experience that [`examples/scripts`](./examples/scripts) seeds into your space; run its bootstrap once first.
 
 ```sh
 cd examples/nextjs
@@ -72,7 +72,7 @@ cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
 npm run dev                  # http://localhost:3000/<experience-id>
 ```
 
-`examples/sveltekit` and `examples/angular` mirror it, registering the same components against the same payload. Each has its own README for the framework-specific setup.
+`examples/sveltekit`, `examples/angular`, and `examples/astro` mirror it, registering the same components against the same payload. `examples/node` is a framework-neutral server that shows the identity cookie handoff between the Web SDK and the Node SDK. Each has its own README for the setup.
 
 ## 🏗️ Repository layout
 
@@ -87,13 +87,108 @@ packages/
 ├── adapter-react/   # @contentful/experiences-react  — React renderer (customer-facing)
 ├── adapter-svelte/  # @contentful/experiences-svelte — Svelte renderer (customer-facing)
 └── adapter-angular/ # @contentful/experiences-angular — Angular renderer (customer-facing)
-examples/
+examples/            # Example apps (customer-facing)
 ├── nextjs/          # Next.js 15 example app
 ├── sveltekit/       # SvelteKit 2 example app
-└── angular/         # Angular 20 + @angular/ssr example app
+├── angular/         # Angular 20 + @angular/ssr example app
+├── astro/           # Astro 7 custom-renderer example app
+├── node/            # node:http identity-cookie example (no renderer)
+└── scripts/         # One-time bootstrap that seeds the demo Experience
+implementations/     # Reference implementations (maintainer-facing)
+├── node-sdk/        # Express/EJS on the packed Node SDK
+├── web-sdk/         # Vanilla browser app on the packed Web SDK UMD build
+└── node-sdk+web-sdk/ # Express/EJS SSR handing off to the Web SDK in the browser
 ```
 
 Package boundaries matter — see the "Conventions" section of [`AGENTS.md`](./AGENTS.md) before moving code between packages. In short: `core` stays free of framework and delivery-client dependencies, and only `client` may import `@contentful/experience-delivery`.
+
+## Example apps vs. reference implementations
+
+The repo has two kinds of runnable apps. They look alike but serve different audiences, so keep them apart.
+
+|                        | `examples/` — example apps                                                                | `implementations/` — reference implementations                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Audience**           | Customers integrating the SDK                                                             | SDK maintainers validating SDK behavior                                                                                                   |
+| **Purpose**            | Show how to integrate the SDK in a given framework; the "clone + bootstrap + run" surface | Exercise the packages as they will be published, modeled on Optimization's reference implementations                                      |
+| **SDK dependency**     | Workspace packages by symlink (npm workspaces)                                            | Locally packed tarballs from `pkgs/`; outside npm workspaces                                                                              |
+| **Nx and root checks** | Ignored by Nx (`.nxignore`); run from each app's directory                                | Nx projects tagged `scope:implementation`; excluded from root `build`/`test`/`lint`/`typecheck`, prepared and checked by the CI Build job |
+| **Linked from**        | README and package READMEs                                                                | This file, `AGENTS.md`, and maintainer docs only                                                                                          |
+
+Use an example app to see a change render end to end, or when the change affects how customers integrate. Keep the four framework apps at parity with one another. Use a reference implementation to check that a change survives packing and installation, or to validate runtime behavior (profiles, consent, events) outside a framework adapter. Customer-facing docs, including package READMEs that ship to npm, link only to `examples/`.
+
+### Local npm artifacts
+
+Build and pack the SDK packages for use by standalone reference implementations:
+
+```sh
+npm run build:pkgs                   # all publishable packages under packages/*
+npm run pack:pkgs                    # same pipeline; reuses valid Nx build caches
+npx nx run node:pack                 # optional: only Node and its local dependencies
+```
+
+`build:pkgs` is the counterpart to Optimization's suite-wide build-and-pack
+workflow. The per-project `node:pack` command is an additional Nx convenience:
+it prepares only Core, Client, Runtime, and Node, using the same pack tasks and
+archive format as the suite-wide command. It does not install or start the Node
+reference implementation.
+
+Nx builds dependencies first and runs the existing release-artifact checks for
+Runtime, Node, and Web before packing them. Packing is uncached and writes to the
+ignored `pkgs/` directory: each package has its npm-generated versioned filename
+and a stable alias such as `contentful-experiences-node-local.tgz`. Each task
+replaces only its own archives; older versioned files can remain in `pkgs/`.
+The stable alias is replaced only after a complete archive passes entry-point
+checks; failures stop the command.
+
+The helper runs `npm pack` against each package's publication files and checks
+that its exported entry points are included. It preserves package manifests,
+including dependency ranges, scripts, and devDependencies, so local artifacts
+exercise the same metadata as publication. Lifecycle scripts are disabled during
+packing; Nx performs the required builds explicitly. These commands do not change
+versions, publish to a registry, or install a reference implementation.
+
+Run the packaging helper's checks with `npx nx test package-tools` and
+`npx nx lint package-tools`. They also participate in the root test/lint commands.
+
+### Running reference implementations
+
+After SDK changes, refresh all standalone reference implementations together:
+
+```sh
+npm run implementation:install
+```
+
+This runs each implementation's existing `setup` target: build and pack its SDK
+dependency chain, reinstall its local packages, and build browser assets where
+applicable. It preserves existing app-local `.env` files and does not start apps.
+Stop running reference apps with their scoped `serve:stop` targets before this
+dependency refresh, then relaunch them with `serve` or `dev`. Focused per-app
+`setup` targets remain available. The CI Build job prepares all implementations
+and runs their lint/typecheck targets after the SDK build.
+
+The [standalone Node reference implementation](./implementations/node-sdk/README.md)
+uses these artifacts with its own dependencies and `.env`. Prepare it with
+`npx nx run implementation-node-sdk:setup`, then run
+`npx nx run implementation-node-sdk:dev`. Root aggregate checks exclude
+implementations; their README documents the explicit Nx commands.
+
+The [standalone Web reference implementation](./implementations/web-sdk/README.md)
+uses the packed Web UMD distribution with browser-owned state and direct live
+delivery. Run `npx nx run implementation-web-sdk:setup`, then
+`npx nx run implementation-web-sdk:dev`. Its README covers local environment
+configuration, consent, interaction tracking, and scoped validation commands.
+
+The [standalone Node + Web reference implementation](./implementations/node-sdk+web-sdk/README.md)
+renders initial Experience content through Express/EJS, adopts final server profile
+state in the browser, and supports Web SDK navigation and interactions. Run
+`npx nx run implementation-node-sdk-web-sdk:setup`, then
+`npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
+integration from demo UI and optional browser-attempt diagnostics.
+
+Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
+`npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
+every process in the selected PM2 home. Use the implementation's scoped stop
+target when managing only one reference app.
 
 ## ✅ Submitting changes
 

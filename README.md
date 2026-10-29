@@ -14,7 +14,7 @@ npm install @contentful/experiences-angular   # Angular
 
 That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, the Runtime-owned `EventBuilder`, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, `@contentful/experiences-client`, and `@contentful/experiences-runtime` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
-All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable apps for all three live in [`examples/`](#examples).
+All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable example apps live in [`examples/`](#examples).
 
 ## Contents
 
@@ -1029,7 +1029,7 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 ## Examples
 
-Runnable apps for all three frameworks live in [`examples/`](./examples). They register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs.
+Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK.
 
 | Example                                      | Stack                       | Shows                                                                                                   |
 | -------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -1037,8 +1037,10 @@ Runnable apps for all three frameworks live in [`examples/`](./examples). They r
 | [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5      | 1:1 parity with the Next.js app                                                                         |
 | [`examples/angular`](./examples/angular)     | Angular 20 + `@angular/ssr` | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
 | [`examples/astro`](./examples/astro)         | Astro 7 + `@astrojs/react`  | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
+| [`examples/node`](./examples/node)           | Node `node:http`            | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer               |
+| [`examples/scripts`](./examples/scripts)     | Node + tsx                  | One-time bootstrap that seeds the demo Experience the other examples render                             |
 
-Both examples render the same demo Experience. To run them you first seed that Experience into your Contentful space with the one-time bootstrap script — the script uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
+The four framework apps register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs. To run one, first seed that Experience into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
 
 ```sh
 npm install --ignore-scripts
@@ -1050,14 +1052,16 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_T
 npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
 
 # 2. Run one of the example apps against the seeded space.
-cd ../nextjs                           # or ../sveltekit
-cp .env.example .env.local             # sveltekit uses .env; fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+cd ../nextjs                           # or ../sveltekit, ../angular, ../astro
+cp .env.example .env.local             # the others use .env; fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
 npm run dev
 ```
 
 Then visit `/landing` (or whichever experienceId the bootstrap printed). See each example's README for its file map and route-by-route walkthrough.
 
 **Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
+
+**Examples vs. reference implementations.** The repo also has an `implementations/` directory. Those are reference implementations for SDK maintainers: standalone apps that install locally packed SDK tarballs to validate SDK behavior before release. They are not integration guides; use `examples/`. See [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the difference.
 
 ---
 
@@ -1547,77 +1551,7 @@ npx nx graph                        # visual dep graph
 npm run release:dry                 # rehearse independent release
 ```
 
-### Local npm artifacts
-
-Build and pack the SDK packages for use by standalone reference implementations:
-
-```sh
-npm run build:pkgs                   # all publishable packages under packages/*
-npm run pack:pkgs                    # same pipeline; reuses valid Nx build caches
-npx nx run node:pack                 # optional: only Node and its local dependencies
-```
-
-`build:pkgs` is the counterpart to Optimization's suite-wide build-and-pack
-workflow. The per-project `node:pack` command is an additional Nx convenience:
-it prepares only Core, Client, Runtime, and Node, using the same pack tasks and
-archive format as the suite-wide command. It does not install or start the Node
-reference implementation.
-
-Nx builds dependencies first and runs the existing release-artifact checks for
-Runtime, Node, and Web before packing them. Packing is uncached and writes to the
-ignored `pkgs/` directory: each package has its npm-generated versioned filename
-and a stable alias such as `contentful-experiences-node-local.tgz`. Each task
-replaces only its own archives; older versioned files can remain in `pkgs/`.
-The stable alias is replaced only after a complete archive passes entry-point
-checks; failures stop the command.
-
-The helper runs `npm pack` against each package's publication files and checks
-that its exported entry points are included. It preserves package manifests,
-including dependency ranges, scripts, and devDependencies, so local artifacts
-exercise the same metadata as publication. Lifecycle scripts are disabled during
-packing; Nx performs the required builds explicitly. These commands do not change
-versions, publish to a registry, or install a reference implementation.
-
-Run the packaging helper's checks with `npx nx test package-tools` and
-`npx nx lint package-tools`. They also participate in the root test/lint commands.
-
-After SDK changes, refresh all standalone reference implementations together:
-
-```sh
-npm run implementation:install
-```
-
-This runs each implementation's existing `setup` target: build and pack its SDK
-dependency chain, reinstall its local packages, and build browser assets where
-applicable. It preserves existing app-local `.env` files and does not start apps.
-Stop running reference apps with their scoped `serve:stop` targets before this
-dependency refresh, then relaunch them with `serve` or `dev`. Focused per-app
-`setup` targets remain available. The CI Build job prepares all implementations
-and runs their lint/typecheck targets after the SDK build.
-
-The [standalone Node reference implementation](./implementations/node-sdk/README.md)
-uses these artifacts with its own dependencies and `.env`. Prepare it with
-`npx nx run implementation-node-sdk:setup`, then run
-`npx nx run implementation-node-sdk:dev`. Root aggregate checks exclude
-implementations; their README documents the explicit Nx commands.
-
-The [standalone Web reference implementation](./implementations/web-sdk/README.md)
-uses the packed Web UMD distribution with browser-owned state and direct live
-delivery. Run `npx nx run implementation-web-sdk:setup`, then
-`npx nx run implementation-web-sdk:dev`. Its README covers local environment
-configuration, consent, interaction tracking, and scoped validation commands.
-
-The [standalone Node + Web reference implementation](./implementations/node-sdk+web-sdk/README.md)
-renders initial Experience content through Express/EJS, adopts final server profile
-state in the browser, and supports Web SDK navigation and interactions. Run
-`npx nx run implementation-node-sdk-web-sdk:setup`, then
-`npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
-integration from demo UI and optional browser-attempt diagnostics.
-
-Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
-`npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
-every process in the selected PM2 home. Use the implementation's scoped stop
-target when managing only one reference app.
+Maintainer workflows for local npm artifacts and the reference implementations in `implementations/` are in [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations).
 
 For deeper context (design decisions, multi-framework architecture notes, conventions, and gotchas), see [`AGENTS.md`](./AGENTS.md).
 
