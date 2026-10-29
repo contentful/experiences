@@ -1,3 +1,13 @@
+## 0.10.8 (2026-10-29)
+
+### 🚀 Features
+
+- report SDK version via X-Contentful-User-Agent [AIS-601] ([#279](https://github.com/contentful/experiences/pull/279))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.13.7
+
 ## 0.10.7 (2026-10-27)
 
 ### 🧱 Updated Dependencies
