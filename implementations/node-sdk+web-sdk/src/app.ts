@@ -1,9 +1,9 @@
 import { referenceNode, pageContext } from '../dist/shared.js';
 import {
   ContentfulExperiences,
-  createRequestHandoffFromData,
   NotFoundError,
   type PortableRenderPlan,
+  type ExperiencesHandoff,
 } from '@contentful/experiences-node';
 import {
   getTrackingAttributes,
@@ -97,48 +97,50 @@ for (const [path, route] of Object.entries(routes)) {
       ...(livePreview ? {} : { isPreview: Boolean(sessionId) }),
     });
     try {
-      // XDA workaround: an initial identify-bearing fetch can time out without a
-      // profile. Await the committed page and require actual SDK-owned identity.
-      if (!request.isPreview) {
-        const pageResult = await request.page({ properties: page });
-        if (!pageResult.accepted || !request.profile?.id) {
-          throw new Error('Page initialization did not establish a profile.');
+      const identifyRequested = !request.isPreview && req.query.userId === 'charles';
+      let events = request.isPreview
+        ? undefined
+        : [
+            ...(identifyRequested
+              ? [
+                  {
+                    type: 'identify' as const,
+                    userId: 'charles',
+                    traits: { identified: true },
+                  },
+                ]
+              : []),
+            { type: 'page' as const, properties: page },
+          ];
+      const plans = new Map<string, PortableRenderPlan>();
+      let handoff: ExperiencesHandoff | undefined;
+      let contentError: unknown;
+      const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+      for (const experienceId of new Set([...route.automatic, ...route.manual])) {
+        const options = {
+          experienceId,
+          ...(binding?.experienceId === experienceId ? {} : { extensions: { sourceMap: {} } }),
+          ...(events ? { personalization: { events } } : {}),
+        };
+        if (events !== undefined) {
+          events = undefined;
+          const result = await request.fetchExperienceForHandoff(options, resolveOptions, {
+            routeKey: req.originalUrl,
+          });
+          handoff = result.handoff;
+          if (result.plan) plans.set(experienceId, result.plan);
+          else contentError ??= result.error ?? new Error('Experience content is unavailable.');
+        } else {
+          try {
+            const plan = await request.fetchExperience(options, resolveOptions);
+            plans.set(experienceId, plan);
+          } catch (error) {
+            if (request.isPreview) throw error;
+            contentError ??= error;
+            // Keep available SSR plans and the initial operation's replay responsibility.
+          }
         }
       }
-      const identifyRequested = !request.isPreview && req.query.userId === 'charles';
-      const identify = identifyRequested
-        ? request.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-        : undefined;
-      const plans = new Map<string, PortableRenderPlan>();
-      // Repeated identify makes these requests potentially profile-producing; later
-      // fetches can depend on earlier SDK profile updates. Reassess serialization when
-      // repeated identify is removed, retaining only actual dependencies (README).
-      for (const experienceId of new Set([...route.automatic, ...route.manual])) {
-        // XDA workaround: profile-only selection can return baseline for an
-        // identified visitor. Reuse this cycle's bound identify per distinct fetch;
-        // never independently send identify or reattach the committed page.
-        plans.set(
-          experienceId,
-          await request.fetchExperience(
-            {
-              experienceId,
-              // Session parameters/extensions belong to the server-owned session.
-              ...(binding?.experienceId === experienceId ? {} : { extensions: { sourceMap: {} } }),
-              ...(identify ? { personalization: { events: [identify] } } : {}),
-            },
-            { config: { components: {}, experienceTemplates: {} } }
-          )
-        );
-      }
-      // Consumer integration: package only final SDK request state, after all
-      // profile-producing operations. This public producer sends nothing and creates no replay.
-      const handoff = request.isPreview
-        ? undefined
-        : createRequestHandoffFromData({
-            spaceId: environment.SPACE_ID,
-            environmentId: environment.ENVIRONMENT_ID,
-            data: { profile: request.profile },
-          });
       const initialPlans = request.isPreview
         ? Object.fromEntries(
             [...plans].map(([id, plan]) => [
@@ -153,21 +155,28 @@ for (const [path, route] of Object.entries(routes)) {
             ])
           )
         : undefined;
+      if (!plans.size && contentError)
+        res.status(contentError instanceof NotFoundError ? 404 : 502);
       const bootstrap = JSON.stringify({
         environment,
         handoff,
         preview: request.isPreview ? { binding, initialPlans } : undefined,
       }).replaceAll('<', '\\u003c');
-      if (!request.isPreview) writeIdentity(res, request, req.secure);
-      res.render('index', { title: route.title, path, route, plans, identifyRequested, bootstrap });
-    } catch (error) {
+      Object.assign(res.locals, {
+        title: route.title,
+        path,
+        route,
+        plans,
+        identifyRequested,
+        bootstrap,
+      });
+    } finally {
+      request.destroy();
       // The SDK owns profile updates; the HTTP host alone writes response cookies.
       // Also expire denied identity when an upstream request fails.
       if (!request.isPreview) writeIdentity(res, request, req.secure);
-      throw error;
-    } finally {
-      request.destroy();
     }
+    res.render('index');
   });
 }
 

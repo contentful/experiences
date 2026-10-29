@@ -5,35 +5,33 @@ import {
 } from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
-  buildPreparedEvents,
+  buildFetchPersonalization,
   assertRuntimePreviewRequest,
   fetchRuntimePreviewSession,
   initializeRuntimeLivePreview,
   InterceptorManager,
-  validatePersonalizationEvent,
-  validatePreparedEvents,
+  withEventConsent,
   type OptimizationEventStreamEvent,
-  createExperiencesHandoff,
-  hasEventConsent,
+  type FetchExperienceForHandoffResult,
   hasEventTypeConsent,
   methodForEventType,
   toConsentState,
   type AllowedEventType,
   type BlockedEvent,
+  type BuiltRuntimeFetchExperienceOptions,
+  type RuntimePersonalizationOptions,
   type ConsentInput,
   type ConsentState,
   type ContentfulExperiencesConfig,
   type EventBuilder,
   type EventBuilderConfig,
   type EventEmissionResult,
-  type EventOptimizationData,
   type EventProfile,
   EventProfileSchema,
   type ExperienceRequestOptions,
   type ExperiencesHandoff,
   type InsightsRequestOptions,
   type IdentifyBuilderArgs,
-  type InitialPersonalizationEvent,
   type PageViewBuilderArgs,
   type RuntimeDirectEventBindings,
   type RuntimeEventMethods,
@@ -51,6 +49,10 @@ import {
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+
+type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
+  personalization?: PersonalizationOptions;
+};
 
 /** Stable SDK configuration; request-sensitive values belong to forRequest(). */
 export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder'> & {
@@ -98,29 +100,6 @@ export type ExperiencesNodeExperienceOptions = ExperienceRequestOptions;
 /** Request-bound Insights API options for stateless requests. */
 export type ExperiencesNodeInsightsOptions = InsightsRequestOptions;
 
-export type PrepareRequestHandoffOptions = {
-  /** Visible pathname plus search, beginning with `/`. */
-  readonly routeKey: string;
-  readonly initialEvents?: readonly InitialPersonalizationEvent[];
-  readonly page?: PageViewBuilderArgs;
-};
-
-export type PrepareRequestHandoffResult = {
-  /** Private handoff with the exact prepared replay when validation succeeds. */
-  readonly handoff: ExperiencesHandoff;
-  /** Preflight response; absent on invalid input or preview transport failure. */
-  readonly data?: EventOptimizationData;
-  /** Preview preparation sends nothing and returns no profile or replay. */
-  readonly skipped?: 'preview';
-};
-
-type PreparedPersonalizationEvent = NonNullable<ExperiencesHandoff['replay']>['events'][number];
-type PreflightPersonalizationEvents = (
-  profileId: string | undefined,
-  events: readonly PreparedPersonalizationEvent[],
-  options: ExperienceRequestOptions
-) => Promise<EventOptimizationData>;
-
 type NodePersonalizationMethods = {
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
@@ -157,6 +136,11 @@ export interface ExperiencesNodeRequest extends NodePersonalizationMethods, Node
     options: RuntimeFetchExperienceOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan>;
+  fetchExperienceForHandoff(
+    options: RuntimeFetchExperienceOptions,
+    resolveOptions: RuntimeFetchResolveOptions,
+    replay: { readonly routeKey: string }
+  ): Promise<FetchExperienceForHandoffResult>;
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
     resolveOptions: RuntimeFetchResolveOptions
@@ -165,9 +149,6 @@ export interface ExperiencesNodeRequest extends NodePersonalizationMethods, Node
     options: RuntimeFetchByDestinationPathOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
-  prepareRequestHandoff(
-    options: PrepareRequestHandoffOptions
-  ): Promise<PrepareRequestHandoffResult>;
 }
 
 /** Node SDK with stable transport configuration and request-local event state. */
@@ -194,13 +175,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return new RequestBoundExperiences(
       this,
       context,
-      (profileId, events, options) =>
-        this.api.experience.upsertProfile(
-          { profileId, events: [...events] },
-          { ...options, preflight: true }
-        ),
       (bindings) => this.createEventMethods(bindings),
-      this.#consentPolicy
+      this.#consentPolicy,
+      (options, resolveOptions) => this.fetchExperiencePayload(options, resolveOptions)
     );
   }
 }
@@ -232,9 +209,12 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   constructor(
     private readonly runtime: ContentfulExperiences,
     private readonly context: ExperiencesNodeRequestContext,
-    private readonly preflightPersonalizationEvents: PreflightPersonalizationEvents,
     createEventMethods: (bindings: RuntimeDirectEventBindings) => RuntimeEventMethods,
-    private readonly consentPolicy: ConsentPolicy
+    private readonly consentPolicy: ConsentPolicy,
+    private readonly fetchPayload: (
+      options: BuiltRuntimeFetchExperienceOptions,
+      resolveOptions: RuntimeFetchResolveOptions
+    ) => Promise<ExperiencePayload>
   ) {
     if (context.livePreview !== undefined && context.isPreview === false) {
       throw new TypeError('livePreview cannot be combined with isPreview: false');
@@ -264,14 +244,23 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
 
     this.eventBuilder = {
       buildIdentify: (args) =>
-        runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildIdentify({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
       buildPageView: (args = {}) =>
-        runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildPageView({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
       buildTrack: (args) =>
-        runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+        withEventConsent(
+          runtime.eventBuilder.buildTrack({ ...this.getRequestEventContext(), ...args }),
+          this.#consent.events === true
+        ),
     };
 
-    const methods = createEventMethods({
+    const eventBindings: RuntimeDirectEventBindings = {
       getProfile: () => this.#profile,
       getIsPreview: () => this.isPreview,
       setProfile: (profile) => this.setProfile(profile),
@@ -286,7 +275,8 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
       allowedEventTypes: consentPolicy.allowedEventTypes,
       onEventBlocked: consentPolicy.onEventBlocked,
       eventInterceptors: runtime.interceptors.event,
-    });
+    };
+    const methods = createEventMethods(eventBindings);
 
     this.identify = (args) =>
       this.isActive() ? methods.identify(args) : Promise.resolve({ accepted: false });
@@ -326,105 +316,6 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     return this.#profile;
   }
 
-  /** Preview one ordered Personalization batch without committing it on the server. */
-  async prepareRequestHandoff({
-    routeKey,
-    initialEvents,
-    page,
-  }: PrepareRequestHandoffOptions): Promise<PrepareRequestHandoffResult> {
-    this.assertActive();
-    if (this.isPreview) {
-      return {
-        handoff: createExperiencesHandoff({
-          spaceId: this.runtime.spaceId,
-          environmentId: this.runtime.environmentId,
-          cache: { scope: 'private-request' },
-        }),
-        skipped: 'preview',
-      };
-    }
-    const incomingProfileId = this.#profile?.id;
-    const profileRevision = this.#profileRevision;
-    const handoff = createExperiencesHandoff({
-      spaceId: this.runtime.spaceId,
-      environmentId: this.runtime.environmentId,
-      cache: { scope: 'private-request' },
-      ...(incomingProfileId === undefined ? {} : { profileId: incomingProfileId }),
-    });
-
-    let events: readonly PreparedPersonalizationEvent[];
-    try {
-      if (!routeKey.startsWith('/')) {
-        throw new TypeError('Request handoff requires a pathname/search route key');
-      }
-      // The initial identify and track inputs are optional, and removing one still
-      // leaves a batch that ends in one page, so each is checked on its own. The page is
-      // not optional: without a permitted page there is no batch to prepare.
-      if (!this.admitMethod('page', page ?? {})) {
-        this.assertActive();
-        return { handoff };
-      }
-      events = buildPreparedEvents({
-        eventBuilder: this.runtime.eventBuilder,
-        initialEvents: initialEvents?.filter((input) => this.admitMethod(input.type, input)),
-        page,
-        eventContext: this.getRequestEventContext(),
-        eventConsent: this.#consent.events === true,
-      });
-      if (this.runtime.interceptors.event.count() !== 0) {
-        const transformed: PreparedPersonalizationEvent[] = [];
-        for (const [index, event] of events.entries()) {
-          const valid = validatePersonalizationEvent(
-            await this.runtime.interceptors.event.run(event)
-          );
-          this.assertActive();
-          if (!this.admitEvent(valid, true)) {
-            this.assertActive();
-            if (index === events.length - 1) return { handoff };
-            continue;
-          }
-          transformed.push(valid);
-        }
-        events = validatePreparedEvents(transformed);
-      }
-    } catch {
-      this.assertActive();
-      console.warn(
-        '[@contentful/experiences] Invalid request handoff inputs; no replay was prepared.'
-      );
-      return { handoff };
-    }
-
-    const locale = this.#personalizationLocale;
-    this.assertActive();
-    // The envelope and batch have already been validated; retain the prepared bodies.
-    const preparedHandoff: ExperiencesHandoff = {
-      ...handoff,
-      replay: { routeKey, events, locale },
-    };
-    try {
-      const data = await this.preflightPersonalizationEvents(incomingProfileId, events, {
-        ...this.#experienceOptions,
-        locale,
-      });
-      this.assertActive();
-      if (this.#profileRevision === profileRevision) this.setProfile(data.profile);
-      return {
-        handoff: {
-          ...preparedHandoff,
-          profileId: incomingProfileId ?? data.profile.id,
-        },
-        data,
-      };
-    } catch {
-      this.assertActive();
-      console.warn(
-        '[@contentful/experiences] Request preview failed; prepared replay remains available.'
-      );
-      return { handoff: preparedHandoff };
-    }
-  }
-
   async resolveExperience(
     payload: ExperiencePayload,
     resolveOptions: RuntimeResolveOptions
@@ -443,39 +334,120 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     this.assertActive();
-    if (this.#previewOptions?.experienceId === options.experienceId) {
-      // Share initialization only for the bound Experience within this request.
-      const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
-        this.#previewOptions
-      ));
-      this.assertActive();
-      assertRuntimePreviewRequest(options);
-      this.gatePersonalizationEvents(options);
-      this.assertActive();
-      const plan = await fetchRuntimePreviewSession(
-        binding,
-        this.runtime.config,
-        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-      );
-      // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
-      this.assertActive();
-      return plan;
+    const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
+    if (this.#previewOptions !== undefined) {
+      const plan = await this.fetchPreview(options, resolve);
+      if (plan !== undefined) return plan;
     }
-    return this.fetchPersonalized(options, (final) =>
-      this.runtime.fetchExperience(
-        { ...final, locale: options.locale ?? this.locale },
-        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-      )
+    return this.fetchPersonalized(options, (request) =>
+      this.runtime.fetchExperience(request, resolve)
     );
+  }
+
+  async fetchExperienceForHandoff(
+    options: RuntimeFetchExperienceOptions,
+    resolveOptions: RuntimeFetchResolveOptions,
+    replay: { readonly routeKey: string }
+  ): Promise<FetchExperienceForHandoffResult> {
+    this.assertActive();
+    if (typeof replay?.routeKey !== 'string' || !replay.routeKey.startsWith('/')) {
+      throw new TypeError('Request handoff requires a pathname/search route key');
+    }
+    const { routeKey } = replay;
+    let handoff: ExperiencesHandoff = {
+      spaceId: this.runtime.spaceId,
+      environmentId: this.runtime.environmentId,
+      cache: { scope: 'private-request' },
+    };
+    const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
+    if (this.#previewOptions !== undefined) {
+      const plan = await this.fetchPreview(options, resolve);
+      if (plan !== undefined) return { handoff, plan };
+    }
+    const profileRevision = this.#profileRevision;
+    let expectedProfileId = this.#profile?.id;
+    let request = this.gatePersonalizationEvents(options);
+    const personalization = request.personalization;
+    if (this.runtime.interceptors.event.count() > 0 && personalization?.events !== undefined) {
+      const events: OptimizationEventStreamEvent[] = [];
+      for (const event of personalization.events) {
+        this.assertActive();
+        events.push(await this.runtime.interceptors.event.run(event));
+        this.assertActive();
+      }
+      request = this.finalizePersonalizationEvents(request, { ...personalization, events });
+    } else {
+      request = this.finalizePersonalizationEvents(request);
+    }
+    this.assertActive();
+    const profileId = request.personalization?.profileId;
+    if (!this.isPreview) {
+      handoff = { ...handoff, profileId };
+      if (request.personalization?.events?.length) {
+        handoff = {
+          ...handoff,
+          replay: {
+            routeKey,
+            events: request.personalization.events,
+            locale: request.locale ?? this.locale,
+          },
+        };
+      }
+    }
+    const assertCurrent = () => {
+      this.assertActive();
+      if (this.#profile?.id !== expectedProfileId && this.#profile?.id !== profileId) {
+        throw new Error('Experiences fetch was superseded');
+      }
+    };
+    try {
+      assertCurrent();
+      const payload = await this.fetchPayload(request, resolve);
+      assertCurrent();
+      const returnedProfile = payload.extensions?.personalization?.profile;
+      if (!this.isPreview && returnedProfile !== undefined) {
+        const profile = EventProfileSchema.parse(returnedProfile);
+        handoff = { ...handoff, profileId: profile.id, state: { profile } };
+        if (this.#profileRevision === profileRevision) {
+          this.setProfile(profile);
+          expectedProfileId = profile.id;
+        }
+      }
+      const plan = await this.runtime.resolveExperience(payload, resolve);
+      assertCurrent();
+      return { handoff, plan };
+    } catch (error) {
+      assertCurrent();
+      return { handoff, error };
+    }
+  }
+
+  private async fetchPreview(
+    options: RuntimeFetchExperienceOptions,
+    resolveOptions: RuntimeFetchResolveOptions
+  ): Promise<PortableRenderPlan | undefined> {
+    if (this.#previewOptions?.experienceId !== options.experienceId) return undefined;
+    // The matching request shares the approved lazy initialization.
+    const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
+      this.#previewOptions
+    ));
+    this.assertActive();
+    assertRuntimePreviewRequest(options);
+    this.gatePersonalizationEvents(options);
+    this.assertActive();
+    const plan = await fetchRuntimePreviewSession(binding, this.runtime.config, resolveOptions);
+    // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
+    this.assertActive();
+    return plan;
   }
 
   fetchByDestinationNode(
     options: RuntimeFetchByDestinationNodeOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.fetchPersonalized(options, (final) =>
+    return this.fetchPersonalized(options, (request) =>
       this.runtime.fetchByDestinationNode(
-        final,
+        request,
         mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
       )
     );
@@ -485,40 +457,30 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     options: RuntimeFetchByDestinationPathOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.fetchPersonalized(options, (final) =>
+    return this.fetchPersonalized(options, (request) =>
       this.runtime.fetchByDestinationPath(
-        final,
+        request,
         mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
       )
     );
   }
 
-  /**
-   * Every XDA fetch goes through here, so by-id and Destination fetches cannot drift:
-   * consent and interceptors apply to caller-built events, the request's profile id is
-   * sent, and the returned one is kept unless the profile changed in the meantime.
-   */
   private async fetchPersonalized<
-    TOptions extends { personalization?: PersonalizationOptions },
+    TOptions extends { personalization?: RuntimePersonalizationOptions; locale?: string },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
-  >(options: TOptions, send: (options: TOptions) => Promise<TResult>): Promise<TResult> {
+  >(
+    options: TOptions,
+    send: (options: BuiltFetchOptions<TOptions>) => Promise<TResult>
+  ): Promise<TResult> {
     this.assertActive();
     const profileRevision = this.#profileRevision;
-    const incomingProfileId = this.#profile?.id;
-    const initiallyGated = this.gatePersonalizationEvents(options);
-    const gated =
+    let request = this.gatePersonalizationEvents(options);
+    request =
       this.runtime.interceptors.event.count() === 0
-        ? initiallyGated
-        : await this.interceptPersonalizationEvents(initiallyGated);
+        ? this.finalizePersonalizationEvents(request)
+        : await this.interceptPersonalizationEvents(request);
     this.assertActive();
-    const profileId = this.isPreview
-      ? undefined
-      : (gated.personalization?.profileId ?? incomingProfileId);
-    const result = await send(
-      profileId === undefined
-        ? gated
-        : { ...gated, personalization: { ...gated.personalization, profileId } }
-    );
+    const result = await send(request);
     this.assertActive();
     // A Destination redirect carries no personalization.
     const returnedProfile =
@@ -534,21 +496,46 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   /**
-   * Drops caller-built XDA events that this request's consent does not admit. The
+   * Drops XDA event intent before building when this request's consent does not admit it. The
    * profile id still travels, since it is not an event.
    */
-  private gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
-    options: T
-  ): T {
+  private gatePersonalizationEvents<
+    T extends { personalization?: RuntimePersonalizationOptions; locale?: string },
+  >(options: T): BuiltFetchOptions<T> {
+    const profileId = options.personalization?.profileId ?? this.#profile?.id;
+    options = {
+      ...options,
+      ...('experienceId' in options ? { locale: options.locale ?? this.locale } : {}),
+      ...(profileId === undefined
+        ? {}
+        : { personalization: { ...options.personalization, profileId } }),
+    };
     if (this.isPreview) {
       for (const event of options.personalization?.events ?? []) this.admitEvent(event);
       return { ...options, personalization: undefined };
     }
-    const events = options.personalization?.events;
-    if (events === undefined) return options;
-
-    const admitted = events.filter((event) => this.admitEvent(event));
-    return { ...options, personalization: { ...options.personalization, events: admitted } };
+    const personalization =
+      options.personalization === undefined
+        ? undefined
+        : buildFetchPersonalization(
+            {
+              ...options.personalization,
+              events: options.personalization.events?.filter((event) => this.admitEvent(event)),
+            },
+            this.eventBuilder
+          );
+    return {
+      ...options,
+      personalization:
+        personalization === undefined
+          ? undefined
+          : {
+              ...personalization,
+              events: personalization.events?.map((event) =>
+                withEventConsent(event, this.#consent.events === true)
+              ),
+            },
+    };
   }
 
   private async interceptPersonalizationEvents<
@@ -559,7 +546,16 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     const events = await Promise.all(
       personalization.events.map((event) => this.runtime.interceptors.event.run(event))
     );
-    const valid = serializePersonalization({ ...personalization, events });
+    this.assertActive();
+    return this.finalizePersonalizationEvents(options, { ...personalization, events });
+  }
+
+  private finalizePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+    options: T,
+    personalization: unknown = options.personalization
+  ): T {
+    if (personalization === undefined) return options;
+    const valid = serializePersonalization(personalization);
     return {
       ...options,
       personalization: {
@@ -585,18 +581,6 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     return false;
   }
 
-  /** Whether one prepared method may be sent; reports it to `onEventBlocked` when it may not. */
-  private admitMethod(method: 'identify' | 'page' | 'track', args: unknown): boolean {
-    const { allowedEventTypes, onEventBlocked } = this.consentPolicy;
-    if (hasEventConsent(method, this.#consent, allowedEventTypes)) return true;
-    try {
-      onEventBlocked?.({ reason: 'consent', method, args: [args] });
-    } catch {
-      // A failing diagnostic callback must not break event delivery.
-    }
-    return false;
-  }
-
   private getRequestEventContext(): UniversalEventBuilderArgs {
     return {
       ...this.context.eventContext,
@@ -615,9 +599,7 @@ function mergeResolveOptions(
   method: RuntimeResolveOptions
 ): RuntimeResolveOptions {
   return {
-    config: method.config,
-    metadata: { ...request?.metadata, ...method?.metadata },
-    debug: method?.debug ?? request?.debug,
+    ...mergeFetchResolveOptions(request, method),
     sourceMap: method.sourceMap ?? request?.sourceMap,
   };
 }

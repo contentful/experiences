@@ -4,6 +4,7 @@ const {
   mockApiClient,
   mockCreateRuntimeDeliveryClient,
   mockFetchExperience,
+  mockFetchExperiencePayload,
   mockResolveExperience,
 } = vi.hoisted(() => {
   const mockOptimizationClient = {
@@ -16,6 +17,7 @@ const {
     }),
     mockCreateRuntimeDeliveryClient: vi.fn((source) => ({ source })),
     mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [] }),
+    mockFetchExperiencePayload: vi.fn().mockResolvedValue({ nodes: [] }),
     mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
   };
 });
@@ -26,6 +28,7 @@ vi.mock('./create-runtime-delivery-client.js', () => ({
 vi.mock('@contentful/experiences-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@contentful/experiences-client')>()),
   fetchExperience: mockFetchExperience,
+  fetchExperiencePayload: mockFetchExperiencePayload,
 }));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
 vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient }));
@@ -91,8 +94,36 @@ describe('ContentfulExperiences', () => {
     expect(personalize).not.toHaveBeenCalled();
   });
 
+  it('builds fetch arguments once while preserving already-built events on refetch', async () => {
+    mockFetchExperiencePayload.mockClear();
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const build = vi.spyOn(runtime.eventBuilder, 'buildIdentify');
+    const options = {
+      experienceId: 'experience',
+      personalization: {
+        events: [{ type: 'identify' as const, userId: 'visitor' }],
+      },
+    };
+    await runtime.fetchExperience(options, { config: { components: {} } });
+    const events = mockFetchExperiencePayload.mock.calls[0]![0].personalization.events;
+    expect(events).toMatchObject([{ type: 'identify', userId: 'visitor', channel: 'server' }]);
+    expect(events).toHaveLength(1);
+    await runtime.fetchExperience(
+      { ...options, personalization: { events } },
+      { config: { components: {} } }
+    );
+    expect(mockFetchExperiencePayload.mock.calls[1]![0].personalization.events).toEqual(events);
+    expect(build).toHaveBeenCalledOnce();
+    expect(options.personalization.events).toEqual([{ type: 'identify', userId: 'visitor' }]);
+  });
+
   it('forwards per-fetch parameters to Delivery and Preview without retaining them', async () => {
-    mockFetchExperience.mockClear();
+    mockFetchExperiencePayload.mockClear();
     const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
@@ -114,7 +145,7 @@ describe('ContentfulExperiences', () => {
       { config: { components: {} } }
     );
     await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
-    expect(mockFetchExperience.mock.calls.map(([options]) => options.parameters)).toEqual([
+    expect(mockFetchExperiencePayload.mock.calls.map(([options]) => options.parameters)).toEqual([
       parameters,
       { featuredPosts: { limit: 12, order: 'sys.createdAt' } },
       undefined,
@@ -200,18 +231,22 @@ describe('ContentfulExperiences', () => {
       },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenCalledWith(
+    expect(mockFetchExperiencePayload).toHaveBeenCalledWith(
       expect.objectContaining({
+        spaceId: 'space',
+        environmentId: 'env',
+        experienceId: 'exp',
         locale: 'de-DE',
         personalization,
         extensions: { sourceMap: {} },
       }),
-      expect.objectContaining({ client: expect.anything() }),
-      expect.objectContaining({
-        config: { components: {} },
-        metadata: { site: 'main', shared: 'default' },
-        debug: true,
-      })
+      expect.anything(),
+      true
+    );
+    expect(mockResolveExperience).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { components: {} },
+      { metadata: { site: 'main', shared: 'default' }, debug: true }
     );
     expect(runtime.locale).toBe('en-US');
   });
@@ -226,6 +261,7 @@ describe('ContentfulExperiences', () => {
     const payload = { sys: { type: 'Experience' as const }, nodes: [] };
     mockResolveExperience.mockClear();
     mockFetchExperience.mockClear();
+    mockFetchExperiencePayload.mockClear();
 
     const calls = [
       () => runtime.resolveExperience(payload, undefined as never),
@@ -246,6 +282,7 @@ describe('ContentfulExperiences', () => {
     }
     expect(mockResolveExperience).not.toHaveBeenCalled();
     expect(mockFetchExperience).not.toHaveBeenCalled();
+    expect(mockFetchExperiencePayload).not.toHaveBeenCalled();
   });
 
   it('forwards personalization on destination node and path fetches', async () => {
@@ -305,10 +342,10 @@ describe('ContentfulExperiences', () => {
       { experienceId: 'exp', preview: true },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
       expect.objectContaining({ experienceId: 'exp' }),
-      { client: preview },
-      expect.anything()
+      preview,
+      undefined
     );
     runtime.destroy();
     const withoutPreview = createRuntime({
@@ -420,10 +457,10 @@ describe('ContentfulExperiences', () => {
     runtime.currentLocale = 'de-DE';
     await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
 
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
       expect.objectContaining({ locale: 'de-DE' }),
       expect.anything(),
-      expect.anything()
+      undefined
     );
     expect(runtime.eventBuilder.getLocale()).toBe('de-DE');
   });

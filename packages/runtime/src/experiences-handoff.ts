@@ -1,15 +1,12 @@
 import {
   ChangeArray,
   parseWithFriendlyError as parseOptimizationSchema,
-  type ExperienceEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import * as z from 'zod/mini';
-import {
-  EventProfileSchema,
-  type EventOptimizationData,
-  type EventProfile,
-} from './runtime-event-methods.js';
-import { validatePreparedEvents } from './prepared-events.js';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { PersonalizationOptions } from '@contentful/experiences-client';
+import { EventProfileSchema, type EventProfile } from './runtime-event-methods.js';
+import { validatePreparedEvents, type PreparedExperienceEvent } from './prepared-events.js';
 
 export type ExperiencesCacheMetadata =
   | { readonly scope: 'private-request'; readonly key?: string }
@@ -24,17 +21,27 @@ export interface ExperiencesHandoff {
   readonly spaceId: string;
   readonly environmentId: string;
   readonly cache: ExperiencesCacheMetadata;
+  /** Aggregate internal hydration data, including SDK-owned custom flags. */
   readonly state?: { readonly profile?: EventProfile; readonly changes?: ChangeArray };
   /** Continuation identity, not proof that prepared events were committed. */
   readonly profileId?: string;
   readonly replay?: {
     /** Application route identity: pathname plus search, beginning with `/`. */
     readonly routeKey: string;
-    /** Personalization events prepared once, ending in one page. */
-    readonly events: readonly ExperienceEvent[];
+    /** Exact finalized XDA-evaluated events, with at most one final page. */
+    readonly events: readonly (
+      PreparedExperienceEvent | NonNullable<PersonalizationOptions['events']>[number]
+    )[];
     /** Captured content/request locale for Personalization, independent of event context. */
     readonly locale?: string;
   };
+}
+
+/** Content failure does not discard a valid evaluated replay. */
+export interface FetchExperienceForHandoffResult {
+  readonly handoff: ExperiencesHandoff;
+  readonly plan?: PortableRenderPlan;
+  readonly error?: unknown;
 }
 
 export type ExperiencesScope = Pick<ExperiencesHandoff, 'spaceId' | 'environmentId'>;
@@ -162,28 +169,4 @@ export function parseExperiencesHandoff(
 /** Validate trusted producer data with the same contract as browser input. */
 export function createExperiencesHandoff(input: ExperiencesHandoff): ExperiencesHandoff {
   return parseExperiencesHandoff(input);
-}
-
-/** Package existing evaluated data without emitting or committing an event. */
-export function createRequestHandoffFromData(input: {
-  handoff: ExperiencesHandoff;
-  data?: EventOptimizationData;
-}): ExperiencesHandoff {
-  if (input.handoff.cache.scope !== 'private-request') {
-    throw new TypeError('Request handoffs must use private-request cache scope');
-  }
-  return createExperiencesHandoff({
-    ...input.handoff,
-    ...(input.data === undefined
-      ? {}
-      : {
-          state: {
-            ...input.handoff.state,
-            profile: input.data.profile,
-            ...(Object.prototype.hasOwnProperty.call(input.data, 'changes')
-              ? { changes: input.data.changes }
-              : {}),
-          },
-        }),
-  });
 }

@@ -97,7 +97,35 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       const fetch = transport();
       const values = reason === 'empty record' ? { featuredPosts: {} } : parameters;
       const extensions = reason === 'extensions' ? { sourceMap: {} } : undefined;
-      const personalization = reason === 'personalization' ? { profileId: 'profile' } : undefined;
+      const page = {
+        path: '/',
+        query: { tag: ['one', 'two'] },
+        referrer: '',
+        search: '?tag=one&tag=two',
+        url: '/?tag=one&tag=two',
+        title: 'Home',
+      };
+      const personalization =
+        reason === 'personalization'
+          ? {
+              profileId: 'profile',
+              events: [
+                {
+                  type: 'page' as const,
+                  channel: 'server' as const,
+                  context: {
+                    library: { name: 'test', version: '1.0.0' },
+                    gdpr: { isConsentGiven: true },
+                    page,
+                  },
+                  messageId: 'page-1',
+                  timestamp: '2026-10-29T00:00:00.000Z',
+                  properties: page,
+                },
+              ],
+            }
+          : undefined;
+      const original = globalThis.structuredClone(personalization);
       await fetchExperience(
         { ...identity, locale: 'en-US', parameters: values, extensions, personalization },
         { accessToken: 'delivery-token' },
@@ -110,6 +138,7 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
         parameters: values,
         extensions: { ...extensions, ...(personalization ? { personalization } : {}) },
       });
+      expect(personalization).toEqual(original);
     }
   );
 

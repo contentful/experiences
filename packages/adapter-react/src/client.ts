@@ -31,7 +31,6 @@ export { ExperiencesRoot, ExperiencesProvider } from './provider/experiences-pro
 export type {
   ExperiencesRootProps,
   ExperiencesProviderProps,
-  ExperiencesStateInitialization,
 } from './provider/experiences-provider.js';
 export { useExperiences, useExperiencesContext } from './context/experiences-context.js';
 export type { ExperiencesContextValue } from './context/experiences-context.js';

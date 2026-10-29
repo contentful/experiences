@@ -34,8 +34,20 @@ existing standalone APIs are unchanged. General supplied-plan rendering and
 
 Managed runtime ownership and state/action hooks are available on `/client`.
 Managed Experience loading, resolved preview-update presentation and route-page
-coordination follow in the next integration phase. Supplied-plan rendering and
-application-owned fetching remain supported.
+coordination belong to gated Phase 7. Current Phase 6 implementation/checks are
+pending; earlier remedy validation/review is historical. Phase 6 is unaccepted/
+incomplete and Phase 7 stays gated. The React reference retains supplied-plan
+rendering and application-owned fetching.
+
+Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
+raw built events, built once by the SDK. Optional `handoff?: ExperiencesHandoff`
+is mode agnostic and explicitly supplied by the consumer, only when an actual
+server transfer provides one. Do not generate local CSR/navigation handoffs or
+require one for normal fetch. Incoming browser replay remains independent of
+display. Content Retry is ordinary event-free fetch of the same ID; replay
+delivery retry remains queue-owned. Preserve pinned ownership, consent, lifetime
+and page consent-retry mechanics without a direct initial emission prerequisite.
+See [Runtime's XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
 
@@ -119,7 +131,9 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const ui = createReactExperiences({ config: experienceConfig });
+const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } = createReactExperiences({
+  config: experienceConfig,
+});
 
 function ConsentControls() {
   const consent = useConsentState();
@@ -133,10 +147,10 @@ function ConsentControls() {
 
 function App({ plan }: { plan: PortableRenderPlan }) {
   return (
-    <ui.ExperiencesRoot {...browserConfig}>
+    <ExperiencesRoot {...browserConfig}>
       <ConsentControls />
-      <ui.ExperienceRenderer experience={plan} />
-    </ui.ExperiencesRoot>
+      <ExperienceRenderer experience={plan} />
+    </ExperiencesRoot>
   );
 }
 ```
@@ -161,9 +175,25 @@ Supplied-plan rendering preserves content while either flag is false.
 Locale prop failures remain visible when hydration settles. Correcting or removing
 the locale prop clears its failure while preserving any activation/hydration error.
 
-Provide `snapshot` for stable server/browser state. Optional
-`initialization={{ handoff, routeKey }}` applies state through Web's
-`hydrateHandoffState` after activation. It emits no page or prepared replay.
+Provide `snapshot` for stable server/browser state. **Phase 6 remedy target:**
+provider/root accept `handoff?: ExperiencesHandoff`, replacing
+`initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
+After activation, the existing effect subscribes to `sdk.states.consent`; its
+immediate emission and later consent changes invoke the complete
+`hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` operation using the
+current browser pathname/search. One stable `isCurrent` guard for that effect
+reaches SDK state application and admission; coalesced SDK work remains live while
+any joined caller is live. Cleanup invalidates that guard and unsubscribes without
+destroying an injected SDK or cancelling accepted queue delivery. Necessary state
+application is internal; matching
+identify/track-only replay never adds or falls back to a page. Replay-less aggregates
+return `{ accepted: false }` after internal state application unless `buildPayload`
+explicitly supplies page intent. Only page-bearing intent uses route deduplication,
+and page-bearing refusal retains gated fallback through the existing implicit
+page consent path. There is no dedicated retry facility or mode detector. Basic
+optional consent/lifecycle consumption must complete in Phase 6; current fixes,
+checks and fresh review remain pending. Earlier checks are historical, while
+managed Phase 7 loading/navigation stays not started and gated.
 Handoff cache safety and receiving scope are asserted before SSR children render;
 unsafe public/static handoffs and mismatched space/environment IDs throw before
 their profile state can reach presentation. Scope follows the captured managed
@@ -171,12 +201,12 @@ configuration or the actual injected SDK.
 Hydration rejection retains the live binding and exposes its error. Snapshot and
 handoff state never become startup `defaults`, which have separate persistence
 and consent semantics. `onStatesReady(states)` runs after commit, before this
-hydration and passive child effects, and may return subscription cleanup.
+complete operation and passive child effects, and may return subscription cleanup.
 Its callback is captured for the binding; use a replacement owner/provider when
 changing application subscription setup.
 
-Inject an application-owned SDK through `<ui.ExperiencesProvider sdk={sdk}>`.
-Without snapshot/initialization it is immediately available; replacement rebinds
+Inject an application-owned SDK through `<ExperiencesProvider sdk={sdk}>`.
+Without snapshot/handoff it is immediately available; replacement rebinds
 subscriptions and manual refs. The provider never destroys an injected SDK.
 Independent React roots can share one explicit `/host` binding and each use an
 injected provider. Activate the host outside React render with
@@ -412,7 +442,7 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const ui = createReactExperiences({ config: registry });
+const { ExperienceRenderer } = createReactExperiences({ config: registry });
 
 function ManualContent({ plan }: { plan: PortableRenderPlan }) {
   const sdk = useExperiences();
@@ -424,7 +454,7 @@ function ManualContent({ plan }: { plan: PortableRenderPlan }) {
     },
     [sdk]
   );
-  return <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+  return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
 }
 ```
 
@@ -435,12 +465,12 @@ SDK registration remains supported. Neither path performs attribution
 selection or root collection. Web owns measurement, consent and delivery, and
 measures each manual element independently. The reference's single-root components
 use ordinary forwarding, with no root-count/readiness panel. Context SDK access
-and registry binding are available now; Phase 6 carries the same per-kind and
+and registry binding are available now; Phase 7 carries the same per-kind and
 optional root callback props through managed `Experience` loading. That managed
 loading API remains planned. The implementation plan
 requires concise consumer examples and checks rather than SDK prop threading,
-root maps or consumer fetch/subscription/page orchestration. XDA workarounds do
-not require root/ref boilerplate.
+root maps or consumer fetch/subscription/page orchestration. Ordinary identity
+and content flows require no extra root/ref boilerplate.
 
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
 

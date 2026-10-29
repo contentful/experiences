@@ -147,7 +147,7 @@ describe('Session preview event isolation', () => {
     }
   );
 
-  it('isolates concurrent Node delivery and skips preview preflight and browser replay', async () => {
+  it('isolates concurrent Node delivery and skips preview XDA events and browser replay', async () => {
     const fetch = http();
     const server = node();
     const context = { isPreview: true, consent: true };
@@ -162,27 +162,18 @@ describe('Session preview event isolation', () => {
     expect(preview.profile).toBeUndefined();
     expect((await allEvents(delivery)).every((result) => result.accepted)).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(8);
-    const handoff = await delivery.prepareRequestHandoff({ routeKey: '/' });
+    const handoff = {
+      spaceId: config.spaceId,
+      environmentId: config.environmentId,
+      cache: { scope: 'private-request' as const },
+      replay: { routeKey: '/', events: [delivery.eventBuilder.buildPageView()] },
+    };
     fetch.mockClear();
-    expect(
-      await preview.prepareRequestHandoff({
-        routeKey: '/',
-        initialEvents: [{ type: 'identify', userId: 'editor' }],
-      })
-    ).toEqual({
-      handoff: {
-        spaceId: config.spaceId,
-        environmentId: config.environmentId,
-        cache: { scope: 'private-request' },
-      },
-      skipped: 'preview',
-    });
     const sdk = web();
     const buildPayload = vi.fn(() => ({}));
-    await sdk.hydrateHandoffState(handoff.handoff, { routeKey: '/' });
-    expect(
-      await sdk.hydrateAndTrackCurrentPage(handoff.handoff, { routeKey: '/', buildPayload })
-    ).toEqual(skipped);
+    expect(await sdk.hydrateAndTrackCurrentPage(handoff, { routeKey: '/', buildPayload })).toEqual(
+      skipped
+    );
     expect(await sdk.trackCurrentPage({ routeKey: '/', buildPayload })).toEqual(skipped);
     expect(buildPayload).not.toHaveBeenCalled();
     expect(sdk.states.profile.current).toBeUndefined();
@@ -199,12 +190,11 @@ describe('Session preview event isolation', () => {
       profile: { id: 'server' },
     });
     const page = sdk.eventBuilder.buildPageView();
-    const { gdpr: _gdpr, ...context } = page.context;
     const input = {
       experienceId: 'exp',
       parameters: { productId: 'sku' },
       extensions: { sourceMap: {} },
-      personalization: { profileId: 'input', events: [{ ...page, context }] },
+      personalization: { profileId: 'input', events: [page] },
     };
     const original = globalThis.structuredClone(input);
     const plans = await Promise.all([

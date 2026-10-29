@@ -2,7 +2,11 @@ import type { ContentfulViewDeliveryClient } from '@contentful/experience-delive
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { serializePersonalization } from './personalization.js';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
-import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
+import type {
+  ExperiencePayload,
+  PortableRenderPlan,
+  ResolverConfig,
+} from '@contentful/experiences-sdk-core';
 import { assertDestinationPreviewSupported } from './destination-guards.js';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
@@ -183,25 +187,32 @@ export async function fetchExperience(
     );
   }
 
+  const payload = await fetchExperiencePayload(experienceOptions, client, debug);
+  return resolveExperience(payload, config, { metadata, debug });
+}
+
+/** @internal Fetch the by-ID payload before renderer resolution. */
+export async function fetchExperiencePayload(
+  experienceOptions: ByIdExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload> {
+  const log = createDebugLogger(debug, 'client');
   const { spaceId, environmentId, experienceId, locale, personalization, extensions } =
     experienceOptions;
-
   log.log('fetching experience', {
     spaceId,
     environmentId,
     experienceId,
     locale,
-    // avoiding log any personalization sensitive data
+    // Avoid logging sensitive personalization data.
     personalization: personalization !== undefined,
     extensions,
   });
-
   const response = await fetchByExperienceId(client, experienceOptions);
-
   const payload = toExperiencePayload(response);
   log.lazy('received raw payload', () => payload);
-
-  return resolveExperience(payload, config, { metadata, debug });
+  return payload;
 }
 
 async function fetchByExperienceId(

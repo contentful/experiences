@@ -96,7 +96,7 @@ const request = experiences.forRequest({
 const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
 ```
 
-An SDK instance retains only stable configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one instance can resolve different Experiences with different component registries. Event-only calls such as `prepareRequestHandoff()` need no registry. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. Multiple Node SDK instances can coexist; no teardown is required before constructing another. Each request facade belongs to its creating instance.
+An SDK instance retains only stable configuration and reusable delivery transports. Each fetch or resolve call receives its own `config`, so one instance can resolve different Experiences with different component registries. Direct event-only calls need no registry; XDA evaluation requires the operation's `config`. Use `forRequest()` at request boundaries so request-varying locale and resolve options cannot leak across concurrent requests. Multiple Node SDK instances can coexist; no teardown is required before constructing another. Each request facade belongs to its creating instance.
 
 ## Runtime Experience parameters
 
@@ -129,7 +129,7 @@ See the [render/refetch example](../../README.md#runtime-experience-parameters).
 
 ## Personalization
 
-Pass a profile id and events with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
+Pass a profile id and existing event arguments (or raw built XDA events) with a by-ID fetch to let XDA evaluate personalization while resolving the Experience:
 
 ```ts
 const request = experiences.forRequest({
@@ -143,12 +143,8 @@ const plan = await request.fetchExperience(
     personalization: {
       profileId,
       events: [
-        request.eventBuilder.buildIdentify({
-          userId,
-        }),
-        request.eventBuilder.buildPageView({
-          properties: pageProperties,
-        }),
+        { type: 'identify', userId },
+        { type: 'page', properties: pageProperties },
       ],
     },
   },
@@ -156,7 +152,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer removes unsupported event fields (`context.gdpr`, `context.screen` and `context.page.title`), including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with XPAPI GET 404. Supplying a profile or events switches the XDA call to POST. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -170,38 +166,72 @@ payloads. See the [delivery diagnostic guidance](../../README.md#delivery-diagno
 
 ### Request-bound event construction
 
-`request.eventBuilder` exposes `buildIdentify`, `buildPageView`, and `buildTrack`,
-using the existing SDK builder with this request's context applied before event
-construction. Explicit event inputs override request context; `forRequest({ locale })`
+Fetch accepts raw built XDA events or existing `IdentifyBuilderArgs`,
+`PageViewBuilderArgs` and `TrackBuilderArgs` with their `type` tag. The owner applies
+consent before building arguments once with request context; supplied raw event
+context is preserved. Advanced `request.eventBuilder` exposes `buildIdentify`,
+`buildPageView` and `buildTrack` with the same request context. Explicit event inputs override request context; `forRequest({ locale })`
 overrides `eventContext.locale`, followed by the SDK builder's existing defaults.
 The merge is shallow: a supplied page replaces the whole request page. An explicit
 `undefined` replaces the request field and uses the builder's normal fallback,
 matching direct event methods. Page-event `properties` remains a separate input;
 pass `properties: pageProperties` when it should describe the request page.
+The request builder sets `context.gdpr.isConsentGiven` from this facade's event
+consent (`true` only when granted), without changing the shared builder or another
+request's metadata.
 
 The public `ExperiencesNodeEventBuilder` type exposes only those construction
 methods. Building does not submit events, apply consent admission, invoke event
 interceptors, or update profiles. Those operations happen on submission. The shared
 `experiences.eventBuilder` remains available for unbound construction. Submitting
-already-built `personalization.events` does not merge request context into them.
+already-built `personalization.events` preserves their supplied page/user-agent/
+locale context and stamps the receiving request's event consent before interception.
 Use the request builder rather than retaining visitor data in a shared interceptor
-closure. See the [committed server rendering recipe](../../README.md#committed-server-rendering-and-state-only-hydration)
-for the page-first, sequential-fetch flow.
+closure. See the [ordinary XDA rendering recipe](../../README.md#xda-rendering-and-browser-submission).
 
-Current XDA behavior limits this integration: profile-only requests can return
-baseline content despite audience membership; initial identify requests without
-a profile can return a personalization timeout; and unmodified EventBuilder
-consent context is rejected. The Node reference establishes its profile with a
-direct page event, includes identify with each personalized fetch, and relies on
-Client's generated-schema serialization. See the reference's
-[workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-before removing these accommodations after upstream fixes.
+### Actual server-to-browser transfer
 
-The current XDA client has no noncommitting preflight option for that POST.
-`prepareRequestHandoff()` previews events through the separate Personalization
-API; it does not make a later XDA fetch render those uncommitted changes. An
-application that independently sends the same events through both operations
-may duplicate them. The SDK does not suppress or deduplicate those calls.
+For SSR use ordinary `request.fetchExperience` with the existing type-tagged
+arguments or raw built events above. XDA evaluates without committing; direct
+event APIs remain callable but are not rendering prerequisites or compensation.
+
+Only an actual hybrid response uses the retained Node producer:
+
+```ts
+const { handoff, plan, error } = await request.fetchExperienceForHandoff(
+  { experienceId, personalization: { events } },
+  { config: experienceConfig },
+  { routeKey }
+);
+// Render available plan and safely serialize handoff in a private/no-store response.
+// Browser optionally consumes the explicitly supplied handoff independently of display.
+```
+
+The third argument is `{ readonly routeKey: string }` only; `routeKey` is
+pathname plus search beginning with `/`. The first two arguments retain ordinary
+fetch/resolve shapes. Node exports `FetchExperienceForHandoffResult` with full
+`handoff`, optional `plan` and optional `error`. Finalized replay survives
+content fetch/resolve failure; invalid route, hook/schema failure or stale ownership
+does not promise usable replay. The producer captures raw final Client events,
+including query arrays, unchanged without a server replay-compatibility check before
+XDA. Normal SDK builder XPAPI validation and Client XDA validation suffice; manually
+built/raw transmission remains the consumer's compatibility risk. Receiving replay
+validation may refuse events while available content remains usable. The existing
+wire type unions raw Client and normal SDK events; no new DTO or SDK safety layer
+is introduced. Preview suppresses visitor work.
+Remove the Node aggregate commit path and handoff-as-content reuse branches/helpers.
+
+Retry of the same Experience is ordinary fetch without events:
+
+```ts
+const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
+```
+
+This performs no event building, event hooks or replay. Reference-only later-ID
+comparisons also use ordinary event-free fetch; no cross-fetch guarantee applies.
+See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
+for the tolerated SSR/CSR noncommit bug, hybrid replay ownership and pending checks.
+Phase 6 remains unaccepted/incomplete; Phase 7 is gated.
 
 ## Custom flags
 
@@ -272,14 +302,14 @@ server-side consent. See the [Node example](../../examples/node/README.md). Even
 consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 
-`prepareRequestHandoff()` filters its optional `initialEvents` one by one before building the batch,
-reporting each one that is not admitted to `onEventBlocked`, so a blocked `track` does not stop a
-permitted `page` from being previewed and replayed. The batch always ends in one page, so when the
-page itself is not admitted nothing is prepared and the handoff has no replay. The browser still
-admits a batch that is already prepared whole or not at all.
+Consumer-supplied XDA intent use the request consent/interceptor/validation path.
+Replay permits identify/track-only intent with an optional single final page; it
+never creates a page. Browser admission of the finalized batch remains whole or
+not at all, with only page-bearing refusal eligible for gated page fallback.
 
-There is no request event queue: await `identify`, `page`, or `track` before
-starting another profile-producing or Analytics call on the same request facade.
+There is no request event queue. Await `identify`, `page`, or `track` when a
+later call needs its evaluated profile; sequence profile changes whose results
+depend on each other. Independent content fetches need no blanket serialization.
 
 ### Event interceptors
 
@@ -304,22 +334,29 @@ experiences.interceptors.event.remove(interceptorId);
 
 The chain runs once for each admitted direct Personalization or Analytics event,
 for each explicit XDA event submission, or when preparing each replay event.
-XDA event chains run concurrently with `Promise.all`, preserving input array
-order; handlers within each chain remain sequential. Preparation processes events
-sequentially. Reusing a built identify in another fetch is another submission.
-Retries and browser prepared replay preserve the evaluated bodies, IDs, and
-timestamps without rerunning event hooks. The state-only producer below invokes
-no event hooks. Hooks transform events; direct methods keep their Personalization
+Ordinary XDA fetch event chains run concurrently with `Promise.all`, preserving
+input array order; handlers within each chain remain sequential. The actual server
+transfer producer processes event chains sequentially, matching Optimization preparation. Passing raw events to another ordinary fetch
+is another submission;
+it is not exact replay. The actual server Node producer retains finalized XDA events once
+for evaluation and commit without repeated hooks; browser admission still applies
+current consent and its permitted metadata restamping.
+Retries and browser prepared replay do not rerun event hooks; the admitted batch
+retains IDs and timestamps under existing XPAPI schema/transport rules. Internal state application invokes no event hooks. Hooks transform events; direct methods keep their Personalization
 or Analytics transport and do not accumulate events awaiting an XDA fetch.
 
-The original consent gate runs before hooks. The SDK then validates transformed
-output against the destination schema and checks its final event type against
+The original consent gate runs before hooks. For XDA events, the SDK immutably
+stamps request event consent into admitted inputs' `context.gdpr.isConsentGiven`,
+overwriting any caller-supplied flag. Hooks receive that default metadata and may
+explicitly transform it, following direct-event policy. The SDK then validates
+transformed output against the destination schema and checks its final event type against
 current consent before publication or sending. Invalid output is a schema failure,
 not a consent refusal. A valid transformed event blocked by consent is reported
 through `onEventBlocked` with its transformed method/type and the existing blocked
 return contract. In XDA calls, those blocked events are removed while preserving
 order and the profile/content fetch; hook or schema errors reject before transport.
-Client remains responsible for XDA serialization and removing unsupported fields.
+Client remains responsible for XDA request validation and serialization, preserving
+the full supported event shape and caller input.
 This final-type check closes the original-type-only consent bypass in the Optimization reference at `70dfa7f`.
 
 The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
@@ -327,80 +364,22 @@ The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
 Runtime owns their shared implementation and types. Stateless free fetch functions
 have no global interceptor registry.
 
-### Produce a state-only browser handoff
+### Consume the XDA handoff
 
-After all sequential profile-producing operations finish, package the final
-`request.profile` with the public Node free function:
+Only an actual server-to-browser transfer uses the Node producer described
+[above](#actual-server-to-browser-transfer). Ordinary SSR uses normal fetch and
+does not commit XDA-carried events; no Node aggregate commitment remains. Optional
+explicit browser replay is governed by [Runtime](../runtime/README.md#xda-preflight-and-profile-finalization).
 
-```ts
-import { createRequestHandoffFromData } from '@contentful/experiences-node';
-
-const handoff = createRequestHandoffFromData({
-  spaceId,
-  environmentId,
-  data: { profile: request.profile },
-  // cache: { scope: 'private-request' }, // default; optional private key allowed
-});
-```
-
-The input requires explicit `spaceId` and `environmentId`, optional
-`data: { profile?: EventProfile | Pick<EventProfile, 'id'>; changes?: ChangeArray }`,
-and an optional private-request cache value. A complete profile produces
-`state.profile`; ID-only input produces top-level continuation `profileId`, without
-profile state. Supplied changes produce `state.changes`. Neither form includes
-replay. Missing both profile and changes omits `state` entirely, including after
-JSON serialization; an absent profile omits both profile fields and preserves the
-browser profile on hydration. Changes are validated with the API's `ChangeArray`
-schema; flag-only state, including `[]`, is private. An explicit non-private cache
-scope throws `TypeError`; Runtime's scope/profile validation errors propagate.
-
-This function packages data only: it emits no events, invokes no event hooks,
-makes no network requests, mutates no request state, and sets no cookies or
-headers. Use `hydrateHandoffState()` to consume it without a browser page event.
-The separate Runtime helper with the same name takes `{ handoff, data? }` and can
-preserve replay and carry evaluated changes. See the [complete startup
-sequence](../../README.md#committed-server-rendering-and-state-only-hydration)
-for serialization and tracking activation.
-
-### Prepare a browser handoff
-
-Call `prepareRequestHandoff` on the request facade to build an ordered
-`identify` / `track` prefix and one final `page`. It previews the complete batch
-with `preflight: true` once, without committing events from Node:
-
-```ts
-const { handoff, data } = await experienceRequest.prepareRequestHandoff({
-  routeKey: '/products?category=chairs',
-  initialEvents: [{ type: 'track', event: 'experience_rendered' }],
-  page: { properties: { title: 'Chairs' } },
-});
-```
-
-The route key is the visible pathname plus search and must begin with `/`.
-The prepared batch's transport locale uses the request locale, falling back to
-the constructor locale. The handoff captures this selection, including an absent
-locale, for browser replay. Explicit event locales such as `page.locale` remain
-in the event bodies and do not override the preparation or replay transport locale.
-The SDK handoff limit is 100 total events including the final page,
-with at most 50 identify events and only identify/track events before that page.
-Validation rejects an invalid or oversized batch before preflight; the SDK
-does not split or truncate it. A valid handoff can still be refused by the
-browser when the whole batch does not fit its remaining queue capacity.
-Invalid input, hook failure, or invalid transformed output returns a private
-handoff without replay or preview data and logs a diagnostic. Consent-blocked
-optional prefix events are omitted; the final event must remain a valid, admitted
-page or preparation uses that same event-free fallback. A failed preview transport
-retains the already-evaluated replay with the same
-event IDs and omits `data`, so the caller can render a fallback. A successful
-preview updates only request-local evaluated profile state; its data and
-continuation ID do not mean those events were committed. The handoff is
-browser-visible sensitive data: use escaped serialization in a private,
-no-store response, and do not log or persist it.
-
-Ordinary `identify`, `page`, `track`, and Analytics calls remain direct server
-events and do not join the prepared batch. The Web SDK accepts this handoff
-through `hydrateAndTrackCurrentPage(handoff, { routeKey })` on an existing browser
-instance. Its admission result does not wait for Personalization HTTP delivery.
+Only actual server-to-browser transfers retain the Node producer; ordinary SSR
+uses normal fetch and does not commit XDA-carried events. Optional explicit browser
+consumption owns hybrid replay. Necessary state application stays internal to that
+complete operation. Standalone XPAPI preparation, separate supplied-data producers
+and public state-only hydration are removed. Route, transport locale, replay limits,
+scope/cache/consent/lifetime and serialization remain governed by the
+[canonical Runtime contract](../runtime/README.md#xda-preflight-and-profile-finalization).
+Content failure preserves usable server replay; same-ID Retry is ordinary event-free
+fetch and never uses handoff as content input.
 
 ## Precedence
 
