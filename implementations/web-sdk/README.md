@@ -83,10 +83,12 @@ The current flow follows the Node reference's documented upstream workarounds:
    their traits change. Repeated inclusion does not guarantee exactly-once event
    processing.
 2. **XDA rejects unsupported built-event consent context such as `context.gdpr`.**
-   Client already normalizes against the generated wire schema. The application
-   must not strip fields again or remove consent metadata from ordinary SDK events.
-   Revisit Client normalization only when upstream/generated types support the
-   built shape; verify built events end to end before removing redundant conversion.
+   Client already removes these fields (`context.gdpr`, `context.screen` and
+   `context.page.title`) before the request; the generated delivery client no longer
+   ships request schemas, so this lives in Client. The application must not strip
+   fields again or remove consent metadata from ordinary SDK events. Revisit Client
+   normalization only when XDA accepts the built shape; verify built events end to
+   end before removing redundant conversion.
 3. **Initial identification inside XDA can time out without an established profile.**
    A direct page first establishes SDK-owned identity. Move page into the first
    event-bearing XDA fetch only after that initial fetch reliably creates the
