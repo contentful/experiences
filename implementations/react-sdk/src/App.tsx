@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 
 import type { PublicEnvironment } from '../public-config';
+import type { AttemptLog } from './attempt-log';
+import { ConsentControls } from './ConsentControls';
 import { getRouteExperienceIds, type PageContent } from './content-loader';
 import { ExperiencePresentation } from './ExperiencePresentation';
+import { TrackingLog } from './TrackingLog';
 
 export function App({
   pathname,
   environment,
   content,
+  log,
 }: {
   pathname: string;
   environment: PublicEnvironment;
   content: Promise<PageContent>;
+  log: AttemptLog;
 }) {
   const [loaded, setLoaded] = useState<PageContent>();
   const ids = getRouteExperienceIds(environment, pathname);
@@ -53,15 +58,7 @@ export function App({
       </nav>
       <div className="app-body">
         <aside className="app-sidebar" aria-label="Tracking">
-          <section className="tracking-log" data-testid="analytics-events-container">
-            <div className="tracking-log__header">
-              <h2>Tracking</h2>
-            </div>
-            <p className="tracking-log__empty">
-              Event observation becomes available with the runtime integration. This reference does
-              not submit or observe events.
-            </p>
-          </section>
+          <TrackingLog log={log} />
         </aside>
         <main className="app-main" id="app-main" tabIndex={-1}>
           <div
@@ -82,21 +79,15 @@ export function App({
           </div>
           {(home || pageTwo) && (
             <>
-              <section className="control-panel" aria-label="Utilities">
-                <h2 className="control-panel__title">Utilities</h2>
-                <p className="control-panel__note">
-                  Content uses the application-owned free fetch path. No Web SDK instance is
-                  created; consent and visitor actions are not available yet.
-                </p>
-              </section>
+              <ConsentControls />
               <div className="sections-grid sections-grid--split">
                 <section className="page-section">
                   <header className="page-section__header">
                     <h2>Experiences with automatic tracking defaults</h2>
                     <p>
-                      Standard rendering stamps source-map attribution on actual DOM roots.
-                      Interaction measurement requires a Web SDK instance, which is not connected
-                      yet.
+                      Standard rendering stamps source-map attribution on actual DOM roots. The
+                      shared Web SDK measures permitted views, hovers and clicks, subject to consent
+                      and profile availability.
                     </p>
                   </header>
                   <div className="entry-grid entry-grid--experiences">
@@ -110,8 +101,8 @@ export function App({
                     <h2>Experiences for manual view registration</h2>
                     <p>
                       The first plan is reused twice with distinct DOM roots. Attribution is
-                      retained and automatic views, hovers and clicks are disabled. Manual
-                      registration and measurement are not connected yet.
+                      retained and automatic views, hovers and clicks are disabled. Each attributed
+                      root is registered for SDK-measured views through runtime context.
                     </p>
                   </header>
                   <div className="entry-grid entry-grid--experiences">

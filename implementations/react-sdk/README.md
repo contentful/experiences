@@ -5,19 +5,19 @@ plans. It consumes locally packed SDK artifacts outside the
 root npm workspaces.
 Home (`/`) and Page Two (`/page-two`) use ordinary document links, including direct
 navigation and browser back/forward. The Web reference's theme, Tracking sidebar,
-Utilities area and split content layout establish the presentation for subsequent
-integration work.
+Utilities area and split content layout provide automatic and manual tracking
+presentations with SDK-owned consent controls.
 
 The application loads real Experience plans through the public React `/client`
 free `fetchExperience` API and renders them with `ExperienceRenderer`. This
 application-owned loading/supplied-plan path remains supported when managed
-loading arrives. It creates no Web SDK runtime and submits no events. Utilities
-and the Tracking sidebar explain their pending availability without inactive
-controls or fabricated event counts. Credentials are unnecessary to build and
-start; content loading requires the app-local space and browser-approved Delivery
-token. Runtime ownership/hooks and controls arrive in Phase 5, and managed
-content/navigation/preview in Phase 6. See the
-[implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-4-add-standard-attributed-rendering)
+loading arrives. A registry-bound `ExperiencesRoot` activates one Web runtime after
+React commits. Utilities expose event and persistence consent; the optional
+Tracking sidebar reports actual event-attempt notifications. Credentials are
+unnecessary to build and start; content loading requires the app-local space and
+browser-approved Delivery token. Managed content/navigation/preview and
+page/identify/reset/retry sequences remain Phase 6 work. See the
+[implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-5-implement-react-ownership-providers-and-hooks)
 and [accepted design](../../tmp/react-next-runtime-phase-1-design.md).
 
 ## Setup and local commands
@@ -92,7 +92,8 @@ hosting configuration, defaulting to 3400, and must be an integer in 1–65535.
 The complete public allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`
 and resolved `EXPERIENCE_IDS`. The first and third default to empty strings;
 environment defaults to `master` and locale to `en-US`. The content loader uses
-these values for Delivery requests; loading content does not create a Web runtime.
+these values for Delivery requests; the managed root uses the same browser-safe
+Delivery configuration and the SDK's default Optimization endpoints.
 The host injects them as `window.ENVIRONMENT` in private/no-store HTML, escaping `<` in JSON.
 Vite environment loading and automatic environment exposure are disabled. No
 configuration values are baked into the JavaScript assets, and environment files
@@ -123,8 +124,9 @@ Client/Runtime/Core/Design chains to local archives, and installs the unchanged
 Preview artifact as an optional dependency for eventual lazy initialization. There
 is no Next dependency, workspace source alias or adjacent Optimization dependency.
 The browser imports the public React `/client` entry and the maintained Contentful
-Rich Text React renderer/types. Web remains declared for Phase 5 but is not imported
-or constructed. Preview remains optional and is not initialized.
+Rich Text React renderer/types. The React managed root owns Web construction and
+disposal; the app imports Web's public state types for optional diagnostics.
+Preview remains optional and is not initialized.
 
 Browser rendering uses the public `@contentful/experiences-react/client` entry;
 static/server integration uses `@contentful/experiences-react/server` where
@@ -134,13 +136,20 @@ the frozen package's public exports and Runtime's supported initializer; see
 [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview).
 
 - `src/App.tsx`, `src/main.tsx`, `index.html`: React shell, route labels, normal
-  links, title/active-link updates, application-owned load and local assets.
-- `src/content-loader.ts`: sequential free fetches for distinct route IDs with
+  links, title/active-link updates, application-owned load, commit-time managed
+  ownership, final-exit/BFCache handling and local assets.
+- `src/experiences.ts`: pure factory binding of the registry once, shared by the
+  managed root and supplied-plan renderers; no SDK construction at module scope.
+- `src/ConsentControls.tsx`: consent state hooks and receiver-safe `setConsent`
+  action for independent event/persistence Grant/Revoke controls.
+- `src/attempt-log.ts`, `src/TrackingLog.tsx`: early retained event subscription,
+  notification counts, actual view/hover interval grouping and cleaned-up age timer.
+- `src/content-loader.ts`: concurrent free fetches for distinct route IDs with
   source maps, per-ID error results and plan reuse; no runtime initialization.
 - `src/experience-config.tsx`: coded component/template registrations, generated
   source-field types, binding checks, Rich Text and the actual named `slot`.
 - `src/ExperiencePresentation.tsx`: standard supplied-plan renderer, content/error
-  presentation and per-kind automatic tracking flags for the manual-view section.
+  presentation, context-based manual-view registration and per-kind automatic flags.
 - `src/contentful-generated.d.ts`: unchanged copy of the current Node reference's
   generated CDA declaration. Its `contentful` type dependency is declared locally;
   no generator runs during app setup.
@@ -157,13 +166,14 @@ the frozen package's public exports and Runtime's supported initializer; see
 ## Rendering and binding evidence
 
 The loader starts once per document outside React render/effect replay. It requests
-`extensions: { sourceMap: {} }`, fetching each distinct route ID sequentially once.
-Home requests all configured IDs; Page Two requests the last and then the first
+`extensions: { sourceMap: {} }`, fetching each distinct route ID concurrently once.
+Results retain route order regardless of completion order.
+Home requests all configured IDs; Page Two requests the last and the first
 (unless they are the same). Both manual presentations reuse the same plan object;
 on Home the automatic presentation also uses it. Errors for one ID do not stop the
 remaining requests. React subscribes to the resulting page load with a stale-result
 guard. This is a single application load, with no general cache, page/identify
-operations, personalization input, shared initialization barrier or preview work.
+operations, personalization input, route initialization barrier or preview work.
 Ordinary document navigation starts a new load. Loading, missing configuration,
 request errors, empty plans and SDK content diagnostics are displayed truthfully.
 
@@ -208,21 +218,77 @@ This adapts the refs/per-kind pattern from Optimization's
 [`ContentEntry.tsx`](https://github.com/contentful/optimization/blob/59add9d6ebff503b9033a59a2eee0149d4b4e925/implementations/react-web-sdk/src/sections/ContentEntry.tsx)
 at the pinned revision. That example disables only automatic views; this section
 also disables hovers and clicks to preserve the existing reference behavior.
-Neither section measures interactions without a Web runtime.
+The manual presentation obtains `sdk` from `useExperiences()`, registers only
+roots with normalized `onNodeRoot` data through
+`sdk.tracking.enableElement('views', element, { data })`, and returns
+`clearElement('views', element)` cleanup. These registration lines are intentional
+consumer lifecycle work. The renderer handles detach and callback replacement,
+including snapshot-to-live activation or an injected SDK replacement. The app
+has no root map, attribution traversal, measurement observer or SDK prop threading.
 
-The app retains no root map or readiness counts and installs no placeholder
-`onNodeRoot` callback. Future managed loading/context integration will add actual
-manual registration through the public SDK tracking API, using `onNodeRoot`'s
-`{ element, node, attribution, data: ScopeAttribution | undefined }`. The SDK normalizes `data`
-to the innermost rooted scope; consumers need not choose `roots.at(-1)`. The existing
-callback lifecycle supplies registration cleanup on detach/replacement. Consent,
-identity, tracking controls and the event sidebar remain Phase 5 work; managed
-loading, initialization, retry/reset orchestration and preview remain Phase 6 work.
-Both phases remain pending.
+## Runtime ownership, consent and diagnostics
+
+`ExperiencesRoot` constructs Web after browser commit and provides the cached
+snapshot before activation or after setup failure. Supplied plans remain visible
+independently of activation/readiness; Utilities exposes provider errors and
+disables consent actions on the snapshot. `isLive` describes runtime activation,
+not preview connection or content success. This phase has no state handoff or
+route-page coordinator. Root configuration is captured for the mounted owner;
+structural changes require deliberate key replacement, while locale is mutable.
+An application-owned SDK can instead be injected through `ExperiencesProvider`;
+independent providers may share a public `/host` binding. This reference uses one
+managed root; shared-root ownership coverage belongs to SDK tests.
+
+Startup consent/profile defaults are unset. State comes from the SDK and its
+existing persistence policy, with no application profile or consent store.
+Grant/Revoke changes event and persistence consent independently, with no content
+fetch or page action from a consent subscription. Event consent gates tracking;
+persistence consent gates durable profile continuity. No visitor profile is
+initialized here. Analytics dispatch and attempt notifications require an available
+runtime event profile or identity. Granting event consent alone does not make
+interaction attempts appear for a fresh visitor without that prerequisite.
+A profileless `trackView` can return `{ accepted: true }` with no `eventStream`
+notification or network request. The sidebar counts actual notifications, which
+do not establish successful transport delivery.
+Page/identify/reset/retry and managed preview
+content are deferred to Phase 6.
+
+The stable `onStatesReady` callback attaches the optional sidebar's retained
+subscription during activation, before root-driven work. It ignores the immediate
+historical `.current` emission on every attachment. Each later event notification
+increments the attempt count, even when message IDs repeat. Only real view/hover
+interval IDs with durations group into one row; the row shows the latest duration,
+first-observed age and notification count. React renders labels as text. These
+rows describe attempts before queue admission/transport completion, never delivery
+success. Clearing SDK event state does not fabricate an attempt or erase history.
+The age timer and UI subscriptions clean up on unmount; the root owns the early
+subscription's cleanup.
+
+Web owns interaction completion and its final visibility/hide flush. The host
+leaves the mounted owner and attributed roots alive during document exit so that
+manual cleanup or SDK destruction cannot cancel pending final durations or the
+Beacon attempt. Document teardown releases that document's tree, subscriptions,
+timers and SDK. Deliberate React unmount/replacement within a live document instead
+uses renderer/provider cleanup to release manual registrations, subscriptions and
+the owned SDK. Persisted `pagehide` retains the root, subscriptions and SDK for
+BFCache resumption; no new load or runtime is created.
+
+The ownership/consent/sidebar patterns were traced with `git show` at Optimization
+commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `OptimizationProvider`,
+Web `presentation/optimizationRootRuntime.ts`, and the maintained React reference's
+`main.tsx`, `ControlPanel.tsx` and `AnalyticsEventDisplay.tsx`. The retained
+Experiences differences are supplied XDA plans rather than local CDA variant
+resolution, no route-page work until Phase 6, SDK-normalized attribution data,
+and skipping historical notifications when attaching diagnostics. The pinned
+reference is evidence only, with no adjacent-checkout runtime dependency.
 
 Use scoped build/lint/typecheck and direct inspection of this maintained app for
 validation after refreshing the installed tarballs. Inspect both routes, repeated
 roots, the named slot, Rich Text, missing/malformed content, attribution attributes
 and per-kind flags. No network unit tests, MSW, E2E tooling, simulated services or
 temporary consumers belong to this reference. Build/typecheck establishes artifact
-consumption, not live service results or later consent/tracking/preview behavior.
+consumption, not live service results. Inspect independent consent decisions,
+retained supplied content after activation failure, callback registration cleanup,
+attempt counts/grouping and final-exit/BFCache behavior with the installed SDK
+artifacts. Keep public imports; no workspace aliases or temporary consumers are
+needed to validate this integration boundary.

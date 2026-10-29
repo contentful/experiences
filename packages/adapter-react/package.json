@@ -33,6 +33,12 @@
         "default": "./dist/client.js"
       }
     },
+    "./host": {
+      "import": {
+        "types": "./dist/host.d.ts",
+        "default": "./dist/host.js"
+      }
+    },
     "./web-sdk": {
       "import": {
         "types": "./dist/web-sdk.d.ts",

@@ -19,7 +19,7 @@ import { toCss } from '../design/design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from '../registry/types';
 import { useDesignValues } from '../hooks/use-design-values';
-import { minimalSourceMap } from '../test-fixtures/source-map.js';
+import { minimalSourceMap } from '../test/source-map.js';
 
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
 
