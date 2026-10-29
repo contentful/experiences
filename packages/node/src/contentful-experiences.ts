@@ -1,6 +1,7 @@
 import {
   serializePersonalization,
   type DestinationRedirectResult,
+  type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
@@ -384,10 +385,51 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     );
   }
 
-  async fetchExperience(
+  fetchExperience(
     options: RuntimeFetchExperienceOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
+    return this.fetchPersonalized(options, (final) =>
+      this.runtime.fetchExperience(
+        { ...final, locale: options.locale ?? this.locale },
+        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+      )
+    );
+  }
+
+  fetchByDestinationNode(
+    options: RuntimeFetchByDestinationNodeOptions,
+    resolveOptions: RuntimeFetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    return this.fetchPersonalized(options, (final) =>
+      this.runtime.fetchByDestinationNode(
+        final,
+        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+      )
+    );
+  }
+
+  fetchByDestinationPath(
+    options: RuntimeFetchByDestinationPathOptions,
+    resolveOptions: RuntimeFetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    return this.fetchPersonalized(options, (final) =>
+      this.runtime.fetchByDestinationPath(
+        final,
+        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+      )
+    );
+  }
+
+  /**
+   * Every XDA fetch goes through here, so by-id and Destination fetches cannot drift:
+   * consent and interceptors apply to caller-built events, the request's profile id is
+   * sent, and the returned one is kept unless the profile changed in the meantime.
+   */
+  private async fetchPersonalized<
+    TOptions extends { personalization?: PersonalizationOptions },
+    TResult extends PortableRenderPlan | DestinationRedirectResult,
+  >(options: TOptions, send: (options: TOptions) => Promise<TResult>): Promise<TResult> {
     const profileRevision = this.#profileRevision;
     const incomingProfileId = this.#profile?.id;
     const initiallyGated = this.gatePersonalizationEvents(options);
@@ -398,15 +440,14 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     const profileId = this.isPreview
       ? undefined
       : (gated.personalization?.profileId ?? incomingProfileId);
-    const resolvedOptions =
+    const result = await send(
       profileId === undefined
         ? gated
-        : { ...gated, personalization: { ...gated.personalization, profileId } };
-    const plan = await this.runtime.fetchExperience(
-      { ...resolvedOptions, locale: options.locale ?? this.locale },
-      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+        : { ...gated, personalization: { ...gated.personalization, profileId } }
     );
-    const returnedProfileId = plan.personalization?.profileId;
+    // A Destination redirect carries no personalization.
+    const returnedProfileId =
+      'personalization' in result ? result.personalization?.profileId : undefined;
     if (
       !this.isPreview &&
       returnedProfileId !== undefined &&
@@ -414,36 +455,16 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     ) {
       this.setProfile({ id: returnedProfileId });
     }
-    return plan;
-  }
-
-  fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
-  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.runtime.fetchByDestinationNode(
-      options,
-      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-    );
-  }
-
-  fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
-  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.runtime.fetchByDestinationPath(
-      options,
-      mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-    );
+    return result;
   }
 
   /**
    * Drops caller-built XDA events that this request's consent does not admit. The
    * profile id still travels, since it is not an event.
    */
-  private gatePersonalizationEvents(
-    options: RuntimeFetchExperienceOptions
-  ): RuntimeFetchExperienceOptions {
+  private gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+    options: T
+  ): T {
     if (this.isPreview) {
       for (const event of options.personalization?.events ?? []) this.admitEvent(event);
       return { ...options, personalization: undefined };
@@ -455,9 +476,9 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     return { ...options, personalization: { ...options.personalization, events: admitted } };
   }
 
-  private async interceptPersonalizationEvents(
-    options: RuntimeFetchExperienceOptions
-  ): Promise<RuntimeFetchExperienceOptions> {
+  private async interceptPersonalizationEvents<
+    T extends { personalization?: PersonalizationOptions },
+  >(options: T): Promise<T> {
     const personalization = options.personalization;
     if (personalization?.events === undefined) return options;
     const events = await Promise.all(
