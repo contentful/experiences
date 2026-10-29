@@ -13,7 +13,7 @@ import {
   type Config,
   type ContentfulComponent,
   type ContentfulExperienceTemplate,
-} from './types.js';
+} from '../registry/types.js';
 
 interface NodeSnapshotBase {
   id: string;
@@ -22,6 +22,8 @@ interface NodeSnapshotBase {
   props: Record<string, unknown>;
   /** Token-resolved design values. */
   design: Record<string, unknown>;
+  /** Serializable registration setting; callable bindings are created in the client boundary. */
+  root?: { prop: string };
 }
 
 /**
@@ -80,6 +82,7 @@ export function resolveNodeProps(node: PortableRenderNode, config: Config): Reso
       nodeId,
       props: mergeProps(registration.defaults, node),
       design: node.props.design,
+      ...(registration.root ? { root: { ...registration.root } } : {}),
       contentful: {
         experienceTemplateId: id,
         nodeId,
@@ -101,6 +104,7 @@ export function resolveNodeProps(node: PortableRenderNode, config: Config): Reso
     nodeId,
     props: mergeProps(registration.defaults, node),
     design: node.props.design,
+    ...(registration.root ? { root: { ...registration.root } } : {}),
     contentful: {
       componentId: id,
       nodeId,

@@ -5,24 +5,28 @@
 
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { ComponentError } from './component-error.js';
-import { DiagnosticReporterContext } from './component-error-boundary.js';
-import { DebugExperience } from './debug-experience.js';
+import { ExperienceBoundary, type ExperienceBoundaryOptions } from './experience-boundary.js';
+import { NodeRootBoundaryContext } from '../tracking/bound-node-roots.js';
+import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
+
+import { ComponentError } from '../diagnostics/component-error.js';
+import { DiagnosticReporterContext } from '../diagnostics/component-error-boundary.js';
+import { DebugExperience } from '../diagnostics/debug-experience.js';
 import { ExperienceProvider } from './context.js';
-import { MissingComponent } from './missing-component.js';
+import { MissingComponent } from '../diagnostics/missing-component.js';
 import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer.js';
-import type { Config, RenderContext } from './types.js';
+import type { Config, RenderContext } from '../registry/types.js';
 
 const DEFAULT_CONTEXT: ExperienceContext = {
   debug: false,
   metadata: {},
 };
 
-export interface ClientExperienceRendererProps {
+export interface ClientExperienceRendererProps extends ExperienceBoundaryOptions {
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
@@ -34,6 +38,7 @@ export interface ClientExperienceRendererProps {
    */
   debug?: boolean;
   renderUnknown?: RenderUnknown;
+  onNodeRoot?: OnExperienceNodeRoot;
   /** Override the fallback rendered when a registered component throws. */
   renderError?: RenderError;
 }
@@ -43,9 +48,39 @@ export function ClientExperienceRenderer({
   config,
   metadata,
   debug,
+  as,
+  rootProps,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
   renderUnknown = MissingComponent,
   renderError = ComponentError,
 }: ClientExperienceRendererProps): ReactNode {
+  const boundary = useRef<HTMLElement | null>(null);
+  const callerRef = rootProps?.ref;
+  const boundaryRef = useMemo(() => {
+    let cleanup: (() => void) | undefined;
+    let attached = false;
+    return (element: HTMLElement | null): void => {
+      boundary.current = element;
+      if (cleanup) {
+        const dispose = cleanup;
+        cleanup = undefined;
+        dispose();
+      } else if (attached && typeof callerRef === 'function') {
+        callerRef(null);
+      }
+      attached = element !== null;
+      if (typeof callerRef === 'function' && element !== null) {
+        const result = callerRef(element);
+        if (typeof result === 'function') cleanup = result;
+      } else if (callerRef && typeof callerRef !== 'function') {
+        (callerRef as { current: HTMLElement | null }).current = element;
+      }
+    };
+  }, [callerRef]);
   const [renderDiagnostics, setRenderDiagnostics] = useState<Error[]>([]);
   // A `setState` updater rather than the SSR renderer's plain-array push: this
   // tree stays mounted and interactive, so a component that throws well after
@@ -92,7 +127,13 @@ export function ClientExperienceRenderer({
 
   return (
     <ExperienceProvider value={renderContext}>
-      {/*
+      <NodeRootBoundaryContext.Provider value={boundary}>
+        <ExperienceBoundary
+          experience={experience}
+          as={as}
+          rootProps={{ ...rootProps, ref: boundaryRef }}
+        >
+          {/*
         Established here, not in `ServerExperienceRenderer`: this Provider
         (and the closure it carries) never crosses a Server→Client boundary
         because everything from `ClientExperienceRenderer` down is already
@@ -100,21 +141,28 @@ export function ClientExperienceRenderer({
         to report a render-time throw without receiving a callback prop —
         see component-error-boundary.tsx for why that specifically matters.
       */}
-      <DiagnosticReporterContext.Provider value={onDiagnostic}>
-        <NodesRenderer
-          nodes={experience.nodes}
-          config={config}
-          renderUnknown={renderUnknown}
-          renderError={renderError}
-          onDiagnostic={onDiagnostic}
-        />
-      </DiagnosticReporterContext.Provider>
-      {resolvedDebug ? (
-        <DebugExperience
-          experience={experience}
-          errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}
-        />
-      ) : null}
+          <DiagnosticReporterContext.Provider value={onDiagnostic}>
+            <NodesRenderer
+              nodes={experience.nodes}
+              config={config}
+              renderUnknown={renderUnknown}
+              renderError={renderError}
+              onDiagnostic={onDiagnostic}
+              clickable={clickable}
+              trackClicks={trackClicks}
+              trackHovers={trackHovers}
+              trackViews={trackViews}
+              onNodeRoot={onNodeRoot}
+            />
+          </DiagnosticReporterContext.Provider>
+          {resolvedDebug ? (
+            <DebugExperience
+              experience={experience}
+              errors={[...(experience.diagnostics ?? []), ...renderDiagnostics]}
+            />
+          ) : null}
+        </ExperienceBoundary>
+      </NodeRootBoundaryContext.Provider>
     </ExperienceProvider>
   );
 }
