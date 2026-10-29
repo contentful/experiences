@@ -26,6 +26,7 @@ import type { Config } from './types.js';
 
 import BrokenFixture from './test-fixtures/BrokenFixture.svelte';
 import ButtonFixture from './test-fixtures/ButtonFixture.svelte';
+import HeadingFixture from './test-fixtures/HeadingFixture.svelte';
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {
@@ -131,5 +132,35 @@ describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('ClientExperienceRenderer — registration changes on a reused node id', () => {
+  it('renders the new component when a plan update swaps the component behind a node id', async () => {
+    const config: Config = {
+      components: { 'contentful-button': ButtonFixture, 'contentful-heading': HeadingFixture },
+    };
+    const first = await resolveExperience(
+      {
+        nodes: [componentNode('contentful-button', { id: 'n', contentProperties: { label: 'a' } })],
+      },
+      config
+    );
+    const second = await resolveExperience(
+      {
+        nodes: [componentNode('contentful-heading', { id: 'n', contentProperties: { text: 'b' } })],
+      },
+      config
+    );
+
+    const { container, rerender } = render(ClientExperienceRenderer, {
+      props: { experience: first, config },
+    });
+    expect(container.querySelector('button')?.textContent).toBe('a');
+
+    await rerender({ experience: second, config });
+
+    expect(container.querySelector('button')).toBeNull();
+    expect(container.textContent).toContain('b');
   });
 });

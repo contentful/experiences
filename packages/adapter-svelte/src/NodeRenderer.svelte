@@ -9,7 +9,7 @@
  * design resolution) is identical across the two kinds.
 -->
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
@@ -53,7 +53,9 @@
     slotSnippets,
   }: NodeRendererProps = $props();
 
-  const { kind, id } = node.registration;
+  // Captured once: the context set below can only be chosen at init.
+  // NodesRenderer keys on the registration, so a change remounts this node.
+  const { kind, id } = untrack(() => node.registration);
   const isExperienceTemplate = kind === 'experienceTemplate';
 
   // Any reactive re-run of this component's `$derived`/`{@const}` blocks
