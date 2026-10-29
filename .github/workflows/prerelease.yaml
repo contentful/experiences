@@ -92,27 +92,11 @@ jobs:
           echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
       - name: NX Prerelease
-        # `prerelease` specifier + `dev` preid → X.Y.Z-dev.N versions.
-        # Nx handles the version bump, CHANGELOG.md prepend, commit back to
-        # the `dev` branch, git tag, and GitHub Release. `--skip-publish`
-        # defers the actual npm publish to the next step so we can pass
-        # `--tag dev` explicitly
-        run: npx nx release --specifier prerelease --preid dev --skip-publish
-        env:
-          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
-
-      - name: Rebuild with released versions
-        # The restored build folders embed the previous versions in SDK
-        # metadata (event `context.library`, `X-Contentful-User-Agent`).
-        run: npx nx run-many -t build --exclude=tag:scope:implementation --skip-nx-cache
-
-      - name: Verify release artifacts
-        run: npx nx run-many -t verify-release-artifact --skip-nx-cache
-
-      - name: NX Publish
-        # Explicit `--tag dev` ensures the `latest` dist-tag on npm is never
-        # moved by a prerelease build. Consumers install with:
+        # `prerelease` specifier + `dev` preid → X.Y.Z-dev.N versions. Same flow
+        # as release.yaml (version, rebuild, verify, changelog/tag/push, publish).
+        # `--tag dev` keeps a prerelease from ever moving the `latest` dist-tag.
+        # Consumers install with:
         #   npm install @contentful/experiences-react@dev
-        run: npx nx release publish --tag dev
+        run: npx tsx scripts/release.ts --specifier prerelease --preid dev --tag dev
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}

@@ -75,22 +75,10 @@ jobs:
           echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
       - name: NX Release
-        # Version, changelog, commit, tag, and GitHub Release. Publishing waits
-        # until the packages are rebuilt with the versions this step wrote.
-        run: npx nx release --skip-publish
-        env:
-          GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
-
-      - name: Rebuild with released versions
-        # The restored build folders embed the previous versions in SDK
-        # metadata (event `context.library`, `X-Contentful-User-Agent`).
-        run: npx nx run-many -t build --exclude=tag:scope:implementation --skip-nx-cache
-
-      - name: Verify release artifacts
-        run: npx nx run-many -t verify-release-artifact --skip-nx-cache
-
-      - name: NX Publish
-        run: npx nx release publish
+        # Versions on disk, rebuilds without the cache so SDK metadata embeds the
+        # new versions, verifies, then commits, tags, pushes, and publishes. See
+        # scripts/release.ts and "Recovering a failed release" in CONTRIBUTING.md.
+        run: npx tsx scripts/release.ts
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
 
