@@ -32,6 +32,10 @@ vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 
+const userAgentHeaders = {
+  'X-Contentful-User-Agent': expect.stringMatching(/^sdk experiences-runtime\/0\.0\.0; /),
+};
+
 const runtimes: ContentfulExperiences[] = [];
 
 function createRuntime(config: ConstructorParameters<typeof ContentfulExperiences>[0]) {
@@ -135,13 +139,17 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
     expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledTimes(2);
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(1, {
-      accessToken: 'delivery',
-    });
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+      1,
+      { accessToken: 'delivery' },
+      undefined,
+      userAgentHeaders
+    );
     expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
       2,
       { accessToken: 'preview' },
-      'https://preview.xdn.contentful.com'
+      'https://preview.xdn.contentful.com',
+      userAgentHeaders
     );
     await runtime.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
@@ -281,7 +289,8 @@ describe('ContentfulExperiences', () => {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
       },
-      'https://preview.xdn.contentful.com'
+      'https://preview.xdn.contentful.com',
+      userAgentHeaders
     );
   });
 
@@ -306,8 +315,30 @@ describe('ContentfulExperiences', () => {
         environment: 'https://preview-environment.example',
         host: 'https://preview-host.example',
       },
-      'https://preview.xdn.contentful.com'
+      'https://preview.xdn.contentful.com',
+      userAgentHeaders
     );
+  });
+
+  it('reports the leaf SDK and application in the user-agent header', () => {
+    mockCreateRuntimeDeliveryClient.mockClear();
+
+    createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: {
+        channel: 'server',
+        app: { name: 'my-site', version: '2.1.0' },
+        library: { name: '@contentful/experiences-node', version: '0.6.0' },
+      },
+    });
+
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(expect.anything(), undefined, {
+      'X-Contentful-User-Agent': expect.stringMatching(
+        /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
+      ),
+    });
   });
 
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {

@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContentfulViewDeliveryClient } from '@contentful/experience-delivery';
 import { createClient } from './create-delivery-client.js';
 
+const userAgentHeaders = {
+  'X-Contentful-User-Agent': expect.stringMatching(/^sdk experiences-client\/0\.0\.0; platform /),
+};
+
 vi.mock('@contentful/experience-delivery', () => ({
   ContentfulViewDeliveryClient: vi.fn().mockImplementation((options) => ({ _options: options })),
 }));
@@ -18,6 +22,7 @@ describe('createClient', () => {
     });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+      headers: userAgentHeaders,
       token: 'token-123',
       baseUrl: 'https://preview.xdn.contentful.com',
     });
@@ -28,6 +33,7 @@ describe('createClient', () => {
     createClient({ accessToken: 'token-123' });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+      headers: userAgentHeaders,
       token: 'token-123',
       baseUrl: undefined,
     });
@@ -45,9 +51,20 @@ describe('createClient', () => {
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
       token: 'token-123',
       baseUrl: 'https://xdn.contentful.com',
-      headers: { 'x-custom': 'value' },
+      headers: { ...userAgentHeaders, 'x-custom': 'value' },
       timeoutInSeconds: 30,
       maxRetries: 5,
+    });
+  });
+
+  it('lets caller headers override the user-agent header', () => {
+    createClient({
+      accessToken: 'token-123',
+      headers: { 'X-Contentful-User-Agent': 'custom' },
+    });
+
+    expect(vi.mocked(ContentfulViewDeliveryClient).mock.calls[0]?.[0].headers).toEqual({
+      'X-Contentful-User-Agent': 'custom',
     });
   });
 });

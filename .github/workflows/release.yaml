@@ -75,11 +75,12 @@ jobs:
           echo "@contentful:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
       - name: NX Release
-        run: |
-          npx nx release --yes
+        # Versions on disk, rebuilds without the cache so SDK metadata embeds the
+        # new versions, verifies, then commits, tags, pushes, and publishes. See
+        # scripts/release.ts and "Recovering a failed release" in CONTRIBUTING.md.
+        run: npx tsx scripts/release.ts
         env:
           GITHUB_TOKEN: ${{ steps.vault.outputs.GITHUB_TOKEN }}
-          CONTENTFUL_EXPERIENCES_VERIFY_RELEASE_ARTIFACT: 'true'
 
       - name: Get latest release tag
         id: get-tag
