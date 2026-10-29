@@ -11,6 +11,10 @@
         {
           "projects": ["node"],
           "target": "pack"
+        },
+        {
+          "projects": ["package-tools"],
+          "target": "pack-preview"
         }
       ],
       "executor": "nx:run-commands",

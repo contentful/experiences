@@ -407,19 +407,64 @@ describe('PersonalizationDelivery', () => {
     );
   });
 
-  it('refuses a new ordinary event when accepted ordinary events fill the offline queue', async () => {
+  it('evicts the oldest ordinary event and admits the new event when the offline queue is full', async () => {
     const f = fixture({ online: false, maxEvents: 2 });
     const first = builder.buildTrack({ event: 'first' });
     const second = builder.buildTrack({ event: 'second' });
     const third = builder.buildTrack({ event: 'third' });
     await f.delivery.send(first);
     await f.delivery.send(second);
-    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: false });
+    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: true });
 
     expect(f.delivery.queuedEventCount).toBe(2);
     f.setOnline(true);
     await f.delivery.flush();
-    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([first, second]);
+    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([second, third]);
+  });
+
+  it('refuses overflow in a mixed queue without evicting ordinary or prepared events', async () => {
+    const f = fixture({ online: false, maxEvents: 4 });
+    const first = builder.buildTrack({ event: 'first' });
+    const last = builder.buildTrack({ event: 'last' });
+    const batch = prepared();
+    await f.delivery.send(first);
+    expect(f.delivery.sendPrepared(batch)).toEqual({ accepted: true });
+    await f.delivery.send(last);
+    await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({ accepted: false });
+    expect(f.delivery.sendPrepared(batch)).toEqual({ accepted: false });
+    expect(f.delivery.queuedEventCount).toBe(4);
+
+    f.setOnline(true);
+    await f.delivery.flush();
+    expect(f.upsertProfile.mock.calls.map(([payload]) => payload.events)).toEqual([
+      [first],
+      batch,
+      [last],
+    ]);
+  });
+
+  it('retains new events after overflow evicts an in-flight ordinary snapshot', async () => {
+    const response = deferred<OptimizationData>();
+    const f = fixture({ online: false, maxEvents: 2 });
+    const first = builder.buildTrack({ event: 'first' });
+    const second = builder.buildTrack({ event: 'second' });
+    const third = builder.buildTrack({ event: 'third' });
+    const fourth = builder.buildTrack({ event: 'fourth' });
+    await f.delivery.send(first);
+    await f.delivery.send(second);
+    f.setOnline(true);
+    f.upsertProfile.mockReturnValueOnce(response.promise);
+    const flush = f.delivery.flush();
+    f.setOnline(false);
+    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: true });
+    await expect(f.delivery.send(fourth)).resolves.toEqual({ accepted: true });
+    response.resolve(data('profile-1'));
+    await flush;
+    expect(f.upsertProfile.mock.calls.map(([payload]) => payload.events)).toEqual([
+      [first, second],
+      [third, fourth],
+    ]);
+    expect(f.delivery.queuedEventCount).toBe(0);
   });
 
   it('reconciles an in-flight ordinary snapshot without dropping events appended during the request', async () => {

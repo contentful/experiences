@@ -8,7 +8,9 @@ import {
 import {
   EventProfileRequiredError,
   parseExperiencesHandoff,
+  type RuntimeLivePreviewModule,
 } from '@contentful/experiences-runtime';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -24,7 +26,7 @@ afterEach(() => {
   runtimes.clear();
 });
 
-function createRuntime() {
+function createRuntime(overrides: Partial<ExperiencesNodeConfig> = {}) {
   return trackRuntime(
     new ContentfulExperiences({
       spaceId: 'space',
@@ -33,6 +35,7 @@ function createRuntime() {
       delivery: { accessToken: 'delivery-token' },
       resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
       app: { name: 'site', version: '1.0.0' },
+      ...overrides,
     })
   );
 }
@@ -67,6 +70,117 @@ function createEventRuntime(
 }
 
 describe('Node ContentfulExperiences', () => {
+  describe('request-owned Live Preview', () => {
+    function previewFixture() {
+      const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
+      const plan: PortableRenderPlan = {
+        nodes: [],
+        metadata: {},
+        debug: false,
+        diagnostics: [],
+        personalization: { profileId: 'preview-profile' },
+      };
+      const implementation: RuntimeLivePreviewModule = {
+        fetchPreviewSession: vi.fn().mockResolvedValue(plan),
+        createLivePreviewClient: vi.fn(),
+        sendPreviewStatus: vi.fn(),
+      };
+      const initializer = vi.fn(() => ({
+        experienceId: 'bound',
+        sessionId: 'session',
+        implementation,
+      }));
+      const ordinary = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue(plan);
+      return { runtime, plan, implementation, initializer, ordinary };
+    }
+
+    it('establishes preview policy before initializing the source', async () => {
+      const f = previewFixture();
+      const upsert = vi.spyOn(f.runtime.api.experience, 'upsertProfile');
+      const request = f.runtime.forRequest({ livePreview: f.initializer, consent: true });
+      expect(request.isPreview).toBe(true);
+      await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
+      expect((await request.prepareRequestHandoff({ routeKey: '/' })).skipped).toBe('preview');
+      expect(f.initializer).not.toHaveBeenCalled();
+      expect(upsert).not.toHaveBeenCalled();
+      expect(() => f.runtime.forRequest({ livePreview: f.initializer, isPreview: false })).toThrow(
+        /isPreview: false/
+      );
+    });
+
+    it('adopts the matching snapshot with request and operation resolve defaults', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({
+        livePreview: f.initializer,
+        profile: { id: 'visitor' },
+        resolveOptions: { metadata: { request: true, shared: 'request' } },
+      });
+      await expect(
+        request.fetchExperience(
+          { experienceId: 'bound' },
+          {
+            config: resolverConfig,
+            metadata: { shared: 'operation' },
+            debug: false,
+          }
+        )
+      ).resolves.toBe(f.plan);
+      expect(vi.mocked(f.implementation.fetchPreviewSession).mock.calls[0]?.[2]).toEqual({
+        config: resolverConfig,
+        debug: false,
+        metadata: { source: 'constructor', request: true, shared: 'operation' },
+      });
+      expect(request.profile).toEqual({ id: 'visitor' });
+      expect(f.ordinary).not.toHaveBeenCalled();
+      expect(f.implementation.createLivePreviewClient).not.toHaveBeenCalled();
+      await request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig });
+      expect(f.initializer).toHaveBeenCalledOnce();
+    });
+
+    it('keeps unrelated IDs on the ordinary source', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({ livePreview: f.initializer });
+      await expect(
+        request.fetchExperience(
+          { experienceId: 'other', preview: true },
+          {
+            config: resolverConfig,
+          }
+        )
+      ).resolves.toBe(f.plan);
+      expect(f.ordinary).toHaveBeenCalledWith(
+        { experienceId: 'other', preview: true, personalization: undefined, locale: 'en-US' },
+        { config: resolverConfig, metadata: {}, debug: undefined }
+      );
+      expect(f.implementation.fetchPreviewSession).not.toHaveBeenCalled();
+    });
+
+    it('rejects a pending snapshot when its request is disposed', async () => {
+      const f = previewFixture();
+      let complete!: (plan: PortableRenderPlan) => void;
+      const started = new Promise<void>((resolve) => {
+        vi.mocked(f.implementation.fetchPreviewSession).mockImplementation(() => {
+          resolve();
+          return new Promise((resolvePlan) => {
+            complete = resolvePlan;
+          });
+        });
+      });
+      const request = f.runtime.forRequest({ livePreview: f.initializer });
+      const pending = request.fetchExperience(
+        { experienceId: 'bound' },
+        { config: resolverConfig }
+      );
+      await started;
+      request.destroy();
+      request.destroy();
+      complete(f.plan);
+      await expect(pending).rejects.toThrow(/destroyed/);
+      await expect(request.page()).resolves.toEqual({ accepted: false });
+      expect(f.runtime.forRequest().isPreview).toBe(false);
+    });
+  });
+
   it('forwards changed parameters through request facades independently of event consent', async () => {
     const runtime = createRuntime();
     const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
@@ -99,6 +213,23 @@ describe('Node ContentfulExperiences', () => {
     first.destroy();
     first.destroy();
     expect(second.forRequest({ locale: 'it-IT' }).locale).toBe('it-IT');
+  });
+
+  it('keeps event disposal local to a request without adding shared SDK shutdown', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const disposed = runtime.forRequest();
+    const sibling = runtime.forRequest();
+    disposed.destroy();
+    disposed.destroy();
+    await expect(disposed.page()).resolves.toEqual({ accepted: false });
+    expect(upsertProfile).not.toHaveBeenCalled();
+
+    runtime.destroy();
+    await expect(sibling.page()).resolves.toMatchObject({ accepted: true });
+    await expect(runtime.forRequest().page()).resolves.toMatchObject({ accepted: true });
+    expect(upsertProfile).toHaveBeenCalledTimes(2);
+    expect(disposed.profile).toBeUndefined();
+    expect(sibling.profile).toEqual({ id: 'updated-profile' });
   });
 
   it('binds event construction to each request without changing the shared builder', () => {

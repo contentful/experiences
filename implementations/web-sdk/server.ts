@@ -32,6 +32,11 @@ const defaultExperienceIds = [
 const experienceIds = env.EXPERIENCE_IDS?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
+const previewEnabled = env.LIVE_PREVIEW_ENABLED === 'true';
+if (previewEnabled && !env.BROWSER_PREVIEW_TOKEN?.trim())
+  throw new Error(
+    'Set BROWSER_PREVIEW_TOKEN to a preview credential approved for browser exposure.'
+  );
 // Consumer integration, when injecting config: allowlist browser-safe values and escape '<'
 // in inline JSON. CDA_TOKEN is intentionally public; never expose private tokens
 // or spread process.env. window.ENVIRONMENT is this host's convention, not an SDK API.
@@ -41,6 +46,19 @@ const publicEnvironment = {
   CDA_TOKEN: env.CDA_TOKEN,
   LOCALE: env.LOCALE || 'en-US',
   EXPERIENCE_IDS: experienceIds?.length ? [...new Set(experienceIds)] : defaultExperienceIds,
+  ...(previewEnabled
+    ? {
+        LIVE_PREVIEW: {
+          accessToken: env.BROWSER_PREVIEW_TOKEN!.trim(),
+          host: env.BROWSER_PREVIEW_HOST?.trim() || undefined,
+          experienceId:
+            env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() || experienceIds?.[0] || defaultExperienceIds[0],
+          sessionId: env.LIVE_PREVIEW_SESSION_ID?.trim() || undefined,
+          sessionHost: env.LIVE_PREVIEW_SESSION_HOST?.trim() || undefined,
+          resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+        },
+      }
+    : {}),
 };
 const environmentScript = `<script>window.ENVIRONMENT = ${JSON.stringify(publicEnvironment).replaceAll('<', '\\u003c')}</script>`;
 const mime: Record<string, string> = {

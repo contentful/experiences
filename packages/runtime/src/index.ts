@@ -40,6 +40,22 @@ export type {
   RuntimeResolveOptions,
 } from './contentful-experiences.js';
 export type { RuntimeDeliveryClientOptions } from './create-runtime-delivery-client.js';
+export {
+  assertRuntimePreviewRequest,
+  createRuntimePreviewClient,
+  fetchRuntimePreviewSession,
+  initializeRuntimeLivePreview,
+  mergeRuntimePreviewResolveOptions,
+} from './live-preview.js';
+export type {
+  RuntimeLivePreviewBinding,
+  RuntimeLivePreviewConfig,
+  RuntimeLivePreviewInitializer,
+  RuntimeLivePreviewModule,
+  RuntimePreviewClient,
+  RuntimePreviewSessionIdentity,
+  RuntimePreviewStatus,
+} from './live-preview.js';
 export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';

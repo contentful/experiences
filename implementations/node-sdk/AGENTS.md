@@ -34,3 +34,7 @@
   never stop unrelated PM2 processes.
 - Validate local changes with `typecheck`, `lint`, and direct execution. There is no E2E
   suite or mock-server integration.
+
+- Optional preview uses request-local `livePreview`, the installed optional package,
+  and ordinary `fetchExperience`. Skip visitor work under `request.isPreview` and
+  call `request.destroy()` in `finally`. See the README for snapshot configuration.

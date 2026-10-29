@@ -70,6 +70,39 @@ is shown; a route-wide panel appears only for errors that need a retry. App-owne
 subscriptions are disposed before SDK destruction on final page exit; a back/forward
 cache suspension preserves the instance for resumption.
 
+## Optional runtime Live Preview
+
+Configure the existing local `.env` and run `npm run dev` after setup:
+
+```dotenv
+LIVE_PREVIEW_ENABLED=true
+BROWSER_PREVIEW_TOKEN=<preview token approved for browser exposure>
+# BROWSER_PREVIEW_HOST=https://...  # optional browser snapshot endpoint
+# LIVE_PREVIEW_SESSION_HOST=wss://... # optional socket endpoint
+```
+
+Use `?preview_session_id=<session>` and optional `preview_experience_id` (any
+Experience ID, default: first presentation ID), or configure
+`LIVE_PREVIEW_SESSION_ID` / `LIVE_PREVIEW_EXPERIENCE_ID`. Optional
+`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Other IDs use Delivery.
+Web passes `livePreview` at initialization and uses `fetchExperience()` for initial
+content and Retry. After loading/rendering, `subscribeToPreview()` applies new
+plans/errors; `states.preview` exposes connection status.
+Preview skips visitor initialization and disables Identify. Navigation inherits
+the current binding only when the destination omits it; explicit destination
+preview parameters take precedence. Binding changes within preview use
+`replaceLivePreview`; entering or leaving preview reloads the document to create
+a new SDK owner. An explicit empty `preview_session_id` leaves preview, including
+when a default session is configured. The presentation ID list stays unchanged.
+Ordinary `build`, `dev`, `serve`, and `restart` commands read app-local
+`LIVE_PREVIEW_ENABLED`: `true` includes optional preview assets and enables host
+configuration; other values exclude them. Rebuild after changing this deployment
+setting. Only explicit browser preview settings enter HTML. Preview errors retain
+usable content, replace failed loading placeholders, and offer Retry content;
+successful updates clear recovered errors. Initial plans with diagnostics retain
+usable content and show a generic error.
+See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
+
 ## Current XDA limitations and workaround removal
 
 The current flow follows the Node reference's documented upstream workarounds:
@@ -164,7 +197,8 @@ npx nx run implementation-web-sdk:setup
 npx nx run implementation-web-sdk:dev
 ```
 
-Setup builds and packs Web and its local dependency chain through the maintained
+Setup builds and packs Web and its local dependency chain and packs the existing optional preview
+artifact through `package-tools:pack-preview` and the maintained
 Nx targets, installs this app with `scripts/install-implementation.ts`, then builds
 browser assets. The helper replaces only this app's `node_modules`, disables
 workspace participation, install lifecycle scripts, and package-lock generation,
@@ -224,11 +258,11 @@ Configure `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, optional `LOCALE` (default
 
 During initial local setup, authorized delivery values may be copied from the
 Node reference's `.env`. Preserve an existing Web `.env`; never copy management
-or preview credentials. Launch commands read only this app's configuration.
+or server-only preview credentials. Launch commands read only this app's configuration.
 
 The server parses `.env` with dotenv, falling back to the credential-free
 `.env.example`, and fails with a setting name when required values are missing.
-It injects exactly `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved
+Its ordinary projection injects exactly `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved
 `EXPERIENCE_IDS` as `window.ENVIRONMENT` into private/no-store HTML. JSON escapes
 `<` before insertion into the script element. No environment values are baked
 into source or generated assets. Environment files are ignored by Git and cannot
@@ -290,7 +324,7 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
   the same SDK-owned measurement and consent mechanisms as Optimization.
 - XDA selects variants server-side. The explicit page/identify/fetch flow follows
   the [current XDA workarounds](#current-xda-limitations-and-workaround-removal),
-  and there is no profile-driven content refresh, Live Updates or Preview Panel.
+  and there is no profile-driven ordinary content refresh, Optimization Live Updates or Preview Panel.
   Attribution comes from source maps and is stamped once per rendered plan container,
   adapting Optimization's self-describing entry hosts to multi-root scopes. Event
   labels use Experience/ExperienceFragment semantics.
@@ -309,7 +343,7 @@ included.
 
 Operation and verification use live services only. Do not introduce mocks,
 fixtures, simulated upstreams, E2E tests, or E2E infrastructure. Retain stable
-selectors for compatibility. No Live Updates or Live Preview is included.
+selectors for compatibility. Optimization Live Updates is outside this reference; Preview Sessions use the optional runtime integration above.
 An event-stream notification denotes an event attempt, not admission or
 successful delivery. XDA is currently unstable
 and may need multiple attempts; HTTP 200 alone does not prove personalization.
@@ -334,7 +368,3 @@ Automatic setup through rendered plan containers is the current standard.
   locations. Install with `npm install --workspaces=false --package-lock=false
 --ignore-scripts` there, then use local npm commands; no root tool is needed to
   build/check/run an already configured copy.
-
-A nonempty initial `preview_session_id` makes the Web SDK skip events when `isPreview` is omitted. This reference requires
-a page-produced profile and can therefore show its existing initialization error; the Next.js
-example provides Session rendering. A fresh navigation without the ID restores delivery.

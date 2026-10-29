@@ -29,7 +29,7 @@ export function createControlPanel(sdk, { onIdentify, onReset, onRetry }) {
       (sdk.states.consent.current === false && sdk.states.persistenceConsent.current === false);
     const identified = new URL(location.href).searchParams.get('userId') === 'charles';
     find('identified-status').textContent = identified ? 'Yes' : 'No';
-    identify.disabled = !active || identified;
+    identify.disabled = !active || sdk.isPreview || identified;
     reset.disabled = !active;
     retry.disabled = !active;
   }
