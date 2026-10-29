@@ -523,9 +523,12 @@ describe('handoff identity', () => {
     seedConsent({ events: true, persistence: true });
     const runtime = createRuntime();
 
-    await runtime.hydrateHandoffState(handoff({ state: { profile: { id: 'server-profile' } } }), {
-      routeKey: '/first',
-    });
+    await runtime.hydrateAndTrackCurrentPage(
+      handoff({ state: { profile: { id: 'server-profile' } } }),
+      {
+        routeKey: '/first',
+      }
+    );
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('server-profile');
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBe('server-profile');
@@ -537,6 +540,7 @@ describe('handoff identity', () => {
 
     await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'server-profile' }), {
       routeKey: '/first',
+      buildPayload: () => ({}),
     });
 
     expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
@@ -547,9 +551,12 @@ describe('handoff identity', () => {
   it('does not write a handoff identity without persistence consent', async () => {
     const runtime = createRuntime();
 
-    await runtime.hydrateHandoffState(handoff({ state: { profile: { id: 'server-profile' } } }), {
-      routeKey: '/first',
-    });
+    await runtime.hydrateAndTrackCurrentPage(
+      handoff({ state: { profile: { id: 'server-profile' } } }),
+      {
+        routeKey: '/first',
+      }
+    );
 
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBeUndefined();
   });
@@ -563,7 +570,7 @@ describe('handoff identity', () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
-      await runtime.hydrateHandoffState(handoff({ cache }), {
+      await runtime.hydrateAndTrackCurrentPage(handoff({ cache }), {
         routeKey: '/first',
       });
 
@@ -585,7 +592,10 @@ describe('handoff identity', () => {
       const runtime = createRuntime();
       expect(runtime.states.profile.current).toBeUndefined();
 
-      await runtime.hydrateAndTrackCurrentPage(handoff({ cache }), { routeKey: '/first' });
+      await runtime.hydrateAndTrackCurrentPage(handoff({ cache }), {
+        routeKey: '/first',
+        buildPayload: () => ({}),
+      });
 
       expect(getCookie(ANONYMOUS_ID_COOKIE)).not.toBeUndefined();
       expect(
@@ -600,6 +610,7 @@ describe('handoff identity', () => {
 
     await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'someone-else' }), {
       routeKey: '/first',
+      buildPayload: () => ({}),
     });
 
     // The held identity is what the request is sent under, not the handoff's.
@@ -635,6 +646,7 @@ describe('the effective identity when only the stored id is held', () => {
 
     await runtime.hydrateAndTrackCurrentPage(handoff({ profileId: 'someone-else' }), {
       routeKey: '/first',
+      buildPayload: () => ({}),
     });
 
     expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(

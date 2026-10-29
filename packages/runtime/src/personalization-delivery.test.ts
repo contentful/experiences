@@ -10,7 +10,7 @@ import type { ExperienceRequestState } from './experience-request-state.js';
 import type { EventInterceptors } from './event-interceptors.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
 import { resolveQueueFlushPolicy } from './lib/queue/index.js';
-import { buildPreparedEvents } from './prepared-events.js';
+import { withEventConsent } from './prepared-events.js';
 import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
 
 const builder = new EventBuilder({
@@ -87,12 +87,9 @@ function fixture(
 }
 
 function prepared(locale = 'de-DE') {
-  return buildPreparedEvents({
-    eventBuilder: builder,
-    eventContext: { locale },
-    initialEvents: [{ type: 'track', event: 'opened' }],
-    eventConsent: true,
-  });
+  return [builder.buildTrack({ event: 'opened', locale }), builder.buildPageView({ locale })].map(
+    (event) => withEventConsent(event, true)
+  );
 }
 
 afterEach(() => {
@@ -210,6 +207,115 @@ describe('PersonalizationDelivery', () => {
     expect(f.applyOptimizationData).toHaveBeenCalledWith(data('profile-1'), expect.any(Function));
   });
 
+  it('reserves and publishes the whole prepared batch before transport, including reentrant flushes', async () => {
+    const f = fixture();
+    const events = prepared();
+    f.publishEvent.mockImplementation(() => {
+      expect(f.delivery.queuedEventCount).toBe(events.length);
+      void f.delivery.flush({ force: true });
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+    });
+
+    expect(f.delivery.sendPrepared(events)).toEqual({ accepted: true });
+    expect(f.publishEvent.mock.calls).toEqual(events.map((event) => [event]));
+    expect(f.upsertProfile).toHaveBeenCalledExactlyOnceWith(
+      { profileId: undefined, events },
+      { preflight: false, locale: undefined }
+    );
+    await f.delivery.flush();
+    expect(f.publishEvent).toHaveBeenCalledTimes(events.length);
+    expect(f.delivery.queuedEventCount).toBe(0);
+  });
+
+  it.each(['clearQueue', 'reset', 'flushOnDestroy'] as const)(
+    'stops prepared publication and transport when a subscriber calls %s',
+    async (action) => {
+      for (const publication of [1, 2]) {
+        const f = fixture();
+        let purge: void | Promise<void> = undefined;
+        f.publishEvent.mockImplementation(() => {
+          expect(f.upsertProfile).not.toHaveBeenCalled();
+          if (f.publishEvent.mock.calls.length === publication) purge = f.delivery[action]();
+        });
+
+        expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
+        await purge;
+        await f.delivery.flush({ force: true });
+        expect(f.publishEvent).toHaveBeenCalledTimes(publication);
+        expect(f.upsertProfile).not.toHaveBeenCalled();
+        expect(f.delivery.queuedEventCount).toBe(0);
+        expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+      }
+    }
+  );
+
+  it('keeps a newer profile when an older event resumes from its event interceptor', async () => {
+    const intercepted = deferred<ExperienceEvent>();
+    const f = fixture({ profileId: 'original' });
+    const older = builder.buildPageView();
+    let publishedProfile = 'original';
+    f.eventInterceptors.run.mockReturnValueOnce(intercepted.promise);
+    f.applyOptimizationData.mockImplementation((published, isCurrent) => {
+      if (!isCurrent()) return;
+      publishedProfile = published.profile.id;
+      f.setProfile(publishedProfile);
+    });
+    const pending = f.delivery.send(older);
+    f.upsertProfile.mockResolvedValueOnce(data('newer')).mockResolvedValueOnce(data('older'));
+    await expect(f.delivery.send(builder.buildIdentify({ userId: 'user-1' }))).resolves.toEqual({
+      accepted: true,
+      data: data('newer'),
+    });
+    intercepted.resolve(older);
+
+    await expect(pending).resolves.toEqual({ accepted: true, data: data('older') });
+    expect(f.upsertProfile.mock.calls[1]?.[0].profileId).toBe('newer');
+    expect(f.applyOptimizationData).toHaveBeenCalledExactlyOnceWith(
+      data('newer'),
+      expect.any(Function)
+    );
+    expect(publishedProfile).toBe('newer');
+    expect(f.experienceRequestState.value).toEqual({ status: 'success' });
+  });
+
+  it('keeps a newer profile when an older transport response arrives', async () => {
+    const response = deferred<OptimizationData>();
+    const f = fixture({ profileId: 'original' });
+    f.upsertProfile.mockReturnValueOnce(response.promise);
+    const pending = f.delivery.send(builder.buildPageView());
+    await vi.waitFor(() => expect(f.upsertProfile).toHaveBeenCalledOnce());
+    f.setProfile('newer');
+    response.resolve(data('older'));
+
+    await expect(pending).resolves.toEqual({ accepted: true, data: data('older') });
+    expect(f.applyOptimizationData).not.toHaveBeenCalled();
+    expect(f.experienceRequestState.value).toEqual({ status: 'success' });
+  });
+
+  it('guards the original revision through asynchronous state interception while completing success', async () => {
+    const intercepted = deferred<void>();
+    const f = fixture({ profileId: 'original' });
+    let publishedProfile = 'original';
+    f.upsertProfile.mockResolvedValueOnce(data('older')).mockResolvedValueOnce(data('newer'));
+    f.applyOptimizationData.mockImplementation(async (published, isCurrent) => {
+      if (published.profile.id === 'older') await intercepted.promise;
+      if (!isCurrent()) return;
+      publishedProfile = published.profile.id;
+      f.setProfile(publishedProfile);
+    });
+    const pending = f.delivery.send(builder.buildPageView());
+    await vi.waitFor(() => expect(f.applyOptimizationData).toHaveBeenCalledOnce());
+    await f.delivery.send(builder.buildIdentify({ userId: 'user-1' }));
+    // State interception owns profile publication; delivery still completes success
+    // if that publication becomes stale while the interceptor is paused.
+    f.experienceRequestState.value = { status: 'pending' };
+    intercepted.resolve();
+
+    await expect(pending).resolves.toEqual({ accepted: true, data: data('older') });
+    expect(publishedProfile).toBe('newer');
+    expect(f.experienceRequestState.value).toEqual({ status: 'success' });
+  });
+
   it('does not send a direct event when a pending-state subscriber resets the owner', async () => {
     let value: ExperienceRequestState = { status: 'idle' };
     const experienceRequestState = {
@@ -289,9 +395,12 @@ describe('PersonalizationDelivery', () => {
 
   it('refuses a valid prepared batch exceeding capacity without sending a prefix', () => {
     const f = fixture({ maxEvents: 2 });
-    expect(prepared()).toHaveLength(2);
-    expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
+    const events = prepared();
+    expect(events).toHaveLength(2);
+    expect(f.delivery.sendPrepared(events)).toEqual({ accepted: true });
+    expect(f.publishEvent.mock.calls).toEqual(events.map((event) => [event]));
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
+    expect(f.publishEvent).toHaveBeenCalledTimes(events.length);
     expect(f.delivery.queuedEventCount).toBe(2);
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
   });
@@ -391,7 +500,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
-  it('refuses an offline ordinary event rather than evicting an accepted prepared batch', async () => {
+  it('refuses an offline ordinary event and preserves an accepted prepared batch', async () => {
     const f = fixture({ online: false, maxEvents: 2 });
     const head = prepared();
     expect(f.delivery.sendPrepared(head)).toEqual({ accepted: true });
@@ -407,22 +516,7 @@ describe('PersonalizationDelivery', () => {
     );
   });
 
-  it('evicts the oldest ordinary event and admits the new event when the offline queue is full', async () => {
-    const f = fixture({ online: false, maxEvents: 2 });
-    const first = builder.buildTrack({ event: 'first' });
-    const second = builder.buildTrack({ event: 'second' });
-    const third = builder.buildTrack({ event: 'third' });
-    await f.delivery.send(first);
-    await f.delivery.send(second);
-    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: true });
-
-    expect(f.delivery.queuedEventCount).toBe(2);
-    f.setOnline(true);
-    await f.delivery.flush();
-    expect(f.upsertProfile.mock.calls[0]?.[0].events).toEqual([second, third]);
-  });
-
-  it('refuses overflow in a mixed queue without evicting ordinary or prepared events', async () => {
+  it('refuses overflow in a mixed queue and preserves ordinary and prepared events', async () => {
     const f = fixture({ online: false, maxEvents: 4 });
     const first = builder.buildTrack({ event: 'first' });
     const last = builder.buildTrack({ event: 'last' });
@@ -441,30 +535,6 @@ describe('PersonalizationDelivery', () => {
       batch,
       [last],
     ]);
-  });
-
-  it('retains new events after overflow evicts an in-flight ordinary snapshot', async () => {
-    const response = deferred<OptimizationData>();
-    const f = fixture({ online: false, maxEvents: 2 });
-    const first = builder.buildTrack({ event: 'first' });
-    const second = builder.buildTrack({ event: 'second' });
-    const third = builder.buildTrack({ event: 'third' });
-    const fourth = builder.buildTrack({ event: 'fourth' });
-    await f.delivery.send(first);
-    await f.delivery.send(second);
-    f.setOnline(true);
-    f.upsertProfile.mockReturnValueOnce(response.promise);
-    const flush = f.delivery.flush();
-    f.setOnline(false);
-    await expect(f.delivery.send(third)).resolves.toEqual({ accepted: true });
-    await expect(f.delivery.send(fourth)).resolves.toEqual({ accepted: true });
-    response.resolve(data('profile-1'));
-    await flush;
-    expect(f.upsertProfile.mock.calls.map(([payload]) => payload.events)).toEqual([
-      [first, second],
-      [third, fourth],
-    ]);
-    expect(f.delivery.queuedEventCount).toBe(0);
   });
 
   it('reconciles an in-flight ordinary snapshot without dropping events appended during the request', async () => {

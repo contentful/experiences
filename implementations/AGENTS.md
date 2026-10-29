@@ -9,14 +9,67 @@ Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
-For server-side personalization, send the page event directly to establish the
-SDK-owned visitor profile. Build the identify event with the SDK event builder
-and include it in `request.fetchExperience()` personalization options so XDA can
-select content for the identified visitor. Fetch each Experience once per app
-request; do not send identify independently or add an initialization content fetch.
-These choices compensate for current XDA behavior. Follow the Node reference's
-[workaround removal criteria](./node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-when XDA/client support changes instead of treating the flow as a permanent API requirement.
+References supply literal page/optional URL identify arguments in ordinary Node/Web
+`personalization.events`; the SDK builds admitted arguments once and also accepts
+raw built events. SSR uses ordinary Node fetch; CSR and browser-local navigation/
+actions use ordinary Web fetch. Only the actual hybrid server response uses Node
+`fetchExperienceForHandoff` with third argument `{ routeKey }`, returning a full
+handoff plus optional plan/error for optional explicit browser consumption.
+Normal fetch requires no handoff; no Web producer or Node aggregate commit remains.
+Usable server replay survives content failure and browser admission is independent
+of SSR display. Direct event APIs are callable, not prerequisites or compensation.
+
+XDA always invokes XPAPI preflight and does not commit. SSR/CSR noncommit is a
+tolerated service bug awaiting upstream force-commit support, with no current flag
+or SDK workaround. Content Retry uses ordinary fetch of the same ID without events,
+builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
+Reference-only later IDs use ordinary event-free fetch. See the
+[canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+Current implementation/checks are pending; earlier remedy checks/review remain
+historical. Phase 6 is unaccepted/incomplete and Phase 7 stays gated.
+
+Browser handoff operations preserve live-profile/provider/handoff identity capture
+before hydration and ordinary provider-first policy under Optimization PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`. Browser continuity may supersede
+the XDA ID; exact replay does not guarantee the same target, response or selection.
+
+Web retains accepted replay identity across newer initialization within the owner
+lifetime. After A is admitted and B becomes current, a serialized A is refused for
+both page and nonpage batches, without reapplying state, republishing events,
+recommitting or starting page fallback. Calls joining current A share its owned work.
+New visitor/action intent must carry fresh message IDs. Reset/destroy clear owner
+admission history; event-consent withdrawal purges permitted queued work without
+forgetting accepted replay identity or restoring accepted/blocked intent on grant.
+This admission guard provides no durable or exactly-once transport guarantee.
+
+Official support is one Experience fetch per page. The SDK does not enforce this
+limit in code. Reference implementations fetch multiple IDs only to compare
+rendering scenarios; their loops are not a supported product pattern and provide
+no multi-Experience or cross-fetch guarantee. Reuse plans
+for repeated presentations. Retry/refresh creates or submits no new visitor events
+and does not rerun event hooks. Standalone Identify and custom track are fresh
+nonpage inputs to ordinary fetch. Initial URL intent pairs identify with the initial
+page; navigation builds page intent without repeating initial identify. Page Two's
+CUSTOM TRACK action is nonpage, while navigation to Page Two still builds a page.
+
+Follow the [Runtime aggregate contract](../packages/runtime/README.md#shared-handoff-primitives).
+Remove standalone XPAPI preparation, separate supplied-data producers and public
+state-only hydration. Hydration/storage/admission do not prove commit; preserve
+XPAPI retry ambiguity and existing browser transport limits.
+See [XDA preflight and profile finalization](../packages/runtime/README.md#xda-preflight-and-profile-finalization)
+and the [Node personalization contract](../packages/node/README.md#personalization).
+
+Phase 6 corrects existing Node/Web/hybrid flows and route/visitor ownership checks.
+Phase 7 owns managed React roots/loaders/page bindings and the React reference;
+adapt Optimization source/presentation ports to XDA-built events without requiring
+`beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
+exception in that future managed flow. Phase 6 acceptance/completion is withdrawn
+pending fresh correctness/design review and explicit acceptance; Phase 7 stays gated.
+Add focused maintained no-network unit/contract tests for optional-page replay,
+consent/preview/schema, content failure, Retry retention, full aggregate ownership
+and stale/reset/destroy guards, without MSW, E2E or server simulations.
+Throwaway verification code must not change
+reference use cases or create maintained consumers/apps. Root records validation.
 
 ## Optional Preview Sessions
 
@@ -40,7 +93,8 @@ All reference implementations use the same hard-coded default Experience IDs:
 An implementation-local override is optional; configuring IDs must not be required
 to use the reference data. Keep implementations standalone rather than adding a
 shared runtime configuration dependency. Profile IDs are distinct: they must come
-from Experience API/XDA responses and remain SDK-managed, with no manual entry.
+from Personalization API/XDA responses and remain SDK-managed, with no manual entry.
+An XDA-returned ID alone does not establish a committed profile.
 
 ## Content typing
 

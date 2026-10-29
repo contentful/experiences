@@ -101,37 +101,41 @@ app.get('/', async (req, res) => {
       : { isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()) }),
   });
   try {
-    // XDA can time out when identify creates a profile in the initial content fetch.
-    // Once that is fixed, include page in the first fetch instead of sending it here.
-    if (!request.isPreview) await request.page({ properties: page });
-    const identifyEvent =
-      !request.isPreview && userId
-        ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
-        : undefined;
+    const identifyRequested = !request.isPreview && Boolean(userId);
+    let events = request.isPreview
+      ? undefined
+      : [
+          ...(identifyRequested && userId
+            ? [{ type: 'identify' as const, userId, traits: { identified: true } }]
+            : []),
+          { type: 'page' as const, properties: page },
+        ];
     const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
-
-    const experiences: { id: string; plan: PortableRenderPlan }[] = [];
-    // Serialize potentially profile-producing requests (including repeated identify)
-    // so the next fetch uses the facade's updated profile. Once repeated identify
-    // is unnecessary, revisit this ordering and retain only demonstrated dependencies.
-    for (const experienceId of experienceIds) {
-      const plan = await request.fetchExperience(
-        {
-          experienceId,
-          // XDA currently returns baseline for profile-only fetches. Include identify
-          // until that is fixed; later fetches can then use the established profile alone.
-          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-        },
-        resolveOptions
-      );
-      experiences.push({ id: experienceId, plan });
+    const plans = new Map<string, PortableRenderPlan>();
+    // Evaluate initial intent once; later IDs are best-effort rendering comparisons.
+    let profileId = request.profile?.id;
+    let contentError: unknown;
+    for (const experienceId of new Set(experienceIds)) {
+      const options = {
+        experienceId,
+        ...(!request.isPreview
+          ? { personalization: { ...(events ? { events } : {}), profileId } }
+          : {}),
+      };
+      events = undefined;
+      try {
+        const plan = await request.fetchExperience(options, resolveOptions);
+        profileId = plan.personalization?.profileId ?? profileId;
+        plans.set(experienceId, plan);
+      } catch (error) {
+        if (request.isPreview) throw error;
+        contentError ??= error;
+      }
     }
+    if (!plans.size) res.status(contentError instanceof NotFoundError ? 404 : 502);
+    const experiences = experienceIds.map((id) => ({ id, plan: plans.get(id) }));
 
-    res.render('index', {
-      isPreview: request.isPreview,
-      identifyRequested: Boolean(identifyEvent),
-      experiences,
-    });
+    res.render('index', { isPreview: request.isPreview, identifyRequested, experiences });
   } finally {
     request.destroy();
   }

@@ -149,11 +149,12 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
   it('does not store a returned profile after reset()', async () => {
     const runtime = createRuntime();
     const pending = deferred<object>();
-    vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockReturnValue(
-      pending.promise as never
-    );
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, method)
+      .mockReturnValue(pending.promise as never);
 
     const request = fetchIt(runtime);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     runtime.reset();
     pending.resolve({ nodes: [], personalization: { profileId: 'stale' } });
     await request;

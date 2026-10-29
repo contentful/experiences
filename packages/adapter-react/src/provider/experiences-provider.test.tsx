@@ -14,14 +14,19 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
+  signals,
+  toObservable,
+  type ConsentInput,
   type ContentfulExperiences,
   type CoreStates,
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
   type ExperiencesWebConfig,
+  type ExperienceState,
   type Observable,
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
+import { EventBuilder } from '@contentful/experiences-runtime';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { minimalSourceMap } from '../test/source-map.js';
 import {
@@ -32,11 +37,7 @@ import {
 import { usePreviewState } from '../hooks/use-experiences-state.js';
 import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
 import { createReactExperiences } from './create-react-experiences.js';
-import {
-  ExperiencesProvider,
-  ExperiencesRoot,
-  type ExperiencesStateInitialization,
-} from './experiences-provider.js';
+import { ExperiencesProvider, ExperiencesRoot } from './experiences-provider.js';
 import {
   createExperiencesRootSdkBinding,
   disposeExperiencesRootSdkBinding,
@@ -54,8 +55,8 @@ vi.mock('@contentful/experiences-web', async (importOriginal) => {
 });
 
 // Ported ownership/activation expectations from OptimizationProvider.onStatesReady
-// at 59add9d6ebff503b9033a59a2eee0149d4b4e925. Experiences always retains a
-// presentation runtime, replaces injected SDKs, and leaves page/content work to callers.
+// at f76f1ff04df1b466c98fc6ce5db6b569f9212438. Experiences always retains a
+// presentation runtime, replaces injected SDKs, and consumes caller-supplied handoffs.
 const config: ExperiencesWebConfig = {
   spaceId: 'space',
   environmentId: 'master',
@@ -66,47 +67,50 @@ const snapshot: ExperiencesSnapshot = {
   locale: 'en-US',
   consent: false,
 };
-function initialization(
-  id = 'server-profile',
-  routeKey = '/initial'
-): ExperiencesStateInitialization {
-  const handoff: ExperiencesHandoff = {
+function handoff(id = 'server-profile'): ExperiencesHandoff {
+  return {
     spaceId: 'space',
     environmentId: 'master',
     cache: { scope: 'private-request' },
     state: { profile: { id } },
   };
-  return { handoff, routeKey };
 }
 function deferred() {
-  let resolve!: () => void;
+  let resolve!: (result?: { accepted: boolean }) => void;
   let reject!: (error: unknown) => void;
-  const promise = new Promise<void>((yes, no) => {
-    resolve = yes;
+  const promise = new Promise<{ accepted: boolean }>((yes, no) => {
+    resolve = (result = { accepted: true }) => yes(result);
     reject = no;
   });
   return { promise, resolve, reject };
 }
 function liveSdk() {
-  return Object.assign(
-    createWebSnapshotRuntime({ locale: 'en-US', data: { profile: { id: 'browser-profile' } } }),
-    {
-      spaceId: config.spaceId,
-      environmentId: config.environmentId,
-      destroy: vi.fn(),
-      hydrateHandoffState: vi.fn(() => Promise.resolve()),
-      setLocale: vi.fn(),
-      page: vi.fn(),
-      fetchExperience: vi.fn(),
-      tracking: {
-        enable: vi.fn(),
-        disable: vi.fn(),
-        enableElement: vi.fn(),
-        disableElement: vi.fn(),
-        clearElement: vi.fn(),
-      },
-    }
-  );
+  const sdk = createWebSnapshotRuntime({
+    locale: 'en-US',
+    data: { profile: { id: 'browser-profile' } },
+  });
+  return Object.assign(sdk, {
+    states: { ...sdk.states, consent: toObservable(signals.consent) },
+    consent: vi.fn((input: ConsentInput) => {
+      signals.consent.value = typeof input === 'boolean' ? input : input.events;
+    }),
+    spaceId: config.spaceId,
+    environmentId: config.environmentId,
+    destroy: vi.fn(),
+    hydrateAndTrackCurrentPage: vi.fn<ContentfulExperiences['hydrateAndTrackCurrentPage']>(() =>
+      Promise.resolve({ accepted: false })
+    ),
+    setLocale: vi.fn(),
+    page: vi.fn(),
+    fetchExperience: vi.fn(),
+    tracking: {
+      enable: vi.fn(),
+      disable: vi.fn(),
+      enableElement: vi.fn(),
+      disableElement: vi.fn(),
+      clearElement: vi.fn(),
+    },
+  });
 }
 type LiveSdk = ReturnType<typeof liveSdk>;
 // A boundary double, not a second Web implementation: only React-observed calls are stubbed.
@@ -117,11 +121,14 @@ describe('React runtime ownership and activation', () => {
   let runtime: LiveSdk;
   let captures: ExperiencesContextValue[];
   let extraViews: ReactTestRoot[];
+  let browser: ContentfulExperiences | undefined;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    window.history.replaceState(null, '', '/initial');
     view = createReactTestRoot();
     extraViews = [];
     captures = [];
+    signals.consent.value = undefined;
     runtime = liveSdk();
     construct.mockReset().mockReturnValue(runtime);
   });
@@ -130,6 +137,9 @@ describe('React runtime ownership and activation', () => {
       view.cleanup();
       extraViews.forEach((root) => root.cleanup());
     });
+    browser?.destroy();
+    browser = undefined;
+    window.localStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -157,12 +167,12 @@ describe('React runtime ownership and activation', () => {
     'rejects unsafe %s handoffs before SSR children can read private profile state',
     (scope) => {
       const child = vi.fn(() => <Probe />);
-      const initial = initialization('private-visitor');
-      const handoff = { ...initial.handoff, cache: { scope, key: 'public-key' } };
+      const initial = handoff('private-visitor');
+      const unsafeHandoff = { ...initial, cache: { scope, key: 'public-key' } };
       const Child = child;
       expect(() =>
         renderToString(
-          <ExperiencesRoot {...config} initialization={{ ...initial, handoff }}>
+          <ExperiencesRoot {...config} handoff={unsafeHandoff}>
             <Child />
           </ExperiencesRoot>
         )
@@ -177,20 +187,20 @@ describe('React runtime ownership and activation', () => {
     (owner) => {
       const child = vi.fn(() => <Probe />);
       const Child = child;
-      const initial = initialization('other-visitor');
-      const handoff = {
-        ...initial.handoff,
+      const initial = handoff('other-visitor');
+      const mismatchedHandoff = {
+        ...initial,
         ...(owner === 'owned'
           ? { spaceId: 'other-space' }
           : { environmentId: 'other-environment' }),
       };
       const tree =
         owner === 'owned' ? (
-          <ExperiencesRoot {...config} initialization={{ ...initial, handoff }}>
+          <ExperiencesRoot {...config} handoff={mismatchedHandoff}>
             <Child />
           </ExperiencesRoot>
         ) : (
-          <ExperiencesProvider sdk={inject(runtime)} initialization={{ ...initial, handoff }}>
+          <ExperiencesProvider sdk={inject(runtime)} handoff={mismatchedHandoff}>
             <Child />
           </ExperiencesProvider>
         );
@@ -199,14 +209,14 @@ describe('React runtime ownership and activation', () => {
       );
       expect(child).not.toHaveBeenCalled();
       expect(construct).not.toHaveBeenCalled();
-      expect(runtime.hydrateHandoffState).not.toHaveBeenCalled();
+      expect(runtime.hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
     }
   );
 
   it('validates later handoffs against the captured managed scope rather than ignored prop changes', async () => {
-    const init = initialization();
+    const suppliedHandoff = handoff();
     const tree = (spaceId: string) => (
-      <ExperiencesRoot {...config} spaceId={spaceId} initialization={init}>
+      <ExperiencesRoot {...config} spaceId={spaceId} handoff={suppliedHandoff}>
         <Probe />
       </ExperiencesRoot>
     );
@@ -219,7 +229,7 @@ describe('React runtime ownership and activation', () => {
       isContentReady: true,
       error: undefined,
     });
-    expect(runtime.hydrateHandoffState).toHaveBeenCalledTimes(1);
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
   });
 
   it('constructs an owned SDK only on commit', () => {
@@ -258,8 +268,8 @@ describe('React runtime ownership and activation', () => {
       second = liveSdk();
     const oldHydration = deferred(),
       newHydration = deferred();
-    first.hydrateHandoffState.mockReturnValue(oldHydration.promise);
-    second.hydrateHandoffState.mockReturnValue(newHydration.promise);
+    first.hydrateAndTrackCurrentPage.mockReturnValue(oldHydration.promise);
+    second.hydrateAndTrackCurrentPage.mockReturnValue(newHydration.promise);
     const cleanup = vi.fn();
     construct
       .mockReset()
@@ -271,11 +281,7 @@ describe('React runtime ownership and activation', () => {
       });
     render(
       <StrictMode>
-        <ExperiencesRoot
-          {...config}
-          initialization={initialization()}
-          onStatesReady={() => cleanup}
-        >
+        <ExperiencesRoot {...config} handoff={handoff()} onStatesReady={() => cleanup}>
           <Probe />
         </ExperiencesRoot>
       </StrictMode>
@@ -303,7 +309,7 @@ describe('React runtime ownership and activation', () => {
         construct.mockImplementation(() => {
           throw error;
         });
-      const props = { snapshot, initialization: initialization(), onStatesReady };
+      const props = { snapshot, handoff: handoff(), onStatesReady };
       render(
         failure === 'injected observer' ? (
           <ExperiencesProvider sdk={inject(runtime)} {...props}>
@@ -325,7 +331,7 @@ describe('React runtime ownership and activation', () => {
       expect(view.container.textContent).toContain('Supplied server content');
       expect(view.container.textContent).toContain('server-profile');
       expect(runtime.destroy).toHaveBeenCalledTimes(failure === 'owned observer' ? 1 : 0);
-      expect(runtime.hydrateHandoffState).not.toHaveBeenCalled();
+      expect(runtime.hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
       act(() => view.cleanup());
       expect(runtime.destroy).toHaveBeenCalledTimes(failure === 'owned observer' ? 1 : 0);
       expectNoContentWork();
@@ -429,8 +435,8 @@ describe('React runtime ownership and activation', () => {
     'hydrates %s HTML from the same supplied snapshot without replacing DOM',
     async (owner) => {
       const pending = deferred();
-      runtime.hydrateHandoffState.mockReturnValue(pending.promise);
-      const props = { snapshot, initialization: initialization() };
+      runtime.hydrateAndTrackCurrentPage.mockReturnValue(pending.promise);
+      const props = { snapshot, handoff: handoff() };
       const tree =
         owner === 'owned' ? (
           <ExperiencesRoot {...config} {...props}>
@@ -465,7 +471,7 @@ describe('React runtime ownership and activation', () => {
       listener(runtime.states.profile.current);
       return { unsubscribe };
     });
-    runtime.hydrateHandoffState.mockImplementation(() => {
+    runtime.hydrateAndTrackCurrentPage.mockImplementation(() => {
       order.push('hydrate');
       return new Promise(() => {});
     });
@@ -478,7 +484,7 @@ describe('React runtime ownership and activation', () => {
     render(
       <ExperiencesRoot
         {...config}
-        initialization={initialization()}
+        handoff={handoff()}
         onStatesReady={(states) => {
           order.push('attach');
           const subscription = states.profile.subscribe(() => order.push('immediate emission'));
@@ -489,9 +495,9 @@ describe('React runtime ownership and activation', () => {
       </ExperiencesRoot>
     );
     expect(order).toEqual(['attach', 'immediate emission', 'hydrate', 'child effect']);
-    expect(runtime.hydrateHandoffState).toHaveBeenCalledExactlyOnceWith(
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ state: { profile: { id: 'server-profile' } } }),
-      { routeKey: '/initial' }
+      { routeKey: '/initial', isCurrent: expect.any(Function) }
     );
     act(() => view.cleanup());
     expect(unsubscribe).toHaveBeenCalledOnce();
@@ -500,24 +506,90 @@ describe('React runtime ownership and activation', () => {
     );
   });
 
-  it.each(['success', 'rejection', 'synchronous throw'] as const)(
+  it.each(['owned', 'injected'] as const)(
+    'consumes the complete aggregate once for the %s lifetime using the current browser route',
+    async (owner) => {
+      window.history.replaceState(null, '', '/initial?view=one#section');
+      const builder = new EventBuilder({
+        channel: 'web',
+        library: { name: 'react-test', version: '1' },
+      });
+      const suppliedHandoff: ExperiencesHandoff = {
+        ...handoff(),
+        profileId: 'continuation-profile',
+        replay: {
+          routeKey: '/initial?view=one',
+          locale: 'de-DE',
+          events: [
+            builder.buildIdentify({ userId: 'visitor', traits: { audience: 'returning' } }),
+            builder.buildPageView(),
+          ],
+        },
+      };
+      const pending = deferred();
+      const cleanup = vi.fn();
+      const onStatesReady = vi.fn(() => cleanup);
+      runtime.hydrateAndTrackCurrentPage.mockImplementation((...args) => {
+        expect(onStatesReady).toHaveBeenCalledExactlyOnceWith(runtime.states);
+        expect(args).toEqual([
+          suppliedHandoff,
+          { routeKey: '/initial?view=one', isCurrent: expect.any(Function) },
+        ]);
+        return pending.promise;
+      });
+      const tree =
+        owner === 'owned' ? (
+          <ExperiencesRoot {...config} handoff={suppliedHandoff} onStatesReady={onStatesReady}>
+            {suppliedContent()}
+          </ExperiencesRoot>
+        ) : (
+          <ExperiencesProvider
+            sdk={inject(runtime)}
+            handoff={suppliedHandoff}
+            onStatesReady={onStatesReady}
+          >
+            {suppliedContent()}
+          </ExperiencesProvider>
+        );
+      expect(renderToString(tree)).toContain('server-profile');
+      expect(runtime.hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
+      render(tree);
+      render(tree);
+      expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: false });
+      expect(view.container.textContent).toContain('Supplied server content');
+      expect(runtime.hydrateAndTrackCurrentPage.mock.calls[0]![0]).toBe(suppliedHandoff);
+      await act(async () => pending.resolve());
+      render(tree);
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      expect(current()).toMatchObject({ isContentReady: true, error: undefined });
+      expect(construct).toHaveBeenCalledTimes(owner === 'owned' ? 1 : 0);
+      if (owner === 'owned') expect(construct).toHaveBeenCalledWith(config);
+      expectNoContentWork();
+      act(() => view.cleanup());
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(runtime.destroy).toHaveBeenCalledTimes(owner === 'owned' ? 1 : 0);
+    }
+  );
+
+  it.each(['success', 'refusal', 'rejection', 'synchronous throw'] as const)(
     'makes hydration %s terminal while retaining the live SDK and supplied content',
     async (outcome) => {
       const pending = deferred(),
         error = new Error('handoff failed');
-      runtime.hydrateHandoffState.mockImplementation(() => {
+      runtime.hydrateAndTrackCurrentPage.mockImplementation(() => {
         if (outcome === 'synchronous throw') throw error;
         return pending.promise;
       });
       render(
-        <ExperiencesRoot {...config} initialization={initialization()}>
+        <ExperiencesRoot {...config} handoff={handoff()}>
           {suppliedContent()}
         </ExperiencesRoot>
       );
       if (outcome !== 'synchronous throw') {
         expect(current().isContentReady).toBe(false);
         await act(async () => {
-          if (outcome === 'success') pending.resolve();
+          if (outcome === 'success' || outcome === 'refusal')
+            pending.resolve({ accepted: outcome === 'success' });
           else pending.reject(error);
         });
       }
@@ -525,7 +597,7 @@ describe('React runtime ownership and activation', () => {
         sdk: runtime,
         isLive: true,
         isContentReady: true,
-        error: outcome === 'success' ? undefined : error,
+        error: outcome === 'success' || outcome === 'refusal' ? undefined : error,
       });
       expect(view.container.textContent).toContain('Supplied server content');
       expect(runtime.destroy).not.toHaveBeenCalled();
@@ -539,21 +611,21 @@ describe('React runtime ownership and activation', () => {
       const first = deferred(),
         second = deferred(),
         replacement = liveSdk();
-      runtime.hydrateHandoffState.mockReturnValue(first.promise);
-      replacement.hydrateHandoffState.mockReturnValue(second.promise);
+      runtime.hydrateAndTrackCurrentPage.mockReturnValue(first.promise);
+      replacement.hydrateAndTrackCurrentPage.mockReturnValue(second.promise);
       const cleanup = vi.fn();
-      const init = initialization();
+      const suppliedHandoff = handoff();
       render(
         <ExperiencesProvider
           sdk={inject(runtime)}
-          initialization={init}
+          handoff={suppliedHandoff}
           onStatesReady={() => cleanup}
         >
           <Probe />
         </ExperiencesProvider>
       );
       render(
-        <ExperiencesProvider sdk={inject(replacement)} initialization={init}>
+        <ExperiencesProvider sdk={inject(replacement)} handoff={suppliedHandoff}>
           <Probe />
         </ExperiencesProvider>
       );
@@ -576,29 +648,209 @@ describe('React runtime ownership and activation', () => {
     }
   );
 
-  it('ignores superseded initialization and releases the terminal barrier when initialization is removed', async () => {
+  it('ignores superseded handoffs and releases the terminal barrier when the handoff is removed', async () => {
     const old = deferred(),
       latest = deferred();
-    runtime.hydrateHandoffState
+    runtime.hydrateAndTrackCurrentPage
       .mockReturnValueOnce(old.promise)
       .mockReturnValueOnce(latest.promise);
     const ready = vi.fn();
-    const tree = (init?: ExperiencesStateInitialization) => (
-      <ExperiencesProvider sdk={inject(runtime)} initialization={init} onStatesReady={ready}>
+    const tree = (suppliedHandoff?: ExperiencesHandoff) => (
+      <ExperiencesProvider sdk={inject(runtime)} handoff={suppliedHandoff} onStatesReady={ready}>
         <Probe />
       </ExperiencesProvider>
     );
-    render(tree(initialization('first', '/first')));
-    render(tree(initialization('latest', '/latest')));
+    window.history.replaceState(null, '', '/first');
+    render(tree(handoff('first')));
+    const firstIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+    expect(firstIsCurrent()).toBe(true);
+    window.history.replaceState(null, '', '/latest');
+    render(tree(handoff('latest')));
+    const latestIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[1]![1].isCurrent!;
+    expect(firstIsCurrent()).toBe(false);
+    expect(latestIsCurrent()).toBe(true);
     await act(async () => old.resolve());
     expect(current().isContentReady).toBe(false);
     render(tree());
+    expect(latestIsCurrent()).toBe(false);
     expect(current()).toMatchObject({ sdk: runtime, isContentReady: true, error: undefined });
-    await act(async () => latest.reject(new Error('removed initialization')));
+    await act(async () => latest.reject(new Error('removed handoff')));
     expect(current()).toMatchObject({ sdk: runtime, isContentReady: true, error: undefined });
     expect(ready).toHaveBeenCalledOnce();
-    expect(runtime.hydrateHandoffState).toHaveBeenCalledTimes(2);
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps one liveness predicate across consent invocations and retains terminal readiness', async () => {
+    const pending = deferred();
+    const subscribe = runtime.states.consent.subscribe;
+    const unsubscribe = vi.fn();
+    vi.spyOn(runtime.states.consent, 'subscribe').mockImplementation((listener) => {
+      const subscription = subscribe(listener);
+      return {
+        unsubscribe: () => {
+          subscription.unsubscribe();
+          unsubscribe();
+        },
+      };
+    });
+    runtime.hydrateAndTrackCurrentPage
+      .mockResolvedValueOnce({ accepted: false })
+      .mockReturnValue(pending.promise);
+    const suppliedHandoff = handoff();
+    const tree = (handoff?: ExperiencesHandoff) => (
+      <ExperiencesProvider sdk={inject(runtime)} handoff={handoff}>
+        <Probe />
+      </ExperiencesProvider>
+    );
+    await act(async () => view.render(tree(suppliedHandoff)));
+    const isCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+    expect(current().isContentReady).toBe(true);
+    const settledRenderCount = captures.length;
+    act(() => runtime.consent({ events: false }));
+    act(() => runtime.consent({ events: true }));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
+    for (const [, options] of runtime.hydrateAndTrackCurrentPage.mock.calls)
+      expect(options.isCurrent).toBe(isCurrent);
+    expect(isCurrent()).toBe(true);
+    expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
+    expect(current().isContentReady).toBe(true);
+    render(tree());
+    expect(isCurrent()).toBe(false);
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    act(() => runtime.consent({ events: false }));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
+    await act(async () => pending.resolve());
+    expect(current()).toMatchObject({ isContentReady: true, error: undefined });
+  });
+
+  it('automatically sends a fresh page after consent grants a denied page-bearing handoff', async () => {
+    const { ContentfulExperiences: ActualSdk } = await vi.importActual<
+      typeof import('@contentful/experiences-web')
+    >('@contentful/experiences-web');
+    browser = new ActualSdk({
+      ...config,
+      allowedEventTypes: [],
+      defaults: { profile: { id: 'browser-profile' }, consent: false, persistenceConsent: false },
+    });
+    const sdk = browser;
+    const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
+      profile: { id: 'browser-profile' },
+    } as never);
+    const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
+    const builder = new EventBuilder({
+      channel: 'server',
+      library: { name: 'react-test', version: '1' },
+      getConsent: () => true,
+    });
+    const events = [builder.buildTrack({ event: 'prepared' }), builder.buildPageView()];
+    const suppliedHandoff: ExperiencesHandoff = {
+      ...handoff(),
+      replay: { routeKey: '/initial', events },
+    };
+    await act(async () =>
+      view.render(
+        <ExperiencesProvider sdk={sdk} handoff={suppliedHandoff}>
+          {suppliedContent()}
+        </ExperiencesProvider>
+      )
+    );
+    expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
+    expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
+    expect(send).not.toHaveBeenCalled();
+    expect(sdk.states.eventStream.current).toBeUndefined();
+    const settledRenderCount = captures.length;
+    await act(async () => {
+      sdk.consent({ events: true });
+      await consume.mock.results[1]!.value;
+      await sdk.flush();
+    });
+    expect(consume).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledOnce();
+    const sent = send.mock.calls[0]![0].events;
+    expect(sent.map((event) => event.type)).toEqual(['page']);
+    expect(events.map((event) => event.messageId)).not.toContain(sent[0]!.messageId);
+    expect(sent[0]!.context.gdpr?.isConsentGiven).toBe(true);
+    expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
+    expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true, error: undefined });
+    expect(view.container.textContent).toContain('Supplied server content');
+  });
+
+  it.each(['remove handoff', 'unmount'] as const)(
+    'prevents late state and replay admission on %s while the injected SDK stays alive',
+    async (action) => {
+      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
+        typeof import('@contentful/experiences-web')
+      >('@contentful/experiences-web');
+      browser = new ActualSdk({
+        ...config,
+        defaults: { profile: { id: 'browser-profile' }, consent: true, persistenceConsent: false },
+      });
+      const sdk = browser;
+      const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
+        profile: { id: 'browser-profile' },
+      } as never);
+      const destroy = vi.spyOn(sdk, 'destroy');
+      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
+      const started = deferred();
+      const release = deferred();
+      const stateInterceptor = vi.fn(async (state: ExperienceState) => {
+        started.resolve();
+        await release.promise;
+        return state;
+      });
+      sdk.interceptors.state.add(stateInterceptor);
+      const events = [sdk.eventBuilder.buildPageView()];
+      const suppliedHandoff: ExperiencesHandoff = {
+        ...handoff(),
+        replay: { routeKey: '/initial', events },
+      };
+      const publishedState = vi.fn();
+      const publishedEvent = vi.fn();
+      const onStatesReady = vi.fn((states: CoreStates) => {
+        const state = states.profile.subscribe(publishedState);
+        const event = states.eventStream.subscribe(publishedEvent);
+        return () => {
+          state.unsubscribe();
+          event.unsubscribe();
+        };
+      });
+      const tree = (handoff?: ExperiencesHandoff) => (
+        <ExperiencesProvider sdk={sdk} handoff={handoff} onStatesReady={onStatesReady}>
+          <Probe />
+        </ExperiencesProvider>
+      );
+      await act(async () => {
+        view.render(tree(suppliedHandoff));
+      });
+      await started.promise;
+      expect(stateInterceptor).toHaveBeenCalledOnce();
+      expect(current().isContentReady).toBe(false);
+      const isCurrent = consume.mock.calls[0]![1].isCurrent!;
+      act(() => {
+        if (action === 'remove handoff') view.render(tree());
+        else view.cleanup();
+      });
+      expect(isCurrent()).toBe(false);
+      const renderCount = captures.length;
+      await act(async () => {
+        release.resolve();
+        expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
+      });
+      expect(destroy).not.toHaveBeenCalled();
+      expect(captures).toHaveLength(renderCount);
+      expect(sdk.states.profile.current).toEqual({ id: 'browser-profile' });
+      expect(sdk.states.experienceRequestState.current).toEqual({ status: 'idle' });
+      expect(sdk.states.eventStream.current).toBeUndefined();
+      expect(publishedState).toHaveBeenCalledExactlyOnceWith({ id: 'browser-profile' });
+      expect(publishedEvent).toHaveBeenCalledExactlyOnceWith(undefined);
+      expect(send).not.toHaveBeenCalled();
+      act(() => sdk.consent({ events: false }));
+      expect(sdk.states.consent.current).toBe(false);
+      expect(consume).toHaveBeenCalledOnce();
+      if (action === 'remove handoff')
+        expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
+    }
+  );
 
   it('captures structural configuration until keyed replacement and updates locale without reconstruction', () => {
     const ready = vi.fn();
@@ -649,10 +901,10 @@ describe('React runtime ownership and activation', () => {
       const pending = deferred();
       const error = new Error('invalid locale');
       const hydrationError = new Error('hydration failed');
-      const init = initialization();
-      runtime.hydrateHandoffState.mockReturnValue(pending.promise);
+      const suppliedHandoff = handoff();
+      runtime.hydrateAndTrackCurrentPage.mockReturnValue(pending.promise);
       const tree = (locale: string) => (
-        <ExperiencesRoot {...config} locale={locale} initialization={init}>
+        <ExperiencesRoot {...config} locale={locale} handoff={suppliedHandoff}>
           <Probe />
         </ExperiencesRoot>
       );
@@ -681,7 +933,9 @@ describe('React runtime ownership and activation', () => {
           probe: (props: HTMLAttributes<HTMLElement>) => <article {...props}>Manual view</article>,
         },
       };
-      const ui = createReactExperiences({ config: registry });
+      const { ExperienceRenderer, ExperiencesProvider } = createReactExperiences({
+        config: registry,
+      });
       const plan = await resolveExperience(
         {
           nodes: [
@@ -715,9 +969,7 @@ describe('React runtime ownership and activation', () => {
           },
           [sdk]
         );
-        return (
-          <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />
-        );
+        return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />;
       }
       await act(async () =>
         view.render(

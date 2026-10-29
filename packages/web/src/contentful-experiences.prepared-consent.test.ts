@@ -68,6 +68,49 @@ afterEach(async () => {
 
 describe('Web prepared handoff and consent', () => {
   describe('the gate', () => {
+    it.each([false, true])(
+      'keeps blocked nonpage replay dropped after grant and newer intent=%s',
+      async (newerIntent) => {
+        const runtime = createRuntime();
+        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const events = serverBatch(true).filter((event) => event.type === 'track');
+        const blocked = handoffWith(events);
+        const route = { routeKey: '/first' };
+        await expect(runtime.hydrateAndTrackCurrentPage(blocked, route)).resolves.toEqual({
+          accepted: false,
+        });
+        runtime.consent({ events: true });
+        if (newerIntent)
+          await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true)), route);
+        await expect(
+          runtime.hydrateAndTrackCurrentPage(JSON.parse(JSON.stringify(blocked)), route)
+        ).resolves.toEqual({ accepted: false });
+        await runtime.flush();
+        const sent = upsert.mock.calls.flatMap(([request]) => request.events);
+        expect(sent.some((event) => event.messageId === events[0]?.messageId)).toBe(false);
+        expect(upsert).toHaveBeenCalledTimes(newerIntent ? 1 : 0);
+      }
+    );
+
+    it('retains the normal page exception through explicit denial and grant after a blocked mixed replay', async () => {
+      const runtime = createRuntime({ allowedEventTypes: [] });
+      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const events = serverBatch(true);
+      const blocked = handoffWith(events);
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(blocked, { routeKey: '/first' })
+      ).resolves.toEqual({ accepted: false });
+      runtime.consent({ events: false });
+      runtime.consent({ events: true });
+      await expect(
+        runtime.hydrateAndTrackCurrentPage(blocked, { routeKey: '/first' })
+      ).resolves.toMatchObject({ accepted: true });
+      expect(upsert.mock.calls[0]?.[0].events.map((event) => event.type)).toEqual(['page']);
+      expect(events.map((event) => event.messageId)).not.toContain(
+        upsert.mock.calls[0]?.[0].events[0]?.messageId
+      );
+    });
+
     it('admits a page-only batch by default, since page is allow-listed', async () => {
       const runtime = createRuntime();
       const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
@@ -281,7 +324,7 @@ describe('Web prepared handoff and consent', () => {
   });
 
   describe('handoff acceptance across a withdrawal', () => {
-    it('lets the same route be admitted again after its queued page was discarded', async () => {
+    it('drops an admitted aggregate on withdrawal and permits fresh page intent for the same route', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
       const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
@@ -294,8 +337,8 @@ describe('Web prepared handoff and consent', () => {
       ).resolves.toEqual({ accepted: true });
       expect(upsert).not.toHaveBeenCalled();
 
-      // Withdrawing discards the queued page; granting again and reconnecting must not
-      // leave the route looking admitted.
+      // Withdrawing discards the admitted batch permanently. The route remains
+      // eligible for a fresh page after regrant; the old aggregate never replays.
       runtime.consent({ events: false });
       runtime.consent({ events: true });
       window.dispatchEvent(new Event('online'));
@@ -306,6 +349,10 @@ describe('Web prepared handoff and consent', () => {
 
       expect(retry.accepted).toBe(true);
       await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+      expect(upsert.mock.calls[0]?.[0].events.map((event) => event.type)).toEqual(['page']);
+      expect(upsert.mock.calls[0]?.[0].events[0]?.messageId).not.toBe(
+        handoff.replay?.events[0]?.messageId
+      );
     });
 
     it('lets trackCurrentPage send the route again after withdrawal discarded its page', async () => {

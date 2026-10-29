@@ -26,7 +26,6 @@ export type {
   ExperienceParameterValue,
   ExperienceParameterRecord,
   ExperienceParameterOrder,
-  PersonalizationOptions,
 } from '@contentful/experiences-client';
 export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
 export type {
@@ -54,6 +53,7 @@ export type {
   RuntimeFetchByDestinationNodeOptions,
   RuntimeFetchByDestinationPathOptions,
   RuntimeFetchExperienceOptions,
+  RuntimePersonalizationOptions as PersonalizationOptions,
   RuntimeFetchResolveOptions,
   RuntimeResolveDefaults,
   RuntimeResolveOptions,
