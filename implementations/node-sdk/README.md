@@ -222,7 +222,7 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 ## Related
 
 - [Node SDK](../../packages/node/README.md)
-- [Local package artifacts](../../README.md#local-npm-artifacts)
+- [Local package artifacts](../../CONTRIBUTING.md#local-npm-artifacts)
 
 The reference converts the incoming `preview_session_id` to an `isPreview` boolean
 and passes it to `forRequest()` before page/fetch work.
