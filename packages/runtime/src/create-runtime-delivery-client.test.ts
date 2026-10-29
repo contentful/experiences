@@ -54,6 +54,23 @@ describe('createRuntimeDeliveryClient', () => {
     });
   });
 
+  it('layers default headers beneath caller headers', () => {
+    createRuntimeDeliveryClient(
+      { accessToken: 'token-123', headers: { 'x-custom': 'value', 'x-shared': 'caller' } },
+      undefined,
+      { 'X-Contentful-User-Agent': 'sdk experiences-node/0.6.0;', 'x-shared': 'default' }
+    );
+    expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
+      token: 'token-123',
+      baseUrl: undefined,
+      headers: {
+        'X-Contentful-User-Agent': 'sdk experiences-node/0.6.0;',
+        'x-custom': 'value',
+        'x-shared': 'caller',
+      },
+    });
+  });
+
   it('rejects missing token and proxy host at runtime', () => {
     expect(() => createRuntimeDeliveryClient({} as never)).toThrow(
       'requires accessToken unless an explicit proxy host is provided'
