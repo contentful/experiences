@@ -1,12 +1,38 @@
 import {
-  ExperienceRenderer,
+  useExperiences,
   type ComponentErrorProps,
   type MissingComponentProps,
   type PortableRenderPlan,
+  type OnExperienceNodeRoot,
 } from '@contentful/experiences-react/client';
+import { useCallback } from 'react';
 
 import type { ContentResult } from './content-loader';
-import { experienceConfig } from './experience-config';
+import { experiences } from './experiences';
+
+function ManualPlan({ plan }: { plan: PortableRenderPlan }) {
+  const sdk = useExperiences();
+  const registerView = useCallback<OnExperienceNodeRoot>(
+    ({ element, data }) => {
+      if (!data) return;
+      sdk.tracking.enableElement('views', element, { data });
+      return () => sdk.tracking.clearElement('views', element);
+    },
+    [sdk]
+  );
+
+  return (
+    <experiences.ExperienceRenderer
+      experience={plan}
+      trackViews={false}
+      trackHovers={false}
+      trackClicks={false}
+      onNodeRoot={registerView}
+      renderUnknown={UnknownComponent}
+      renderError={RenderError}
+    />
+  );
+}
 
 function UnknownComponent({ componentId, nodeId }: MissingComponentProps) {
   return (
@@ -42,15 +68,15 @@ function PlanPresentation({ plan, manual }: { plan: PortableRenderPlan; manual: 
       {!plan.nodes.length && (
         <p className="placeholder-card">The delivered plan has no renderable nodes.</p>
       )}
-      <ExperienceRenderer
-        experience={plan}
-        config={experienceConfig}
-        trackViews={manual ? false : undefined}
-        trackHovers={manual ? false : undefined}
-        trackClicks={manual ? false : undefined}
-        renderUnknown={UnknownComponent}
-        renderError={RenderError}
-      />
+      {manual ? (
+        <ManualPlan plan={plan} />
+      ) : (
+        <experiences.ExperienceRenderer
+          experience={plan}
+          renderUnknown={UnknownComponent}
+          renderError={RenderError}
+        />
+      )}
     </>
   );
 }

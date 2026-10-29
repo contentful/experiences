@@ -28,7 +28,7 @@ function localGraph(entry: string, declarations = false, seen = new Set<string>(
 }
 
 describe('published package entry points', () => {
-  it.each(['index.js', 'server.js', 'client.js', 'custom-renderer.js', 'web-sdk.js'])(
+  it.each(['index.js', 'server.js', 'client.js', 'custom-renderer.js', 'web-sdk.js', 'host.js'])(
     '%s imports without browser globals under Node ESM resolution',
     (file) => {
       expect(() =>
@@ -49,7 +49,7 @@ describe('published package entry points', () => {
     expect(graph).not.toMatch(/from ['"]next(?:\/|['"])/);
   });
 
-  it.each(['index', 'server', 'client', 'custom-renderer', 'web-sdk'])(
+  it.each(['index', 'server', 'client', 'custom-renderer', 'web-sdk', 'host'])(
     '%s has no optional preview imports in JavaScript or declarations',
     (entry) => {
       for (const declarations of [false, true]) {
@@ -71,6 +71,7 @@ describe('published package entry points', () => {
       if (
         file.endsWith('.test.ts') ||
         file.endsWith('.test.tsx') ||
+        file.replaceAll('\\', '/').startsWith('test/') ||
         file.replaceAll('\\', '/').startsWith('preview/legacy/')
       )
         continue;
@@ -103,8 +104,87 @@ describe('published package entry points', () => {
     }
     expect(
       readdirSync(new URL('../dist/', import.meta.url), { recursive: true, encoding: 'utf8' }).some(
-        (file) => /use-live-preview|preview[/\\]legacy/.test(file)
+        (file) => /use-live-preview|preview[/\\]legacy|^test[/\\]/.test(file)
       )
     ).toBe(false);
   });
+
+  it.each(['bundler', 'NodeNext'] as const)(
+    'typechecks runtime ownership and context manual registration with %s resolution',
+    (resolution) => {
+      const filename = fileURLToPath(new URL('./published-runtime.tsx', import.meta.url));
+      const source = `
+        import { useCallback } from 'react';
+        import {
+          createReactExperiences, useExperiences, useExperiencesContext,
+          useExperiencesActions, useConsentState, usePreviewState,
+          type OnExperienceNodeRoot, type PortableRenderPlan
+        } from '@contentful/experiences-react/client';
+        import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
+          from '@contentful/experiences-react/host';
+        import { ContentfulExperiences, type ExperiencesWebConfig, type WebExperiencesRuntime,
+          type CoreStates, type RuntimeLivePreviewInitializer }
+          from '@contentful/experiences-react/web-sdk';
+
+        const ui = createReactExperiences({ config: { components: {} } });
+        declare const config: ExperiencesWebConfig;
+        declare const livePreview: RuntimeLivePreviewInitializer;
+        declare const plan: PortableRenderPlan;
+        declare const sdk: ContentfulExperiences;
+        function ManualContent() {
+          const runtime: WebExperiencesRuntime = useExperiences();
+          const registerView = useCallback<OnExperienceNodeRoot>(({ element, data }) => {
+            if (!data) return;
+            runtime.tracking.enableElement('views', element, { data });
+            return () => runtime.tracking.clearElement('views', element);
+          }, [runtime]);
+          const { setConsent, trackEvent, setLocale } = useExperiencesActions();
+          const consent: CoreStates['consent']['current'] = useConsentState();
+          const preview: CoreStates['preview']['current'] = usePreviewState();
+          const context: { sdk: WebExperiencesRuntime; error: Error | undefined;
+            isLive: boolean; isContentReady: boolean } = useExperiencesContext();
+          const track: WebExperiencesRuntime['track'] = trackEvent;
+          const locale: WebExperiencesRuntime['setLocale'] = setLocale;
+          void [consent, preview, context, track, locale, setConsent];
+          return <ui.ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+        }
+        const owned = <ui.ExperiencesRoot {...config} livePreview={livePreview}><ManualContent /></ui.ExperiencesRoot>;
+        const injected = <ui.ExperiencesProvider sdk={sdk}><ManualContent /></ui.ExperiencesProvider>;
+        const binding = createExperiencesRootSdkBinding({ sdk });
+        const concrete: ContentfulExperiences = binding.sdk;
+        disposeExperiencesRootSdkBinding(binding);
+        void [owned, injected, concrete];
+        // @ts-expect-error Destruction belongs to the SDK owner.
+        useExperiencesActions().destroy();
+        // @ts-expect-error Managed content loading belongs to the next phase.
+        ui.Experience;
+      `;
+      const options: ts.CompilerOptions = {
+        target: ts.ScriptTarget.ES2023,
+        jsx: ts.JsxEmit.ReactJSX,
+        module: resolution === 'NodeNext' ? ts.ModuleKind.NodeNext : ts.ModuleKind.ESNext,
+        moduleResolution:
+          resolution === 'NodeNext'
+            ? ts.ModuleResolutionKind.NodeNext
+            : ts.ModuleResolutionKind.Bundler,
+        strict: true,
+        skipLibCheck: true,
+        noEmit: true,
+        types: ['node'],
+      };
+      const host = ts.createCompilerHost(options);
+      const readFile = host.readFile.bind(host);
+      const fileExists = host.fileExists.bind(host);
+      host.readFile = (file) => (file === filename ? source : readFile(file));
+      host.fileExists = (file) => file === filename || fileExists(file);
+      const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([filename], options, host));
+      expect(
+        ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+          getCanonicalFileName: (file) => file,
+          getCurrentDirectory: () => fileURLToPath(new URL('..', import.meta.url)),
+          getNewLine: () => '\n',
+        })
+      ).toBe('');
+    }
+  );
 });
