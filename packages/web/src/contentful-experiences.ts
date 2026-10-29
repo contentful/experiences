@@ -20,12 +20,13 @@ import {
   type PageViewBuilderArgs,
   type QueuePolicy,
   resolveQueuePolicy,
-  parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
+  type RuntimePersonalizationOptions,
+  buildFetchPersonalization,
   type FetchResolveOptions,
   hasEventConsent,
   hasEventTypeConsent,
@@ -146,6 +147,8 @@ export interface CurrentPageOptions {
   readonly buildPayload: (metadata: {
     isInitialEmission: boolean;
   }) => PageViewBuilderArgs | undefined;
+  /** Optional framework lifetime before event admission. */
+  readonly isCurrent?: () => boolean;
 }
 
 export interface HydrateAndTrackCurrentPageOptions extends Omit<
@@ -153,6 +156,8 @@ export interface HydrateAndTrackCurrentPageOptions extends Omit<
   'buildPayload'
 > {
   readonly buildPayload?: CurrentPageOptions['buildPayload'];
+  /** Framework operation lifetime; SDK lifetime and accepted queue work remain SDK-owned. */
+  readonly isCurrent?: () => boolean;
 }
 
 type HandoffEnvelope = ReturnType<typeof parseExperiencesHandoffEnvelope>;
@@ -160,6 +165,7 @@ type HandoffEnvelope = ReturnType<typeof parseExperiencesHandoffEnvelope>;
 interface HandoffInitialization {
   readonly key: string | ExperiencesHandoff;
   readonly routeKey: string;
+  readonly callers: Set<() => boolean>;
   readonly isCurrent: () => boolean;
   identityReady?: Promise<string | undefined>;
   hydration?: Promise<void>;
@@ -187,6 +193,11 @@ function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void 
 
 /** A prepared batch after validation: what the delivery queue accepts. */
 type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
+const unguardedHandoffCaller = () => true;
+
+type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
+  personalization?: PersonalizationOptions;
+};
 
 function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
   return cloneDeepWith(plan, (value) => {
@@ -238,6 +249,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   readonly #adoptedProfileId = signal<string | undefined>();
   #identityRevision = 0;
   #currentInitialization: HandoffInitialization | undefined;
+  readonly #consumedHandoffs = new Set<string>();
   readonly #currentPage = new AcceptedCurrentPageTracker();
   #destroyed = false;
   readonly #acceptedFlagViews = new Map<string, { id: number; signature: readonly unknown[] }>();
@@ -516,7 +528,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         // permitted attempt for the same route would be answered from the cache and
         // never sent. This also forgets routes already sent, so one can be sent again
         // after a withdrawal and a new grant.
-        this.#currentInitialization = undefined;
+        // Generation invalidates pending work while retaining the current route
+        // owner for Optimization's page retry after a later consent grant.
         this.#currentPage.reset();
         // Even allowlisted detectors must discard the previous lifecycle's intervals
         // and capture the new token. Sync explicitly: repeated denials do not change
@@ -673,56 +686,19 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
-    const currentGeneration = () => this.#contentLifetime;
-    const generation = currentGeneration();
+    const generation = this.#contentLifetime;
     const token = this.#resetToken;
     const source = this.#preview?.revision;
-    const assertCurrent = () => {
-      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-      if (
-        generation !== currentGeneration() ||
-        (!this.isPreview && token !== this.#resetToken) ||
-        source !== this.#preview?.revision
-      ) {
-        throw new Error('Experiences fetch was superseded');
-      }
-    };
+    const assertCurrent = () => this.#assertContentCurrent(generation, source, token);
     assertCurrent();
-    if (this.#preview?.experienceId === options.experienceId) {
-      const binding = await this.#preview.ready();
+    if (this.#preview !== undefined) {
+      const preview = await this.#fetchPreview(options, resolveOptions, assertCurrent);
       assertCurrent();
-      assertRuntimePreviewRequest(options);
-      this.#gatePersonalizationEvents(options);
-      assertCurrent();
-      const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
-      const key =
-        options.personalization?.events !== undefined
-          ? undefined
-          : getExperienceSourceKey(
-              {
-                request: { experienceId: options.experienceId },
-                revision: [this.#contentLifetime],
-              },
-              resolve,
-              source ?? 0,
-              'snapshot'
-            );
-      return this.#shareContent(key, resolve, async () => {
-        const plan = await fetchRuntimePreviewSession(binding, this.config, resolveOptions);
-        // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
-        assertCurrent();
-        return plan;
-      });
+      if (preview !== undefined) return preview;
     }
     return this.#fetchPersonalized(options, {
       preview: options.preview === true,
-      prepare: (current) =>
-        this.#ensureInteractionTracking()?.hasAutoTracking()
-          ? {
-              ...current,
-              extensions: { ...current.extensions, sourceMap: current.extensions?.sourceMap ?? {} },
-            }
-          : current,
+      prepare: (current) => this.#withTrackingSourceMap(current),
       send: (final) => super.fetchExperience(final, resolveOptions),
       share: (load, final, revision) => {
         const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
@@ -765,128 +741,176 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     });
   }
 
-  /**
-   * Every XDA fetch goes through here, so by-id and Destination fetches cannot drift.
-   * It settles identity, applies consent and interceptors to caller-built events, sends
-   * the stored profile id, and keeps the returned one unless the visitor changed while
-   * the request was in flight.
-   */
   async #fetchPersonalized<
-    TOptions extends { personalization?: PersonalizationOptions },
+    TOptions extends { personalization?: RuntimePersonalizationOptions },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(
     options: TOptions,
     request: {
       preview?: boolean;
       prepare?: (options: TOptions) => TOptions;
-      send: (options: TOptions) => Promise<TResult>;
+      send: (options: BuiltFetchOptions<TOptions>) => Promise<TResult>;
       share?: (
         load: () => Promise<TResult>,
-        options: TOptions,
+        options: BuiltFetchOptions<TOptions>,
         revision: number[]
       ) => Promise<TResult>;
     }
   ): Promise<TResult> {
-    const currentGeneration = () => this.#contentLifetime;
-    let generation = currentGeneration();
-    let token = this.#resetToken;
+    const generation = this.#contentLifetime;
+    const token = this.#resetToken;
     const source = this.#preview?.revision;
-    const assertCurrent = () => {
-      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-      if (
-        generation !== currentGeneration() ||
-        (!this.isPreview && token !== this.#resetToken) ||
-        source !== this.#preview?.revision
-      ) {
-        throw new Error('Experiences fetch was superseded');
-      }
-    };
+    const assertCurrent = () => this.#assertContentCurrent(generation, source, token);
     assertCurrent();
-    if (
-      this.#currentInitialization?.identityReady !== undefined ||
-      this.#currentInitialization?.hydration !== undefined
-    ) {
-      await this.#awaitCurrentHandoffIdentity();
-      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    const identityReady = this.#awaitCurrentHandoffIdentity();
+    if (identityReady !== undefined) {
+      await identityReady;
+      assertCurrent();
     }
     const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
-    token = this.#resetToken;
-    generation = currentGeneration();
-    const gated = this.#gatePersonalizationEvents(request.prepare?.(options) ?? options);
+    const adoptProfile = this.#createProfileAdopter({ preview: request.preview });
+    const prepared = await this.#prepareContentRequest(
+      request.prepare?.(options) ?? options,
+      assertCurrent
+    );
     assertCurrent();
-    const intercepted =
-      gated.personalization?.events === undefined
-        ? gated.personalization
-        : {
-            ...gated.personalization,
-            events: await Promise.all(
-              gated.personalization.events.map((event) => this.interceptors.event.run(event))
-            ),
-          };
-    assertCurrent();
-    const serialized =
-      intercepted === undefined ? undefined : serializePersonalization(intercepted);
-    const personalization =
-      serialized?.events === undefined
-        ? serialized
-        : // Client validates the whole batch before any final-type consent callback runs.
-          {
-            ...serialized,
-            events: serialized.events.filter((event) => {
-              const admitted = this.#admitEvent(event, true);
-              assertCurrent();
-              return admitted;
-            }),
-          };
-    assertCurrent();
-    for (const event of personalization?.events ?? []) {
+    for (const event of prepared.personalization?.events ?? []) {
       this.#publishEvent(event);
       assertCurrent();
     }
-    const profileId = this.isPreview
-      ? undefined
-      : (personalization?.profileId ?? this.#requestIdentity());
+    const final = this.#withRequestIdentity(prepared);
     assertCurrent();
-    const final =
-      profileId === undefined
-        ? { ...gated, personalization }
-        : {
-            ...gated,
-            personalization: { ...personalization, profileId },
-          };
     const load = async () => {
       const result = await request.send(final);
-      if (
-        !this.#destroyed &&
-        !this.isPreview &&
-        request.preview !== true &&
-        this.#identityRevision === identityRevision
-      ) {
-        const returnedProfile =
-          'personalization' in result ? result.personalization?.profile : undefined;
-        if (
-          returnedProfile !== undefined &&
-          this.#profileRevision === profileRevision &&
-          !isEqual(profileSignal.value, returnedProfile)
-        ) {
-          const next = await this.interceptors.state.run(
-            { profile: EventProfileSchema.parse(returnedProfile) },
-            mergePersonalizationState
-          );
-          if (
-            this.#isCurrent(token) &&
-            this.#identityRevision === identityRevision &&
-            this.#profileRevision === profileRevision
-          )
-            batch(() => this.#commitIncomingState(next));
-        }
-      }
+      await adoptProfile('personalization' in result ? result.personalization?.profile : undefined);
       return result;
     };
     return request.share
       ? request.share(load, final, [generation, profileRevision, identityRevision])
       : load();
+  }
+
+  #assertContentCurrent(generation: number, source: number | undefined, token: object): void {
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (
+      generation !== this.#contentLifetime ||
+      (!this.isPreview && token !== this.#resetToken) ||
+      source !== this.#preview?.revision
+    )
+      throw new Error('Experiences fetch was superseded');
+  }
+
+  async #fetchPreview(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions,
+    assertCurrent: () => void
+  ): Promise<PortableRenderPlan | undefined> {
+    if (this.#preview?.experienceId !== options.experienceId) return undefined;
+    const binding = await this.#preview.ready();
+    assertCurrent();
+    assertRuntimePreviewRequest(options);
+    this.#gatePersonalizationEvents(options);
+    assertCurrent();
+    const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+    const key =
+      options.personalization?.events !== undefined
+        ? undefined
+        : getExperienceSourceKey(
+            { request: { experienceId: options.experienceId }, revision: [this.#contentLifetime] },
+            resolve,
+            this.#preview?.revision ?? 0,
+            'snapshot'
+          );
+    return this.#shareContent(key, resolve, async () => {
+      const plan = await fetchRuntimePreviewSession(binding, this.config, resolveOptions);
+      // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
+      assertCurrent();
+      return plan;
+    });
+  }
+
+  #withTrackingSourceMap(options: FetchExperienceOptions): FetchExperienceOptions {
+    return this.#ensureInteractionTracking()?.hasAutoTracking()
+      ? {
+          ...options,
+          extensions: { ...options.extensions, sourceMap: options.extensions?.sourceMap ?? {} },
+        }
+      : options;
+  }
+
+  #withRequestIdentity<T extends { personalization?: PersonalizationOptions }>(options: T): T {
+    const profileId = this.isPreview
+      ? undefined
+      : (options.personalization?.profileId ?? this.#requestIdentity());
+    return profileId === undefined
+      ? options
+      : { ...options, personalization: { ...options.personalization, profileId } };
+  }
+
+  async #prepareContentRequest<T extends { personalization?: RuntimePersonalizationOptions }>(
+    options: T,
+    assertCurrent: () => void
+  ): Promise<BuiltFetchOptions<T>> {
+    const gated = this.#gatePersonalizationEvents(options);
+    assertCurrent();
+    const personalization = gated.personalization;
+    const transformed =
+      personalization?.events === undefined
+        ? personalization
+        : {
+            ...personalization,
+            events: await Promise.all(
+              personalization.events.map((event) => this.interceptors.event.run(event))
+            ),
+          };
+    assertCurrent();
+    // Validate the whole XDA batch before final-type consent callbacks run.
+    let valid = transformed === undefined ? undefined : serializePersonalization(transformed);
+    if (valid?.events !== undefined) {
+      valid = {
+        ...valid,
+        events: valid.events.filter((event) => {
+          const admitted = this.#admitEvent(event, true);
+          assertCurrent();
+          return admitted;
+        }),
+      };
+    }
+    assertCurrent();
+    return { ...gated, personalization: valid };
+  }
+
+  #createProfileAdopter(
+    options: Pick<FetchExperienceOptions, 'preview'>
+  ): (
+    profile: NonNullable<PortableRenderPlan['personalization']>['profile'] | undefined
+  ) => Promise<PersonalizationState | undefined> {
+    const token = this.#resetToken;
+    const profileRevision = this.#profileRevision;
+    const identityRevision = this.#identityRevision;
+    return async (profile) => {
+      const canAdopt = () =>
+        !this.#destroyed &&
+        this.#isCurrent(token) &&
+        this.#identityRevision === identityRevision &&
+        this.#profileRevision === profileRevision;
+      if (
+        this.isPreview ||
+        options.preview === true ||
+        profile === undefined ||
+        !canAdopt() ||
+        isEqual(profileSignal.value, profile)
+      )
+        return undefined;
+      const next = await this.interceptors.state.run(
+        { profile: EventProfileSchema.parse(profile) },
+        mergePersonalizationState
+      );
+      if (!canAdopt()) return undefined;
+      batch(() => this.#commitIncomingState(next));
+      return next;
+    };
   }
 
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
@@ -902,6 +926,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#preview?.clear();
       this.#interactionTracking?.reset();
       this.#currentInitialization = undefined;
+      this.#consumedHandoffs.clear();
       this.#currentPage.reset();
       this.#setAdoptedProfileId(undefined);
       this.personalizationQueue.reset();
@@ -947,6 +972,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.analyticsQueue.clearPeriodicFlushTimer();
     this.analyticsQueue.clearScheduledRetry();
     this.#currentInitialization = undefined;
+    this.#consumedHandoffs.clear();
     this.#currentPage.reset();
     try {
       if (typeof window !== 'undefined') {
@@ -988,76 +1014,110 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     ));
   }
 
-  /** Adopt a validated handoff's profile state without sending its page. */
-  async hydrateHandoffState(
-    handoff: ExperiencesHandoff,
-    { routeKey }: { readonly routeKey: string }
-  ): Promise<void> {
-    if (this.#destroyed || this.isPreview) return;
-    this.#requireRouteKey(routeKey);
-    const parsed = parseExperiencesHandoff(handoff, this);
-    const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
-    await this.#hydrateHandoffState(parsed, initialization);
-  }
-
   /** Deduplicate accepted page emissions for the current route. Manual page() stays direct. */
   async trackCurrentPage({
     routeKey,
     buildPayload,
+    isCurrent,
   }: CurrentPageOptions): Promise<EventEmissionResult> {
     if (this.#destroyed) return { accepted: false };
+    if (isCurrent?.() === false) return { accepted: false };
     if (this.isPreview) return this.#skipPreviewEvent('trackCurrentPage', [routeKey]);
     this.#requireRouteKey(routeKey);
     this.#clearHandoffInitialization(routeKey);
-    return await this.#currentPage.emitIfNeeded(routeKey, () =>
-      this.page(buildPayload({ isInitialEmission: !this.#currentPage.hasAccepted() }) ?? {})
-    );
+    return await this.#currentPage.emitIfNeeded(routeKey, () => {
+      const payload = buildPayload({ isInitialEmission: !this.#currentPage.hasAccepted() }) ?? {};
+      if (isCurrent?.() === false) return Promise.resolve({ accepted: false });
+      if (isCurrent === undefined || !this.hasConsent('page')) return this.page(payload);
+      return this.personalizationQueue.send(this.eventBuilder.buildPageView(payload), isCurrent);
+    });
   }
 
-  /** Hydrate the current render and admit its matching prepared page once. */
+  /** Consume one complete handoff and admit its matching evaluated events once. */
   async hydrateAndTrackCurrentPage(
     handoff: ExperiencesHandoff,
-    { routeKey, buildPayload }: HydrateAndTrackCurrentPageOptions
+    {
+      routeKey,
+      buildPayload,
+      isCurrent = unguardedHandoffCaller,
+    }: HydrateAndTrackCurrentPageOptions
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return { accepted: false };
+    if (!isCurrent()) return { accepted: false };
     if (this.isPreview) return this.#skipPreviewEvent('hydrateAndTrackCurrentPage', [routeKey]);
     this.#requireRouteKey(routeKey);
     const parsed = parseExperiencesHandoffEnvelope(handoff, this);
-    const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey);
+    const hasPage =
+      parsed.replay?.events.some(
+        (event) =>
+          typeof event === 'object' && event !== null && 'type' in event && event.type === 'page'
+      ) === true;
+    const token = this.#resetToken;
+    const initialization = this.#getHandoffInitialization(handoff, parsed, routeKey, isCurrent);
     if (initialization.delivery !== undefined) return await initialization.delivery;
+    const consumed =
+      typeof initialization.key === 'string' && this.#consumedHandoffs.has(initialization.key);
+    if (consumed && (!hasPage || !initialization.isCurrent())) return { accepted: false };
 
     // Begin the current attempt by checking and publishing identity synchronously.
     // Once visible to other operations, navigation retains this continuation.
-    // Fetches can join this boundary without waiting for hydration or replay HTTP.
+    // This is local identity readiness, not XPAPI commit completion. Current fetches
+    // do not await replay HTTP; provisional-ID profile-only lookups can therefore fail.
+    // See Runtime README's XDA preflight and profile finalization contract.
     const identityReady = Promise.resolve().then(() =>
-      initialization.isCurrent() ? this.#adoptHandoffIdentity(parsed) : undefined
+      !consumed && initialization.isCurrent()
+        ? this.#adoptHandoffIdentity(parsed, initialization.isCurrent)
+        : undefined
     );
     initialization.identityReady = identityReady;
     const attempt = identityReady.then(async (targetId): Promise<EventEmissionResult> => {
       if (!initialization.isCurrent()) return { accepted: false };
-      await this.#hydrateHandoffState(parsed, initialization);
+      if (!consumed) await this.#hydrateHandoffState(parsed, initialization);
       if (!initialization.isCurrent()) return { accepted: false };
 
-      if (parsed.replay?.routeKey === routeKey) {
+      if (!consumed && parsed.replay?.routeKey === routeKey) {
         const result = await this.sendPreparedExperienceEvents(
           parsed.replay.events,
           targetId,
-          parsed.replay.locale
+          parsed.replay.locale,
+          initialization
         );
         if (result.accepted) {
-          if (initialization.isCurrent()) this.#currentPage.markAccepted(routeKey);
+          if (
+            hasPage &&
+            !this.#destroyed &&
+            this.#isCurrent(token) &&
+            this.#currentInitialization === initialization
+          )
+            this.#currentPage.markAccepted(routeKey);
           return result;
         }
+        // A refused identify/track batch has no page intent to fall back to.
+        if (!hasPage && (parsed.replay.events.length !== 0 || buildPayload === undefined))
+          return result;
       }
 
-      if (!initialization.isCurrent()) return { accepted: false };
+      if (
+        !initialization.isCurrent() ||
+        (buildPayload === undefined && (!hasPage || parsed.replay?.routeKey !== routeKey))
+      )
+        return { accepted: false };
       return await this.trackCurrentPage({
         routeKey,
         buildPayload: buildPayload ?? (() => ({})),
+        isCurrent: initialization.isCurrent,
       });
     });
     const delivery = attempt.then(
       (result) => {
+        if (
+          result.accepted &&
+          !this.#destroyed &&
+          this.#isCurrent(token) &&
+          typeof initialization.key === 'string' &&
+          parsed.replay?.routeKey === routeKey
+        )
+          this.#consumedHandoffs.add(initialization.key);
         if (!result.accepted && initialization.delivery === delivery) {
           initialization.delivery = undefined;
         }
@@ -1076,25 +1136,37 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   protected sendPreparedExperienceEvents(
     events: readonly unknown[],
     profileId?: string,
-    locale?: string
+    locale?: string,
+    initialization?: HandoffInitialization
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
     if (this.isPreview)
       return Promise.resolve(this.#skipPreviewEvent('sendPreparedExperienceEvents', [events]));
     const token = this.#resetToken;
-    const isCurrent = (): boolean => this.#isCurrent(token);
-    const admitted = this.#admitPreparedEvents(events);
-    if (admitted === undefined || !isCurrent()) return Promise.resolve({ accepted: false });
-    const result = this.personalizationQueue.sendPrepared(admitted, { profileId, locale });
-    if (result.accepted && isCurrent()) {
-      for (const event of admitted) {
-        if (!isCurrent()) break;
-        this.#publishEvent(event);
-      }
-      if (isCurrent() && profileSignal.value === undefined) {
-        this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId.value);
-      }
+    const isCurrent = (): boolean =>
+      !this.#destroyed && this.#isCurrent(token) && initialization?.isCurrent() !== false;
+    const handoffKey = typeof initialization?.key === 'string' ? initialization.key : undefined;
+    let valid: ValidatedPreparedEvents;
+    try {
+      valid = validatePreparedEvents(events);
+    } catch {
+      return Promise.resolve({ accepted: false });
     }
+    // Reserve the supplied aggregate before callbacks can reenter. A consent
+    // refusal is terminal; capacity refusal below leaves unadmitted work eligible.
+    if (handoffKey !== undefined) this.#consumedHandoffs.add(handoffKey);
+    let allowed = true;
+    for (const event of valid) {
+      if (!this.#admitEvent(event, true)) allowed = false;
+      if (!isCurrent()) return Promise.resolve({ accepted: false });
+    }
+    if (!allowed) return Promise.resolve({ accepted: false });
+    const admitted = valid.map((event) => withEventConsent(event, consentSignal.value === true));
+    const result = this.personalizationQueue.sendPrepared(admitted, { profileId, locale });
+    if (!result.accepted && isCurrent() && handoffKey !== undefined)
+      this.#consumedHandoffs.delete(handoffKey);
+    if (result.accepted && isCurrent() && profileSignal.value === undefined)
+      this.#setAdoptedProfileId(profileId ?? this.#adoptedProfileId.value);
     return Promise.resolve(result);
   }
 
@@ -1117,51 +1189,33 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   /**
-   * Drops caller-built XDA events that consent does not admit. The profile id
+   * Drops event intent that consent does not admit before building. The profile id
    * still travels, since it is not an event.
    */
-  #gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+  #gatePersonalizationEvents<T extends { personalization?: RuntimePersonalizationOptions }>(
     options: T
-  ): T {
+  ): BuiltFetchOptions<T> {
     if (this.isPreview) {
       for (const event of options.personalization?.events ?? []) this.#admitEvent(event, true);
       return { ...options, personalization: undefined };
     }
     const events = options.personalization?.events;
-    if (events === undefined) return options;
+    if (events === undefined) return options as BuiltFetchOptions<T>;
 
     const admitted = events.filter((event) => this.#admitEvent(event));
-    return { ...options, personalization: { ...options.personalization, events: admitted } };
-  }
-
-  /**
-   * Gates and stamps a server-prepared batch. The server built these events, so they
-   * carry its consent; the browser's own consent decides whether they are sent and is
-   * what they are stamped with, as for direct calls.
-   *
-   * A prepared batch is identify and track events followed by one page, and is
-   * admitted whole or not at all: dropping one event would leave a batch the
-   * validator rejects. Returns `undefined` when the batch is invalid or any event is
-   * not admitted, and otherwise the validated batch, which the queue takes as it is.
-   * This is the one place the batch is validated.
-   */
-  #admitPreparedEvents(events: readonly unknown[]): ValidatedPreparedEvents | undefined {
-    let valid: ValidatedPreparedEvents;
-    try {
-      valid = validatePreparedEvents(events);
-    } catch {
-      return undefined;
-    }
-
-    // Check every event, without stopping at the first blocked one, so each is reported.
-    let admitted = true;
-    for (const event of valid) {
-      if (!this.#admitEvent(event)) admitted = false;
-    }
-    if (!admitted) return undefined;
-
-    const isConsentGiven = consentSignal.value === true;
-    return valid.map((event) => withEventConsent(event, isConsentGiven));
+    const personalization = buildFetchPersonalization(
+      { ...options.personalization, events: admitted },
+      this.eventBuilder
+    )!;
+    return {
+      ...options,
+      personalization: {
+        ...personalization,
+        events: personalization.events?.map((event) =>
+          withEventConsent(event, consentSignal.value === true)
+        ),
+      },
+    };
   }
 
   #requireRouteKey(routeKey: string): void {
@@ -1173,7 +1227,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #getHandoffInitialization(
     input: ExperiencesHandoff,
     parsed: HandoffEnvelope,
-    routeKey: string
+    routeKey: string,
+    callerIsCurrent: () => boolean
   ): HandoffInitialization {
     const finalEvent = parsed.replay?.events.at(-1);
     const key =
@@ -1184,14 +1239,30 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         ? finalEvent.messageId
         : input;
     const current = this.#currentInitialization;
-    if (current?.routeKey === routeKey && current.key === key) return current;
+    if (current?.routeKey === routeKey && current.key === key && current.isCurrent()) {
+      current.callers.add(callerIsCurrent);
+      return current;
+    }
 
     const token = this.#resetToken;
     const initialization: HandoffInitialization = {
       key,
       routeKey,
-      isCurrent: () => this.#isCurrent(token) && this.#currentInitialization === initialization,
+      callers: new Set([callerIsCurrent]),
+      isCurrent: () =>
+        !this.#destroyed &&
+        this.#isCurrent(token) &&
+        this.#currentInitialization === initialization &&
+        [...initialization.callers].some((caller) => caller()),
     };
+    // Remember admitted or consent-dropped replay without reviving it or cancelling a
+    // newer initialization. A new visitor action carries fresh message IDs.
+    if (
+      typeof key === 'string' &&
+      this.#consumedHandoffs.has(key) &&
+      (current?.key !== key || current.routeKey !== routeKey)
+    )
+      return initialization;
     this.#currentInitialization = initialization;
     return initialization;
   }
@@ -1201,15 +1272,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.#currentInitialization = undefined;
   }
 
-  async #awaitCurrentHandoffIdentity(): Promise<void> {
-    while (true) {
-      const initialization = this.#currentInitialization;
-      if (initialization === undefined || !initialization.isCurrent()) return;
-      const pending = initialization.identityReady ?? initialization.hydration;
-      if (pending === undefined) return;
-      await pending;
-      if (this.#currentInitialization === initialization) return;
-    }
+  #awaitCurrentHandoffIdentity(): Promise<void> | undefined {
+    const initialization = this.#currentInitialization;
+    if (initialization === undefined || !initialization.isCurrent()) return undefined;
+    const pending = initialization.identityReady ?? initialization.hydration;
+    return pending?.then(() =>
+      this.#currentInitialization !== initialization
+        ? this.#awaitCurrentHandoffIdentity()
+        : undefined
+    );
   }
 
   #hydrateHandoffState(
@@ -1243,11 +1314,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       initialization.hydration = undefined;
       throw error;
     });
-    return initialization.hydration;
+    return initialization.hydration.finally(() => {
+      if (!initialization.isCurrent()) initialization.hydration = undefined;
+    });
   }
 
-  #adoptHandoffIdentity(handoff: HandoffEnvelope): string | undefined {
-    const profileId = this.#requestIdentity() ?? handoff.profileId;
+  #adoptHandoffIdentity(handoff: HandoffEnvelope, isCurrent: () => boolean): string | undefined {
+    const profileId = profileSignal.value?.id ?? this.#getAnonymousId() ?? handoff.profileId;
+    if (!isCurrent()) return undefined;
     this.#setAdoptedProfileId(profileId);
     return profileId;
   }

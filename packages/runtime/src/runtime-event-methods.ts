@@ -26,7 +26,6 @@ import {
 import { validatePersonalizationEvent, type EventInterceptors } from './event-interceptors.js';
 import type EventBuilder from './event-builder.js';
 import type { EventEmissionResult } from './event-emission-result.js';
-import { sendPersonalizationEvents } from './personalization-delivery.js';
 import { withEventConsent } from './prepared-events.js';
 import type {
   ClickBuilderArgs,
@@ -287,6 +286,26 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
   }
 }
 
+/** @internal Deliver a finalized, admitted batch and publish only to its current owner. */
+export async function deliverPersonalizationEvents(
+  api: EventApi['experience'],
+  events: readonly PersonalizationEvent[],
+  profileId: string | undefined,
+  options: (PersonalizationRequestOptions & { preflight?: boolean }) | undefined,
+  bindings: Pick<DirectEventBindings, 'setProfile' | 'getProfileRevision' | 'isActive'>,
+  profileRevision = bindings.getProfileRevision?.()
+): Promise<EventEmissionResult> {
+  if (bindings.isActive?.() === false) return { accepted: false };
+  const data = await api.upsertProfile({ profileId, events: [...events] }, options);
+  if (
+    bindings.isActive?.() !== false &&
+    (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision)
+  ) {
+    bindings.setProfile(data.profile);
+  }
+  return { accepted: true, data };
+}
+
 function createDirectEventDispatch(
   api: EventApi,
   bindings: DirectEventBindings
@@ -299,18 +318,14 @@ function createDirectEventDispatch(
         event = validatePersonalizationEvent(await interceptors.run(event));
         if (!admitInterceptedEvent(event, bindings)) return { accepted: false };
       }
-      if (bindings.isActive?.() === false) return { accepted: false };
-      const data = await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
-        ...bindings.getPersonalizationOptions?.(),
-        locale: bindings.getLocale?.(),
-      });
-      if (
-        bindings.isActive?.() !== false &&
-        (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision)
-      ) {
-        bindings.setProfile(data.profile);
-      }
-      return { accepted: true, data };
+      return deliverPersonalizationEvents(
+        api.personalization,
+        [event],
+        profile?.id,
+        { ...bindings.getPersonalizationOptions?.(), locale: bindings.getLocale?.() },
+        bindings,
+        profileRevision
+      );
     },
     analytics: async (event, profile) => {
       const interceptors = bindings.eventInterceptors;

@@ -1,7 +1,7 @@
 'use client';
 
 // Adapted from OptimizationProvider activation at
-// 59add9d6ebff503b9033a59a2eee0149d4b4e925 (MIT).
+// f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT).
 import {
   useEffect,
   useLayoutEffect,
@@ -32,15 +32,9 @@ import {
   type OnStatesReady,
 } from './experiences-root-sdk-binding.js';
 
-/** State-only initialization. Page decisions and prepared replay belong to the route owner. */
-export interface ExperiencesStateInitialization {
-  readonly routeKey: string;
-  readonly handoff: ExperiencesHandoff;
-}
-
 interface PresentationOptions {
   readonly snapshot?: ExperiencesSnapshot;
-  readonly initialization?: ExperiencesStateInitialization;
+  readonly handoff?: ExperiencesHandoff;
   readonly onStatesReady?: OnStatesReady;
 }
 
@@ -66,19 +60,18 @@ const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
 function createTarget(props: ActivationProps): Target {
-  assertInitialization(props.initialization, props);
+  assertHandoff(props.handoff, props);
   const ownedConfig = 'sdk' in props ? undefined : props;
   const snapshot = createWebSnapshotRuntime(
     props.snapshot ?? {
-      data: props.initialization?.handoff.state,
+      data: props.handoff?.state,
       locale: ownedConfig?.locale,
       consent: ownedConfig?.defaults?.consent,
       persistenceConsent: ownedConfig?.defaults?.persistenceConsent,
       allowedEventTypes: ownedConfig?.allowedEventTypes,
     }
   );
-  const immediate =
-    'sdk' in props && props.snapshot === undefined && props.initialization === undefined;
+  const immediate = 'sdk' in props && props.snapshot === undefined && props.handoff === undefined;
   return {
     props,
     snapshot,
@@ -91,13 +84,10 @@ function createTarget(props: ActivationProps): Target {
   };
 }
 
-function assertInitialization(
-  initialization: ExperiencesStateInitialization | undefined,
-  owner: ActivationProps
-): void {
-  if (!initialization) return;
-  assertExperiencesCacheSafety(initialization.handoff);
-  assertExperiencesHandoffScope(initialization.handoff, 'sdk' in owner ? owner.sdk : owner);
+function assertHandoff(handoff: ExperiencesHandoff | undefined, owner: ActivationProps): void {
+  if (!handoff) return;
+  assertExperiencesCacheSafety(handoff);
+  assertExperiencesHandoffScope(handoff, 'sdk' in owner ? owner.sdk : owner);
 }
 
 function ActivationProvider(props: ActivationProps) {
@@ -107,7 +97,7 @@ function ActivationProvider(props: ActivationProps) {
   const target = useMemo(() => createTarget(props), [injectedSdk]);
   // Validate later handoffs against the actual receiving owner, whose structural
   // configuration stays captured until replacement. No child reads unsafe state.
-  assertInitialization(props.initialization, target.props);
+  assertHandoff(props.handoff, target.props);
   const [state, setState] = useState<ProviderState>(() => ({ ...target.initial, target }));
   const [localeFailure, setLocaleFailure] = useState<{
     sdk: ExperiencesContextValue['sdk'];
@@ -115,7 +105,7 @@ function ActivationProvider(props: ActivationProps) {
   }>();
   const activeRef = useRef<ActiveBinding | undefined>(undefined);
   const context = state.target === target ? state : target.initial;
-  const initialization = props.initialization;
+  const handoff = props.handoff;
 
   function publishLive(active: ActiveBinding, isContentReady: boolean, error?: Error) {
     if (activeRef.current !== active) return;
@@ -142,7 +132,7 @@ function ActivationProvider(props: ActivationProps) {
               const {
                 children: _children,
                 snapshot: _snapshot,
-                initialization: _initialization,
+                handoff: _handoff,
                 onStatesReady,
                 ...config
               } = initial;
@@ -150,7 +140,7 @@ function ActivationProvider(props: ActivationProps) {
             })();
       active = { target, binding };
       activeRef.current = active;
-      publishLive(active, initial.initialization === undefined);
+      publishLive(active, initial.handoff === undefined);
     } catch (error) {
       setState({
         target,
@@ -170,33 +160,39 @@ function ActivationProvider(props: ActivationProps) {
   useCommitEffect(() => {
     const active = activeRef.current;
     if (!active || active.target !== target) return;
-    if (!initialization) {
+    if (!handoff) {
       publishLive(active, true);
       return;
     }
     let cancelled = false;
     const isCurrent = () => !cancelled && activeRef.current === active;
     publishLive(active, false);
-    // onStatesReady has attached before this operation, including its immediate emissions.
-    try {
-      const result = active.binding.sdk.hydrateHandoffState(initialization.handoff, {
-        routeKey: initialization.routeKey,
-      });
-      void Promise.resolve(result).then(
-        () => {
-          if (isCurrent()) publishLive(active, true);
-        },
-        (error: unknown) => {
-          if (isCurrent()) publishLive(active, true, toError(error));
-        }
-      );
-    } catch (error) {
-      if (isCurrent()) publishLive(active, true, toError(error));
-    }
+    // Like Optimization's useAutoPageEmitter, consent changes delegate to the
+    // complete SDK operation. The immediate emission starts it after onStatesReady.
+    const subscription = active.binding.sdk.states.consent.subscribe(() => {
+      if (!isCurrent()) return;
+      try {
+        const result = active.binding.sdk.hydrateAndTrackCurrentPage(handoff, {
+          routeKey: window.location.pathname + window.location.search,
+          isCurrent,
+        });
+        void Promise.resolve(result).then(
+          () => {
+            if (isCurrent()) publishLive(active, true);
+          },
+          (error: unknown) => {
+            if (isCurrent()) publishLive(active, true, toError(error));
+          }
+        );
+      } catch (error) {
+        if (isCurrent()) publishLive(active, true, toError(error));
+      }
+    });
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
-  }, [target, initialization?.handoff, initialization?.routeKey]);
+  }, [target, handoff]);
 
   const locale = 'sdk' in props ? undefined : props.locale;
   useCommitEffect(() => {

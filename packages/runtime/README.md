@@ -12,7 +12,10 @@ type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
 
-Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperience`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. Core remains dependency-free.
+Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperience`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It supplements generated XDA validation only for
+`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
+using local primitive constraints in `zod/mini`. Existing XDA event/context
+contracts and the generated passthrough result are preserved. Core remains dependency-free.
 
 ## Shared base
 
@@ -128,13 +131,16 @@ propagates handler errors. Node owns one event registry shared by its request
 facades; request state remains facade-local. Web keeps its existing event and
 state registries. Runtime owns no browser signals or state-interceptor registry.
 
-A chain runs once per admitted submission or prepared event. XDA uses
-`Promise.all` across event chains while preserving result order; preparation runs
-events sequentially. Destination validation precedes the final-type consent check.
+A chain runs once per admitted submission or prepared event. Node/Web validate
+admitted XDA input, then immutably stamp owner event consent before interception.
+Hooks may explicitly transform valid metadata, following direct-event policy.
+Ordinary Node/Web XDA fetch uses `Promise.all` across event chains while preserving
+result order. The actual Node transfer producer runs event chains sequentially,
+matching Optimization preparation. Destination validation precedes the final-type
+consent check.
 Valid consent-blocked XDA events are omitted without cancelling content fetching;
-hook/schema failures reject before transport. Prepared hook/schema failures or an
-invalid/blocked final page produce the existing event-free fallback, while a later
-preflight transport failure retains the evaluated replay. Retries and browser
+hook/schema failures reject before transport; content fetch/resolve failure after
+finalization retains usable replay. Pages are optional and never synthesized. Retries and browser
 prepared replay never rerun event hooks; browser replay still applies browser
 consent and its metadata. Hooks preserve the existing transport boundaries, and
 stateless free fetch functions gain no global registry. This final-type gate is a
@@ -142,9 +148,28 @@ local correction of the Optimization reference's original-type-only gate at `70d
 
 ## Shared handoff primitives
 
-Runtime also exports `ExperiencesHandoff`, `createExperiencesHandoff`, `parseExperiencesHandoff`, `buildPreparedEvents`, `validatePreparedEvents`, cache-safety diagnostics, and `createRequestHandoffFromData`. Node uses these primitives for `prepareRequestHandoff()`, and Web validates the resulting handoff before state hydration or event admission.
+The remedy adapts the pinned Optimization complete-operation ownership to XDA
+consumer-supplied intent. The pin defaults absent/nonpage replay to ordinary page
+tracking; that default must not be ported because it would invent an event absent
+from the consumer's XDA evaluation. Optional-page replay and explicit-only page
+intent are required XDA adaptations, pending remedy validation and acceptance.
 
-The new handoff carries its Contentful space and environment, cache scope, optional evaluated profile and changes, optional continuation ID, and optional prepared Personalization replay. `buildPreparedEvents` captures event IDs, timestamps, request context, locale, and current event-consent metadata once without sending; browser consent remains the permission gate. A prepared replay has identify/track events followed by exactly one final page, with SDK limits of 100 total events and 50 identify events. These are handoff limits, not asserted limits of the single-profile API endpoint. Server preparation reuses the validated batch when constructing the handoff and adding continuation identity. The exported create/parse operations validate each event batch once. The exported strict parser validates untrusted data, optional receiving-runtime scope, cache safety, and replay order. Browser `hydrateAndTrackCurrentPage` consumption validates the envelope first and defers prepared event validation to admission so rejection can fall back to ordinary current-page tracking. Parsing does not send events or alter SDK state.
+The full `ExperiencesHandoff` aggregate carries scope, cache policy, optional
+profile, changes, continuation identity and final Client XDA events for optional replay. The actual server Node producer
+is its XDA producer; separate supplied-data producers and standalone XPAPI preparation
+are removed by the remedy. Necessary state application is internal to the complete
+Web `hydrateAndTrackCurrentPage` operation. Create/parse/validation primitives
+validate untrusted scope, cache safety, event schema, count and order on receiving
+paths without sending or mutating owner state. The Node producer captures final
+Client events unchanged; it adds no replay-compatibility validation before XDA. Replay permits identify/track-only events with
+one optional final page, retaining SDK limits of 100 total and 50 identify events.
+These are handoff limits, not asserted single-profile endpoint limits.
+
+Ordinary Node/Web fetch accepts existing type-tagged builder arguments or raw
+built events, with SDK-owned construction once. Only an actual Node-to-browser
+transfer produces a handoff; Web/React optionally consume the explicitly supplied
+aggregate. Content Retry uses ordinary event-free fetch. See the canonical
+[XDA contract](#xda-preflight-and-profile-finalization) for flows and replay rules.
 
 Web's shared state-application helper also serves the public
 `@contentful/experiences-web/bridge-support` entry. It applies profile and changes state
@@ -158,28 +183,158 @@ Handoff `state.changes` is optional and validated with the Optimization API's
 `ChangeArray` schema. Any supplied changes, including `[]` without a profile,
 require private-request cache scope.
 
-Runtime's internal `createRequestHandoffFromData({ handoff, data? })` adds the
-evaluated API profile and supplied changes to an existing private handoff and can
-preserve its replay. The distinct public Node free
-function `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
-constructs a private-request envelope through Runtime validation, without replay.
-A complete profile is packaged in `state.profile`; ID-only input is packaged as
-top-level continuation `profileId`. An absent profile omits both profile fields.
-Supplied changes are packaged in `state.changes`; missing both profile and changes
-omits `state`. The producer performs no events or network work.
-Profileless hydration preserves the browser profile; supplied changes replace flag state.
-Neither helper commits a preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
+The aggregate packages a complete evaluated API profile in `state.profile` and
+retains continuation identity in top-level `profileId`; ID-only continuation does
+not supply browser profile state.
+Profileless internal state application preserves existing browser continuity;
+supplied changes replace flag state.
+It does not commit preflight results or transfer selected-optimization state.
+No journal-specific 64 KiB cap or version field applies to the aggregate or
+`PortableRenderPlan`; callers own safe serialization and response-size policy.
 
-The generated XDA request currently has no preflight option. Ordinary by-ID
-Experience fetches still pass profile IDs and events through Client's Delivery
-boundary, using its event-bearing POST when supplied. Runtime exposes no
-XDA-backed noncommitting content-preparation stub or duplicate-event
-workaround. Once XDA and the generated client support preflight, map the real
-request field through Client before adding a content-and-handoff operation.
+## XDA preflight and profile finalization
+
+**Current correction: implementation and checks pending.** Phase 6 is not accepted
+or complete; Phase 7 remains gated. Earlier remedy checks and review are historical
+evidence for a superseded design, not validation of this revision. Phases 1–5
+remain accepted. Root must record actual implementation and validation results.
+
+XDA always invokes the Personalization API (XPAPI) with `preflight: true`.
+It evaluates events and profile changes without committing events or profile
+creation/mutation. Newly returned IDs are provisional; local Node/Web adoption,
+hydration, storage and queue admission do not finalize them. Profile-only XDA uses
+XPAPI GET internally and may return 404 for an uncommitted ID, even when the
+SDK-to-XDA request is POST.
+
+The active content flow is:
+
+- **SSR:** ordinary Node request `fetchExperience`.
+- **CSR:** ordinary Web `fetchExperience`.
+- **Hybrid transfer:** Node request `fetchExperienceForHandoff(options,
+resolveOptions, { routeKey })` evaluates actual server content and returns
+  `FetchExperienceForHandoffResult`: a full `handoff` plus optional `plan`/`error`.
+  An explicitly supplied server handoff is optionally consumed by Web/React.
+  Browser-local navigation/actions use ordinary Web fetch unless a new server
+  response actually supplies another handoff.
+
+Ordinary Node/Web fetch accepts existing type-tagged `IdentifyBuilderArgs`,
+`PageViewBuilderArgs` and `TrackBuilderArgs`, or raw built XDA events.
+The SDK builds admitted arguments once, immutably stamps owner consent, intercepts
+and validates before XDA. Client accepts raw built events and owns serialization.
+Normal fetch requires no handoff. Direct event APIs remain callable, but are
+neither an initial rendering prerequisite nor compensation for XDA noncommit.
+
+SSR/CSR XDA-carried events remain uncommitted. This is a tolerated service bug
+awaiting upstream force-commit support; there is no current force flag or SDK
+workaround. Do not introduce Node aggregate commitment, a Web handoff producer,
+standalone XPAPI preparation, or a new API family to compensate.
+
+The Node producer is retained only for an actual server-to-browser transfer.
+Its third argument is `{ readonly routeKey: string }` only, never an existing
+`ExperiencesHandoff`. It retains finalized consent-gated/intercepted/validated
+replay before content work, so content failure does not discard usable replay.
+The browser commits the server-supplied replay through
+`hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })`, independently of SSR display
+and without startup refetch or a complete-plan barrier. Do not reconstruct replay
+from raw arrays, create local CSR/navigation handoffs, or use handoff as content input.
+Remove `Node.commitRequestHandoff`, `Web.fetchExperienceForHandoff` and all
+handoff-as-content re-evaluation union branches/helpers.
+
+Content Retry refetches the same Experience ID through ordinary fetch without
+events, builders, event hooks, publication, admission or replay. Ordinary refresh
+and reference-only later-ID comparison likewise do not reuse evaluated events or
+handoffs. Accepted incoming replay delivery retry belongs to the existing Web
+queue and retains event IDs, target and locale; content Retry never resubmits it.
+Identify/custom track actions supply fresh nonpage intent through ordinary fetch.
+Page Two's CUSTOM TRACK action is nonpage; navigation to Page Two still supplies
+a page event. Navigation does not repeat initial URL identify intent.
+
+Official support is one Experience per page, unenforced in code. Reference
+multi-ID loops compare rendering scenarios only: later IDs use ordinary fetch
+without new events. They provide no multi-Experience or cross-fetch guarantee.
+Reuse plans for repeated presentations.
+
+Web/React optional handoff consumption is mode agnostic and explicit. Incoming
+replay permits identify/track-only intent with one optional final page, at most
+100 total events and 50 identify events. Nonpage replay never synthesizes a page
+or marks a route tracked. A replay-less aggregate applies necessary state
+internally and returns `{ accepted: false }` unless explicit `buildPayload`
+supplies page intent. Consent refusal is terminal for the supplied replay batch:
+blocked identify/track events are never restored on grant. For a still-current
+page-bearing handoff after consent grant, skip that batch and fall through the
+existing `trackCurrentPage` fallback if the page remains eligible under current
+consent, route and lifetime guards. This is Optimization's normal implicit page
+path, with no dedicated API, scheduler, controller, state class or mode detector.
+Current React optional consumption subscribes to `sdk.states.consent` within its
+existing effect and reinvokes that complete operation with one stable `isCurrent`
+lifetime guard. This basic consent/lifecycle behavior must complete in Phase 6;
+managed React loading/navigation remains gated Phase 7 work. Queue-capacity
+refusal remains retry-eligible for unadmitted work. Accepted replay never triggers
+fallback or application resubmission because delivery fails. Admission does not
+prove delivery.
+
+Capture browser replay target before hydration: current live profile, configured
+anonymous provider, then `handoff.profileId`; ordinary requests remain
+provider-first. Browser continuity can supersede XDA identity, so exact replay
+does not guarantee the same commit profile, response or selection. Scope,
+private-request cache safety, current receiving consent, schema, capacity and
+owner lifetime still gate the complete operation. Consent restamping copies
+events; finalized replay never reruns event hooks. Preview suppresses visitor work.
+
+Retain accepted replay identity across newer initialization within the owner
+lifetime: serialized A after B is refused without state/event republication,
+recommit or fallback for page and nonpage batches. Calls joining current A share
+owned work while any coalesced caller is live. Optional `isCurrent: () => boolean`
+guards operation liveness, including SDK state application and replay admission;
+omitting it leaves caller liveness unrestricted. A departing caller neither
+destroys an injected SDK nor cancels accepted queue delivery. Reset/destroy clear
+admission history; consent withdrawal purges
+eligible queued work without restoring accepted/blocked intent on grant.
+Supersession cancels pending work, not accepted queue delivery. Preserve operation
+revision through asynchronous interception and admission/publication so stale
+visitor work cannot publish after reset, consent withdrawal, supersession or destroy.
+
+Optimization PR #549 at `f76f1ff04df1b466c98fc6ce5db6b569f9212438`
+remains the pinned ownership, consent, queues and lifetime reference. XDA content
+evaluation and its current noncommit service behavior require the differences
+above; this revision does not claim full commit parity. Actual XPAPI delivery
+retains generic retry ambiguity and no durable/exactly-once guarantee.
+
+The default Web page provider omits `title`, `hash`, `width` and `height`
+under its [temporary workaround comment](../web/src/browser-event-context.ts).
+Shared `buildPageView` retains the required `properties.title` string fallback
+while respecting provider omission of `context.page.title`. Explicit page
+context, raw caller-built events and Node/Client metadata remain caller-owned.
+The Next.js, SvelteKit and Angular example helpers omit title from their explicit
+`context.page` input while retaining `properties.title` and `context.gdpr`; this
+narrow input change adds no shared-builder stripping, instance wrapper or post-build sanitizer.
+
+### Replay transport limits
+
+The actual Node transfer producer captures raw final Client events unchanged,
+including supported `context.page.query` arrays, and preserves available content.
+Normal SDK-built events already pass XPAPI builder validation and Client XDA
+validation; no additional server replay-compatibility validation is required before
+XDA. Manually built/raw transmission remains the consumer's compatibility risk.
+`ExperiencesHandoff.replay.events` uses a union of raw Client and normal SDK event
+types in the existing wire contract, without a new DTO.
+
+The receiving browser retains existing replay schema/order/count, capacity,
+scope/cache/consent and lifetime checks. It may refuse unsupported replay while
+available content remains usable. The pinned XPAPI client's schema/serialization
+remains the commit boundary; wider XDA metadata/query arrays do not establish
+exact replay compatibility. Add no SDK safety-validation layer, custom transport
+or dependency upgrade.
+
+Prepared event attempts publish only after the whole batch is admitted and before
+transport begins; refusal publishes none. Preserve the original operation revision
+through asynchronous interception and final admission/state publication, so reset,
+consent withdrawal, supersession or destroy cannot admit or publish stale visitor work.
+These are remedy correctness/test obligations, not claims of completed validation.
 
 ## Personalization delivery
 
-`PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, an ordinary-only offline queue evicts its oldest event and admits the new event, following Optimization. A queue containing any prepared replay instead refuses overflow without evicting ordinary events or splitting prepared batches. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Runtime event methods enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
+`PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, the offline queue refuses a new ordinary event before publication, without evicting accepted events, matching the active Optimization baseline. Prepared batches are admitted whole or refused before publication; the queue never splits them. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Runtime event methods enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
 
 Owner bindings may supply fixed `getIsPreview` intent. Shared event methods check it before
 building or profile lookup and return `{ accepted: false, reason: 'preview' }`; request/browser

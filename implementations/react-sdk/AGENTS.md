@@ -1,11 +1,15 @@
 # React SDK rendering reference
 
+Official support is one Experience fetch per page, without code enforcement.
+Reference multi-ID loops exist only to compare rendering scenarios, not as
+supported product usage or a cross-fetch guarantee.
+
 - Read this app's README, parent implementation guidance and the accepted React
   plan/design before changes. Extend the permanent app in place.
 - Phase 3 owns the React/Vite shell, local configuration/assets, tarball manifest,
   Nx and scoped lifecycle. Phase 4 adds application-owned free fetching and
   supplied-plan rendering; retain this supported path. SDK ownership/controls and
-  managed content/events/preview belong to Phases 5 and 6. Do not bridge
+  managed content/events/preview belong to Phases 5 and 7. Do not bridge
   unavailable capabilities with fake controls, loading or orchestration.
 - Keep the app private and outside npm workspaces. Use the existing installer,
   installed local tarballs and internal-chain overrides; no workspace aliases,
@@ -31,7 +35,18 @@
   document teardown releases them. Deliberate unmount/replacement within a live
   document uses renderer/provider cleanup; persisted pagehide retains ownership.
   Managed loading, navigation,
-  page/identify/reset/retry sequences and preview content remain Phase 6 work.
+  page/identify/reset/retry sequences and preview content remain Phase 7 work.
+  Phase 6 corrects existing Node/Web/hybrid references and owner checks only; do not
+  pull managed React loading forward. The necessary provider/root migration exposes
+  `handoff?: ExperiencesHandoff` instead of `initialization: { routeKey, handoff }`
+  and `ExperiencesStateInitialization`; lifecycle consumes the complete operation
+  using current browser route, with internal state application and optional-page replay.
+  Phase 6 implementation/checks are pending for the current correction; earlier
+  checks/review are historical. Phase 6 is unaccepted/incomplete; Phase 7 stays gated. Phase 7 uses ordinary Web fetch for CSR and browser-local actions. Optional handoff
+  consumption is mode agnostic and consumer supplied only for actual server transfers.
+  Same-ID Retry and later comparison IDs use ordinary event-free fetch without
+  builders/hooks/replay. No local CSR/navigation producer or new API family applies.
+  Preserve pinned ownership, blocked-event rules and the page consent-retry exception.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy

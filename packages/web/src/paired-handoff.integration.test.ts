@@ -6,15 +6,41 @@ import {
   InsightsApiClient as AnalyticsApiClient,
 } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ContentfulExperiences as RuntimeExperiences,
+  type FetchExperienceOptions,
+  type BuiltRuntimeFetchExperienceOptions,
+  type FetchResolveOptions,
+  withEventConsent,
+} from '@contentful/experiences-runtime';
+import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
-import { createRequestHandoffFromData } from '../../node/src/handoff.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { completeProfile } from './test-fixtures/profile.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
+const payloadRuntime = RuntimeExperiences.prototype as unknown as {
+  fetchExperiencePayload(
+    options: BuiltRuntimeFetchExperienceOptions,
+    resolve: FetchResolveOptions
+  ): Promise<ExperiencePayload>;
+};
+const resolveOptions = { config: { components: {} } };
+
+function evaluate(
+  request: ReturnType<NodeExperiences['forRequest']>,
+  routeKey: string,
+  events: NonNullable<FetchExperienceOptions['personalization']>['events']
+) {
+  return request.fetchExperienceForHandoff(
+    { experienceId: 'experience', personalization: { events } },
+    resolveOptions,
+    { routeKey }
+  );
+}
 
 function node(policy: { allowedEventTypes?: readonly ('identify' | 'page' | 'track')[] } = {}) {
   const sdk = new NodeExperiences({
@@ -53,6 +79,10 @@ function deferred<T>() {
 // Consent is not what these tests are about: the browser is a visitor who has opted in.
 beforeEach(() => {
   seedConsent({ events: true, persistence: true });
+  vi.spyOn(payloadRuntime, 'fetchExperiencePayload').mockResolvedValue({
+    nodes: [],
+    extensions: { personalization: { profile: completeProfile('preview-profile') } },
+  });
 });
 
 afterEach(() => {
@@ -64,8 +94,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('paired Node preparation and Web delivery', () => {
-  it('packages final request state without evaluating server or browser event hooks', async () => {
+describe('paired XDA evaluation and Web delivery', () => {
+  it('consumes the complete XDA handoff without rerunning finalized event hooks', async () => {
     const upsert = vi
       .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: completeProfile('evaluated-profile') } as never);
@@ -75,30 +105,28 @@ describe('paired Node preparation and Web delivery', () => {
     );
     server.interceptors.event.add(serverHook);
     const request = server.forRequest({ consent: true, profile: { id: 'original-profile' } });
-    await request.prepareRequestHandoff({
-      routeKey: '/intercepted',
-      initialEvents: [{ type: 'track', event: 'original' }],
-    });
+    const result = await evaluate(request, '/intercepted', [
+      request.eventBuilder.buildTrack({ event: 'original' }),
+      request.eventBuilder.buildPageView(),
+    ]);
     expect(serverHook).toHaveBeenCalledTimes(2);
-    const stateOnly = createRequestHandoffFromData({
-      spaceId: 'space',
-      environmentId: 'environment',
-      data: { profile: request.profile },
-    });
-    expect(stateOnly).toMatchObject({ state: { profile: completeProfile('evaluated-profile') } });
-    expect(stateOnly.replay).toBeUndefined();
-    expect(serverHook).toHaveBeenCalledTimes(2);
-    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(result.handoff.replay?.events).toEqual(
+      vi.mocked(payloadRuntime.fetchExperiencePayload).mock.calls[0]?.[0].personalization?.events
+    );
+    expect(upsert).not.toHaveBeenCalled();
 
     const browser = web();
     const browserHook = vi.fn((event) => event);
     browser.interceptors.event.add(browserHook);
-    await browser.hydrateHandoffState(JSON.parse(JSON.stringify(stateOnly)), {
-      routeKey: '/state',
+    await browser.hydrateAndTrackCurrentPage(JSON.parse(JSON.stringify(result.handoff)), {
+      routeKey: '/intercepted',
     });
+    await browser.flush();
     expect(browser.states.profile.current?.id).toBe('evaluated-profile');
     expect(browserHook).not.toHaveBeenCalled();
+    expect(serverHook).toHaveBeenCalledTimes(2);
     expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0]?.[0].events).toEqual(result.handoff.replay?.events);
   });
 
   it.each([
@@ -124,15 +152,14 @@ describe('paired Node preparation and Web delivery', () => {
         consent: true,
       });
       expect(request.locale).toBe(transportLocale);
-      const prepared = await request.prepareRequestHandoff({
-        routeKey: '/localized',
-        initialEvents: [{ type: 'track', event: 'opened', locale: 'es-ES' }],
-        page: { locale: 'fr-FR' },
-      });
+      const prepared = await evaluate(request, '/localized', [
+        request.eventBuilder.buildTrack({ event: 'opened', locale: 'es-ES' }),
+        request.eventBuilder.buildPageView({ locale: 'fr-FR' }),
+      ]);
       expect(prepared.handoff.replay?.locale).toBe(transportLocale);
       const events = prepared.handoff.replay?.events;
       expect(events?.map(({ context }) => context.locale)).toEqual(['es-ES', 'fr-FR']);
-      expect(upsert.mock.calls[0]?.[1]).toEqual({ locale: transportLocale, preflight: true });
+      expect(upsert).not.toHaveBeenCalled();
 
       const browser = web();
       browser.setLocale('nl-NL');
@@ -141,15 +168,15 @@ describe('paired Node preparation and Web delivery', () => {
           routeKey: '/localized',
         })
       ).resolves.toEqual({ accepted: true });
-      expect(upsert.mock.calls[1]?.[0].events).toEqual(events);
-      expect(upsert.mock.calls[1]?.[1]).toEqual({ locale: transportLocale, preflight: false });
+      expect(upsert.mock.calls[0]?.[0].events).toEqual(events);
+      expect(upsert.mock.calls[0]?.[1]).toEqual({ locale: transportLocale, preflight: false });
 
       await request.identify({ userId: 'visitor', locale: 'ja-JP' });
-      expect(upsert.mock.calls[2]?.[0].events[0]?.context.locale).toBe('ja-JP');
-      expect(upsert.mock.calls[2]?.[1]).toEqual({ locale: transportLocale });
+      expect(upsert.mock.calls[1]?.[0].events[0]?.context.locale).toBe('ja-JP');
+      expect(upsert.mock.calls[1]?.[1]).toEqual({ locale: transportLocale });
       await request.page();
-      expect(upsert.mock.calls[3]?.[0].events[0]?.context.locale).toBe(requestLocale ?? 'it-IT');
-      expect(upsert.mock.calls[3]?.[1]).toEqual({ locale: transportLocale });
+      expect(upsert.mock.calls[2]?.[0].events[0]?.context.locale).toBe(requestLocale ?? 'it-IT');
+      expect(upsert.mock.calls[2]?.[1]).toEqual({ locale: transportLocale });
     }
   );
 
@@ -160,7 +187,6 @@ describe('paired Node preparation and Web delivery', () => {
     const secondDelivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
       .mockReturnValueOnce(firstDelivery.promise as never)
       .mockReturnValueOnce(secondDelivery.promise as never);
     // Event consent is denied, but the prepared types are allow-listed, so the batch is
@@ -176,23 +202,21 @@ describe('paired Node preparation and Web delivery', () => {
       eventContext: { userAgent: 'server-agent' },
       consent: { events: false },
     });
-    const prepared = await request.prepareRequestHandoff({
-      routeKey: '/products?sort=popular',
-      initialEvents: [
-        { type: 'identify', userId: 'user-1' },
-        { type: 'track', event: 'experience_rendered' },
-      ],
-    });
+    const prepared = await evaluate(request, '/products?sort=popular', [
+      request.eventBuilder.buildIdentify({ userId: 'user-1' }),
+      request.eventBuilder.buildTrack({ event: 'experience_rendered' }),
+      request.eventBuilder.buildPageView(),
+    ]);
 
-    expect(prepared.data?.profile.id).toBe('preview-profile');
-    expect(prepared.handoff.profileId).toBe('known-profile');
-    expect(upsert).toHaveBeenCalledTimes(1);
-    const [previewBody, previewOptions] = upsert.mock.calls[0]!;
-    expect(previewOptions).toEqual({ locale: 'de-DE', preflight: true });
+    expect(prepared.plan?.personalization?.profile?.id).toBe('preview-profile');
+    expect(prepared.handoff.profileId).toBe('preview-profile');
+    expect(upsert).not.toHaveBeenCalled();
+    const previewBody = vi.mocked(payloadRuntime.fetchExperiencePayload).mock.calls[0]![0]
+      .personalization!;
     expect(previewBody.profileId).toBe('known-profile');
-    expect(previewBody.events.map((event) => event.type)).toEqual(['identify', 'track', 'page']);
-    expect(new Set(previewBody.events.map((event) => event.messageId)).size).toBe(3);
-    for (const event of previewBody.events) {
+    expect(previewBody.events!.map((event) => event.type)).toEqual(['identify', 'track', 'page']);
+    expect(new Set(previewBody.events!.map((event) => event.messageId)).size).toBe(3);
+    for (const event of previewBody.events!) {
       expect(event.context).toMatchObject({
         locale: 'de-DE',
         userAgent: 'server-agent',
@@ -206,26 +230,23 @@ describe('paired Node preparation and Web delivery', () => {
     const browserHook = vi.fn((event) => event);
     browser.interceptors.event.add(browserHook);
     expect(serverHook).toHaveBeenCalledTimes(3);
-    expect(previewBody.events[1]).toMatchObject({ type: 'track', event: 'server-evaluated' });
+    expect(previewBody.events![1]).toMatchObject({ type: 'track', event: 'server-evaluated' });
     const handoff = JSON.parse(JSON.stringify(prepared.handoff));
     const admission = browser.hydrateAndTrackCurrentPage(handoff, {
       routeKey: '/products?sort=popular',
     });
     await expect(admission).resolves.toEqual({ accepted: true });
     expect(browser.states.personalizationRequestState.current.status).toBe('pending');
-    expect(upsert).toHaveBeenCalledTimes(2);
-    const [firstBody, firstOptions] = upsert.mock.calls[1]!;
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const [firstBody, firstOptions] = upsert.mock.calls[0]!;
     // The same events in the same order, except that the consent flag is the browser's
     // (opted in) and no longer the server's (denied), which admitted them for sending.
     expect(firstBody).toEqual({
-      profileId: 'known-profile',
-      events: previewBody.events.map((event) => ({
-        ...event,
-        context: { ...event.context, gdpr: { ...event.context.gdpr, isConsentGiven: true } },
-      })),
+      profileId: 'preview-profile',
+      events: prepared.handoff.replay!.events.map((event) => withEventConsent(event, true)),
     });
     expect(firstOptions).toEqual({ locale: 'de-DE', preflight: false });
-    expect(browser.states.profile.current).toBeUndefined();
+    expect(browser.states.profile.current).toEqual(completeProfile('preview-profile'));
 
     firstDelivery.reject(new Error('response lost after request may have arrived'));
     await vi.waitFor(() =>
@@ -233,8 +254,8 @@ describe('paired Node preparation and Web delivery', () => {
     );
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(upsert).toHaveBeenCalledTimes(3);
-    expect(upsert.mock.calls[2]).toEqual([firstBody, firstOptions]);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1]).toEqual([firstBody, firstOptions]);
     expect(serverHook).toHaveBeenCalledTimes(3);
     expect(browserHook).not.toHaveBeenCalled();
     secondDelivery.resolve({ profile: completeProfile('committed-profile') });
@@ -247,19 +268,23 @@ describe('paired Node preparation and Web delivery', () => {
     const delivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: completeProfile('issued-profile') } as never)
       .mockReturnValueOnce(delivery.promise as never);
+    vi.mocked(payloadRuntime.fetchExperiencePayload).mockResolvedValueOnce({
+      nodes: [],
+      extensions: { personalization: { profile: completeProfile('issued-profile') } },
+    });
     const analytics = vi
       .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
     const server = node();
-    const prepared = await server
-      .forRequest({ consent: true })
-      .prepareRequestHandoff({ routeKey: '/new' });
+    const request = server.forRequest({ consent: true });
+    const prepared = await evaluate(request, '/new', [request.eventBuilder.buildPageView()]);
 
     expect(prepared.handoff.profileId).toBe('issued-profile');
-    expect(upsert.mock.calls[0]?.[0].profileId).toBeUndefined();
-    expect(upsert.mock.calls[0]?.[1]).toEqual({ locale: 'de-DE', preflight: true });
+    expect(
+      vi.mocked(payloadRuntime.fetchExperiencePayload).mock.calls[0]?.[0].personalization?.profileId
+    ).toBeUndefined();
+    expect(upsert).not.toHaveBeenCalled();
 
     server.destroy();
     const browser = web();
@@ -268,42 +293,41 @@ describe('paired Node preparation and Web delivery', () => {
         routeKey: '/new',
       })
     ).resolves.toEqual({ accepted: true });
-    expect(upsert.mock.calls[1]?.[0].profileId).toBe('issued-profile');
-    expect(upsert.mock.calls[1]?.[0].events).toEqual(prepared.handoff.replay?.events);
-    // The continuation ID is id-only, which Analytics rejects: the click is admitted but
-    // not sent until the Personalization API commits a complete profile.
-    await expect(
-      browser.trackClick({ entityId: 'hero', entityKind: 'Experience' })
-    ).resolves.toEqual({ accepted: true });
-    expect(analytics).not.toHaveBeenCalled();
+    expect(upsert.mock.calls[0]?.[0].profileId).toBe('issued-profile');
+    expect(upsert.mock.calls[0]?.[0].events).toEqual(prepared.handoff.replay?.events);
+    await browser.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+    // The replayed delivery is held open, so start the flush and wait for Analytics.
+    void browser.flush();
+    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
+    expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('issued-profile');
 
     const committed = completeProfile('committed-profile');
     delivery.resolve({ profile: committed });
     await vi.waitFor(() => expect(browser.states.profile.current).toEqual(committed));
     await browser.trackClick({ entityId: 'hero', entityKind: 'Experience' });
     await browser.flush();
-    expect(analytics).toHaveBeenCalledOnce();
-    expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('committed-profile');
+    expect(analytics).toHaveBeenCalledTimes(2);
+    expect(analytics.mock.calls[1]?.[0][0]?.profile.id).toBe('committed-profile');
   });
 
-  it('retains replay after preview failure and uses an ordinary page on a different route', async () => {
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('retains replay after XDA failure and uses an ordinary page on a different route', async () => {
     const upsert = vi
       .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-      .mockRejectedValueOnce(new Error('preview unavailable'))
       .mockResolvedValue({ profile: completeProfile('committed-profile') } as never);
+    const failure = new Error('XDA unavailable');
+    vi.mocked(payloadRuntime.fetchExperiencePayload).mockRejectedValueOnce(failure);
     const server = node();
-    const prepared = await server
-      .forRequest({ profile: { id: 'known-profile' }, consent: true })
-      .prepareRequestHandoff({
-        routeKey: '/original',
-        initialEvents: [{ type: 'track', event: 'prepared' }],
-      });
-    expect(prepared.data).toBeUndefined();
+    const request = server.forRequest({ profile: { id: 'known-profile' }, consent: true });
+    const prepared = await evaluate(request, '/original', [
+      request.eventBuilder.buildTrack({ event: 'prepared' }),
+      request.eventBuilder.buildPageView(),
+    ]);
+    expect(prepared.error).toBe(failure);
     expect(prepared.handoff.replay?.events.map((event) => event.type)).toEqual(['track', 'page']);
-    expect(prepared.handoff.replay?.events).toEqual(upsert.mock.calls[0]?.[0].events);
-    expect(upsert.mock.calls[0]?.[1]).toEqual({ locale: 'de-DE', preflight: true });
-    expect(warning).toHaveBeenCalledWith(expect.stringContaining('Request preview failed'));
+    expect(prepared.handoff.replay?.events).toEqual(
+      vi.mocked(payloadRuntime.fetchExperiencePayload).mock.calls[0]?.[0].personalization?.events
+    );
+    expect(upsert).not.toHaveBeenCalled();
 
     server.destroy();
     const browser = web();
@@ -314,12 +338,12 @@ describe('paired Node preparation and Web delivery', () => {
         buildPayload: () => ({ properties: { source: 'current-route' } }),
       })
     ).resolves.toMatchObject({ accepted: true });
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(upsert.mock.calls[1]?.[0]).toMatchObject({
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0]?.[0]).toMatchObject({
       profileId: 'known-profile',
       events: [{ type: 'page', properties: { source: 'current-route' } }],
     });
-    expect(upsert.mock.calls[1]?.[0].events[0]?.messageId).not.toBe(
+    expect(upsert.mock.calls[0]?.[0].events[0]?.messageId).not.toBe(
       prepared.handoff.replay?.events.at(-1)?.messageId
     );
   });
@@ -330,29 +354,21 @@ describe('paired Node preparation and Web delivery', () => {
       const firstDelivery = deferred<{ profile: EventProfile }>();
       const upsert = vi
         .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-        .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
-        .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
         .mockReturnValueOnce(firstDelivery.promise as never)
         .mockResolvedValue({ profile: completeProfile('committed-profile') } as never);
       const server = node();
       const request = server.forRequest({ profile: { id: 'known-profile' }, consent: true });
-      const full = await request.prepareRequestHandoff({
-        routeKey: '/full',
-        initialEvents: Array.from({ length: 99 }, () => ({
-          type: 'track' as const,
-          event: 'bulk',
-        })),
-      });
-      const next = await request.prepareRequestHandoff({
-        routeKey: '/next',
-        initialEvents: [{ type: 'track', event: 'next' }],
-      });
+      const full = await evaluate(request, '/full', [
+        ...Array.from({ length: 99 }, () => request.eventBuilder.buildTrack({ event: 'bulk' })),
+        request.eventBuilder.buildPageView(),
+      ]);
+      const next = await evaluate(request, '/next', [
+        request.eventBuilder.buildTrack({ event: 'next' }),
+        request.eventBuilder.buildPageView(),
+      ]);
       expect(full.handoff.replay?.events).toHaveLength(100);
       expect(next.handoff.replay?.events).toHaveLength(2);
-      expect(upsert.mock.calls.map(([, options]) => options)).toEqual([
-        { locale: 'de-DE', preflight: true },
-        { locale: 'de-DE', preflight: true },
-      ]);
+      expect(upsert).not.toHaveBeenCalled();
 
       server.destroy();
       const browser = web();
@@ -373,12 +389,12 @@ describe('paired Node preparation and Web delivery', () => {
           : { accepted: false }
       );
       expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: false });
-      expect(upsert).toHaveBeenCalledTimes(online ? 4 : 3);
-      expect(upsert.mock.calls[2]?.[0].events).toEqual(full.handoff.replay?.events);
+      expect(upsert).toHaveBeenCalledTimes(online ? 2 : 1);
+      expect(upsert.mock.calls[0]?.[0].events).toEqual(full.handoff.replay?.events);
       if (online) {
-        const fallback = upsert.mock.calls[3];
+        const fallback = upsert.mock.calls[1];
         expect(fallback?.[0]).toMatchObject({
-          profileId: 'known-profile',
+          profileId: 'preview-profile',
           events: [{ type: 'page', properties: { source: 'capacity-fallback' } }],
         });
         expect(fallback?.[0].events).toHaveLength(1);
@@ -401,10 +417,10 @@ describe('paired Node preparation and Web delivery', () => {
         expect(buildPayload).toHaveBeenCalledTimes(1);
       } else {
         expect(repeated).toEqual({ accepted: true });
-        await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(4));
-        expect(upsert.mock.calls[3]?.[0].events).toEqual(next.handoff.replay?.events);
+        await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+        expect(upsert.mock.calls[1]?.[0].events).toEqual(next.handoff.replay?.events);
       }
-      expect(upsert).toHaveBeenCalledTimes(4);
+      expect(upsert).toHaveBeenCalledTimes(2);
     }
   );
 });

@@ -27,7 +27,7 @@ export type {
   EventMethod,
   EventType,
 } from './consent.js';
-export { ContentfulExperiences } from './contentful-experiences.js';
+export { ContentfulExperiences, buildFetchPersonalization } from './contentful-experiences.js';
 export { resolveFlagChange } from './resolve-flag-change.js';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
@@ -35,6 +35,8 @@ export type {
   Config,
   ExperienceRuntime,
   FetchExperienceOptions,
+  RuntimePersonalizationOptions,
+  BuiltRuntimeFetchExperienceOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
   EventBuilderOptions,
@@ -94,22 +96,18 @@ export type {
   ExperienceEvent as PersonalizationEvent,
   InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
-export {
-  buildPreparedEvents,
-  validatePreparedEvents,
-  withEventConsent,
-} from './prepared-events.js';
-export type { BuildPreparedEventsOptions, InitialPersonalizationEvent } from './prepared-events.js';
+export { validatePreparedEvents, withEventConsent } from './prepared-events.js';
+export type { PreparedExperienceEvent } from './prepared-events.js';
 export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
   createExperiencesHandoff,
-  createRequestHandoffFromData,
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
 } from './experiences-handoff.js';
 export type {
+  FetchExperienceForHandoffResult,
   ExperiencesCacheMetadata,
   ExperiencesCacheSafetyWarning,
   ExperiencesCacheSafetyWarningCode,
