@@ -1,0 +1,65 @@
+{
+  "name": "@contentful/experiences-nextjs",
+  "version": "0.0.0",
+  "description": "Next.js adapter for Contentful Experiences",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.js"
+      }
+    },
+    "./custom-renderer": {
+      "import": {
+        "types": "./dist/custom-renderer.d.ts",
+        "default": "./dist/custom-renderer.js"
+      }
+    },
+    "./tracking-attributes": {
+      "import": {
+        "types": "./dist/tracking-attributes.d.ts",
+        "default": "./dist/tracking-attributes.js"
+      }
+    },
+    "./server": {
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/contentful/experiences.git",
+    "directory": "packages/adapter-nextjs"
+  },
+  "dependencies": {
+    "@contentful/experiences-react": "0.15.1",
+    "@contentful/experiences-node": "0.8.1"
+  },
+  "peerDependencies": {
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
