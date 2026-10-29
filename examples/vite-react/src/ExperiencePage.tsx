@@ -25,7 +25,7 @@ type State =
 /**
  * The client-only flow: the same `fetchExperience` call the Next.js example
  * makes on the server, run in an effect instead. It fetches from the
- * Experience Delivery API, resolves the plan (including `card`'s async
+ * Experience Delivery API, resolves it (including `card`'s async
  * `resolveData`), and hands the result to `ClientExperienceRenderer`.
  *
  * What a server would otherwise give you, and what you take on here:

@@ -1,7 +1,7 @@
 <!--
   The client-only flow: the same `fetchExperience` call the SvelteKit example
   makes in its server load function, run in the browser instead. It fetches
-  from the Experience Delivery API, resolves the plan, and hands the result to
+  from the Experience Delivery API, resolves it, and hands the result to
   `ClientExperienceRenderer`.
 
   What a server would otherwise give you, and what you take on here:
@@ -45,8 +45,8 @@
 
 {#await experience}
   <p role="status">Loading experience…</p>
-{:then plan}
-  <ClientExperienceRenderer experience={plan} config={experienceConfig} {debug} />
+{:then resolvedExperience}
+  <ClientExperienceRenderer experience={resolvedExperience} config={experienceConfig} {debug} />
 {:catch error}
   {#if error instanceof NotFoundError}
     <p role="alert">Experience not found.</p>

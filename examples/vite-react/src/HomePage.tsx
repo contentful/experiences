@@ -33,7 +33,8 @@ export function HomePage() {
       <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 24, marginBottom: 0 }}>
         <code>landing</code> is the id the bootstrap script (<code>examples/scripts</code>) seeds by
         default. Replace it in the URL with any other Experience id from your space. Append{' '}
-        <code>?debug=true</code> to turn on SDK logging and show the resolved plan in a debug panel.
+        <code>?debug=true</code> to turn on SDK logging and show the resolved Experience in a debug
+        panel.
       </p>
     </main>
   );
