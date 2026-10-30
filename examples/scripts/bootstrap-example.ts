@@ -1021,8 +1021,16 @@ async function seedDestinationNode(
   await publishResource(url, upserted);
 }
 
-/** Example apps and the env file each one reads, relative to this directory. */
-const EXAMPLE_ENV_FILES = ['../nextjs/.env.local', '../sveltekit/.env', '../angular/.env'];
+/** Example apps, the env file each one reads, and the variable name it expects. */
+const EXAMPLE_ENV_FILES = [
+  { file: '../nextjs/.env.local', key: 'DESTINATION_ID' },
+  { file: '../sveltekit/.env', key: 'DESTINATION_ID' },
+  { file: '../angular/.env', key: 'DESTINATION_ID' },
+  { file: '../astro/.env', key: 'DESTINATION_ID' },
+  // Vite inlines only VITE_* variables into the browser bundle.
+  { file: '../vite-react/.env.local', key: 'VITE_DESTINATION_ID' },
+  { file: '../vite-svelte/.env.local', key: 'VITE_DESTINATION_ID' },
+];
 
 /**
  * DESTINATION_ID is server-generated, so it cannot be a fixture constant. Set it
@@ -1030,23 +1038,27 @@ const EXAMPLE_ENV_FILES = ['../nextjs/.env.local', '../sveltekit/.env', '../angu
  * files also hold tokens the user copies in from `.env.example`.
  */
 function writeDestinationId(destinationId: string) {
-  const line = `DESTINATION_ID=${destinationId}`;
   const missing: string[] = [];
-  for (const rel of EXAMPLE_ENV_FILES) {
+  for (const { file: rel, key } of EXAMPLE_ENV_FILES) {
     const file = resolvePath(__dirname, rel);
+    const shown = rel.replace('../', 'examples/');
+    const line = `${key}=${destinationId}`;
     if (!existsSync(file)) {
-      missing.push(rel.replace('../', 'examples/'));
+      missing.push(shown);
       continue;
     }
     const contents = readFileSync(file, 'utf8');
-    const next = /^DESTINATION_ID=.*$/m.test(contents)
-      ? contents.replace(/^DESTINATION_ID=.*$/m, line)
+    const existing = new RegExp(`^${key}=.*$`, 'm');
+    const next = existing.test(contents)
+      ? contents.replace(existing, line)
       : `${contents}${contents.endsWith('\n') || contents === '' ? '' : '\n'}${line}\n`;
     if (next !== contents) writeFileSync(file, next);
-    log(`   ✓ ${rel.replace('../', 'examples/')}: ${line}`);
+    log(`   ✓ ${shown}: ${line}`);
   }
   if (missing.length > 0) {
-    log(`   Not found (copy .env.example first, then add ${line}): ${missing.join(', ')}`);
+    log(
+      `   Not found (copy .env.example first, then set the Destination id): ${missing.join(', ')}`
+    );
   }
 }
 

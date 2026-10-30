@@ -1,0 +1,44 @@
+---
+import { fetchExperience, NotFoundError } from '@contentful/experiences-react';
+
+import ExperienceNodes from '../exo/ExperienceNodes.astro';
+import { experienceConfig } from '../lib/experience-config';
+
+// The URL path is the Destination path; `[...path]` also matches `/`.
+const path = `/${Astro.params.path ?? ''}`;
+
+let result;
+try {
+  result = await fetchExperience(
+    {
+      spaceId: import.meta.env.SPACE_ID,
+      destinationId: import.meta.env.DESTINATION_ID,
+      path,
+    },
+    { accessToken: import.meta.env.CDA_TOKEN },
+    { config: experienceConfig, metadata: { slug: path } }
+  );
+} catch (error) {
+  if (error instanceof NotFoundError) {
+    return new Response(`Nothing is published at "${path}"`, { status: 404 });
+  }
+  throw error;
+}
+
+// A Destination redirect node resolves to a value the app has to follow.
+if ('redirect' in result) return Astro.redirect(result.redirect.path, 307);
+
+const plan = result;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{path}</title>
+  </head>
+  <body>
+    <ExperienceNodes nodes={plan.nodes} experience={{ debug: plan.debug, metadata: plan.metadata }} />
+  </body>
+</html>

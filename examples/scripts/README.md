@@ -22,7 +22,7 @@ npm install               # from the repo root, if you haven't already
 npm run bootstrap
 ```
 
-The script prints the Destination id at the end and writes it as `DESTINATION_ID` into the env file of each example that already has one (`nextjs/.env.local`, `sveltekit/.env`, `angular/.env`). It never creates those files; copy `.env.example` first, or paste the printed id yourself. The home node (`/`) serves the `home` Experience and `/demo/landing` serves `landing`; the apps' by-id routes take either id.
+The script prints the Destination id at the end and writes it as `DESTINATION_ID` into the env file of each example that already has one (`nextjs/.env.local`, `sveltekit/.env`, `angular/.env`, `astro/.env`, and `vite-react`/`vite-svelte` `.env.local`, where the variable is `VITE_DESTINATION_ID`). It never creates those files; copy `.env.example` first, or paste the printed id yourself. The home node (`/`) serves the `home` Experience and `/demo/landing` serves `landing`; the apps' by-id routes take either id.
 
 ### What it seeds
 
