@@ -24,16 +24,39 @@ defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Tem
 ### Fetching
 
 ```ts
-fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async; fetches from XDA and resolves in one call
+fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async; fetches by Destination path/node id or Experience id and resolves in one call
+fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?) // Async; lists every routable path in a Destination
 fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions) // Async; fetches and resolves a Preview Session Experience
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
-NotFoundError                               // Thrown when the Experience ID doesn't exist
+NotFoundError                               // Thrown when the Experience ID or Destination path doesn't exist
+DestinationPreviewNotSupportedError         // Thrown when preview is requested for a Destination fetch
 PreviewSessionFetchError                   // Thrown when fetching a Preview Session fails
 LivePreviewConnectionError                 // Reported when the live-preview connection fails
 ContentfulViewDelivery                      // Full error namespace from the delivery client
-type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,
+type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOptions,
+  ByDestinationNodeIdExperienceOptions, DestinationRedirectResult, DestinationSitemapResult,
+  FetchDestinationSitemapOptions, FetchDestinationSitemapPaginationOptions, SitemapPathItem,
+  PreviewSessionExperienceOptions, PreviewSessionClientOptions,
   PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
+```
+
+Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview is not supported on Destinations (it throws `DestinationPreviewNotSupportedError`); use the by-id form for preview.
+
+```ts
+const result = await fetchExperience(
+  { spaceId, destinationId, path: '/demo/landing' },
+  { accessToken },
+  { config: experienceConfig }
+);
+if ('redirect' in result) {
+  // follow it: navigate to result.redirect.path
+}
+// otherwise `result` is a PortableRenderPlan
+
+// Enumerate every routable path, for example to prerender
+const sitemap = await fetchDestinationSitemap({ spaceId, destinationId }, { accessToken });
+const paths = sitemap.items.map((item) => item.path); // follow sitemap.pages.next for more
 ```
 
 Use `fetchPreviewSession` for the initial render when the Contentful app
@@ -205,11 +228,11 @@ export const experienceConfig: Config = { components, resolveToken };
 ```
 
 ```tsx
-// app/[slug]/page.tsx: in a server component
+// app/experiences/[id]/page.tsx: in a server component, fetching by Experience id
 import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 
 const experience = await fetchExperience(
-  { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+  { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: id },
   { accessToken: process.env.CDA_TOKEN! },
   { config: experienceConfig }
 );

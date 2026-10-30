@@ -46,10 +46,11 @@ export type ByIdExperienceOptions = {
 };
 
 /**
- * Resolve an Experience by the Destination Node instead of `experienceId`
- * The destinations delivery endpoints are space-scoped only and have no locale
- * param, unlike the by-id path. Supplying `personalization` switches the
- * request from the cacheable GET to the POST that carries it.
+ * Resolve an Experience by the Destination Node instead of `experienceId`.
+ * The destinations delivery endpoints are space-scoped only: no `environmentId`,
+ * and the generated delivery client sends no `locale`, unlike the by-id path.
+ * Supplying `personalization` switches the request from the cacheable GET to
+ * the POST that carries it.
  */
 export type ByDestinationNodeIdExperienceOptions = {
   spaceId: string;
@@ -62,7 +63,8 @@ export type ByDestinationNodeIdExperienceOptions = {
 /**
  * Resolve an Experience by the absolute path wired up to a
  * Destination Node, instead of a node id directly. Same scoping as
- * `ByDestinationNodeIdExperienceOptions` — no `environmentId` or `locale`.
+ * `ByDestinationNodeIdExperienceOptions` — no `environmentId`, and no `locale`
+ * from the generated client.
  */
 export type ByDestinationPathExperienceOptions = {
   spaceId: string;

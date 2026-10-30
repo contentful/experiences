@@ -10,7 +10,25 @@ Isolates `@contentful/experience-delivery` — the generated Experience Delivery
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
-The primary fetch + resolve entry point. Fetches an Experience payload from the Experience Delivery API and resolves it into a `PortableRenderPlan` in one call.
+The primary fetch + resolve entry point. Fetches an Experience payload and resolves it into a `PortableRenderPlan` in one call. There are three ways to say which Experience:
+
+- **By destination path** (recommended for apps): `{ spaceId, destinationId, path }`. The URL path is the Destination path.
+- **By destination node id**: `{ spaceId, destinationId, nodeId }`.
+- **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id, and for preview.
+
+The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+
+```ts
+const result = await fetchExperience(
+  { spaceId, destinationId, path: '/demo/landing' },
+  { accessToken: process.env.CDA_TOKEN! },
+  { config: experienceConfig }
+);
+if ('redirect' in result) return redirect(result.redirect.path);
+// result is a PortableRenderPlan
+```
+
+`preview: true` with a destination throws `DestinationPreviewNotSupportedError` (a bridge; use the by-id form for preview). It does not fire on the `{ client }` branch.
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
@@ -30,11 +48,11 @@ the renderer's plan; see the [runtime parameters example](../../README.md#runtim
 
 Three positional args group by concern:
 
-| Arg                 | Type                                                                                            | Purpose                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch.                                                             |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                           | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                 | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
+| Arg                 | Type                                                                                                                                                                  | Purpose                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                                    |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                                                                                                 | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte
@@ -139,6 +157,28 @@ PREVIEW_WEBSOCKET_HOST; // 'wss://preview.xdn.contentful.com'
 ```
 
 `createClient` is the fixed-mode path — one client, one token, one host. If you need to flip between delivery and preview per request (e.g. an `isPreview` URL param), use `fetchExperience`'s inline-credentials form with `preview: boolean` instead of pre-building a client here. See ["Preview mode"](#preview-mode) above.
+
+### `fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?)`
+
+Lists every routable path in a published Destination, for static generation, `sitemap.xml`, or any other bulk walk. It does not hydrate Experiences; feed each `path` to `fetchExperience`.
+
+```ts
+import { fetchDestinationSitemap } from '@contentful/experiences-react';
+
+const paths: string[] = [];
+let pageNext: string | undefined;
+do {
+  const sitemap = await fetchDestinationSitemap(
+    { spaceId, destinationId },
+    { accessToken: process.env.CDA_TOKEN! },
+    { pageNext } // limit defaults to 100, max 1000
+  );
+  paths.push(...sitemap.items.map((item) => item.path));
+  pageNext = sitemap.pages.next;
+} while (pageNext);
+```
+
+Each item is `{ path, experienceId, type }`. Cursors (`pages.next`, `pages.prev`) are opaque; don't combine `pageNext` and `pagePrev`. A missing Destination throws `NotFoundError`. It is a free function only; the Node and Web runtimes have no sitemap method.
 
 ### `NotFoundError`
 

@@ -337,7 +337,7 @@ The customer pipeline is three steps:
 fetchExperience(experienceOptions, clientOptions, resolveOptions) → <ExperienceRenderer experience={…} />
 ```
 
-`fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Experience Delivery API and calls `resolveExperience` internally. The three positional args group by concern: **which experience**, **how to fetch**, **how to resolve**. Each grouping evolves independently (personalization slots into arg 3; digital-property identifiers widen arg 1) — a shape chosen to avoid one flat options object growing unbounded.
+`fetchExperience` is the **single async entry** for most customers — it fetches the payload from the Destinations Delivery API (by destination path or node id, the recommended path for apps) or the Experience Delivery API (by Experience id) and calls `resolveExperience` internally. The three positional args group by concern: **which experience**, **how to fetch**, **how to resolve**. Each grouping evolves independently — a shape chosen to avoid one flat options object growing unbounded.
 
 The existing free `fetchExperience` and framework-adapter path remains separate
 from runtime construction. Customers who want to manage a delivery client there
@@ -375,13 +375,32 @@ An unregistered id degrades rather than blanking the page: a **component** node 
 
 ### Why three positional args on `fetchExperience` instead of one options object?
 
-`fetchExperience` carries three concerns at once — fetch, resolve, and per-render context — and has more inbound (personalization params, digital-property identifiers from the channels RFC). A single flat options object would mix all three into one bag of a dozen-plus fields, so the signature is split into three grouped args:
+`fetchExperience` carries three concerns at once — fetch, resolve, and per-render context — and takes several kinds of inbound input (Experience ids, destination paths and node ids, personalization). A single flat options object would mix all three into one bag of a dozen-plus fields, so the signature is split into three grouped args:
 
-1. `experienceOptions` — **which** experience (`spaceId`, `environmentId`, `experienceId`, `locale`). Digital-property identifiers widen this type when the channels RFC lands.
+1. `experienceOptions` — **which** experience. A union discriminated by key presence (`nodeId`, then `path`, otherwise the by-id shape), with one overload per member:
+   - **By destination path** (recommended for apps) — `{ spaceId, destinationId, path, personalization? }`, where `path` is absolute and starts with `/`.
+   - **By destination node id** — `{ spaceId, destinationId, nodeId, personalization? }`.
+   - **By Experience id** — `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }`. Returns `PortableRenderPlan`. The secondary route: use it when you already hold an id, and for preview and live preview, which Destinations do not support.
+
+   The destination shapes are space-scoped only: no `environmentId`, `locale`, `parameters`, or `extensions` (`personalization` is supported). They return `PortableRenderPlan | DestinationRedirectResult`, because a Destination redirect node resolves to `{ redirect: { path } }` — returned as a value, not thrown. Callers navigate to the new path or re-call `fetchExperience` with it.
+
 2. `clientOptions` — **how** to fetch. Discriminated union: `{ accessToken, host? }` OR `{ client }`. Kept intentionally as one arg (not split further) so users can move between inline creds and a pre-made client with only that arg changing.
-3. `resolveOptions` — **how** to resolve (`config`, `context`). Personalization params (`audienceIds`, `userTraits`, etc.) go here.
+3. `resolveOptions` — **how** to resolve (`config`, `metadata`, `debug`). Personalization is _not_ here — it rides on `experienceOptions.personalization`, for both the by-id and destination shapes.
 
 Each grouping evolves without touching the others.
+
+### Destinations: fetch by path, enumerate with the sitemap
+
+A Destination (an instance of a Channel) maps paths to Experiences through its nodes. Two entry points, both free functions in `packages/client` and re-exported by every framework adapter:
+
+- `fetchExperience({ spaceId, destinationId, path | nodeId }, …)` resolves **one** path or node.
+- `fetchDestinationSitemap({ spaceId, destinationId }, clientOptions, { limit?, pageNext?, pagePrev? })` lists **every** routable path as `{ items: { path, experienceId, type }[], limit, pages: { next?, prev? } }`. `limit` defaults to `100` (max `1000`); cursors are opaque, and `pageNext` and `pagePrev` must not be combined. It does not hydrate Experiences and never calls `fetchExperience`.
+
+The sitemap exists for bulk enumeration — static generation / prerendering (feed each `path` to `fetchExperience`), `sitemap.xml` generation, and any other need to walk a Destination's routes. Prefer resolving by `path` over passing a sitemap item's `experienceId` to the by-id shape: by-id skips the Destination tree lookup, and with it the redirect and consistency behavior of the Destinations API.
+
+**Preview is not supported for Destinations yet.** With inline credentials, `preview: true` plus a destination (in either function) throws `DestinationPreviewNotSupportedError`, re-exported by every adapter. The guard (`destination-guards.ts`) is a bridge, not a permanent design; it does not fire on the `{ client }` branch. The Node and Web runtimes expose per-request destination fetches (`fetchByDestinationNode` / `fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only — there is no sitemap method on either runtime.
+
+**Examples are destinations-first.** `examples/nextjs`, `examples/sveltekit`, and `examples/angular` resolve the URL path against a Destination (`DESTINATION_ID`, written by the bootstrap) and fetch by Experience id only at `/experiences/[id]`, for preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route.
 
 ### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
@@ -426,7 +445,7 @@ Returning `null` for a payload with `nodes: []` would conflate two states the CM
 - **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
 - **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
 
-So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns a plan with `nodes: []`). `fetchExperience` returns `PortableRenderPlan`, never `null`.
+So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns a plan with `nodes: []`). `fetchExperience` returns `PortableRenderPlan`, never `null` (the destination overloads may instead return a `DestinationRedirectResult`, which is a redirect to follow rather than an empty Experience).
 
 For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch and use the adapter's dependency on `@contentful/experience-delivery`.
 
@@ -574,7 +593,7 @@ crn:contentful:::experience:spaces/$self/environments/$self/{components|experien
 
 ### `examples/nextjs/lib/experience-config.tsx` is `.tsx` not `.ts`
 
-It returns JSX (the render fns). The compiler picks up the `tsx` extension; importing the `tsx` file into `app/[slug]/page.tsx` works because Next resolves both extensions.
+It returns JSX (the render fns). The compiler picks up the `tsx` extension; importing the `tsx` file into `app/[[...path]]/page.tsx` works because Next resolves both extensions.
 
 ### `next-env.d.ts` is gitignored
 
@@ -622,7 +641,7 @@ An editor-authored ("composite") Experience Template arrives as plain `component
 
 ### Slug routing
 
-`client.view.getExperience(spaceId, envId, **experienceId**, ...)` takes an Experience ID, not a slug. Customers want `/blog/my-post` URLs, not `/IBMF5dElL6tgVuNR40fST`. No SDK-side helper today.
+`client.view.getExperience(spaceId, envId, **experienceId**, ...)` takes an Experience ID, not a slug. Customers want `/blog/my-post` URLs, not `/IBMF5dElL6tgVuNR40fST`. Use a Destination for path-based routing: `fetchExperience({ spaceId, destinationId, path }, …)` resolves an absolute path, and `fetchDestinationSitemap` enumerates the paths (see [Destinations](#destinations-fetch-by-path-enumerate-with-the-sitemap)). The by-id path still takes an Experience ID.
 
 ### `resolveData` advanced merge policy
 
@@ -688,15 +707,15 @@ npx nx run-many -t build --skip-nx-cache
 # 1. Seed the demo Experience into your target space (one-time).
 cd examples/scripts
 cp .env.example .env         # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap            # prints experienceId (default: `landing`)
+npm run bootstrap            # seeds content + a Destination; writes DESTINATION_ID to the example's .env if it exists
 
 # 2. Run the app.
 cd ../nextjs
 cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
-npm run dev                  # http://localhost:3000/landing
+npm run dev                  # http://localhost:3000/ and /demo/landing; by id: /experiences/landing
 ```
 
-The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, Components, Experience Templates, DataAssemblies, Experience — via the experiences management API. Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
+The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everything the demo Experience references — ContentType, entries, assets, design tokens, Components, Experience Templates, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes — via the experiences management API. Idempotent per resource; safe to re-run against a half-seeded env. See `examples/scripts/README.md` for details.
 
 ### Add a new framework adapter
 

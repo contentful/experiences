@@ -26,8 +26,27 @@ defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Tem
 ### Fetching
 
 ```ts
-fetchExperience(experienceOptions, clientOptions, resolveOptions); // Async; fetches from XDA and resolves in one call
+fetchExperience(experienceOptions, clientOptions, resolveOptions); // Async; fetches by Destination path/node id or Experience id and resolves in one call
+fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?); // Async; lists every routable path in a Destination
 fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions); // Async; fetches and resolves a Preview Session Experience
+```
+
+Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview is not supported on Destinations (it throws `DestinationPreviewNotSupportedError`); use the by-id form for preview.
+
+```ts
+const result = await fetchExperience(
+  { spaceId, destinationId, path: '/demo/landing' },
+  { accessToken },
+  { config: experienceConfig }
+);
+if ('redirect' in result) {
+  // follow it: navigate to result.redirect.path
+}
+// otherwise `result` is a PortableRenderPlan
+
+// Enumerate every routable path, for example to prerender
+const sitemap = await fetchDestinationSitemap({ spaceId, destinationId }, { accessToken });
+const paths = sitemap.items.map((item) => item.path); // follow sitemap.pages.next for more
 ```
 
 Use `fetchPreviewSession` for the initial render when the Contentful app
@@ -144,12 +163,15 @@ type ResolverConfig, ResolveExperienceOptions
 isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
-fetchExperience, fetchPreviewSession, createClient, ContentfulViewDelivery,
-ContentfulViewDeliveryClient, NotFoundError, PreviewSessionFetchError,
+fetchExperience, fetchDestinationSitemap, fetchPreviewSession, createClient, ContentfulViewDelivery,
+ContentfulViewDeliveryClient, NotFoundError, DestinationPreviewNotSupportedError, PreviewSessionFetchError,
 LivePreviewConnectionError,
 DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST
 
-type ExperienceOptions, PreviewSessionExperienceOptions, PreviewSessionClientOptions,
+type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOptions,
+  ByDestinationNodeIdExperienceOptions, DestinationRedirectResult, DestinationSitemapResult,
+  FetchDestinationSitemapOptions, FetchDestinationSitemapPaginationOptions, SitemapPathItem,
+  PreviewSessionExperienceOptions, PreviewSessionClientOptions,
   PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
