@@ -64,7 +64,7 @@ helper. The build tools require Node.js 22.12 or later.
 
 ## Browser transport and preview
 
-This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only.
+This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
 
 The inherited readonly `api` is the actual Optimization API client, with
 `api.experience` and `api.insights`; inherited readonly `config` retains the

@@ -394,7 +394,7 @@ if ('redirect' in result) {
 }
 ```
 
-Destination node and path requests do not use locale or environment identifiers because the upstream endpoints do not accept them. They still use request-scoped resolve settings such as metadata and debug.
+Destination node and path requests accept `personalization` (a profile id and caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the profile id XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug.
 
 The runtime owns its Delivery and Preview clients. Configure each with an
 `accessToken`, or configure a tokenless trusted proxy by supplying an explicit

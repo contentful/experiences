@@ -20,6 +20,8 @@ import {
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
+  type RuntimeFetchByDestinationNodeOptions,
+  type RuntimeFetchByDestinationPathOptions,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
   hasEventConsent,
@@ -30,7 +32,11 @@ import {
   withEventConsent,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import { serializePersonalization } from '@contentful/experiences-client';
+import {
+  serializePersonalization,
+  type DestinationRedirectResult,
+  type PersonalizationOptions,
+} from '@contentful/experiences-client';
 import { signal, untracked } from '@preact/signals-core';
 import { isEqual } from 'es-toolkit/predicate';
 import {
@@ -163,6 +169,13 @@ function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void 
       error
     );
   });
+}
+
+/** The profile id XDA returned. A Destination redirect carries no personalization. */
+function returnedProfileId(
+  result: PortableRenderPlan | DestinationRedirectResult
+): string | undefined {
+  return 'personalization' in result ? result.personalization?.profileId : undefined;
 }
 
 /** A prepared batch after validation: what the delivery queue accepts. */
@@ -505,10 +518,63 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return resolvedLocale;
   }
 
-  override async fetchExperience(
+  override fetchExperience(
     options: RuntimeFetchExperienceOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
+    return this.#fetchPersonalized(options, {
+      // A preview fetch neither sends nor stores a profile.
+      preview: options.preview === true,
+      // Runs once identity has settled, because the source map depends on live tracking.
+      prepare: (current) =>
+        this.#ensureInteractionTracking()?.hasAutoTracking()
+          ? {
+              ...current,
+              extensions: {
+                ...current.extensions,
+                sourceMap: current.extensions?.sourceMap ?? {},
+              },
+            }
+          : current,
+      send: (final) => super.fetchExperience(final, resolveOptions),
+    });
+  }
+
+  override fetchByDestinationNode(
+    options: RuntimeFetchByDestinationNodeOptions,
+    resolveOptions: RuntimeFetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    return this.#fetchPersonalized(options, {
+      send: (final) => super.fetchByDestinationNode(final, resolveOptions),
+    });
+  }
+
+  override fetchByDestinationPath(
+    options: RuntimeFetchByDestinationPathOptions,
+    resolveOptions: RuntimeFetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    return this.#fetchPersonalized(options, {
+      send: (final) => super.fetchByDestinationPath(final, resolveOptions),
+    });
+  }
+
+  /**
+   * Every XDA fetch goes through here, so by-id and Destination fetches cannot drift.
+   * It settles identity, applies consent and interceptors to caller-built events, sends
+   * the stored profile id, and keeps the returned one unless the visitor changed while
+   * the request was in flight.
+   */
+  async #fetchPersonalized<
+    TOptions extends { personalization?: PersonalizationOptions },
+    TResult extends PortableRenderPlan | DestinationRedirectResult,
+  >(
+    options: TOptions,
+    request: {
+      preview?: boolean;
+      prepare?: (options: TOptions) => TOptions;
+      send: (options: TOptions) => Promise<TResult>;
+    }
+  ): Promise<TResult> {
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (
       this.#currentInitialization?.identityReady !== undefined ||
@@ -520,14 +586,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
     const generation = this.#generation;
-    const gated = this.#gatePersonalizationEvents(
-      this.#ensureInteractionTracking()?.hasAutoTracking()
-        ? {
-            ...options,
-            extensions: { ...options.extensions, sourceMap: options.extensions?.sourceMap ?? {} },
-          }
-        : options
-    );
+    const gated = this.#gatePersonalizationEvents(request.prepare?.(options) ?? options);
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
     const intercepted =
@@ -567,22 +626,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const profileId = this.isPreview
       ? undefined
       : (personalization?.profileId ?? this.#requestIdentity());
-    const plan = await super.fetchExperience(
+    const result = await request.send(
       profileId === undefined
         ? { ...gated, personalization }
         : {
             ...gated,
             personalization: { ...personalization, profileId },
-          },
-      resolveOptions
+          }
     );
     if (
       !this.#destroyed &&
       !this.isPreview &&
-      options.preview !== true &&
+      request.preview !== true &&
       this.#identityRevision === identityRevision
     ) {
-      const nextProfileId = plan.personalization?.profileId;
+      const nextProfileId = returnedProfileId(result);
       if (
         nextProfileId !== undefined &&
         this.#profileRevision === profileRevision &&
@@ -602,7 +660,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           profileSignal.value = next.profile;
       }
     }
-    return plan;
+    return result;
   }
 
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
@@ -819,9 +877,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    * Drops caller-built XDA events that consent does not admit. The profile id
    * still travels, since it is not an event.
    */
-  #gatePersonalizationEvents(
-    options: RuntimeFetchExperienceOptions
-  ): RuntimeFetchExperienceOptions {
+  #gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+    options: T
+  ): T {
     if (this.isPreview) {
       for (const event of options.personalization?.events ?? []) this.#admitEvent(event, true);
       return { ...options, personalization: undefined };

@@ -225,6 +225,38 @@ describe('ContentfulExperiences', () => {
     expect(mockFetchExperience).not.toHaveBeenCalled();
   });
 
+  it('forwards personalization on destination node and path fetches', async () => {
+    const delivery = { id: 'delivery' } as never;
+    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery);
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const personalization = { profileId: 'profile-1' };
+
+    await runtime.fetchByDestinationNode(
+      { destinationId: 'dest', nodeId: 'node', personalization },
+      { config: { components: {} } }
+    );
+    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+      { spaceId: 'space', destinationId: 'dest', nodeId: 'node', personalization },
+      { client: delivery },
+      expect.anything()
+    );
+
+    await runtime.fetchByDestinationPath(
+      { destinationId: 'dest', path: '/page', personalization },
+      { config: { components: {} } }
+    );
+    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+      { spaceId: 'space', destinationId: 'dest', path: '/page', personalization },
+      { client: delivery },
+      expect.anything()
+    );
+  });
+
   it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
     mockCreateRuntimeDeliveryClient.mockClear();
     const delivery = { id: 'delivery' } as never;
