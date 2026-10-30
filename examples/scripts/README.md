@@ -22,25 +22,24 @@ npm install               # from the repo root, if you haven't already
 npm run bootstrap
 ```
 
-The script prints the resulting experienceId and Destination id at the end. Paste the Destination id into the example app's env as `DESTINATION_ID` (and hit `/landing` directly if you left the fixture unchanged).
+The script prints the Destination id at the end and writes it as `DESTINATION_ID` into the env file of each example that already has one (`nextjs/.env.local`, `sveltekit/.env`, `angular/.env`). It never creates those files; copy `.env.example` first, or paste the printed id yourself. The home node (`/`) serves the `home` Experience and `/demo/landing` serves `landing`; the apps' by-id routes take either id.
 
 ### What it seeds
 
 The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant. It provisions:
 
-| Step | Resource type      | Count | Notes                                                                                    |
-| ---- | ------------------ | ----- | ---------------------------------------------------------------------------------------- |
-| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                               |
-| 2    | Asset              | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space  |
-| 3    | Entry              | 4     | Base hero + personalized hero + 2 card `promotion` entries                               |
-| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by Components                           |
-| 5    | Component          | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card         |
-| 6    | ExperienceTemplate | 1     | `page` (passthrough)                                                                     |
-| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)      |
-| 8    | (linkage)          | 2     | Append DA links to hero-plain and card Components, republish                             |
-| 9    | Experience         | 1 + 3 | `landing`, its nested `Landing (developers)` variant, an EU audience and an Optimization |
-
-| 10 | Channel, Destination, Destination Node | 1 + 1 + 4 | `demo-web` Channel, `Demo Website` Destination, and nodes for `/`, `/demo`, `/demo/landing`, and a `/welcome` redirect to `/` |
+| Step | Resource type                          | Count     | Notes                                                                                                                         |
+| ---- | -------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ContentType                            | 1         | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                                                                    |
+| 2    | Asset                                  | 3         | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space                                       |
+| 3    | Entry                                  | 4         | Base hero + personalized hero + 2 card `promotion` entries                                                                    |
+| 4    | DesignToken                            | 15        | color/size/fontSize/fontWeight tokens referenced by Components                                                                |
+| 5    | Component                              | 8         | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card                                              |
+| 6    | ExperienceTemplate                     | 1         | `page` (passthrough)                                                                                                          |
+| 7    | DataAssembly                           | 2         | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)                                           |
+| 8    | (linkage)                              | 2         | Append DA links to hero-plain and card Components, republish                                                                  |
+| 9    | Experiences                            | 2 + 3     | `home` and `landing`, the nested `Landing (developers)` variant, an EU audience and an Optimization                           |
+| 10   | Channel, Destination, Destination Node | 1 + 1 + 4 | `demo-web` Channel, `Demo Website` Destination, and nodes for `/`, `/demo`, `/demo/landing`, and a `/welcome` redirect to `/` |
 
 Each step is idempotent: if a resource with the fixture's id already exists, that step is skipped. Re-running against a half-seeded env picks up where a previous run left off.
 

@@ -81,3 +81,26 @@ export const experience: ExperienceFixture = {
     content: [heroNode, cardsContainerNode],
   },
 };
+
+// Served by the Destination's home node (`/`), so the root path renders a
+// different page than `/demo/landing`.
+const homeHeroNode: ExperienceNode = {
+  ...heroNode,
+  id: 'node:home-hero',
+  contentBindings: {
+    dataAssemblyTempId: 'assembly:hero',
+    parameters: {
+      promo: { $entryTempId: 'entry:home-hero' },
+    },
+  },
+};
+
+export const homeExperience: ExperienceFixture = {
+  id: 'home',
+  name: 'Home (demo)',
+  description: 'Minimal ExO demo home page — 1 hero bound via DataAssembly to a promotion entry',
+  experienceTemplateId: 'page',
+  slots: {
+    content: [homeHeroNode],
+  },
+};

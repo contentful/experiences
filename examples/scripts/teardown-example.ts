@@ -24,6 +24,7 @@ import {
   designTokens,
   entries,
   experience,
+  homeExperience,
   experienceTemplates,
   components,
   contentTypes,
@@ -163,6 +164,7 @@ async function main() {
     pending.set(`https://api.contentful.com${channel}`, `Channel "${destination.channel.id}"`);
   }
   pending.set(`/experiences/${experience.id}`, `Experience "${experience.id}"`);
+  pending.set(`/experiences/${homeExperience.id}`, `Experience "${homeExperience.id}"`);
   for (const t of experienceTemplates) {
     pending.set(`/experience_templates/${t.id}`, `Experience Template "${t.id}"`);
   }

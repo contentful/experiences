@@ -1,7 +1,7 @@
 import type { DestinationFixture } from './types.js';
 
 // A Channel (org-level routing model) with one Destination under it. Nodes map
-// paths to the `landing` Experience so the example apps can resolve by path
+// paths to the `home` and `landing` Experiences so the example apps can resolve by path
 // (`/`, `/demo/landing`), follow a redirect (`/welcome`), and enumerate the
 // routes with `fetchDestinationSitemap`.
 //
@@ -25,7 +25,7 @@ export const destination: DestinationFixture = {
   },
   nodes: [
     // Home node: the one node allowed to claim `/`.
-    { id: 'demo-node-home', kind: 'experience', path: '', experienceId: 'landing' },
+    { id: 'demo-node-home', kind: 'experience', path: '', experienceId: 'home' },
     // Folder with a child, to exercise multi-segment paths (`/demo/landing`).
     { id: 'demo-node-demo', kind: 'folder', path: 'demo' },
     {

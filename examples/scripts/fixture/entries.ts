@@ -48,6 +48,31 @@ export const entries: EntryFixture[] = [
     },
   },
   {
+    tempId: 'entry:home-hero',
+    contentTypeId: 'promotion',
+    fields: {
+      internalName: { 'en-US': 'Hero — Home' },
+      title: { 'en-US': 'Welcome to the Experiences demo' },
+      teaser: {
+        'en-US': 'This page is served by the Destination’s home node, at the path /.',
+      },
+      body: {
+        'en-US': rt([
+          [
+            { text: 'The URL path picks the Experience: ' },
+            { text: '/', bold: true },
+            { text: ' renders this page and ' },
+            { text: '/demo/landing', bold: true },
+            { text: ' renders the landing page.' },
+          ],
+        ]),
+      },
+      ctaLabel: { 'en-US': 'View the landing page' },
+      ctaUrl: { 'en-US': '/demo/landing' },
+      image: { 'en-US': assetRef('asset:hero-bg') },
+    },
+  },
+  {
     tempId: 'entry:card-on',
     contentTypeId: 'promotion',
     fields: {

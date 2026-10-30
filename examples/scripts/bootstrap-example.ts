@@ -27,7 +27,7 @@
 /* eslint-disable no-console */
 /* global fetch, RequestInit, Response */
 import { createClient, type PlainClientAPI } from 'contentful-management';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +43,7 @@ import {
   dataAssemblies,
   dataAssemblyComponentLinks,
   experience,
+  homeExperience,
   personalization,
   destination,
   type AssetFixture,
@@ -1017,9 +1018,36 @@ async function seedDestinationNode(
   });
   log(`  ✓ ${node.kind} node "${node.id}" (${node.path}) ${existing ? 'updated' : 'created'}`);
 
-  // UNVERIFIED: the publish-node page was not fetched when this was written; the
-  // path mirrors the documented Channel and Destination publish endpoints.
   await publishResource(url, upserted);
+}
+
+/** Example apps and the env file each one reads, relative to this directory. */
+const EXAMPLE_ENV_FILES = ['../nextjs/.env.local', '../sveltekit/.env', '../angular/.env'];
+
+/**
+ * DESTINATION_ID is server-generated, so it cannot be a fixture constant. Set it
+ * in the env files the example apps already have; never create one, since those
+ * files also hold tokens the user copies in from `.env.example`.
+ */
+function writeDestinationId(destinationId: string) {
+  const line = `DESTINATION_ID=${destinationId}`;
+  const missing: string[] = [];
+  for (const rel of EXAMPLE_ENV_FILES) {
+    const file = resolvePath(__dirname, rel);
+    if (!existsSync(file)) {
+      missing.push(rel.replace('../', 'examples/'));
+      continue;
+    }
+    const contents = readFileSync(file, 'utf8');
+    const next = /^DESTINATION_ID=.*$/m.test(contents)
+      ? contents.replace(/^DESTINATION_ID=.*$/m, line)
+      : `${contents}${contents.endsWith('\n') || contents === '' ? '' : '\n'}${line}\n`;
+    if (next !== contents) writeFileSync(file, next);
+    log(`   ✓ ${rel.replace('../', 'examples/')}: ${line}`);
+  }
+  if (missing.length > 0) {
+    log(`   Not found (copy .env.example first, then add ${line}): ${missing.join(', ')}`);
+  }
 }
 
 async function main() {
@@ -1052,6 +1080,7 @@ async function main() {
 
   step('Step 9/10 — Experience');
   const experienceId = await seedExperience(experience);
+  await seedExperience(homeExperience);
   const variantId = await seedOptimizationVariant(personalization);
   await seedOptimization(personalization, variantId);
 
@@ -1062,10 +1091,11 @@ async function main() {
   for (const node of destination.nodes) await seedDestinationNode(node, destinationId);
 
   log(`\n✅ Done.\n`);
-  log(`   Experience id: ${experienceId}`);
-  log(`   Destination id: ${destinationId}   (set DESTINATION_ID in the example apps' env)`);
+  log(`   Destination id: ${destinationId}`);
+  log(`   Experience ids: ${homeExperience.id}, ${experienceId}`);
+  writeDestinationId(destinationId);
   log(
-    `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit /${experienceId}.`
+    `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit / and /demo/landing.`
   );
 }
 
