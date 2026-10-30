@@ -498,11 +498,26 @@ describe('fetchExperience — personalization', () => {
   });
 
   it('routes personalization through POST and strips unsupported event context', async () => {
+    // EventBuilder adds context keys that XDA's narrower event schema rejects:
+    // gdpr, screen and page.title. The input carries them; the request must not.
+    const page = { path: '/', query: {}, referrer: '', search: '', url: '/' };
     const input = {
       ...personalization,
       events: personalization.events.map((event) => ({
         ...event,
-        context: { ...event.context, gdpr: { isConsentGiven: true } },
+        context: {
+          ...event.context,
+          gdpr: { isConsentGiven: true },
+          screen: { name: 'Home' },
+          page: { ...page, title: 'Home' },
+        },
+      })),
+    };
+    const expected = {
+      ...personalization,
+      events: personalization.events.map((event) => ({
+        ...event,
+        context: { ...event.context, page },
       })),
     };
     await fetchExperience(
@@ -514,7 +529,7 @@ describe('fetchExperience — personalization', () => {
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
       locale: 'en-US',
-      extensions: { personalization },
+      extensions: { personalization: expected },
     });
   });
 

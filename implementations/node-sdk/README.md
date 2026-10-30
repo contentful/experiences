@@ -48,14 +48,14 @@ workarounds merely because the reference already uses them.
    traits change.
 2. **XDA rejects SDK-built consent context.** Sending an unmodified EventBuilder
    event containing `context.gdpr` produces HTTP 422 (`ValidationFailed`,
-   `unrecognized_keys`). Client serializes personalization through the generated
-   XDA schema, removing unsupported fields without mutating the original events.
-   This is an SDK/API contract incompatibility; strict rejection itself may be
-   intentional. Once upstream XDA and generated client types support the built
-   event shape, or the generated client performs the required conversion, verify
-   built page and identify events end to end and remove the extra Client
-   normalization if redundant. Keep consent metadata on ordinary SDK events and
-   retain coverage of the supported wire contract.
+   `unrecognized_keys`). Client serializes personalization itself, removing
+   unsupported fields (`context.gdpr`, `context.screen` and `context.page.title`)
+   without mutating the original events; the generated delivery client no longer
+   ships request schemas to do this. This is an SDK/API contract incompatibility;
+   strict rejection itself may be intentional. Once upstream XDA supports the built
+   event shape, verify built page and identify events end to end and remove the
+   extra Client normalization if redundant. Keep consent metadata on ordinary SDK
+   events and retain coverage of the supported wire contract.
 3. **Initial identification without a profile can time out.** An initial XDA
    request containing identify, including a page/identify batch, can return HTTP
    200 with a personalization `TimeoutError`, baseline content, and no profile.

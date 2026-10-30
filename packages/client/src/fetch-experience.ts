@@ -16,7 +16,7 @@ import {
 export type { ClientOptions };
 
 type DeliveryExperienceRequestExtensions =
-  ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensions;
+  ContentfulViewDelivery.GetWithOverridesExperienceRequest.Extensions;
 
 export type PersonalizationOptions = NonNullable<
   DeliveryExperienceRequestExtensions['personalization']
