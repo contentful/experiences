@@ -13,12 +13,12 @@ import { experienceConfig } from '@/lib/experience-config';
 import { buildPagePersonalization } from '@/lib/personalization';
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export default async function ExperiencePage({ params, searchParams }: PageProps) {
-  const { slug: experienceId } = await params;
+  const { id: experienceId } = await params;
   const sp = (await searchParams) ?? {};
 
   const preview = typeof sp.preview === 'string' ? sp.preview : undefined;
@@ -61,7 +61,7 @@ export default async function ExperiencePage({ params, searchParams }: PageProps
   const personalization = personalizationEnabled
     ? buildPagePersonalization({
         origin: `${forwardedProto}://${host}`,
-        path: `/${experienceId}`,
+        path: `/experiences/${experienceId}`,
         locale,
         referrer: requestHeaders.get('referer') ?? '',
         searchParams: sp,
