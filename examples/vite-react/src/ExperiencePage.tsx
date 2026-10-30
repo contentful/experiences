@@ -11,7 +11,10 @@ import { env } from './lib/env';
 import { experienceConfig } from './lib/experience-config';
 
 interface ExperiencePageProps {
-  experienceId: string;
+  /** Fetch by Destination path. Destination fetches take no `locale`. */
+  destinationPath?: string;
+  /** Fetch by Experience id. Set exactly one of `destinationPath` and `experienceId`. */
+  experienceId?: string;
   locale: string;
   debug: boolean;
 }
@@ -24,16 +27,23 @@ type State =
 
 /**
  * The client-only flow: the same `fetchExperience` call the Next.js example
- * makes on the server, run in an effect instead. It fetches from the
- * Experience Delivery API, resolves it (including `card`'s async
- * `resolveData`), and hands the result to `ClientExperienceRenderer`.
+ * makes on the server, run in an effect instead. It fetches by Destination
+ * path (or by Experience id), resolves it (including `card`'s async
+ * `resolveData`), and hands the result to `ClientExperienceRenderer`. A
+ * Destination redirect node resolves to `{ redirect }`, which the browser
+ * follows with `location.replace`.
  *
  * What a server would otherwise give you, and what you take on here:
  * - The delivery token ships in the bundle (see `lib/env.ts`).
  * - Nothing renders until the fetch and resolve finish, so handle loading.
  * - Crawlers that don't run JavaScript see an empty page.
  */
-export function ExperiencePage({ experienceId, locale, debug }: ExperiencePageProps) {
+export function ExperiencePage({
+  destinationPath,
+  experienceId,
+  locale,
+  debug,
+}: ExperiencePageProps) {
   const [state, setState] = useState<State>({ status: 'loading' });
 
   useEffect(() => {
@@ -42,22 +52,46 @@ export function ExperiencePage({ experienceId, locale, debug }: ExperiencePagePr
     let isCurrent = true;
     setState({ status: 'loading' });
 
-    if (!env.spaceId || !env.accessToken) {
+    if (!env.spaceId || !env.accessToken || (destinationPath !== undefined && !env.destinationId)) {
       setState({
         status: 'error',
         message:
-          'VITE_SPACE_ID and VITE_CDA_TOKEN must be set. Copy .env.example to .env.local and fill them in.',
+          'VITE_SPACE_ID, VITE_DESTINATION_ID and VITE_CDA_TOKEN must be set. Copy .env.example to .env.local and fill them in.',
       });
       return;
     }
 
-    fetchExperience(
-      { spaceId: env.spaceId, environmentId: env.environmentId, experienceId, locale },
-      { accessToken: env.accessToken },
-      { config: experienceConfig, metadata: { slug: experienceId, locale }, debug }
-    ).then(
-      (experience) => {
-        if (isCurrent) setState({ status: 'ready', experience });
+    const resolveOptions = {
+      config: experienceConfig,
+      metadata: { slug: destinationPath ?? experienceId, locale },
+      debug,
+    };
+    const request =
+      destinationPath !== undefined
+        ? fetchExperience(
+            { spaceId: env.spaceId, destinationId: env.destinationId, path: destinationPath },
+            { accessToken: env.accessToken },
+            resolveOptions
+          )
+        : fetchExperience(
+            {
+              spaceId: env.spaceId,
+              environmentId: env.environmentId,
+              experienceId: experienceId!,
+              locale,
+            },
+            { accessToken: env.accessToken },
+            resolveOptions
+          );
+
+    request.then(
+      (result) => {
+        if (!isCurrent) return;
+        if ('redirect' in result) {
+          window.location.replace(result.redirect.path);
+          return;
+        }
+        setState({ status: 'ready', experience: result });
       },
       (error: unknown) => {
         if (!isCurrent) return;
@@ -75,7 +109,7 @@ export function ExperiencePage({ experienceId, locale, debug }: ExperiencePagePr
     return () => {
       isCurrent = false;
     };
-  }, [experienceId, locale, debug]);
+  }, [destinationPath, experienceId, locale, debug]);
 
   switch (state.status) {
     case 'loading':

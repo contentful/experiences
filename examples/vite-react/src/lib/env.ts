@@ -2,6 +2,7 @@
 // every visitor. That is fine for a read-only delivery token and nothing else.
 export const env = {
   spaceId: import.meta.env.VITE_SPACE_ID ?? '',
+  destinationId: import.meta.env.VITE_DESTINATION_ID ?? '',
   environmentId: import.meta.env.VITE_ENVIRONMENT_ID || 'master',
   accessToken: import.meta.env.VITE_CDA_TOKEN ?? '',
 };
