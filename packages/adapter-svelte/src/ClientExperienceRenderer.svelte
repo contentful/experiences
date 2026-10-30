@@ -3,6 +3,8 @@
  * browser-only design-property work.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   import type { ExperienceContext } from '@contentful/experiences-sdk-core';
 
   import ComponentError from './ComponentError.svelte';
@@ -55,16 +57,19 @@
   }
 
   // A $state-backed mirror so descendants reading getExperience() stay
-  // reactive when the plan or rendering options change.
-  const liveContext = $state<RenderContext>({
-    ...DEFAULT_CONTEXT,
-    debug: debug ?? experience?.debug ?? false,
-    metadata: {
-      ...DEFAULT_CONTEXT.metadata,
-      ...(experience?.metadata ?? {}),
-      ...(metadata ?? {}),
-    },
-  });
+  // reactive when the plan or rendering options change. Seeded untracked from
+  // the initial props; the effect below keeps it current.
+  const liveContext = $state<RenderContext>(
+    untrack(() => ({
+      ...DEFAULT_CONTEXT,
+      debug: debug ?? experience?.debug ?? false,
+      metadata: {
+        ...DEFAULT_CONTEXT.metadata,
+        ...(experience?.metadata ?? {}),
+        ...(metadata ?? {}),
+      },
+    }))
+  );
 
   setExperience(liveContext);
 

@@ -1,0 +1,24 @@
+{
+  "name": "@contentful/experiences-example-vite-svelte",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vite + Svelte client-only SPA demonstrating @contentful/experiences-svelte integration",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@contentful/experiences-svelte": "*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}
