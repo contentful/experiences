@@ -1,6 +1,6 @@
 # Contentful Experiences SDK
 
-> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](#versioning-and-stability).
 
 A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a design system; the SDK takes the Experience payload from the Experience Delivery API (XDA) and renders it.
 
@@ -32,6 +32,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 - [API reference](#api-reference)
 - [Design system stays portable](#design-system-stays-portable)
 - [Workspace internals](#workspace-internals)
+- [Versioning and stability](#versioning-and-stability)
 - [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
@@ -1556,6 +1557,26 @@ npm run release:dry                 # rehearse independent release
 Maintainer workflows for local npm artifacts and the reference implementations in `implementations/` are in [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations).
 
 For deeper context (design decisions, multi-framework architecture notes, conventions, and gotchas), see [`AGENTS.md`](./AGENTS.md).
+
+---
+
+## Versioning and stability
+
+The SDK stays on major version `0` until Experience Orchestration reaches general availability (GA), then moves to `1.0.0`. Until then, the version number tells you what a release contains:
+
+| Release | Contains               | Example             |
+| ------- | ---------------------- | ------------------- |
+| Minor   | Breaking changes       | `0.15.3` → `0.16.0` |
+| Patch   | New features and fixes | `0.15.3` → `0.15.4` |
+
+npm's default caret range keeps you on one minor line: `^0.15.3` installs `>=0.15.3 <0.16.0`, so `npm update` never pulls in a breaking change. Moving to the next minor is a deliberate upgrade; read its release notes first.
+
+You only track the versions of the packages you install: your framework adapter, or `@contentful/experiences-node` / `@contentful/experiences-web`, plus `@contentful/experiences-live-preview` if you use it directly. The public packages pin the internal packages to exact versions.
+
+- **Dist-tags.** Releases publish to `latest`. The `dev` tag carries prereleases (for example `0.16.0-dev.3`) for testing a specific change; don't use them in production.
+- **Breaking changes** are listed under **⚠️ Breaking Changes** in each package's `CHANGELOG.md` and in its GitHub Release, with what changed and what to do about it.
+- **Deprecations.** A replaced API is marked `@deprecated` with its replacement named, and where the SDK can detect it at runtime, it logs a one-time warning in development. We aim to keep a deprecated API for at least one minor release before removing it, but a change to the Experience Delivery API can require a direct break.
+- **From `1.0.0` on**, the SDK follows standard semver: breaking changes ship only in major versions.
 
 ---
 
