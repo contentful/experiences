@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
   const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
   const previewToken = env.CPA_TOKEN;
   const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
-  const metadata = { slug: params.slug };
+  const metadata = { slug: params.id };
   const personalizationParam = url.searchParams.get('personalization');
   const personalizationEnabled = personalizationParam === 'true' || personalizationParam === '1';
   const locale = url.searchParams.get('locale') ?? 'en-US';
@@ -69,7 +69,7 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
           {
             spaceId,
             environmentId,
-            experienceId: params.slug,
+            experienceId: params.id,
             locale,
             personalization,
           },

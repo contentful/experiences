@@ -1,9 +1,11 @@
 <script lang="ts">
   import ConsentPanel from '$lib/components/ConsentPanel.svelte';
+  import PersonalizationToggle from '$lib/components/PersonalizationToggle.svelte';
 
   let { children, data } = $props();
 </script>
 
+<PersonalizationToggle />
 {@render children()}
 
 <ConsentPanel
