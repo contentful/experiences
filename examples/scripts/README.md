@@ -1,6 +1,6 @@
 # examples/scripts
 
-One-time setup scripts for the customer-facing example apps in [`../nextjs`](../nextjs), [`../sveltekit`](../sveltekit), [`../vite-react`](../vite-react), and [`../vite-svelte`](../vite-svelte).
+One-time setup scripts that seed the demo Experience rendered by the framework example apps in [`examples/`](..).
 
 ## bootstrap-example.ts
 
