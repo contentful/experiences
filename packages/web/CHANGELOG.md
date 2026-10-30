@@ -1,3 +1,16 @@
+## 0.9.4 (2026-10-30)
+
+### 🚀 Features
+
+- support personalization on Destination fetches [AIS-812] ([#282](https://github.com/contentful/experiences/pull/282))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.4
+- Updated client to 0.10.10
+- Updated core to 0.13.9
+- Updated node to 0.8.4
+
 ## 0.9.3 (2026-10-30)
 
 ### 🧱 Updated Dependencies

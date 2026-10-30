@@ -1,3 +1,17 @@
+## 0.10.10 (2026-10-30)
+
+### 🚀 Features
+
+- support personalization on Destination fetches [AIS-812] ([#282](https://github.com/contentful/experiences/pull/282))
+
+### 🩹 Fixes
+
+- **deps:** update dependency @contentful/experience-delivery to v1.0.0-dev.11 ([#277](https://github.com/contentful/experiences/pull/277))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.13.9
+
 ## 0.10.9 (2026-10-30)
 
 ### 🧱 Updated Dependencies
