@@ -1,3 +1,12 @@
+## 0.9.3 (2026-10-30)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.3
+- Updated client to 0.10.9
+- Updated core to 0.13.8
+- Updated node to 0.8.3
+
 ## 0.9.2 (2026-10-29)
 
 ### 🚀 Features

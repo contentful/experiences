@@ -1,0 +1,26 @@
+{
+  "name": "@contentful/experiences-example-vite-react",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vite + React client-only SPA demonstrating @contentful/experiences-react integration",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@contentful/experiences-react": "*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "styled-components": "^6.1.19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}
