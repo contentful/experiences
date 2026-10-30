@@ -228,9 +228,10 @@ rules above are review-time conventions, not build failures.
 npm workspaces and the Nx project graph cover **different** sets of directories,
 which is the single most surprising thing about this workspace.
 
-`package.json#workspaces` is `["packages/*", "examples/*"]` — both are npm
-workspaces, so both are symlinked and can consume the SDK packages by name
-(`"@contentful/experiences-react": "*"` in `examples/nextjs/package.json`).
+`package.json#workspaces` is `["packages/*", "examples/*", "lib/mocks"]`, so
+the example apps are symlinked into the workspace and consume the SDK packages
+by name (`"@contentful/experiences-react": "*"` in
+`examples/nextjs/package.json`).
 
 But `.nxignore` excludes `examples`, and every plugin entry in `nx.json` is
 scoped to `include: ["packages/**/*"]`. So:
@@ -241,6 +242,15 @@ scoped to `include: ["packages/**/*"]`. So:
   all.
 - The example apps have no `project.json` and are run directly from their
   own directories (`cd examples/nextjs && npm run dev`).
+
+`implementations/` is the inverse. The reference implementations are **not**
+npm workspaces: each installs locally packed SDK tarballs from `pkgs/`, so it
+exercises the packages as they will be published. They **are** Nx projects,
+tagged `scope:implementation`, and the root aggregate scripts exclude that tag
+(`--exclude=tag:scope:implementation`). Run them through their explicit
+`implementation-*` Nx targets or `npm run implementation:install`.
+`examples/` is the customer-facing integration surface; `implementations/` is
+for maintainers validating SDK behavior.
 
 ### Targets
 
