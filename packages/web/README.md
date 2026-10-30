@@ -2,7 +2,7 @@
 
 The browser SDK for fetching and resolving [Contentful Experiences](https://www.contentful.com/developers/docs/concepts/experiences/) in a Web application. It produces runtime-neutral `PortableRenderPlan` values; render a plan with the framework adapter used by your application.
 
-> **Alpha.** This package is a lean browser runtime. Its API is still evolving.
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](../../README.md#versioning-and-stability).
 
 Only one live Experiences Web SDK instance is supported in a JavaScript runtime. Constructing a second while one is active throws. Call `destroy()` during teardown or hot reload before constructing a replacement; it stops active interaction observers and releases the Web owner lock. Experiences Web and Optimization Web are alternative product SDKs and are not supported together on one page. Applications must choose one; the SDKs do not coordinate with each other.
 
