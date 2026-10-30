@@ -41,8 +41,13 @@ experiences/
 ├── examples/                # Customer-facing example apps
 │   ├── nextjs/               # Next.js 15 example (external developers run this)
 │   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
-│   └── angular/              # Angular 20 + @angular/ssr example (parity with both)
-├── implementations/         # Standalone reference apps consuming local npm tarballs
+│   ├── angular/              # Angular 20 + @angular/ssr example (parity with both)
+│   ├── astro/                # Astro 7 example on the React custom-renderer entry
+│   ├── vite-react/           # Vite + React client-only example
+│   ├── vite-svelte/          # Vite + Svelte client-only example
+│   ├── node/                 # node:http identity-cookie example (no renderer)
+│   └── scripts/              # Bootstrap that seeds the demo Experience for the examples
+├── implementations/         # Maintainer-facing reference implementations consuming local npm tarballs
 │   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   └── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
@@ -56,7 +61,7 @@ experiences/
 
 **`skills/`** holds agent-invokable guides in the `SKILL.md` format. When asked to render Experiences in a framework without a first-party adapter (Vue, Nuxt, Solid, Lit, Qwik, ...), follow [skills/implement-framework-adapter/SKILL.md](./skills/implement-framework-adapter/SKILL.md). Keep it in sync when adapter behavior changes (merge order, fallbacks, context, diagnostics).
 
-**`implementations/`** stays outside npm workspaces and consumes packed SDK artifacts.
+**`implementations/`** holds reference implementations for SDK maintainers, not customers. Point integrators to `examples/`, never to a reference implementation as a how-to guide; link into `implementations/` only for authoritative maintainer detail (for example, the XDA workaround removal criteria linked from `packages/node/README.md`); see [CONTRIBUTING.md](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the split. Implementations stay outside npm workspaces and consume packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped
 `implementation-node-sdk`, `implementation-web-sdk`, or
 `implementation-node-sdk-web-sdk` Nx `setup` / `dev` targets. Root aggregate checks
