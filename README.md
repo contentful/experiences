@@ -1031,16 +1031,18 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK.
 
-| Example                                      | Stack                       | Shows                                                                                                   |
-| -------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)       | Next.js 15 (App Router)     | Preview mode, async `resolveData`, design tokens, styling hooks                                         |
-| [`examples/sveltekit`](./examples/sveltekit) | SvelteKit 2 + Svelte 5      | 1:1 parity with the Next.js app                                                                         |
-| [`examples/angular`](./examples/angular)     | Angular 20 + `@angular/ssr` | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
-| [`examples/astro`](./examples/astro)         | Astro 7 + `@astrojs/react`  | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
-| [`examples/node`](./examples/node)           | Node `node:http`            | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer               |
-| [`examples/scripts`](./examples/scripts)     | Node + tsx                  | One-time bootstrap that seeds the demo Experience the other examples render                             |
+| Example                                          | Stack                           | Shows                                                                                                   |
+| ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Preview mode, async `resolveData`, design tokens, styling hooks                                         |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                         |
+| [`examples/angular`](./examples/angular)         | Angular 20 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
+| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
+| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Fetch, resolve, and render entirely in the browser; styled-components for CSS-in-JS                     |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                       |
+| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer               |
+| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                             |
 
-The four framework apps register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs. To run one, first seed that Experience into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
+The framework example apps register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs. To run one, first seed that Experience into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
 
 ```sh
 npm install --ignore-scripts
@@ -1052,8 +1054,8 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_T
 npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
 
 # 2. Run one of the example apps against the seeded space.
-cd ../nextjs                           # or ../sveltekit, ../angular, ../astro
-cp .env.example .env.local             # the others use .env; fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+cd ../nextjs                           # or ../sveltekit, ../angular, ../astro, ../vite-react, ../vite-svelte
+cp .env.example .env.local             # file name and variable prefix vary by app; see its README
 npm run dev
 ```
 

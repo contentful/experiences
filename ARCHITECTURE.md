@@ -228,9 +228,10 @@ rules above are review-time conventions, not build failures.
 npm workspaces and the Nx project graph cover **different** sets of directories,
 which is the single most surprising thing about this workspace.
 
-`package.json#workspaces` is `["packages/*", "examples/*", "lib/mocks"]` —
-`packages/*` and `examples/*` are both npm workspaces, so both are symlinked and can consume the SDK packages by name
-(`"@contentful/experiences-react": "*"` in `examples/nextjs/package.json`).
+`package.json#workspaces` is `["packages/*", "examples/*", "lib/mocks"]`, so
+the example apps are symlinked into the workspace and consume the SDK packages
+by name (`"@contentful/experiences-react": "*"` in
+`examples/nextjs/package.json`).
 
 But `.nxignore` excludes `examples`, and every plugin entry in `nx.json` is
 scoped to `include: ["packages/**/*"]`. So:

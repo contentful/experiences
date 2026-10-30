@@ -64,7 +64,7 @@ npx nx show project adapter-react     # see a project's available targets
 
 ### Running an example app
 
-The `examples/` directory has Next.js, SvelteKit, Angular, and Astro apps that render live XDA payloads — the fastest way to see a change end to end. They read the demo Experience that [`examples/scripts`](./examples/scripts) seeds into your space; run its bootstrap once first.
+The `examples/` directory has Next.js, SvelteKit, Angular, Astro, and client-only Vite (React and Svelte) apps that render live XDA payloads — the fastest way to see a change end to end. They read the demo Experience that [`examples/scripts`](./examples/scripts) seeds into your space; run its bootstrap once first.
 
 ```sh
 cd examples/nextjs
@@ -72,7 +72,7 @@ cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
 npm run dev                  # http://localhost:3000/<experience-id>
 ```
 
-`examples/sveltekit`, `examples/angular`, and `examples/astro` mirror it, registering the same components against the same payload. `examples/node` is a framework-neutral server that shows the identity cookie handoff between the Web SDK and the Node SDK. Each has its own README for the setup.
+`examples/sveltekit`, `examples/angular`, `examples/astro`, `examples/vite-react`, and `examples/vite-svelte` mirror it, registering the same components against the same payload. `examples/node` is a framework-neutral server that shows the identity cookie handoff between the Web SDK and the Node SDK. Each has its own README for the setup.
 
 ## 🏗️ Repository layout
 
@@ -92,6 +92,8 @@ examples/            # Example apps (customer-facing)
 ├── sveltekit/       # SvelteKit 2 example app
 ├── angular/         # Angular 20 + @angular/ssr example app
 ├── astro/           # Astro 7 custom-renderer example app
+├── vite-react/      # Vite + React client-only example app
+├── vite-svelte/     # Vite + Svelte client-only example app
 ├── node/            # node:http identity-cookie example (no renderer)
 └── scripts/         # One-time bootstrap that seeds the demo Experience
 implementations/     # Reference implementations (maintainer-facing)
@@ -112,9 +114,9 @@ The repo has two kinds of runnable apps. They look alike but serve different aud
 | **Purpose**            | Show how to integrate the SDK in a given framework; the "clone + bootstrap + run" surface | Exercise the packages as they will be published, modeled on Optimization's reference implementations                                      |
 | **SDK dependency**     | Workspace packages by symlink (npm workspaces)                                            | Locally packed tarballs from `pkgs/`; outside npm workspaces                                                                              |
 | **Nx and root checks** | Ignored by Nx (`.nxignore`); run from each app's directory                                | Nx projects tagged `scope:implementation`; excluded from root `build`/`test`/`lint`/`typecheck`, prepared and checked by the CI Build job |
-| **Linked from**        | README and package READMEs                                                                | This file, `AGENTS.md`, and maintainer docs only                                                                                          |
+| **Linked from**        | Integration guides (README, package READMEs)                                              | Maintainer docs; package READMEs only for authoritative maintainer detail                                                                 |
 
-Use an example app to see a change render end to end, or when the change affects how customers integrate. Keep the four framework apps at parity with one another. Use a reference implementation to check that a change survives packing and installation, or to validate runtime behavior (profiles, consent, events) outside a framework adapter. Customer-facing docs, including package READMEs that ship to npm, link only to `examples/`.
+Use an example app to see a change render end to end, or when the change affects how customers integrate. Keep the framework example apps at parity with one another. Use a reference implementation to check that a change survives packing and installation, or to validate runtime behavior (profiles, consent, events) outside a framework adapter. Point integrators to `examples/`: never use a reference implementation as a getting-started or how-to guide. Link into `implementations/` only when it is the authoritative source for maintainer detail, such as the XDA workaround removal criteria that `packages/node/README.md` links to.
 
 ### Local npm artifacts
 
