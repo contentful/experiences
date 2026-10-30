@@ -1085,18 +1085,18 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK.
 
-| Example                                          | Stack                           | Shows                                                                                                           |
-| ------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Destination routing with sitemap SSG and redirects; by-id route for preview; async `resolveData`, design tokens |
-| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                                 |
-| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                  |
-| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default         |
-| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Fetch, resolve, and render entirely in the browser; styled-components for CSS-in-JS                             |
-| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                               |
-| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                       |
-| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                     |
+| Example                                          | Stack                           | Shows                                                                                                                            |
+| ------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Destination routing with sitemap SSG and redirects; by-id route for preview; async `resolveData`, design tokens                  |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                                                  |
+| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                   |
+| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered |
+| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Destination routing, fetched, resolved, and rendered entirely in the browser; styled-components for CSS-in-JS                    |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                                                |
+| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                        |
+| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                      |
 
-The Next.js, SvelteKit, and Angular examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id (the route for preview). They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
+The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id (the route for preview). They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
 
 ```sh
 npm install --ignore-scripts
@@ -1114,7 +1114,7 @@ cp .env.example .env.local             # file name and variable prefix vary by a
 npm run dev
 ```
 
-Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). The Astro and Vite examples are not Destination-based and still take an Experience id: visit `/landing`. See each example's README for its file map and route-by-route walkthrough.
+Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). See each example's README for its file map and route-by-route walkthrough.
 
 **Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
 

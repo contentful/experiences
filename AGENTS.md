@@ -400,7 +400,7 @@ The sitemap exists for bulk enumeration — static generation / prerendering (fe
 
 **Preview is not supported for Destinations yet.** With inline credentials, `preview: true` plus a destination (in either function) throws `DestinationPreviewNotSupportedError`, re-exported by every adapter. The guard (`destination-guards.ts`) is a bridge, not a permanent design; it does not fire on the `{ client }` branch. The Node and Web runtimes expose per-request destination fetches (`fetchByDestinationNode` / `fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only — there is no sitemap method on either runtime.
 
-**Examples are destinations-first.** `examples/nextjs`, `examples/sveltekit`, and `examples/angular` resolve the URL path against a Destination (`DESTINATION_ID`, written by the bootstrap) and fetch by Experience id only at `/experiences/[id]`, for preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route.
+**Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, written by the bootstrap) and fetch by Experience id only at `/experiences/[id]`. Preview lives on that route in the server-rendered examples; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route.
 
 ### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
