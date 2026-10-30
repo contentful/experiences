@@ -12,6 +12,7 @@ import {
   NotFoundError,
   fetchExperience,
   fetchPreviewSession,
+  type PortableRenderPlan,
 } from '@contentful/experiences-angular';
 import express from 'express';
 
@@ -34,6 +35,12 @@ app.use(
   })
 );
 
+type LoadResult = ExperienceRouteData | { redirect: string } | undefined;
+
+// `/experiences/:id` fetches one Experience by id; every other path is a
+// Destination path.
+const BY_ID_ROUTE = /^\/experiences\/([^/]+)\/?$/;
+
 /**
  * The Angular analogue of SvelteKit's `+page.server.ts` load: fetch on the
  * server only, then hand the result to the app as `requestContext`.
@@ -43,13 +50,12 @@ app.use(
  * tokens to the client. Doing it here keeps them server-side, and
  * `ExperienceStore` relays the plan to the browser through `TransferState`.
  */
-async function loadExperience(req: express.Request): Promise<ExperienceRouteData | undefined> {
+async function loadExperience(req: express.Request): Promise<LoadResult> {
   const url = new URL(req.originalUrl, `http://${req.headers.host ?? 'localhost'}`);
-  const slug = url.pathname.replace(/^\/+|\/+$/g, '');
+  const pathname = url.pathname;
 
-  // Only the single-segment `:slug` route renders an experience. `.`-bearing
-  // paths are unmatched static assets falling through `express.static`.
-  if (!slug || slug.includes('/') || slug.includes('.')) return undefined;
+  // `.`-bearing paths are unmatched static assets falling through `express.static`.
+  if (pathname.includes('.')) return undefined;
 
   const spaceId = process.env['SPACE_ID'];
   const accessToken = process.env['CDA_TOKEN'];
@@ -58,6 +64,10 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
       'SPACE_ID and CDA_TOKEN must be set. Copy .env.example to .env and fill them in.'
     );
   }
+
+  const byId = BY_ID_ROUTE.exec(pathname);
+  const path = `/${pathname.replace(/^\/+|\/+$/g, '')}`;
+  const slug = byId ? decodeURIComponent(byId[1]!) : path;
 
   const preview = url.searchParams.get('preview');
   const debugParam = url.searchParams.get('debug');
@@ -69,8 +79,8 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
   const environmentId = process.env['ENVIRONMENT_ID'] || 'master';
   const previewToken = process.env['CPA_TOKEN'];
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
-  const livePreview = sessionId !== undefined && previewToken !== undefined;
-  const previewMode = preview === 'true' || preview === '1' || livePreview;
+  const livePreview = byId !== null && sessionId !== undefined && previewToken !== undefined;
+  const previewMode = byId !== null && (preview === 'true' || preview === '1' || livePreview);
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
@@ -90,33 +100,65 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
       })
     : undefined;
 
+  const notFound: ExperienceRouteData = {
+    slug,
+    metadata,
+    experience: null,
+    debug,
+    livePreview,
+    previewSessionOptions,
+    notFound: true,
+  };
+
   try {
     const resolveOptions = {
       config: experienceConfig,
       metadata,
       debug,
     };
-    const experience = livePreview
-      ? await fetchPreviewSession(
-          { spaceId, environmentId, sessionId },
-          { previewToken },
-          resolveOptions
-        )
-      : await fetchExperience(
-          {
-            spaceId,
-            environmentId,
-            experienceId: slug,
-            locale,
-            personalization,
-          },
-          {
-            accessToken,
-            previewToken,
-            preview: previewMode,
-          },
-          resolveOptions
+
+    let experience: PortableRenderPlan;
+    if (byId) {
+      experience = livePreview
+        ? await fetchPreviewSession(
+            { spaceId, environmentId, sessionId },
+            { previewToken },
+            resolveOptions
+          )
+        : await fetchExperience(
+            {
+              spaceId,
+              environmentId,
+              experienceId: slug,
+              locale,
+              personalization,
+            },
+            {
+              accessToken,
+              previewToken,
+              preview: previewMode,
+            },
+            resolveOptions
+          );
+    } else {
+      const destinationId = process.env['DESTINATION_ID'];
+      if (!destinationId) {
+        throw new Error(
+          'DESTINATION_ID must be set. Copy .env.example to .env, fill it in, and run the bootstrap in examples/scripts.'
         );
+      }
+      // The URL path is the Destination path. A Destination resolves to either a
+      // plan or a redirect the app must follow. Preview is not supported on
+      // Destinations, so no `previewToken` or `preview` flag is passed; use the
+      // /experiences/:id route for preview.
+      const result = await fetchExperience(
+        { spaceId, destinationId, path, personalization },
+        { accessToken },
+        resolveOptions
+      );
+      if ('redirect' in result) return { redirect: result.redirect.path };
+      experience = result;
+    }
 
     // The plan carries these values. `debug` is relayed so the page can
     // demonstrate the renderer's override input.
@@ -130,17 +172,7 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
       notFound: false,
     };
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      return {
-        slug,
-        metadata,
-        experience: null,
-        debug,
-        livePreview,
-        previewSessionOptions,
-        notFound: true,
-      };
-    }
+    if (error instanceof NotFoundError) return notFound;
     throw error;
   }
 }
@@ -148,12 +180,16 @@ async function loadExperience(req: express.Request): Promise<ExperienceRouteData
 app.use(async (req, res, next) => {
   try {
     const context = await loadExperience(req);
+    if (context && 'redirect' in context) {
+      res.redirect(307, context.redirect);
+      return;
+    }
     const consent: ConsentConfig = {
       spaceId: process.env['SPACE_ID'] ?? '',
       environmentId: process.env['ENVIRONMENT_ID'] || 'master',
       accessToken: process.env['CDA_TOKEN'] ?? '',
     };
-    // `consent` rides along on every request; the experience data only on slug routes.
+    // `consent` rides along on every request; the experience data only on experience routes.
     const response = await angularApp.handle(req, { ...context, consent });
     if (!response) {
       next();
