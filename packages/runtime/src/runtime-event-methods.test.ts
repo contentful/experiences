@@ -43,6 +43,7 @@ function createFixture(
     requireProfile?: boolean;
     insightsOptions?: InsightsApiClientRequestOptions;
     experienceOptions?: ExperienceRequestOptions;
+    isActive?: () => boolean;
   } = {}
 ) {
   let profile = options.profile;
@@ -77,6 +78,7 @@ function createFixture(
           setProfile,
           eventInterceptors: options.eventInterceptors,
           getProfileRevision: () => revision,
+          isActive: options.isActive,
           onEventBlocked: options.onEventBlocked,
         })
       : createRuntimeEventMethods(
@@ -98,6 +100,54 @@ function createFixture(
 }
 
 describe('RuntimeEventMethods', () => {
+  it('drops a direct request disposed during its async hook before transport', async () => {
+    let active = true;
+    const run = vi.fn<EventInterceptors['run']>(async (event) => {
+      active = false;
+      return event;
+    });
+    const f = createFixture({
+      consent: { events: true },
+      profile: { id: 'visitor' },
+      isActive: () => active,
+      eventInterceptors: { run },
+    });
+    await expect(f.methods.page()).resolves.toEqual({ accepted: false });
+    active = true;
+    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: false });
+    expect(f.upsertProfile).not.toHaveBeenCalled();
+    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('preserves successful Personalization acceptance without publishing after request disposal', async () => {
+    let active = true;
+    const f = createFixture({ isActive: () => active });
+    f.upsertProfile.mockImplementationOnce(async () => {
+      active = false;
+      return optimizationData('late');
+    });
+    await expect(f.methods.page()).resolves.toEqual({
+      accepted: true,
+      data: optimizationData('late'),
+    });
+    expect(f.setProfile).not.toHaveBeenCalled();
+  });
+
+  it('preserves successful Analytics acceptance after request disposal', async () => {
+    let active = true;
+    const f = createFixture({
+      consent: { events: true },
+      profile: { id: 'visitor' },
+      isActive: () => active,
+    });
+    f.sendBatchEvents.mockImplementationOnce(async () => {
+      active = false;
+      return true;
+    });
+    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: true });
+    expect(f.sendBatchEvents).toHaveBeenCalledTimes(1);
+  });
+
   describe('direct event interception', () => {
     const builder = new EventBuilder({
       channel: 'server',

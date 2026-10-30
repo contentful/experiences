@@ -23,6 +23,15 @@
       "options": {
         "command": "tsc --noEmit -p scripts/tsconfig.json"
       }
+    },
+    "pack-preview": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/live-preview",
+        "command": "tsx ../../scripts/pack-package.ts"
+      }
     }
   }
 }

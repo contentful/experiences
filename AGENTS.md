@@ -132,6 +132,26 @@ tracking, embedded fetch personalization and handoff preparation/replay before e
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
 Static preview without a Session ID requires explicit opt-in; raw `sdk.api` and free fetches remain outside it.
 
+Web owns one Preview Session source/connection and publishes the normal SDK
+signal `states.preview: Observable<PreviewState | undefined>`. It is undefined
+during initialization or when disabled; otherwise it carries optional
+Experience/session IDs, raw `ExperiencePayload` data, error, `live`/`static`/undefined
+status and content revision. `fetchExperience` loads initial/refresh snapshots for
+matching bound IDs. `subscribeToPreview(experienceId, RuntimeFetchResolveOptions,
+listener): Subscription` emits `PreviewUpdate` with optional plan/error, which can
+coexist; status comes from `states.preview`. The binding never fetches snapshots
+or owns per-view state. Web shares in-flight fetching/resolution and owns
+mode/event/profile/lifetime policy; views retain presentation state. Do not add
+SDK per-resource state. `replaceLivePreview` switches sessions. SSR-only adapters
+observe matching content revisions for server refresh without browser resolution.
+Snapshot runtimes expose inert undefined preview state; other states are unchanged.
+
+Future React/Next integration ports Optimization's existing source/presentation
+controllers with the thin binding. Current standalone React preview hooks remain
+until their scheduled migration. Registry/shared ownership, shared page
+initialization, preparation barrier, handoff envelope and attribution remain
+required. See the canonical [Runtime preview limits](./packages/runtime/README.md#optional-runtime-live-preview).
+
 Web's `tracking` API follows Optimization's `enable`, `disable`, `enableElement`,
 `disableElement` and `clearElement` controls for `views`, `hovers` and `clicks`.
 Manual observation means developer registration of elements with real
@@ -214,8 +234,10 @@ Web state and subscription mechanics follow Optimization at pinned commit
 persistence, consent, and connectivity effects. Its readonly `states: CoreStates`
 exposes `profile`, `locale`, `consent`, `persistenceConsent`,
 `experienceRequestState`, `eventStream`, and `blockedEventStream` as observables.
+`preview` uses the same machinery.
 `current` and subscription snapshots are cloned except for immutable
-`eventStream` references. Subscriptions are caller-owned; `subscribe` emits the
+`eventStream` references and read-only preview payloads.
+Subscriptions are caller-owned; `subscribe` emits the
 current value immediately, and `subscribeOnce` stops at the first non-nullish
 value, including `false`. Ordinary event attempts stream after validation and
 consent, before transport or queue admission (including later capacity refusal),
@@ -259,15 +281,19 @@ anonymous identity only with persistence consent. `resolveStatefulDefaults` and
 its exported types preserve configured-default precedence and lazy persisted
 profile loading. `createSnapshotRuntime`, `ExperiencesRuntime`,
 `ExperiencesSnapshot`, and `SnapshotRuntime` are exported from the Web root and
-`./runtime` entry. Snapshot runtimes expose the same seven static observables and
-inert event/command methods, with no fetch or resolve API. See the
+`./runtime` entry. Snapshot runtimes retain the seven static observables and add
+inert undefined `preview` state. Event/command
+methods remain inert, with no fetch or resolve API. See the
 [Web SSR reference](./packages/web/README.md#ssr-import-safety).
 
 A difference is justified only when the content sources and their properties require it, or when server-side personalization here replaces client-side variant resolution there. A retained difference names that requirement. Existing code and new documentation are not a justification.
 
 Retained differences:
 
-- `onOfflineDrop` is not ported. It is deprecated and inactive in Optimization.
+- `onOfflineDrop` is not ported. Optimization's deprecated callback remains active
+  on ordinary offline overflow at the pinned commit. Experiences uses the same
+  oldest-event eviction for ordinary-only queues, without adding the deprecated API.
+  Queues containing prepared replay refuse overflow to preserve whole batches.
 - Observable snapshot functions and subscribers run untracked so callback reads
   cannot add dependencies to a subscription. Event-stream publication reports
   synchronous subscriber errors without interrupting delivery or prepared-replay
@@ -482,6 +508,8 @@ Per-entry prop narrowing happens at `defineComponent<Props>(...)` call time, not
 ## Conventions
 
 ### Commit messages
+
+Keep changes unstaged during implementation and review. Stage only for a ready commit explicitly requested by the user, or an explicit staging request. Commit only when the user requests it.
 
 Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.). Enforced via `commitlint.config.js` + `.husky/commit-msg`. **`feat:` and `fix:` trigger version bumps via `nx release`. `chore:` does NOT trigger a release.**
 

@@ -8,7 +8,7 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 
 ## Session preview
 
-Set `isPreview: true` to suppress events or `isPreview: false` to select delivery.
+Set `isPreview: true` to suppress events or `isPreview: false` to select ordinary event policy.
 When omitted, the SDK detects a nonempty, trimmed `preview_session_id` in the initial
 browser URL. The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
 All event methods return `{ accepted: false, reason: 'preview' }` and report through
@@ -24,6 +24,60 @@ before entering/leaving Session preview in a SPA. CPA configuration, `preview: t
 do not select this policy. Static preview without a Session ID is not detected automatically;
 applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
 fetches remain outside it.
+
+### Shared source and optional live preview
+
+Web owns one Preview Session source/connection through `states.preview`, which
+is `undefined` while initialization is pending or integration is disabled.
+`fetchExperience` loads initial/refresh snapshots for the bound Experience ID;
+other IDs keep their ordinary source. The SDK shares equivalent in-flight
+fetching/resolution; the view keeps its existing presentation state.
+
+`subscribeToPreview(experienceId, resolveOptions, listener)` returns a
+`Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
+fetching. Its optional `data` and `error` may appear together: a new plan can carry
+an existing source error. Connection status comes from `states.preview`.
+
+```ts
+const sdk = new ContentfulExperiences({
+  ...browserConfig,
+  preview: { accessToken: previewToken },
+  livePreview: sessionId
+    ? async () => ({
+        experienceId,
+        sessionId,
+        implementation: await import('@contentful/experiences-live-preview'),
+      })
+    : undefined,
+});
+if (initialPlan) renderPlan(initialPlan);
+else renderPlan(await sdk.fetchExperience({ experienceId }, { config: registry }));
+const subscription = sdk.subscribeToPreview(
+  experienceId,
+  { config: registry },
+  ({ data, error }) => {
+    if (data) renderPlan(data);
+    showError(error);
+  }
+);
+// On teardown:
+subscription.unsubscribe();
+sdk.destroy();
+```
+
+The initializer establishes preview policy before events/tracking. Explicit
+consent/reset commands retain their behavior. `replaceLivePreview(initializer)`
+switches sessions within fixed preview mode and invalidates obsolete work.
+Bindings detach their listeners; source lifetime belongs to the SDK. Failed
+updates leave usable presentation content intact.
+
+SSR-only adapters observe matching `states.preview` content revisions for server
+refresh, without browser resolution. Status-only changes do not advance revision;
+keep the connection stable across refreshes and preserve server content.
+
+Install preview only where enabled. Browser UMD users need a separately bundled
+ESM asset; the references demonstrate enabled builds and production exclusion.
+See [Runtime limits](../runtime/README.md#optional-runtime-live-preview).
 
 ## Install
 
@@ -114,7 +168,7 @@ client; configure its Personalization and Analytics endpoints through `optimizat
 Treat custom endpoints as sensitive-data destinations and use only trusted HTTPS
 origins outside explicit local development.
 
-Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
+Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The optional SDK wrapper coordinates those public APIs through the shared source described above; the package retains transport/protocol ownership.
 
 ## Delivery diagnostics
 
@@ -207,15 +261,16 @@ validation used by the constructor and setter.
 `experiences.states` exposes the browser SDK's observable state. Each observable
 has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 
-| State                    | Value                                                                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`                | Current profile, or `undefined`.                                                                                                                     |
-| `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
-| `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
-| `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
-| `experienceRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`. |
-| `eventStream`            | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                |
-| `blockedEventStream`     | Most recently blocked event metadata, or `undefined`.                                                                                                |
+| State                    | Value                                                                                                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                | Current profile, or `undefined`.                                                                                                                                       |
+| `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                                      |
+| `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                            |
+| `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                                      |
+| `experienceRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.                   |
+| `eventStream`            | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                                  |
+| `blockedEventStream`     | Most recently blocked event metadata, or `undefined`.                                                                                                                  |
+| `preview`                | Shared `PreviewState` or `undefined`: optional `experienceId`/`sessionId`, raw `ExperiencePayload` data, error, `live`/`static`/undefined status and content revision. |
 
 `subscribe` immediately invokes its callback with the current value, including
 `undefined`, then observes changes. `subscribeOnce` waits for the first
@@ -238,8 +293,9 @@ consentSubscription.unsubscribe();
 ```
 
 Object snapshots are deep-cloned by default, so changing a snapshot does not
-update SDK state. `eventStream` uses the emitted event reference instead; treat
-its values as immutable. For ordinary calls, `eventStream` publishes validated,
+update SDK state. `eventStream` uses the emitted event reference instead;
+`preview` also exposes raw payload references as read-only. Treat both
+as immutable. For ordinary calls, `eventStream` publishes validated,
 consent-allowed events before transport or queue admission, so an event may appear
 even if queue capacity later refuses it. Each prepared event appears once only
 when the whole batch is admitted; a refused prepared batch publishes none of its
@@ -267,9 +323,9 @@ For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `effect`, `toObservable`, and `toDistinctObservable`, plus the types `Observable`,
 `Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
-The supported state names follow Optimization's shared browser-state contract;
-Experiences has no flags, selected-optimization, optimization-eligibility, or
-preview state in `states`.
+Preview types are `PreviewState` and `PreviewUpdate`. Other state names follow
+Optimization's shared browser-state contract; Experiences has no flags,
+selected-optimization or optimization-eligibility state.
 
 ### Interceptors
 
@@ -302,8 +358,8 @@ transport boundaries.
 Runtime owns the shared manager and the `OptimizationEventStreamEvent` union;
 Web's root imports remain compatible, and Node exposes the same manager/type
 names with one event registry per SDK instance. Web retains its separate state
-registry. The `./runtime` entry and snapshot runtimes remain unchanged and expose
-no interceptor registry.
+registry. The `./runtime` entry and snapshot runtimes expose no interceptor registry;
+`states.preview` is inert and undefined there.
 
 State interceptors receive incoming `{ profile }` state from Personalization,
 XDA, and private handoff hydration before it is committed. A sparse result that
@@ -403,9 +459,9 @@ the server's captured transport locale, including an absent locale, independentl
 of the browser's current locale. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
-prepared work. Offline ordinary calls are accepted into an in-memory queue until
-capacity, then refused without evicting accepted work. A prepared batch is
-admitted whole or refused at capacity. Capacity is `queuePolicy.offlineMaxEvents`
+prepared work. When an ordinary-only offline queue is full, the oldest event is
+evicted and the new event is admitted, matching Optimization. Queues containing
+prepared replay refuse overflow; prepared batches are admitted whole or refused. Capacity is `queuePolicy.offlineMaxEvents`
 (default 100; a non-positive or non-finite value falls back to the default, and a
 fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
 completion. Read `states.experienceRequestState.current` for the latest
@@ -868,10 +924,11 @@ const runtime = createSnapshotRuntime({
 });
 ```
 
-Its seven `states` observables are static: profile, locale, and consent come from
+Its existing seven `states` observables are static: profile, locale and consent come from
 the snapshot, persistence consent falls back to event consent, request state is
-`{ status: 'success' }`, and both event streams are `undefined`. `hasConsent()`
-uses the snapshot's consent and optional `allowedEventTypes`. Event methods and
+`{ status: 'success' }`; both event streams and `preview` are inert `undefined`
+observables.
+`hasConsent()` uses the snapshot's consent and optional `allowedEventTypes`. Event methods and
 state-changing commands warn and do no work; methods returning an admission
 result resolve `{ accepted: false }`. `destroy()` needs no cleanup. Fetching and
 resolution remain outside this interface. `createSnapshotRuntime` and the types

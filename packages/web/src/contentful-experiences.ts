@@ -28,8 +28,12 @@ import {
   toConsentState,
   validatePreparedEvents,
   withEventConsent,
+  assertRuntimePreviewRequest,
+  fetchRuntimePreviewSession,
+  mergeRuntimePreviewResolveOptions,
+  type RuntimeLivePreviewInitializer,
 } from '@contentful/experiences-runtime';
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { serializePersonalization } from '@contentful/experiences-client';
 import { signal, untracked } from '@preact/signals-core';
 import { isEqual } from 'es-toolkit/predicate';
@@ -44,9 +48,10 @@ import {
   online as onlineSignal,
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
+  preview as previewSignal,
   toObservable,
 } from './signals/index.js';
-import type { CoreStates } from './states.js';
+import type { CoreStates, PreviewUpdate } from './states.js';
 import { normalizeExplicitLocale } from './locale.js';
 import {
   mergeExperienceState,
@@ -75,6 +80,9 @@ import { beaconHandler } from './lib/beacon.js';
 import { createVisibilityChangeListener } from './lib/visibility.js';
 import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
+import { WebPreview } from './web-preview.js';
+import { getExperienceSourceKey } from './experience-source-key.js';
+import type { Subscription } from './signals/index.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type BrowserEventContextProviders = Pick<
@@ -91,6 +99,8 @@ export type CoreConfigDefaults = StatefulDefaults;
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
   /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
   isPreview?: boolean;
+  /** Optional lazy Preview Session binding. Presence establishes preview policy immediately. */
+  livePreview?: RuntimeLivePreviewInitializer;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -174,6 +184,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 > {
   readonly #singletonOwner: string;
   readonly #isPreview: boolean;
+  #preview: WebPreview | undefined;
+  readonly #pendingContent = new Map<
+    RuntimeFetchResolveOptions['config'],
+    Map<string, Promise<PortableRenderPlan>>
+  >();
+  #contentLifetime = 0;
   #profileRevision = 0;
   readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
@@ -239,6 +255,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   /** Observable state shared with application subscriptions and internal effects. */
   readonly states: CoreStates = {
+    preview: toObservable(previewSignal, (value) => value),
     blockedEventStream: toObservable(blockedEventSignal),
     consent: toObservable(consentSignal),
     persistenceConsent: toObservable(persistenceConsentSignal),
@@ -281,8 +298,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
       },
     });
+    if (config.livePreview !== undefined && config.isPreview === false) {
+      throw new TypeError('livePreview cannot be combined with isPreview: false');
+    }
     this.#isPreview =
-      config.isPreview ??
+      (config.livePreview !== undefined ? true : config.isPreview) ??
       (typeof window !== 'undefined' &&
         Boolean(
           new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim()
@@ -315,6 +335,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         eventSignal.value = undefined;
         blockedEventSignal.value = undefined;
         experienceRequestStateSignal.value = { status: 'idle' };
+        previewSignal.value = undefined;
       });
       this.eventBuilder.getConsent = () => consentSignal.value;
       this.#identity = new IdentityCookie(LocalStore, cookie);
@@ -365,8 +386,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           () => !this.#destroyed && this.#generation === generation
         );
       });
+      if (this.isPreview && (defaults?.persistenceConsent ?? defaults?.consent) === false) {
+        LocalStore.clearProfileContinuity();
+        this.#identity.clear();
+      }
       // Capture the incoming cookie before the profile-persistence effect can replace it.
-      const incoming = persistenceConsentSignal.value === true ? this.#identity.read() : undefined;
+      const incoming =
+        !this.isPreview && persistenceConsentSignal.value === true
+          ? this.#identity.read()
+          : undefined;
       this.#initializeEffects();
       if (incoming !== undefined) this.#reconcileCookie(incoming);
       if (typeof window !== 'undefined') {
@@ -381,7 +409,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         await this.#interactionTracking?.endActive();
         await this.flushQueues({ force: true, beacon: beaconHandler });
       });
+      if (config.livePreview) this.#preview = new WebPreview(this.config, config.livePreview);
     } catch (error) {
+      this.#preview?.destroy();
       this.#interactionTracking?.destroy();
       this.#disposeEffects();
       this.#cleanupVisibilityListener?.();
@@ -472,6 +502,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         if (next.persistence === false) {
           LocalStore.clearProfileContinuity();
           this.#identity.clear();
+        } else if (this.isPreview && next.persistence === true) {
+          // Preview startup never mutates continuity. An explicit visitor command still can.
+          this.#reconcileCookie(this.#identity.read());
+          LocalStore.profile = profileSignal.peek();
+          this.#identity.persist(
+            this.#identity.resolve({
+              profileId: profileSignal.peek()?.id,
+              handoffId: this.#adoptedProfileId.peek(),
+            })
+          );
         }
       } finally {
         // Cookie deletion can throw in a restricted document. Queues and old
@@ -501,15 +541,150 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.#destroyed) return undefined;
     const resolvedLocale = normalizeExplicitLocale(locale);
     localeSignal.value = resolvedLocale;
+    if (this.#destroyed) return undefined;
     this.api.experience.setLocale(resolvedLocale);
     return resolvedLocale;
+  }
+
+  /** Deliver resolved preview updates; the caller retains its existing view state. */
+  subscribeToPreview(
+    experienceId: string,
+    resolveOptions: RuntimeFetchResolveOptions,
+    listener: (update: PreviewUpdate) => void
+  ): Subscription {
+    if (this.#destroyed) return { unsubscribe() {} };
+    const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+    let active = true;
+    let previous: ExperiencePayload | undefined;
+    let previousError: Error | undefined;
+    const subscription = this.states.preview.subscribe((state) => {
+      if (!active || this.#destroyed) return;
+      if (!state || (state.experienceId && state.experienceId !== experienceId)) {
+        previous = undefined;
+        previousError = undefined;
+        return;
+      }
+      if (state.error && state.error !== previousError) listener({ error: state.error });
+      previousError = state.error;
+      const data = state.data;
+      if (!data) {
+        previous = undefined;
+        return;
+      }
+      if (data === previous || state.experienceId !== experienceId) return;
+      previous = data;
+      const lifetime = this.#contentLifetime;
+      const source = this.#preview?.revision;
+      const current = () =>
+        active &&
+        !this.#destroyed &&
+        lifetime === this.#contentLifetime &&
+        source === this.#preview?.revision &&
+        previewSignal.peek()?.data === data;
+      const key = getExperienceSourceKey(
+        { request: { experienceId }, revision: [lifetime, state.revision] },
+        resolve,
+        source ?? 0,
+        'preview'
+      );
+      // Unlike resolved snapshots, the preview client emits raw payloads.
+      // Resolve streamed content with the caller's registry before publishing a plan.
+      void this.#shareContent(key, resolve, async () =>
+        this.resolveExperience(data, resolveOptions)
+      ).then(
+        (plan) => {
+          if (!current()) return;
+          listener(
+            plan.diagnostics.length
+              ? { error: plan.diagnostics[0]! }
+              : { data: plan, error: previewSignal.peek()?.error }
+          );
+        },
+        (error: unknown) => {
+          if (current())
+            listener({ error: error instanceof Error ? error : new Error(String(error)) });
+        }
+      );
+    });
+    return {
+      unsubscribe: () => {
+        active = false;
+        subscription.unsubscribe();
+      },
+    };
+  }
+
+  async replaceLivePreview(initializer: RuntimeLivePreviewInitializer): Promise<void> {
+    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    if (!this.isPreview) throw new Error('Entering preview requires a new Web SDK instance');
+    this.#contentLifetime++;
+    this.#pendingContent.clear();
+    if (this.#preview) await this.#preview.replace(initializer);
+    else {
+      this.#preview = new WebPreview(this.config, initializer);
+      await this.#preview.ready();
+    }
+  }
+
+  #shareContent(
+    key: string | undefined,
+    resolve: RuntimeFetchResolveOptions,
+    load: () => Promise<PortableRenderPlan>
+  ): Promise<PortableRenderPlan> {
+    if (key === undefined) return load();
+    let pending = this.#pendingContent.get(resolve.config);
+    if (!pending) this.#pendingContent.set(resolve.config, (pending = new Map()));
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const promise = load().finally(() => {
+      if (pending.get(key) === promise) pending.delete(key);
+      if (!pending.size && this.#pendingContent.get(resolve.config) === pending)
+        this.#pendingContent.delete(resolve.config);
+    });
+    pending.set(key, promise);
+    return promise;
   }
 
   override async fetchExperience(
     options: RuntimeFetchExperienceOptions,
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+    const currentGeneration = () => (this.isPreview ? this.#contentLifetime : this.#generation);
+    let generation = currentGeneration();
+    const source = this.#preview?.revision;
+    const assertCurrent = () => {
+      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+      if (generation !== currentGeneration() || source !== this.#preview?.revision) {
+        throw new Error('Experiences fetch was superseded');
+      }
+    };
+    assertCurrent();
+    const binding = this.#preview ? await this.#preview.ready() : undefined;
+    assertCurrent();
+    if (binding?.experienceId === options.experienceId) {
+      assertRuntimePreviewRequest(options);
+      this.#gatePersonalizationEvents(options);
+      assertCurrent();
+      const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+      const key =
+        options.personalization?.events !== undefined
+          ? undefined
+          : getExperienceSourceKey(
+              {
+                request: { experienceId: options.experienceId },
+                revision: [this.#contentLifetime],
+              },
+              resolve,
+              source ?? 0,
+              'snapshot'
+            );
+      return this.#shareContent(key, resolve, async () => {
+        const plan = await fetchRuntimePreviewSession(binding, this.config, resolveOptions);
+        // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
+        assertCurrent();
+        return plan;
+      });
+    }
     if (
       this.#currentInitialization?.identityReady !== undefined ||
       this.#currentInitialization?.hydration !== undefined
@@ -519,7 +694,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
-    const generation = this.#generation;
+    generation = currentGeneration();
     const gated = this.#gatePersonalizationEvents(
       this.#ensureInteractionTracking()?.hasAutoTracking()
         ? {
@@ -528,8 +703,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           }
         : options
     );
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    assertCurrent();
     const intercepted =
       gated.personalization?.events === undefined
         ? gated.personalization
@@ -539,8 +713,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
               gated.personalization.events.map((event) => this.interceptors.event.run(event))
             ),
           };
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    assertCurrent();
     const serialized =
       intercepted === undefined ? undefined : serializePersonalization(intercepted);
     const personalization =
@@ -551,58 +724,72 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             ...serialized,
             events: serialized.events.filter((event) => {
               const admitted = this.#admitEvent(event, true);
-              if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-              if (this.#generation !== generation)
-                throw new Error('Experiences fetch was superseded');
+              assertCurrent();
               return admitted;
             }),
           };
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    assertCurrent();
     for (const event of personalization?.events ?? []) {
       this.#publishEvent(event);
-      if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-      if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+      assertCurrent();
     }
     const profileId = this.isPreview
       ? undefined
       : (personalization?.profileId ?? this.#requestIdentity());
-    const plan = await super.fetchExperience(
+    assertCurrent();
+    const request =
       profileId === undefined
         ? { ...gated, personalization }
-        : {
-            ...gated,
-            personalization: { ...personalization, profileId },
-          },
-      resolveOptions
-    );
-    if (
-      !this.#destroyed &&
-      !this.isPreview &&
-      options.preview !== true &&
-      this.#identityRevision === identityRevision
-    ) {
-      const nextProfileId = plan.personalization?.profileId;
+        : { ...gated, personalization: { ...personalization, profileId } };
+    const normalizedRequest = {
+      ...request,
+      locale: options.locale ?? this.locale,
+      preview: options.preview ?? false,
+    };
+    const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+    const key =
+      options.personalization?.events !== undefined
+        ? undefined
+        : getExperienceSourceKey(
+            {
+              request: normalizedRequest,
+              revision: [generation, profileRevision, identityRevision],
+            },
+            resolve,
+            source ?? 0,
+            'delivery'
+          );
+    return this.#shareContent(key, resolve, async () => {
+      const plan = await super.fetchExperience(request, resolveOptions);
       if (
-        nextProfileId !== undefined &&
-        this.#profileRevision === profileRevision &&
-        profileSignal.value?.id !== nextProfileId
+        !this.#destroyed &&
+        !this.isPreview &&
+        options.preview !== true &&
+        this.#identityRevision === identityRevision
       ) {
-        const next = await this.interceptors.state.run(
-          { profile: { id: nextProfileId } },
-          mergeExperienceState
-        );
+        const nextProfileId = plan.personalization?.profileId;
         if (
-          !this.#destroyed &&
-          this.#generation === generation &&
-          this.#identityRevision === identityRevision &&
+          nextProfileId !== undefined &&
           this.#profileRevision === profileRevision &&
-          !isEqual(profileSignal.value, next.profile)
-        )
-          profileSignal.value = next.profile;
+          profileSignal.value?.id !== nextProfileId
+        ) {
+          const next = await this.interceptors.state.run(
+            { profile: { id: nextProfileId } },
+            mergeExperienceState
+          );
+          if (
+            !this.#destroyed &&
+            this.#generation === generation &&
+            this.#identityRevision === identityRevision &&
+            this.#profileRevision === profileRevision &&
+            !isEqual(profileSignal.value, next.profile)
+          ) {
+            profileSignal.value = next.profile;
+          }
+        }
       }
-    }
-    return plan;
+      return plan;
+    });
   }
 
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
@@ -613,6 +800,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     batch(() => {
       this.#generation += 1;
+      this.#contentLifetime += 1;
+      this.#pendingContent.clear();
+      this.#preview?.clear();
       this.#interactionTracking?.reset();
       this.#currentInitialization = undefined;
       this.#currentPage.reset();
@@ -649,6 +839,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       flushPersonalizationOnDestroy(this.experienceQueue);
     }
     this.#destroyed = true;
+    this.#contentLifetime += 1;
+    this.#pendingContent.clear();
     this.#disposeEffects();
     this.insightsQueue.clearPeriodicFlushTimer();
     this.insightsQueue.clearScheduledRetry();
@@ -665,6 +857,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;
+      this.#preview?.destroy();
     } finally {
       try {
         super.destroy();
@@ -1035,6 +1228,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       effect(() => {
         const persistenceConsent = persistenceConsentSignal.value;
         LocalStore.persistenceConsent = persistenceConsent;
+        if (this.isPreview) return;
         if (persistenceConsent === true) {
           untracked(() => this.#reconcileCookie(this.#identity.read()));
         }
@@ -1049,7 +1243,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         const profile = profileSignal.value;
         const persistenceConsent = persistenceConsentSignal.value;
         const handoffId = this.#adoptedProfileId.value;
-        if (persistenceConsent !== true) return;
+        if (this.isPreview || persistenceConsent !== true) return;
         LocalStore.profile = profile;
         this.#identity.persist(this.#identity.resolve({ profileId: profile?.id, handoffId }));
       })

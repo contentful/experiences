@@ -12,10 +12,10 @@
   Shared SDK references are type-only; SDK execution stays in runtime adapters.
   `public/dist` is generated; the local Web theme retains its pinned provenance.
 - Runtime reads only this app's ignored `.env` via dotenv. Preserve it during
-  installation and cleanup. Keep `.env.example` credential-free. The sole public
+  installation and cleanup. Keep `.env.example` credential-free. The ordinary public
   configuration allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`,
   resolved `EXPERIENCE_IDS`. `PORT` and unrelated settings stay private. CDA_TOKEN
-  must be appropriate for public browser use; never copy management/preview tokens.
+  must be appropriate for public browser use; never copy management or server-only preview credentials.
 - Serve only public assets, explicit Home/Page Two routes, and API-free health.
   Bind to loopback. Missing routes/assets return 404; never serve the app directory.
 - Server integration is actual EJS SSR. Browser activation adopts state without
@@ -60,10 +60,22 @@
   final exit or failed activation. Preserve it for BFCache. Never fabricate server
   events or expose handoff/profile payloads. Group only actual interval IDs.
 - No tests, test infrastructure, mocks, fixtures, simulated upstreams, verification
-  runners, test-only hooks, transport workarounds, Live Preview or Live Updates.
+  runners, test-only hooks, transport workarounds or Optimization Live Updates.
   Validate using the actual install/build/lint/typecheck commands, installed exports
   and declarations, and direct shell/asset/health inspection.
 - Typecheck covers server/build TypeScript; lint covers authored browser JavaScript
   when present. EJS and browser content property accesses are not typechecked.
 - Stop/restart/status/logs must target only `experiences-node-web-sdk-app`.
   Preserve siblings, unrelated processes, local credentials and stack metadata.
+
+- Optional preview uses request-local Node `livePreview`; Web retains SSR plans/DOM
+  and attaches `subscribeToPreview` without a startup refetch. Navigation/Retry fetch
+  and render before attaching listeners; `states.preview` exposes status. Skip visitor
+  work/handoff and identity-cookie writes under `isPreview`; destroy Node facades in
+  `finally`. Allowlist browser settings; seed plans without profiles or upstream
+  diagnostic strings, retaining generic diagnostic counts.
+  Build and host read app-local `LIVE_PREVIEW_ENABLED`; bundle installed preview
+  artifacts only when enabled. Use `replaceLivePreview` for binding changes within
+  preview and reload the document when entering or leaving preview.
+  Release subscriptions on route replacement/final exit and retain them for BFCache.
+  Keep `packages/live-preview` and local `.env` files unchanged.
