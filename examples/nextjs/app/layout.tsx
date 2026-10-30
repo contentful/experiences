@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 
 import { ConsentPanel } from '@/components/ConsentPanel';
+import { PersonalizationToggle } from '@/components/PersonalizationToggle';
 
 export const metadata = {
   title: 'Contentful Experiences — Next.js example',
@@ -19,6 +20,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           minHeight: '100vh',
         }}
       >
+        <Suspense fallback={null}>
+          <PersonalizationToggle />
+        </Suspense>
         {children}
         <Suspense fallback={null}>
           <ConsentPanel

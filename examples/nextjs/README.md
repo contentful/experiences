@@ -92,7 +92,7 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Open `http://localhost:3000/demo/landing?personalization=true` (or
+Tick **Personalization** in the top-right corner of any page, or open `http://localhost:3000/demo/landing?personalization=true` (or
 `/experiences/landing?personalization=true`) to see the developer hero. Without
 the flag you get the base hero. Both the Destination and by-id fetches accept the
 same `personalization` option.
@@ -191,7 +191,7 @@ if ('redirect' in result) redirect(result.redirect.path);
 return <ServerExperienceRenderer experience={result} config={experienceConfig} debug={debug} />;
 ```
 
-Destination delivery is space-scoped (no `environmentId`), and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. Static pages are served as built: republish content and rebuild, or use revalidation, to pick up changes.
+Destination delivery is space-scoped (no `environmentId`), and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. The listed paths are prerendered at build time; requests carrying query flags such as `?personalization=true` or `?debug=true` are rendered on demand, because the page reads `searchParams`. Rebuild or use revalidation to refresh the prerendered copies after republishing content.
 
 The by-id route:
 
