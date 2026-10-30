@@ -916,23 +916,30 @@ Resolved design auto-fills props here too, so a component styles itself straight
 ### 3. Fetch + render (SvelteKit)
 
 ```ts
-// routes/[slug]/+page.server.ts
-import { fetchExperience } from '@contentful/experiences-svelte';
-import { CDA_TOKEN, SPACE_ID } from '$env/static/private';
+// routes/[...path]/+page.server.ts: the URL path is the Destination path
+import { error, redirect } from '@sveltejs/kit';
+import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
+import { CDA_TOKEN, DESTINATION_ID, SPACE_ID } from '$env/static/private';
 import { experienceConfig } from '$lib/experience-config';
 
 export const load = async ({ params }) => {
-  const experience = await fetchExperience(
-    { spaceId: SPACE_ID, environmentId: 'master', experienceId: params.slug },
-    { accessToken: CDA_TOKEN },
-    { config: experienceConfig }
-  );
-  return { experience };
+  try {
+    const result = await fetchExperience(
+      { spaceId: SPACE_ID, destinationId: DESTINATION_ID, path: `/${params.path}` },
+      { accessToken: CDA_TOKEN },
+      { config: experienceConfig }
+    );
+    if ('redirect' in result) redirect(307, result.redirect.path);
+    return { experience: result };
+  } catch (err) {
+    if (err instanceof NotFoundError) error(404, 'Not found');
+    throw err;
+  }
 };
 ```
 
 ```svelte
-<!-- routes/[slug]/+page.svelte -->
+<!-- routes/[...path]/+page.svelte -->
 <script lang="ts">
   import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
   import { experienceConfig } from '$lib/experience-config';
@@ -943,7 +950,7 @@ export const load = async ({ params }) => {
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
 
-Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
+To fetch by Experience id instead (for example, for preview), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
 
 ---
 
@@ -1047,14 +1054,16 @@ Fetch on the server — in an Express handler rather than an Angular route resol
 import { fetchExperience } from '@contentful/experiences-angular';
 import { experienceConfig } from './app/lib/experience-config';
 
-const experience = await fetchExperience(
-  { spaceId, environmentId: 'master', experienceId: slug },
+// The URL path is the Destination path.
+const result = await fetchExperience(
+  { spaceId, destinationId, path: req.path },
   { accessToken: CDA_TOKEN },
   { config: experienceConfig }
 );
+if ('redirect' in result) return res.redirect(307, result.redirect.path);
 
 // Hand it to the app as the requestContext argument of AngularNodeAppEngine.handle().
-const response = await angularApp.handle(req, { experience });
+const response = await angularApp.handle(req, { experience: result });
 ```
 
 ```ts

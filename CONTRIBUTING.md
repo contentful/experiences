@@ -64,12 +64,12 @@ npx nx show project adapter-react     # see a project's available targets
 
 ### Running an example app
 
-The `examples/` directory has Next.js, SvelteKit, Angular, Astro, and client-only Vite (React and Svelte) apps that render live XDA payloads — the fastest way to see a change end to end. They read the demo Experience that [`examples/scripts`](./examples/scripts) seeds into your space; run its bootstrap once first.
+The `examples/` directory has Next.js, SvelteKit, Angular, Astro, and client-only Vite (React and Svelte) apps that render live XDA payloads — the fastest way to see a change end to end. They read the demo content and Destination that [`examples/scripts`](./examples/scripts) seeds into your space; run its bootstrap once first.
 
 ```sh
 cd examples/nextjs
-cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN
-npm run dev                  # http://localhost:3000/<experience-id>
+cp .env.example .env.local   # fill in SPACE_ID + CDA_TOKEN + DESTINATION_ID (the bootstrap prints it)
+npm run dev                  # http://localhost:3000/ and /demo/landing; by id: /experiences/<experience-id>
 ```
 
 `examples/sveltekit`, `examples/angular`, `examples/astro`, `examples/vite-react`, and `examples/vite-svelte` mirror it, registering the same components against the same payload. `examples/node` is a framework-neutral server that shows the identity cookie handoff between the Web SDK and the Node SDK. Each has its own README for the setup.
@@ -95,7 +95,7 @@ examples/            # Example apps (customer-facing)
 ├── vite-react/      # Vite + React client-only example app
 ├── vite-svelte/     # Vite + Svelte client-only example app
 ├── node/            # node:http identity-cookie example (no renderer)
-└── scripts/         # One-time bootstrap that seeds the demo Experience
+└── scripts/         # One-time bootstrap that seeds the demo content and a Destination
 implementations/     # Reference implementations (maintainer-facing)
 ├── node-sdk/        # Express/EJS on the packed Node SDK
 ├── web-sdk/         # Vanilla browser app on the packed Web SDK UMD build
