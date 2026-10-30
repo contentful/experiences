@@ -1,3 +1,7 @@
+## 0.13.7 (2026-10-30)
+
+This was a version bump only for design to align it with other projects, there were no code changes.
+
 ## 0.13.6 (2026-10-29)
 
 This was a version bump only for design to align it with other projects, there were no code changes.

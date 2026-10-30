@@ -119,6 +119,11 @@
   />
 {/snippet}
 
-{#each nodes as node, index (node.nodeId ?? index)}
+<!--
+  The key includes the registration because NodeRenderer captures it once at
+  init (its context setup can't re-run), so a node whose component changes
+  must remount rather than reuse the old instance.
+-->
+{#each nodes as node, index (`${node.registration.kind}:${node.registration.id}:${node.nodeId ?? index}`)}
   {@render renderNode(node)}
 {/each}
