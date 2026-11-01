@@ -1,6 +1,7 @@
 import { resolveExperience, type ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLivePreviewClient, LivePreviewConnectionError } from './index';
+import { inspectorPayload } from './test-fixtures/inspector';
 import {
   FakeWebSocket,
   resetSockets,
@@ -197,6 +198,25 @@ describe('createLivePreviewClient', () => {
 
     expect(source.getResult().data).toEqual(expected);
     expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('requests and preserves source maps from the first and subsequent backend updates', async () => {
+    setBrowser();
+    const source = createLivePreviewClient({ ...sourceOptions('session-id'), sourceMap: true });
+    const unsubscribe = source.subscribe(vi.fn());
+    expect(new URL(sockets[0]!.url).searchParams.get('source_map')).toBe('true');
+    for (const title of ['first update', 'second update']) {
+      const expected = globalThis.structuredClone(inspectorPayload);
+      expected.nodes[0]!.contentProperties = { title };
+      sockets[0]!.emitMessage(message('next', expected));
+      await waitForSnapshot(source);
+      expect(source.getResult().data).toEqual(expected);
+      const plan = await resolveExperience(source.getResult().data!, { components: {} });
+      expect(plan.diagnostics).toEqual([]);
+      expect(plan.sourceMap).toEqual(expected.extensions!.sourceMap);
+      expect(plan.nodes.map(({ nodeId }) => nodeId)).toEqual(['rendered-first', 'rendered-second']);
+    }
     unsubscribe();
   });
 

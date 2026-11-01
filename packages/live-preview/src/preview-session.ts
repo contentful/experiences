@@ -15,6 +15,8 @@ export type PreviewSessionOptions = {
    * Opaque encoded resource-resolution value for referenced spaces.
    */
   resourceResolution?: string;
+  /** Request the public source map with source_map=true. */
+  sourceMap?: boolean;
   /**
    * Custom WebSocket URL for Preview Session subscriptions (staging, proxy, per-region).
    * Omit to use the production Preview Session WebSocket host.

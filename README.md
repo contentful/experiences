@@ -1270,7 +1270,13 @@ When a plan carries a usable source map, the SDK resolves which reportable scope
 
 Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.
 
-Live Preview plans carry attribution only if the preview-session endpoints return a source map, which the SDK does not request today.
+Live Preview plans carry attribution when the preview-session endpoints return
+a source map. React's `useLivePreview({ ..., inspector: true })` requests maps and
+reports committed geometry to the embedding editor. Framework-neutral preview
+clients can request maps with `PreviewSessionOptions.sourceMap: true`.
+See the [inspector integration](./packages/adapter-react/README.md#inspector-geometry)
+for DOM markers and the parent-message contract. Backend support for
+`source_map=true` is required; without a usable map, inspection reports no targets.
 
 #### Which map wins
 
