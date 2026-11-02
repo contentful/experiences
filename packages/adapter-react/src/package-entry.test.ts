@@ -118,7 +118,8 @@ describe('published package entry points', () => {
         import {
           createReactExperiences, useExperiences, useExperiencesContext,
           useExperiencesActions, useConsentState, usePreviewState,
-          type OnExperienceNodeRoot, type PortableRenderPlan
+          type OnExperienceNodeRoot, type PortableRenderPlan, type ManagedExperienceResult,
+          Experience as UnboundExperience
         } from '@contentful/experiences-react/client';
         import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
           from '@contentful/experiences-react/host';
@@ -126,12 +127,13 @@ describe('published package entry points', () => {
           type States, type RuntimeLivePreviewOptions }
           from '@contentful/experiences-react/web-sdk';
 
-        const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } =
+        const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer, Experience, useManagedExperience } =
           createReactExperiences({ config: { components: {} } });
         declare const config: Config;
         declare const livePreview: RuntimeLivePreviewOptions;
         declare const plan: PortableRenderPlan;
         declare const sdk: ContentfulExperiences;
+        declare const initialError: Error;
         function ManualContent() {
           const runtime: WebExperiencesRuntime = useExperiences();
           const registerView = useCallback<OnExperienceNodeRoot>(({ element, data }) => {
@@ -147,18 +149,48 @@ describe('published package entry points', () => {
           const track: WebExperiencesRuntime['track'] = trackEvent;
           const locale: WebExperiencesRuntime['setLocale'] = setLocale;
           void [consent, preview, context, track, locale, setConsent];
-          return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+          const content = useManagedExperience({ experienceId: 'experience', initialPlan: plan, initialError,
+            personalization: { events: [{ type: 'identify', userId: 'visitor' }, { type: 'page' }] } });
+          const refresh: () => Promise<void> = content.refresh;
+          const retry: () => Promise<void> = content.retry;
+          void [refresh, retry];
+          return <Experience experienceId="experience" initialPlan={plan} trackViews={false}
+            trackHovers={false} trackClicks={false} onNodeRoot={registerView}
+            onExperienceResolved={(result) => { const resolved: PortableRenderPlan = result.data; void resolved; }}
+            onExperienceError={(error, result) => { const value: ManagedExperienceResult = result;
+              const message: string = error.message; void [value, message]; }}
+            errorFallback={(result) => result.error?.message} loadingFallback={(result) => result.status} />;
         }
-        const owned = <ExperiencesRoot {...config} livePreview={livePreview}><ManualContent /></ExperiencesRoot>;
+        const owned = <ExperiencesRoot {...config} livePreview={livePreview} routeKey="/"
+          buildPagePayload={() => ({ properties: { title: 'Home' } })}><ManualContent /></ExperiencesRoot>;
+        const supplied = <ExperienceRenderer experience={plan} />;
+        const authoritative = <Experience experience={plan} errorFallback="Unavailable" />;
+        const unbound = <UnboundExperience experience={plan} config={{ components: {} }} />;
+        const empty = <Experience experience={null} />;
+        const failed = <Experience experienceId="experience" initialError={initialError} />;
+        const partial = <Experience experienceId="experience" initialPlan={plan} initialError={initialError} />;
         const injected = <ExperiencesProvider sdk={sdk}><ManualContent /></ExperiencesProvider>;
         const binding = createExperiencesRootSdkBinding({ sdk });
         const concrete: ContentfulExperiences = binding.sdk;
         disposeExperiencesRootSdkBinding(binding);
-        void [owned, injected, concrete];
+        void [owned, injected, concrete, supplied, authoritative, unbound, empty, failed, partial];
         // @ts-expect-error Destruction belongs to the SDK owner.
         useExperiencesActions().destroy();
-        // @ts-expect-error Managed content loading belongs to the next phase.
-        createReactExperiences({ config: { components: {} } }).Experience;
+        // @ts-expect-error A managed Experience descriptor requires its ID.
+        const invalid = <Experience />;
+        // @ts-expect-error Supplied and managed sources are mutually exclusive.
+        const mixedId = <Experience experience={plan} experienceId="experience" />;
+        // @ts-expect-error A supplied plan is authoritative, not a managed seed.
+        const mixedSeed = <Experience experience={plan} initialPlan={plan} />;
+        // @ts-expect-error Supplied mode cannot carry a managed error seed.
+        const mixedError = <Experience experience={plan} initialError={initialError} />;
+        // @ts-expect-error Supplied mode has no fetch personalization.
+        const mixedFetch = <Experience experience={plan} personalization={{ events: [{ type: 'page' }] }} />;
+        // @ts-expect-error Unbound Experience requires its registry.
+        const missingConfig = <UnboundExperience experience={plan} />;
+        // @ts-expect-error The unbound union also rejects mixed inputs.
+        const mixedUnbound = <UnboundExperience experience={plan} experienceId="experience" config={{ components: {} }} />;
+        void [invalid, mixedId, mixedSeed, mixedError, mixedFetch, missingConfig, mixedUnbound];
       `;
       const options: ts.CompilerOptions = {
         target: ts.ScriptTarget.ES2023,

@@ -16,26 +16,33 @@ import {
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
   type Config,
+  type CurrentPageOptions,
 } from '@contentful/experiences-web';
 import {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
 } from '@contentful/experiences-runtime';
-import {
-  ExperiencesContext,
-  type ExperiencesContextValue,
-} from '../context/experiences-context.js';
+import { ExperiencesContext, type ExperiencesContextValue } from './experiences-context.js';
 import {
   createExperiencesRootSdkBinding,
   disposeExperiencesRootSdkBinding,
   type ExperiencesRootSdkBinding,
   type OnStatesReady,
 } from './experiences-root-sdk-binding.js';
+import {
+  ExperiencesPageSequence,
+  type BeforeInitialPageOptions,
+} from './experiences-page-sequence.js';
 
 interface PresentationOptions {
   readonly snapshot?: ExperiencesSnapshot;
   readonly handoff?: ExperiencesHandoff;
   readonly onStatesReady?: OnStatesReady;
+  readonly routeKey?: string;
+  readonly buildPagePayload?: CurrentPageOptions['buildPayload'];
+  /** Static page arguments; update route-varying values on navigation. The builder takes precedence. */
+  readonly initialPagePayload?: Exclude<ReturnType<CurrentPageOptions['buildPayload']>, undefined>;
+  readonly beforeInitialPage?: BeforeInitialPageOptions;
 }
 
 export type ExperiencesProviderProps = PropsWithChildren<
@@ -75,12 +82,19 @@ function createTarget(props: ActivationProps): Target {
   return {
     props,
     snapshot,
-    initial: {
-      sdk: immediate ? props.sdk : snapshot,
-      error: undefined,
-      isLive: immediate,
-      isContentReady: immediate,
-    },
+    initial: immediate
+      ? {
+          sdk: props.sdk,
+          error: undefined,
+          isLive: true,
+          isContentReady: true,
+        }
+      : {
+          sdk: snapshot,
+          error: undefined,
+          isLive: false,
+          isContentReady: false,
+        },
   };
 }
 
@@ -106,6 +120,27 @@ function ActivationProvider(props: ActivationProps) {
   const activeRef = useRef<ActiveBinding | undefined>(undefined);
   const context = state.target === target ? state : target.initial;
   const handoff = props.handoff;
+  const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
+    () =>
+      props.buildPagePayload ??
+      (props.initialPagePayload === undefined ? undefined : () => props.initialPagePayload),
+    [props.buildPagePayload, props.initialPagePayload]
+  );
+  const routeKey =
+    props.routeKey ??
+    (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
+  const [resetRevision, setResetRevision] = useState<object>(() => ({}));
+  const operationRevision = useRef(resetRevision);
+  const resetHandoff = useRef<ExperiencesHandoff | undefined>(undefined);
+  const resetRequests = useMemo(
+    () => () => {
+      const revision = {};
+      operationRevision.current = revision;
+      resetHandoff.current = handoff;
+      setResetRevision(revision);
+    },
+    [handoff]
+  );
 
   function publishLive(active: ActiveBinding, isContentReady: boolean, error?: Error) {
     if (activeRef.current !== active) return;
@@ -122,22 +157,26 @@ function ActivationProvider(props: ActivationProps) {
     let active: ActiveBinding | undefined;
     try {
       const initial = target.props;
-      const binding =
-        'sdk' in initial
-          ? createExperiencesRootSdkBinding({
-              sdk: initial.sdk,
-              onStatesReady: initial.onStatesReady,
-            })
-          : (() => {
-              const {
-                children: _children,
-                snapshot: _snapshot,
-                handoff: _handoff,
-                onStatesReady,
-                ...config
-              } = initial;
-              return createExperiencesRootSdkBinding({ config, onStatesReady });
-            })();
+      let binding: ExperiencesRootSdkBinding;
+      if ('sdk' in initial) {
+        binding = createExperiencesRootSdkBinding({
+          sdk: initial.sdk,
+          onStatesReady: initial.onStatesReady,
+        });
+      } else {
+        const {
+          children: _children,
+          snapshot: _snapshot,
+          handoff: _handoff,
+          onStatesReady,
+          routeKey: _routeKey,
+          buildPagePayload: _buildPagePayload,
+          initialPagePayload: _initialPagePayload,
+          beforeInitialPage: _beforeInitialPage,
+          ...config
+        } = initial;
+        binding = createExperiencesRootSdkBinding({ config, onStatesReady });
+      }
       active = { target, binding };
       activeRef.current = active;
       publishLive(active, initial.handoff === undefined);
@@ -160,12 +199,14 @@ function ActivationProvider(props: ActivationProps) {
   useCommitEffect(() => {
     const active = activeRef.current;
     if (!active || active.target !== target) return;
-    if (!handoff) {
+    if (!handoff || resetHandoff.current === handoff) {
       publishLive(active, true);
       return;
     }
     let cancelled = false;
-    const isCurrent = () => !cancelled && activeRef.current === active;
+    const revision = operationRevision.current;
+    const isCurrent = () =>
+      !cancelled && activeRef.current === active && operationRevision.current === revision;
     publishLive(active, false);
     // Like Optimization's useAutoPageEmitter, consent changes delegate to the
     // complete SDK operation. The immediate emission starts it after onStatesReady.
@@ -173,7 +214,8 @@ function ActivationProvider(props: ActivationProps) {
       if (!isCurrent()) return;
       try {
         const result = active.binding.sdk.hydrateAndTrackCurrentPage(handoff, {
-          routeKey: window.location.pathname + window.location.search,
+          routeKey,
+          buildPayload: buildPagePayload,
           isCurrent,
         });
         void Promise.resolve(result).then(
@@ -192,7 +234,7 @@ function ActivationProvider(props: ActivationProps) {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [target, handoff]);
+  }, [target, handoff, routeKey, buildPagePayload, resetRevision]);
 
   const locale = 'sdk' in props ? undefined : props.locale;
   useCommitEffect(() => {
@@ -211,16 +253,26 @@ function ActivationProvider(props: ActivationProps) {
   }, [context.isLive, context.sdk, locale]);
 
   const error = localeFailure?.sdk === context.sdk ? localeFailure.error : context.error;
-  const value = useMemo(
-    () => ({
-      sdk: context.sdk,
-      error,
-      isLive: context.isLive,
-      isContentReady: context.isContentReady,
-    }),
-    [context.sdk, error, context.isLive, context.isContentReady]
+  const value = useMemo<ExperiencesContextValue>(() => {
+    const presentation = { error, isContentReady: context.isContentReady };
+    return context.isLive
+      ? { ...presentation, sdk: context.sdk, isLive: true }
+      : { ...presentation, sdk: context.sdk, isLive: false };
+  }, [context.sdk, error, context.isLive, context.isContentReady]);
+  return (
+    <ExperiencesContext.Provider value={value}>
+      <ExperiencesPageSequence
+        routeKey={routeKey}
+        handoff={resetHandoff.current === handoff ? undefined : handoff}
+        buildPagePayload={buildPagePayload}
+        beforeInitialPage={props.beforeInitialPage}
+        resetRevision={resetRevision}
+        onReset={resetRequests}
+      >
+        {props.children}
+      </ExperiencesPageSequence>
+    </ExperiencesContext.Provider>
   );
-  return <ExperiencesContext.Provider value={value}>{props.children}</ExperiencesContext.Provider>;
 }
 
 export function ExperiencesProvider(props: ExperiencesProviderProps) {
