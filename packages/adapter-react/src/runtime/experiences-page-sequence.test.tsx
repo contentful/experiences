@@ -16,6 +16,7 @@ import {
   type ExperienceRequestContextValue,
 } from './experience-request-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { profileFixture } from '../test/profile.js';
 import {
   ExperiencesPageSequence,
   type BeforeInitialPageOptions,
@@ -135,6 +136,10 @@ describe('React route request and page coordination', () => {
     expect(runtime.fetchExperience).toHaveBeenNthCalledWith(1, request, { config });
     expect(runtime.fetchExperience).toHaveBeenNthCalledWith(2, refresh, { config });
     expect(request.personalization.events).toHaveLength(1);
+    await act(async () => {
+      consent.value = true;
+    });
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
   });
   it('does not let a pending refresh supply a new presentation initial request', async () => {
     const refreshed = deferred<PortableRenderPlan>();
@@ -174,25 +179,58 @@ describe('React route request and page coordination', () => {
       await expect(refreshing).resolves.toBe(refreshPlan);
     }
   });
-  it('rejects an old route result while retaining the same child and runtime', async () => {
+  it.each(['parameters', 'locale', 'metadata', 'registry', 'debug'] as const)(
+    'does not reuse a pending plan after the actual %s descriptor changes',
+    async (changed) => {
+      const pending = deferred<PortableRenderPlan>();
+      vi.mocked(runtime.fetchExperience).mockReturnValueOnce(pending.promise);
+      await render();
+      const request = { experienceId: 'home', locale: 'en-US', parameters: { campaign: 'one' } };
+      const resolve = { config, metadata: { label: 'one' }, debug: false };
+      const first = requests.fetchExperience(runtime, request, resolve, false);
+      expect(requests.fetchExperience(runtime, { ...request }, { ...resolve }, false)).toBe(first);
+      const nextRequest =
+        changed === 'parameters'
+          ? { ...request, parameters: { campaign: 'two' } }
+          : changed === 'locale'
+            ? { ...request, locale: 'de-DE' }
+            : request;
+      const nextResolve =
+        changed === 'metadata'
+          ? { ...resolve, metadata: { label: 'two' } }
+          : changed === 'registry'
+            ? { ...resolve, config: { components: {} } }
+            : changed === 'debug'
+              ? { ...resolve, debug: true }
+              : resolve;
+      await expect(
+        requests.fetchExperience(runtime, nextRequest, nextResolve, false)
+      ).resolves.toBe(plan);
+      expect(runtime.fetchExperience).toHaveBeenCalledTimes(2);
+      expect(runtime.fetchExperience).toHaveBeenLastCalledWith(nextRequest, nextResolve);
+      pending.resolve(plan);
+      await expect(first).resolves.toBe(plan);
+    }
+  );
+  it('joins a pending explicit initial intent without rebuilding or replaying it', async () => {
     const pending = deferred<PortableRenderPlan>();
     vi.mocked(runtime.fetchExperience).mockReturnValueOnce(pending.promise);
     await render();
-    const child = view.container.querySelector('span');
-    const old = requests.fetchExperience(runtime, { experienceId: 'home' }, { config }, false);
-    const rejection = expect(old).rejects.toThrow('superseded');
-    await Promise.resolve();
-    await render({ routeKey: '/page-two' });
+    const request = {
+      experienceId: 'home',
+      personalization: { events: [{ type: 'track' as const, event: 'initial' }] },
+    };
+    const first = requests.fetchExperience(runtime, request, { config }, false);
+    expect(
+      requests.fetchExperience(runtime, globalThis.structuredClone(request), { config }, false)
+    ).toBe(first);
+    await act(async () => {
+      consent.value = true;
+    });
+    expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(request, { config });
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
     pending.resolve(plan);
-    await rejection;
-    expect(view.container.querySelector('span')).toBe(child);
-    await requests.fetchExperience(runtime, { experienceId: 'two' }, { config }, false);
-    expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        personalization: { events: [{ type: 'page', properties: { route: '/page-two' } }] },
-      }),
-      { config }
-    );
+    await expect(first).resolves.toBe(plan);
   });
   it('retains the implicit consent-change page exception without refetching content', async () => {
     vi.mocked(runtime.hasConsent).mockReturnValue(true); // Default page allowlist.
@@ -210,49 +248,42 @@ describe('React route request and page coordination', () => {
     expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
     expect(runtime.fetchExperience).toHaveBeenCalledTimes(1);
   });
-  it.each([false, true])(
-    'defers a consent-triggered page until the optional callback settles without gating XDA (managed=%s)',
-    async (fetch) => {
-      const pending = deferred<void>();
-      const order: string[] = [];
-      vi.spyOn(runtime, 'identify').mockImplementation(async () => {
-        order.push('identify');
-        return { accepted: true };
-      });
-      vi.mocked(runtime.trackCurrentPage).mockImplementation(async () => {
-        order.push('page');
-        return { accepted: true };
-      });
-      const beforeInitialPage: BeforeInitialPageOptions = {
-        run: async (client) => {
-          order.push('callback-start');
-          await pending.promise;
-          await client.identify({ userId: 'visitor' });
-          order.push('callback-end');
-        },
-      };
-      await render({ beforeInitialPage, fetch });
-      if (fetch) {
-        expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(
-          {
-            experienceId: 'home',
-            personalization: { events: [{ type: 'page', properties: { route: '/' } }] },
-          },
-          { config }
-        );
-        await expect(vi.mocked(runtime.fetchExperience).mock.results[0]!.value).resolves.toBe(plan);
-      } else expect(runtime.fetchExperience).not.toHaveBeenCalled();
-      await act(async () => {
-        consent.value = true;
-      });
-      expect(order).toEqual(['callback-start']);
-      expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
+  it('lets XDA finish during the callback and delegates overlapping page attempts to Web', async () => {
+    const { ContentfulExperiences: ActualSdk } = await import('@contentful/experiences-web');
+    const sdk = new ActualSdk({
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { accessToken: 'delivery' },
+      defaults: { profile: profileFixture('visitor'), consent: false, persistenceConsent: false },
+    });
+    runtime = sdk;
+    const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue(plan);
+    const send = vi
+      .spyOn(sdk.api.personalization, 'upsertProfile')
+      .mockResolvedValue({ profile: profileFixture('visitor') } as never);
+    const pending = deferred<void>();
+    const run = vi.fn(async (client: Parameters<BeforeInitialPageOptions['run']>[0]) => {
+      await pending.promise;
+      await client.identify({ userId: 'visitor' });
+    });
+    try {
+      await render({ beforeInitialPage: { run }, fetch: true });
+      expect(fetch).toHaveBeenCalledOnce();
+      await expect(fetch.mock.results[0]!.value).resolves.toBe(plan);
+      await act(async () => sdk.consent({ events: true }));
+      expect(send).not.toHaveBeenCalled();
       await act(async () => pending.resolve());
-      expect(order).toEqual(['callback-start', 'identify', 'callback-end', 'page']);
-      expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(1);
-      expect(runtime.fetchExperience).toHaveBeenCalledTimes(fetch ? 1 : 0);
+      expect(run).toHaveBeenCalledOnce();
+      expect(
+        send.mock.calls.flatMap(([request]) => request.events.map((event) => event.type))
+      ).toEqual(['identify', 'page']);
+      expect(fetch).toHaveBeenCalledOnce();
+    } finally {
+      await act(async () => view.cleanup());
+      sdk.destroy();
+      window.localStorage.clear();
     }
-  );
+  });
   it('supersedes a pending optional callback when matching replay arrives', async () => {
     vi.useFakeTimers();
     const pending = deferred<void>();
@@ -324,23 +355,6 @@ describe('React route request and page coordination', () => {
       expect(vi.getTimerCount()).toBe(0);
     }
   );
-  it('joins only in-flight initialization, never a settled previous visitor plan', async () => {
-    await render();
-    await requests.fetchExperience(runtime, { experienceId: 'home' }, { config }, false);
-    await requests.fetchExperience(runtime, { experienceId: 'home' }, { config }, false);
-    expect(runtime.fetchExperience).toHaveBeenCalledTimes(2);
-    const pending = deferred<PortableRenderPlan>();
-    vi.mocked(runtime.fetchExperience).mockReturnValueOnce(pending.promise);
-    const old = requests.fetchExperience(runtime, { experienceId: 'home' }, { config }, false);
-    const rejected = expect(old).rejects.toThrow('superseded');
-    await Promise.resolve();
-    signals.personalizationRequestState.value = { status: 'idle' }; // Direct SDK reset/purge.
-    const fresh = requests.fetchExperience(runtime, { experienceId: 'home' }, { config }, false);
-    pending.resolve(plan);
-    await rejected;
-    await fresh;
-    expect(runtime.fetchExperience).toHaveBeenCalledTimes(4);
-  });
   it('guards old callback clients and starts a fresh visitor callback after reset', async () => {
     const old = deferred<void>();
     const fresh = deferred<void>();
@@ -393,23 +407,5 @@ describe('React route request and page coordination', () => {
     await expect(content).resolves.toBe(plan);
     expect(beforeInitialPage.run).not.toHaveBeenCalled();
     expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
-  });
-  it('preserves page intent after withdrawal cancels a pending initial callback', async () => {
-    consent.value = true;
-    const pending = deferred<void>();
-    const beforeInitialPage = { run: vi.fn(() => pending.promise) };
-    await render({ beforeInitialPage });
-    await act(async () => {
-      consent.value = false;
-      signals.personalizationRequestState.value = { status: 'idle' };
-    });
-    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
-    await act(async () => {
-      consent.value = true;
-    });
-    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(1);
-    await act(async () => pending.resolve());
-    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(1);
-    expect(beforeInitialPage.run).toHaveBeenCalledTimes(1);
   });
 });

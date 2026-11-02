@@ -198,7 +198,7 @@ No journal-specific 64 KiB cap or version field applies to the aggregate or
 
 **Current correction: complete and explicitly accepted on 2026-11-02.** Current
 checks and acceptance review are recorded in the implementation plan.
-Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
 evidence for a superseded design, not validation of this revision. Phases 1–5
 remain accepted. Current implementation and validation results are recorded there.
 
@@ -281,7 +281,7 @@ path, with no dedicated API, scheduler, controller, state class or mode detector
 Current React optional consumption subscribes to `sdk.states.consent` within its
 existing effect and reinvokes that complete operation with one stable `isCurrent`
 lifetime guard. This basic consent/lifecycle behavior is complete in accepted Phase 6;
-managed React loading/navigation, API refinements and source cleanup are validated and awaiting Phase 7 user acceptance. Queue-capacity
+managed React loading/navigation, API refinements and source cleanup are complete and explicitly accepted as Phase 7 on 2026-11-02. Queue-capacity
 refusal remains retry-eligible while the complete operation is unaccepted; accepted eligible
 page fallback completes initialization without resubmitting the original refused batch. Accepted replay never triggers
 fallback or application resubmission because delivery fails. Admission does not

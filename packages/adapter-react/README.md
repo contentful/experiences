@@ -34,9 +34,7 @@ existing standalone APIs are unchanged. General supplied-plan rendering and
 
 Managed runtime ownership, state/action hooks, `Experience` and
 `useManagedExperience` are available on `/client`. Managed loading and supplied
-plans share the standard renderer. Phase 7 implementation and refinements,
-including source cleanup and reference reduction, are validated and awaiting
-user acceptance.
+plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
 Phases 8–13 have not started. Phase 6 remains complete and explicitly accepted on
 2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
 
@@ -150,7 +148,7 @@ one primary managed result as the content owner; pass its `data` to supplied
 presentations instead of copying that plan into application state or starting
 another managed loader for each repeated view. Use `children(result)` to render
 usable content and errors together, and use committed notifications for effects
-that depend on the presented result. The SDK owns request cancellation, preview
+that depend on the presented result. The SDK owns request lifetimes, preview
 updates, consent, interaction measurement and event delivery.
 
 An `initialPlan` seeds the first server/browser presentation without a startup
@@ -180,7 +178,8 @@ managed descriptor; they do not turn it into an authoritative supplied source.
 Explicit `refresh()` and `retry()` invalidate older work and refetch the
 current descriptor without personalization events, builders, event hooks or
 replay, retaining the last usable plan while pending or failed. Equivalent
-request/resolve options do not refetch after success or error. Changed descriptors,
+request/resolve options do not refetch after success or error. Replace these
+inputs when changing them, as with ordinary immutable React props. Changed descriptors,
 runtime replacement, navigation and reset invalidate obsolete presentation work.
 SDK queues retain ownership of already-admitted replay delivery retry.
 

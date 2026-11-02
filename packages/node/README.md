@@ -231,7 +231,7 @@ This performs no event building, event hooks or replay. Reference-only later-ID
 comparisons also use ordinary event-free fetch; no cross-fetch guarantee applies.
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
 for the tolerated SSR/CSR noncommit bug, hybrid replay ownership and accepted checks.
-Phase 6 is complete and explicitly accepted on 2026-11-02. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
+Phase 6 is complete and explicitly accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phases 8–13 have not started; the Phase 6 gate is satisfied.
 
 ## Custom flags
 

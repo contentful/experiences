@@ -90,8 +90,25 @@ export function sourceSdk() {
     .mockResolvedValue(plan());
   const subscribeToPreview = vi.fn<ContentfulExperiences['subscribeToPreview']>(
     (_id, _resolve, listener) => {
-      const unsubscribe = vi.fn();
-      bindings.push({ listener, unsubscribe });
+      let active = true;
+      const deliver = (update: PreviewUpdate) => {
+        if (active) listener(update);
+      };
+      // Web owns error delivery and suppresses callbacks after unsubscribe.
+      let previousError: Error | undefined;
+      const subscription = preview.state.subscribe((state) => {
+        const error =
+          state?.experienceId === undefined || state.experienceId === _id
+            ? state?.error
+            : undefined;
+        if (error && error !== previousError) deliver({ error });
+        previousError = error;
+      });
+      const unsubscribe = vi.fn(() => {
+        active = false;
+        subscription.unsubscribe();
+      });
+      bindings.push({ listener: deliver, unsubscribe });
       return { unsubscribe };
     }
   );

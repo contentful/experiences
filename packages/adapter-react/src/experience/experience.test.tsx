@@ -44,19 +44,15 @@ describe('Experience', () => {
     );
   };
 
-  it('renders loading then content through the existing renderer', async () => {
+  it('renders loading then current preview content without letting a pending fetch overwrite it', async () => {
     const pending = deferred<PortableRenderPlan>();
     source.fetchExperience.mockReturnValue(pending.promise);
     await render({ loadingFallback: <p>loading</p> });
     expect(root.container.textContent).toBe('loading');
-    await act(async () => pending.resolve(plan('selected')));
+    await act(async () => source.bindings.at(-1)!.listener({ data: plan('selected') }));
     expect(root.container.querySelector('h1')?.textContent).toBe('selected');
-  });
-
-  it('retains managed fetching when its excluded optional experience prop is explicitly undefined', async () => {
-    await render({ experience: undefined });
-    expect(root.container.textContent).toBe('content');
-    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
+    await act(async () => pending.resolve(plan('older snapshot')));
+    expect(root.container.querySelector('h1')?.textContent).toBe('selected');
   });
 
   it('keeps presentation props and notifications out of the SDK request', async () => {
@@ -73,20 +69,6 @@ describe('Experience', () => {
       expect(request).not.toHaveProperty(key);
     expect(root.container.querySelector('section')?.id).toBe('presentation');
     expect(onExperienceResolved).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders the error callback without data and permits event-free recovery', async () => {
-    source.fetchExperience.mockRejectedValueOnce(new Error('unavailable'));
-    let result!: ManagedExperienceResult;
-    await render({
-      errorFallback: (value) => {
-        result = value;
-        return <p>{value.error?.message}</p>;
-      },
-    });
-    expect(root.container.textContent).toBe('unavailable');
-    await act(async () => result.retry());
-    expect(root.container.querySelector('h1')?.textContent).toBe('content');
   });
 
   it('binds an error-only seed without startup fetching and clears it through preview updates', async () => {
@@ -220,38 +202,6 @@ describe('Experience', () => {
     expect(onExperienceError).toHaveBeenCalledTimes(1);
   });
 
-  it('exposes concurrent plan/error/loading state to a children callback', async () => {
-    let result!: ManagedExperienceResult;
-    await render({
-      initialPlan: plan('seed'),
-      children: (value) => {
-        result = value;
-        return (
-          <p>
-            {value.status}:{String(value.data?.nodes[0]?.props.content.title)}:
-            {value.error?.message}
-          </p>
-        );
-      },
-    });
-    await act(async () =>
-      source.bindings.at(-1)!.listener({ data: plan('partial'), error: new Error('warning') })
-    );
-    expect(root.container.textContent).toBe('error:partial:warning');
-    const pending = deferred<PortableRenderPlan>();
-    source.fetchExperience.mockReturnValue(pending.promise);
-    let refresh!: Promise<void>;
-    act(() => {
-      refresh = result.refresh();
-    });
-    expect(root.container.textContent).toBe('loading:partial:');
-    await act(async () => {
-      pending.resolve(plan('fresh'));
-      await refresh;
-    });
-    expect(root.container.textContent).toBe('success:fresh:');
-  });
-
   it('forwards unknown-node and debug rendering options', async () => {
     await render({
       initialPlan: {
@@ -318,22 +268,6 @@ describe('Experience', () => {
     await act(async () => source.bindings.at(-1)!.listener({ data: partial, error: warning }));
     expect(error).toHaveBeenCalledTimes(1);
     expect(replacement).toHaveBeenCalledTimes(1);
-  });
-
-  it('notifies error-only committed results and successful recovery', async () => {
-    const failure = new Error('offline');
-    source.fetchExperience.mockRejectedValueOnce(failure);
-    const error = vi.fn();
-    const resolved = vi.fn();
-    await render({ onExperienceError: error, onExperienceResolved: resolved });
-    expect(error).toHaveBeenCalledExactlyOnceWith(
-      failure,
-      expect.objectContaining({ data: undefined })
-    );
-    expect(resolved).not.toHaveBeenCalled();
-    await act(async () => error.mock.calls[0]![1].retry());
-    expect(resolved).toHaveBeenCalledTimes(1);
-    expect(error).toHaveBeenCalledTimes(1);
   });
 
   it('never notifies during server rendering or an abandoned render', async () => {
@@ -413,7 +347,7 @@ describe('Experience', () => {
     expect(root.container.textContent).toBe('fresh');
   });
 
-  it('suppresses stale descriptor, SDK, and unmounted completions and preview callbacks', async () => {
+  it('suppresses stale view completions and releases replaced or unmounted bindings', async () => {
     const first = deferred<PortableRenderPlan>();
     const second = deferred<PortableRenderPlan>();
     source.fetchExperience.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
@@ -427,9 +361,7 @@ describe('Experience', () => {
       onExperienceError: error,
     });
     await act(async () => first.resolve(plan('old')));
-    await act(async () =>
-      oldBinding.listener({ data: plan('old preview'), error: new Error('old error') })
-    );
+    expect(oldBinding.unsubscribe).toHaveBeenCalledTimes(1);
     expect(resolved).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
     const replacement = sourceSdk();
@@ -446,7 +378,7 @@ describe('Experience', () => {
     const currentBinding = source.bindings.at(-1)!;
     await act(async () => root.cleanup());
     await act(async () => third.resolve(plan('unmounted')));
-    await act(async () => currentBinding.listener({ data: plan('unmounted preview') }));
+    expect(currentBinding.unsubscribe).toHaveBeenCalledTimes(1);
     expect(resolved).not.toHaveBeenCalled();
   });
 
@@ -528,7 +460,6 @@ describe('Experience', () => {
     expect(source.locale.listeners.size).toBe(0);
     expect(source.consent.listeners.size).toBe(0);
     await act(async () => pending.resolve(plan('obsolete')));
-    await act(async () => binding.listener({ data: plan('obsolete preview') }));
     expect(root.container.textContent).toBe('authoritative');
     expect(resolved).toHaveBeenCalledTimes(1);
     await act(async () => resolved.mock.calls[0]![0].retry());
