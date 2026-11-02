@@ -1,40 +1,45 @@
-import type { ManagedExperienceResult } from '@contentful/experiences-react/client';
+'use client';
 
-import type { PublicEnvironment } from '../public-config';
+import { useEffect, useState } from 'react';
+import {
+  useExperiencesContext,
+  type ManagedExperienceResult,
+} from '@contentful/experiences-react/client';
 import { experienceConfig } from './experience-config';
 
 export type ContentResult = Pick<ManagedExperienceResult, 'data' | 'error'>;
-export type PageContent = Record<string, ContentResult>;
 
-export function getRouteExperienceIds(environment: PublicEnvironment, pathname: string) {
-  const ids = environment.EXPERIENCE_IDS;
-  return {
-    automatic: pathname === '/' ? ids : pathname === '/page-two' ? ids.slice(-1) : [],
-    manual: pathname === '/' || pathname === '/page-two' ? ids.slice(0, 1) : [],
-  };
-}
-
-// Reference-only comparison loop: the first ID belongs to the managed loader.
-// Later IDs fetch without events and reuse their plans across presentations.
-export async function loadComparisonContent(
-  sdk: import('@contentful/experiences-web').ContentfulExperiences,
-  experienceIds: readonly string[],
-  isCurrent: () => boolean
-): Promise<PageContent> {
-  const content: PageContent = {};
-  for (const experienceId of experienceIds) {
-    if (!isCurrent()) break;
-    try {
-      const data = await sdk.fetchExperience({ experienceId }, { config: experienceConfig });
-      if (!isCurrent()) break;
-      content[experienceId] = { data, error: undefined };
-    } catch (error) {
-      if (!isCurrent()) break;
-      content[experienceId] = {
-        data: undefined,
-        error: error instanceof Error ? error : new Error('The Experience request failed.'),
-      };
+// Only later comparison IDs fetch here, without visitor events. React owns this
+// loop's cancellation; the SDK owns the primary request and preview updates.
+export function useComparisonContent(ids: readonly string[], ready: boolean) {
+  const { sdk, isLive } = useExperiencesContext();
+  const [content, setContent] = useState<Record<string, ContentResult>>({});
+  useEffect(() => {
+    if (!isLive || !ready || !ids.length) return;
+    const client = sdk;
+    let active = true;
+    async function load() {
+      const next: Record<string, ContentResult> = {};
+      for (const experienceId of ids) {
+        if (!active) break;
+        try {
+          next[experienceId] = {
+            data: await client.fetchExperience({ experienceId }, { config: experienceConfig }),
+            error: undefined,
+          };
+        } catch (error) {
+          next[experienceId] = {
+            data: undefined,
+            error: error instanceof Error ? error : new Error('The Experience request failed.'),
+          };
+        }
+      }
+      if (active) setContent(next);
     }
-  }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [sdk, isLive, ready, ids]);
   return content;
 }

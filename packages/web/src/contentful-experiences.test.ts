@@ -64,23 +64,26 @@ describe('Web ContentfulExperiences', () => {
           finish = resolve;
         }) as never
       );
-    const runtime = createRuntime({ defaults: { profile: { id: 'first' } } });
+    const runtime = createRuntime({ defaults: { profile: completeProfile('first') } });
     const pending = runtime.fetchExperience(
       { experienceId: 'old' },
       { config: { components: {} } }
     );
     const rejected = expect(pending).rejects.toThrow('identity was superseded');
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    await hydrateOptimizationData(runtime, { profile: { id: 'replacement' } });
-    finish({ nodes: [], personalization: { profileId: 'first' } });
+    await hydrateOptimizationData(runtime, { profile: completeProfile('replacement') });
+    finish({ nodes: [], personalization: { profile: completeProfile('first') } });
     await rejected;
     expect(runtime.states.profile.current?.id).toBe('replacement');
 
-    runtime.interceptors.state.add(() => ({ profile: { id: 'intercepted' } }));
-    fetch.mockResolvedValueOnce({ nodes: [], personalization: { profileId: 'selected' } } as never);
+    runtime.interceptors.state.add(() => ({ profile: completeProfile('intercepted') }));
+    fetch.mockResolvedValueOnce({
+      nodes: [],
+      personalization: { profile: completeProfile('selected') },
+    } as never);
     await expect(
       runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } })
-    ).resolves.toMatchObject({ personalization: { profileId: 'selected' } });
+    ).resolves.toMatchObject({ personalization: { profile: completeProfile('selected') } });
     expect(runtime.states.profile.current?.id).toBe('intercepted');
   });
 

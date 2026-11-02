@@ -37,7 +37,7 @@ supported product usage or a cross-fetch guarantee.
   Managed loading, navigation,
   page/identify/reset/retry sequences and preview content are implemented in the
   validated Phase 7 implementation. API refinements, source cleanup and reference
-  reduction are validated and awaiting user acceptance.
+  reduction are complete and explicitly accepted on 2026-11-02.
   Phase 6 corrected existing Node/Web/hybrid references and owner checks; managed
   React loading belongs to Phase 7. The necessary provider/root migration exposes
   `handoff?: ExperiencesHandoff` instead of `initialization: { routeKey, handoff }`
@@ -45,8 +45,7 @@ supported product usage or a cross-fetch guarantee.
   using current browser route, with internal state application and optional-page replay.
   Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
   acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 implementation and refinements, including source
-  cleanup and reference reduction, are validated and awaiting user acceptance.
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
   Phases 8–13 have not
   started; the Phase 6 gate is satisfied. Phase 7 uses
   ordinary Web fetch for CSR and browser-local actions. Optional handoff
@@ -64,7 +63,7 @@ supported product usage or a cross-fetch guarantee.
   concrete SDK operations. `initialPagePayload` supplies static `PageViewBuilderArgs`;
   explicit `buildPagePayload` takes precedence. Preserve event-free content Retry.
 - Keep one primary `useManagedExperience` result as the content owner and render
-  its plan through supplied `Experience` mode, including repeated presentations.
+  its plan through the supplied renderer, including repeated presentations.
   Do not mirror the primary plan in application state. Later comparison plans seed
   managed mode with `initialPlan`/`initialError` after the event-free comparison loop
   settles. Seeded failures retain preview bindings without a duplicate startup
@@ -72,8 +71,13 @@ supported product usage or a cross-fetch guarantee.
   must use the current `children(result)` value, while primary presentation uses
   the page-owned result. Keep this on the existing seed/controller lifecycle.
   Use the typed live context for concrete SDK operations without casts. Keep URL
-  and visitor intent together, the SDK root alive across ordinary
+  and visitor intent together in Navigation, the SDK root alive across ordinary
   navigation and the synchronous attributed-DOM gap before reset.
+- Keep bootstrap in `main.tsx`; use focused App, Navigation, PageShell, ContentPage,
+  ConsentControls and presentation components. Do not embed the application tree in
+  the entrypoint or introduce an application action queue. Disable visitor actions
+  while initial content is pending. Check binding fields/document roots, leaving
+  recursive Rich Text semantics to the maintained renderer.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy

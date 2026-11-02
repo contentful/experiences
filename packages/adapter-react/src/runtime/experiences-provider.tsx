@@ -57,17 +57,12 @@ type Target = {
   readonly initial: ExperiencesContextValue;
 };
 type ProviderState = ExperiencesContextValue & { readonly target: Target };
-type ActiveBinding = {
-  readonly target: Target;
-  readonly binding: ExperiencesRootSdkBinding;
-};
 
 const useCommitEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
 function createTarget(props: ActivationProps): Target {
-  assertHandoff(props.handoff, props);
   const ownedConfig = 'sdk' in props ? undefined : props;
   const snapshot = createWebSnapshotRuntime(
     props.snapshot ?? {
@@ -82,19 +77,13 @@ function createTarget(props: ActivationProps): Target {
   return {
     props,
     snapshot,
-    initial: immediate
-      ? {
-          sdk: props.sdk,
-          error: undefined,
-          isLive: true,
-          isContentReady: true,
-        }
-      : {
-          sdk: snapshot,
-          error: undefined,
-          isLive: false,
-          isContentReady: false,
-        },
+    initial: {
+      error: undefined,
+      isContentReady: immediate,
+      ...(immediate
+        ? { sdk: props.sdk, isLive: true as const }
+        : { sdk: snapshot, isLive: false as const }),
+    },
   };
 }
 
@@ -117,8 +106,11 @@ function ActivationProvider(props: ActivationProps) {
     sdk: ExperiencesContextValue['sdk'];
     error: Error;
   }>();
-  const activeRef = useRef<ActiveBinding | undefined>(undefined);
-  const context = state.target === target ? state : target.initial;
+  const activeRef = useRef<ExperiencesRootSdkBinding | undefined>(undefined);
+  const { target: stateTarget, ...presentation } = state;
+  const context = stateTarget === target ? presentation : target.initial;
+  const latestHandoff = useRef(props.handoff);
+  latestHandoff.current = props.handoff;
   const handoff = props.handoff;
   const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
     () =>
@@ -136,28 +128,20 @@ function ActivationProvider(props: ActivationProps) {
     () => () => {
       const revision = {};
       operationRevision.current = revision;
-      resetHandoff.current = handoff;
+      resetHandoff.current = latestHandoff.current;
       setResetRevision(revision);
     },
-    [handoff]
+    []
   );
 
-  function publishLive(active: ActiveBinding, isContentReady: boolean, error?: Error) {
-    if (activeRef.current !== active) return;
-    setState({
-      target: active.target,
-      sdk: active.binding.sdk,
-      isLive: true,
-      isContentReady,
-      error,
-    });
+  function publishLive(sdk: ContentfulExperiences, isContentReady: boolean, error?: Error) {
+    setState({ target, sdk, isLive: true, isContentReady, error });
   }
 
   useCommitEffect(() => {
-    let active: ActiveBinding | undefined;
+    let binding: ExperiencesRootSdkBinding | undefined;
     try {
       const initial = target.props;
-      let binding: ExperiencesRootSdkBinding;
       if ('sdk' in initial) {
         binding = createExperiencesRootSdkBinding({
           sdk: initial.sdk,
@@ -177,9 +161,8 @@ function ActivationProvider(props: ActivationProps) {
         } = initial;
         binding = createExperiencesRootSdkBinding({ config, onStatesReady });
       }
-      active = { target, binding };
-      activeRef.current = active;
-      publishLive(active, initial.handoff === undefined);
+      activeRef.current = binding;
+      publishLive(binding.sdk, initial.handoff === undefined);
     } catch (error) {
       setState({
         target,
@@ -190,45 +173,38 @@ function ActivationProvider(props: ActivationProps) {
       });
     }
     return () => {
-      if (!active) return;
-      if (activeRef.current === active) activeRef.current = undefined;
-      disposeExperiencesRootSdkBinding(active.binding);
+      activeRef.current = undefined;
+      disposeExperiencesRootSdkBinding(binding);
     };
   }, [target]);
 
   useCommitEffect(() => {
     const active = activeRef.current;
-    if (!active || active.target !== target) return;
+    if (!active) return;
     if (!handoff || resetHandoff.current === handoff) {
-      publishLive(active, true);
+      publishLive(active.sdk, true);
       return;
     }
     let cancelled = false;
     const revision = operationRevision.current;
-    const isCurrent = () =>
-      !cancelled && activeRef.current === active && operationRevision.current === revision;
-    publishLive(active, false);
+    const isCurrent = () => !cancelled && operationRevision.current === revision;
+    publishLive(active.sdk, false);
     // Like Optimization's useAutoPageEmitter, consent changes delegate to the
     // complete SDK operation. The immediate emission starts it after onStatesReady.
-    const subscription = active.binding.sdk.states.consent.subscribe(() => {
-      if (!isCurrent()) return;
+    const hydrate = async () => {
       try {
-        const result = active.binding.sdk.hydrateAndTrackCurrentPage(handoff, {
+        await active.sdk.hydrateAndTrackCurrentPage(handoff, {
           routeKey,
           buildPayload: buildPagePayload,
           isCurrent,
         });
-        void Promise.resolve(result).then(
-          () => {
-            if (isCurrent()) publishLive(active, true);
-          },
-          (error: unknown) => {
-            if (isCurrent()) publishLive(active, true, toError(error));
-          }
-        );
+        if (isCurrent()) publishLive(active.sdk, true);
       } catch (error) {
-        if (isCurrent()) publishLive(active, true, toError(error));
+        if (isCurrent()) publishLive(active.sdk, true, toError(error));
       }
+    };
+    const subscription = active.sdk.states.consent.subscribe(() => {
+      void hydrate();
     });
     return () => {
       cancelled = true;
@@ -239,26 +215,21 @@ function ActivationProvider(props: ActivationProps) {
   const locale = 'sdk' in props ? undefined : props.locale;
   useCommitEffect(() => {
     const active = activeRef.current;
-    if (!context.isLive || !active || context.sdk !== active.binding.sdk) return;
+    if (!active) return;
+    const sdk = active.sdk;
     let error: Error | undefined;
     try {
-      if (locale !== undefined && context.sdk.locale !== locale) context.sdk.setLocale(locale);
+      if (locale !== undefined && sdk.locale !== locale) sdk.setLocale(locale);
     } catch (cause) {
       error = toError(cause);
     }
     // Locale recovery must not clear a still-applicable hydration error, and a
     // hydration result must not erase this command's failure.
-    if (activeRef.current === active)
-      setLocaleFailure(error ? { sdk: context.sdk, error } : undefined);
-  }, [context.isLive, context.sdk, locale]);
+    setLocaleFailure(error ? { sdk, error } : undefined);
+  }, [target, locale]);
 
   const error = localeFailure?.sdk === context.sdk ? localeFailure.error : context.error;
-  const value = useMemo<ExperiencesContextValue>(() => {
-    const presentation = { error, isContentReady: context.isContentReady };
-    return context.isLive
-      ? { ...presentation, sdk: context.sdk, isLive: true }
-      : { ...presentation, sdk: context.sdk, isLive: false };
-  }, [context.sdk, error, context.isLive, context.isContentReady]);
+  const value = useMemo<ExperiencesContextValue>(() => ({ ...context, error }), [context, error]);
   return (
     <ExperiencesContext.Provider value={value}>
       <ExperiencesPageSequence

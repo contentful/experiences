@@ -239,7 +239,7 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phases 8–13 have not started; the Phase 6 gate is satisfied.
 Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
@@ -683,7 +683,7 @@ migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
+accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phases 8–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
