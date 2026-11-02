@@ -187,6 +187,13 @@ state in the browser, and supports Web SDK navigation and interactions. Run
 `npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
 integration from demo UI and optional browser-attempt diagnostics.
 
+The [standalone React reference implementation](./implementations/react-sdk/README.md)
+uses the packed React and Web SDKs for managed content, runtime-backed preview and
+automatic/manual presentations under one SDK root. Run
+`npx nx run implementation-react-sdk:setup`, then
+`npx nx run implementation-react-sdk:dev`. Its README covers local configuration,
+consent, navigation/visitor intent, tracking and scoped validation commands.
+
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
 every process in the selected PM2 home. Use the implementation's scoped stop

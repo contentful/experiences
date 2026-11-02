@@ -7,7 +7,7 @@ supported product usage or a cross-fetch guarantee.
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
 current checks and acceptance review are recorded in the implementation plan.
 Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
+Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
 checks/review remain historical; Phase 7 package and live observations are recorded
 in its implementation-plan entry.
 
@@ -45,9 +45,11 @@ navigation producer remains. Retry is ordinary event-free fetch of the same ID;
 accepted incoming replay delivery retry remains queue-owned. Page Two's CUSTOM TRACK
 action is nonpage; navigation still carries a page. Preserve pinned ownership,
 consent/lifetime and the page consent-retry exception without direct initial
-emission as a prerequisite. See the
-[implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-5-implement-react-ownership-providers-and-hooks)
-and [accepted design](../../tmp/react-next-runtime-phase-1-design.md).
+emission as a prerequisite. See the tracked
+[React ownership contract](../../packages/adapter-react/README.md#managed-content)
+and [Runtime XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+Planning/history records under `tmp/` are local review material and are not needed
+to run this reference from a clean checkout.
 
 The API refinements distinguish supplied `<Experience experience={plan} />`
 presentation from managed `experienceId` loading with optional `initialPlan` and
@@ -320,8 +322,10 @@ managed root; shared-root ownership coverage belongs to SDK tests.
 
 Startup consent/profile defaults are unset. State comes from the SDK and its
 existing persistence policy, with no application profile or consent store.
-Grant/Revoke changes event and persistence consent independently, with no content
-fetch or page action from a consent subscription. Event consent gates tracking;
+Grant/Revoke changes event and persistence consent independently. The application
+adds no consent subscription that fetches content or emits pages; the SDK retains
+its implicit consent-change page retry for eligible page intent, without refetching
+content or replaying blocked nonpage events. Event consent gates tracking;
 persistence consent gates durable profile continuity. XDA-returned profile IDs are
 adopted locally without proving event commitment. Analytics dispatch and attempt notifications require an available
 runtime event profile or identity. Granting event consent alone does not make
