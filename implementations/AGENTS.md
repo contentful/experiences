@@ -25,8 +25,9 @@ or SDK workaround. Content Retry uses ordinary fetch of the same ID without even
 builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
 Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Current implementation/checks are pending; earlier remedy checks/review remain
-historical. Phase 6 is unaccepted/incomplete and Phase 7 stays gated.
+Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
+acceptance review are recorded in the implementation plan. Earlier remedy
+checks/review remain historical. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
 
 Browser handoff operations preserve live-profile/provider/handoff identity capture
 before hydration and ordinary provider-first policy under Optimization PR #549 at
@@ -63,8 +64,8 @@ Phase 6 corrects existing Node/Web/hybrid flows and route/visitor ownership chec
 Phase 7 owns managed React roots/loaders/page bindings and the React reference;
 adapt Optimization source/presentation ports to XDA-built events without requiring
 `beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
-exception in that future managed flow. Phase 6 acceptance/completion is withdrawn
-pending fresh correctness/design review and explicit acceptance; Phase 7 stays gated.
+exception in that managed flow. Phase 6 is complete and explicitly
+accepted on 2026-11-02. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.

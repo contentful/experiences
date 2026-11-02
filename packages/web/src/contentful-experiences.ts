@@ -780,7 +780,22 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     assertCurrent();
     const load = async () => {
       const result = await request.send(final);
-      await adoptProfile('personalization' in result ? result.personalization?.profile : undefined);
+      assertCurrent();
+      if (
+        !this.isPreview &&
+        (this.#profileRevision !== profileRevision || this.#identityRevision !== identityRevision)
+      )
+        throw new Error('Experiences fetch identity was superseded');
+      const adopted = await adoptProfile(
+        'personalization' in result ? result.personalization?.profile : undefined
+      );
+      assertCurrent();
+      if (
+        !this.isPreview &&
+        (this.#profileRevision !== profileRevision + (adopted === undefined ? 0 : 1) ||
+          this.#identityRevision !== identityRevision)
+      )
+        throw new Error('Experiences fetch identity was superseded');
       return result;
     };
     return request.share

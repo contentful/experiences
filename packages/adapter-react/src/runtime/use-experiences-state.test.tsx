@@ -4,7 +4,7 @@ import { act, StrictMode, Suspense, startTransition, type ReactNode } from 'reac
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CoreStates, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
-import { ExperiencesContext } from '../context/experiences-context.js';
+import { ExperiencesContext } from './experiences-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { profileFixture } from '../test/profile.js';
 import * as hooks from './use-experiences-state.js';
@@ -12,7 +12,7 @@ import * as hooks from './use-experiences-state.js';
 const context = (sdk: WebExperiencesRuntime) => ({
   sdk,
   error: undefined,
-  isLive: true,
+  isLive: false as const,
   isContentReady: true,
 });
 
@@ -108,6 +108,33 @@ describe('Experiences state hooks', () => {
       CoreStates['blockedEventStream']['current']
     >();
     expectTypeOf(hooks.usePreviewState).returns.toEqualTypeOf<CoreStates['preview']['current']>();
+  });
+
+  it('supports absent observables without a provider and detaches replaced subscriptions', () => {
+    const state = observable('live');
+    const captures: Array<string | undefined> = [];
+    function Probe({ observable }: { observable?: Observable<string> }) {
+      const value = hooks.useObservableState(observable);
+      captures.push(value);
+      return <output>{value ?? 'absent'}</output>;
+    }
+    act(() => rendered.render(<Probe />));
+    expect(container.textContent).toBe('absent');
+    expect(state.subscribe).not.toHaveBeenCalled();
+    const absentRenders = captures.length;
+    act(() => rendered.render(<Probe />));
+    expect(captures).toHaveLength(absentRenders + 1);
+    act(() => rendered.render(<Probe observable={state.store} />));
+    expect(container.textContent).toBe('live');
+    expect(state.listeners.size).toBe(1);
+    act(() => rendered.render(<Probe />));
+    expect(container.textContent).toBe('absent');
+    expect(state.unsubscribe).toHaveBeenCalledTimes(1);
+    act(() => state.emitRetired('obsolete'));
+    expect(container.textContent).toBe('absent');
+    act(() => rendered.render(<Probe observable={state.store} />));
+    expect(container.textContent).toBe('live');
+    expect(state.listeners.size).toBe(1);
   });
 
   const cases = [

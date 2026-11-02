@@ -2,13 +2,13 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import type { CoreStates, Observable } from '@contentful/experiences-web';
-import { useExperiences } from '../context/experiences-context.js';
+import { useExperiences } from './experiences-context.js';
 
-function useObservableState<T>(observable: Observable<T>): T {
+export function useObservableState<T>(observable: Observable<T> | undefined): T | undefined {
   // Keep each store's cache separate: an abandoned replacement render must not
   // mutate the snapshot read by the committed subscription.
   const store = useMemo(() => {
-    const serverSnapshot = observable.current;
+    const serverSnapshot = observable?.current;
     let snapshot = serverSnapshot;
 
     return {
@@ -16,7 +16,7 @@ function useObservableState<T>(observable: Observable<T>): T {
       getServerSnapshot: () => serverSnapshot,
       subscribe: (onStoreChange: () => void) => {
         let active = true;
-        const subscription = observable.subscribe((value) => {
+        const subscription = observable?.subscribe((value) => {
           if (!active) return;
           snapshot = value;
           onStoreChange();
@@ -24,7 +24,7 @@ function useObservableState<T>(observable: Observable<T>): T {
 
         return () => {
           active = false;
-          subscription.unsubscribe();
+          subscription?.unsubscribe();
         };
       },
     };
