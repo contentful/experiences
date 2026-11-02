@@ -276,7 +276,7 @@ workaround. Direct event APIs remain callable but are not compensation.
 
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02.
 Current checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
 five-owner static-check and no-production-findings review results describe the
 superseded remedy only. Earlier installed-reference checks likewise remain historical;
 no live XDA/XPAPI events were exercised. Phases 1–5 remain accepted.

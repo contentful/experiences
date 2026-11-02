@@ -8,7 +8,14 @@ import { describe, expect, it } from 'vitest';
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const packageName = '@contentful/experiences-nextjs';
 const manifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
-const entries = ['', '/client', '/server', '/custom-renderer', '/tracking-attributes'];
+const entries = [
+  '',
+  '/client',
+  '/server',
+  '/custom-renderer',
+  '/tracking-attributes',
+  '/request-handler',
+];
 
 function runModule(source: string, forbidden: string[] = []): string {
   const loader = `
@@ -45,6 +52,7 @@ describe('published package entries', () => {
         './server',
         './custom-renderer',
         './tracking-attributes',
+        './request-handler',
         './package.json',
       ].sort()
     );
@@ -87,7 +95,7 @@ describe('published package entries', () => {
   });
 
   it.each(entries.filter(Boolean))('%s imports from dist without eager preview', (suffix) => {
-    const forbidden = suffix === '/client' ? [] : ['@contentful/experiences-web'];
+    const forbidden = suffix === '/client' ? [] : ['@contentful/experiences-web', 'next/headers'];
     expect(() => runModule(`await import('${packageName}${suffix}');`, forbidden)).not.toThrow();
   });
 
@@ -100,11 +108,12 @@ describe('published package entries', () => {
         process.stdout.write(JSON.stringify({
           names: Object.keys(actual).sort(),
           sharedNames: Object.keys(shared).sort(),
-          same: Object.keys(actual).every(name => actual[name] === shared[name])
+          same: Object.keys(shared).every(name => actual[name] === shared[name])
         }));
       `);
       const { names, sharedNames, same } = JSON.parse(result);
-      expect(names).toEqual(sharedNames);
+      expect(names).toEqual(expect.arrayContaining(sharedNames));
+      if (suffix !== '/server') expect(names).toEqual(sharedNames);
       expect(same).toBe(true);
     }
   );
@@ -140,6 +149,7 @@ describe('published package entries', () => {
       'server.js',
       'custom-renderer.js',
       'tracking-attributes.js',
+      'request-handler.js',
     ]) {
       expect(readFileSync(path.join(packageRoot, 'dist', filename), 'utf8')).not.toMatch(
         /['"]use client['"]/
@@ -158,6 +168,12 @@ describe('published package entries', () => {
         'server.d.ts',
         'custom-renderer.d.ts',
         'tracking-attributes.d.ts',
+        'request-handler.d.ts',
+        'server-request.d.ts',
+        'request-context.d.ts',
+        'cookies.d.ts',
+        'cache.d.ts',
+        'serialization.d.ts',
       ].sort()
     );
     for (const filename of declarations) {
@@ -198,7 +214,13 @@ describe('published declarations', () => {
       const filename = path.join(packageRoot, 'src', 'published-surface.ts');
       const source = `
       import * as root from '${packageName}';
+      import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
+        configureNextjsServerExperiences, bindNextjsExperiencesRequest,
+        createNextjsRouteKey, serializeNextjsPlan, serializeNextjsHandoff,
+        createNextjsPrivateFetch, assertNextjsPublicRequestPolicy,
+        applyNextjsPrivateResponseCache, persistNextjsAnonymousId,
+        type ExperiencesNodeRequest, type BindNextjsExperiencesRequestOptions,
         ServerExperienceRenderer, defineComponent, fetchExperience, EventBuilder,
         type Config, type PortableRenderPlan, type ServerExperienceRendererProps
       } from '${packageName}/server';
@@ -214,6 +236,51 @@ describe('published declarations', () => {
       import { ServerExperienceRenderer as sharedServer } from '@contentful/experiences-react/server';
       import { ExperienceRenderer as sharedClient } from '@contentful/experiences-react/client';
 
+      const sdk = configureNextjsServerExperiences({
+        spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server-token' }
+      });
+      const request = bindNextjsExperiencesRequest(sdk, { consent: false, locale: 'en-US' });
+      const actualRequest: ExperiencesNodeRequest = request;
+      const response = { headers: new Headers() };
+      applyNextjsPrivateResponseCache(response);
+      persistNextjsAnonymousId(response, request, { cookieOptions: { httpOnly: true } });
+      request.destroy();
+      // @ts-expect-error The unpublished binding wrapper has been removed.
+      import { type NextjsExperiencesRequestBinding } from '${packageName}/server';
+      // @ts-expect-error The direct Node request has no response persistence closure.
+      request.persist(response);
+      const unsupportedBindOptions: BindNextjsExperiencesRequestOptions = {
+        consent: false,
+        // @ts-expect-error Cookie response options belong to standalone persistence or middleware.
+        cookieOptions: { httpOnly: true }
+      };
+      const unsupportedWithdrawalOptions: BindNextjsExperiencesRequestOptions = {
+        consent: false,
+        // @ts-expect-error Withdrawal policy belongs to response persistence.
+        deleteWhenProfileCannotPersist: false
+      };
+      void [unsupportedBindOptions, unsupportedWithdrawalOptions];
+      // @ts-expect-error Consent is required independently of request cookies.
+      bindNextjsExperiencesRequest(sdk, { locale: 'en-US' });
+      declare const initializer: NonNullable<Parameters<typeof sdk.forRequest>[0]>['livePreview'];
+      const livePreview: NextjsLivePreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
+      const handlerOptions: NextjsExperiencesContextHandlerOptions = { sdk, consent: false, livePreview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
+      const contextHandler = createNextjsExperiencesContextHandler(handlerOptions);
+      const explicitRequest = bindNextjsExperiencesRequest(sdk, { consent: false, livePreview: initializer });
+      // @ts-expect-error Handler livePreview resolves an initializer, not a preview-policy record.
+      const unsupportedPolicy: NextjsLivePreviewResolver = () => ({ isPreview: true });
+      // @ts-expect-error The handler does not accept an initializer directly as its resolver.
+      const unsupportedInitializer: NextjsLivePreviewResolver = initializer!;
+      const unsupportedHandlerOptions: NextjsExperiencesContextHandlerOptions = {
+        sdk, consent: false,
+        // @ts-expect-error There is one application-owned livePreview resolver.
+        previewResolver: livePreview
+      };
+      explicitRequest.destroy();
+      void [unsupportedPolicy, unsupportedInitializer, unsupportedHandlerOptions];
+      assertNextjsPublicRequestPolicy({ cache: { scope: 'static' }, context: { consent: false } });
+      void [actualRequest, contextHandler, createNextjsRouteKey, serializeNextjsPlan,
+        serializeNextjsHandoff, createNextjsPrivateFetch];
       const server: typeof sharedServer = ServerExperienceRenderer;
       const client: typeof sharedClient = ExperienceRenderer;
       const config: Config = { components: {} };

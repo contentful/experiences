@@ -27,9 +27,12 @@ export type {
 } from '@contentful/experiences-client';
 export {
   ANONYMOUS_ID_COOKIE,
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
   EventProfileRequiredError,
   InterceptorManager,
   resolveFlagChange,
+  parseExperiencesHandoffEnvelope,
 } from '@contentful/experiences-runtime';
 export type {
   ChangeArray,
@@ -48,6 +51,7 @@ export type {
   EventOptimizationData,
   EventEmissionResult,
   EventProfile,
+  ExperiencesCacheMetadata,
   ExperiencesHandoff,
   FetchExperienceForHandoffResult,
   ClickBuilderArgs,

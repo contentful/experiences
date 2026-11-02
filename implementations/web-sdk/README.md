@@ -1,6 +1,6 @@
 # Experiences Web SDK reference implementation
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
 
 This standalone application consumes the locally packed `@contentful/experiences-web`
 SDK as a classic UMD script. Browser application files are vanilla JavaScript;
@@ -106,18 +106,24 @@ BROWSER_PREVIEW_TOKEN=<preview token approved for browser exposure>
 ```
 
 Use `?preview_session_id=<session>` and optional `preview_experience_id` (any
-Experience ID, default: first presentation ID), or configure
-`LIVE_PREVIEW_SESSION_ID` / `LIVE_PREVIEW_EXPERIENCE_ID`. Optional
+Experience ID, default: `LIVE_PREVIEW_EXPERIENCE_ID` or first presentation ID).
+Preview activates only when app-local `LIVE_PREVIEW_ENABLED` is exactly `true` and
+the URL supplies a nonempty, trimmed `preview_session_id`. `LIVE_PREVIEW_SESSION_ID`
+is local convenience storage only; runtime/build code never reads it or emits it
+into browser configuration. Missing or empty session parameters, or a disabled
+flag even with a session URL, use ordinary mode and events. Optional
 `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Other IDs use Delivery.
-Web passes `livePreview` at initialization and uses `fetchExperience()` for initial
-content and Retry. After loading/rendering, `subscribeToPreview()` applies new
+Web passes `livePreview` and explicit `isPreview: Boolean(previewBinding)` at
+initialization, overriding SDK URL autodetection even when false. It uses
+`fetchExperience()` for initial content and Retry. After loading/rendering,
+`subscribeToPreview()` applies new
 plans/errors; `states.preview` exposes connection status.
 Preview skips visitor actions and disables Identify. Navigation inherits
 the current binding only when the destination omits it; explicit destination
 preview parameters take precedence. Binding changes within preview use
 `replaceLivePreview`; entering or leaving preview reloads the document to create
-a new SDK owner. An explicit empty `preview_session_id` leaves preview, including
-when a default session is configured. The presentation ID list stays unchanged.
+a new SDK owner. An explicit empty `preview_session_id` leaves preview.
+The presentation ID list stays unchanged.
 Ordinary `build`, `dev`, `serve`, and `restart` commands read app-local
 `LIVE_PREVIEW_ENABLED`: `true` includes optional preview assets and enables host
 configuration; other values exclude them. Rebuild after changing this deployment
