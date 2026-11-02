@@ -146,7 +146,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('does not store a returned profile after reset()', async () => {
+  it('rejects an in-flight result after reset() without storing its profile', async () => {
     const runtime = createRuntime();
     const pending = deferred<object>();
     const fetch = vi
@@ -157,7 +157,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     runtime.reset();
     pending.resolve({ nodes: [], personalization: { profileId: 'stale' } });
-    await request;
+    await expect(request).rejects.toThrow('Experiences fetch was superseded');
 
     expect(runtime.states.profile.current).toBeUndefined();
   });

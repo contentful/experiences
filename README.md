@@ -219,10 +219,11 @@ profile changes. SSR/CSR XDA events remain uncommitted: this tolerated service b
 awaits upstream force-commit support. There is no current force flag or SDK
 workaround. Direct event APIs remain callable but are not compensation.
 
-**Current Phase 6 correction:** Implementation and checks are pending; Phase 6
-is not accepted or complete and Phase 7 remains gated. Earlier 1008-test,
+**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02.
+Current checks and acceptance review are recorded in the implementation plan.
+Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
 five-owner static-check and no-production-findings review results describe the
-superseded remedy only. Installed-reference checks likewise remain historical;
+superseded remedy only. Earlier installed-reference checks likewise remain historical;
 no live XDA/XPAPI events were exercised. Phases 1–5 remain accepted.
 
 Only an actual server-to-browser transfer uses the Node producer:

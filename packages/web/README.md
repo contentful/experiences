@@ -281,9 +281,8 @@ navigation still supplies page intent. Direct event APIs remain callable without
 becoming an initial prerequisite or XDA noncommit workaround.
 
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
-for the tolerated SSR/CSR service bug and incoming replay rules. This correction's
-implementation/checks are pending; Phase 6 remains unaccepted/incomplete and
-Phase 7 stays gated.
+for the tolerated SSR/CSR service bug and incoming replay rules. This correction is
+complete and explicitly accepted on 2026-11-02. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
 
 ## Browser-safe configuration
 
@@ -873,7 +872,7 @@ roots, and one root can belong to several scopes.
 
 ## Server event handoff
 
-**Current correction:** Implementation and checks are pending; Phase 6 is not accepted or complete and Phase 7 stays gated. Earlier remedy checks/review are historical evidence for the superseded design.
+**Current correction:** Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks/review are historical evidence for the superseded design.
 
 Create one browser runtime, then pass the `ExperiencesHandoff` prepared by Node
 to `hydrateAndTrackCurrentPage`. Supply the visible pathname plus search as the

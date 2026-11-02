@@ -151,9 +151,9 @@ SDK per-resource state. `replaceLivePreview` switches sessions. SSR-only adapter
 observe matching content revisions for server refresh without browser resolution.
 Snapshot runtimes expose inert undefined preview state; other states are unchanged.
 
-Future React/Next integration ports Optimization's existing source/presentation
-controllers with the thin binding. Current standalone React preview hooks remain
-until their scheduled migration. Registry/shared ownership, shared page
+React managed integration ports Optimization's source/presentation controllers
+with the thin binding; the obsolete standalone preview hooks have been retired.
+Next integration will reuse the same framework-neutral SDK owners. Registry/shared ownership, shared page
 initialization, request memoization, applicable handoff envelopes and attribution
 remain required. Managed React content/root sequencing belongs to phase 7, Next
 utilities to phase 9 and router request families to phase 10; no complete-plan
@@ -219,9 +219,9 @@ the full Optimization context schema. The old generated contract alone did not
 validate the added fields. Keep Client's `zod` dependency direct; do not add an
 Optimization API client dependency or a Runtime import. Validate final transformed
 output before final consent callbacks/publication, preserving input immutability.
-Current correction implementation and checks are pending; earlier companion checks/
-review are historical. Ordinary SSR uses Node fetch; CSR and browser-local navigation/
-actions use Web fetch, accepting existing type-tagged arguments or raw built events
+The Phase 6 correction is complete and explicitly accepted on 2026-11-02; earlier
+companion checks/review are historical. Ordinary SSR uses Node fetch; CSR and
+browser-local navigation/actions use Web fetch, accepting existing type-tagged arguments or raw built events
 with SDK-owned construction once. Only actual server-to-browser transfers retain
 the Node `fetchExperienceForHandoff` producer with `{ routeKey }` as its third
 argument, returning full handoff plus optional plan/error. Web/React optionally
@@ -236,8 +236,9 @@ comparison IDs also use ordinary event-free fetch, without an SDK multi-Experien
 or cross-fetch guarantee; official support is one Experience per page, unenforced.
 Direct APIs remain callable, not initial prerequisites or compensation.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
-for replay, identity, consent, queues and lifetime. Phase 6 remains unaccepted/
-incomplete and Phase 7 stays gated; phases 1–5 remain accepted.
+for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
+accepted on 2026-11-02. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied.
+Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
 means not granted. Until event consent is granted only `allowedEventTypes`
@@ -286,7 +287,8 @@ Prepared event attempts publish only after the whole batch is admitted and befor
 transport begins; refusal publishes none. Preserve the original operation revision
 through asynchronous interception and final admission/state publication, so reset,
 consent withdrawal, supersession or destroy cannot admit or publish stale visitor work.
-These are remedy correctness/test obligations, not claims of completed validation.
+These remain correctness/test obligations; Phase 6 validation and acceptance are
+recorded in the implementation plan.
 
 ## Parity with the Optimization SDK
 
@@ -629,10 +631,11 @@ existing Node/Web/hybrid flows and owner checks, plus the necessary React provid
 migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 `ExperiencesStateInitialization`. Lifecycle consumes the complete operation using the
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
-Phase 6 acceptance/completion is withdrawn pending fresh correctness/design review and
-explicit acceptance; phases 1–5 remain accepted and Phase 7 stays gated. Adapt source/presentation ports
+Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
+acceptance review are recorded in the implementation plan. Phases 1–5 remain
+accepted. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
-Optimization's page consent-retry exception in that future managed flow; do not
+Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
 
 Vitest. Tests live next to source (`src/foo.test.ts`). The `node` environment is fine for everything (we use `react-dom/server` for renderer tests — no jsdom needed).

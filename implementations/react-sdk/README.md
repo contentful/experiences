@@ -1,36 +1,45 @@
-# Experiences React SDK rendering reference
+# Experiences React SDK runtime reference
 
 Official support is one Experience fetch per page, without code enforcement.
 Reference multi-ID loops exist only to compare rendering scenarios, not as
 supported product usage or a cross-fetch guarantee.
 
-**Current Phase 6 correction:** Implementation and checks are pending; Phase 6 is not accepted or complete and Phase 7 stays gated. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
+current checks and acceptance review are recorded in the implementation plan.
+Phase 7 implementation and refinements, including source cleanup and reference
+reduction, are validated and awaiting user acceptance.
+Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
+checks/review remain historical; Phase 7 package and live observations are recorded
+in its implementation-plan entry.
 
 This private standalone React/Vite application loads and renders real Experience
 plans. It consumes locally packed SDK artifacts outside the
 root npm workspaces.
-Home (`/`) and Page Two (`/page-two`) use ordinary document links, including direct
-navigation and browser back/forward. The Web reference's theme, Tracking sidebar,
+Home (`/`) and Page Two (`/page-two`) support direct document visits, client
+navigation through ordinary links and browser back/forward under one stable root. The Web reference's theme, Tracking sidebar,
 Utilities area and split content layout provide automatic and manual tracking
 presentations with SDK-owned consent controls.
 
-The application loads real Experience plans through the public React `/client`
-free `fetchExperience` API and renders them with `ExperienceRenderer`. This
-application-owned loading/supplied-plan path remains supported when managed
-loading arrives. A registry-bound `ExperiencesRoot` activates one Web runtime after
-React commits. Utilities expose event and persistence consent; the optional
-Tracking sidebar reports actual event-attempt notifications. Credentials are
-unnecessary to build and start; content loading requires the app-local space and
-browser-approved Delivery token. Managed content/navigation/preview and
-page/identify/reset/retry sequences remain Phase 7 work. Phase 6 corrects the
+The first route ID loads through the registry-bound `useManagedExperience` hook;
+supplied `<Experience experience={plan} />` presentations reuse that hook's plan
+for automatic and manual roots. Later comparison IDs seed managed `Experience`
+presentations so they can receive live-preview updates. The first request carries
+page/optional initial URL identify intent through ordinary Web fetch. Later IDs use a lightweight
+event-free comparison loop and reuse their plans. Application-owned free fetching
+and supplied-plan rendering remain supported public paths. `ExperiencesRoot`
+activates one Web runtime after React commits, retaining it through navigation.
+Utilities expose consent, Identify, Reset, Retry content and Page Two's separate
+CUSTOM TRACK; the sidebar reports actual event-attempt notifications. Optional
+Preview Sessions use the same SDK loading and rendering surfaces. Credentials are
+unnecessary to build and start; real content requires app-local browser-approved
+Delivery configuration. Phase 6 corrects the
 existing Node/Web/hybrid references and owner checks, plus the necessary React
 provider/root migration to `handoff?: ExperiencesHandoff`, replacing
 `initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
 Lifecycle consumes the complete operation using current browser route. Matching
 nonpage replay has no page fallback; replay-less state applies internally and returns
-`{ accepted: false }` unless explicit `buildPayload` supplies page intent. Other
-managed React/Phase 7 capabilities stay gated. Phase 7 uses ordinary Web fetch for
-CSR and browser-local navigation/actions; normal fetch requires no handoff.
+`{ accepted: false }` unless explicit `buildPayload` supplies page intent. Managed React loading uses ordinary Web fetch for CSR and browser-local
+navigation/actions; normal fetch requires no handoff.
 Optional Web/React handoff consumption is mode agnostic and consumer supplied
 only for an actual server transfer, independently of display. No local CSR/
 navigation producer remains. Retry is ordinary event-free fetch of the same ID;
@@ -40,6 +49,19 @@ consent/lifetime and the page consent-retry exception without direct initial
 emission as a prerequisite. See the
 [implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-5-implement-react-ownership-providers-and-hooks)
 and [accepted design](../../tmp/react-next-runtime-phase-1-design.md).
+
+The API refinements distinguish supplied `<Experience experience={plan} />`
+presentation from managed `experienceId` loading with optional `initialPlan` and
+`initialError` seeds.
+Supplied presentation performs no content request, resolution or preview binding.
+Committed `onExperienceResolved`/`onExperienceError` notifications can report a
+usable plan alongside an error; node/function fallbacks and custom children retain
+the full result. `isLive` narrows the context SDK for concrete operations, while
+root/provider `initialPagePayload` supplies static `PageViewBuilderArgs` with explicit
+`buildPagePayload` precedence. See the [adapter contract](../../packages/adapter-react/README.md#managed-content).
+Reference reduction and source organization are implemented. Local SDK checks,
+installed setup/build/lint/typecheck, bounded review and live reference checks have
+passed; Phase 7 user acceptance remains pending.
 
 ## Setup and local commands
 
@@ -110,8 +132,8 @@ The host parses only this app's `.env`, falling back to the credential-free
 another reference's environment file or spreads `process.env`. `PORT` is local
 hosting configuration, defaulting to 3400, and must be an integer in 1–65535.
 
-The complete public allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`
-and resolved `EXPERIENCE_IDS`. The first and third default to empty strings;
+The public allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`,
+resolved `EXPERIENCE_IDS` and the optional `LIVE_PREVIEW` projection described below. The first and third default to empty strings;
 environment defaults to `master` and locale to `en-US`. The content loader uses
 these values for Delivery requests; the managed root uses the same browser-safe
 Delivery configuration and the SDK's default Optimization endpoints.
@@ -122,9 +144,26 @@ cannot be served from the output-only host.
 
 `CDA_TOKEN`, when configured, is intentionally browser-visible and must be a Delivery
 credential approved and scoped for that use. Do not place management credentials
-or server-only preview tokens in the public allowlist. Preview configuration and
-initialization are introduced with the later preview integration; this app
-does not read preview settings or open a connection.
+or server-only preview tokens in the public allowlist. Configure optional preview with `LIVE_PREVIEW_ENABLED=true` and an explicitly
+browser-approved `BROWSER_PREVIEW_TOKEN`. Optional `BROWSER_PREVIEW_HOST`,
+`LIVE_PREVIEW_EXPERIENCE_ID`, `LIVE_PREVIEW_SESSION_ID`, `LIVE_PREVIEW_SESSION_HOST`
+and `LIVE_PREVIEW_RESOURCE_RESOLUTION` map to the supported public SDK initializer.
+A blank Experience ID uses the first configured/default ID. The URL can override
+`preview_session_id` and `preview_experience_id`; an explicitly empty
+`?preview_session_id=` selects ordinary mode even when a session default is configured.
+Links preserve that explicit choice. Changing session or fixed preview policy
+recreates the document/owner; ordinary navigation retains it. Rebuild and restart
+after changing the deployment flag: Vite replaces `__LIVE_PREVIEW_ENABLED__` at
+build time, excluding the optional preview import/chunk when disabled. Runtime
+configuration alone cannot add an excluded chunk. The session token is required;
+no tokenless-proxy capability is assumed.
+
+Matching preview requests load the snapshot and bind resolved session updates.
+Unrelated IDs retain ordinary fetching under preview's event policy. Utilities
+show status/errors, visitor event controls are suppressed, and usable content
+survives refresh or connection failures. Explicit Reset and consent controls retain
+SDK command semantics. See [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview);
+this reference does not implement protocol recovery or an independent preview client.
 
 An absent or blank comma-separated `EXPERIENCE_IDS` uses the same defaults as Web:
 
@@ -142,36 +181,44 @@ manual section presents that first plan twice to demonstrate separate DOM roots.
 
 `package.json` declares the public React and Web local tarballs, overrides their
 Client/Runtime/Core/Design chains to local archives, and installs the unchanged
-Preview artifact as an optional dependency for eventual lazy initialization. There
+Preview artifact as an optional dependency for deployment-controlled lazy initialization. There
 is no Next dependency, workspace source alias or adjacent Optimization dependency.
 The browser imports the public React `/client` entry and the maintained Contentful
 Rich Text React renderer/types. The React managed root owns Web construction and
 disposal; the app imports Web's public state types for optional diagnostics.
-Preview remains optional and is not initialized.
+Preview is initialized only when the deployment enables it and a session is bound.
 
 Browser rendering uses the public `@contentful/experiences-react/client` entry;
 static/server integration uses `@contentful/experiences-react/server` where
-applicable. This browser app uses `/client` for both free fetching and supplied-plan
-rendering. Preview integration must use
+applicable. This browser app uses `/client` for managed loading, hooks, supplied
+primary-plan rendering and seeded comparison rendering. Preview integration uses
 the frozen package's public exports and Runtime's supported initializer; see
 [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview).
 
 - `src/App.tsx`, `src/main.tsx`, `index.html`: React shell, route labels, normal
-  links, title/active-link updates, application-owned load, commit-time managed
-  ownership, final-exit/BFCache handling and local assets.
+  links, history navigation, title/active-link/focus updates, visitor intent,
+  one primary managed result, comparison state, commit-time managed ownership,
+  final-exit/BFCache handling and local assets. Main keeps URL and visitor intent
+  together and supplies static `initialPagePayload`; App consumes the primary hook
+  result directly without a mirrored primary-plan state store.
 - `src/experiences.ts`: pure factory binding of the registry once, shared by the
-  managed root and supplied-plan renderers; no SDK construction at module scope.
+  managed root, `Experience` and loader hook; no SDK construction at module scope.
 - `src/ConsentControls.tsx`: consent state hooks and receiver-safe `setConsent`
-  action for independent event/persistence Grant/Revoke controls.
+  action for independent event/persistence Grant/Revoke controls, visitor actions,
+  content recovery and shared preview status.
 - `src/attempt-log.ts`, `src/TrackingLog.tsx`: early retained event subscription,
   notification counts, actual view/hover interval grouping and cleaned-up age timer.
-- `src/content-loader.ts`: concurrent free fetches for distinct route IDs solely to compare rendering
-  scenarios, with source maps, per-ID error results and plan reuse; no runtime
-  initialization or supported multi-Experience product pattern.
+- `src/content-loader.ts`: a sequential event-free Web fetch loop for later comparison
+  IDs, per-ID errors and plan reuse, without a supported multi-Experience guarantee.
+- `src/preview.ts`: optional public module import and URL/environment session binding.
 - `src/experience-config.tsx`: coded component/template registrations, generated
   source-field types, binding checks, Rich Text and the actual named `slot`.
-- `src/ExperiencePresentation.tsx`: standard supplied-plan renderer, content/error
-  presentation, context-based manual-view registration and per-kind automatic flags.
+- `src/ExperiencePresentation.tsx`: supplied primary plans and managed comparison
+  plan/error seeds through standard `Experience`; custom children present current
+  managed diagnostics, errors and empty content through the bound renderer. Primary
+  diagnostics use the page-owned result. It also retains context-based
+  manual-view registration and per-kind automatic flags, without a second plan-view
+  wrapper or SDK casts.
 - `src/contentful-generated.d.ts`: unchanged copy of the current Node reference's
   generated CDA declaration. Its `contentful` type dependency is declared locally;
   no generator runs during app setup.
@@ -187,17 +234,38 @@ the frozen package's public exports and Runtime's supported initializer; see
 
 ## Rendering and binding evidence
 
-The loader starts once per document outside React render/effect replay. It requests
-`extensions: { sourceMap: {} }`, fetching each distinct route ID concurrently once.
-Results retain route order regardless of completion order.
-Home requests all configured IDs; Page Two requests the last and the first
-(unless they are the same). Both manual presentations reuse the same plan object;
-on Home the automatic presentation also uses it. Errors for one ID do not stop the
-remaining requests. React subscribes to the resulting page load with a stale-result
-guard. This is a single application load, with no general cache, page/identify
-operations, personalization input, route initialization barrier or preview work.
-Ordinary document navigation starts a new load. Loading, missing configuration,
-request errors, empty plans and SDK content diagnostics are displayed truthfully.
+Managed loading begins after commit and requests source maps for ordinary content,
+including manual presentations. Home starts with the first configured ID; Page Two
+starts with the last. Later IDs are comparison-only ordinary event-free fetches.
+Both manual presentations reuse one plan; Home's first automatic presentation uses
+it too. Primary presentations use supplied mode: the primary hook owns fetching and
+preview updates, without duplicate content state or per-presentation I/O. Comparison
+plans/errors seed managed mode after the event-free comparison loop settles, using
+`initialPlan`/`initialError` without a duplicate startup fetch. An error-only seed
+still binds preview updates, and explicit refresh/retry can recover. Managed
+diagnostics, errors and empty-content messages follow the current `children(result)`
+value rather than the original seed; primary presentations use the page-owned
+result. Errors for one comparison ID do not prevent remaining comparisons. The SDK/hook guards obsolete
+results across navigation, request changes and teardown.
+Loading, missing configuration, errors, empty plans and content diagnostics remain
+visible without fabricated personalization success.
+
+Initial `?userId=charles` pairs identify with page intent. Standalone Identify and
+CUSTOM TRACK supply fresh nonpage arguments; SDK construction occurs once.
+Navigation carries a page. Retry/refresh refetch the same descriptor without events,
+builders, event hooks or replay and keep usable content. Visitor actions requested
+during a running initialization wait for that outcome; settled cancellation permits
+explicit Retry. Consent changes use SDK/root page behavior without application
+consent subscriptions that fetch content. Reset synchronously removes old attributed
+DOM/manual registrations before calling the bound SDK reset action, then starts a
+fresh presentation while retaining the root and sidebar. URL/title/active links and
+focus follow direct navigation and back/forward.
+
+Ordinary SSR/CSR XDA events currently remain uncommitted because the service forces
+preflight. That is tolerated absent blocking errors, without synthetic XPAPI
+compensation. A provisional profile ID and content success do not prove commitment.
+Only actual supplied server transfers use optional explicit replay; this CSR reference
+creates none. Insights acceptance is observed per request, not assumed from an ID.
 
 The read-only space export at
 `lib/mocks/src/contentful/data/space/ctfl-space-data.json` establishes these mappings:
@@ -207,7 +275,7 @@ The read-only space export at
 | `codedComponent`            | Data assembly `5yb8t7OHz3FgDoriyuR2Ek` permits `content` entries. Its GraphQL resolver selects `internalTitle`, `text`, and `richText { document: json }`, returning `title`, `text`, and `richText`. Rendered as a card.                                                                                                                                             |
 | `codedExperienceTemplate`   | Data assembly `6qkMYKRvKerQnsOX3Hdc2N` has the same source-field aliases/wrapper. The template declares the named `slot`; the coded Experience fills it with coded and personalized fragments.                                                                                                                                                                        |
 | Composed component/template | `246bbtx2pFLq7paqNanBXp` and `1xrW5RkILRtGaWxGhtqtE7` delegate to the coded component assembly, then map outputs through TypeRef properties (`cp_r8UEGKwoXF` / `cp_XxhQNVJuDb` and `cp_17S_0fGkrF` / `cp_iFJCJZhqU-`). Their component trees expand into `codedComponent` nodes. The composed template also inserts its `slot`. No app-side tree expansion is needed. |
-| Personalization variants    | The fragment switches `content` entries through the same assembly; the personalized composed Experience swaps its two entry parameters. This app supplies no visitor context and does not claim that a returned plan is personalized.                                                                                                                                 |
+| Personalization variants    | The fragment switches `content` entries through the same assembly; the personalized composed Experience swaps its two entry parameters. XDA evaluates the supplied visitor intent; a returned plan or HTTP 200 alone does not prove personalized selection.                                                                                                           |
 
 The title/text/document value types derive from
 `TypeContentWithoutLinkResolutionResponse['fields']`, rather than schema markers.
@@ -254,8 +322,8 @@ has no root map, attribution traversal, measurement observer or SDK prop threadi
 snapshot before activation or after setup failure. Supplied plans remain visible
 independently of activation/readiness; Utilities exposes provider errors and
 disables consent actions on the snapshot. `isLive` describes runtime activation,
-not preview connection or content success. This phase has no state handoff or
-route-page coordinator. Root configuration is captured for the mounted owner;
+not preview connection or content success. The public root supports optional explicit
+state handoff/replay; this CSR reference uses ordinary fetching and route inputs. Root configuration is captured for the mounted owner;
 structural changes require deliberate key replacement, while locale is mutable.
 An application-owned SDK can instead be injected through `ExperiencesProvider`;
 independent providers may share a public `/host` binding. This reference uses one
@@ -265,15 +333,21 @@ Startup consent/profile defaults are unset. State comes from the SDK and its
 existing persistence policy, with no application profile or consent store.
 Grant/Revoke changes event and persistence consent independently, with no content
 fetch or page action from a consent subscription. Event consent gates tracking;
-persistence consent gates durable profile continuity. No visitor profile is
-initialized here. Analytics dispatch and attempt notifications require an available
+persistence consent gates durable profile continuity. XDA-returned profile IDs are
+adopted locally without proving event commitment. Analytics dispatch and attempt notifications require an available
 runtime event profile or identity. Granting event consent alone does not make
 interaction attempts appear for a fresh visitor without that prerequisite.
 A profileless `trackView` can return `{ accepted: true }` with no `eventStream`
 notification or network request. The sidebar counts actual notifications, which
 do not establish successful transport delivery.
-Page/identify/reset/retry and managed preview
-content are deferred to Phase 7.
+Page/identify/reset/retry and preview content use the managed integration. Ordinary
+content remains independent of event submission, identity finalization and socket status.
+
+The user accepted the live ID-only profile/Insights HTTP 400 mismatch as a tolerated
+service limitation on 2026-11-02. See [Runtime's canonical record](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+View/hover/click notifications show measurement/admission, not delivery. Complete
+XPAPI profiles produced HTTP 200; fresh XDA ID-only profiles were rejected for
+missing profile fields. No profile fields or compensating commits are fabricated.
 
 The stable `onStatesReady` callback attaches the optional sidebar's retained
 subscription during activation, before root-driven work. It ignores the immediate
@@ -301,7 +375,7 @@ at Optimization commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `Optimi
 Web `presentation/optimizationRootRuntime.ts`, and the maintained React reference's
 `main.tsx`, `ControlPanel.tsx` and `AnalyticsEventDisplay.tsx`. The retained
 Experiences differences are supplied XDA plans rather than local CDA variant
-resolution, no route-page work until Phase 7, SDK-normalized attribution data,
+resolution, XDA-carried ordinary intent, SDK-normalized attribution data,
 and skipping historical notifications when attaching diagnostics. The pinned
 reference is historical evidence only, with no adjacent-checkout runtime dependency.
 The active parity baseline is PR #549 at
