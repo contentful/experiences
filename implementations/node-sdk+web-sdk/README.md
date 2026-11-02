@@ -4,7 +4,7 @@ Official support is one Experience fetch per page, without code enforcement.
 Reference multi-ID loops exist only to compare rendering scenarios, not as
 supported product usage or a cross-fetch guarantee.
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 implementation and refinements, including source cleanup and reference reduction, are validated and awaiting user acceptance. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
 
 This standalone Express/EJS application consumes locally packed public
 `@contentful/experiences-node` and `@contentful/experiences-web` packages. It has its

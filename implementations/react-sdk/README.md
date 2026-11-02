@@ -6,8 +6,7 @@ supported product usage or a cross-fetch guarantee.
 
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
 current checks and acceptance review are recorded in the implementation plan.
-Phase 7 implementation and refinements, including source cleanup and reference
-reduction, are validated and awaiting user acceptance.
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
 Phases 8–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
 checks/review remain historical; Phase 7 package and live observations are recorded
 in its implementation-plan entry.
@@ -21,7 +20,7 @@ Utilities area and split content layout provide automatic and manual tracking
 presentations with SDK-owned consent controls.
 
 The first route ID loads through the registry-bound `useManagedExperience` hook;
-supplied `<Experience experience={plan} />` presentations reuse that hook's plan
+supplied renderer presentations reuse that hook's plan
 for automatic and manual roots. Later comparison IDs seed managed `Experience`
 presentations so they can receive live-preview updates. The first request carries
 page/optional initial URL identify intent through ordinary Web fetch. Later IDs use a lightweight
@@ -61,7 +60,7 @@ root/provider `initialPagePayload` supplies static `PageViewBuilderArgs` with ex
 `buildPagePayload` precedence. See the [adapter contract](../../packages/adapter-react/README.md#managed-content).
 Reference reduction and source organization are implemented. Local SDK checks,
 installed setup/build/lint/typecheck, bounded review and live reference checks have
-passed; Phase 7 user acceptance remains pending.
+passed; Phase 7 is complete and explicitly accepted on 2026-11-02.
 
 ## Setup and local commands
 
@@ -195,30 +194,19 @@ primary-plan rendering and seeded comparison rendering. Preview integration uses
 the frozen package's public exports and Runtime's supported initializer; see
 [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview).
 
-- `src/App.tsx`, `src/main.tsx`, `index.html`: React shell, route labels, normal
-  links, history navigation, title/active-link/focus updates, visitor intent,
-  one primary managed result, comparison state, commit-time managed ownership,
-  final-exit/BFCache handling and local assets. Main keeps URL and visitor intent
-  together and supplies static `initialPagePayload`; App consumes the primary hook
-  result directly without a mirrored primary-plan state store.
-- `src/experiences.ts`: pure factory binding of the registry once, shared by the
-  managed root, `Experience` and loader hook; no SDK construction at module scope.
-- `src/ConsentControls.tsx`: consent state hooks and receiver-safe `setConsent`
-  action for independent event/persistence Grant/Revoke controls, visitor actions,
-  content recovery and shared preview status.
-- `src/attempt-log.ts`, `src/TrackingLog.tsx`: early retained event subscription,
-  notification counts, actual view/hover interval grouping and cleaned-up age timer.
-- `src/content-loader.ts`: a sequential event-free Web fetch loop for later comparison
-  IDs, per-ID errors and plan reuse, without a supported multi-Experience guarantee.
+- `src/main.tsx`, `index.html`: bootstrap and document/BFCache lifetime; no application components live in the entrypoint.
+- `src/App.tsx`: stable SDK root, preview configuration and route selection.
+- `src/Navigation.tsx`: navigation UI and one URL/visitor-intent update path, including history and focus.
+- `src/PageShell.tsx`: shared layout, sidebar, page heading/title and busy state.
+- `src/ContentPage.tsx`: one primary managed result, comparison IDs, repeated presentations and the synchronous content gap before Reset.
+- `src/experiences.ts`: pure registry binding shared by the root, renderer and loader; no module-scope SDK construction.
+- `src/ConsentControls.tsx`: independent consent controls, Identify/custom visitor intent, Reset, Retry and preview diagnostics. Visitor actions are disabled while the initial content request is pending; there is no application action queue.
+- `src/attempt-log.ts`, `src/TrackingLog.tsx`: retained attempt subscription, measured interval grouping and sidebar age timer.
+- `src/content-loader.ts`: the event-free comparison hook/loop and its effect cleanup, without a supported multi-Experience guarantee.
 - `src/preview.ts`: optional public module import and URL/environment session binding.
-- `src/experience-config.tsx`: coded component/template registrations, generated
-  source-field types, binding checks, Rich Text and the actual named `slot`.
-- `src/ExperiencePresentation.tsx`: supplied primary plans and managed comparison
-  plan/error seeds through standard `Experience`; custom children present current
-  managed diagnostics, errors and empty content through the bound renderer. Primary
-  diagnostics use the page-owned result. It also retains context-based
-  manual-view registration and per-kind automatic flags, without a second plan-view
-  wrapper or SDK casts.
+- `src/Content.tsx`: plain card/template components, generated field types, narrow binding checks, Rich Text and the named slot.
+- `src/experience-config.tsx`: SDK registrations and Fragment clickability; presentation components remain separate.
+- `src/ExperiencePresentation.tsx`: current content, diagnostics, error/empty display, managed comparison seeds and one context-based manual-view registration callback.
 - `src/contentful-generated.d.ts`: unchanged copy of the current Node reference's
   generated CDA declaration. Its `contentful` type dependency is declared locally;
   no generator runs during app setup.
@@ -238,7 +226,7 @@ Managed loading begins after commit and requests source maps for ordinary conten
 including manual presentations. Home starts with the first configured ID; Page Two
 starts with the last. Later IDs are comparison-only ordinary event-free fetches.
 Both manual presentations reuse one plan; Home's first automatic presentation uses
-it too. Primary presentations use supplied mode: the primary hook owns fetching and
+it too. Primary presentations use the supplied renderer: the primary hook owns fetching and
 preview updates, without duplicate content state or per-presentation I/O. Comparison
 plans/errors seed managed mode after the event-free comparison loop settles, using
 `initialPlan`/`initialError` without a duplicate startup fetch. An error-only seed
@@ -253,9 +241,9 @@ visible without fabricated personalization success.
 Initial `?userId=charles` pairs identify with page intent. Standalone Identify and
 CUSTOM TRACK supply fresh nonpage arguments; SDK construction occurs once.
 Navigation carries a page. Retry/refresh refetch the same descriptor without events,
-builders, event hooks or replay and keep usable content. Visitor actions requested
-during a running initialization wait for that outcome; settled cancellation permits
-explicit Retry. Consent changes use SDK/root page behavior without application
+builders, event hooks or replay and keep usable content. Identify and CUSTOM TRACK are disabled while content is idle/loading, then become
+available under the existing preview/identity policy; explicit Retry remains
+available after the request settles. Consent changes use SDK/root page behavior without application
 consent subscriptions that fetch content. Reset synchronously removes old attributed
 DOM/manual registrations before calling the bound SDK reset action, then starts a
 fresh presentation while retaining the root and sidebar. URL/title/active links and
@@ -280,10 +268,11 @@ The read-only space export at
 The title/text/document value types derive from
 `TypeContentWithoutLinkResolutionResponse['fields']`, rather than schema markers.
 The SDK's incoming content remains unknown-valued. Registration `resolveData`
-checks strings and the Rich Text document wrapper/node structure; rendering repeats
-those checks for supplied plans and the SDK's resolver-error fallback. Missing or
+checks strings and the Rich Text document root; rendering repeats these narrow
+binding checks because the SDK may render a node after resolver failure. Missing or
 malformed values produce field-specific errors rather than asserted content or
-invented defaults. These checks do not validate every editorial Rich Text rule.
+invented defaults. Child-node semantics belong to the maintained Rich Text renderer; the reference
+does not implement another recursive document validator.
 Linked entries/assets are not separately fetched or resolved by this reference;
 the maintained Rich Text renderer uses its default handling for those nodes.
 Changed admin mappings or different override IDs may require new registrations.

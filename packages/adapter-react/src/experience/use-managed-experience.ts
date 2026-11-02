@@ -113,9 +113,7 @@ export function useExperienceSource(
       preview: options.preview,
     };
     const liveSdk = context?.isLive ? context.sdk : undefined;
-    // The existing observable subscription owns cancellation on view/SDK changes.
-    // Wait only for a configured initializer; static preview can fetch ordinarily.
-    // Enrich before root joining so its retained initial operation has a stable key.
+    // Wait for the bound ID before adding delivery-only locale/source-map defaults.
     const pendingPreview = liveSdk?.config.livePreview !== undefined && preview === undefined;
     const previewRequest =
       pendingPreview ||
@@ -125,14 +123,11 @@ export function useExperienceSource(
       seedRequest: request,
       request: {
         ...request,
-        // Session locale is server-owned. Preserve explicit caller overrides so
-        // the SDK rejects them, while ordinary requests inherit browser locale.
+        // Explicit session overrides reach SDK validation unchanged.
         locale: request.locale ?? (previewRequest ? undefined : locale),
-        ...(!previewRequest
-          ? {
-              extensions: { ...request.extensions, sourceMap: request.extensions?.sourceMap ?? {} },
-            }
-          : {}),
+        extensions: previewRequest
+          ? request.extensions
+          : { ...request.extensions, sourceMap: request.extensions?.sourceMap ?? {} },
       },
       resolve: { ...resolveOptions, config },
       initialPlan,

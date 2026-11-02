@@ -1,3 +1,5 @@
+'use client';
+
 import {
   useExperiences,
   type ComponentErrorProps,
@@ -5,7 +7,6 @@ import {
   type OnExperienceNodeRoot,
 } from '@contentful/experiences-react/client';
 import { useCallback } from 'react';
-
 import type { ContentResult } from './content-loader';
 import { Experience, ExperienceRenderer } from './experiences';
 
@@ -49,9 +50,7 @@ export function ExperiencePresentation({
     },
     [sdk]
   );
-  function present(current: ContentResult) {
-    const data = managed ? current.data : result?.data;
-    const error = managed ? current.error : !data ? result?.error : undefined;
+  function present({ data, error }: ContentResult) {
     return (
       <>
         {error && (
@@ -107,19 +106,17 @@ export function ExperiencePresentation({
         <p role="status" className="page-loading">
           Loading Experience…
         </p>
-      ) : (
+      ) : managed ? (
         <Experience
-          {...(managed
-            ? {
-                experienceId,
-                initialPlan: result.data,
-                initialError: result.error,
-                personalization: { events: [] },
-              }
-            : { experience: result.data })}
+          experienceId={experienceId}
+          initialPlan={result.data}
+          initialError={result.error}
+          personalization={{ events: [] }}
         >
           {present}
         </Experience>
+      ) : (
+        present(result)
       )}
     </section>
   );

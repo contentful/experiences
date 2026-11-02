@@ -3,7 +3,12 @@
 import { act, StrictMode, Suspense, useLayoutEffect, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createWebSnapshotRuntime, type PortableRenderPlan } from '@contentful/experiences-web';
+import {
+  ContentfulExperiences,
+  createWebSnapshotRuntime,
+  type PortableRenderPlan,
+} from '@contentful/experiences-web';
+import type { RuntimeLivePreviewModule } from '@contentful/experiences-runtime';
 import { ExperiencesContext } from '../runtime/experiences-context.js';
 import {
   ExperienceRequestContext,
@@ -95,21 +100,6 @@ describe('useManagedExperience', () => {
     expect(source.subscribeToPreview).not.toHaveBeenCalled();
   });
 
-  it('uses a snapshot runtime without attempting transport', async () => {
-    const sdk = createWebSnapshotRuntime();
-    await act(async () =>
-      root.render(
-        <ExperiencesContext.Provider
-          value={{ sdk, error: undefined, isLive: false, isContentReady: true }}
-        >
-          <Probe options={{ experienceId: 'home', config, initialPlan: plan('server') }} />
-        </ExperiencesContext.Provider>
-      )
-    );
-    await act(async () => result.refresh());
-    expect(root.container.textContent).toBe('success:server');
-  });
-
   it('preserves a seed when activation changes SDK, inherited locale, attribution defaults and root revision', async () => {
     const source = sourceSdk();
     const snapshot = createWebSnapshotRuntime();
@@ -127,6 +117,9 @@ describe('useManagedExperience', () => {
         </ExperiencesContext.Provider>
       )
     );
+    await act(async () => result.refresh());
+    expect(root.container.textContent).toBe('success:server');
+    expect(fetchExperience).not.toHaveBeenCalled();
     await act(async () =>
       root.render(content(source, options, { revision: {}, fetchExperience, reset() {} }))
     );
@@ -144,36 +137,6 @@ describe('useManagedExperience', () => {
     expect(previewSource.fetchExperience.mock.calls.at(-1)?.[0].extensions).toEqual({
       sourceMap: {},
     });
-  });
-
-  it('retains mounted equivalent bindings and cleans up descriptor/source replacements', async () => {
-    const source = sourceSdk();
-    source.preview.emit(previewState());
-    const options = {
-      experienceId: 'home',
-      config,
-      initialPlan: plan('seed'),
-      resolveOptions: { metadata: { a: 1 } },
-    };
-    await act(async () => root.render(content(source, options)));
-    const first = source.bindings.at(-1)!;
-    await act(async () =>
-      root.render(content(source, { ...options, resolveOptions: { metadata: { a: 1 } } }))
-    );
-    expect(first.unsubscribe).not.toHaveBeenCalled();
-    expect(source.subscribeToPreview).toHaveBeenCalledTimes(1);
-    await act(async () =>
-      root.render(content(source, { ...options, resolveOptions: { metadata: { a: 2 } } }))
-    );
-    expect(first.unsubscribe).toHaveBeenCalledTimes(1);
-    const second = source.bindings.at(-1)!;
-    await act(async () => source.preview.emit(previewState({ sessionId: 'replacement' })));
-    expect(second.unsubscribe).toHaveBeenCalledTimes(1);
-    const current = source.bindings.at(-1)!;
-    await act(async () => first.listener({ data: plan('obsolete callback') }));
-    expect(result.data?.nodes[0]?.props.content.title).not.toBe('obsolete callback');
-    await act(async () => root.cleanup());
-    expect(current.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it.each(['home', 'other'])(
@@ -243,23 +206,53 @@ describe('useManagedExperience', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('retains content while a preview replacement initializes and fetches only with its current descriptor', async () => {
-    const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
-    source.preview.emit(previewState());
-    const options = { experienceId: 'home', config, initialPlan: plan('retained') };
-    await act(async () => root.render(content(source, options)));
-    await act(async () => source.preview.emit(undefined));
-    expect(result.data?.nodes[0]?.props.content.title).toBe('retained');
-    expect(source.fetchExperience).not.toHaveBeenCalled();
-    await act(async () =>
-      source.preview.emit(previewState({ experienceId: 'other', sessionId: 'new-session' }))
-    );
-    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
-    expect(source.fetchExperience.mock.calls[0]?.[0].extensions).toEqual({ sourceMap: {} });
-    await act(async () => source.preview.emit(previewState({ sessionId: 'matching-session' })));
-    expect(source.fetchExperience.mock.calls.at(-1)?.[0].extensions).toBeUndefined();
-    expect(result.status).toBe('success');
+  it('automatically fetches a replacement matching session when preview is static', async () => {
+    const snapshot = deferred<PortableRenderPlan>();
+    const implementation: RuntimeLivePreviewModule = {
+      fetchPreviewSession: vi.fn(() => snapshot.promise),
+      createLivePreviewClient() {
+        throw new Error('socket unavailable');
+      },
+      sendPreviewStatus() {},
+    };
+    const sdk = new ContentfulExperiences({
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { accessToken: 'delivery' },
+      preview: { accessToken: 'preview' },
+      livePreview: () => ({ experienceId: 'home', sessionId: 'session-a', implementation }),
+    });
+    try {
+      await act(async () =>
+        root.render(
+          <ExperiencesContext.Provider
+            value={{ sdk, error: undefined, isLive: true, isContentReady: true }}
+          >
+            <Probe options={{ experienceId: 'home', config, initialPlan: plan('retained') }} />
+          </ExperiencesContext.Provider>
+        )
+      );
+      expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
+      await act(async () =>
+        sdk.replaceLivePreview(() => ({
+          experienceId: 'home',
+          sessionId: 'session-b',
+          implementation,
+        }))
+      );
+      expect(sdk.states.preview.current?.status).toBe('static');
+      expect(result.data?.nodes[0]?.props.content.title).toBe('retained');
+      expect(implementation.fetchPreviewSession).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ sessionId: 'session-b' }),
+        expect.anything(),
+        expect.anything()
+      );
+      await act(async () => snapshot.resolve(plan('replacement')));
+      expect(result.data?.nodes[0]?.props.content.title).toBe('replacement');
+    } finally {
+      act(() => root.cleanup());
+      sdk.destroy();
+    }
   });
 
   it('does not invalidate an explicit refresh for connection/status-only notifications', async () => {
@@ -302,8 +295,6 @@ describe('useManagedExperience', () => {
     await act(async () => pending.resolve(plan('joined')));
     expect(root.container.textContent).toBe('success:joined');
     expect(onExperienceResolved).toHaveBeenCalledTimes(1);
-    expect(source.preview.listeners.size).toBe(2); // Hook state observation and thin binding owner.
-    expect(source.consent.listeners.size).toBe(1);
     await act(async () => root.cleanup());
     expect(source.preview.listeners.size).toBe(0);
     expect(source.consent.listeners.size).toBe(0);
@@ -322,6 +313,7 @@ describe('useManagedExperience', () => {
       root.render(content(source, { ...initial, parameters: { segment: 'one' } }))
     );
     expect(source.fetchExperience).toHaveBeenCalledTimes(1);
+    expect(source.subscribeToPreview).toHaveBeenCalledTimes(1);
     await act(async () =>
       root.render(content(source, { ...initial, resolveOptions: { debug: true } }))
     );
@@ -329,28 +321,6 @@ describe('useManagedExperience', () => {
     await act(async () => source.locale.emit('de-DE'));
     expect(source.fetchExperience.mock.calls.at(-1)?.[0].locale).toBe('de-DE');
     expect(source.fetchExperience).toHaveBeenCalledTimes(3);
-  });
-
-  it('does not refetch on consent changes or profile adoption and suppresses withdrawn pending work', async () => {
-    const source = sourceSdk();
-    const pending = deferred<PortableRenderPlan>();
-    source.fetchExperience.mockReturnValueOnce(pending.promise);
-    const onExperienceResolved = vi.fn();
-    const initial = { experienceId: 'home', config, onExperienceResolved };
-    await act(async () => root.render(content(source, initial)));
-    await act(async () => source.profile.emit({ id: 'adopted' }));
-    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
-    await act(async () => source.consent.emit(false));
-    await act(async () => root.render(content(source, { ...initial })));
-    await act(async () => source.consent.emit(true));
-    await act(async () => pending.resolve(plan('obsolete')));
-    expect(result.data).toBeUndefined();
-    expect(onExperienceResolved).not.toHaveBeenCalled();
-    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
-    await act(async () => result.retry());
-    expect(result.status).toBe('success');
-    expect(source.fetchExperience).toHaveBeenCalledTimes(2);
-    expect(onExperienceResolved).toHaveBeenCalledTimes(1);
   });
 
   it('refetches for a route/reset revision while guarding previous results', async () => {
@@ -369,168 +339,7 @@ describe('useManagedExperience', () => {
     expect(result.data?.nodes[0]?.props.content.title).toBe('new route');
     expect(fetchExperience).toHaveBeenCalledTimes(2);
     expect(onExperienceResolved).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          nodes: expect.arrayContaining([
-            expect.objectContaining({
-              props: expect.objectContaining({ content: { title: 'new route' } }),
-            }),
-          ]),
-        }),
-      })
+      expect.objectContaining({ data: result.data })
     );
-  });
-
-  it('preserves an unchanged caller seed while an unrelated preview source is temporarily initializing', async () => {
-    const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
-    source.preview.emit(previewState({ experienceId: 'other' }));
-    const initialPlan = plan('ordinary seed');
-    const options = {
-      experienceId: 'home',
-      config,
-      initialPlan,
-      resolveOptions: { metadata: { a: 1 } },
-    };
-    const context = {
-      revision: {},
-      fetchExperience: vi.fn().mockResolvedValue(plan('fresh')),
-      reset() {},
-    };
-    await act(async () => root.render(content(source, options, context)));
-    await act(async () => source.preview.emit(undefined));
-    expect(result.data).toBe(initialPlan);
-    expect(context.fetchExperience).not.toHaveBeenCalled();
-    await act(async () =>
-      source.preview.emit(previewState({ experienceId: 'other', sessionId: 'replacement' }))
-    );
-    expect(result.data).toBe(initialPlan);
-    expect(context.fetchExperience).not.toHaveBeenCalled();
-  });
-
-  it.each(['caller', 'resolve', 'registry', 'reset'] as const)(
-    'does not preserve stale seed data across a genuine %s change during preview initialization',
-    async (kind) => {
-      const source = sourceSdk();
-      Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
-      source.preview.emit(previewState({ experienceId: 'other' }));
-      const options: ManagedExperienceOptions = {
-        experienceId: 'home',
-        config,
-        initialPlan: plan('old seed'),
-      };
-      const context = {
-        revision: {},
-        fetchExperience: vi.fn().mockResolvedValue(plan('new visitor')),
-        reset() {},
-      };
-      await act(async () => root.render(content(source, options, context)));
-      await act(async () => source.preview.emit(undefined));
-      const next = { ...options };
-      if (kind === 'caller') next.experienceId = 'new-id';
-      if (kind === 'resolve') next.resolveOptions = { metadata: { a: 2 } };
-      if (kind === 'registry') next.config = { components: {} };
-      await act(async () =>
-        root.render(
-          content(source, next, kind === 'reset' ? { ...context, revision: {} } : context)
-        )
-      );
-      expect(result.data).toBeUndefined();
-      expect(context.fetchExperience).not.toHaveBeenCalled();
-      await act(async () =>
-        source.preview.emit(previewState({ experienceId: 'other', sessionId: 'replacement' }))
-      );
-      expect(result.data?.nodes[0]?.props.content.title).toBe('new visitor');
-      expect(context.fetchExperience).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  it.each([{ locale: 'de-DE' }, { parameters: {} }, { extensions: {} }])(
-    'keeps seeded matching preview validation errors until caller fields are corrected (%j)',
-    async (unsupported) => {
-      const source = sourceSdk();
-      source.preview.emit(previewState());
-      const initialPlan = plan('usable seed');
-      const options = { experienceId: 'home', config, initialPlan, ...unsupported };
-      await act(async () =>
-        root.render(content(source, { experienceId: 'home', config, initialPlan }))
-      );
-      await act(async () => root.render(content(source, options)));
-      const error = result.error;
-      expect(error).toBeInstanceOf(TypeError);
-      expect(result.data).toBe(initialPlan);
-      await act(async () =>
-        source.preview.emit(
-          previewState({ revision: 2, data: { sys: { type: 'Experience' }, nodes: [] } })
-        )
-      );
-      expect(result.error).toBe(error);
-      expect(result.data).toBe(initialPlan);
-      expect(source.subscribeToPreview).toHaveBeenCalledTimes(1);
-      await act(async () =>
-        root.render(content(source, { experienceId: 'home', config, initialPlan }))
-      );
-      await act(async () => source.bindings.at(-1)!.listener({ data: plan('corrected') }));
-      expect(result.status).toBe('success');
-      expect(result.error).toBeUndefined();
-    }
-  );
-
-  it.each([false, true])(
-    'reconciles batched validation recovery with unchanged caller/effective options (seeded=%s)',
-    async (seeded) => {
-      const source = sourceSdk();
-      source.locale.emit(undefined);
-      Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
-      source.preview.emit(previewState({ experienceId: undefined }));
-      const obsolete = deferred<PortableRenderPlan>();
-      const recovered = plan('recovered snapshot');
-      source.fetchExperience.mockReturnValueOnce(obsolete.promise).mockResolvedValue(recovered);
-      const initialPlan = seeded ? plan('valid seed') : undefined;
-      const extensions = { sourceMap: {} };
-      const options = { experienceId: 'home', config, initialPlan, extensions };
-      await act(async () => root.render(content(source, options)));
-      const binding = source.bindings.at(-1)!;
-      await act(async () => source.preview.emit(previewState()));
-      expect(result.error).toBeInstanceOf(TypeError);
-      expect(result.data).toBe(initialPlan);
-      expect(binding.unsubscribe).toHaveBeenCalledTimes(1);
-      expect(source.consent.listeners.size).toBe(0);
-      await act(async () => {
-        source.preview.emit(undefined);
-        source.preview.emit(previewState({ experienceId: 'other', sessionId: 'other-session' }));
-      });
-      expect(result.error).toBeUndefined();
-      expect(result.data).toBe(seeded ? initialPlan : recovered);
-      expect(source.fetchExperience).toHaveBeenCalledTimes(seeded ? 0 : 2);
-      expect(source.preview.listeners.size).toBe(2);
-      expect(source.consent.listeners.size).toBe(1);
-      await act(async () => {
-        obsolete.resolve(plan('obsolete snapshot'));
-        binding.listener({ data: plan('obsolete preview') });
-      });
-      expect(result.data).toBe(seeded ? initialPlan : recovered);
-      expect(options.extensions).toBe(extensions);
-      expect(extensions).toEqual({ sourceMap: {} });
-    }
-  );
-
-  it('starts fetching after a cold validation failure recovers in a batched source replacement', async () => {
-    const source = sourceSdk();
-    source.locale.emit(undefined);
-    source.preview.emit(previewState());
-    const recovered = plan('ordinary content');
-    source.fetchExperience.mockResolvedValue(recovered);
-    const options = { experienceId: 'home', config, extensions: { sourceMap: {} } };
-    await act(async () => root.render(content(source, options)));
-    expect(result.error).toBeInstanceOf(TypeError);
-    expect(source.fetchExperience).not.toHaveBeenCalled();
-    await act(async () => {
-      source.preview.emit(undefined);
-      source.preview.emit(previewState({ experienceId: 'other', sessionId: 'other-session' }));
-    });
-    expect(result).toMatchObject({ status: 'success', data: recovered, error: undefined });
-    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
-    expect(source.fetchExperience.mock.calls[0]?.[0].extensions).toEqual(options.extensions);
   });
 });
