@@ -70,6 +70,11 @@ export function ExperiencePresentation({
                 </ul>
               </div>
             ) : null}
+            {data.deliveryDiagnostics?.length ? (
+              <p role="status" className="placeholder-card">
+                Some Experience content may be incomplete.
+              </p>
+            ) : null}
             {!data.nodes.length && (
               <p className="placeholder-card">The delivered plan has no renderable nodes.</p>
             )}
