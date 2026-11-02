@@ -53,7 +53,6 @@ const publicEnvironment = {
           host: env.BROWSER_PREVIEW_HOST?.trim() || undefined,
           experienceId:
             env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() || experienceIds?.[0] || defaultExperienceIds[0],
-          sessionId: env.LIVE_PREVIEW_SESSION_ID?.trim() || undefined,
           sessionHost: env.LIVE_PREVIEW_SESSION_HOST?.trim() || undefined,
           resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
         },

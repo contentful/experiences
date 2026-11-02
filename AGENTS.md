@@ -51,7 +51,8 @@ experiences/
 │   ├── node-sdk/             # Express/EJS Node reference, managed through Nx
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   ├── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
-│   └── react-sdk/           # React/Vite runtime reference, managed through Nx
+│   ├── react-sdk/           # React/Vite runtime reference, managed through Nx
+│   └── nextjs-sdk/          # Next.js server reference, managed through Nx
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
@@ -65,7 +66,8 @@ experiences/
 **`implementations/`** holds reference implementations for SDK maintainers, not customers. Point integrators to `examples/`, never to a reference implementation as a how-to guide; link into `implementations/` only for authoritative maintainer detail (for example, the XDA workaround removal criteria linked from `packages/node/README.md`); see [CONTRIBUTING.md](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the split. Implementations stay outside npm workspaces and consume packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped
 `implementation-node-sdk`, `implementation-web-sdk`,
-`implementation-node-sdk-web-sdk`, or `implementation-react-sdk` Nx `setup` / `dev` targets. Root aggregate checks
+`implementation-node-sdk-web-sdk`, `implementation-react-sdk`, or
+`implementation-nextjs-sdk` Nx `setup` / `dev` targets. Root aggregate checks
 exclude implementations; the Build CI job explicitly prepares and checks them.
 Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
 and the app README for the package boundary, local `.env`, and lifecycle commands.
@@ -242,7 +244,7 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
 Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
@@ -715,7 +717,7 @@ migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
+accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.

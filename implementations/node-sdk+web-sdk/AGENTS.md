@@ -6,7 +6,7 @@ supported product usage or a cross-fetch guarantee.
 
 - Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
   acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Replay-less aggregates apply state
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Replay-less aggregates apply state
   internally and return `{ accepted: false }` unless explicit `buildPayload` supplies
   page intent. Only page-bearing intent participates in route deduplication.
 - Read the parent implementation instructions and this app's README before editing.
@@ -111,7 +111,13 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
   `finally`. Allowlist browser settings; seed plans without profiles or upstream
   diagnostic strings, retaining generic diagnostic counts.
   Build and host read app-local `LIVE_PREVIEW_ENABLED`; bundle installed preview
-  artifacts only when enabled. Use `replaceLivePreview` for binding changes within
+  artifacts only when enabled. Preview requires the flag to be exactly `true` and
+  a nonempty trimmed URL `preview_session_id`. Node and Web must agree and pass
+  explicit `isPreview: Boolean(binding)`, including false. Missing/empty sessions
+  or disabled flags use ordinary events, visitor cookies and handoff policy.
+  `LIVE_PREVIEW_SESSION_ID` is local convenience storage only; never read it in
+  runtime/build code or emit it in browser configuration.
+  Use `replaceLivePreview` for binding changes within
   preview and reload the document when entering or leaving preview.
   Release subscriptions on route replacement/final exit and retain them for BFCache.
   Keep `packages/live-preview` and local `.env` files unchanged.
