@@ -27,8 +27,11 @@ export type {
 } from '@contentful/experiences-client';
 export {
   ANONYMOUS_ID_COOKIE,
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
   EventProfileRequiredError,
   InterceptorManager,
+  parseExperiencesHandoffEnvelope,
 } from '@contentful/experiences-runtime';
 export type {
   Interceptor,
@@ -44,6 +47,7 @@ export type {
   EventOptimizationData,
   EventEmissionResult,
   EventProfile,
+  ExperiencesCacheMetadata,
   ExperiencesHandoff,
   FetchExperienceForHandoffResult,
   ClickBuilderArgs,
