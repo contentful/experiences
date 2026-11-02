@@ -46,8 +46,7 @@ supported product usage or a cross-fetch guarantee.
   Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
   acceptance review are recorded in the implementation plan. Earlier checks/review
   remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-  Phases 8–13 have not
-  started; the Phase 6 gate is satisfied. Phase 7 uses
+  Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Phase 7 uses
   ordinary Web fetch for CSR and browser-local actions. Optional handoff
   consumption is mode agnostic and consumer supplied only for actual server transfers.
   Same-ID Retry and later comparison IDs use ordinary event-free fetch without
