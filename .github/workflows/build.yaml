@@ -40,4 +40,4 @@ jobs:
         with:
           path: |
             packages/*/dist
-          key: build-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          key: build-cache-${{ github.run_id }}
