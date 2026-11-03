@@ -1,7 +1,7 @@
 import type { AppProps } from 'next/app';
 import type { PagesReferenceProps } from '../pages-server';
 import type { SingleExperienceProps } from './pages/single-experience';
-import { NextjsPagesRouterRequestRoot } from '@contentful/experiences-nextjs/pages-router';
+import { ExperiencesRoot } from '../components/SingleExperience';
 import { PagesBrowserRoot } from '../components/BrowserRoot';
 import '../theme.css';
 
@@ -11,17 +11,14 @@ export default function App({
 }: AppProps<PagesReferenceProps | SingleExperienceProps>) {
   if (!pageProps.environment) return <Component {...pageProps} />;
   if ('singleExperience' in pageProps) {
-    const { spaceId, environmentId, locale, delivery } = pageProps.environment.web;
     return (
-      <NextjsPagesRouterRequestRoot
-        spaceId={spaceId}
-        environmentId={environmentId}
-        locale={locale}
-        browser={{ delivery, isPreview: false }}
+      <ExperiencesRoot
+        {...pageProps.environment.web}
+        isPreview={false}
         result={pageProps.experiences}
       >
         <Component {...pageProps} />
-      </NextjsPagesRouterRequestRoot>
+      </ExperiencesRoot>
     );
   }
   if (pageProps.serverOnly && !pageProps.analytics)

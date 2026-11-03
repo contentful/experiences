@@ -160,7 +160,13 @@ React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
 automatically fetches, resolves and manages one primary Experience. App and Pages
-request families expose `request.loadExperience`; `hydration` is
+server request families expose `request.loadExperience`. Pages client bindings
+export top-level `ExperiencesRoot`, `ExperiencesAnalyticsRoot`, `Experience`,
+`ExperienceRenderer` and `useManagedExperience`, with no client `request` family.
+Export components once from a client configuration module and import names for
+plain `<ExperiencesRoot>` JSX; bind flat browser SDK options,
+`consent.clientDefaults` and `cookie`. Pages `Experience` accepts a complete
+`result` or existing managed props. `hydration` is
 `preserve-server` or `server-only`. Bind `config` and `resolveOptions` once.
 `consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
 browser defaults and response identity policy distinct. `request.pagePayload`

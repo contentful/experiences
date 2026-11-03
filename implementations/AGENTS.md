@@ -47,8 +47,15 @@ This admission guard provides no durable or exactly-once transport guarantee.
 Automatic fetching, resolution and management of one primary Experience is the
 normal React/Next workflow. The Next reference demonstrates it at
 `/single-experience` and `/pages/single-experience`, alongside diagnostic routes.
-App/Pages bind `config` and `resolveOptions` once and expose `request.loadExperience`,
-`request.Experience` and built-in roots. Hydration is `preserve-server` or
+App/Pages bind `config` and `resolveOptions` once; server families expose
+`request.loadExperience`. Pages client bindings export top-level `ExperiencesRoot`,
+`ExperiencesAnalyticsRoot`, `Experience`, `ExperienceRenderer` and
+`useManagedExperience`, with no client `request` family. Export those components
+once from a client configuration module and import named components for plain
+`<ExperiencesRoot>` JSX. Bind flat browser SDK options, `consent.clientDefaults`
+and `cookie`; lazy server-derived reference configuration may supply flat runtime
+root props. Pages `Experience` accepts a complete `result` or existing managed
+props. App retains its request components and built-in roots. Hydration is `preserve-server` or
 `server-only`; server-only updates use server round-trips without browser content
 loading. Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
