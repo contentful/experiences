@@ -142,6 +142,7 @@ export type DataAssemblyFixture = {
     string,
     {
       name: string;
+      required: boolean;
       allowedContentTypes: string[];
     }
   >;

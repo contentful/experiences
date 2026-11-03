@@ -457,20 +457,19 @@ async function seedDataAssembly(fixture: DataAssemblyFixture) {
     return;
   }
 
-  const parameters: Record<string, unknown> = {};
-  for (const [pid, pdef] of Object.entries(fixture.parameters)) {
-    parameters[pid] = {
-      name: pdef.name,
-      type: 'ResourceLink',
-      allowedResources: [
-        {
-          type: 'Contentful:Entry',
-          source: SAME_SPACE_CONTENT_SOURCE,
-          allowedTypes: pdef.allowedContentTypes,
-        },
-      ],
-    };
-  }
+  const parameters = Object.entries(fixture.parameters).map(([pid, pdef]) => ({
+    id: pid,
+    required: pdef.required,
+    name: pdef.name,
+    type: 'ResourceLink',
+    allowedResources: [
+      {
+        type: 'Contentful:Entry',
+        source: SAME_SPACE_CONTENT_SOURCE,
+        allowedTypes: pdef.allowedContentTypes,
+      },
+    ],
+  }));
 
   const created = await cma.dataAssembly.create({}, {
     name: fixture.name,
