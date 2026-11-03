@@ -194,6 +194,9 @@ closure. See the [ordinary XDA rendering recipe](../../README.md#xda-rendering-a
 For SSR use ordinary `request.fetchExperience` with the existing type-tagged
 arguments or raw built events above. XDA evaluates without committing; direct
 event APIs remain callable but are not rendering prerequisites or compensation.
+Ordinary SSR integrations do not prepare or consume replay. This remains the
+intended boundary after XDA gains commitment control; see
+[Runtime's current limitation, expected future behavior and release gate](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 Only an actual hybrid response uses the retained Node producer:
 

@@ -16,12 +16,14 @@ import {
   useServerPreviewRefresh,
   useNextjsRequestOptions,
 } from './router-lifetime.js';
+import { mergeNextjsLivePreview, nextjsLivePreviewSessionId } from './live-preview.js';
 import type { NextjsClientExperiencesConfig } from './app-router-client.js';
 import type {
   BoundNextjsExperiencesRootProps,
   NextjsDefaultRequestRootProps,
   BoundNextjsRequestRootProps,
   NextjsRequestExperienceProps,
+  NextjsRequestResult,
 } from './request-result.js';
 export type {
   BoundNextjsExperiencesRootProps,
@@ -32,6 +34,7 @@ export type {
 
 export type { NextjsBrowserConfig } from './browser-config.js';
 export type { NextjsDefaultRequestRootProps } from './request-result.js';
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
 
 export type NextjsPagesRouterExperiencesConfig = NextjsClientExperiencesConfig;
 
@@ -48,19 +51,43 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
     return (
       <PagesRouterRequestOwner
         {...props}
-        Root={ExperiencesRoot}
+        livePreview={mergeNextjsLivePreview(
+          runtimeConfig.livePreview,
+          props.result?.livePreview ?? props.livePreview
+        )}
+        Root={BrowserRoot}
         configuredBuilder={runtimeConfig.buildPagePayload}
       />
     );
   }
 
-  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+  function BrowserRoot(props: BoundNextjsExperiencesRootProps) {
     const effective = {
       ...runtimeConfig,
       ...props,
       defaults: props.defaults ?? consent?.clientDefaults ?? runtimeConfig.defaults,
     };
-    return <NextjsBrowserRoot {...effective} />;
+    return (
+      <NextjsBrowserRoot
+        {...effective}
+        livePreview={mergeNextjsLivePreview(runtimeConfig.livePreview, props.livePreview)}
+      />
+    );
+  }
+
+  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+    const preview = props.livePreview ?? runtimeConfig.livePreview;
+    return preview && 'enabled' in preview && props.routeKey === undefined ? (
+      <PagesRouterRequestOwner
+        initialPagePayload={runtimeConfig.initialPagePayload}
+        {...props}
+        livePreview={mergeNextjsLivePreview(runtimeConfig.livePreview, props.livePreview)}
+        Root={BrowserRoot}
+        configuredBuilder={runtimeConfig.buildPagePayload}
+      />
+    ) : (
+      <BrowserRoot {...props} />
+    );
   }
 
   function RequestExperience({ result, ...props }: NextjsRequestExperienceProps) {
@@ -112,7 +139,8 @@ function PagesRouterRequestOwner({
   Root,
   configuredBuilder,
   ...props
-}: BoundNextjsRequestRootProps & {
+}: BoundNextjsExperiencesRootProps & {
+  result?: NextjsRequestResult;
   Root: typeof NextjsBrowserRoot;
   configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
 }) {
@@ -123,12 +151,18 @@ function PagesRouterRequestOwner({
     key: createNextjsRouteKey(
       router.isReady ? router.asPath : (props.result?.routeKey ?? router.asPath)
     ),
+    previewKey: createNextjsRouteKey(
+      router.isReady ? router.asPath : (props.result?.routeKey ?? router.asPath)
+    ),
   }));
   // Page props can precede asPath/history and the completion event. Adopt
   // their route and descriptor atomically, before any child request effects.
   if (route.data !== props.result)
     setRoute({
       data: props.result,
+      previewKey: shallowTransition.current
+        ? route.previewKey
+        : createNextjsRouteKey(props.result?.routeKey ?? router.asPath),
       key: shallowTransition.current
         ? route.key
         : createNextjsRouteKey(props.result?.routeKey ?? router.asPath),
@@ -137,7 +171,8 @@ function PagesRouterRequestOwner({
     // Ignore canceled transitions, hashes and shallow UI updates. Only a normal
     // committed route changes the root's ordinary XDA intent.
     const complete = (url: string, { shallow }: { shallow: boolean }) => {
-      if (!shallow) setRoute((current) => ({ ...current, key: createNextjsRouteKey(url) }));
+      const previewKey = createNextjsRouteKey(url);
+      setRoute((current) => ({ ...current, key: shallow ? current.key : previewKey, previewKey }));
     };
     const start = (_url: string, { shallow }: { shallow: boolean }) => {
       shallowTransition.current = shallow;
@@ -146,7 +181,11 @@ function PagesRouterRequestOwner({
       shallowTransition.current = false;
     };
     if (router.isReady)
-      setRoute((current) => ({ ...current, key: createNextjsRouteKey(router.asPath) }));
+      setRoute((current) => ({
+        ...current,
+        key: createNextjsRouteKey(router.asPath),
+        previewKey: createNextjsRouteKey(router.asPath),
+      }));
     router.events.on('routeChangeStart', start);
     router.events.on('routeChangeComplete', complete);
     router.events.on('routeChangeError', cancel);
@@ -160,6 +199,11 @@ function PagesRouterRequestOwner({
     !props.result && router.isReady && !shallowTransition.current
       ? createNextjsRouteKey(router.asPath)
       : route.key;
+  const previewUrl = !props.result && router.isReady ? router.asPath : route.previewKey;
+  const previewSession =
+    props.livePreview && 'enabled' in props.livePreview
+      ? nextjsLivePreviewSessionId(props.livePreview, previewUrl)
+      : undefined;
   const ready = router.isReady;
   const buildPagePayload = useCallback<
     NonNullable<ExperiencesRootProps['buildPagePayload']>
@@ -180,11 +224,15 @@ function PagesRouterRequestOwner({
   }, [ready, committedRoute]);
   return (
     <PagesRequestRouteContext.Provider value={{ routeKey: committedRoute, ready }}>
-      <NextjsInitialDataBoundary routeKey={committedRoute} requestId={props.result?.requestId}>
+      <NextjsInitialDataBoundary
+        routeKey={`${committedRoute}#preview=${previewSession ?? ''}`}
+        requestId={props.result?.requestId}
+      >
         <NextjsRequestPresentation
           {...props}
           Root={Root}
           routeKey={committedRoute}
+          previewUrl={previewUrl}
           ready={ready}
           configuredBuilder={configuredBuilder}
           buildRoutePayload={buildPagePayload}

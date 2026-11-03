@@ -42,10 +42,29 @@ export const loadServerPage = cache(async () => {
   const binding = bindNextjsAppRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
+    browser: {
+      delivery: browser.web.delivery,
+      ...(browser.web.preview ? { preview: browser.web.preview } : {}),
+    },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    livePreview: ({ request }) => serverPreview(new URL(request.url)),
+    livePreview: {
+      ...browser.livePreview,
+      enabled: Boolean(browser.livePreview),
+      loadImplementation: () => import('@contentful/experiences-live-preview'),
+    },
     request: {
-      experience,
+      experience: ({ requestUrl }) => {
+        const url = new URL(requestUrl);
+        const preview = Boolean(serverPreview(url));
+        return {
+          experienceId:
+            (preview &&
+              (url.searchParams.get('preview_experience_id')?.trim() ||
+                browser.livePreview?.experienceId)) ||
+            routeIds(url.pathname, browser.experienceIds)[0],
+          ...(preview ? {} : { extensions: { sourceMap: {} } }),
+        };
+      },
       initialEvents: ({ requestUrl, headers }) =>
         headers.get('rsc') !== '1' && new URL(requestUrl).searchParams.get('userId') === 'charles'
           ? [{ type: 'identify', userId: 'charles', traits: { identified: true } }]
@@ -62,7 +81,18 @@ export const loadServerPage = cache(async () => {
           requestId: randomUUID(),
           routeKey: createNextjsRouteKey(url),
           experienceId: experience.experienceId,
-          experience,
+          experience: ({ requestUrl }) => {
+            const url = new URL(requestUrl);
+            const preview = Boolean(serverPreview(url));
+            return {
+              experienceId:
+                (preview &&
+                  (url.searchParams.get('preview_experience_id')?.trim() ||
+                    browser.livePreview?.experienceId)) ||
+                routeIds(url.pathname, browser.experienceIds)[0],
+              ...(preview ? {} : { extensions: { sourceMap: {} } }),
+            };
+          },
         }
       : await binding.request.loadExperience();
   const serialized = serializeNextjsRequestResult(result);

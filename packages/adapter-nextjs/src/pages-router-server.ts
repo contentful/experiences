@@ -25,11 +25,13 @@ import {
   type NextjsServerRequestOverrides,
 } from './server-config.js';
 import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
+import { resolveNextjsLivePreview } from './live-preview.js';
 
 export type { NextjsRequestResult } from './request-result.js';
 export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
 
 export interface NextjsPagesRouterServerExperiencesConfig extends NextjsServerExperiencesConfig {
   /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */
@@ -130,7 +132,16 @@ export function bindNextjsPagesRouterServerExperiences<
     };
     const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
     nativeContext.res.setHeader('Cache-Control', 'private, no-store');
-    const preview = await livePreview?.(context);
+    const preview =
+      typeof livePreview === 'function'
+        ? await livePreview(context)
+        : livePreview
+          ? resolveNextjsLivePreview(
+              livePreview,
+              context.requestUrl,
+              resolved.descriptor.experienceId
+            )
+          : undefined;
     if (isNextjsSpeculativeRequest(incoming.headers))
       return serializeNextjsRequestResult(resolved.result, resolved.policy);
     const request = bindNextjsExperiencesRequest(sdk, {

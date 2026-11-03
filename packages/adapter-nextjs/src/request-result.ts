@@ -11,6 +11,8 @@ import type {
   Config,
 } from '@contentful/experiences-web';
 
+import type { NextjsLivePreviewOptions } from './live-preview.js';
+
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 /** Detached request data shared by the router root and content presentation. */
@@ -22,16 +24,15 @@ export interface NextjsRequestResult {
   readonly contentError?: string;
   readonly handoff?: ExperiencesHandoff;
   readonly initialPagePayload?: ExperiencesRootProps['initialPagePayload'];
+  /** Configuration only; the browser derives session and identity from its route and descriptor. */
+  readonly livePreview?: Omit<NextjsLivePreviewOptions, 'loadImplementation' | 'experienceId'>;
 }
 
 export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
-  Partial<
-    Pick<
-      ExperiencesRootProps,
-      RuntimeIdentity | 'defaults' | 'locale' | 'isPreview' | 'livePreview'
-    >
-  > & {
+  Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
+    readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewOptions;
+    readonly experienceId?: string;
   };
 
 export type BoundNextjsRequestRootProps = Omit<
