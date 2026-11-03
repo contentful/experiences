@@ -48,7 +48,7 @@
     "@angular/compiler-cli": "22.1.4",
     "@angular/core": "22.1.4",
     "@angular/platform-browser": "22.1.4",
-    "@angular/platform-server": "22.1.4",
+    "@angular/platform-server": "22.2.1",
     "@testing-library/jest-dom": "^7.0.1",
     "jsdom": "^30.0.1",
     "publint": "^0.3.25",
