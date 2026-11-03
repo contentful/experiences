@@ -10,8 +10,9 @@ npm install @contentful/experiences-react
 
 For React, this is the rendering adapter you install. Next.js applications should
 use [`@contentful/experiences-nextjs`](../adapter-nextjs/README.md) for the common
-automatic one-Experience App setup, with request loading and built-in roots.
-The Next adapter uses these React rendering and runtime owners.
+automatic one-Experience App/Pages setup, with request loading and built-in roots.
+The Next adapter uses these React rendering and runtime owners; the broader
+`examples/nextjs` migration remains Phase 14.
 
 This package re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
@@ -40,7 +41,7 @@ existing standalone APIs are unchanged. General supplied-plan rendering and
 Managed runtime ownership, state/action hooks, `Experience` and
 `useManagedExperience` are available on `/client`. Managed loading and supplied
 plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started. Phase 6 remains complete and explicitly accepted on
+Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started. Phase 6 remains complete and explicitly accepted on
 2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
 
 Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
