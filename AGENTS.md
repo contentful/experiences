@@ -182,15 +182,41 @@ application escape hatch after every actual server primary fetch, including RSC 
 before cleanup; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.
-Current Phase 10 DX validation remains pending until the root records it; optional
-React Router/TanStack work stays deferred to Phase 11. The broad `examples/nextjs`
-managed API migration is Phase 14; its retired hooks are not current guidance.
+Phase 10 is complete and explicitly accepted on 2026-11-03; optional
+React Router/TanStack integration is Phase 11, now in progress and not accepted.
+The broad `examples/nextjs` managed API migration is Phase 14; its retired hooks
+are not current guidance.
 Registry/shared ownership, shared page
 initialization, request memoization, applicable handoff envelopes and attribution
 remain required. Managed React content/root sequencing belongs to phase 7, Next
 utilities to phase 9 and router request families to phase 10; no complete-plan
 preparation barrier or per-descriptor identify requirement applies. See the
 canonical [Runtime preview limits](./packages/runtime/README.md#optional-runtime-live-preview).
+
+React's optional `/router/react-router` and `/router/tanstack-router` entries
+export `bindReactRouterExperiences({ config })` and
+`bindTanStackRouterExperiences({ config })`. Bind once at module scope; each returns
+the `createReactExperiences` result with wrapped `ExperiencesRoot`/`ExperiencesProvider`
+and bound `Experience`, `useManagedExperience` and `ExperienceRenderer`. The entries
+also export matching `*ExperiencesRootProps`, `*ExperiencesProviderProps` and
+`*AutoPageContext` types, plus `AutoPagePayload`, `AutoPageEmissionContext` and
+`AutoPagePayloadOptions`. React Router requires a data router (`useMatches`, optional
+`react-router-dom` peer >=6.4); TanStack's optional `@tanstack/react-router` peer is
+`>=1`. Keep ordinary React imports and declarations independent of both routers.
+Mount one stable wrapper inside the router above the primary managed `Experience`.
+Roots reuse existing SDK ownership/cleanup; injected Providers leave SDK destruction
+to the application. Existing owner props are retained except `routeKey`,
+`buildPagePayload` and `initialPagePayload`, replaced by pinned `pagePayload` and
+`getPagePayload({ context, routeKey, isInitialEmission })` options. Deeply merge
+nested records: router metadata, static payload, then dynamic payload; later values
+win and undefined layers are skipped. Metadata supplies hash/path/query/search/url.
+Route keys always use pathname plus original search, without query re-encoding;
+hash is metadata only. TanStack pairs the URL with settled rendered matches,
+retaining the previous URL during pending navigation and pending UI. Preserve existing server-handoff matching. No browser handoff
+producer, tracker or direct page emitter is added: the existing root sequence owns
+managed XDA page injection, explicit `personalization.events` remains authoritative,
+and Retry stays event-free. See the
+[router integration guide](./packages/adapter-react/README.md#optional-router-integration).
 
 Web's `tracking` API follows Optimization's `enable`, `disable`, `enableElement`,
 `disableElement` and `clearElement` controls for `views`, `hovers` and `clicks`.
@@ -271,7 +297,7 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started; the Phase 6 gate is satisfied.
 Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
@@ -746,7 +772,7 @@ migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
+accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.

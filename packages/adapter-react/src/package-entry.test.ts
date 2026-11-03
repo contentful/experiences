@@ -7,6 +7,9 @@ import { describe, expect, it } from 'vitest';
 const entryUrl = (file: string): string =>
   pathToFileURL(fileURLToPath(new URL(`../dist/${file}`, import.meta.url))).href;
 
+const ordinaryEntries = ['index', 'server', 'client', 'custom-renderer', 'web-sdk', 'host'];
+const routerEntries = ['router/react-router', 'router/tanstack-router'];
+
 function localGraph(entry: string, declarations = false, seen = new Set<string>()): string {
   if (seen.has(entry)) return '';
   seen.add(entry);
@@ -28,7 +31,7 @@ function localGraph(entry: string, declarations = false, seen = new Set<string>(
 }
 
 describe('published package entry points', () => {
-  it.each(['index.js', 'server.js', 'client.js', 'custom-renderer.js', 'web-sdk.js', 'host.js'])(
+  it.each([...ordinaryEntries, ...routerEntries].map((entry) => `${entry}.js`))(
     '%s imports without browser globals under Node ESM resolution',
     (file) => {
       expect(() =>
@@ -49,7 +52,7 @@ describe('published package entry points', () => {
     expect(graph).not.toMatch(/from ['"]next(?:\/|['"])/);
   });
 
-  it.each(['index', 'server', 'client', 'custom-renderer', 'web-sdk', 'host'])(
+  it.each([...ordinaryEntries, ...routerEntries])(
     '%s has no optional preview imports in JavaScript or declarations',
     (entry) => {
       for (const declarations of [false, true]) {
@@ -62,6 +65,29 @@ describe('published package entry points', () => {
       }
     }
   );
+
+  it.each(ordinaryEntries)(
+    '%s keeps optional routers out of JavaScript and declarations',
+    (entry) => {
+      for (const declarations of [false, true]) {
+        const graph = localGraph(
+          entryUrl(`${entry}.${declarations ? 'd.ts' : 'js'}`),
+          declarations
+        );
+        expect(graph).not.toContain('react-router-dom');
+        expect(graph).not.toContain('@tanstack/react-router');
+      }
+    }
+  );
+
+  it.each(routerEntries)('%s depends only on its own optional router', (entry) => {
+    for (const declarations of [false, true]) {
+      const graph = localGraph(entryUrl(`${entry}.${declarations ? 'd.ts' : 'js'}`), declarations);
+      expect(graph).not.toContain(
+        entry.endsWith('/react-router') ? '@tanstack/react-router' : 'react-router-dom'
+      );
+    }
+  });
 
   it('preserves every per-file client directive in the unbundled output', () => {
     const directory = new URL('.', import.meta.url);
@@ -89,6 +115,10 @@ describe('published package entry points', () => {
     expect(manifest.dependencies).not.toHaveProperty('@contentful/experiences-live-preview');
     expect(manifest.peerDependencies).not.toHaveProperty('next');
     expect(manifest.dependencies).not.toHaveProperty('next');
+    for (const name of ['react-router-dom', '@tanstack/react-router']) {
+      expect(manifest.dependencies).not.toHaveProperty(name);
+      expect(manifest.peerDependenciesMeta[name]).toEqual({ optional: true });
+    }
     const folders = {
       '@contentful/experiences-client': 'client',
       '@contentful/experiences-runtime': 'runtime',
@@ -126,6 +156,12 @@ describe('published package entry points', () => {
         import { ContentfulExperiences, type Config, type WebExperiencesRuntime,
           type States, type RuntimeLivePreviewOptions }
           from '@contentful/experiences-react/web-sdk';
+        import { bindReactRouterExperiences,
+          type ReactRouterAutoPageContext, type AutoPageEmissionContext }
+          from '@contentful/experiences-react/router/react-router';
+        import { bindTanStackRouterExperiences,
+          type TanStackRouterAutoPageContext }
+          from '@contentful/experiences-react/router/tanstack-router';
 
         const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer, Experience, useManagedExperience } =
           createReactExperiences({ config: { components: {} } });
@@ -170,10 +206,32 @@ describe('published package entry points', () => {
         const failed = <Experience experienceId="experience" initialError={initialError} />;
         const partial = <Experience experienceId="experience" initialPlan={plan} initialError={initialError} />;
         const injected = <ExperiencesProvider sdk={sdk}><ManualContent /></ExperiencesProvider>;
+        const { ExperiencesRoot: ReactRouterExperiencesRoot, ExperiencesProvider: ReactRouterExperiencesProvider } =
+          bindReactRouterExperiences({ config: { components: {} } });
+        const { ExperiencesRoot: TanStackRouterExperiencesRoot, ExperiencesProvider: TanStackRouterExperiencesProvider } =
+          bindTanStackRouterExperiences({ config: { components: {} } });
+        const reactRouter = <ReactRouterExperiencesRoot {...config} pagePayload={{ properties: { title: 'Home' } }}
+          getPagePayload={(emission) => {
+            const context: AutoPageEmissionContext<ReactRouterAutoPageContext> = emission;
+            return { properties: { path: context.context.pathname } };
+          }}><ManualContent /></ReactRouterExperiencesRoot>;
+        const reactRouterInjected = <ReactRouterExperiencesProvider sdk={sdk} />;
+        const tanStack = <TanStackRouterExperiencesRoot {...config}
+          getPagePayload={({ context, routeKey, isInitialEmission }) => {
+            const value: TanStackRouterAutoPageContext = context;
+            void [value.router, value.matches, routeKey, isInitialEmission];
+            return undefined;
+          }}><ManualContent /></TanStackRouterExperiencesRoot>;
+        const tanStackInjected = <TanStackRouterExperiencesProvider sdk={sdk} />;
+        // @ts-expect-error Router bindings derive routeKey from the current router location.
+        const routerWithExplicitKey = <ReactRouterExperiencesProvider sdk={sdk} routeKey="/" />;
+        // @ts-expect-error Use pagePayload/getPagePayload with optional router bindings.
+        const routerWithExplicitBuilder = <TanStackRouterExperiencesProvider sdk={sdk} buildPagePayload={() => ({})} />;
         const binding = createExperiencesRootSdkBinding({ sdk });
         const concrete: ContentfulExperiences = binding.sdk;
         disposeExperiencesRootSdkBinding(binding);
-        void [owned, injected, concrete, supplied, authoritative, unbound, empty, failed, partial];
+        void [owned, injected, concrete, supplied, authoritative, unbound, empty, failed, partial,
+          reactRouter, reactRouterInjected, tanStack, tanStackInjected, routerWithExplicitKey, routerWithExplicitBuilder];
         // @ts-expect-error Destruction belongs to the SDK owner.
         useExperiencesActions().destroy();
         // @ts-expect-error A managed Experience descriptor requires its ID.
