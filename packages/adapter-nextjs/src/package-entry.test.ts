@@ -337,7 +337,11 @@ describe('published declarations', () => {
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       };
-      const pagesClient = bindNextjsPagesRouterExperiences({ config });
+      const pagesClient = bindNextjsPagesRouterExperiences({
+        config, spaceId: 'space', environmentId: 'master',
+        delivery: { accessToken: 'browser' },
+        consent: { clientDefaults: { consent: false, persistenceConsent: false } }
+      });
       declare const result: NextjsRequestResult;
       {
         const { ExperiencesRoot, Experience } = appClient.request;
@@ -351,12 +355,20 @@ describe('published declarations', () => {
         ExperiencesRoot({ result, handoff: result.handoff });
       }
       {
-        const { ExperiencesRoot, Experience } = pagesClient.request;
-        const tree = <ExperiencesRoot result={result}><Experience result={result} /></ExperiencesRoot>;
-        void tree;
+        const { ExperiencesRoot, ExperiencesAnalyticsRoot, Experience, ExperienceRenderer: PagesExperienceRenderer, useManagedExperience } = pagesClient;
+        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
+        const analytics = <ExperiencesAnalyticsRoot result={result}><p>Server content</p></ExperiencesAnalyticsRoot>;
+        void [tree, analytics];
+        Experience({ experienceId: 'home', initialPlan: plan, parameters: { variant: 'home' } });
+        Experience({ experience: plan });
+        PagesExperienceRenderer({ experience: plan });
+        useManagedExperience({ experienceId: 'home' });
+        // @ts-expect-error Descriptor overlays cannot change the supplied request result.
+        Experience({ result, experienceId: 'different' });
         // @ts-expect-error Seeds are part of the complete request result.
         Experience({ result, initialPlan: plan });
       }
+      pagesServer.request.loadExperience({ resolvedUrl: '/home' } as Parameters<typeof pagesServer.request.loadExperience>[0], pagesOptions);
       // @ts-expect-error Request server roots cannot receive browser callbacks.
       ExperiencesRoot({ beforeInitialPage: () => {} });
       const tree = <ExperiencesRoot><Experience {...requestProps} /></ExperiencesRoot>;

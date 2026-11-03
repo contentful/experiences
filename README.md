@@ -178,8 +178,11 @@ do {
 ## Next.js managed integration
 
 For a normal Next.js page, bind one primary Experience and let the Next adapter
-fetch, resolve and manage its presentation. App Router and Pages Router provide
-`request.loadExperience`, `request.Experience` and built-in browser roots. The
+fetch, resolve and manage its presentation. App Router and Pages Router server
+families provide `request.loadExperience`. Pages client configuration exports
+plain `ExperiencesRoot` and `Experience` components from the binding; `Experience`
+accepts a server `result` or existing managed props. App retains its request
+presentation and built-in browser roots. The
 `preserve-server` hydration mode retains server HTML and the supplied plan without
 a startup browser refetch; `server-only` keeps content updates on a server
 round-trip and can attach browser analytics without browser content rendering.

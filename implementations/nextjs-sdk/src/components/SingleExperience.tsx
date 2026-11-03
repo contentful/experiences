@@ -7,10 +7,13 @@ import {
 import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
-const app = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
-const pages = bindNextjsPagesRouterExperiences({ config: browserRegistry });
-const { Experience: AppRequestExperience } = app.request;
-const fallbacks = {
+const { Experience: AppRequestExperience } = bindNextjsAppRouterClientExperiences({
+  config: browserRegistry,
+}).request;
+export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+  config: browserRegistry,
+});
+export const singleExperienceFallbacks = {
   loadingFallback: (
     <p className="placeholder-card" role="status">
       Loading Experience…
@@ -24,9 +27,5 @@ const fallbacks = {
 };
 
 export function ClientRequestExperience(props: NextjsRequestExperienceProps) {
-  return <AppRequestExperience {...fallbacks} {...props} />;
-}
-
-export function PagesSingleExperience(props: NextjsRequestExperienceProps) {
-  return <pages.request.Experience {...fallbacks} {...props} />;
+  return <AppRequestExperience {...singleExperienceFallbacks} {...props} />;
 }
