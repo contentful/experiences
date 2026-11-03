@@ -6,11 +6,13 @@ import {
 } from '@contentful/experiences-nextjs/app-router/client';
 import { browserRegistry } from './browser-registry';
 
-const bound = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
+const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
+
+const { Experience } = binding.request;
 
 export function ClientRequestExperience(props: NextjsRequestExperienceProps) {
   return (
-    <bound.request.Experience
+    <Experience
       loadingFallback={
         <p className="placeholder-card" role="status">
           Loading Experience…
