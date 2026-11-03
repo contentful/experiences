@@ -12,8 +12,11 @@ for the same pathname and search-params object reference. Both routes pass Next'
 resolved `searchParams` object unchanged; ordinary and repeated presentations use
 that one result. Equal-valued copies are distinct cache inputs, so callers sharing
 a render must reuse the original object rather than reconstructing it.
-The loader binds one request facade, fetches the route's display/comparison IDs
-sequentially and destroys the facade in `finally`. Available plans render independently of other
+The loader binds the primary request facade and loads later comparison IDs
+sequentially on a separate identity-free Node request with the same locale and
+preview binding. Comparisons never inherit the primary's provisional XDA profile
+ID or change its identity. Both facades are destroyed in `finally`.
+Available plans render independently of other
 fetch failures. Their ordering, identity and result handling remain application-owned
 comparison behavior, with no SDK multi-Experience guarantee.
 
@@ -127,7 +130,8 @@ Home and Page Two are dynamic and use `force-no-store`; ordinary Delivery uses
 single-Experience page uses explicit `isPreview: false`; advanced preview setup
 uses the SDK client-module binding described in the Next adapter guide.
 
-Ordinary SSR uses one request facade and ordinary Experience fetching.
+Ordinary SSR uses the primary request facade and ordinary Experience fetching;
+later event-free comparisons use the separate comparison request.
 Home displays all configured IDs with the first as primary. Page Two displays
 only the last configured ID as primary. That route's primary fetch runs first with
 initial intent; remaining display/comparison IDs load sequentially without events.
