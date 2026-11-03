@@ -1,4 +1,5 @@
 import { ANONYMOUS_ID_COOKIE, type ExperiencesNodeRequest } from '@contentful/experiences-node';
+import type { ExperiencesWebConfig } from '@contentful/experiences-web';
 
 export interface NextjsAnonymousIdCookieOptions {
   readonly domain?: string;
@@ -139,4 +140,15 @@ export function persistNextjsAnonymousId(
   } else {
     response.headers.append('set-cookie', serializeCookie(cookie));
   }
+}
+
+/** Shared high-level cookie attributes; expires is a number of days, as in Web. */
+export type NextjsCookieConfig = NonNullable<ExperiencesWebConfig['cookie']>;
+
+export function toNextjsAnonymousIdCookieOptions(
+  cookie: NextjsCookieConfig = {}
+): NextjsAnonymousIdCookieOptions {
+  const { expires = 365, ...attributes } = cookie;
+  if (!Number.isFinite(expires)) throw new TypeError('Invalid cookie expires');
+  return { ...attributes, maxAge: Math.trunc(expires * 86_400), httpOnly: false };
 }

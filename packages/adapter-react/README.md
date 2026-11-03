@@ -8,7 +8,12 @@ The React adapter for the Contentful Experiences SDK. You bring your own React c
 npm install @contentful/experiences-react
 ```
 
-This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
+For React, this is the rendering adapter you install. Next.js applications should
+use [`@contentful/experiences-nextjs`](../adapter-nextjs/README.md) for the common
+automatic one-Experience App setup, with request loading and built-in roots.
+The Next adapter uses these React rendering and runtime owners.
+
+This package re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
 ## Import entries
 
@@ -187,8 +192,11 @@ Ordinary requests obtain attribution even when automatic tracking is disabled.
 `trackViews`, `trackHovers`, `trackClicks` and `onNodeRoot` work on the same managed
 surface as on `ExperienceRenderer`. Supplied plans retain their existing attribution.
 Official support is one Experience fetch per page; repeated views may reuse its
-plan. The reference's later-ID comparisons are event-free caller glue, without a
-multi-Experience or cross-fetch guarantee.
+plan. The reference's later-ID comparisons are event-free caller glue: ordering,
+identity and result handling remain application-owned diagnostic behavior, without
+a multi-Experience or cross-fetch guarantee. Next's automatic request convenience
+manages one primary Experience and consumes its complete result; it adds no
+multiple-fetch controller, result list or identity reconciliation.
 
 Configure optional preview once with Web's `livePreview` configuration and browser-safe
 `preview` credentials on the root. The same `<Experience experienceId={id} />`
@@ -363,8 +371,9 @@ the document. `buildPagePayload` supplies default page arguments for the first
 ordinary managed request of a route. Root/provider `initialPagePayload` is shorthand
 for static `PageViewBuilderArgs`; update route-varying values on navigation.
 An explicit `buildPagePayload` takes precedence, including when it returns
-`undefined`; neither form creates page intent when both are absent. Explicit
-`personalization.events` remains complete caller intent. Ordinary XDA noncommit is
+`undefined`; neither form creates page intent when both are absent and `pageMode`
+is omitted. Explicit `personalization.events` remains complete caller intent.
+Ordinary XDA noncommit is
 tolerated without a compensating XPAPI call or accepted-route mark. Explicit replay
 and page/fallback operations
 retain Web's route admission and consent-change behavior.
@@ -383,6 +392,15 @@ and consent semantics. `onStatesReady(states)` runs after commit, before this
 complete operation and passive child effects, and may return subscription cleanup.
 Its callback is captured for the binding; use a replacement owner/provider when
 changing application subscription setup.
+
+For server-rendered content with browser-owned page events, set
+`pageMode="analytics"` on `ExperiencesRoot` or `ExperiencesProvider`. This optional
+readonly presentation prop opts the existing React page sequence into page handling
+without a managed content component. It waits for `beforeInitialPage` to settle
+and retains the same consent, preview and handoff rules. Supply server-rendered
+children and keep content updates on the server; the prop performs no content
+fetching, resolution or rendering. It configures React presentation, not Runtime
+policy.
 
 Inject an application-owned SDK through `<ExperiencesProvider sdk={sdk}>`.
 Without snapshot/handoff it is immediately available; replacement rebinds

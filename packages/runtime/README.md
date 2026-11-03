@@ -187,6 +187,13 @@ require private-request cache scope.
 The aggregate packages a complete evaluated API profile in `state.profile` and
 retains continuation identity in top-level `profileId`; ID-only continuation does
 not supply browser profile state.
+
+Public-permutation metadata may carry optional `tags`, preserved by canonical
+handoff parsing. Tags must be nonempty strings; the consuming Next adapter applies its count,
+length and HTTP delimiter limits.
+Framework limits, HTTP headers and invalidation remain with the consuming adapter
+and application; Runtime supplies no cache engine.
+
 Profileless internal state application preserves existing browser continuity;
 supplied changes replace flag state.
 It does not commit preflight results or transfer selected-optimization state.

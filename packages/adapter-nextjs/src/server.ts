@@ -35,6 +35,11 @@ export {
   serializeNextjsHandoff,
   serializeNextjsJsonForHtml,
 } from './serialization.js';
+export {
+  createExperiencesCacheKey,
+  createPublicPermutationCacheMetadata,
+  type NextjsExperiencesCacheKeyInput,
+} from './cache-key.js';
 export type {
   ExperiencesNodeConfig,
   ExperiencesNodeRequest,
