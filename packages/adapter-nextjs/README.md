@@ -22,7 +22,7 @@ The package is ESM and preserves per-file client boundaries. The root entry has 
 | `/app-router/server`   | `bindNextjsAppRouterServerExperiences`, request-aware server components and explicit/static rendering.                                                                                                 |
 | `/app-router/client`   | `bindNextjsAppRouterClientExperiences`, `NextjsAppRouterRequestRoot`, `NextjsAppRouterRequestAnalyticsRoot`, managed/injected content and server children.                                             |
 | `/pages-router/server` | `bindNextjsPagesRouterServerExperiences` and its native request/response helper.                                                                                                                       |
-| `/pages-router`        | `bindNextjsPagesRouterExperiences`, `NextjsPagesRouterRequestRoot`, `NextjsPagesRouterRequestAnalyticsRoot`, one committed-route browser owner in `_app`.                                              |
+| `/pages-router`        | `bindNextjsPagesRouterExperiences`, bound `ExperiencesRoot`, `ExperiencesAnalyticsRoot` and `Experience`.                                                                                              |
 | `/cache-middleware`    | Edge-compatible `createNextjsPublicPermutationCacheMiddleware`; no Node SDK or event work.                                                                                                             |
 | `/package.json`        | Package metadata.                                                                                                                                                                                      |
 
@@ -154,10 +154,10 @@ export default async function Page() {
 
 Bind the same server policy once with `bindNextjsPagesRouterServerExperiences`
 from `/pages-router/server`; use an explicit trusted `origin` for host-independent
-page URLs. Export the renderer from a client module using
-`bindNextjsPagesRouterExperiences({ config: browserRegistry }).request.Experience`.
-The server configuration above can be shared without the App-specific binder or
-`server-only` marker; keep all its imports inside the GSSP server dependency path.
+page URLs. Bind the browser registry and flat browser SDK options in a client
+configuration module, then export the named components once. Import
+`ExperiencesRoot` into `_app` and `Experience` into the page. Keep private server
+configuration and imports inside the GSSP server dependency path.
 
 ```tsx
 // lib/pages-experience-server.tsx — consumed only by getServerSideProps.
@@ -187,8 +187,22 @@ export const pagesExperiences = bindNextjsPagesRouterServerExperiences({
 import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
-const client = bindNextjsPagesRouterExperiences({ config: browserRegistry });
-export const PagesRequestExperience = client.request.Experience;
+export const {
+  ExperiencesRoot,
+  ExperiencesAnalyticsRoot,
+  Experience,
+  ExperienceRenderer,
+  useManagedExperience,
+} = bindNextjsPagesRouterExperiences({
+  config: browserRegistry,
+  spaceId: process.env.NEXT_PUBLIC_CONTENTFUL_SPACE_ID!,
+  environmentId: 'master',
+  locale: 'en-US',
+  delivery: { accessToken: process.env.NEXT_PUBLIC_CONTENTFUL_DELIVERY_TOKEN! },
+  isPreview: false,
+  consent: { clientDefaults: { consent: false, persistenceConsent: false } },
+  cookie: { path: '/', sameSite: 'lax' },
+});
 ```
 
 ```tsx
@@ -196,7 +210,7 @@ export const PagesRequestExperience = client.request.Experience;
 import type { GetServerSideProps } from 'next';
 import type { NextjsRequestResult } from '@contentful/experiences-nextjs/pages-router/server';
 import { pagesExperiences } from '../lib/pages-experience-server';
-import { PagesRequestExperience } from '../lib/pages-experience-client';
+import { Experience } from '../lib/pages-experience-client';
 
 export const getServerSideProps: GetServerSideProps<{ result: NextjsRequestResult }> = async (
   context
@@ -206,27 +220,20 @@ export const getServerSideProps: GetServerSideProps<{ result: NextjsRequestResul
 };
 
 export default function Page({ result }: { result: NextjsRequestResult }) {
-  return <PagesRequestExperience result={result} />;
+  return <Experience result={result} />;
 }
 ```
 
 ```tsx
 // pages/_app.tsx — one stable built-in browser owner.
 import type { AppProps } from 'next/app';
-import { NextjsPagesRouterRequestRoot } from '@contentful/experiences-nextjs/pages-router';
-import { browserConfig } from '../lib/browser-config';
+import { ExperiencesRoot } from '../lib/pages-experience-client';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <NextjsPagesRouterRequestRoot
-      spaceId={process.env.NEXT_PUBLIC_CONTENTFUL_SPACE_ID!}
-      environmentId="master"
-      locale="en-US"
-      browser={browserConfig}
-      result={pageProps.result}
-    >
+    <ExperiencesRoot result={pageProps.result}>
       <Component {...pageProps} />
-    </NextjsPagesRouterRequestRoot>
+    </ExperiencesRoot>
   );
 }
 ```
@@ -245,12 +252,13 @@ every request-aware route. Only this opt-in server family reads framework
 headers/cookies.
 
 Here `pagesExperiences` is the server binder with `config`, `request`,
-`consent.server`, `cookie` and `origin`; `browserConfig` is the explicit literal
-`NextjsBrowserConfig`, for example the `browser` value in the App setup above.
-Pass the same configured scope/locale to the Pages root; the browser object needs
-no duplicate scope. When using `consent.clientDefaults` and `cookie`, pass them
-as the root's separate `defaults` and `cookie` props; they do not belong inside
-`browser`. Native redirects/errors belong before the request helper.
+`consent.server`, `cookie` and `origin`. The client binding owns its flat browser
+SDK options, `consent.clientDefaults` and `cookie`; `_app` passes the complete
+result without remapping browser options or consent defaults. Configure matching
+scope, locale and cookie attributes on the server and browser. The client binder
+has no `request` family. Its `Experience` accepts either the complete server
+`result` or existing managed props for explicit browser flows. Native
+redirects/errors belong before the server request helper.
 The helper persists the final permitted identity on `context.res` and destroys
 its facade. It returns a JSON-safe `NextjsRequestResult` ready for props; no manual
 projection is needed. Raw plan/error data is available inside `composeRequest`
@@ -259,7 +267,7 @@ the server.
 
 Both routers default to `preserve-server`: initial HTML and supplied plans survive
 browser activation without a startup content refetch. Use `server-only` with
-`request.ExperiencesAnalyticsRoot` (App) or `NextjsPagesRouterRequestAnalyticsRoot`
+`request.ExperiencesAnalyticsRoot` (App) or the bound `ExperiencesAnalyticsRoot`
 (Pages) for opaque server content and optional browser analytics. All content
 updates then use server round-trips, including preview; there is no browser
 content loading, resolution or rendering. Analytics-only browser owners still
@@ -267,8 +275,9 @@ require Delivery configuration under the existing Runtime constructor contract.
 
 Browser credentials are explicit browser-visible credentials. The designated
 public token above must have appropriate scope and endpoint CORS; otherwise use
-`browser.delivery: { host: 'https://your-app.example/api/delivery' }` and implement
-that trusted proxy's upstream authentication. Built-in App roots inherit server
+`delivery: { host: 'https://your-app.example/api/delivery' }` in the Pages client
+binding (or `browser.delivery` in App server configuration) and implement that
+trusted proxy's upstream authentication. Built-in App roots inherit server
 scope and locale but never copy private server Delivery/Preview tokens. Browser
 defaults use `consent.clientDefaults`, independently of request consent. Literal
 browser configuration is JSON-safe; functions, custom fetch and preview
@@ -493,13 +502,15 @@ server renderer callbacks. Custom root overrides own their preview refresh obser
 use the client binding's `request.ExperiencesAnalyticsRoot` when that root wraps
 server-rendered content. Built-in server roots install their own matching observer.
 
-The client family retains explicit `ExperiencesRoot`, managed `Experience`,
-supplied `ExperienceRenderer` and `useManagedExperience`. `request.ExperiencesRoot`
-derives committed Next route inputs; `request.Experience` accepts the complete
-JSON-safe `result` from the server family. Managed and injected roots use the existing
-React/SDK owner. Supplied plans bind preview without a startup fetch. Configure
-renderer callbacks, custom roots, function-valued options
-and preview configuration in a client module for advanced setup.
+The App client family retains explicit `ExperiencesRoot`, managed `Experience`,
+supplied `ExperienceRenderer` and `useManagedExperience`. App's
+`request.ExperiencesRoot` derives committed Next route inputs;
+`request.Experience` accepts the complete JSON-safe `result` from the server
+family. Pages exposes these committed-route roots at the top level, with one
+`Experience` for both server results and existing managed props. Managed and
+injected roots use the existing React/SDK owner. Supplied plans bind preview
+without a startup fetch. Configure renderer callbacks, function-valued options
+and preview initializers in the client configuration module.
 
 `ExperiencesAnalyticsRoot` accepts opaque server children. It calls the existing
 SDK page operation for browser-owned initial intent and observes the SDK's active
@@ -537,15 +548,18 @@ usable plan/handoff and a browser-safe `contentError`.
 Static/ISR uses the existing explicit fetch/renderer, serializers and public cache
 validation; native `revalidate`, redirects and errors remain application-owned.
 
-Use `NextjsPagesRouterRequestRoot` once in `_app` with literal `browser` configuration,
-configured scope/locale and the primary `result`. Use
-`NextjsPagesRouterRequestAnalyticsRoot` for opaque server-only content. Advanced
-client-module setup can bind `/pages-router` with
+Destructure and export `ExperiencesRoot`, `ExperiencesAnalyticsRoot`, `Experience`,
+`ExperienceRenderer` and `useManagedExperience` from
 `bindNextjsPagesRouterExperiences({ config: browserRegistry, ...browserOptions })`
-and use its `request.ExperiencesRoot` / `request.ExperiencesAnalyticsRoot` instead.
-The matching `request.Experience` receives the same complete result, adopting its
-request inputs and route together before child work. Comparisons remain explicit
-event-free application loops, and repeated presentations reuse plans.
+in a client configuration module. Use plain `<ExperiencesRoot>` once in `_app`
+with the primary `result`; use `ExperiencesAnalyticsRoot` for opaque server-only
+content. The binding accepts flat browser SDK options, `consent.clientDefaults`
+and `cookie`, so `_app` needs no manual mapping. The matching `Experience`
+receives the same complete result, adopting its request inputs and route together
+before child work, or accepts existing managed props for explicit browser flows.
+Pages has no client `request` family or standalone request-root exports.
+Comparisons remain explicit event-free application loops, and repeated
+presentations reuse plans.
 
 Both routers use `createNextjsRouteKey`: hash-only and Pages shallow changes do not
 own a page, while committed path/query changes and back/forward do. Canceled

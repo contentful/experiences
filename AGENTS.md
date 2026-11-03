@@ -162,9 +162,14 @@ React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
 automatically fetches, resolves and manages one primary Experience. App and Pages
-request families expose `request.loadExperience`; server `request.Experience` always
-uses `ServerExperienceRenderer`. There is no hydration or navigation policy flag.
-Bind `config` and `resolveOptions` once. Server roots/renderers share a memoized result.
+server request families expose `request.loadExperience`. Pages client bindings
+export top-level `ExperiencesRoot`, `ExperiencesAnalyticsRoot`, `Experience`,
+`ExperienceRenderer` and `useManagedExperience`, with no client `request` family.
+Export components once from a client configuration module and import names for
+plain `<ExperiencesRoot>` JSX; bind flat browser SDK options,
+`consent.clientDefaults` and `cookie`. Pages `Experience` accepts a complete
+`result` or existing managed props. Server request `Experience` uses
+`ServerExperienceRenderer`. Bind `config` and `resolveOptions` once.
 Follow the canonical [rendering compositions](./packages/adapter-nextjs/README.md#automatic-single-experience-setup)
 and [server preparation contract](./packages/adapter-nextjs/README.md#router-bindings)
 for document/RSC evaluation, page events, replay, prefetch and preview ownership.

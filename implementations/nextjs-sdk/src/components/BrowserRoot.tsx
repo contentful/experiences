@@ -80,7 +80,7 @@ export function PagesBrowserRoot({
   environment,
   ...props
 }: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
-  const [pages] = useState(() =>
+  const [{ ExperiencesRoot, ExperiencesAnalyticsRoot, Experience }] = useState(() =>
     bindNextjsPagesRouterExperiences({ ...environment.web, config: browserRegistry })
   );
   const router = usePagesRouter();
@@ -90,10 +90,10 @@ export function PagesBrowserRoot({
       {...props}
       environment={environment}
       currentRouteKey={routeKey}
-      ContentRoot={pages.request.ExperiencesRoot}
-      AnalyticsRoot={pages.request.ExperiencesAnalyticsRoot}
-      Experience={pages.Experience}
-      RequestExperience={pages.request.Experience}
+      ContentRoot={ExperiencesRoot}
+      AnalyticsRoot={ExperiencesAnalyticsRoot}
+      Experience={Experience}
+      RequestExperience={Experience}
       navigate={(href, replace, shallow) => {
         void router[replace ? 'replace' : 'push'](href, undefined, {
           shallow: shallow ?? false,
@@ -124,9 +124,9 @@ function ReferenceBrowserRoot({
   const livePreview = useMemo(() => previewConfiguration(binding), [previewKey]);
   const [log] = useState(createAttemptLog);
   const serverOnly = url.searchParams.get('mode') === 'server-only';
-  const Root = serverOnly ? AnalyticsRoot : ContentRoot;
+  const ExperiencesRoot = serverOnly ? AnalyticsRoot : ContentRoot;
   return (
-    <Root
+    <ExperiencesRoot
       {...props}
       key={previewKey ?? 'ordinary'}
       isPreview={Boolean(binding)}
@@ -148,7 +148,7 @@ function ReferenceBrowserRoot({
         <ConsentMirror />
         <ReferenceShell>{props.children}</ReferenceShell>
       </ReferenceContext.Provider>
-    </Root>
+    </ExperiencesRoot>
   );
 }
 

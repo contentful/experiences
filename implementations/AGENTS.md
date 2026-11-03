@@ -47,14 +47,16 @@ This admission guard provides no durable or exactly-once transport guarantee.
 Automatic fetching, resolution and management of one primary Experience is the
 normal React/Next workflow. The Next reference demonstrates it at
 `/single-experience` and `/pages/single-experience`, alongside diagnostic routes.
-App/Pages request families bind `config` and `resolveOptions` once and expose `request.loadExperience`,
-`request.Experience` and built-in roots. Server request presentation always uses
-`ServerExperienceRenderer`; `/single-experience` instead passes one serialized server
-result to a client request root and presentation. Follow the canonical
-[rendering compositions](../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
-and [request contract](../packages/adapter-nextjs/README.md#router-bindings) for page
-preparation, replay, prefetch, root lifetime and preview behavior.
-Browser roots inherit scope/locale, not private credentials; supply
+App/Pages bind `config` and `resolveOptions` once; server families expose
+`request.loadExperience`. Pages client bindings export top-level `ExperiencesRoot`,
+`ExperiencesAnalyticsRoot`, `Experience`, `ExperienceRenderer` and
+`useManagedExperience`, with no client `request` family. Export those components
+once from a client configuration module and import named components for plain
+`<ExperiencesRoot>` JSX. Bind flat browser SDK options, `consent.clientDefaults`
+and `cookie`; lazy server-derived reference configuration may supply flat runtime
+root props. Pages `Experience` accepts a complete `result` or existing managed
+props. App retains its request components and built-in roots. Server request `Experience` uses
+`ServerExperienceRenderer`. Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
 in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pass

@@ -8,7 +8,8 @@ Rich Text renderer, named `slot` presentation and locally vendored theme.
 Start with App Router `/single-experience` or Pages Router
 `/pages/single-experience` for the normal automatic one-Experience workflow.
 The public binder owns fetching, resolution and management of the primary result;
-the page uses its `request.Experience` and a built-in browser root. These routes
+App uses its `request.Experience`; Pages imports the bound `Experience` and
+`ExperiencesRoot` components. These routes
 need no comparison loop or custom browser Root. They use the same registrations
 and local configuration as the diagnostics below.
 
@@ -139,8 +140,9 @@ WebSocket broker and never substitutes the private preview token. Inactive previ
 does not require a browser preview token.
 
 Built-in browser roots inherit space/environment and locale from server setup;
-their Delivery configuration is explicitly supplied through `browser`, never
-copied from private server credentials. The existing Runtime still requires
+their Delivery configuration is explicitly supplied through App's `browser`
+configuration or flat Pages browser SDK options, never copied from private server
+credentials. The existing Runtime still requires
 Delivery configuration for an analytics-only browser owner. Function-valued
 callbacks, custom fetch implementations and Preview Session initializers remain
 advanced setup in a client module.
@@ -164,7 +166,7 @@ options. Session transport uses the frozen helper without a custom fetch wrapper
 Both content routes are dynamic and use `force-no-store`; ordinary Delivery uses
 `createNextjsPrivateFetch`. There is no preview broker or application preview client.
 
-Ordinary SSR uses one request facade and ordinary Experience fetching.
+Ordinary SSR uses the primary request facade and ordinary Experience fetching.
 The single-Experience routes select one configured primary ID and let the SDK
 manage it automatically. Diagnostic Home displays all configured IDs with the
 first as primary. Page Two displays
@@ -224,9 +226,10 @@ URL identify intent, and retains the same browser root. View keys clear nonpage
 action intent on route changes; Utilities reads initial URL intent, successful server
 Identify intent and the SDK profile. Each `NextjsRequestResult` carries its
 request identity, route, descriptor, optional plan/error and optional handoff.
-The reference passes that result to `request.ExperiencesRoot` and
-`request.Experience`. Request roots accept an optional `result`; request Experience
-requires it and retains presentation callbacks. The adapter rejects restored
+App passes that result to `request.ExperiencesRoot` and `request.Experience`;
+Pages uses the top-level bound `ExperiencesRoot` and `Experience`. Roots accept an
+optional `result`. Pages `Experience` accepts either the complete `result` or
+existing managed props and retains presentation callbacks. The adapter rejects restored
 original results after departure, including back/forward after Reset, while
 accepting fresh server results. Ordinary
 `Experience` inputs remain caller-owned. Fresh client actions use that ordinary
@@ -265,12 +268,18 @@ below continues to use its existing explicit loader.
 ## Public server integration
 
 The normal one-Experience example binds the server policy in
-`src/single-experience-server.tsx` and exports only the request renderer from
-`src/components/SingleExperience.tsx`. App's sibling `(single)` route group uses
-`request.ExperiencesRoot` and `request.Experience` without manual result plumbing;
-Pages uses native GSSP `request.loadExperience` and the built-in
-`NextjsPagesRouterRequestRoot` in `_app`. Literal browser transport configuration
-stays separate from normalized consent defaults and cookie attributes.
+`src/single-experience-server.tsx`. `src/components/SingleExperience.tsx` exports
+the App request renderer and the Pages binding's named `ExperiencesRoot` and
+`Experience` components once, alongside the existing presentation fallbacks. App's
+sibling `(single)` route group calls the lazy `singleAppExperiences()` once,
+destructures `ExperiencesRoot` and `Experience` from its request family, and uses
+plain JSX without manual result plumbing;
+Pages uses native GSSP `request.loadExperience` and plain `<ExperiencesRoot>`
+in `_app`, imported from the client binding. The registry is bound at module
+scope; the allowlisted runtime environment is passed as flat root props because
+this reference reads server configuration lazily. Normal Pages integrations bind
+flat browser SDK options, `consent.clientDefaults` and `cookie` in their client
+configuration module, with no manual browser/defaults/cookie remapping in `_app`.
 
 `src/config.ts` owns lazy server configuration and its explicit browser projection.
 `src/server-loader.ts` uses `bindNextjsAppRouterServerExperiences` with the
@@ -284,7 +293,9 @@ result's full handoff and plans. `src/components/BrowserRoot.tsx` binds the publ
 App and Pages client families, with the registry and ordinary shared UI in one client
 module. Separate router reads and factories feed the shared preview setup, context,
 consent mirror, shell and attempt log. Each router retains one browser owner across
-navigation; preview binding changes deliberately replace that owner.
+navigation; preview binding changes deliberately replace that owner. Pages
+destructures the top-level roots and `Experience` from its stable binding; the
+same `Experience` serves primary results and explicit managed diagnostic flows.
 The shared shell reads the current browser route separately from the whole server
 result passed as `result={serverResult}` to the SDK request root. Initial content,
 `initialPagePayload` (from `request.pagePayload`) and optional handoff retain the

@@ -8,11 +8,7 @@ import {
   type ContentfulExperiences,
   type PortableRenderPlan,
 } from '@contentful/experiences-web';
-import {
-  bindNextjsPagesRouterExperiences,
-  NextjsPagesRouterRequestRoot,
-  NextjsPagesRouterRequestAnalyticsRoot,
-} from './pages-router.js';
+import { bindNextjsPagesRouterExperiences } from './pages-router.js';
 import type { NextjsRequestResult } from './request-result.js';
 
 const router = vi.hoisted(() => ({
@@ -112,19 +108,21 @@ describe('Pages managed request sequence', () => {
 
   it('adopts the destination descriptor and page intent before completion without fetching twice', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+    });
     const tree = (experiences: NextjsRequestResult) => (
-      <NextjsPagesRouterRequestRoot
-        browser={{ delivery: { accessToken: 'browser-token' } }}
+      <ExperiencesRoot
+        delivery={{ accessToken: 'browser-token' }}
         spaceId="space"
         environmentId="master"
         sdk={sdk}
         result={experiences}
       >
-        <bound.request.Experience key={experiences.routeKey} result={experiences}>
+        <Experience key={experiences.routeKey} result={experiences}>
           {(result) => <output>{result.status}</output>}
-        </bound.request.Experience>
-      </NextjsPagesRouterRequestRoot>
+        </Experience>
+      </ExperiencesRoot>
     );
 
     await act(async () => root.render(tree(startup)));
@@ -165,12 +163,14 @@ describe('Pages managed request sequence', () => {
 
   it('ignores hash, shallow and canceled transitions while committing a changed query', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+    });
     await act(async () =>
       root.render(
-        <bound.request.ExperiencesRoot sdk={sdk} result={startup}>
-          <bound.request.Experience result={startup} />
-        </bound.request.ExperiencesRoot>
+        <ExperiencesRoot sdk={sdk} result={startup}>
+          <Experience result={startup} />
+        </ExperiencesRoot>
       )
     );
     const listener = (name: string) =>
@@ -197,14 +197,17 @@ describe('Pages managed request sequence', () => {
       },
     });
   });
-  it('runs the registry-free analytics path without browser content loading', async () => {
+  it('runs the bound analytics root without browser content loading', async () => {
     const { sdk, fetchExperience } = sdkFixture();
+    const { ExperiencesAnalyticsRoot } = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+    });
     await act(async () =>
       root.render(
-        <NextjsPagesRouterRequestAnalyticsRoot
+        <ExperiencesAnalyticsRoot
           spaceId="space"
           environmentId="master"
-          browser={{ delivery: { accessToken: 'browser-token' } }}
+          delivery={{ accessToken: 'browser-token' }}
           sdk={sdk}
           result={{
             requestId: 'server-only',
@@ -213,7 +216,7 @@ describe('Pages managed request sequence', () => {
           }}
         >
           <p>Server HTML</p>
-        </NextjsPagesRouterRequestAnalyticsRoot>
+        </ExperiencesAnalyticsRoot>
       )
     );
     expect(sdk.trackCurrentPage).toHaveBeenCalledOnce();

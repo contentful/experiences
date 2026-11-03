@@ -3,7 +3,7 @@ import type { NextjsRequestResult } from '@contentful/experiences-nextjs/pages-r
 import type { BrowserEnvironment } from '../../reference';
 import { getServer } from '../../config';
 import { singlePagesExperiences } from '../../single-experience-server';
-import { PagesSingleExperience } from '../../components/SingleExperience';
+import { Experience, singleExperienceFallbacks } from '../../components/SingleExperience';
 import { SingleExperiencePage } from '../../components/SingleExperiencePage';
 
 export interface SingleExperienceProps {
@@ -23,7 +23,7 @@ export const getServerSideProps: GetServerSideProps<SingleExperienceProps> = asy
 export default function SingleExperience({ experiences }: SingleExperienceProps) {
   return (
     <SingleExperiencePage pages>
-      <PagesSingleExperience result={experiences} />
+      <Experience {...singleExperienceFallbacks} result={experiences} />
     </SingleExperiencePage>
   );
 }
