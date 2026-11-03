@@ -44,6 +44,18 @@
         "types": "./dist/web-sdk.d.ts",
         "default": "./dist/web-sdk.js"
       }
+    },
+    "./router/react-router": {
+      "import": {
+        "types": "./dist/router/react-router.d.ts",
+        "default": "./dist/router/react-router.js"
+      }
+    },
+    "./router/tanstack-router": {
+      "import": {
+        "types": "./dist/router/tanstack-router.d.ts",
+        "default": "./dist/router/tanstack-router.js"
+      }
     }
   },
   "files": [
@@ -68,14 +80,24 @@
   },
   "devDependencies": {
     "jsdom": "^30.0.1",
-    "@contentful/experiences-live-preview": "0.7.11"
+    "@contentful/experiences-live-preview": "0.7.11",
+    "react-router-dom": "^7.18.4",
+    "@tanstack/react-router": "^1.168.2"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "react-router-dom": ">=6.4.0",
+    "@tanstack/react-router": ">=1.0.0"
   },
   "peerDependenciesMeta": {
     "react-dom": {
+      "optional": true
+    },
+    "react-router-dom": {
+      "optional": true
+    },
+    "@tanstack/react-router": {
       "optional": true
     }
   }
