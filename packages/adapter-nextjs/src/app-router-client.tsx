@@ -90,7 +90,9 @@ export function useNextAppAutoPageInputs() {
 /** Browser credentials/callbacks stay in the module that calls this pure binder. */
 export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperiencesConfig) {
   const { config, consent, ...rootConfig } = options;
-  const react = createReactExperiences({ config });
+  const { Experience, ExperienceRenderer, useManagedExperience } = createReactExperiences({
+    config,
+  });
 
   function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
     const effective = {
@@ -113,7 +115,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
 
   function RequestExperience({ result, ...props }: NextjsRequestExperienceProps) {
     const initial = useNextjsRequestOptions(result);
-    return <react.Experience {...props} {...initial} />;
+    return <Experience {...props} {...initial} />;
   }
 
   function ExperiencesAnalyticsRoot({
@@ -145,9 +147,9 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
   return {
     ExperiencesRoot,
     ExperiencesAnalyticsRoot,
-    Experience: react.Experience,
-    ExperienceRenderer: react.ExperienceRenderer,
-    useManagedExperience: react.useManagedExperience,
+    Experience,
+    ExperienceRenderer,
+    useManagedExperience,
     request: {
       ExperiencesRoot: RequestExperiencesRoot,
       ExperiencesAnalyticsRoot: RequestExperiencesAnalyticsRoot,

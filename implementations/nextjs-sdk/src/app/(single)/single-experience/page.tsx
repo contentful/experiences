@@ -4,12 +4,14 @@ import { SingleExperiencePage } from '../../../components/SingleExperiencePage';
 export const dynamic = 'force-dynamic';
 
 export default function SingleExperience() {
-  const bound = singleAppExperiences();
+  const {
+    request: { ExperiencesRoot, Experience },
+  } = singleAppExperiences();
   return (
-    <bound.request.ExperiencesRoot>
+    <ExperiencesRoot>
       <SingleExperiencePage>
-        <bound.request.Experience />
+        <Experience />
       </SingleExperiencePage>
-    </bound.request.ExperiencesRoot>
+    </ExperiencesRoot>
   );
 }
