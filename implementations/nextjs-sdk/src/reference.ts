@@ -1,5 +1,8 @@
 import type { Config } from '@contentful/experiences-web';
-import type { NextjsBrowserConfig } from '@contentful/experiences-nextjs/app-router/client';
+import type {
+  NextjsBrowserConfig,
+  NextjsRequestResult,
+} from '@contentful/experiences-nextjs/app-router/client';
 
 export interface BrowserEnvironment {
   readonly web: Pick<Config, 'spaceId' | 'environmentId' | 'locale'> &
@@ -12,6 +15,13 @@ export interface BrowserEnvironment {
   };
 }
 
+export type ContentSeed = NextjsRequestResult;
+
+export function routeIds(pathname: string, ids: readonly string[]) {
+  const display = pathname.endsWith('/page-two') ? ids.slice(-1) : [...ids];
+  return [...new Set([...display, ids[0]])];
+}
+
 export const consentCookies = {
   events: 'experiences-nextjs-event-consent',
   persistence: 'experiences-nextjs-persistence-consent',
@@ -19,4 +29,27 @@ export const consentCookies = {
 
 export function consentDecision(value: string | undefined) {
   return value === 'granted' ? true : value === 'denied' ? false : undefined;
+}
+
+// Only deployment-enabled preview with an actual URL session selects preview policy.
+export function previewBinding(environment: BrowserEnvironment, url: URL) {
+  const sessionId = url.searchParams.get('preview_session_id')?.trim();
+  return environment.livePreview && sessionId
+    ? {
+        ...environment.livePreview,
+        experienceId:
+          url.searchParams.get('preview_experience_id')?.trim() ||
+          environment.livePreview.experienceId,
+        sessionId,
+      }
+    : undefined;
+}
+
+export function previewConfiguration(binding: ReturnType<typeof previewBinding>) {
+  return binding
+    ? {
+        ...binding,
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      }
+    : undefined;
 }

@@ -1,4 +1,5 @@
-import 'server-only';
+// Node-only configuration. Pages GSSP strips this import from its browser bundle;
+// App consumers use the server-only request loader. Never import from client UI.
 
 import {
   configureNextjsServerExperiences,
@@ -49,10 +50,7 @@ function configureServer() {
     locale: env.LOCALE?.trim() || 'en-US',
     experienceIds,
     preview: livePreviewEnabled
-      ? {
-          accessToken: required('PREVIEW_TOKEN'),
-          host: env.PREVIEW_HOST?.trim() || undefined,
-        }
+      ? { accessToken: required('PREVIEW_TOKEN'), host: env.PREVIEW_HOST?.trim() || undefined }
       : undefined,
     livePreview: livePreviewEnabled
       ? {
@@ -61,9 +59,7 @@ function configureServer() {
             ? { sessionHost: env.LIVE_PREVIEW_SESSION_HOST.trim() }
             : {}),
           ...(env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim()
-            ? {
-                resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION.trim(),
-              }
+            ? { resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION.trim() }
             : {}),
         }
       : undefined,
@@ -100,12 +96,7 @@ function configureServer() {
     experienceIds,
     ...(config.livePreview ? { livePreview: config.livePreview } : {}),
   };
-  return {
-    config,
-    nodeConfig,
-    browser,
-    sdk: configureNextjsServerExperiences(nodeConfig),
-  };
+  return { config, nodeConfig, browser, sdk: configureNextjsServerExperiences(nodeConfig) };
 }
 
 let server: ReturnType<typeof configureServer> | undefined;
