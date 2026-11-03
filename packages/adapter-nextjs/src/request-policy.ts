@@ -54,6 +54,19 @@ export async function resolveNextjsRequestPolicy(
         ? { personalization: { events: [] } }
         : {}),
     },
+    ...(options.livePreview && typeof options.livePreview !== 'function'
+      ? {
+          livePreview: {
+            enabled: options.livePreview.enabled,
+            ...(options.livePreview.sessionHost === undefined
+              ? {}
+              : { sessionHost: options.livePreview.sessionHost }),
+            ...(options.livePreview.resourceResolution === undefined
+              ? {}
+              : { resourceResolution: options.livePreview.resourceResolution }),
+          },
+        }
+      : {}),
   };
   return { policy, descriptor, resolveOptions, result };
 }

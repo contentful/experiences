@@ -42,6 +42,7 @@ import {
   type NextjsServerRequestResult,
 } from './server-config.js';
 import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
+import { resolveNextjsLivePreview, nextjsLivePreviewSessionId } from './live-preview.js';
 import {
   NextjsAppRouterRequestRoot,
   NextjsAppRouterRequestAnalyticsRoot,
@@ -51,6 +52,7 @@ export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
 export type { NextjsHydrationMode } from './request-result.js';
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
 
 export type NextjsAppRouterRequestContext = NextjsServerRequestContext;
 export type NextjsAppRouterServerExperiencesConfig = NextjsServerExperiencesConfig;
@@ -132,7 +134,16 @@ export function bindNextjsAppRouterServerExperiences(
       };
       const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
       const rsc = context.headers.get('rsc') === '1';
-      const preview = await livePreview?.(context);
+      const preview =
+        typeof livePreview === 'function'
+          ? await livePreview(context)
+          : livePreview
+            ? resolveNextjsLivePreview(
+                livePreview,
+                context.requestUrl,
+                resolved.descriptor.experienceId
+              )
+            : undefined;
       // Hybrid navigations load in Web; server-only refreshes use a server round-trip.
       if (
         isNextjsSpeculativeRequest(context.headers) ||
@@ -163,17 +174,28 @@ export function bindNextjsAppRouterServerExperiences(
     return serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys });
   }
 
-  function ExperiencesRoot(props: BoundNextjsRequestRootProps) {
-    if (client?.request?.ExperiencesRoot)
-      return createElement(client.request.ExperiencesRoot, props);
-    return createElement(NextjsAppRouterRequestRoot, {
-      ...props,
+  function inheritedRootProps() {
+    return {
       spaceId: options.spaceId,
       environmentId: options.environmentId,
       ...(options.locale !== undefined ? { locale: options.locale } : {}),
-      browser: nextjsBrowserRootConfig(options),
       ...(consent?.clientDefaults ? { defaults: consent.clientDefaults } : {}),
       ...(cookie ? { cookie } : {}),
+    };
+  }
+
+  function ExperiencesRoot(props: BoundNextjsRequestRootProps) {
+    if (client?.request?.ExperiencesRoot)
+      return createElement(client.request.ExperiencesRoot, {
+        ...(options.browser
+          ? { ...nextjsBrowserRootConfig(options), ...inheritedRootProps() }
+          : {}),
+        ...props,
+      });
+    return createElement(NextjsAppRouterRequestRoot, {
+      ...props,
+      ...inheritedRootProps(),
+      browser: nextjsBrowserRootConfig(options),
     });
   }
 
@@ -184,15 +206,16 @@ export function bindNextjsAppRouterServerExperiences(
 
   function ExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
     if (client?.request?.ExperiencesAnalyticsRoot)
-      return createElement(client.request.ExperiencesAnalyticsRoot, props);
+      return createElement(client.request.ExperiencesAnalyticsRoot, {
+        ...(options.browser
+          ? { ...nextjsBrowserRootConfig(options), ...inheritedRootProps() }
+          : {}),
+        ...props,
+      });
     return createElement(NextjsAppRouterRequestAnalyticsRoot, {
       ...props,
-      spaceId: options.spaceId,
-      environmentId: options.environmentId,
-      ...(options.locale !== undefined ? { locale: options.locale } : {}),
+      ...inheritedRootProps(),
       browser: nextjsBrowserRootConfig(options),
-      ...(consent?.clientDefaults ? { defaults: consent.clientDefaults } : {}),
-      ...(cookie ? { cookie } : {}),
     });
   }
 
@@ -277,7 +300,20 @@ export function bindNextjsAppRouterServerExperiences(
       locale: nodeConfig.locale,
       cookieOptions: toNextjsAnonymousIdCookieOptions(cookie),
       livePreview: livePreview
-        ? (context) => livePreview(handlerContext(context as NextjsExperiencesResolverContext))
+        ? async (context) => {
+            const serverContext = handlerContext(context as NextjsExperiencesResolverContext);
+            if (typeof livePreview === 'function') return livePreview(serverContext);
+            if (!nextjsLivePreviewSessionId(livePreview, serverContext.requestUrl))
+              return undefined;
+            const descriptor = options.request?.experience
+              ? await resolveNextjsServerValue(options.request.experience, serverContext)
+              : undefined;
+            return resolveNextjsLivePreview(
+              livePreview,
+              serverContext.requestUrl,
+              descriptor?.experienceId
+            );
+          }
         : undefined,
     }),
   };

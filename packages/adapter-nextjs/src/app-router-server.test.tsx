@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExperienceFetchError } from '@contentful/experiences-node';
+import { NextRequest } from 'next/server.js';
 import {
   NextjsAppRouterRequestRoot,
   NextjsAppRouterRequestAnalyticsRoot,
 } from './app-router-client.js';
 import { bindNextjsAppRouterServerExperiences } from './app-router-server.js';
+import type { NextjsLivePreviewConfig } from './live-preview.js';
 
 const doubles = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -60,6 +62,79 @@ beforeEach(() => {
 });
 
 describe('App Router request family', () => {
+  it('wires active managed preview from the primary and projects only browser options', async () => {
+    doubles.headers.mockResolvedValue(
+      new globalThis.Headers({
+        rsc: '1',
+        'x-ctfl-exp-request-url': 'https://example.com/?preview_session_id=session',
+      })
+    );
+    const implementation = {} as Awaited<ReturnType<NextjsLivePreviewConfig['loadImplementation']>>;
+    const loadImplementation = vi.fn(() => implementation);
+    const binding = bindNextjsAppRouterServerExperiences({
+      ...config,
+      browser: { delivery: { accessToken: 'browser-token' } },
+      livePreview: {
+        enabled: true,
+        experienceId: 'fallback',
+        sessionHost: 'https://preview.example.com',
+        resourceResolution: 'resolved',
+        loadImplementation,
+      },
+    });
+    const root = await binding.request.ExperiencesRoot({});
+    expect(root.props.result?.livePreview).toEqual({
+      enabled: true,
+      sessionHost: 'https://preview.example.com',
+      resourceResolution: 'resolved',
+    });
+    expect(loadImplementation).not.toHaveBeenCalled();
+    expect(doubles.bind.mock.calls[0]![1].livePreview).toEqual({
+      experienceId: 'home',
+      sessionId: 'session',
+      sessionHost: 'https://preview.example.com',
+      resourceResolution: 'resolved',
+      loadImplementation,
+    });
+    expect(doubles.bind.mock.calls[0]![1].isPreview).toBe(true);
+    expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(config.request.experience, {
+      config: config.config,
+    });
+    expect(doubles.transfer).not.toHaveBeenCalled();
+  });
+
+  it('resolves only the active middleware descriptor and keeps the implementation lazy', async () => {
+    const experience = vi.fn(() => ({ experienceId: 'home' }));
+    const unrelated = vi.fn(() => {
+      throw new Error('request policy must not run in middleware');
+    });
+    const loadImplementation = vi.fn();
+    for (const [enabled, search] of [
+      [false, '?preview_session_id=session'],
+      [true, ''],
+      [true, '?preview_session_id=session'],
+    ] as const) {
+      const binding = bindNextjsAppRouterServerExperiences({
+        ...config,
+        livePreview: { enabled, loadImplementation },
+        request: {
+          experience,
+          hydration: unrelated,
+          resolveOptions: unrelated,
+          pagePayload: unrelated,
+          initialEvents: unrelated,
+        },
+      });
+      await binding.requestHandler(new NextRequest('https://example.com/' + search));
+      expect(doubles.bind.mock.calls.at(-1)![1].livePreview).toEqual(
+        enabled && search ? expect.objectContaining({ loadImplementation }) : undefined
+      );
+      expect(experience).toHaveBeenCalledTimes(enabled && search ? 1 : 0);
+    }
+    expect(unrelated).not.toHaveBeenCalled();
+    expect(loadImplementation).not.toHaveBeenCalled();
+  });
+
   it('explicit/static rendering reads no framework request state', async () => {
     const binding = bindNextjsAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan });
@@ -229,6 +304,40 @@ describe('App Router request family', () => {
     await expect(binding.request.ExperiencesRoot({})).rejects.toThrow(
       'requires browser configuration'
     );
+  });
+
+  it('projects browser credentials and inherited props into registered client roots', async () => {
+    const client = () => null;
+    const browser = { delivery: { accessToken: 'browser-token' } };
+    const defaults = { consent: false };
+    const cookie = { path: '/scope' };
+    const binding = bindNextjsAppRouterServerExperiences(
+      {
+        ...config,
+        browser,
+        locale: 'de-DE',
+        cookie,
+        consent: { ...config.consent, clientDefaults: defaults },
+      },
+      { request: { ExperiencesRoot: client, ExperiencesAnalyticsRoot: client } }
+    );
+    for (const Root of [
+      binding.request.ExperiencesRoot,
+      binding.request.ExperiencesAnalyticsRoot,
+    ]) {
+      const root = await Root({});
+      expect(root.props).toMatchObject({
+        ...browser,
+        spaceId: 'space',
+        environmentId: 'master',
+        locale: 'de-DE',
+        defaults,
+        cookie,
+      });
+      expect((root.props as { delivery?: unknown }).delivery).not.toBe(browser.delivery);
+      expect(root.props).not.toHaveProperty('browser');
+      expect(JSON.stringify(root.props)).not.toContain('secret');
+    }
   });
 
   it('rejects functions in explicit browser config without projecting server credentials', async () => {

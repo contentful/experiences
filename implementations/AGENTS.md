@@ -28,7 +28,7 @@ Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Earlier remedy
-checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
+checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
 
 Browser handoff operations preserve live-profile/provider/handoff identity capture
 before hydration and ordinary provider-first policy under Optimization PR #549 at
@@ -60,12 +60,16 @@ props. App retains its request components and built-in roots. Hydration is `pres
 loading. Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
-in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pass
+in client modules. Next bindings accept `livePreview: { enabled, loadImplementation }`
+and own session inference, replacement and mode changes; do not add consumer
+preview-only wrappers/hooks/keys. Request results carry loader-free preview configuration; roots derive sessions
+from existing route/descriptor data. Request history survives owned SDK replacement.
+The server and browser use matching deployment policy and separate credentials. `request.pagePayload` becomes `result.initialPagePayload`; pass
 the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
 facade. Do not add multi-prefetch/result lists, identity reconciliation or new
-controllers/cache/barriers. Current Phase 10 DX validation is pending root evidence;
-Phase 11 optional router integrations remain deferred.
+controllers/cache/barriers. Phase 10 DX validation and Phase 11 optional router integration are complete and
+explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 remain not started.
 
 Official support is one Experience fetch per page. The SDK does not enforce this
 limit in code. Reference implementations fetch multiple IDs only to compare
@@ -90,7 +94,7 @@ Phase 7 owns managed React roots/loaders/page bindings and the React reference;
 adapt Optimization source/presentation ports to XDA-built events without requiring
 `beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
 exception in that managed flow. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.

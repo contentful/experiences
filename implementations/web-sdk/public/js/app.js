@@ -255,7 +255,7 @@ function wireRouteControls(path, focus) {
         ],
       });
     });
-    appMain.querySelector('.control-panel').appendChild(actions);
+    appMain.querySelector('.control-panel__fields').appendChild(actions);
   }
   if (focus) appMain.focus();
 }
