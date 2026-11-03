@@ -99,27 +99,37 @@ export async function loadReferenceContent(
   return [primary, ...(await loadComparisons(request, primary, url))];
 }
 
-// This caller-owned loop follows the primary and keeps comparisons event-free. It claims no supported multi-Experience transaction.
+// Comparisons have no visitor intent. Keep primary preflight identity on its own
+// request: a newly returned ID may not exist for a later profile-only lookup.
 export async function loadComparisons(
   request: ExperiencesNodeRequest,
   primary: ServerContent,
   url: URL
 ) {
-  const { browser } = getServer();
+  const { sdk, browser } = getServer();
+  const comparisons = sdk.forRequest({
+    locale: request.locale,
+    isPreview: request.isPreview,
+    livePreview: request.isPreview ? serverPreview(url) : undefined,
+  });
   const output: ServerContent[] = [];
-  for (const experienceId of routeIds(url.pathname, browser.experienceIds)) {
-    if (experienceId === primary.experienceId) continue;
-    try {
-      output.push({
-        experienceId,
-        plan: await request.fetchExperience(
-          { experienceId, ...(request.isPreview ? {} : { extensions: { sourceMap: {} } }) },
-          { config: experienceConfig }
-        ),
-      });
-    } catch (error) {
-      output.push({ experienceId, error });
+  try {
+    for (const experienceId of routeIds(url.pathname, browser.experienceIds)) {
+      if (experienceId === primary.experienceId) continue;
+      try {
+        output.push({
+          experienceId,
+          plan: await comparisons.fetchExperience(
+            { experienceId, ...(request.isPreview ? {} : { extensions: { sourceMap: {} } }) },
+            { config: experienceConfig }
+          ),
+        });
+      } catch (error) {
+        output.push({ experienceId, error });
+      }
     }
+    return output;
+  } finally {
+    comparisons.destroy();
   }
-  return output;
 }
