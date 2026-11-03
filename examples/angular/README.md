@@ -1,6 +1,6 @@
 # Angular example: Contentful Experiences
 
-An Angular 20 + `@angular/ssr` app demonstrating `@contentful/experiences-angular` rendering an Experience payload fetched from XDA. Mirrors `examples/nextjs/` and `examples/sveltekit/` in registered components, slugs, and rendered output; the only thing that changes between the three apps is the framework-specific setup. (One component differs between the two reference examples themselves — see [the `Section` note](#a-note-on-section-where-the-two-reference-examples-disagree).)
+An Angular 22 + `@angular/ssr` app demonstrating `@contentful/experiences-angular` rendering an Experience payload fetched from XDA. Mirrors `examples/nextjs/` and `examples/sveltekit/` in registered components, slugs, and rendered output; the only thing that changes between the three apps is the framework-specific setup. (One component differs between the two reference examples themselves — see [the `Section` note](#a-note-on-section-where-the-two-reference-examples-disagree).)
 
 ## What it shows
 

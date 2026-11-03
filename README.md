@@ -1035,7 +1035,7 @@ Runnable example apps live in [`examples/`](./examples). Clone the repo, seed th
 | ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Preview mode, async `resolveData`, design tokens, styling hooks                                         |
 | [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                         |
-| [`examples/angular`](./examples/angular)         | Angular 20 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
+| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
 | [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
 | [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Fetch, resolve, and render entirely in the browser; styled-components for CSS-in-JS                     |
 | [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                       |
