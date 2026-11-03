@@ -19,7 +19,7 @@ const optionals = {
     'entryIds',
   ],
   handoff: ['profileId', 'replay'],
-  cache: ['key'],
+  cache: ['key', 'tags'],
   replay: ['locale'],
   context: ['app', 'campaign', 'gdpr', 'locale', 'location', 'page', 'screen', 'userAgent'],
   page: ['title', 'hash', 'width', 'height'],

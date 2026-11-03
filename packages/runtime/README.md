@@ -151,6 +151,12 @@ continuity unchanged. This helper does not run as part of an XDA content fetch.
 
 Cache warnings are advisory; `assertExperiencesCacheSafety` and the create/parse operations reject a public or static handoff containing a profile, continuation ID, or replay. `public-permutation` requires a nonempty application-owned key covering Experience identity and content revision, environment, locale, and every dimension that changes rendered output. A profileless `static` handoff needs no key. Runtime does not set response headers or prove that application-rendered content is safe to cache.
 
+Public-permutation metadata may carry optional `tags`, preserved by canonical
+handoff parsing. Tags must be nonempty strings; the consuming Next adapter applies its count,
+length and HTTP delimiter limits.
+Framework limits, HTTP headers and invalidation remain with the consuming adapter
+and application; Runtime supplies no cache engine.
+
 Profileless internal state application preserves existing browser continuity.
 It does not commit preflight results or transfer selected-optimization state.
 No journal-specific 64 KiB cap or version field applies to the aggregate or

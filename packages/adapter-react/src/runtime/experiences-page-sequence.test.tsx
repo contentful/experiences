@@ -80,6 +80,7 @@ describe('React route request and page coordination', () => {
     fetch = false,
     strict = false,
     reset,
+    pageMode,
   }: {
     routeKey?: string;
     handoff?: ExperiencesHandoff;
@@ -87,6 +88,7 @@ describe('React route request and page coordination', () => {
     fetch?: boolean;
     strict?: boolean;
     reset?: object;
+    pageMode?: 'analytics';
   } = {}) {
     const tree = (
       <ExperiencesContext.Provider
@@ -94,6 +96,7 @@ describe('React route request and page coordination', () => {
       >
         <ExperiencesPageSequence
           routeKey={routeKey}
+          pageMode={pageMode}
           handoff={handoff}
           beforeInitialPage={beforeInitialPage}
           buildPagePayload={() => ({ properties: { route: routeKey } })}
@@ -106,6 +109,25 @@ describe('React route request and page coordination', () => {
     );
     await act(async () => view.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   }
+  it('orders analytics-only page intent after the optional callback without loading content', async () => {
+    const pending = deferred<void>();
+    const beforeInitialPage = { run: vi.fn(() => pending.promise) };
+    await render({ pageMode: 'analytics', beforeInitialPage });
+    expect(beforeInitialPage.run).toHaveBeenCalledOnce();
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
+    expect(runtime.fetchExperience).not.toHaveBeenCalled();
+    await act(async () => pending.resolve());
+    expect(runtime.trackCurrentPage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ routeKey: '/' })
+    );
+    await render({ pageMode: 'analytics', beforeInitialPage, routeKey: '/next' });
+    expect(beforeInitialPage.run).toHaveBeenCalledOnce();
+    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
+    expect(runtime.trackCurrentPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ routeKey: '/next' })
+    );
+    expect(runtime.fetchExperience).not.toHaveBeenCalled();
+  });
   it('joins the initial supported request during Strict Mode without a synthetic page commit', async () => {
     await render({ fetch: true, strict: true });
     expect(runtime.fetchExperience).toHaveBeenCalledTimes(1);

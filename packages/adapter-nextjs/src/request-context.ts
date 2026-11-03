@@ -35,6 +35,14 @@ export interface NextjsRequestLike {
   readonly cookies?: NextjsCookieReader;
 }
 
+/** Speculative work is never an initialization or writable identity boundary. */
+export function isNextjsSpeculativeRequest(headers: globalThis.Headers): boolean {
+  return (
+    headers.get('next-router-prefetch') === '1' ||
+    /prefetch/i.test(`${headers.get('purpose') ?? ''} ${headers.get('sec-purpose') ?? ''}`)
+  );
+}
+
 export type NextjsSearchParams =
   globalThis.URLSearchParams | Readonly<Record<string, string | readonly string[] | undefined>>;
 

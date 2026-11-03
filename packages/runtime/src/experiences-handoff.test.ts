@@ -276,3 +276,17 @@ describe('Experiences handoff', () => {
     expect(Object.prototype.hasOwnProperty.call(handoff.state, 'profile')).toBe(true);
   });
 });
+
+it('round-trips public cache tags and validates their string contract', () => {
+  const input: ExperiencesHandoff = {
+    spaceId: 'space',
+    environmentId: 'master',
+    cache: { scope: 'public-permutation', key: 'public-content', tags: ['content:home'] },
+  };
+  expect(
+    parseExperiencesHandoff(JSON.parse(JSON.stringify(createExperiencesHandoff(input))))
+  ).toEqual(input);
+  expect(() =>
+    parseExperiencesHandoff({ ...input, cache: { ...input.cache, tags: [1] } })
+  ).toThrow();
+});

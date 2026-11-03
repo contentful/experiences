@@ -11,6 +11,8 @@ export type ExperiencesCacheMetadata =
       readonly scope: 'public-permutation';
       /** Caller-owned key covering Experience identity/revision, environment, locale, and every rendered permutation dimension. */
       readonly key: string;
+      /** Application-owned invalidation tags; framework limits are enforced by the adapter. */
+      readonly tags?: readonly string[];
     }
   | { readonly scope: 'static'; readonly key?: string };
 
@@ -52,9 +54,17 @@ export interface ExperiencesCacheSafetyWarning {
   readonly path?: readonly string[];
 }
 
+const PublicCacheTagsSchema = z.optional(
+  z.array(z.string().check(z.refine((tag) => tag.trim() !== '')))
+);
+
 const CacheSchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('private-request'), key: z.optional(z.string()) }),
-  z.object({ scope: z.literal('public-permutation'), key: z.string() }),
+  z.object({
+    scope: z.literal('public-permutation'),
+    key: z.string(),
+    tags: PublicCacheTagsSchema,
+  }),
   z.object({ scope: z.literal('static'), key: z.optional(z.string()) }),
 ]);
 
