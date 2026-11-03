@@ -1,13 +1,19 @@
-import { ServerExperienceRenderer } from '@contentful/experiences-nextjs/server';
-import { experienceConfig } from './ExperienceContent';
-import type { ServerContent } from '../server-loader';
+import type { PortableRenderPlan } from '@contentful/experiences-web';
+import type { ReactNode } from 'react';
 
 export function ExperiencePresentation({
   experienceId,
   plan,
   error,
   repeated = false,
-}: ServerContent & { repeated?: boolean }) {
+  children,
+}: {
+  experienceId: string;
+  plan?: PortableRenderPlan;
+  error?: unknown;
+  repeated?: boolean;
+  children: ReactNode;
+}) {
   return (
     <section
       className="experience-presentation"
@@ -17,7 +23,7 @@ export function ExperiencePresentation({
         <code>{experienceId}</code>
         {repeated && <span className="entry-card__badge">Repeated plan</span>}
       </header>
-      {error && (
+      {Boolean(error) && (
         <p role="alert" className="placeholder-card">
           This Experience could not be loaded.
         </p>
@@ -37,23 +43,12 @@ export function ExperiencePresentation({
           {!plan.nodes.length && (
             <p className="placeholder-card">The delivered plan has no renderable nodes.</p>
           )}
-          <ServerExperienceRenderer
-            experience={plan}
-            config={experienceConfig}
-            renderUnknown={({ componentId }) => (
-              <p role="alert" className="placeholder-card">
-                No component registered for {componentId}.
-              </p>
-            )}
-            renderError={({ componentId }) => (
-              <p role="alert" className="placeholder-card">
-                Could not render {componentId}.
-              </p>
-            )}
-          />
+          {children}
         </>
       ) : !error ? (
-        <p className="placeholder-card">No content was returned for this Experience.</p>
+        <p role="status" className="page-loading">
+          Loading Experience…
+        </p>
       ) : null}
     </section>
   );

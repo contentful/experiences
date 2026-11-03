@@ -57,6 +57,18 @@
         "default": "./dist/app-router-client.js"
       }
     },
+    "./pages-router": {
+      "import": {
+        "types": "./dist/pages-router.d.ts",
+        "default": "./dist/pages-router.js"
+      }
+    },
+    "./pages-router/server": {
+      "import": {
+        "types": "./dist/pages-router-server.d.ts",
+        "default": "./dist/pages-router-server.js"
+      }
+    },
     "./cache-middleware": {
       "import": {
         "types": "./dist/cache-middleware.d.ts",

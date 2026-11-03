@@ -6,7 +6,7 @@ SDK operations in the public runtime and justify every departure from that examp
 Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 [Node + Web](./node-sdk+web-sdk/README.md), plus the
 [React reference](./react-sdk/README.md) and
-[Next.js App + server reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
+[Next.js App/Pages reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
@@ -28,7 +28,7 @@ Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Earlier remedy
-checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
+checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
 
 Browser handoff operations preserve live-profile/provider/handoff identity capture
 before hydration and ordinary provider-first policy under Optimization PR #549 at
@@ -46,8 +46,8 @@ This admission guard provides no durable or exactly-once transport guarantee.
 
 Automatic fetching, resolution and management of one primary Experience is the
 normal React/Next workflow. The Next reference demonstrates it at
-`/single-experience`, alongside the existing Home/Page Two server routes.
-App request families bind `config` and `resolveOptions` once and expose `request.loadExperience`,
+`/single-experience` and `/pages/single-experience`, alongside diagnostic routes.
+App/Pages bind `config` and `resolveOptions` once and expose `request.loadExperience`,
 `request.Experience` and built-in roots. Hydration is `preserve-server` or
 `server-only`; server-only updates use server round-trips without browser content
 loading. Browser roots inherit scope/locale, not private credentials; supply
@@ -57,8 +57,8 @@ in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pa
 the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
 facade. Do not add multi-prefetch/result lists, identity reconciliation or new
-controllers/cache/barriers. Optional React Router/TanStack integration remains
-deferred.
+controllers/cache/barriers. Current Phase 10 DX validation is pending root evidence;
+Phase 11 optional router integrations remain deferred.
 
 Official support is one Experience fetch per page. The SDK does not enforce this
 limit in code. Reference implementations fetch multiple IDs only to compare
@@ -83,7 +83,7 @@ Phase 7 owns managed React roots/loaders/page bindings and the React reference;
 adapt Optimization source/presentation ports to XDA-built events without requiring
 `beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
 exception in that managed flow. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.

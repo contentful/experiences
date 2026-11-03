@@ -53,7 +53,7 @@ experiences/
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   ├── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
 │   ├── react-sdk/           # React/Vite runtime reference, managed through Nx
-│   └── nextjs-sdk/          # Next.js App + server reference, managed through Nx
+│   └── nextjs-sdk/          # Next.js App/Pages reference, managed through Nx
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
@@ -85,7 +85,7 @@ and the app README for the package boundary, local `.env`, and lifecycle command
 | `packages/web`             | `@contentful/experiences-web`          | **Customer-facing.** Web SDK with browser-owned locale/context state, shared transport capabilities, and direct event operations. |
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                          |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                   |
-| `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App request families, built-in roots and React rendering via explicit subpaths.                              |
+| `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App/Pages request families, built-in roots and React rendering via explicit subpaths.                        |
 | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
 | `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Insights handlers and explicit Contentful maintenance tools.               |
@@ -159,8 +159,8 @@ Snapshot runtimes expose inert undefined preview state; other states are unchang
 React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
-automatically fetches, resolves and manages one primary Experience. The App
-request family exposes `request.loadExperience`; `hydration` is
+automatically fetches, resolves and manages one primary Experience. App and Pages
+request families expose `request.loadExperience`; `hydration` is
 `preserve-server` or `server-only`. Bind `config` and `resolveOptions` once.
 `consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
 browser defaults and response identity policy distinct. `request.pagePayload`
@@ -173,9 +173,9 @@ callbacks/preview setup stay in a client module. `composeRequest` is an explicit
 application escape hatch on the existing facade; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.
-Optional React Router/TanStack integration remains deferred. The current
-`examples/nextjs` has not migrated to managed APIs; its retired hooks are not
-current guidance.
+Current Phase 10 DX validation remains pending until the root records it; optional
+React Router/TanStack work stays deferred to Phase 11. The broad `examples/nextjs`
+managed API migration is Phase 14; its retired hooks are not current guidance.
 Registry/shared ownership, shared page
 initialization, request memoization, applicable handoff envelopes and attribution
 remain required. Managed React content/root sequencing belongs to phase 7, Next
@@ -260,7 +260,7 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
 Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
@@ -656,7 +656,7 @@ migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
+accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.

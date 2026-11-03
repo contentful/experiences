@@ -5,26 +5,40 @@ workspaces. It uses standard Next.js 15.5 hosting with React 19 and Node >=22.13
 Its server foundation shares the sibling references' content mappings, Contentful
 Rich Text renderer, named `slot` presentation and locally vendored theme.
 
-Home (`/`) and Page Two (`/page-two`) use the public Next server binding and
-ordinary Node SSR fetching. A stable SDK is initialized lazily from server-only
-configuration; React `cache` shares the host loader's result within a server render
-for the same pathname and search-params object reference. Both routes pass Next's
-resolved `searchParams` object unchanged; ordinary and repeated presentations use
-that one result. Equal-valued copies are distinct cache inputs, so callers sharing
-a render must reuse the original object rather than reconstructing it.
-The loader binds the primary request facade and loads later comparison IDs
-sequentially on a separate identity-free Node request with the same locale and
-preview binding. Comparisons never inherit the primary's provisional XDA profile
-ID or change its identity. Both facades are destroyed in `finally`.
-Available plans render independently of other
-fetch failures. Their ordering, identity and result handling remain application-owned
-comparison behavior, with no SDK multi-Experience guarantee.
+Start with App Router `/single-experience` or Pages Router
+`/pages/single-experience` for the normal automatic one-Experience workflow.
+The public binder owns fetching, resolution and management of the primary result;
+the page uses its `request.Experience` and a built-in browser root. These routes
+need no comparison loop or custom browser Root. They use the same registrations
+and local configuration as the diagnostics below.
 
-`/single-experience` demonstrates the normal automatic App Router integration:
-one primary Experience, a server-bound registry and request policy, an exported
-client renderer and the built-in browser root. It retains server HTML and its
-supplied plan on activation, without a startup browser content refetch. Home and
-Page Two retain their existing server-only flow.
+App Router diagnostic Home (`/`) and Page Two (`/page-two`) and Pages Router Home
+(`/pages`) and Page Two (`/pages/page-two`) share registrations, presentation,
+Utilities, event controls and the tracking log in this one app. Pages uses one
+stable browser owner in `_app`; App uses one stable root layout owner. Standard
+Next links disable prefetch. Switching router families or rendering modes uses a
+full document navigation.
+
+The initial hybrid document uses the actual Node `fetchExperienceForHandoff`
+result. Its plan and full handoff are reused by the presentation and root; supplied
+plans require no startup browser fetch or duplicate initial page. Later comparison
+IDs fetch sequentially without events and repeated containers reuse plans.
+Their ordering, identity and results are application-owned diagnostic behavior;
+the SDK adds no multi-Experience controller, prefetch/result list or reconciliation.
+Browser-local navigation, Identify and CUSTOM TRACK use ordinary Web content
+fetches. Retry is an ordinary same-ID event-free fetch. Server RSC prefetch,
+navigation and refresh do not restart the initial hybrid transfer.
+
+The SDK hydration names are `preserve-server` and `server-only`. The reference's
+URL controls select those modes; hybrid rendering uses `preserve-server`.
+Add `?mode=server-only` to either router's diagnostic routes for Node-rendered content with
+optional browser analytics. Add `&analytics=off` to omit the browser owner.
+SSR-only controls use App Server Actions returning server JSX, or Pages Router
+roundtrips through `getServerSideProps`. They perform no Web content fetch,
+resolution or content rendering. Content remains visible while updates are pending
+or fail; Reset removes the old attributed content before new visitor work. Matching preview revisions refresh the
+server subtree through the router integration. Rendering works without JavaScript
+and remains independent of replay admission or successful event delivery.
 
 ## Setup and lifecycle
 
@@ -76,7 +90,7 @@ match that address. Never stop unrelated processes.
 `clean` removes only `.next`, `out` and the local TypeScript incremental output.
 The API-free `/health` endpoint returns `ok`.
 
-For a production run of this server reference, install its packed dependencies,
+For a production run of this reference, install its packed dependencies,
 keep the private app-local `.env` on the server, then use `npm run build` followed
 by `npm run start` from this directory, or the scoped `serve` target above.
 Standard Next hosts the dynamic routes; no custom server or static export is used.
@@ -98,21 +112,35 @@ shared defaults:
 - `4WzbgzPQHa9Tr2ffbOU8p7` — Composed Experience
 - `7u2eP09B4BIBToH8UwSHck` — Personalized Composed Experience
 
-`src/config.ts` reads only this app's `.env` at request time and is guarded by
-`server-only`. It does not read sibling configuration or merge process variables.
-No environment object, private server credentials or SDK instance is passed to presentation.
-The single-Experience route uses an explicit browser configuration allowlist.
-`BROWSER_CDA_TOKEN` is optional and must be approved for browser visibility. With
-it blank, the same-app Delivery proxy authenticates upstream using the private
-`CDA_TOKEN`. The proxy restricts requests to the configured space/environment;
-server credentials stay server-local. Browser roots inherit scope and locale,
-but require explicit Delivery configuration even for analytics-only use. Advanced
-callbacks and Preview Session initialization belong in a client module.
+`src/config.ts` reads only this app's `.env` lazily at request time. Its Node
+filesystem dependencies remain server-local; Pages GSSP strips those imports from
+the browser build, and App request loading is guarded by `server-only`.
+The browser projection is a fixed allowlist of scope, locale, configured IDs,
+explicitly designated browser credentials and Preview Session binding settings.
+It never spreads `.env`, serializes an SDK, reads sibling configuration, or exposes
+private `CDA_TOKEN` / `PREVIEW_TOKEN`.
+
+Ordinary browser Delivery defaults to the real same-app `/api/delivery` proxy.
+The SDK uses an explicit tokenless trusted host; the proxy supplies private upstream
+authentication, limits requests to this scope and configured IDs, preserves the
+generated rename/feature headers, and returns private/no-store responses. An optional
+`BROWSER_CDA_TOKEN` enables direct Delivery instead and must be explicitly approved
+for browser exposure. Active Preview Sessions use the separately designated
+`BROWSER_PREVIEW_TOKEN` and optional `BROWSER_PREVIEW_HOST`; the app provides no
+WebSocket broker and never substitutes the private preview token. Inactive preview
+does not require a browser preview token.
+
+Built-in browser roots inherit space/environment and locale from server setup;
+their Delivery configuration is explicitly supplied through `browser`, never
+copied from private server credentials. The existing Runtime still requires
+Delivery configuration for an analytics-only browser owner. Function-valued
+callbacks, custom fetch implementations and Preview Session initializers remain
+advanced setup in a client module.
 
 Optional preview settings are `LIVE_PREVIEW_ENABLED`, `PREVIEW_TOKEN`,
 `PREVIEW_HOST`, `LIVE_PREVIEW_EXPERIENCE_ID`,
 `LIVE_PREVIEW_SESSION_HOST` and `LIVE_PREVIEW_RESOURCE_RESOLUTION`. The optional
-package is installed from its unchanged artifact. Home/Page Two preview activates only when
+package is installed from its unchanged artifact. Preview activates only when
 `LIVE_PREVIEW_ENABLED=true` and a nonempty `preview_session_id` is supplied in the
 URL. Experience selection uses local settings or `preview_experience_id`.
 `LIVE_PREVIEW_SESSION_ID` is retained in local `.env` only for convenient copying;
@@ -120,161 +148,143 @@ application/build code never reads it. Both preview fields are blank in
 `.env.example`. Missing/empty session parameters and a falsy flag keep the request
 ordinary, even with a nonempty session parameter in the URL. The bound request
 receives an explicit `isPreview: false` in those cases, retaining ordinary event
-handling. Browser owners must use the same explicit policy, subject to normal
+handling. The browser owner and sidebar use the same explicit policy, subject to normal
 consent and identity requirements. Active preview supplies a lazy implementation loader that imports the
 public Preview package. Node owns policy and snapshot loading through ordinary
 `fetchExperience`. Matching session requests omit ordinary locale/source-map fetch
 options. Session transport uses the frozen helper without a custom fetch wrapper.
-Home and Page Two are dynamic and use `force-no-store`; ordinary Delivery uses
-`createNextjsPrivateFetch`. There is no preview broker or application preview client. The automatic
-single-Experience page uses explicit `isPreview: false`; advanced preview setup
-uses the SDK client-module binding described in the Next adapter guide.
+Both content routes are dynamic and use `force-no-store`; ordinary Delivery uses
+`createNextjsPrivateFetch`. There is no preview broker or application preview client.
 
-Ordinary SSR uses the primary request facade and ordinary Experience fetching;
-later event-free comparisons use the separate comparison request.
-Home displays all configured IDs with the first as primary. Page Two displays
+Ordinary SSR uses one request facade and ordinary Experience fetching.
+The single-Experience routes select one configured primary ID and let the SDK
+manage it automatically. Diagnostic Home displays all configured IDs with the
+first as primary. Page Two displays
 only the last configured ID as primary. That route's primary fetch runs first with
 initial intent; remaining display/comparison IDs load sequentially without events.
 Both routes reuse the first configured ID's plan for repeated containers; Page Two
 fetches it after its primary when they differ. Official support is one Experience per page, unenforced; these
-comparisons provide no SDK multi-Experience or cross-fetch guarantee. Only an actual
+comparisons leave ordering, identity and result handling to the application and
+provide no SDK multi-Experience or cross-fetch guarantee. Only an actual
 server-to-browser transfer uses the Node full handoff result producer. Content
 presentation does not depend on replay or submission success. XDA preflight leaves
 ordinary SSR/CSR events uncommitted; this app adds no XPAPI compensation or force flag.
 
-The initial Home/Page Two fetch carries literal page-builder arguments and, only for
+The initial ordinary fetch carries literal page-builder arguments and, only for
 `?userId=charles`, literal identify arguments with `traits: { identified: true }`.
 The SDK builds and consent-gates these inputs once. Later IDs carry no events.
 Preview carries neither page nor identify intent. The request page comes from the
 SDK's explicit page-context helper, using the trusted configured `ORIGIN` and
-incoming referrer; these routes read Next headers/cookies in their explicit server
-loader. The automatic App family owns framework request reads for its route.
+incoming referrer. The App request-aware adapter owns framework reads and render-local
+memoization; Pages response helpers map the explicit `getServerSideProps` context.
 
 Consent comes from separate application cookies
 `experiences-nextjs-event-consent` and `experiences-nextjs-persistence-consent`,
-using `granted`/`denied`; absence is undecided. Home and Page Two provide no
-consent controls. The host passes the cookie reader and explicit consent
+using `granted`/`denied`; absence is undecided. Utilities provides independent Grant/Revoke controls, mirrored synchronously through SDK
+observable subscriptions into these application cookies for subsequent requests. The host passes the cookie reader and explicit consent
 separately. The public binding reads identity only with granted persistence consent
 and excludes identity in preview; an identity cookie never grants consent.
 Server Components do not write response cookies and the request binding has no
-persistence method. A response handler owns identity-cookie persistence at its
-supported response boundary; Home and Page Two call no response-cookie helper.
-For the automatic hybrid App route, the existing Web SDK owns browser identity
-persistence when persistence consent permits. Server Components cannot persist a
-newly evaluated profile without browser activation or a writable response boundary.
+persistence method. Pages GSSP persists the final evaluated identity after comparison fetches at
+`ctx.res`. App hybrid hydration lets the existing Web SDK write the cookie when
+persistence consent permits. Without JavaScript, Server Components cannot persist
+a newly evaluated profile. Middleware forwards context only and does not capture
+final RSC evaluation identity. App Server Actions bind the actual request, fetch content, persist the final cookie
+through `persistNextjsAnonymousId`, and return a server-rendered subtree. Pages
+controls use `router.replace(internalHref, visibleHref)` to run GSSP with explicit
+identify/custom-track or event-free Retry intent while retaining the visible page.
+The app-local `actionRouteKey` query carries that visible path and query; server-only
+action responses return it as `experiences.routeKey` after same-path validation.
+Identify adds `userId=charles` only to the internal request and the control records
+successful action intent locally. Content actions do not start browser page intent;
+ordinary route and query navigation still does. Pages GSSP
+uses its writable response to persist the final identity. Preview suppresses
+identity writes and deletions. There is no HTML update API or cross-router proxy.
 
 These routes request `Cache-Control: private, no-store` and disable framework
 content caching. Production inspection returned `Cache-Control: private, no-store` while retaining
 Next's framework `Vary` headers.
-Home/Page Two plans and diagnostics stay in the server subtree. The automatic
-App route projects its primary result through the public SDK serializer and uses
-the actual Node transfer producer for the initial hybrid response. Content display
-remains independent of browser replay admission or delivery success.
-
-## Automatic App integration
-
-`src/single-experience-server.tsx` binds `config`, `request.experience` and
-`request.hydration: 'preserve-server'` through
-`bindNextjsAppRouterServerExperiences`. The request family owns framework context,
-render-local memoization, primary fetching, resolution and request cleanup.
-`src/components/SingleExperience.tsx` exports the client request renderer with its
-browser registry and selects `Experience` from `binding.request`. The single-Experience
-page calls the lazy `singleAppExperiences()` once and destructures `ExperiencesRoot`
-and `Experience` from its `request` family, then renders `<ExperiencesRoot>` and
-`<Experience>` without manual result plumbing or a custom browser root.
-Context-only Node middleware supplies sanitized request URL context.
-
-Bind `request.resolveOptions` once when needed. `consent.server`,
-`consent.clientDefaults` and `cookie` keep server consent, browser startup defaults
-and shared identity attributes distinct. `request.pagePayload` travels as
-`result.initialPagePayload`. `request.loadExperience()` exposes the primary result
-for explicit server composition; pass the complete browser-safe result, including
-its `requestId`, without descriptor or payload overlays. Use `server-only` with
-`request.ExperiencesAnalyticsRoot` when content updates must remain server-rendered.
-Browser content loading and resolution are then absent; analytics still needs the
-existing Runtime Delivery configuration.
-
-`request.composeRequest` is an explicit escape hatch on the same facade for
-application-owned diagnostic composition. It adds no SDK multi-fetch/result list,
-identity reconciliation, resource cache or controller. The Home/Page Two flow
-below continues to use its existing explicit loader.
+Hybrid plans use the public safe serializer and the actual Node handoff crosses
+the private/no-store framework boundary. The browser preserves that initial batch;
+later comparisons do not change its replay ID, route, locale or contents. Server-only
+plans stay server-local; Pages serializes rendered HTML, and App passes opaque server
+children. Both SSR-only update flows retain server rendering. Sidebar counts
+only actual browser attempts and real interval IDs, not server events or confirmed
+delivery. Reset removes attributed DOM synchronously before `resetUser`, removes
+URL identify intent, and retains the same browser root. View keys clear nonpage
+action intent on route changes; Utilities reads initial URL intent, successful server
+Identify intent and the SDK profile. Each `NextjsRequestResult` carries its
+request identity, route, descriptor, optional plan/error and optional handoff.
+The reference passes that result to `request.ExperiencesRoot` and
+`request.Experience`. Request roots accept an optional `result`; request Experience
+requires it and retains presentation callbacks. The adapter rejects restored
+original results after departure, including back/forward after Reset, while
+accepting fresh server results. Ordinary
+`Experience` inputs remain caller-owned. Fresh client actions use that ordinary
+component with the full descriptor and new intent. Comparison results carry an
+explicit event-free descriptor, so adopting or retrying them creates no page intent.
+Router adoption and reset behavior belong to the adapter.
 
 ## Public server integration
 
-`src/config.ts` owns lazy process SDK configuration, and `src/server-loader.ts`
-owns render-local request loading. Both import their utilities from
-`@contentful/experiences-nextjs/server`. The public server entry defines these
-signatures used by this reference:
+The normal one-Experience example binds the server policy in
+`src/single-experience-server.tsx` and exports only the request renderer from
+`src/components/SingleExperience.tsx`. App's sibling `(single)` route group uses
+`request.ExperiencesRoot` and `request.Experience` without manual result plumbing;
+Pages uses native GSSP `request.loadExperience` and the built-in
+`NextjsPagesRouterRequestRoot` in `_app`. Literal browser transport configuration
+stays separate from normalized consent defaults and cookie attributes.
 
-| Utility           | Signature / result                                                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Stable SDK        | `configureNextjsServerExperiences(config: ExperiencesNodeConfig): ContentfulExperiences`                                         |
-| Request binding   | `bindNextjsExperiencesRequest(sdk: ContentfulExperiences, options: BindNextjsExperiencesRequestOptions): ExperiencesNodeRequest` |
-| Explicit page     | `createNextjsPageContext(options: CreateNextjsPageContextOptions): NonNullable<UniversalEventBuilderArgs['page']>`               |
-| Private transport | `createNextjsPrivateFetch(fetchImplementation?: typeof globalThis.fetch): typeof globalThis.fetch`                               |
+`src/config.ts` owns lazy server configuration and its explicit browser projection.
+`src/server-loader.ts` uses `bindNextjsAppRouterServerExperiences` with the
+single-Experience request policy, bound `config`/`request.resolveOptions`, separate
+`consent.server`/`consent.clientDefaults`, `cookie`, preview and initial-event policy. The adapter reads framework
+request context and memoizes the actual descriptor result. The reference's
+`composeRequest` callback uses that same request facade for event-free
+comparisons before the result is finalized; the layout and page reuse the primary
+result's full handoff and plans. `src/components/BrowserRoot.tsx` binds the public
+App and Pages client families, with the registry and ordinary shared UI in one client
+module. Separate router reads and factories feed the shared preview setup, context,
+consent mirror, shell and attempt log. Each router retains one browser owner across
+navigation; preview binding changes deliberately replace that owner.
+The shared shell reads the current browser route separately from the whole server
+result passed as `result={serverResult}` to the SDK request root. Initial content,
+`initialPagePayload` (from `request.pagePayload`) and optional handoff retain the
+request that produced them; no descriptor/seed/payload overlays are added.
+The request AnalyticsRoot receives the current route's primary Experience ID for
+matching server preview revisions, falling back to the result's descriptor ID
+when omitted. That presentation input does not replace the supplied result.
 
-The stable SDK is the public Node SDK. The binding returns the actual
-`ExperiencesNodeRequest` directly. Binding options require `consent` and accept
-explicit `request: NextjsRequestLike`,
-`cookies`, `page`, `locale`, `livePreview`, `isPreview` and the existing Node request
-options. The loader passes a string URL derived from trusted `ORIGIN`, actual Next
-headers/cookies, independent consent and locale. The binding derives event page
-context and user agent from that request and owns cookie identity admission.
-The loader keeps explicit page-builder properties separate from event context.
-The request facade has the Node request methods directly, including
-`fetchExperience` and `destroy`; there is no binding wrapper or persistence method.
-At a writable response boundary, the handler owns cookie persistence through the
-public `persistNextjsAnonymousId(response, request, options?)` helper, with
-`request` as the bound `ExperiencesNodeRequest`. Its response type is
-`NextjsResponseLike` (`headers: Headers`, with optional Next cookie jar), and its
-optional settings are `PersistNextjsAnonymousIdOptions`. This helper does not
-apply response cache headers; `applyNextjsPrivateResponseCache(response)` takes
-the same response type and sets `Cache-Control: private, no-store`. Neither
-response helper is used during Server Component rendering.
+`src/pages-server.tsx` uses ordinary `getServerSideProps` with
+`bindNextjsPagesRouterServerExperiences(...).request.loadExperience`. The app supplies
+the trusted origin with bound registry, request, consent, cookie and preview policy. The adapter maps the native
+request to one facade, fetches the primary, runs the reference's event-free
+comparison callback, persists the final cookie and destroys that facade. The helper
+returns a JSON-safe `NextjsRequestResult` directly for GSSP props; raw plan/error
+data is available inside `composeRequest` only. `_app` passes the `experiences` envelope as `result`
+to the stable request root.
+Pages server-only props contain rendered markup rather than a browser render plan.
+The shared server presentations serve App RSC and Pages GSSP; the browser only adopts
+that output. Initial hybrid plans remain independent of replay admission.
 
-`CreateNextjsPageContextOptions` requires `path` and optionally accepts `origin`,
-`url`, `referrer` and `searchParams`. The loader supplies
-`{ path, origin, referrer, searchParams }` once, directly from Next's search-params
-object and the trusted configured origin. The helper derives
-`path` from `path` and query and search properties from `searchParams`; explicit
-`url` supplies only the returned page URL. Passing Next's `searchParams`
-preserves repeated query values in page properties independently of request event
-context. Route-key construction and sanitized middleware forwarding remove
-`_rsc`/hashes and normalize search encoding; page-context construction does not.
-The primary ordinary call is
-`request.fetchExperience(descriptor, { config: experienceConfig })`; it returns a
-`PortableRenderPlan`. Rendering stays server-only, so this flow creates no handoff
-and calls no browser serializer or response-cookie helper.
+The reference uses explicit host helpers only at real host boundaries. The App
+Server Action reads writable cookies/headers, binds the Node request and calls
+`persistNextjsAnonymousId` after content evaluation. Its request is destroyed in
+`finally`. Pages GSSP's public server binder handles its writable response cookie
+boundary and JSON-safe result projection, without a manual serializer call in GSSP.
+App's loader still exposes a raw server result, and its bound roots project
+automatically. Both diagnostic request families run the same caller-owned
+sequential comparison loop through `composeRequest`, with no events or second
+initialization; the layout reads only the shared primary. Comparisons change
+neither its handoff nor its replay identity. The middleware only
+forwards context through the supported Node request-handler entry.
 
-`createNextjsPrivateFetch(fetchImplementation?: typeof globalThis.fetch)` is used
-in server-only SDK configuration to force Delivery fetches to `no-store` while
-preserving request details. It does not set response cache headers.
-`applyNextjsPrivateResponseCache(response: NextjsResponseLike): void` is the
-separate response helper for writable handler responses; the dynamic routes also
-disable framework content caching and are documented above. This app uses the
-fetch helper in `src/config.ts`, not the response helper.
+Explicit event-free/no-page intent travels through the existing
+`result.experience.personalization.events: []` field. Automatic roots respect it
+for a matching result; no separate suppression flag is added.
 
-The same entry exports these transfer utilities:
-
-```ts
-import type { ExperiencesHandoff } from '@contentful/experiences-node';
-import type { PortableRenderPlan } from '@contentful/experiences-nextjs/server';
-
-declare function createNextjsRouteKey(input: string | URL): string;
-declare function serializeNextjsPlan(
-  plan: PortableRenderPlan,
-  options?: { readonly metadataKeys?: readonly string[] }
-): PortableRenderPlan;
-declare function serializeNextjsHandoff(
-  handoff: ExperiencesHandoff,
-  scope: Pick<ExperiencesHandoff, 'spaceId' | 'environmentId'>
-): ExperiencesHandoff;
-declare function serializeNextjsJsonForHtml(value: unknown): string;
-```
-
-Those APIs support the automatic App transfer without an application adapter shim;
-they are not prerequisites for this ordinary SSR flow. Their full contracts are in
-the [Next SDK README](../../packages/adapter-nextjs/README.md).
+Server response utilities, explicit/static inputs and their full contracts are
+in the [Next SDK README](../../packages/adapter-nextjs/README.md).
 
 ## Components and validation
 
@@ -287,25 +297,28 @@ generic renderer failure; removing duplicate identity `resolveData` checks remov
 only their extra resolver diagnostic and corresponding banner. Generated declarations
 and typecheck do not validate every live content variant.
 
-`src/components/ServerContentPage.tsx` owns the page shell and passes Next's
-search-params object unchanged to the cached loader, which owns page context.
+`src/components/ServerContentPage.tsx` uses the adapter-owned memoized result for
+App presentation. `ClientContentPage` uses bound managed Experiences and owns manual registration,
+while `ServerPresentations` renders server content at each supported server boundary.
 `src/components/ExperiencePresentation.tsx` owns each attributed presentation,
-including diagnostics and renderer fallbacks, for both ordinary and repeated plans.
-The existing `src/app` files retain the layout, Home, Page Two and health entry
-points; the single-Experience route adds the automatic App path. SDK imports use
-public Next `/server` and `/app-router` entries.
+including common diagnostics, for both ordinary and repeated plans. The server
+and client rendering paths retain their own renderer and fallbacks.
+The `src/app` and `src/pages` directories contain both router families and their
+native update flows. SDK imports use public Next server and router entries.
 
 The generated declaration is copied unchanged from the React reference. The theme
 is copied locally from that reference, preserving Optimization stylesheet
-provenance and the MIT license; a small server-only layout override removes its
-sidebar column. No adjacent checkout, generator change, source alias, custom server,
+provenance and the MIT license; the local layout retains its Utilities, split presentation and sidebar columns. No adjacent checkout, generator change, source alias, custom server,
 E2E tooling, MSW or temporary consumer is required.
+
+Current Phase 10 DX validation remains pending until the root records source,
+package and installed-reference results. Phase 10 is not accepted; optional React
+Router/TanStack integration remains deferred to Phase 11, and broad example code
+migration remains Phase 14.
 
 Run scoped build/lint/typecheck after the installed artifacts are refreshed. Inspect
 Home and Page Two directly for delivered content, slots, Rich Text, errors and
 repeated attributed containers. Static checks establish artifact/type consumption;
-live content and server behavior require configured services. Installation, build,
-typecheck and live inspection remain pending while refreshed packed artifacts
-are being prepared by the coordinating owner. Scoped lint and authored-file
-formatting have passed; the copied generated declaration remains byte-for-byte
-unchanged.
+live content and server behavior require configured services. Production build, direct lint and typecheck validate installed tarball consumption.
+Browser/service inspection and final packed SDK verification belong to the coordinating
+owner. The generated declaration remains byte-for-byte unchanged.
