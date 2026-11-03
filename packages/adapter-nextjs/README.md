@@ -35,7 +35,9 @@ result list, identity reconciliation or additional cache/controller/barrier.
 
 ### App Router
 
-Export the client renderer component from a client module. The common setup uses
+Export named components from `binding.request` in the binding modules, then import
+and render those names in pages (`<ExperiencesRoot>` and `<Experience>`). Bind the
+configuration once. Export the client renderer component from a client module. The common setup uses
 the built-in browser root and needs no custom Root:
 
 ```tsx
@@ -45,8 +47,8 @@ the built-in browser root and needs no custom Root:
 import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
 import { browserRegistry } from './browser-registry';
 
-const client = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
-export const RequestExperience = client.request.Experience;
+const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
+export const { Experience } = binding.request;
 ```
 
 ```tsx
@@ -55,9 +57,9 @@ import 'server-only';
 import { bindNextjsAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
 import { createNextjsPrivateFetch } from '@contentful/experiences-nextjs/server';
 import { serverRegistry } from './server-registry';
-import { RequestExperience } from './experience-client';
+import * as client from './experience-client';
 
-export const experiences = bindNextjsAppRouterServerExperiences(
+const binding = bindNextjsAppRouterServerExperiences(
   {
     spaceId: process.env.CONTENTFUL_SPACE_ID!,
     environmentId: 'master',
@@ -78,8 +80,10 @@ export const experiences = bindNextjsAppRouterServerExperiences(
       resolveOptions: { debug: false },
     },
   },
-  { request: { Experience: RequestExperience } }
+  { request: { Experience: client.Experience } }
 );
+
+export const { ExperiencesRoot, Experience } = binding.request;
 ```
 
 ```ts
@@ -92,15 +96,15 @@ export const config = { runtime: 'nodejs', matcher: ['/'] };
 
 ```tsx
 // app/page.tsx
-import { experiences } from '../lib/experience-server';
+import { ExperiencesRoot, Experience } from '../lib/experience-server';
 
 export const dynamic = 'force-dynamic';
 
 export default function Page() {
   return (
-    <experiences.request.ExperiencesRoot>
-      <experiences.request.Experience />
-    </experiences.request.ExperiencesRoot>
+    <ExperiencesRoot>
+      <Experience />
+    </ExperiencesRoot>
   );
 }
 ```

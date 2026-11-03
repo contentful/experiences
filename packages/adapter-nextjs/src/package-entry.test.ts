@@ -211,7 +211,7 @@ describe('published declarations', () => {
     'typechecks the surface with %s resolution',
     (resolution) => {
       // Compile an in-memory consumer inside this package, resolving its real exports to dist.
-      const filename = path.join(packageRoot, 'src', 'published-surface.ts');
+      const filename = path.join(packageRoot, 'src', 'published-surface.tsx');
       const source = `
       import * as root from '${packageName}';
       import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
@@ -302,15 +302,16 @@ describe('published declarations', () => {
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, consent: { clientDefaults: { profile: { id: 'server' } } } });
       // @ts-expect-error A browser token supplier is a function and cannot cross the RSC boundary.
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, browser: { delivery: { accessToken: () => 'browser' } } });
-      const requestProps: Parameters<typeof appServer.request.Experience>[0] = {
+      const { ExperiencesRoot, Experience } = appServer.request;
+      const requestProps: Parameters<typeof Experience>[0] = {
         as: 'section', rootProps: { id: 'experience', 'data-host': 'root' }
       };
       // @ts-expect-error Ordinary renderer callbacks must be configured in the client module.
-      appServer.request.Experience({ renderError: () => null });
+      Experience({ renderError: () => null });
       // @ts-expect-error DOM event handlers cannot cross the request RSC boundary.
-      appServer.request.Experience({ rootProps: { onClick: () => {} } });
+      Experience({ rootProps: { onClick: () => {} } });
       // @ts-expect-error Custom components belong in the client binding.
-      appServer.request.Experience({ as: () => null });
+      Experience({ as: () => null });
       appServer.Experience({ experience: plan, renderError: () => null });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: {
         experience: { experienceId: 'home' },
@@ -321,18 +322,22 @@ describe('published declarations', () => {
       } });
       const appClient = bindNextjsAppRouterClientExperiences({ config });
       declare const result: NextjsRequestResult;
-      appClient.request.ExperiencesRoot({ result });
-      appClient.request.Experience({ result, as: 'section' });
-      // @ts-expect-error Descriptor overlays cannot change the supplied request result.
-      appClient.request.Experience({ result, experienceId: 'different' });
-      // @ts-expect-error Seeds are part of the complete request result.
-      appClient.request.Experience({ result, initialPlan: plan });
-      // @ts-expect-error Request roots obtain handoff from their result.
-      appClient.request.ExperiencesRoot({ result, handoff: result.handoff });
+      {
+        const { ExperiencesRoot, Experience } = appClient.request;
+        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
+        void tree;
+        // @ts-expect-error Descriptor overlays cannot change the supplied request result.
+        Experience({ result, experienceId: 'different' });
+        // @ts-expect-error Seeds are part of the complete request result.
+        Experience({ result, initialPlan: plan });
+        // @ts-expect-error Request roots obtain handoff from their result.
+        ExperiencesRoot({ result, handoff: result.handoff });
+      }
       // @ts-expect-error Request server roots cannot receive browser callbacks.
-      appServer.request.ExperiencesRoot({ beforeInitialPage: () => {} });
+      ExperiencesRoot({ beforeInitialPage: () => {} });
+      const tree = <ExperiencesRoot><Experience {...requestProps} /></ExperiencesRoot>;
       const cacheMiddleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => undefined });
-      void [appServer, appClient, cacheMiddleware, requestProps];
+      void [appServer, appClient, cacheMiddleware, requestProps, tree];
       const serverProps: ServerExperienceRendererProps = { experience: null, config };
       const clientProps: ExperienceRendererProps = { experience: null, config };
       const attrs: TrackingAttributes = getTrackingAttributes(undefined);
@@ -359,6 +364,7 @@ describe('published declarations', () => {
           resolution === 'NodeNext'
             ? ts.ModuleResolutionKind.NodeNext
             : ts.ModuleResolutionKind.Bundler,
+        jsx: ts.JsxEmit.ReactJSX,
         strict: true,
         skipLibCheck: true,
         noEmit: true,

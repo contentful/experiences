@@ -178,8 +178,10 @@ remains independent of browser replay admission or delivery success.
 `bindNextjsAppRouterServerExperiences`. The request family owns framework context,
 render-local memoization, primary fetching, resolution and request cleanup.
 `src/components/SingleExperience.tsx` exports the client request renderer with its
-browser registry. The single-Experience route uses `request.ExperiencesRoot` and
-`request.Experience` without manual result plumbing or a custom browser root.
+browser registry and selects `Experience` from `binding.request`. The single-Experience
+page calls the lazy `singleAppExperiences()` once and destructures `ExperiencesRoot`
+and `Experience` from its `request` family, then renders `<ExperiencesRoot>` and
+`<Experience>` without manual result plumbing or a custom browser root.
 Context-only Node middleware supplies sanitized request URL context.
 
 Bind `request.resolveOptions` once when needed. `consent.server`,

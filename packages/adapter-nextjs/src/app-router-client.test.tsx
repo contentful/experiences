@@ -103,6 +103,7 @@ describe('App committed route inputs', () => {
       cache: { scope: 'private-request' as const },
       state: { profile: { id: 'server-profile' } },
     };
+    const { ExperiencesRoot, Experience } = bound.request;
     const tree = (routeKey: string, requestId: string, seed = true) => {
       const result = {
         routeKey,
@@ -112,12 +113,12 @@ describe('App committed route inputs', () => {
         plan: seed ? JSON.parse(JSON.stringify(startupPlan)) : undefined,
       };
       return (
-        <bound.request.ExperiencesRoot sdk={sdk} result={result}>
+        <ExperiencesRoot sdk={sdk} result={result}>
           <Actions />
-          <bound.request.Experience key={routeKey} result={result}>
+          <Experience key={routeKey} result={result}>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
-          </bound.request.Experience>
-        </bound.request.ExperiencesRoot>
+          </Experience>
+        </ExperiencesRoot>
       );
     };
     await act(async () => root.render(tree('/page?q=hello+world', 'original')));
@@ -151,6 +152,7 @@ describe('App committed route inputs', () => {
       return null;
     }
     const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const { Experience } = bound.request;
     const result = {
       requestId: 'default',
       routeKey: '/page?q=hello+world',
@@ -169,9 +171,9 @@ describe('App committed route inputs', () => {
           result={result}
         >
           <Probe />
-          <bound.request.Experience result={result}>
+          <Experience result={result}>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
-          </bound.request.Experience>
+          </Experience>
         </NextjsAppRouterRequestRoot>
       )
     );
@@ -198,9 +200,10 @@ describe('App committed route inputs', () => {
       buildPagePayload: configured,
       beforeInitialPage,
     });
+    const { ExperiencesAnalyticsRoot } = bound.request;
     await act(async () =>
       root.render(
-        <bound.request.ExperiencesAnalyticsRoot
+        <ExperiencesAnalyticsRoot
           sdk={createWebSnapshotRuntime() as ContentfulExperiences}
           buildPagePayload={override}
         />
@@ -230,13 +233,14 @@ describe('App committed route inputs', () => {
       subscribeToPreview: () => ({ unsubscribe() {} }),
     } as unknown as ContentfulExperiences;
     const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const { ExperiencesRoot, Experience } = bound;
     const tree = () => (
-      <bound.ExperiencesRoot
+      <ExperiencesRoot
         sdk={sdk}
         handoff={{ spaceId: 'space', environmentId: 'master', cache: { scope: 'private-request' } }}
       >
-        <bound.Experience key={navigation.pathname} experienceId="primary" initialPlan={plan} />
-      </bound.ExperiencesRoot>
+        <Experience key={navigation.pathname} experienceId="primary" initialPlan={plan} />
+      </ExperiencesRoot>
     );
     await act(async () => root.render(tree()));
     navigation.pathname = '/destination';
