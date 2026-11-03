@@ -5,6 +5,7 @@ import {
   type FetchExperienceOptions,
 } from '@contentful/experiences-node';
 import type { NextjsResponseLike } from './cookies.js';
+import { validateNextjsPublicPermutationCacheTags } from './cache-key.js';
 
 /** Install only in host-assembled private Delivery/CPA configuration. */
 export function createNextjsPrivateFetch(
@@ -46,6 +47,7 @@ export function assertNextjsPublicRequestPolicy(options: {
   if (cache.scope !== 'static' && cache.scope !== 'public-permutation')
     throw new TypeError('Explicit public/static cache policy required');
   assertExperiencesCacheSafety({ spaceId: '', environmentId: '', cache });
+  if (cache.scope === 'public-permutation') validateNextjsPublicPermutationCacheTags(cache.tags);
   if (
     context?.profile !== undefined ||
     context?.isPreview ||

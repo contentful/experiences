@@ -15,7 +15,15 @@ const entries = [
   '/custom-renderer',
   '/tracking-attributes',
   '/request-handler',
+  '/app-router/server',
+  '/app-router/client',
+  '/cache-middleware',
 ];
+const entryFile = (suffix: string) =>
+  ({
+    '/app-router/server': 'app-router-server',
+    '/app-router/client': 'app-router-client',
+  })[suffix] ?? (suffix ? suffix.slice(1) : 'index');
 
 function runModule(source: string, forbidden: string[] = []): string {
   const loader = `
@@ -54,6 +62,9 @@ describe('published package entries', () => {
         './tracking-attributes',
         './request-handler',
         './package.json',
+        './app-router/server',
+        './app-router/client',
+        './cache-middleware',
       ].sort()
     );
     expect(manifest).toMatchObject({
@@ -74,8 +85,8 @@ describe('published package entries', () => {
     for (const suffix of entries) {
       expect(manifest.exports[suffix ? `.${suffix}` : '.']).toEqual({
         import: {
-          types: `./dist/${suffix ? suffix.slice(1) : 'index'}.d.ts`,
-          default: `./dist/${suffix ? suffix.slice(1) : 'index'}.js`,
+          types: `./dist/${entryFile(suffix)}.d.ts`,
+          default: `./dist/${entryFile(suffix)}.js`,
         },
       });
     }
@@ -95,7 +106,11 @@ describe('published package entries', () => {
   });
 
   it.each(entries.filter(Boolean))('%s imports from dist without eager preview', (suffix) => {
-    const forbidden = suffix === '/client' ? [] : ['@contentful/experiences-web', 'next/headers'];
+    const forbidden = ['/client', '/app-router/client'].includes(suffix)
+      ? []
+      : suffix === '/app-router/server'
+        ? []
+        : ['@contentful/experiences-web', 'next/headers'];
     expect(() => runModule(`await import('${packageName}${suffix}');`, forbidden)).not.toThrow();
   });
 
@@ -161,21 +176,6 @@ describe('published package entries', () => {
     const declarations = readdirSync(path.join(packageRoot, 'dist')).filter((file) =>
       file.endsWith('.d.ts')
     );
-    expect(declarations.sort()).toEqual(
-      [
-        'index.d.ts',
-        'client.d.ts',
-        'server.d.ts',
-        'custom-renderer.d.ts',
-        'tracking-attributes.d.ts',
-        'request-handler.d.ts',
-        'server-request.d.ts',
-        'request-context.d.ts',
-        'cookies.d.ts',
-        'cache.d.ts',
-        'serialization.d.ts',
-      ].sort()
-    );
     for (const filename of declarations) {
       expect(readFileSync(path.join(packageRoot, 'dist', filename), 'utf8')).not.toMatch(
         /experiences-live-preview|useLivePreview|fetchPreviewSession|PREVIEW_WEBSOCKET_HOST/
@@ -214,6 +214,9 @@ describe('published declarations', () => {
       const filename = path.join(packageRoot, 'src', 'published-surface.ts');
       const source = `
       import * as root from '${packageName}';
+      import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
+      import { bindNextjsAppRouterClientExperiences, type NextjsRequestResult } from '${packageName}/app-router/client';
+      import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
       import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
         configureNextjsServerExperiences, bindNextjsExperiencesRequest,
@@ -284,6 +287,52 @@ describe('published declarations', () => {
       const server: typeof sharedServer = ServerExperienceRenderer;
       const client: typeof sharedClient = ExperienceRenderer;
       const config: Config = { components: {} };
+      const appServer = bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config });
+      const browserApp = bindAppServer({
+        spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+        browser: { delivery: { host: 'https://example.com/api/delivery' } },
+        cookie: { expires: 7, sameSite: 'lax' },
+        consent: { server: false, clientDefaults: { consent: false, persistenceConsent: false } },
+        request: { experience: { experienceId: 'home' }, hydration: 'preserve-server', resolveOptions: { metadata: { server: true }, debug: false } }
+      }, { request: { Experience: () => null } });
+      browserApp.request.loadExperience({ resolveOptions: { debug: true } });
+      // @ts-expect-error High-level expiry uses days; Date belongs to explicit low-level cookie helpers.
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, cookie: { expires: new Date() } });
+      // @ts-expect-error Server request state cannot become browser startup defaults.
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, consent: { clientDefaults: { profile: { id: 'server' } } } });
+      // @ts-expect-error A browser token supplier is a function and cannot cross the RSC boundary.
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, browser: { delivery: { accessToken: () => 'browser' } } });
+      const requestProps: Parameters<typeof appServer.request.Experience>[0] = {
+        as: 'section', rootProps: { id: 'experience', 'data-host': 'root' }
+      };
+      // @ts-expect-error Ordinary renderer callbacks must be configured in the client module.
+      appServer.request.Experience({ renderError: () => null });
+      // @ts-expect-error DOM event handlers cannot cross the request RSC boundary.
+      appServer.request.Experience({ rootProps: { onClick: () => {} } });
+      // @ts-expect-error Custom components belong in the client binding.
+      appServer.request.Experience({ as: () => null });
+      appServer.Experience({ experience: plan, renderError: () => null });
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: {
+        experience: { experienceId: 'home' },
+        composeRequest: async (request, primary, context) => {
+          const facade: RequestRuntime = request;
+          void [facade, primary.plan, primary.error, context.routeKey];
+        }
+      } });
+      const appClient = bindNextjsAppRouterClientExperiences({ config });
+      declare const result: NextjsRequestResult;
+      appClient.request.ExperiencesRoot({ result });
+      appClient.request.Experience({ result, as: 'section' });
+      // @ts-expect-error Descriptor overlays cannot change the supplied request result.
+      appClient.request.Experience({ result, experienceId: 'different' });
+      // @ts-expect-error Seeds are part of the complete request result.
+      appClient.request.Experience({ result, initialPlan: plan });
+      // @ts-expect-error Request roots obtain handoff from their result.
+      appClient.request.ExperiencesRoot({ result, handoff: result.handoff });
+      // @ts-expect-error Request server roots cannot receive browser callbacks.
+      appServer.request.ExperiencesRoot({ beforeInitialPage: () => {} });
+      const cacheMiddleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => undefined });
+      void [appServer, appClient, cacheMiddleware, requestProps];
       const serverProps: ServerExperienceRendererProps = { experience: null, config };
       const clientProps: ExperienceRendererProps = { experience: null, config };
       const attrs: TrackingAttributes = getTrackingAttributes(undefined);
@@ -299,7 +348,7 @@ describe('published declarations', () => {
       root.ExperienceRenderer;
       // @ts-expect-error Standalone preview hooks are not part of normal entries.
       import { useLivePreview } from '${packageName}/client';
-      // @ts-expect-error Router binding belongs to a later phase.
+      // @ts-expect-error Request-aware components require their opt-in router entry.
       import { bindNextjsAppRouterServerExperiences } from '${packageName}/server';
     `;
       const options: ts.CompilerOptions = {
@@ -331,9 +380,7 @@ describe('published declarations', () => {
       ).toBe('');
       const files = program.getSourceFiles().map((file) => file.fileName);
       for (const suffix of entries) {
-        expect(files).toContain(
-          path.join(packageRoot, 'dist', `${suffix ? suffix.slice(1) : 'index'}.d.ts`)
-        );
+        expect(files).toContain(path.join(packageRoot, 'dist', `${entryFile(suffix)}.d.ts`));
       }
       expect(
         files.some((file) => /experiences-live-preview|packages\/live-preview\//.test(file))

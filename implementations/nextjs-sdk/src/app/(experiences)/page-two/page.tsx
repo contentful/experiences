@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ServerContentPage, type PageSearchParams } from '../../components/ServerContentPage';
+import { ServerContentPage, type PageSearchParams } from '../../../components/ServerContentPage';
 
 export const metadata: Metadata = { title: 'Page Two' };
 export const dynamic = 'force-dynamic';
