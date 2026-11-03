@@ -27,7 +27,10 @@ full document navigation.
 The initial hybrid document uses the actual Node `fetchExperienceForHandoff`
 result. Its plan and full handoff are reused by the presentation and root; supplied
 plans require no startup browser fetch or duplicate initial page. Later comparison
-IDs fetch sequentially without events and repeated containers reuse plans.
+IDs fetch sequentially without events on a separate identity-free Node request;
+repeated containers reuse plans. The comparison request retains locale and preview
+policy, and is destroyed after loading. It never inherits the primary's provisional
+XDA profile ID or changes the primary identity used for handoff and persistence.
 Their ordering, identity and results are application-owned diagnostic behavior;
 the SDK adds no multi-Experience controller, prefetch/result list or reconciliation.
 Browser-local navigation, Identify and CUSTOM TRACK use ordinary Web content
@@ -166,7 +169,8 @@ The single-Experience routes select one configured primary ID and let the SDK
 manage it automatically. Diagnostic Home displays all configured IDs with the
 first as primary. Page Two displays
 only the last configured ID as primary. That route's primary fetch runs first with
-initial intent; remaining display/comparison IDs load sequentially without events.
+initial intent; remaining display/comparison IDs load sequentially without events
+on the separate comparison request.
 Both routes reuse the first configured ID's plan for repeated containers; Page Two
 fetches it after its primary when they differ. Official support is one Experience per page, unenforced; these
 comparisons leave ordering, identity and result handling to the application and
@@ -190,7 +194,7 @@ observable subscriptions into these application cookies for subsequent requests.
 separately. The public binding reads identity only with granted persistence consent
 and excludes identity in preview; an identity cookie never grants consent.
 Server Components do not write response cookies and the request binding has no
-persistence method. Pages GSSP persists the final evaluated identity after comparison fetches at
+persistence method. Pages GSSP persists the primary's evaluated identity after comparison fetches at
 `ctx.res`. App hybrid hydration lets the existing Web SDK write the cookie when
 persistence consent permits. Without JavaScript, Server Components cannot persist
 a newly evaluated profile. Middleware forwards context only and does not capture
@@ -273,8 +277,9 @@ stays separate from normalized consent defaults and cookie attributes.
 single-Experience request policy, bound `config`/`request.resolveOptions`, separate
 `consent.server`/`consent.clientDefaults`, `cookie`, preview and initial-event policy. The adapter reads framework
 request context and memoizes the actual descriptor result. The reference's
-`composeRequest` callback uses that same request facade for event-free
-comparisons before the result is finalized; the layout and page reuse the primary
+`composeRequest` callback receives the primary request facade and loads event-free
+comparisons on a separate identity-free facade before the result is finalized;
+the layout and page reuse the primary
 result's full handoff and plans. `src/components/BrowserRoot.tsx` binds the public
 App and Pages client families, with the registry and ordinary shared UI in one client
 module. Separate router reads and factories feed the shared preview setup, context,
@@ -350,6 +355,15 @@ Current Phase 10 DX validation remains pending until the root records source,
 package and installed-reference results. Phase 10 is not accepted; optional React
 Router/TanStack integration remains deferred to Phase 11, and broad example code
 migration remains Phase 14.
+
+After setup, run the focused reference regressions from the repository root:
+
+```sh
+node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts
+```
+
+The comparison tests use the installed Node SDK without network requests or `.env`
+and cover primary identity isolation, comparison content, disposal and preview policy.
 
 Run scoped build/lint/typecheck after the installed artifacts are refreshed. Inspect
 Home and Page Two directly for delivered content, slots, Rich Text, errors and
