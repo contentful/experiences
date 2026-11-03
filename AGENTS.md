@@ -774,7 +774,7 @@ Next regenerates it on every `next build`. It's in `.gitignore`. If you see lint
 
 ### Nx cache + tsup builds
 
-`build.yaml` saves `packages/*/dist` to a job-scoped cache; `check.yaml` and `release.yaml` restore it. **The cache key is `build-cache-${run_id}-${run_attempt}`** — meaning each CI run is its own cache. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Don't change the cache path unless you also update both restore steps.
+`build.yaml` saves `packages/*/dist` to a run-scoped cache; `check.yaml`, `release.yaml` and `prerelease.yaml` restore it. **The cache key is `build-cache-${run_id}`** — retries of the same run reuse its completed build, including when only a failed downstream job reruns. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Keep the cache path and key consistent across the save and all restore steps.
 
 ### Publishing
 
