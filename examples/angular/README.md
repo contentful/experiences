@@ -106,12 +106,9 @@ The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. `server.ts` passe
 reaches the browser, so use a read-only delivery token. The panel only sends events
 and never fetches an Experience.
 
-The interaction buttons send a fixed demo entity. The panel also starts
-`startInteractionTracking()`, but no rendered node is stamped for it yet, so views,
-hovers and clicks on the page are not tracked automatically. Stamping rendered nodes
-is waiting on the scope-based attribution in
-[#225](https://github.com/contentful/experiences/pull/225), which replaces
-`data-ctfl-node-id`.
+The interaction buttons send a fixed demo entity. The Web SDK starts interaction
+discovery during construction, but this example does not stamp rendered nodes with
+attribution, so views, hovers and clicks on the page are not tracked automatically.
 
 ### Optional: preview mode
 
