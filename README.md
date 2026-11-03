@@ -133,7 +133,7 @@ The signature is three grouped params: what to fetch (a Destination path or an E
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-A working version is at [`examples/nextjs/app/[[...path]]/page.tsx`](./examples/nextjs/app/[[...path]]/page.tsx), with the by-id route at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx).
+A working version is at [`examples/nextjs/lib/destination-page.tsx`](./examples/nextjs/lib/destination-page.tsx), used by the hub at [`app/page.tsx`](./examples/nextjs/app/page.tsx) and the [`app/[...path]/page.tsx`](./examples/nextjs/app/[...path]/page.tsx) catch-all, with the by-id route at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx).
 
 ## Destinations
 

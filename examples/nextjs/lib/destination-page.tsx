@@ -4,19 +4,15 @@ import { notFound, redirect } from 'next/navigation';
 import {
   NotFoundError,
   ServerExperienceRenderer,
-  fetchDestinationSitemap,
   fetchExperience,
 } from '@contentful/experiences-react';
 
 import { experienceConfig } from '@/lib/experience-config';
 import { buildPagePersonalization } from '@/lib/personalization';
 
-interface PageProps {
-  params: Promise<{ path?: string[] }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
+export type SearchParams = Record<string, string | string[] | undefined>;
 
-function destinationConfig() {
+export function destinationConfig() {
   const spaceId = process.env.SPACE_ID;
   const destinationId = process.env.DESTINATION_ID;
   const accessToken = process.env.CDA_TOKEN;
@@ -28,33 +24,19 @@ function destinationConfig() {
   return { spaceId, destinationId, accessToken };
 }
 
-// Enumerate every routable path in the Destination. An optional catch-all uses
-// an empty `path` array for `/`.
-export async function generateStaticParams() {
-  const { spaceId, destinationId, accessToken } = destinationConfig();
-  const paths: { path: string[] }[] = [];
-  let pageNext: string | undefined;
-  do {
-    const sitemap = await fetchDestinationSitemap(
-      { spaceId, destinationId },
-      { accessToken },
-      { pageNext }
-    );
-    for (const item of sitemap.items) {
-      paths.push({ path: item.path.split('/').filter(Boolean) });
-    }
-    pageNext = sitemap.pages.next;
-  } while (pageNext);
-  return paths;
+export function flag(value: string | string[] | undefined) {
+  return value === 'true' || value === '1';
 }
 
-export default async function DestinationPage({ params, searchParams }: PageProps) {
-  const { path: segments = [] } = await params;
-  const sp = (await searchParams) ?? {};
+/**
+ * Fetches the Destination node at `segments` and renders it. Shared by the hub
+ * at `/` (the home node, empty `segments`) and the `[...path]` catch-all.
+ */
+export async function renderDestinationPage(segments: string[], sp: SearchParams) {
   const path = `/${segments.join('/')}`;
 
-  const debug = sp.debug === 'true' || sp.debug === '1';
-  const personalizationEnabled = sp.personalization === 'true' || sp.personalization === '1';
+  const debug = flag(sp.debug);
+  const personalizationEnabled = flag(sp.personalization);
   const locale = typeof sp.locale === 'string' ? sp.locale : 'en-US';
   const { spaceId, destinationId, accessToken } = destinationConfig();
 

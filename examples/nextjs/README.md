@@ -4,7 +4,8 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-react` render
 
 ## What it shows
 
-- **Destinations as the primary route**: the root `app/[[...path]]/page.tsx` calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
+- **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
+- **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
 - **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` fetches one Experience by id. It is the route for preview, live preview and runtime parameters, none of which Destinations support.
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
@@ -92,7 +93,7 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Tick **Personalization** in the top-right corner of any page, or open `http://localhost:3000/demo/landing?personalization=true` (or
+Tick **Personalization** on the hub at `/` and click Apply, or open `http://localhost:3000/demo/landing?personalization=true` (or
 `/experiences/landing?personalization=true`) to see the developer hero. Without
 the flag you get the base hero. Both the Destination and by-id fetches accept the
 same `personalization` option.
@@ -168,12 +169,12 @@ The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are bo
 
 ## The routes
 
-Two routes. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it.
+The hub at `/` links to all of these. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it.
 
 | Try it locally                                                              | Source                                                             | Notes                                                                            |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `http://localhost:3000/`                                                    | [`app/[[...path]]/page.tsx`](./app/[[...path]]/page.tsx)           | Destination home node                                                            |
-| `http://localhost:3000/demo/landing`                                        | same route                                                         | Destination path                                                                 |
+| `http://localhost:3000/`                                                    | [`app/page.tsx`](./app/page.tsx)                                   | Demo hub plus the Destination home node (shared `lib/destination-page.tsx`)      |
+| `http://localhost:3000/demo/landing`                                        | [`app/[...path]/page.tsx`](./app/[...path]/page.tsx)               | Destination path                                                                 |
 | `http://localhost:3000/welcome`                                             | same route                                                         | Redirect node: `redirect()` back to `/`                                          |
 | `http://localhost:3000/demo/landing?personalization=true&debug=true`        | same route                                                         | personalized page event plus SDK debug output                                    |
 | `http://localhost:3000/experiences/landing`                                 | [`app/experiences/[id]/page.tsx`](./app/experiences/[id]/page.tsx) | By Experience id                                                                 |
@@ -211,7 +212,8 @@ An empty-nodes payload (draft, unpublished, or empty locale) resolves to a plan 
 examples/nextjs/
 ├── app/
 │   ├── layout.tsx                       # root layout
-│   ├── [[...path]]/page.tsx             # primary: Destination path, redirects, 404, sitemap SSG
+│   ├── page.tsx                         # demo hub at `/` + the Destination home node
+│   ├── [...path]/page.tsx               # primary: Destination path, redirects, 404, sitemap SSG
 │   └── experiences/[id]/page.tsx        # secondary: by Experience id; preview, live preview, parameters
 ├── components/                          # design-system components; design arrives as props
 │   ├── Section.tsx                      # flex/grid layout primitive; design as named props

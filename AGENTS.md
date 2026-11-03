@@ -593,7 +593,7 @@ crn:contentful:::experience:spaces/$self/environments/$self/{components|experien
 
 ### `examples/nextjs/lib/experience-config.tsx` is `.tsx` not `.ts`
 
-It returns JSX (the render fns). The compiler picks up the `tsx` extension; importing the `tsx` file into `app/[[...path]]/page.tsx` works because Next resolves both extensions.
+It returns JSX (the render fns). The compiler picks up the `tsx` extension; importing the `tsx` file into `app/[...path]/page.tsx` works because Next resolves both extensions.
 
 ### `next-env.d.ts` is gitignored
 
