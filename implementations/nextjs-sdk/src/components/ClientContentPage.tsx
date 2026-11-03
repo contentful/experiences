@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import parse from 'html-react-parser';
 import { useRouter } from 'next/router';
 import type { PagesReferenceProps } from '../pages-server';
 import {
@@ -15,6 +16,7 @@ import { browserRegistry } from './browser-registry';
 import { ExperiencePresentation } from './ExperiencePresentation';
 import { Utilities, ServerUtilities, type Personalization } from './Utilities';
 import { pagesContentActionUrls } from './pages-content-action';
+import { ManualServerViews } from './ManualServerViews';
 
 export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) {
   const { environment, routeKey, Experience, RequestExperience } = useReference();
@@ -23,8 +25,10 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
   const [intent, setIntent] = useState<{
     cycle: number;
     personalization?: Personalization;
+    identified: boolean;
   }>({
     cycle: 0,
+    identified: false,
   });
   const [hidden, setHidden] = useState(false);
   const primarySeed = seeds.find((seed) => seed.experience.experienceId === ids[0]);
@@ -32,15 +36,19 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
     <>
       <Utilities
         result={result}
+        identifyIntent={intent.identified}
         onIntent={(personalization) =>
           setIntent((old) => ({
             cycle: old.cycle + 1,
             personalization,
+            identified:
+              old.identified ||
+              personalization?.events?.some((event) => event.type === 'identify') === true,
           }))
         }
         onClearContent={() => setHidden(true)}
         onResume={() => {
-          setIntent((old) => ({ cycle: old.cycle + 1 }));
+          setIntent((old) => ({ cycle: old.cycle + 1, identified: false }));
           setHidden(false);
         }}
       />
@@ -231,7 +239,11 @@ export function PagesContentPage({
     if (!loaded) throw new Error('The server content request was canceled.');
   }
   if (serverOnly) {
-    const content = <div dangerouslySetInnerHTML={{ __html: html ?? '' }} />;
+    const content = analytics ? (
+      <ManualServerViews html={html ?? ''} />
+    ) : (
+      <div>{parse(html ?? '')}</div>
+    );
     return analytics ? (
       <ServerUtilities key={experiences.routeKey} update={update}>
         {content}

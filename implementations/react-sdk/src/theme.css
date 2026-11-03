@@ -311,11 +311,11 @@ main {
 
 .control-panel__fields {
   display: grid;
-  grid-template-columns: 9rem 5rem auto;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
   gap: 0.4rem 1.5rem;
   align-items: center;
   justify-items: start;
-  width: fit-content;
+  width: 100%;
 }
 
 .control-panel__actions {
@@ -333,7 +333,15 @@ main {
   font-size: 0.825rem;
   font-weight: 600;
   color: var(--color-text);
-  white-space: nowrap;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.control-panel__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 /* Buttons */

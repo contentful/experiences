@@ -5,6 +5,7 @@ import {
   ExperiencesProvider,
   type ExperiencesRootProps,
   usePreviewState,
+  useExperiencesContext,
 } from '@contentful/experiences-react/client';
 import {
   createContext,
@@ -16,11 +17,13 @@ import {
   type ReactNode,
 } from 'react';
 
-import type {
-  BoundNextjsExperiencesRootProps,
-  BoundNextjsRequestRootProps,
-  NextjsRequestResult,
-} from './request-result.js';
+import type { BoundNextjsExperiencesRootProps, NextjsRequestResult } from './request-result.js';
+
+import {
+  resolveNextjsLivePreview,
+  nextjsLivePreviewSessionId,
+  mergeNextjsLivePreview,
+} from './live-preview.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
 
@@ -79,13 +82,90 @@ export function useServerPreviewRefresh(experienceId: string | undefined, refres
   }, [current, refresh]);
 }
 
-/** Reuse React's managed/injected owner without constructing a rendering registry. */
-export function NextjsBrowserRoot(props: BoundNextjsExperiencesRootProps) {
-  return props.sdk ? (
-    <ExperiencesProvider {...props} sdk={props.sdk} />
-  ) : (
-    <ExperiencesRoot {...(props as ExperiencesRootProps)} />
+/** Preview adds session synchronization to the existing React SDK owner. */
+export function NextjsBrowserRoot({
+  livePreview,
+  experienceId,
+  sdk,
+  previewUrl,
+  children,
+  ...props
+}: BoundNextjsExperiencesRootProps & { previewUrl?: string }) {
+  const config = livePreview && 'enabled' in livePreview ? livePreview : undefined;
+  if (config && sdk)
+    throw new TypeError('Managed Live Preview requires an SDK-owned Next.js root.');
+  const url = previewUrl ?? props.routeKey ?? '/';
+  const sessionId = config && nextjsLivePreviewSessionId(config, url);
+  const direct = livePreview && !('enabled' in livePreview) ? livePreview : undefined;
+  const options = useMemo(
+    () => (config ? resolveNextjsLivePreview(config, url, experienceId) : direct),
+    [
+      sessionId,
+      experienceId,
+      config?.experienceId,
+      config?.loadImplementation,
+      config?.sessionHost,
+      config?.resourceResolution,
+      direct,
+    ]
   );
+  // A captured constructor must read the current binding when it reactivates.
+  const current = useRef(options);
+  current.current = options;
+  const forwarded = useMemo<NonNullable<ExperiencesRootProps['livePreview']>>(
+    () => ({
+      get experienceId() {
+        return current.current!.experienceId;
+      },
+      get sessionId() {
+        return current.current!.sessionId;
+      },
+      get sessionHost() {
+        return current.current!.sessionHost;
+      },
+      get resourceResolution() {
+        return current.current!.resourceResolution;
+      },
+      loadImplementation() {
+        const load = current.current!.loadImplementation;
+        return load();
+      },
+    }),
+    []
+  );
+  if (sdk)
+    return (
+      <ExperiencesProvider {...props} sdk={sdk}>
+        {children}
+      </ExperiencesProvider>
+    );
+  return (
+    <ExperiencesRoot
+      key={config ? (sessionId ? 'preview' : 'ordinary') : undefined}
+      {...(props as ExperiencesRootProps)}
+      isPreview={config ? Boolean(sessionId) : props.isPreview}
+      livePreview={config && options ? forwarded : options}
+    >
+      {config && options && <PreviewSession options={options} />}
+      {children}
+    </ExperiencesRoot>
+  );
+}
+
+function PreviewSession({
+  options,
+}: {
+  options: NonNullable<ExperiencesRootProps['livePreview']>;
+}) {
+  const context = useExperiencesContext();
+  const applied = useRef(options);
+  useEffect(() => {
+    if (!context.isLive || applied.current === options) return;
+    applied.current = options;
+    // Web owns supersession, cleanup and error publication.
+    void context.sdk.replaceLivePreview(options).catch(() => undefined);
+  }, [context.sdk, context.isLive, options]);
+  return null;
 }
 
 /** Shared whole-result adoption and page builder precedence for both router families. */
@@ -96,8 +176,11 @@ export function NextjsRequestPresentation({
   configuredBuilder,
   buildRoutePayload,
   ready = true,
+  previewUrl,
   ...props
-}: BoundNextjsRequestRootProps & {
+}: BoundNextjsExperiencesRootProps & {
+  result?: NextjsRequestResult;
+  previewUrl?: string;
   Root: typeof NextjsBrowserRoot;
   routeKey: string;
   configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
@@ -106,7 +189,8 @@ export function NextjsRequestPresentation({
 }) {
   const canAdopt = useNextjsInitialData(result?.requestId);
   const matchingResult = canAdopt && result?.routeKey === routeKey ? result : undefined;
-  const initialPagePayload = matchingResult?.initialPagePayload;
+  const initialPagePayload =
+    matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);
   const events = matchingResult?.experience.personalization?.events;
   const pageFree = events !== undefined && !events.some((event) => event.type === 'page');
   const builder = props.buildPagePayload ?? configuredBuilder;
@@ -123,8 +207,17 @@ export function NextjsRequestPresentation({
     <Root
       {...props}
       routeKey={routeKey}
-      handoff={canAdopt && (ready || typeof window === 'undefined') ? result?.handoff : undefined}
-      handoffKey={result?.requestId}
+      previewUrl={previewUrl}
+      experienceId={props.experienceId ?? result?.experience.experienceId}
+      livePreview={mergeNextjsLivePreview(props.livePreview, result?.livePreview)}
+      handoff={
+        result
+          ? canAdopt && (ready || typeof window === 'undefined')
+            ? result.handoff
+            : undefined
+          : props.handoff
+      }
+      handoffKey={result?.requestId ?? props.handoffKey}
       // Returning undefined from a builder still permits Web's empty page fallback.
       buildPagePayload={pageFree ? undefined : buildPagePayload}
       initialPagePayload={undefined}

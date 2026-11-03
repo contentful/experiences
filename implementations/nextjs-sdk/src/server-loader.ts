@@ -26,14 +26,27 @@ export const loadServerPage = cache(async () => {
     {
       ...nodeConfig,
       config: experienceConfig,
+      browser: {
+        delivery: browser.web.delivery,
+        ...(browser.web.preview ? { preview: browser.web.preview } : {}),
+      },
       consent: { server: ({ cookies }) => readConsent(cookies) },
-      livePreview: ({ request }) => serverPreview(new URL(request.url)),
+      livePreview: {
+        ...browser.livePreview,
+        enabled: Boolean(browser.livePreview),
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      },
       request: {
         experience: ({ requestUrl }) => {
           const url = new URL(requestUrl);
+          const preview = Boolean(serverPreview(url));
           return {
-            experienceId: routeIds(url.pathname, browser.experienceIds)[0],
-            ...(serverPreview(url) ? {} : { extensions: { sourceMap: {} } }),
+            experienceId:
+              (preview &&
+                (url.searchParams.get('preview_experience_id')?.trim() ||
+                  browser.livePreview?.experienceId)) ||
+              routeIds(url.pathname, browser.experienceIds)[0],
+            ...(preview ? {} : { extensions: { sourceMap: {} } }),
           };
         },
         hydration: ({ requestUrl }) =>

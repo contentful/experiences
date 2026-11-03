@@ -43,7 +43,7 @@ existing standalone APIs are unchanged. General supplied-plan rendering and
 Managed runtime ownership, state/action hooks, `Experience` and
 `useManagedExperience` are available on `/client`. Managed loading and supplied
 plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started. Phase 6 remains complete and explicitly accepted on
+Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started. Phase 6 remains complete and explicitly accepted on
 2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
 
 Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or

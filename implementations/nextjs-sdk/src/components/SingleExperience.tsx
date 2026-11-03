@@ -7,11 +7,17 @@ import {
 import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
-const { Experience: AppRequestExperience } = bindNextjsAppRouterClientExperiences({
-  config: browserRegistry,
-}).request;
+const livePreview = {
+  enabled: true,
+  loadImplementation: () => import('@contentful/experiences-live-preview'),
+};
+
+const { ExperiencesRoot: AppExperiencesRoot, Experience: AppRequestExperience } =
+  bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
+export { AppExperiencesRoot };
 export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
   config: browserRegistry,
+  livePreview,
 });
 export const singleExperienceFallbacks = {
   loadingFallback: (
