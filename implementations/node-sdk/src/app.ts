@@ -83,13 +83,11 @@ app.get('/', async (req, res) => {
     experienceIds[0];
   const livePreview =
     process.env.LIVE_PREVIEW_ENABLED === 'true' && sessionId
-      ? async () => {
-          return {
-            experienceId: previewExperienceId,
-            sessionId,
-            resourceResolution: process.env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
-            implementation: await import('@contentful/experiences-live-preview'),
-          };
+      ? {
+          experienceId: previewExperienceId,
+          sessionId,
+          resourceResolution: process.env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+          loadImplementation: () => import('@contentful/experiences-live-preview'),
         }
       : undefined;
   const request = sdk.forRequest({

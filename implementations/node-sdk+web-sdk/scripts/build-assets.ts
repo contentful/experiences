@@ -1,7 +1,7 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'vite';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'dotenv';
 
 // Maintainer: prepare this standalone reference from locally packed/installed SDK
@@ -43,7 +43,11 @@ await build({
 
 // Build and host use the same app-local deployment setting. Disabled builds
 // tree-shake the optional package and its protocol dependencies.
-const previewEnabled = parse(readFileSync(resolve(root, '.env'))).LIVE_PREVIEW_ENABLED === 'true';
+const localEnvironment = resolve(root, '.env');
+const previewEnabled =
+  parse(
+    readFileSync(existsSync(localEnvironment) ? localEnvironment : `${localEnvironment}.example`)
+  ).LIVE_PREVIEW_ENABLED === 'true';
 // Preview ships unbundled ESM, so prepare a browser-loadable asset alongside the Web UMD.
 await build({
   configFile: false,

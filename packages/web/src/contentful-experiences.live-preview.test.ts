@@ -26,6 +26,7 @@ function runtime(config: Partial<ExperiencesWebConfig> = {}) {
 function preview() {
   let update = () => {};
   let data: ExperiencePayload | undefined;
+  const unsubscribe = vi.fn();
   const implementation: RuntimeLivePreviewModule = {
     fetchPreviewSession: vi.fn(async () => ({
       ...plan,
@@ -35,20 +36,25 @@ function preview() {
       getResult: () => ({ data, error: undefined }),
       subscribe: (next: () => void) => {
         update = next;
-        return () => {};
+        return unsubscribe;
       },
-      subscribeStatus: () => () => {},
+      subscribeStatus: () => unsubscribe,
     })),
     sendPreviewStatus: vi.fn(),
   };
   return {
     implementation,
+    unsubscribe,
     config: {
       preview: { accessToken: 'preview' },
-      livePreview: () => ({ experienceId: 'hero', sessionId: 'session', implementation }),
+      livePreview: {
+        experienceId: 'hero',
+        sessionId: 'session',
+        loadImplementation: () => implementation,
+      },
     },
-    emit() {
-      data = { sys: { type: 'Experience' }, nodes: [] };
+    emit(payload: ExperiencePayload = { sys: { type: 'Experience' }, nodes: [] }) {
+      data = payload;
       update();
     },
   };
@@ -74,33 +80,131 @@ it('establishes policy immediately and uses the session only for the bound Exper
   expect(f.implementation.fetchPreviewSession).toHaveBeenCalledTimes(1);
 });
 
-it('rejects failed initialization without falling back to ordinary delivery', async () => {
+it('isolates unrelated fetches from pending and failed preview initialization', async () => {
   const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
-  const sdk = runtime({
-    livePreview: async () => {
-      throw new Error('module unavailable');
-    },
+  let reject!: (error: Error) => void;
+  const pending = new Promise<RuntimeLivePreviewModule>((_, fail) => {
+    reject = fail;
   });
+  const loadImplementation = vi.fn(() => pending);
+  const sdk = runtime({
+    livePreview: { experienceId: 'hero', sessionId: 'session', loadImplementation },
+  });
+  const bound = expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).rejects.toThrow(
+    'module unavailable'
+  );
+  await expect(sdk.fetchExperience({ experienceId: 'other' }, resolve)).resolves.toEqual(plan);
+  reject(new Error('module unavailable'));
+  await bound;
+  expect(sdk.states.preview.current?.experienceId).toBe('hero');
+  await expect(sdk.fetchExperience({ experienceId: 'other' }, resolve)).resolves.toEqual(plan);
   await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).rejects.toThrow(
     'module unavailable'
   );
-  expect(ordinary).not.toHaveBeenCalled();
+  expect(loadImplementation).toHaveBeenCalledOnce();
+  expect(ordinary).toHaveBeenCalledTimes(2);
 });
 
-it('coalesces equivalent ordinary fetches and commits their evaluated profile once', async () => {
+it('delivers usable preview nodes and every resolver diagnostic', async () => {
+  const f = preview(),
+    sdk = runtime(f.config);
+  const next = vi.fn();
+  const subscription = sdk.subscribeToPreview('hero', resolve, next);
+  await vi.waitFor(() => expect(f.implementation.createLivePreviewClient).toHaveBeenCalled());
+  f.emit({
+    nodes: [
+      {
+        component: {
+          sys: {
+            type: 'ResourceLink',
+            linkType: 'Contentful:Component',
+            urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Heading',
+          },
+        },
+        contentProperties: { text: 'fresh' },
+      },
+      {},
+      {},
+    ],
+  } as ExperiencePayload);
+  await vi.waitFor(() => expect(next).toHaveBeenCalledOnce());
+  const update = next.mock.calls[0]![0];
+  expect(update.data.nodes).toHaveLength(1);
+  expect(update.data.nodes[0].props.content.text).toBe('fresh');
+  expect(update.data.diagnostics).toHaveLength(2);
+  expect(update.error).toBeUndefined();
+  subscription.unsubscribe();
+});
+
+it('coalesces equivalent fetches with independent plans and one profile adoption', async () => {
+  const sdk = runtime({ locale: 'en-US' });
+  const resolverError = new Error('resolver failed', { cause: () => {} });
+  const resolveOptions = {
+    config: {
+      components: {
+        Heading: {
+          resolveData: () => {
+            throw resolverError;
+          },
+        },
+      },
+    },
+  };
+  const source = await sdk.resolveExperience(
+    {
+      nodes: [
+        {
+          component: {
+            sys: {
+              type: 'ResourceLink',
+              linkType: 'Contentful:Component',
+              urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/Heading',
+            },
+          },
+          contentProperties: { text: 'original' },
+        },
+      ],
+    },
+    resolveOptions
+  );
   const fetch = vi
     .spyOn(Runtime.prototype, 'fetchExperience')
-    .mockResolvedValue({ ...plan, personalization: { profileId: 'evaluated' } });
-  const sdk = runtime({ locale: 'en-US' });
-  await Promise.all([
-    sdk.fetchExperience({ experienceId: 'hero' }, resolve),
+    .mockResolvedValue({ ...source, personalization: { profileId: 'evaluated' } });
+  const [first, second] = await Promise.all([
+    sdk.fetchExperience({ experienceId: 'hero' }, resolveOptions),
     sdk.fetchExperience(
       { experienceId: 'hero', locale: 'en-US', preview: false, extensions: { sourceMap: {} } },
-      resolve
+      resolveOptions
     ),
   ]);
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(sdk.states.profile.current?.id).toBe('evaluated');
+  expect(first.diagnostics[0]).toBeInstanceOf(Error);
+  expect(first.diagnostics[0]!.cause).toBe(resolverError);
+  expect(first.diagnostics[0]!.stack).toBe(source.diagnostics[0]!.stack);
+  first.diagnostics[0]!.message = 'changed';
+  expect(second.diagnostics[0]!.message).toBe(source.diagnostics[0]!.message);
+  first.nodes[0]!.props.content.text = 'changed';
+  expect(second.nodes[0]!.props.content.text).toBe('original');
+  expect(source.nodes[0]!.props.content.text).toBe('original');
+  first.nodes.splice(0, 1);
+  expect(second.nodes).toHaveLength(1);
+  expect(source.nodes).toHaveLength(1);
+});
+
+it('releases preview subscriptions and ownership when tracking teardown throws', async () => {
+  const f = preview(),
+    sdk = runtime(f.config);
+  await vi.waitFor(() => expect(f.implementation.createLivePreviewClient).toHaveBeenCalled());
+  f.emit();
+  expect(sdk.states.preview.current?.data).toBeDefined();
+  vi.spyOn(MutationObserver.prototype, 'disconnect').mockImplementationOnce(() => {
+    throw new Error('tracking teardown failed');
+  });
+  expect(() => sdk.destroy()).toThrow('tracking teardown failed');
+  expect(f.unsubscribe).toHaveBeenCalledTimes(2);
+  expect(sdk.states.preview.current).toBeUndefined();
+  expect(() => runtime()).not.toThrow();
 });
 
 it('shares preview resolution, does not fetch in the binding, and ignores detached consumers', async () => {

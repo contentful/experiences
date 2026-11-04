@@ -66,7 +66,8 @@ Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentatio
 
 ## Optional runtime Live Preview
 
-Applications supply the optional package's public exports through a lazy initializer.
+Applications supply synchronous session configuration and the optional package's
+public exports through `RuntimeLivePreviewOptions.loadImplementation`.
 Runtime exports structural types and wrappers without requiring that package: Node
 owns request snapshots, and Web owns one preview source and its subscriptions.
 `fetchRuntimePreviewSession` adopts the resolved plan; `createRuntimePreviewClient`

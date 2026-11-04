@@ -3,7 +3,7 @@ import {
   initializeRuntimeLivePreview,
   type ContentfulExperiencesConfig,
   type RuntimeLivePreviewBinding,
-  type RuntimeLivePreviewInitializer,
+  type RuntimeLivePreviewOptions,
 } from '@contentful/experiences-runtime';
 import { preview } from './signals/signals.js';
 import type { PreviewState } from './states.js';
@@ -11,6 +11,7 @@ import type { PreviewState } from './states.js';
 /** Owns one Preview Session and publishes through the SDK's normal state signal. */
 export class WebPreview {
   #ready: Promise<RuntimeLivePreviewBinding>;
+  #experienceId: string;
   #version = 0;
   // Local payload sequence; the package exposes no revision shared with HTTP snapshots.
   #sequence = 0;
@@ -19,9 +20,13 @@ export class WebPreview {
 
   constructor(
     readonly config: ContentfulExperiencesConfig,
-    initializer: RuntimeLivePreviewInitializer
+    options: RuntimeLivePreviewOptions
   ) {
-    this.#ready = this.#initialize(initializer);
+    this.#experienceId = options.experienceId;
+    this.#ready = this.#initialize(options);
+  }
+  get experienceId(): string {
+    return this.#experienceId;
   }
   ready(): Promise<RuntimeLivePreviewBinding> {
     return this.#ready;
@@ -30,12 +35,13 @@ export class WebPreview {
     return this.#version;
   }
 
-  async replace(initializer: RuntimeLivePreviewInitializer): Promise<void> {
+  async replace(options: RuntimeLivePreviewOptions): Promise<void> {
     if (this.#destroyed) throw new Error('Preview owner has been destroyed');
     // The public client has no reconfiguration API; release it to change session/token.
     this.#stop();
     preview.value = undefined;
-    this.#ready = this.#initialize(initializer);
+    this.#experienceId = options.experienceId;
+    this.#ready = this.#initialize(options);
     await this.#ready;
   }
 
@@ -50,10 +56,9 @@ export class WebPreview {
     preview.value = undefined;
   }
 
-  #initialize(initializer: RuntimeLivePreviewInitializer): Promise<RuntimeLivePreviewBinding> {
+  #initialize(options: RuntimeLivePreviewOptions): Promise<RuntimeLivePreviewBinding> {
     const version = this.#version;
-    const ready = Promise.resolve()
-      .then(() => initializeRuntimeLivePreview(initializer))
+    const ready = initializeRuntimeLivePreview(options)
       .then((binding) => {
         if (!this.#current(version)) return binding;
         this.#publish({ experienceId: binding.experienceId, sessionId: binding.sessionId });
@@ -61,7 +66,12 @@ export class WebPreview {
         return binding;
       })
       .catch((error: unknown) => {
-        if (this.#current(version)) this.#publish({ error: asError(error), status: 'static' });
+        if (this.#current(version))
+          this.#publish({
+            experienceId: options.experienceId,
+            error: asError(error),
+            status: 'static',
+          });
         throw error;
       });
     void ready.catch(() => {}); // State exposes failure even if no fetch joins initialization.

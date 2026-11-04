@@ -31,11 +31,13 @@ Web owns one Preview Session source/connection through `states.preview`, which
 is `undefined` while initialization is pending or integration is disabled.
 `fetchExperience` loads initial/refresh snapshots for the bound Experience ID;
 other IDs keep their ordinary source. The SDK shares equivalent in-flight
-fetching/resolution; the view keeps its existing presentation state.
+fetching/resolution while each consumer receives an independent mutable plan;
+the view keeps its existing presentation state.
 
 `subscribeToPreview(experienceId, resolveOptions, listener)` returns a
 `Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
-fetching. Its optional `data` and `error` may appear together: a new plan can carry
+fetching. Resolved plans retain all resolver diagnostics without discarding usable
+content. Its optional `data` and `error` may appear together: a new plan can carry
 an existing source error. Connection status comes from `states.preview`.
 
 ```ts
@@ -43,11 +45,11 @@ const sdk = new ContentfulExperiences({
   ...browserConfig,
   preview: { accessToken: previewToken },
   livePreview: sessionId
-    ? async () => ({
+    ? {
         experienceId,
         sessionId,
-        implementation: await import('@contentful/experiences-live-preview'),
-      })
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      }
     : undefined,
 });
 if (initialPlan) renderPlan(initialPlan);
@@ -65,8 +67,9 @@ subscription.unsubscribe();
 sdk.destroy();
 ```
 
-The initializer establishes preview policy before events/tracking. Explicit
-consent/reset commands retain their behavior. `replaceLivePreview(initializer)`
+The session configuration establishes preview policy before events/tracking.
+Unrelated IDs do not await the implementation loader, even if it fails or remains
+pending. Explicit consent/reset commands retain their behavior. `replaceLivePreview(options)`
 switches sessions within fixed preview mode and invalidates obsolete work.
 Bindings detach their listeners; source lifetime belongs to the SDK. Failed
 updates leave usable presentation content intact.

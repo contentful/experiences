@@ -53,7 +53,7 @@ export {
 export type {
   RuntimeLivePreviewBinding,
   RuntimeLivePreviewConfig,
-  RuntimeLivePreviewInitializer,
+  RuntimeLivePreviewOptions,
   RuntimeLivePreviewModule,
   RuntimePreviewClient,
   RuntimePreviewSessionIdentity,
