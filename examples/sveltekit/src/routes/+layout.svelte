@@ -1,9 +1,15 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import ConsentPanel from '$lib/components/ConsentPanel.svelte';
+  import DemoHub from '$lib/components/DemoHub.svelte';
 
   let { children, data } = $props();
 </script>
 
+<!-- The demo hub only shows at `/`, above the Destination's home node. -->
+{#if page.url.pathname === '/'}
+  <DemoHub />
+{/if}
 {@render children()}
 
 <ConsentPanel

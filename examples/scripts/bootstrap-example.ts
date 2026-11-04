@@ -43,7 +43,9 @@ import {
   dataAssemblies,
   dataAssemblyComponentLinks,
   experience,
+  homeExperience,
   personalization,
+  destination,
   type AssetFixture,
   type EntryFixture,
   type ContentTypeFixture,
@@ -53,6 +55,7 @@ import {
   type DesignTokenFixture,
   type ExperienceFixture,
   type ExperiencePersonalizationFixture,
+  type DestinationFixture,
   type ExperienceNode,
   type TempId,
 } from './fixture/index.js';
@@ -858,43 +861,218 @@ async function seedOptimization(fixture: ExperiencePersonalizationFixture, varia
 
 // --- Orchestrator ------------------------------------------------------------
 
+// --- Destinations ------------------------------------------------------------
+//
+// Channels are organization-scoped; Destinations and their nodes are scoped to
+// the space + environment. All of it goes through raw fetch(): the plain client
+// has no Destinations methods. Order matters: publish the Channel before the
+// Destination that references it, and the Experience before the node serving it.
+
+const API_BASE = 'https://api.contentful.com';
+
+type Versioned = {
+  sys: { id: string; version: number; publishedVersion?: number };
+};
+
+async function rawJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${CMA_TOKEN}`,
+      'Content-Type': 'application/vnd.contentful.management.v1+json',
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `${init.method ?? 'GET'} ${url} failed (${response.status}): ${await response.text()}`
+    );
+  }
+  return (await response.json()) as T;
+}
+
+const isPublished = (r: Versioned) =>
+  !!r.sys.publishedVersion && r.sys.publishedVersion === r.sys.version;
+
+/** PUT .../published at the caller-supplied current version; no-op if already published. */
+async function publishResource(url: string, resource: Versioned): Promise<Versioned> {
+  if (isPublished(resource)) return resource;
+  return rawJson<Versioned>(`${url}/published`, {
+    method: 'PUT',
+    headers: { 'X-Contentful-Version': String(resource.sys.version) },
+  });
+}
+
+async function getOrganizationId(): Promise<string> {
+  const space = await rawJson<{ sys: { organization?: { sys: { id: string } } } }>(
+    `${API_BASE}/spaces/${SPACE_ID}`
+  );
+  const id = space.sys.organization?.sys.id;
+  if (!id) {
+    throw new Error(
+      `Could not read the organization id from GET /spaces/${SPACE_ID}; Channels are ` +
+        `organization-scoped, so the Destination step cannot continue.`
+    );
+  }
+  return id;
+}
+
+async function seedChannel(fixture: DestinationFixture['channel'], organizationId: string) {
+  const url = `${API_BASE}/organizations/${organizationId}/channels/${fixture.id}`;
+  const { id: _id, ...body } = fixture;
+
+  let existing: Versioned | null = null;
+  try {
+    existing = await rawJson<Versioned>(url);
+  } catch (err) {
+    if (!String(err).includes('(404)')) throw err;
+  }
+
+  // Upsert: omit X-Contentful-Version to create, send the current one to update.
+  const upserted = await rawJson<Versioned>(url, {
+    method: 'PUT',
+    headers: existing ? { 'X-Contentful-Version': String(existing.sys.version) } : {},
+    body: JSON.stringify(body),
+  });
+  log(existing ? `  ✓ Channel "${fixture.id}" updated` : `  ✓ Channel "${fixture.id}" created`);
+
+  await publishResource(url, upserted);
+  log(`  ✓ Channel "${fixture.id}" published`);
+}
+
+/** Returns the Destination id. The id is server-generated, so match by name. */
+async function seedDestination(fixture: DestinationFixture): Promise<string> {
+  const base = `${CMA_BASE}/destinations`;
+  const list = await rawJson<{ items: Array<Versioned & { name: string }> }>(`${base}?limit=100`);
+  const existing = list.items.find((d) => d.name === fixture.destination.name);
+
+  let current: Versioned;
+  if (existing) {
+    // Update needs the full body and must not send channelId (it is fixed on create).
+    current = await rawJson<Versioned>(`${base}/${existing.sys.id}`, {
+      method: 'PUT',
+      headers: { 'X-Contentful-Version': String(existing.sys.version) },
+      body: JSON.stringify(fixture.destination),
+    });
+    log(`  ✓ Destination "${fixture.destination.name}" updated (${current.sys.id})`);
+  } else {
+    current = await rawJson<Versioned>(base, {
+      method: 'POST',
+      body: JSON.stringify({ ...fixture.destination, channelId: fixture.channel.id }),
+    });
+    log(`  ✓ Destination "${fixture.destination.name}" created (${current.sys.id})`);
+  }
+
+  await publishResource(`${base}/${current.sys.id}`, current);
+  log(`  ✓ Destination "${fixture.destination.name}" published`);
+  return current.sys.id;
+}
+
+const nodeBody = (
+  node: DestinationFixture['nodes'][number],
+  destinationId: string
+): Record<string, unknown> => {
+  const parent = node.parentNodeId
+    ? { sys: { type: 'Link', linkType: 'DestinationFolderNode', id: node.parentNodeId } }
+    : { sys: { type: 'Link', linkType: 'Destination', id: destinationId } };
+  // The upsert endpoint's validator discriminates on a top-level `type`, though the
+  // docs show none (and the POST create page says it rejects an explicit one).
+  // Without it, PUT returns 422 "Invalid discriminator value ... at \"type\"".
+  const type = {
+    folder: 'DestinationFolderNode',
+    experience: 'DestinationExperienceNode',
+    redirect: 'DestinationRedirectNode',
+  }[node.kind];
+  const body: Record<string, unknown> = { type, properties: [{ path: node.path }], parent };
+  if (node.kind === 'experience') {
+    body.experience = {
+      sys: {
+        type: 'ResourceLink',
+        linkType: 'Contentful:Experience',
+        urn: `crn:contentful:::experience:spaces/$self/environments/$self/experiences/${node.experienceId}`,
+      },
+    };
+  } else if (node.kind === 'redirect') {
+    body.redirectTo = {
+      sys: { type: 'Link', linkType: 'DestinationExperienceNode', id: node.redirectToNodeId },
+    };
+  }
+  return body;
+};
+
+async function seedDestinationNode(
+  node: DestinationFixture['nodes'][number],
+  destinationId: string
+) {
+  const url = `${CMA_BASE}/destinations/${destinationId}/nodes/${node.id}`;
+  let existing: Versioned | null = null;
+  try {
+    existing = await rawJson<Versioned>(url);
+  } catch (err) {
+    if (!String(err).includes('(404)')) throw err;
+  }
+  const upserted = await rawJson<Versioned>(url, {
+    method: 'PUT',
+    headers: existing ? { 'X-Contentful-Version': String(existing.sys.version) } : {},
+    body: JSON.stringify(nodeBody(node, destinationId)),
+  });
+  log(`  ✓ ${node.kind} node "${node.id}" (${node.path}) ${existing ? 'updated' : 'created'}`);
+
+  await publishResource(url, upserted);
+}
+
 async function main() {
   log(`Bootstrapping ExO demo into space ${SPACE_ID} / env ${ENVIRONMENT_ID}\n`);
 
-  step('Step 1/9 — ContentTypes');
+  step('Step 1/10 — ContentTypes');
   for (const ct of contentTypes) await seedContentType(ct);
 
-  step('Step 2/9 — Assets');
+  step('Step 2/10 — Assets');
   for (const a of assets) await seedAsset(a);
 
-  step('Step 3/9 — Entries');
+  step('Step 3/10 — Entries');
   for (const e of entries) await seedEntry(e);
   await seedEntry(personalization.entry);
 
-  step('Step 4/9 — Design tokens');
+  step('Step 4/10 — Design tokens');
   for (const t of designTokens) await seedDesignToken(t);
 
-  step('Step 5/9 — Components');
+  step('Step 5/10 — Components');
   for (const c of components) await seedComponent(c);
 
-  step('Step 6/9 — Experience Template');
+  step('Step 6/10 — Experience Template');
   for (const t of experienceTemplates) await seedExperienceTemplate(t);
 
-  step('Step 7/9 — DataAssemblies');
+  step('Step 7/10 — DataAssemblies');
   for (const da of dataAssemblies) await seedDataAssembly(da);
 
-  step('Step 8/9 — Link DataAssemblies to composed Components');
+  step('Step 8/10 — Link DataAssemblies to composed Components');
   await linkDataAssembliesToComponents();
 
-  step('Step 9/9 — Experience');
+  step('Step 9/10 — Experience');
   const experienceId = await seedExperience(experience);
+  await seedExperience(homeExperience);
   const variantId = await seedOptimizationVariant(personalization);
   await seedOptimization(personalization, variantId);
 
+  step('Step 10/10 — Channel, Destination, and Destination Nodes');
+  const organizationId = await getOrganizationId();
+  await seedChannel(destination.channel, organizationId);
+  const destinationId = await seedDestination(destination);
+  for (const node of destination.nodes) await seedDestinationNode(node, destinationId);
+
   log(`\n✅ Done.\n`);
-  log(`   Experience id: ${experienceId}`);
+  log(`   Destination id: ${destinationId}`);
+  log(`   Experience ids: ${homeExperience.id}, ${experienceId}`);
+  // DESTINATION_ID is server-generated, so it can't be a fixture constant. The
+  // script never edits the example apps' env files (they also hold tokens), so
+  // print the line to paste instead.
+  log(`\n   Add this to the .env of the example you run (examples/nextjs/.env.local,`);
+  log(`   examples/sveltekit/.env, examples/angular/.env, examples/astro/.env):`);
+  log(`\n     DESTINATION_ID=${destinationId}\n`);
+  log(`   The Vite examples (vite-react, vite-svelte .env.local) use VITE_DESTINATION_ID.`);
   log(
-    `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit /${experienceId}.`
+    `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit / and /demo/landing.`
   );
 }
 

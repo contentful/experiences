@@ -47,9 +47,8 @@ import { experienceConfig } from '../lib/experience-config.js';
         <h1 style="margin-top: 0;">Experience not found</h1>
         <p style="color: #4b5563;">
           Nothing was returned for <code>{{ slug }}</code
-          >. Seed the demo Experience with <code>examples/scripts</code> (<code
-            >npm run bootstrap</code
-          >), or check that <code>SPACE_ID</code>, <code>ENVIRONMENT_ID</code>, and
+          >. Seed the demo content with <code>examples/scripts</code> (<code>npm run bootstrap</code
+          >), or check that <code>SPACE_ID</code>, <code>DESTINATION_ID</code>, and
           <code>CDA_TOKEN</code> point at a space that has it.
         </p>
       </main>

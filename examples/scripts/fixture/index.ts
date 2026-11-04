@@ -6,5 +6,6 @@ export { designTokens, type DesignTokenFixture } from './design-tokens.js';
 export { components } from './components.js';
 export { experienceTemplates } from './experience-templates.js';
 export { dataAssemblies, dataAssemblyComponentLinks } from './data-assemblies.js';
-export { experience } from './experience.js';
+export { experience, homeExperience } from './experience.js';
 export { personalization } from './personalization.js';
+export { destination } from './destination.js';

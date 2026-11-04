@@ -10,7 +10,8 @@ A client-only Vite + Svelte 5 single-page app demonstrating `@contentful/experie
 - **Styling from design props**: resolved design auto-fills each component's `$props()` by key, as in the SvelteKit example.
 - **The `getDesignValues()` escape hatch**: [`CardCta.svelte`](./src/lib/components/CardCta.svelte) reads the card's design off context.
 - **Design tokens**: [`src/lib/experience-config.ts`](./src/lib/experience-config.ts) wires a `resolveToken` mapping token ids to CSS values.
-- **No router dependency**: [`src/App.svelte`](./src/App.svelte) reads the Experience id from the path. Replace it with your router; nothing SDK-related changes.
+- **Destination routing**: the URL path is the Destination path, so `/` and `/demo/landing` resolve to different Experiences. A redirect node (`/welcome`) comes back as `{ redirect }` and the app follows it with `location.replace`. `/experiences/<id>` fetches one Experience by id instead.
+- **No router dependency**: [`src/App.svelte`](./src/App.svelte) chooses between those two from `location.pathname`. Replace it with your router; nothing SDK-related changes.
 
 ## Client-only trade-offs
 
@@ -30,11 +31,13 @@ npm install
 npm run build                          # build the SDK packages
 
 cd examples/vite-svelte
-cp .env.example .env.local             # fill in VITE_SPACE_ID, VITE_CDA_TOKEN
+cp .env.example .env.local             # fill in VITE_SPACE_ID, VITE_DESTINATION_ID, VITE_CDA_TOKEN
 npm run dev
 ```
 
-Open [http://localhost:5174/landing](http://localhost:5174/landing).
+`VITE_DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
+
+Open [http://localhost:5174/](http://localhost:5174/) (the Destination's home node) and [http://localhost:5174/demo/landing](http://localhost:5174/demo/landing). `/welcome` is a redirect node back to `/`. For one Experience by id, open `/experiences/landing`; that route uses `VITE_ENVIRONMENT_ID`, while Destination delivery is space-scoped.
 
 | Script              | What it does                                       |
 | ------------------- | -------------------------------------------------- |
@@ -43,4 +46,4 @@ Open [http://localhost:5174/landing](http://localhost:5174/landing).
 | `npm run preview`   | Serves `dist/` locally, with the same SPA fallback |
 | `npm run typecheck` | `svelte-check`                                     |
 
-To deploy, serve `dist/` from any static host and configure it to fall back to `index.html` for unknown paths so deep links like `/landing` resolve.
+To deploy, serve `dist/` from any static host and configure it to fall back to `index.html` for unknown paths so deep links like `/demo/landing` resolve.

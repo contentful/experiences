@@ -19,7 +19,8 @@ This app walks the plan in `.astro` markup instead, so each interactive node bec
 
 ## What it shows
 
-- **Server-side fetch** with `fetchExperience` in [`src/pages/[slug].astro`](./src/pages/[slug].astro). `?preview=true` fetches draft content from the Content Preview API.
+- **Destination routing** with `fetchExperience` in [`src/pages/[...path].astro`](./src/pages/[...path].astro): the URL path is the Destination path, a redirect node becomes a 307, and a missing path is a 404.
+- **By Experience id** in [`src/pages/experiences/[id].astro`](./src/pages/experiences/[id].astro). `?preview=true` fetches draft content from the Content Preview API, which Destinations do not support.
 - **The walker** in [`src/exo/ExperienceNodes.astro`](./src/exo/ExperienceNodes.astro): static nodes render with `ExperienceNode`; ids in `clientComponents` render as `<ClientExperienceNode client:visible>`. Slots recurse with `Astro.self`.
 - **An interactive component**: `Card` keeps local state (save, read more), so it only works as an island.
 - **A host-inserted component**: the walker renders a `ChatWidget` island right after the hero. The host owns the walk, so it can place its own components between authored nodes.
@@ -36,14 +37,14 @@ npm run build                          # build the SDK packages
 
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # one-time; prints the experienceId (default: `landing`)
+npm run bootstrap                      # one-time; seeds content + a Destination, prints the DESTINATION_ID to paste into astro/.env
 
 cd ../astro
-cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN (CPA_TOKEN for ?preview=true)
+cp .env.example .env                   # fill in SPACE_ID, DESTINATION_ID, CDA_TOKEN (ENVIRONMENT_ID and CPA_TOKEN for the by-id route)
 npm run dev
 ```
 
-Visit `http://localhost:4321/landing`, or `/landing?preview=true` for draft content.
+Visit `http://localhost:4321/` and `http://localhost:4321/demo/landing` (Destination paths). `/welcome` is a redirect node back to `/`. For one Experience by id, use `/experiences/landing`, or `/experiences/landing?preview=true` for draft content.
 
 ## Limits
 

@@ -19,6 +19,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 ## Contents
 
 - [Getting started](#getting-started-the-simple-path)
+- [Destinations](#destinations)
 - [Live preview](#live-preview)
 - [Event tracking](#event-tracking)
 - [Styling components](#styling-components)
@@ -86,33 +87,86 @@ Components are registered by id and receive their **content** props together wit
 
 ### 2. Fetch + resolve + render (server-side)
 
+Serve pages from a [Destination](#destinations): the URL path is the Destination path, and the SDK resolves it to an Experience.
+
 ```tsx
-// app/[slug]/page.tsx (Next.js App Router)
-import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
+// app/[[...path]]/page.tsx (Next.js App Router)
+import { notFound, redirect } from 'next/navigation';
+import {
+  NotFoundError,
+  fetchExperience,
+  ServerExperienceRenderer,
+} from '@contentful/experiences-react';
 import { experienceConfig } from '@/lib/experience-config';
 
-export default async function ExperiencePage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const experience = await fetchExperience(
-    { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
-    { accessToken: process.env.CDA_TOKEN! },
-    { config: experienceConfig }
-  );
-  return <ServerExperienceRenderer experience={experience} config={experienceConfig} />;
+export default async function Page({ params }: { params: Promise<{ path?: string[] }> }) {
+  const { path = [] } = await params;
+  let result;
+  try {
+    result = await fetchExperience(
+      {
+        spaceId: process.env.SPACE_ID!,
+        destinationId: process.env.DESTINATION_ID!,
+        path: `/${path.join('/')}`,
+      },
+      { accessToken: process.env.CDA_TOKEN! },
+      { config: experienceConfig }
+    );
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    throw err;
+  }
+  if ('redirect' in result) redirect(result.redirect.path);
+  return <ServerExperienceRenderer experience={result} config={experienceConfig} />;
 }
 ```
 
-One `fetchExperience` call fetches the payload from the Experience Delivery API and resolves it: the renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks in parallel, and dispatches each node to your registered React component.
+One `fetchExperience` call fetches the payload from the Destinations Delivery API and resolves it: the renderer walks the payload, resolves design properties to plain scalars, runs any `resolveData` hooks in parallel, and dispatches each node to your registered React component.
 
-It throws `NotFoundError` when the id doesn't exist. See [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing that to your framework's 404.
+It throws `NotFoundError` when no node claims the path. A Destination redirect node comes back as `{ redirect: { path } }`, which you follow instead of rendering. See [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing `NotFoundError` to your framework's 404.
 
-The signature is three grouped params: what to fetch (space, env, experience), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so future personalization params, digital-property identifiers, and transport options fit their respective group without reshaping the signature.
+To fetch one Experience by id instead (for example, to preview a draft), pass `{ spaceId, environmentId, experienceId }`. See [Destinations](#destinations) for when to use which.
+
+The signature is three grouped params: what to fetch (a Destination path or an Experience id), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so new options and transport settings fit their respective group without reshaping the signature.
 
 **You pass render context once, to `fetchExperience`.** `metadata` and `debug` ride along on the returned plan, so the renderer reads them from there — no second copy to keep in sync. The renderer accepts both as props too, but only as overrides.
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-A working version is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx).
+A working version is at [`examples/nextjs/lib/destination-page.tsx`](./examples/nextjs/lib/destination-page.tsx), used by the hub at [`app/page.tsx`](./examples/nextjs/app/page.tsx) and the [`app/[...path]/page.tsx`](./examples/nextjs/app/[...path]/page.tsx) catch-all, with the by-id route at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx).
+
+## Destinations
+
+A Destination maps URL paths to Experiences through its nodes, so your app routes by path instead of by Experience id. It is the recommended way to serve pages. Create the Channel, Destination, and nodes in Contentful (the [bootstrap script](./examples/scripts) seeds a demo set and prints `DESTINATION_ID`), then:
+
+| You want to                                   | Call                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Render the Experience at a URL path           | `fetchExperience({ spaceId, destinationId, path }, clientOptions, resolveOptions)`         |
+| Resolve a known node                          | `fetchExperience({ spaceId, destinationId, nodeId }, clientOptions, resolveOptions)`       |
+| List every routable path (SSG, `sitemap.xml`) | `fetchDestinationSitemap({ spaceId, destinationId }, clientOptions, { pageNext? })`        |
+| Fetch one Experience by id                    | `fetchExperience({ spaceId, environmentId, experienceId }, clientOptions, resolveOptions)` |
+
+- **Redirects.** The destination forms return `PortableRenderPlan | DestinationRedirectResult`. A redirect node resolves to `{ redirect: { path } }`; navigate there instead of rendering.
+- **Personalization.** Both destination forms accept `personalization` (a profile id plus events), the same as by-id. It switches the request from a cacheable GET to a POST.
+- **Scope.** Destination delivery is space-scoped: no `environmentId`, `locale`, `parameters`, or `extensions` on the destination forms.
+- **Preview.** Not supported on Destinations yet. `preview: true` with a destination throws `DestinationPreviewNotSupportedError` (re-exported by every adapter). Use the by-id form, with a `previewToken`, for preview and live preview.
+- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. The sitemap is a free function; the Node and Web runtimes have no sitemap method.
+
+```ts
+const paths: string[] = [];
+let pageNext: string | undefined;
+do {
+  const sitemap = await fetchDestinationSitemap(
+    { spaceId, destinationId },
+    { accessToken },
+    { pageNext }
+  );
+  paths.push(...sitemap.items.map((item) => item.path));
+  pageNext = sitemap.pages.next;
+} while (pageNext);
+```
+
+`DESTINATION_ID` is generated by Contentful when the Destination is created. The examples read it from the environment.
 
 ---
 
@@ -541,10 +595,10 @@ Returning `undefined` means "not resolvable": the SDK retains the raw token in t
 
 When the simple path isn't enough, a few optional features cover most production needs. Per-page `metadata` flows into resolvers. `debug` mode surfaces what the SDK saw (visible missing-component boxes, verbose logs, a JSON dump panel). Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working route is at [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). Visit `/<id>?debug=true&locale=en-US` after running the example.
+A full working route is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` too; they have no `locale` or `preview`.)
 
 ```tsx
-// app/[slug]/page.tsx
+// app/experiences/[id]/page.tsx
 import { fetchExperience, ServerExperienceRenderer } from '@contentful/experiences-react';
 
 import { experienceConfig } from '@/lib/experience-config';
@@ -553,10 +607,10 @@ export default async function ExperiencePage({
   params,
   searchParams,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { slug: experienceId } = await params;
+  const { id: experienceId } = await params;
   const sp = await searchParams;
   const previewMode = sp.preview === 'true';
   const debug = sp.debug === 'true';
@@ -862,23 +916,30 @@ Resolved design auto-fills props here too, so a component styles itself straight
 ### 3. Fetch + render (SvelteKit)
 
 ```ts
-// routes/[slug]/+page.server.ts
-import { fetchExperience } from '@contentful/experiences-svelte';
-import { CDA_TOKEN, SPACE_ID } from '$env/static/private';
+// routes/[...path]/+page.server.ts: the URL path is the Destination path
+import { error, redirect } from '@sveltejs/kit';
+import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
+import { CDA_TOKEN, DESTINATION_ID, SPACE_ID } from '$env/static/private';
 import { experienceConfig } from '$lib/experience-config';
 
 export const load = async ({ params }) => {
-  const experience = await fetchExperience(
-    { spaceId: SPACE_ID, environmentId: 'master', experienceId: params.slug },
-    { accessToken: CDA_TOKEN },
-    { config: experienceConfig }
-  );
-  return { experience };
+  try {
+    const result = await fetchExperience(
+      { spaceId: SPACE_ID, destinationId: DESTINATION_ID, path: `/${params.path}` },
+      { accessToken: CDA_TOKEN },
+      { config: experienceConfig }
+    );
+    if ('redirect' in result) redirect(307, result.redirect.path);
+    return { experience: result };
+  } catch (err) {
+    if (err instanceof NotFoundError) error(404, 'Not found');
+    throw err;
+  }
 };
 ```
 
 ```svelte
-<!-- routes/[slug]/+page.svelte -->
+<!-- routes/[...path]/+page.svelte -->
 <script lang="ts">
   import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
   import { experienceConfig } from '$lib/experience-config';
@@ -889,7 +950,7 @@ export const load = async ({ params }) => {
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
 
-Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
+To fetch by Experience id instead (for example, for preview), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
 
 ---
 
@@ -993,14 +1054,16 @@ Fetch on the server — in an Express handler rather than an Angular route resol
 import { fetchExperience } from '@contentful/experiences-angular';
 import { experienceConfig } from './app/lib/experience-config';
 
-const experience = await fetchExperience(
-  { spaceId, environmentId: 'master', experienceId: slug },
+// The URL path is the Destination path.
+const result = await fetchExperience(
+  { spaceId, destinationId, path: req.path },
   { accessToken: CDA_TOKEN },
   { config: experienceConfig }
 );
+if ('redirect' in result) return res.redirect(307, result.redirect.path);
 
 // Hand it to the app as the requestContext argument of AngularNodeAppEngine.handle().
-const response = await angularApp.handle(req, { experience });
+const response = await angularApp.handle(req, { experience: result });
 ```
 
 ```ts
@@ -1031,18 +1094,18 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK.
 
-| Example                                          | Stack                           | Shows                                                                                                   |
-| ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Preview mode, async `resolveData`, design tokens, styling hooks                                         |
-| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                         |
-| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
-| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
-| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Fetch, resolve, and render entirely in the browser; styled-components for CSS-in-JS                     |
-| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                       |
-| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer               |
-| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                             |
+| Example                                          | Stack                           | Shows                                                                                                                            |
+| ------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Destination routing with sitemap SSG and redirects; by-id route for preview; async `resolveData`, design tokens                  |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                                                  |
+| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                   |
+| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered |
+| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Destination routing, fetched, resolved, and rendered entirely in the browser; styled-components for CSS-in-JS                    |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                                                |
+| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                        |
+| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                      |
 
-The framework example apps register the same components against the same Experience payload, so they render identically; only the framework-specific setup differs. To run one, first seed that Experience into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, and the Experience itself.
+The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id (the route for preview). They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
 
 ```sh
 npm install --ignore-scripts
@@ -1051,15 +1114,16 @@ npm run build                          # build the SDK packages
 # 1. Seed the demo Experience into your Contentful space (one-time).
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+npm run bootstrap                      # prints the Destination id; paste it into the example's env file as DESTINATION_ID
 
 # 2. Run one of the example apps against the seeded space.
 cd ../nextjs                           # or ../sveltekit, ../angular, ../astro, ../vite-react, ../vite-svelte
 cp .env.example .env.local             # file name and variable prefix vary by app; see its README
+                                       # (run the bootstrap again afterwards if it didn't write DESTINATION_ID)
 npm run dev
 ```
 
-Then visit `/landing` (or whichever experienceId the bootstrap printed). See each example's README for its file map and route-by-route walkthrough.
+Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). See each example's README for its file map and route-by-route walkthrough.
 
 **Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
 
@@ -1079,11 +1143,11 @@ and direct `ContentfulViewDeliveryClient` use remain supported.
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                                            | Purpose                                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch, including first-class personalization and additional XDA extensions. Future digital-property identifiers widen this type.       |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                           | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.              |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                 | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box. |
+| Arg                 | Type                                                                                                                                                                  | Purpose                                                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by Destination path or node id (recommended), or by Experience id. Both take first-class personalization; by-id also takes additional XDA extensions. |
+| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                                                                                                 | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.                                    |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box.                       |
 
 Both `metadata` and `debug` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 

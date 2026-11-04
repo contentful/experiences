@@ -25,7 +25,7 @@ npm run build                          # build the SDK packages
 
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+npm run bootstrap                      # seeds the content, a Destination, and its nodes
 ```
 
 ### 2. Run the app
@@ -36,7 +36,34 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-Visit `http://localhost:5173/landing`. `landing` is the Experience id the bootstrap printed; any other Experience id in your space works too.
+`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env`.
+
+`/` is also a demo hub ([`DemoHub.svelte`](./src/lib/components/DemoHub.svelte)): it lists every route, has `?personalization` and `?debug` checkboxes, and sits above the home node. Visit `http://localhost:5173/` (the Destination's home node, the `home` Experience) and `http://localhost:5173/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:5173/experiences/landing`; that route also handles preview, which Destinations do not support.
+
+The destination route ([`src/routes/[...path]/+page.server.ts`](./src/routes/[...path]/+page.server.ts)) calls `fetchExperience({ spaceId, destinationId, path }, { accessToken }, ...)`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to a 404. It is rendered per request, not prerendered: it reads `?personalization` and `?debug`, and SvelteKit rejects `url.searchParams` on prerendered pages.
+
+For a fully static site, drop those query flags and enumerate the paths with `fetchDestinationSitemap`:
+
+```ts
+// src/routes/[...path]/+page.server.ts
+export const prerender = true;
+export const entries: EntryGenerator = async () => {
+  const paths: { path: string }[] = [];
+  let pageNext: string | undefined;
+  do {
+    const sitemap = await fetchDestinationSitemap(
+      { spaceId, destinationId },
+      { accessToken },
+      { pageNext }
+    );
+    for (const item of sitemap.items) paths.push({ path: item.path.replace(/^\/+/, '') });
+    pageNext = sitemap.pages.next;
+  } while (pageNext);
+  return paths;
+};
+```
+
+Prerendering also needs `$env/static/private`, because `$env/dynamic/private` is unavailable while prerendering.
 
 ### Optional: personalization
 
@@ -45,8 +72,8 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Tick **Personalization** on the home page, or open
-`http://localhost:5173/landing?personalization=true`, to see the developer
+Tick **Personalization** in the top-right corner of any page, or open
+`http://localhost:5173/demo/landing?personalization=true`, to see the developer
 hero. Without the flag you get the base hero.
 
 With `?personalization=true` the server builds a server-channel page event with
@@ -90,13 +117,13 @@ attribution, so views, hovers and clicks on the page are not tracked automatical
 
 ### Optional: preview mode
 
-Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
+Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/experiences/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
 
-The route ([`src/routes/[slug]/+page.server.ts`](./src/routes/[slug]/+page.server.ts)) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request.
+The by-id route ([`src/routes/experiences/[id]/+page.server.ts`](./src/routes/experiences/[id]/+page.server.ts)) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request.
 
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
+Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
 
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
@@ -115,15 +142,17 @@ examples/sveltekit/
 ├── src/
 │   ├── app.html              # SvelteKit HTML shell
 │   ├── routes/
-│   │   ├── +layout.svelte    # root layout
-│   │   ├── +page.svelte      # index
-│   │   ├── [slug]/+page.server.ts  # dynamic Experience load (server)
-│   │   └── [slug]/+page.svelte     # dynamic Experience render
+│   │   ├── +layout.svelte    # root layout; shows the demo hub at `/`, plus the consent panel
+│   │   ├── [...path]/+page.server.ts   # primary: Destination path load, redirects, 404
+│   │   ├── [...path]/+page.svelte      # Destination render
+│   │   ├── experiences/[id]/+page.server.ts  # secondary: by Experience id; preview, live preview
+│   │   └── experiences/[id]/+page.svelte     # by-id render
 │   └── lib/
 │       ├── components/       # design-system components; design arrives as props
 │       │   ├── Button.svelte
 │       │   ├── Card.svelte
 │       │   ├── CardCta.svelte  # nested child; the getDesignValues() escape hatch
+│       │   ├── DemoHub.svelte  # the route list and options shown at `/`
 │       │   ├── Heading.svelte
 │       │   ├── HeroPlain.svelte
 │       │   ├── Image.svelte

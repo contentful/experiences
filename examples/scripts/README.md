@@ -22,23 +22,24 @@ npm install               # from the repo root, if you haven't already
 npm run bootstrap
 ```
 
-The script prints the resulting experienceId at the end — paste it into the example app's `.env.local` (or hit `/landing` directly if you left the fixture unchanged).
+The script prints the Destination id at the end. Paste it into the env file of the example you run as `DESTINATION_ID` (`nextjs/.env.local`, `sveltekit/.env`, `angular/.env`, `astro/.env`), or `VITE_DESTINATION_ID` for `vite-react` and `vite-svelte` (`.env.local`). The script never reads or edits those files, since they also hold your tokens. The home node (`/`) serves the `home` Experience and `/demo/landing` serves `landing`; the apps' by-id routes take either id.
 
 ### What it seeds
 
-The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant. It provisions:
+The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant, plus a simpler `home` Experience for the Destination's `/` node. It provisions:
 
-| Step | Resource type      | Count | Notes                                                                                    |
-| ---- | ------------------ | ----- | ---------------------------------------------------------------------------------------- |
-| 1    | ContentType        | 1     | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                               |
-| 2    | Asset              | 3     | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space  |
-| 3    | Entry              | 4     | Base hero + personalized hero + 2 card `promotion` entries                               |
-| 4    | DesignToken        | 15    | color/size/fontSize/fontWeight tokens referenced by Components                           |
-| 5    | Component          | 8     | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card         |
-| 6    | ExperienceTemplate | 1     | `page` (passthrough)                                                                     |
-| 7    | DataAssembly       | 2     | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)      |
-| 8    | (linkage)          | 2     | Append DA links to hero-plain and card Components, republish                             |
-| 9    | Experience         | 1 + 3 | `landing`, its nested `Landing (developers)` variant, an EU audience and an Optimization |
+| Step | Resource type                          | Count     | Notes                                                                                                                         |
+| ---- | -------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ContentType                            | 1         | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                                                                    |
+| 2    | Asset                                  | 3         | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space                                       |
+| 3    | Entry                                  | 5         | Base hero + personalized hero + home hero + 2 card `promotion` entries                                                        |
+| 4    | DesignToken                            | 15        | color/size/fontSize/fontWeight tokens referenced by Components                                                                |
+| 5    | Component                              | 8         | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card                                              |
+| 6    | ExperienceTemplate                     | 1         | `page` (passthrough)                                                                                                          |
+| 7    | DataAssembly                           | 2         | `Hero from Promotion` + `Card from Promotion` (map entry fields to Component props)                                           |
+| 8    | (linkage)                              | 2         | Append DA links to hero-plain and card Components, republish                                                                  |
+| 9    | Experiences                            | 2 + 3     | `home` and `landing`, the nested `Landing (developers)` variant, an EU audience and an Optimization                           |
+| 10   | Channel, Destination, Destination Node | 1 + 1 + 4 | `demo-web` Channel, `Demo Website` Destination, and nodes for `/`, `/demo`, `/demo/landing`, and a `/welcome` redirect to `/` |
 
 Each step is idempotent: if a resource with the fixture's id already exists, that step is skipped. Re-running against a half-seeded env picks up where a previous run left off.
 
@@ -53,6 +54,12 @@ with `?personalization=true`; without it they render the base experience.
 The nested variant is idempotent too: the script finds it by its stable name,
 updates it in place, and publishes the latest version.
 
+Step 10 needs a CMA token that can manage Channels, which are scoped to the
+organization that owns the space. The Destination id is generated by Contentful,
+so re-runs find the Destination by name (`Demo Website`) instead of by id. Node
+paths are single segments without slashes (the home node's is empty); the API joins
+them on resolution, so the nodes resolve to `/`, `/demo`, `/demo/landing` and `/welcome`.
+
 ### Fixture
 
 The concrete data the script provisions lives in [`fixture/`](./fixture) — one TypeScript module per resource kind. If you want a different demo, edit those files rather than the bootstrap. `fixture/types.ts` documents each shape; every fixture module exports typed data the bootstrap imports directly.
@@ -60,4 +67,5 @@ The concrete data the script provisions lives in [`fixture/`](./fixture) — one
 ### Known limitations
 
 - **The ExO plain client methods used here (`component`, `experienceTemplate`, `dataAssembly`, `experience`) are marked `@internal` / experimental** in `contentful-management` and are subject to breaking changes without notice.
+- **Channels, Destinations, and Destination Nodes are called via raw `fetch()`**; the plain client has no methods for them.
 - **`/design_tokens` is called via raw `fetch()`** — the CMA dev build's plain client doesn't cover that endpoint yet. Customers setting up Experience Orchestration are encouraged to use the [Design System Import CLI tool](https://github.com/contentful/experience-design-system-sdk-public)

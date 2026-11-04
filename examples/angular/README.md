@@ -27,7 +27,7 @@ npm run build                          # build the SDK packages
 
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+npm run bootstrap                      # seeds the content, a Destination, and its nodes
 ```
 
 ### 2. Run the app
@@ -38,9 +38,13 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-Visit `http://localhost:4200/landing`. `landing` is the Experience id the bootstrap printed; any other Experience id in your space works too.
+`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env`.
 
-`ENVIRONMENT_ID` must name the environment you actually bootstrapped into — the seeder writes wherever its own `.env` points, which is not necessarily `master`. A mismatch surfaces as `Execution plan not found for view: landing`, not as a 404 from the space.
+`/` is also a demo hub ([`demo-hub.component.ts`](./src/app/components/demo-hub.component.ts)): it lists every route, has `?personalization` and `?debug` checkboxes, and sits above the home node. Visit `http://localhost:4200/` (the Destination's home node, the `home` Experience) and `http://localhost:4200/demo/landing` (the `landing` Experience). `/welcome` is a redirect node: the server answers with a 307 back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:4200/experiences/landing`; that route also handles preview, which Destinations do not support.
+
+[`src/server.ts`](./src/server.ts) sends `/experiences/:id` to a by-id `fetchExperience` and every other path to `fetchExperience({ spaceId, destinationId, path }, { accessToken }, ...)`, turns a `DestinationRedirectResult` into an HTTP redirect, and maps `NotFoundError` to a 404. Both are rendered per request, not prerendered (see the `outputMode` note below), so there is no `fetchDestinationSitemap` call here; see the Next.js example for sitemap-driven prerendering.
+
+`ENVIRONMENT_ID` only affects the by-id route (Destination delivery is space-scoped), and it must name the environment you actually bootstrapped into — the seeder writes wherever its own `.env` points, which is not necessarily `master`. A mismatch surfaces as `Execution plan not found for view: landing`, not as a 404 from the space.
 
 `.env` has to exist before `npm run dev` — the scripts pass Node's `--env-file`, which errors on a missing file rather than skipping it.
 
@@ -48,7 +52,7 @@ To run the production build instead:
 
 ```sh
 npm run build
-npm run preview                        # http://localhost:4000/landing
+npm run preview                        # http://localhost:4000/demo/landing
 ```
 
 ### Query parameters
@@ -67,8 +71,8 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Tick **Personalization** on the home page, or open
-`http://localhost:4200/landing?personalization=true`, to see the developer
+Tick **Personalization** in the top-right corner of any page, or open
+`http://localhost:4200/demo/landing?personalization=true`, to see the developer
 hero. Without the flag you get the base hero.
 
 With `?personalization=true` the server builds a server-channel page event with
@@ -112,13 +116,13 @@ attribution, so views, hovers and clicks on the page are not tracked automatical
 
 ### Optional: preview mode
 
-Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:4200/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
+Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:4200/experiences/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
 
 [`src/server.ts`](./src/server.ts) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request. `?debug=true` turns on the resolver's debug output the same way.
 
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched plan until a complete update arrives.
+Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched Experience until a complete update arrives.
 
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
@@ -141,19 +145,19 @@ examples/angular/
 │   ├── main.server.ts                # SSR bootstrap (threads BootstrapContext)
 │   ├── server.ts                     # Express 5 + AngularNodeAppEngine; fetches the plan
 │   └── app/
-│       ├── app.component.ts          # <router-outlet />
-│       ├── app.routes.ts             # '' → Home, ':slug' → Experience
+│       ├── app.component.ts          # <router-outlet /> + demo hub at /
+│       ├── app.routes.ts             # 'experiences/:id' and '**' → Experience page
 │       ├── app.routes.server.ts      # RenderMode.Server on '**'
 │       ├── app.config.ts             # zoneless + router + client hydration
 │       ├── app.config.server.ts      # + provideServerRendering(withRoutes(...))
 │       ├── experience-store.ts       # REQUEST_CONTEXT → TransferState bridge
 │       ├── pages/
-│       │   ├── home.component.ts
 │       │   └── experience-page.component.ts   # renders <cf-server-experience>
 │       ├── components/               # plain design-system components; design arrives as inputs
 │       │   ├── button.component.ts
 │       │   ├── card.component.ts
 │       │   ├── card-cta.component.ts # nested child; the injectDesignValues() escape hatch
+│       │   ├── demo-hub.component.ts # the route list and options shown at `/`
 │       │   ├── heading.component.ts
 │       │   ├── hero-plain.component.ts
 │       │   ├── image.component.ts

@@ -1,9 +1,12 @@
 # Next.js example: Contentful Experiences
 
-A Next.js 15 App Router app demonstrating `@contentful/experiences-react` rendering an Experience payload fetched from XDA.
+A Next.js 15 App Router app demonstrating `@contentful/experiences-react` rendering an Experience payload fetched from XDA. Pages are served from a **Destination**: the URL path is the Destination path, and the SDK resolves it to an Experience. Fetching by Experience id is available as a secondary route.
 
 ## What it shows
 
+- **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
+- **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
+- **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` fetches one Experience by id. It is the route for preview, live preview and runtime parameters, none of which Destinations support.
 - **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
 - **Preview mode via `?preview=true`**: `fetchExperience` accepts both a delivery `accessToken` and a `previewToken`; flipping `preview: true` at request time swaps the token and endpoint together. This is purely a fetch concern (which token + host) — independent of `debug`.
@@ -34,7 +37,7 @@ npm run build                          # build the SDK packages
 
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # prints the experienceId at the end (default: `landing`)
+npm run bootstrap                      # seeds the content, a Destination, and its nodes
 ```
 
 ### 2. Run the app
@@ -45,11 +48,13 @@ cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-Visit `http://localhost:3000/landing`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
+`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
+
+Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
 ### Optional: runtime parameters
 
-Open `/<experience-id>?parameter_demo=true` to show the parameter form. Enter a
+Open `/experiences/<experience-id>?parameter_demo=true` to show the parameter form. Enter a
 JSON object using IDs declared in that Experience's `parameters`, then click
 **Refetch Experience**. The GET form reloads the same route with new values;
 the server calls `fetchExperience` again and renders its newly resolved plan.
@@ -88,9 +93,10 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Tick **Personalization** on the home page, or open
-`http://localhost:3000/landing?personalization=true`, to see the developer
-hero. Without the flag you get the base hero.
+Tick **Personalization** on the hub at `/` and click Apply, or open `http://localhost:3000/demo/landing?personalization=true` (or
+`/experiences/landing?personalization=true`) to see the developer hero. Without
+the flag you get the base hero. Both the Destination and by-id fetches accept the
+same `personalization` option.
 
 With `?personalization=true` the server builds a server-channel page event with
 `EventBuilder`, stamps an EU location on it, and sends it in `fetchExperience`'s
@@ -135,7 +141,7 @@ both automatic tracking and these manual calls.
 
 ### Optional: preview mode
 
-Append `?preview=true` to any experience URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
+Preview is not supported on Destinations (`fetchExperience` throws `DestinationPreviewNotSupportedError`), so it lives on the by-id route. Append `?preview=true` to an `/experiences/<id>` URL to read from the Content Preview API (`preview.xdn.contentful.com`) instead. Preview requires a **Content Preview API token** — the CDA token is rejected by that host.
 
 Add it to `.env.local`:
 
@@ -143,13 +149,13 @@ Add it to `.env.local`:
 CPA_TOKEN=...   # Content Preview API token, from Settings → API keys in your space
 ```
 
-Then visit `http://localhost:3000/landing?preview=true&locale=en-US`.
+Then visit `http://localhost:3000/experiences/landing?preview=true&locale=en-US`.
 
 The route wires this through `fetchExperience`'s client options — both tokens are passed up front and `preview: previewMode` selects which one to use per request. See the snippet in [The route](#the-route) below.
 
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
+Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
 
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
@@ -161,46 +167,44 @@ The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are bo
 | `CDA_TOKEN` | Content Delivery   | The example app                              | Yes, to run the app   |
 | `CPA_TOKEN` | Content Preview    | The example app when the Preview API is used | Only for preview mode |
 
-## The route
+## The routes
 
-One dynamic `/[slug]` route. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it. Preview mode, debug mode, and per-page metadata are all wired up as `searchParams`.
+The hub at `/` links to all of these. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it.
 
-| Try it locally                                                  | Source                                         | Config                                                                           |
-| --------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
-| `http://localhost:3000/landing`                                 | [`app/[slug]/page.tsx`](./app/[slug]/page.tsx) | [`lib/experience-config.tsx`](./lib/experience-config.tsx)                       |
-| `http://localhost:3000/landing?debug=true&locale=en-US`         | same route                                     | same config                                                                      |
-| `http://localhost:3000/landing?personalization=true&debug=true` | same route                                     | personalized page event plus SDK debug output                                    |
-| `http://localhost:3000/landing?preview_session_id=<session-id>` | same route                                     | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
+| Try it locally                                                              | Source                                                             | Notes                                                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `http://localhost:3000/`                                                    | [`app/page.tsx`](./app/page.tsx)                                   | Demo hub plus the Destination home node (shared `lib/destination-page.tsx`)      |
+| `http://localhost:3000/demo/landing`                                        | [`app/[...path]/page.tsx`](./app/[...path]/page.tsx)               | Destination path                                                                 |
+| `http://localhost:3000/welcome`                                             | same route                                                         | Redirect node: `redirect()` back to `/`                                          |
+| `http://localhost:3000/demo/landing?personalization=true&debug=true`        | same route                                                         | personalized page event plus SDK debug output                                    |
+| `http://localhost:3000/experiences/landing`                                 | [`app/experiences/[id]/page.tsx`](./app/experiences/[id]/page.tsx) | By Experience id                                                                 |
+| `http://localhost:3000/experiences/landing?preview_session_id=<session-id>` | same route                                                         | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
 
-The route in one glance:
+The destination route in one glance:
+
+```tsx
+const result = await fetchExperience(
+  { spaceId, destinationId, path }, // path: "/demo/landing"
+  { accessToken: CDA_TOKEN },
+  { config: experienceConfig, metadata: { slug, locale }, debug }
+);
+if ('redirect' in result) redirect(result.redirect.path);
+return <ServerExperienceRenderer experience={result} config={experienceConfig} debug={debug} />;
+```
+
+Destination delivery is space-scoped (no `environmentId`), and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. The listed paths are prerendered at build time; requests carrying query flags such as `?personalization=true` or `?debug=true` are rendered on demand, because the page reads `searchParams`. Rebuild or use revalidation to refresh the prerendered copies after republishing content.
+
+The by-id route:
 
 ```tsx
 const experience = await fetchExperience(
   { spaceId, environmentId, experienceId, locale },
-  {
-    accessToken: CDA_TOKEN,
-    previewToken: CPA_TOKEN,
-    preview: previewMode,
-  },
-  {
-    config: experienceConfig,
-    metadata: { slug, locale },
-    debug,
-  }
-);
-return (
-  <ServerExperienceRenderer
-    experience={experience}
-    config={experienceConfig}
-    metadata={{ slug, locale }}
-    debug={debug}
-  />
+  { accessToken: CDA_TOKEN, previewToken: CPA_TOKEN, preview: previewMode },
+  { config: experienceConfig, metadata: { slug: experienceId, locale }, debug }
 );
 ```
 
 An empty-nodes payload (draft, unpublished, or empty locale) resolves to a plan with `nodes: []` and renders as an empty page — not a 404.
-
-Slug-to-ID mapping is up to you. See the SDK roadmap in [`AGENTS.md`](../../AGENTS.md) for the longer-term direction.
 
 ## File map
 
@@ -208,8 +212,9 @@ Slug-to-ID mapping is up to you. See the SDK roadmap in [`AGENTS.md`](../../AGEN
 examples/nextjs/
 ├── app/
 │   ├── layout.tsx                       # root layout
-│   ├── page.tsx                         # index; links to the demo experience
-│   └── [slug]/page.tsx                  # fetch + render + 404, preview, metadata
+│   ├── page.tsx                         # demo hub at `/` + the Destination home node
+│   ├── [...path]/page.tsx               # primary: Destination path, redirects, 404, sitemap SSG
+│   └── experiences/[id]/page.tsx        # secondary: by Experience id; preview, live preview, parameters
 ├── components/                          # design-system components; design arrives as props
 │   ├── Section.tsx                      # flex/grid layout primitive; design as named props
 │   ├── Heading.tsx
@@ -320,11 +325,15 @@ PriceTag: defineComponent<PriceTagProps>({
 }),
 ```
 
-The route calls `fetchExperience` once, and it handles the API call and resolution in one step:
+The route calls `fetchExperience` once (a Destination path may return a redirect instead of an Experience; see above), and it handles the API call and resolution in one step:
 
 ```ts
-const experience = await fetchExperience(
-  { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId: slug },
+const result = await fetchExperience(
+  {
+    spaceId: process.env.SPACE_ID!,
+    destinationId: process.env.DESTINATION_ID!,
+    path: '/demo/landing',
+  },
   { accessToken: process.env.CDA_TOKEN! },
   { config: experienceConfig }
 );

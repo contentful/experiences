@@ -1,8 +1,9 @@
 <!--
   The client-only flow: the same `fetchExperience` call the SvelteKit example
-  makes in its server load function, run in the browser instead. It fetches
-  from the Experience Delivery API, resolves it, and hands the result to
-  `ClientExperienceRenderer`.
+  makes in its server load function, run in the browser instead. It fetches by
+  Destination path (or by Experience id), resolves it, and hands the result to
+  `ClientExperienceRenderer`. A Destination redirect node resolves to
+  `{ redirect }`, which the browser follows with `location.replace`.
 
   What a server would otherwise give you, and what you take on here:
   - The delivery token ships in the bundle (see `lib/env.ts`).
@@ -20,25 +21,47 @@
   import { experienceConfig } from './lib/experience-config.js';
 
   interface Props {
-    experienceId: string;
+    /** Fetch by Destination path. Destination fetches take no `locale`. */
+    destinationPath?: string;
+    /** Fetch by Experience id. Set exactly one of `destinationPath` and `experienceId`. */
+    experienceId?: string;
     locale: string;
     debug: boolean;
   }
 
-  let { experienceId, locale, debug }: Props = $props();
+  let { destinationPath, experienceId, locale, debug }: Props = $props();
 
   const experience = $derived.by(() => {
-    if (!env.spaceId || !env.accessToken) {
+    if (!env.spaceId || !env.accessToken || (destinationPath !== undefined && !env.destinationId)) {
       return Promise.reject(
         new Error(
-          'VITE_SPACE_ID and VITE_CDA_TOKEN must be set. Copy .env.example to .env.local and fill them in.'
+          'VITE_SPACE_ID, VITE_DESTINATION_ID and VITE_CDA_TOKEN must be set. Copy .env.example to .env.local and fill them in.'
         )
       );
     }
+    const resolveOptions = {
+      config: experienceConfig,
+      metadata: { slug: destinationPath ?? experienceId, locale },
+      debug,
+    };
+    if (destinationPath !== undefined) {
+      return fetchExperience(
+        { spaceId: env.spaceId, destinationId: env.destinationId, path: destinationPath },
+        { accessToken: env.accessToken },
+        resolveOptions
+      ).then((result) => {
+        if ('redirect' in result) {
+          window.location.replace(result.redirect.path);
+          // The browser is navigating away; keep showing the loading state.
+          return new Promise<never>(() => {});
+        }
+        return result;
+      });
+    }
     return fetchExperience(
-      { spaceId: env.spaceId, environmentId: env.environmentId, experienceId, locale },
+      { spaceId: env.spaceId, environmentId: env.environmentId, experienceId: experienceId!, locale },
       { accessToken: env.accessToken },
-      { config: experienceConfig, metadata: { slug: experienceId, locale }, debug }
+      resolveOptions
     );
   });
 </script>

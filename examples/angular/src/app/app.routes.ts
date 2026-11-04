@@ -1,9 +1,11 @@
 import type { Routes } from '@angular/router';
 
 import { ExperiencePageComponent } from './pages/experience-page.component.js';
-import { HomeComponent } from './pages/home.component.js';
 
+// Both routes render the Experience `src/server.ts` resolved for the request: the
+// Express layer sends `/experiences/:id` to a by-id fetch and every other path
+// to a Destination fetch. The router only chooses the component.
 export const routes: Routes = [
-  { path: '', component: HomeComponent },
-  { path: ':slug', component: ExperiencePageComponent },
+  { path: 'experiences/:id', component: ExperiencePageComponent },
+  { path: '**', component: ExperiencePageComponent },
 ];

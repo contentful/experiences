@@ -11,7 +11,8 @@ A client-only Vite + React 19 single-page app demonstrating `@contentful/experie
 - **CSS-in-JS**: [`src/components/Card.tsx`](./src/components/Card.tsx) is styled with styled-components. Resolved design values arrive as props and pass into the styled components as transient (`$`-prefixed) props, so they never reach the DOM. The other components use inline styles.
 - **The `useDesignValues()` escape hatch**: the card's nested `CardCta` reads the card's design off context.
 - **Design tokens**: [`src/lib/experience-config.ts`](./src/lib/experience-config.ts) wires a `resolveToken` that maps token ids to values from [`src/lib/design-tokens.ts`](./src/lib/design-tokens.ts).
-- **No router dependency**: [`src/App.tsx`](./src/App.tsx) reads the Experience id from the path. Replace it with your router; nothing SDK-related changes.
+- **Destination routing**: the URL path is the Destination path, so `/` and `/demo/landing` resolve to different Experiences. A redirect node (`/welcome`) comes back as `{ redirect }` and the app follows it with `location.replace`. `/experiences/<id>` fetches one Experience by id instead.
+- **No router dependency**: [`src/App.tsx`](./src/App.tsx) chooses between those two from `location.pathname`. Replace it with your router; nothing SDK-related changes.
 
 ## Client-only trade-offs
 
@@ -31,11 +32,13 @@ npm install
 npm run build                          # build the SDK packages
 
 cd examples/vite-react
-cp .env.example .env.local             # fill in VITE_SPACE_ID, VITE_CDA_TOKEN
+cp .env.example .env.local             # fill in VITE_SPACE_ID, VITE_DESTINATION_ID, VITE_CDA_TOKEN
 npm run dev
 ```
 
-Open [http://localhost:5173/landing](http://localhost:5173/landing).
+`VITE_DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
+
+Open [http://localhost:5173/](http://localhost:5173/) (the Destination's home node) and [http://localhost:5173/demo/landing](http://localhost:5173/demo/landing). `/welcome` is a redirect node back to `/`. For one Experience by id, open `/experiences/landing`; that route uses `VITE_ENVIRONMENT_ID`, while Destination delivery is space-scoped.
 
 | Script              | What it does                                       |
 | ------------------- | -------------------------------------------------- |
@@ -44,4 +47,4 @@ Open [http://localhost:5173/landing](http://localhost:5173/landing).
 | `npm run preview`   | Serves `dist/` locally, with the same SPA fallback |
 | `npm run typecheck` | `tsc --noEmit`                                     |
 
-To deploy, serve `dist/` from any static host and configure it to fall back to `index.html` for unknown paths so deep links like `/landing` resolve.
+To deploy, serve `dist/` from any static host and configure it to fall back to `index.html` for unknown paths so deep links like `/demo/landing` resolve.
