@@ -6,7 +6,7 @@ import {
   type ExperiencesNodeRequest,
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
-  type RuntimeLivePreviewInitializer,
+  type RuntimeLivePreviewOptions,
 } from '@contentful/experiences-node';
 import type { Config } from '@contentful/experiences-react/server';
 import type { ExperiencesRootProps } from '@contentful/experiences-react/client';
@@ -62,8 +62,7 @@ export interface NextjsServerExperiencesConfig extends ExperiencesNodeConfig {
   readonly cookie?: NextjsCookieConfig;
   readonly livePreview?: (
     context: NextjsServerRequestContext
-  ) =>
-    RuntimeLivePreviewInitializer | undefined | Promise<RuntimeLivePreviewInitializer | undefined>;
+  ) => RuntimeLivePreviewOptions | undefined | Promise<RuntimeLivePreviewOptions | undefined>;
   readonly request?: NextjsServerRequestPolicy;
 }
 
