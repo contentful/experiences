@@ -30,4 +30,4 @@ metadata:
 spec:
   type: library
   lifecycle: experimental
-  owner: group-applied-ai-solutions
+  owner: group:group-applied-ai-solutions
