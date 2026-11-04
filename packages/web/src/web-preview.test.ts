@@ -2,6 +2,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type {
   RuntimeLivePreviewBinding,
+  RuntimeLivePreviewModule,
+  RuntimeLivePreviewOptions,
   RuntimePreviewClient,
 } from '@contentful/experiences-runtime';
 import { WebPreview } from './web-preview.js';
@@ -44,13 +46,21 @@ function fixture(experienceId = 'hero') {
       })),
     },
   };
-  const create = (initializer = () => Promise.resolve(binding)) => {
-    const owner = new WebPreview(config, initializer);
+  const options = {
+    experienceId,
+    sessionId: binding.sessionId,
+    loadImplementation: () => binding.implementation,
+  };
+  const create = (
+    loadImplementation: RuntimeLivePreviewOptions['loadImplementation'] = options.loadImplementation
+  ) => {
+    const owner = new WebPreview(config, { ...options, loadImplementation });
     owners.push(owner);
     return owner;
   };
   return {
     binding,
+    options,
     create,
     stop,
     stopStatus,
@@ -80,14 +90,14 @@ it('publishes one SDK-owned source and releases its subscriptions on destruction
   expect(preview.peek()).toBeUndefined();
 });
 
-it('ignores an obsolete initializer after replacing the session', async () => {
+it('ignores an obsolete implementation load after replacing the session', async () => {
   const old = fixture('old'),
     fresh = fixture('fresh');
-  const pending = deferred<RuntimeLivePreviewBinding>();
+  const pending = deferred<RuntimeLivePreviewModule>();
   const owner = old.create(() => pending.promise);
   const initial = owner.ready();
-  await owner.replace(() => fresh.binding);
-  pending.resolve(old.binding);
+  await owner.replace(fresh.options);
+  pending.resolve(old.binding.implementation);
   await initial;
   expect(preview.peek()?.experienceId).toBe('fresh');
   expect(old.binding.implementation.createLivePreviewClient).not.toHaveBeenCalled();

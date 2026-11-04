@@ -34,14 +34,14 @@ export function getPreviewBinding(environment: PreviewEnvironment, href: string)
 
 export function createPreviewInitializer(binding: ReturnType<typeof getPreviewBinding>) {
   if (!binding) return undefined;
-  return async () => {
-    if (!__LIVE_PREVIEW_ENABLED__)
-      throw new Error(
-        'Preview assets are excluded. Enable LIVE_PREVIEW_ENABLED in .env and rebuild.'
-      );
-    return {
-      ...binding,
-      implementation: await import('@contentful/experiences-live-preview'),
-    };
+  return {
+    ...binding,
+    loadImplementation: () => {
+      if (!__LIVE_PREVIEW_ENABLED__)
+        throw new Error(
+          'Preview assets are excluded. Enable LIVE_PREVIEW_ENABLED in .env and rebuild.'
+        );
+      return import('@contentful/experiences-live-preview');
+    },
   };
 }

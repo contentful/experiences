@@ -64,7 +64,7 @@ export type {
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
-  RuntimeLivePreviewInitializer,
+  RuntimeLivePreviewOptions,
   RuntimeLivePreviewBinding,
   RuntimeLivePreviewModule,
   RuntimePreviewClient,

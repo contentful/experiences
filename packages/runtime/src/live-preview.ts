@@ -42,18 +42,23 @@ export interface RuntimeLivePreviewBinding {
   sessionHost?: string;
   implementation: RuntimeLivePreviewModule;
 }
-export type RuntimeLivePreviewInitializer = () =>
-  RuntimeLivePreviewBinding | Promise<RuntimeLivePreviewBinding>;
+export interface RuntimeLivePreviewOptions extends Omit<
+  RuntimeLivePreviewBinding,
+  'implementation'
+> {
+  loadImplementation(): RuntimeLivePreviewModule | Promise<RuntimeLivePreviewModule>;
+}
 export type RuntimeLivePreviewConfig = Pick<
   Config,
   'spaceId' | 'environmentId' | 'preview' | 'resolveDefaults'
 >;
 
 /** Owners retain the returned promise to share initialization within their own lifetime. */
-export async function initializeRuntimeLivePreview(
-  initializer: RuntimeLivePreviewInitializer
-): Promise<RuntimeLivePreviewBinding> {
-  return { ...(await initializer()) };
+export async function initializeRuntimeLivePreview({
+  loadImplementation,
+  ...binding
+}: RuntimeLivePreviewOptions): Promise<RuntimeLivePreviewBinding> {
+  return { ...binding, implementation: await loadImplementation() };
 }
 
 /** Call only after selecting the matching session, before ordinary-source enrichment. */
