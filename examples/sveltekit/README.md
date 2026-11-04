@@ -38,7 +38,7 @@ npm run dev
 
 `DESTINATION_ID` is server-generated. Run the bootstrap after creating `.env` and it writes the id for you; otherwise paste the id it prints.
 
-Visit `http://localhost:5173/` (the Destination's home node, the `home` Experience) and `http://localhost:5173/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:5173/experiences/landing`; that route also handles preview, which Destinations do not support.
+`/` is also a demo hub ([`DemoHub.svelte`](./src/lib/components/DemoHub.svelte)): it lists every route, has `?personalization` and `?debug` checkboxes, and sits above the home node. Visit `http://localhost:5173/` (the Destination's home node, the `home` Experience) and `http://localhost:5173/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:5173/experiences/landing`; that route also handles preview, which Destinations do not support.
 
 The destination route ([`src/routes/[...path]/+page.server.ts`](./src/routes/[...path]/+page.server.ts)) calls `fetchExperience({ spaceId, destinationId, path }, { accessToken }, ...)`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to a 404. It is rendered per request, not prerendered: it reads `?personalization` and `?debug`, and SvelteKit rejects `url.searchParams` on prerendered pages.
 
