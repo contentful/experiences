@@ -142,7 +142,7 @@ examples/sveltekit/
 ├── src/
 │   ├── app.html              # SvelteKit HTML shell
 │   ├── routes/
-│   │   ├── +layout.svelte    # root layout
+│   │   ├── +layout.svelte    # root layout; shows the demo hub at `/`, plus the consent panel
 │   │   ├── [...path]/+page.server.ts   # primary: Destination path load, redirects, 404
 │   │   ├── [...path]/+page.svelte      # Destination render
 │   │   ├── experiences/[id]/+page.server.ts  # secondary: by Experience id; preview, live preview
@@ -152,6 +152,7 @@ examples/sveltekit/
 │       │   ├── Button.svelte
 │       │   ├── Card.svelte
 │       │   ├── CardCta.svelte  # nested child; the getDesignValues() escape hatch
+│       │   ├── DemoHub.svelte  # the route list and options shown at `/`
 │       │   ├── Heading.svelte
 │       │   ├── HeroPlain.svelte
 │       │   ├── Image.svelte

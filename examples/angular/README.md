@@ -157,6 +157,7 @@ examples/angular/
 │       │   ├── button.component.ts
 │       │   ├── card.component.ts
 │       │   ├── card-cta.component.ts # nested child; the injectDesignValues() escape hatch
+│       │   ├── demo-hub.component.ts # the route list and options shown at `/`
 │       │   ├── heading.component.ts
 │       │   ├── hero-plain.component.ts
 │       │   ├── image.component.ts

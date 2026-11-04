@@ -26,13 +26,13 @@ The script prints the Destination id at the end. Paste it into the env file of t
 
 ### What it seeds
 
-The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant. It provisions:
+The demo is a `landing` Experience with one hero, two cards, and a developer-focused personalized hero variant, plus a simpler `home` Experience for the Destination's `/` node. It provisions:
 
 | Step | Resource type                          | Count     | Notes                                                                                                                         |
 | ---- | -------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 1    | ContentType                            | 1         | `promotion` (title, teaser, body, ctaLabel, ctaUrl, image)                                                                    |
 | 2    | Asset                                  | 3         | hero background + 2 card images, read from `fixture/assets/` and uploaded to your space                                       |
-| 3    | Entry                                  | 4         | Base hero + personalized hero + 2 card `promotion` entries                                                                    |
+| 3    | Entry                                  | 5         | Base hero + personalized hero + home hero + 2 card `promotion` entries                                                        |
 | 4    | DesignToken                            | 15        | color/size/fontSize/fontWeight tokens referenced by Components                                                                |
 | 5    | Component                              | 8         | Section, Heading, RichText, Text, Button, Image (primitives) + hero-plain + card                                              |
 | 6    | ExperienceTemplate                     | 1         | `page` (passthrough)                                                                                                          |

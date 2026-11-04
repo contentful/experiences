@@ -400,7 +400,7 @@ The sitemap exists for bulk enumeration — static generation / prerendering (fe
 
 **Preview is not supported for Destinations yet.** With inline credentials, `preview: true` plus a destination (in either function) throws `DestinationPreviewNotSupportedError`, re-exported by every adapter. The guard (`destination-guards.ts`) is a bridge, not a permanent design; it does not fire on the `{ client }` branch. The Node and Web runtimes expose per-request destination fetches (`fetchByDestinationNode` / `fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only — there is no sitemap method on either runtime.
 
-**Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, written by the bootstrap) and fetch by Experience id only at `/experiences/[id]`. Preview lives on that route in the server-rendered examples; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route.
+**Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, printed by the bootstrap for you to paste into the example's env file) and fetch by Experience id only at `/experiences/[id]`. Preview lives on that route in the server-rendered examples; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route. The Next.js, SvelteKit, and Angular examples also show a demo hub at `/` (the route list and the `?personalization` and `?debug` options) above the home node.
 
 ### Why does `fetchExperience` have both `preview: boolean` and `host: string`?
 
@@ -711,7 +711,7 @@ npm run bootstrap            # seeds content + a Destination; prints the DESTINA
 
 # 2. Run the app.
 cd ../nextjs
-cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+cp .env.example .env.local   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN, DESTINATION_ID (the bootstrap prints it)
 npm run dev                  # http://localhost:3000/ and /demo/landing; by id: /experiences/landing
 ```
 
