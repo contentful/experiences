@@ -90,7 +90,7 @@ packages/
 examples/            # Example apps (customer-facing)
 ├── nextjs/          # Next.js 15 example app
 ├── sveltekit/       # SvelteKit 2 example app
-├── angular/         # Angular 20 + @angular/ssr example app
+├── angular/         # Angular 22 + @angular/ssr example app
 ├── astro/           # Astro 7 custom-renderer example app
 ├── vite-react/      # Vite + React client-only example app
 ├── vite-svelte/     # Vite + Svelte client-only example app

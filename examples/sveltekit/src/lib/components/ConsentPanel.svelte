@@ -74,10 +74,9 @@
       }),
     ];
 
-    // Views, hovers, and clicks on rendered nodes go through the same consent gate.
-    const session = instance.startInteractionTracking({ resolveAttribution: () => undefined });
+    // The constructor discovers rendered attribution; views, hovers, and clicks on
+    // rendered nodes go through the same consent gate.
     return () => {
-      void session.stop();
       subscriptions.forEach((subscription) => subscription.unsubscribe());
       // Only one Web SDK may be live at a time; release it so a remount can construct another.
       instance.destroy();

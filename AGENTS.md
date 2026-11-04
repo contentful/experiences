@@ -41,7 +41,7 @@ experiences/
 ├── examples/                # Customer-facing example apps
 │   ├── nextjs/               # Next.js 15 example (external developers run this)
 │   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
-│   ├── angular/              # Angular 20 + @angular/ssr example (parity with both)
+│   ├── angular/              # Angular 22 + @angular/ssr example (parity with both)
 │   ├── astro/                # Astro 7 example on the React custom-renderer entry
 │   ├── vite-react/           # Vite + React client-only example
 │   ├── vite-svelte/          # Vite + Svelte client-only example
