@@ -17,16 +17,22 @@ const isOn = (value: unknown) => ['true', '1'].includes(String(value ?? ''));
     >
       <h1 style="margin-top: 0;">Contentful Experiences — Angular example</h1>
       <p style="color: #4b5563;">
-        This app renders Contentful Experiences with <code>&#64;contentful/experiences-angular</code> in
-        Angular SSR. Pages are served from a <strong>Destination</strong>: the URL path is the
-        Destination path. One Experience can also be fetched <strong>by id</strong>, which is the
-        route for preview and live preview. The home Experience for this page is rendered below.
+        This app renders Contentful Experiences with
+        <code>&#64;contentful/experiences-angular</code> in Angular SSR. Pages are served from a
+        <strong>Destination</strong>: the URL path is the Destination path. One Experience can also
+        be fetched <strong>by id</strong>, which is the route for preview and live preview. The home
+        Experience for this page is rendered below.
       </p>
 
       <form method="get" action="/">
         <p style="margin-bottom: 8px;">
           <label style="display: flex; align-items: center; gap: 8px; color: #374151;">
-            <input type="checkbox" name="personalization" value="true" [checked]="personalization" />
+            <input
+              type="checkbox"
+              name="personalization"
+              value="true"
+              [checked]="personalization"
+            />
             Personalization (simulates an EU visitor)
           </label>
         </p>
@@ -46,9 +52,7 @@ const isOn = (value: unknown) => ['true', '1'].includes(String(value ?? ''));
           <a [href]="withFlags('/demo/landing')">/demo/landing</a>: the <code>landing</code>
           Experience
         </li>
-        <li>
-          <a href="/welcome">/welcome</a>: a redirect node, sends you back to <code>/</code>
-        </li>
+        <li><a href="/welcome">/welcome</a>: a redirect node, sends you back to <code>/</code></li>
         <li>Any other path is a 404.</li>
       </ul>
       <p style="color: #4b5563;">
