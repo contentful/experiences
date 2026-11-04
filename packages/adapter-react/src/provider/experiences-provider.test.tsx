@@ -23,6 +23,7 @@ import {
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { profileFixture } from '../test/profile.js';
 import { minimalSourceMap } from '../test/source-map.js';
 import {
   useExperiences,
@@ -62,7 +63,7 @@ const config: ExperiencesWebConfig = {
   delivery: { accessToken: 'delivery' },
 };
 const snapshot: ExperiencesSnapshot = {
-  data: { profile: { id: 'server-profile' } },
+  data: { profile: profileFixture('server-profile') },
   locale: 'en-US',
   consent: false,
 };
@@ -74,7 +75,7 @@ function initialization(
     spaceId: 'space',
     environmentId: 'master',
     cache: { scope: 'private-request' },
-    state: { profile: { id } },
+    state: { profile: profileFixture(id) },
   };
   return { handoff, routeKey };
 }
@@ -89,7 +90,10 @@ function deferred() {
 }
 function liveSdk() {
   return Object.assign(
-    createWebSnapshotRuntime({ locale: 'en-US', data: { profile: { id: 'browser-profile' } } }),
+    createWebSnapshotRuntime({
+      locale: 'en-US',
+      data: { profile: profileFixture('browser-profile') },
+    }),
     {
       spaceId: config.spaceId,
       environmentId: config.environmentId,
@@ -490,7 +494,7 @@ describe('React runtime ownership and activation', () => {
     );
     expect(order).toEqual(['attach', 'immediate emission', 'hydrate', 'child effect']);
     expect(runtime.hydrateHandoffState).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ state: { profile: { id: 'server-profile' } } }),
+      expect.objectContaining({ state: { profile: profileFixture('server-profile') } }),
       { routeKey: '/initial' }
     );
     act(() => view.cleanup());
@@ -754,7 +758,7 @@ describe('React runtime ownership and activation', () => {
     }
   );
 
-  it('forwards a lazy preview initializer only at commit and keeps preview state separate from root readiness', async () => {
+  it('forwards preview configuration only at commit and keeps preview state separate from root readiness', async () => {
     let value: CoreStates['preview']['current'];
     const listeners = new Set<(state: CoreStates['preview']['current']) => void>();
     const preview: Observable<CoreStates['preview']['current']> = {
@@ -773,9 +777,13 @@ describe('React runtime ownership and activation', () => {
       subscribeOnce: vi.fn(),
     };
     runtime.states.preview = preview;
-    const livePreview = vi.fn<NonNullable<ExperiencesWebConfig['livePreview']>>(() => {
-      throw new Error('React must forward the initializer without invoking it');
-    });
+    const livePreview: NonNullable<ExperiencesWebConfig['livePreview']> = {
+      experienceId: 'hero',
+      sessionId: 'session',
+      loadImplementation: vi.fn(() => {
+        throw new Error('React must not invoke the preview loader');
+      }),
+    };
     const previewValues: Array<CoreStates['preview']['current']> = [];
     function PreviewProbe() {
       previewValues.push(usePreviewState());
@@ -789,12 +797,12 @@ describe('React runtime ownership and activation', () => {
     );
     renderToString(tree);
     expect(construct).not.toHaveBeenCalled();
-    expect(livePreview).not.toHaveBeenCalled();
+    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
     expect(previewValues[0]).toBeUndefined();
     render(tree);
     expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, livePreview });
     // The double does not initialize preview: loading and policy remain Web responsibilities.
-    expect(livePreview).not.toHaveBeenCalled();
+    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
     const states: Array<CoreStates['preview']['current']> = [
       undefined,
       {
