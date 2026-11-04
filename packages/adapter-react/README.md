@@ -146,7 +146,7 @@ after browser commit and destroys it during cleanup, including Strict Mode
 effect replay. Conflicting owners surface the Web singleton error through context.
 Structural configuration is captured for the mounted owner; use a deliberate
 React `key` replacement to change credentials, endpoints, preview policy or the
-initializer. Locale props use `setLocale`; consent and other mutable commands use
+preview configuration. Locale props use `setLocale`; consent and other mutable commands use
 actions. Within fixed preview mode, explicit `sdk.replaceLivePreview()` remains
 available on an application-owned concrete Web instance.
 
@@ -202,8 +202,8 @@ immediate historical value when counting new attempts.
 arguments, results, errors and runtime policy. Direct identify/page actions do not
 refresh content or coordinate navigation. Destruction remains an owner operation.
 
-Pass the optional `livePreview` initializer directly to the managed root's Web
-configuration. It is invoked by SDK setup after commit, and `usePreviewState`
+Pass the optional `livePreview` options directly to the managed root's Web
+configuration. The SDK loads the implementation after commit, and `usePreviewState`
 observes the shared source. Pending initialization, source errors, static preview
 and session replacement do not change root readiness. Preview errors remain in
 `states.preview.error`; undefined means disabled or initializing. No initial
@@ -211,7 +211,7 @@ fetch or per-view resolved update binding is introduced by a provider.
 
 ### Live preview
 
-Use runtime-owned preview through the public Web SDK. Conditional preview configuration
+Use runtime-owned preview through the public Web SDK. A conditional preview configuration
 binds one Experience ID to a session, while ordinary requests for other IDs keep
 their Delivery source. The application owns the SDK lifetime when using it
 directly, constructs it after browser commit, and disposes its subscriptions

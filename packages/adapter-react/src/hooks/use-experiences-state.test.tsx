@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import type { CoreStates, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
 import { ExperiencesContext } from '../context/experiences-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { profileFixture } from '../test/profile.js';
 import * as hooks from './use-experiences-state.js';
 
 const context = (sdk: WebExperiencesRuntime) => ({
@@ -123,7 +124,7 @@ describe('Experiences state hooks', () => {
   it.each(cases)('observes only %s and disposes its subscription', (key, useState) => {
     const initial = key === 'experienceRequestState' ? { status: 'idle' } : undefined;
     const next = {
-      profile: { id: 'visitor' },
+      profile: profileFixture('visitor'),
       locale: 'de-DE',
       consent: false,
       persistenceConsent: false,
@@ -150,14 +151,14 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches cloned current values across renders and uses immediate/latest emissions', () => {
-    const state = observable<CoreStates['profile']['current']>({ id: 'before-commit' });
+    const state = observable<CoreStates['profile']['current']>(profileFixture('before-commit'));
     const sdk = runtime({ profile: state.store });
     const captures: unknown[] = [];
     function Probe() {
       const profile = hooks.useProfileState();
       captures.push(profile);
       // Simulate an external change after render but before subscription commit.
-      state.setBeforeSubscribe({ id: 'at-commit' });
+      state.setBeforeSubscribe(profileFixture('at-commit'));
       return <output>{profile?.id}</output>;
     }
     render(sdk, <Probe />);
@@ -167,7 +168,7 @@ describe('Experiences state hooks', () => {
     render(sdk, <Probe />);
     expect(captures.at(-1)).toBe(committed);
     expect(state.read).toHaveBeenCalledTimes(1);
-    act(() => state.emit({ id: 'updated' }));
+    act(() => state.emit(profileFixture('updated')));
     expect(container.textContent).toBe('updated');
     expect(state.subscribe).toHaveBeenCalledTimes(1);
   });
@@ -317,7 +318,7 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches server snapshots and hydrates cloned objects without loops or mismatches', async () => {
-    const state = observable<CoreStates['profile']['current']>({ id: 'server' });
+    const state = observable<CoreStates['profile']['current']>(profileFixture('server'));
     const sdk = runtime({ profile: state.store });
     function Probe() {
       return <output>{hooks.useProfileState()?.id}</output>;
@@ -337,7 +338,7 @@ describe('Experiences state hooks', () => {
     expect(onRecoverableError).not.toHaveBeenCalled();
     expect(state.read).toHaveBeenCalledTimes(2);
     expect(container.textContent).toBe('server');
-    act(() => state.emit({ id: 'browser' }));
+    act(() => state.emit(profileFixture('browser')));
     expect(container.textContent).toBe('browser');
     expect(state.read).toHaveBeenCalledTimes(2);
   });
