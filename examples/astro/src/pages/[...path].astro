@@ -28,7 +28,7 @@ try {
 // A Destination redirect node resolves to a value the app has to follow.
 if ('redirect' in result) return Astro.redirect(result.redirect.path, 307);
 
-const plan = result;
+const experience = result;
 ---
 
 <!doctype html>
@@ -39,6 +39,6 @@ const plan = result;
     <title>{path}</title>
   </head>
   <body>
-    <ExperienceNodes nodes={plan.nodes} experience={{ debug: plan.debug, metadata: plan.metadata }} />
+    <ExperienceNodes nodes={experience.nodes} experience={{ debug: experience.debug, metadata: experience.metadata }} />
   </body>
 </html>

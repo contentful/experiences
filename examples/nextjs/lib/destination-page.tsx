@@ -59,8 +59,8 @@ export async function renderDestinationPage(segments: string[], sp: SearchParams
     debug,
   };
 
-  // The URL path is the Destination path. A Destination resolves to either a
-  // plan or a redirect the app must follow. Preview is not supported on
+  // The URL path is the Destination path. A Destination resolves to either an
+  // Experience or a redirect the app must follow. Preview is not supported on
   // Destinations, so no `previewToken` or `preview` flag is passed; use the
   // /experiences/[id] route for preview.
   let result;

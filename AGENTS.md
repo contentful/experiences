@@ -445,7 +445,7 @@ Returning `null` for a payload with `nodes: []` would conflate two states the CM
 - **Experience doesn't exist** (404 from the delivery API) — the delivery client throws `NotFoundError`. Caller should route to their framework's 404 idiom.
 - **Experience exists, empty content** (200 with `nodes: []`) — draft, unpublished, empty locale fallback, editor-in-progress. Legitimate CMS state; renders as an empty page.
 
-So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns a plan with `nodes: []`). `fetchExperience` returns `PortableRenderPlan`, never `null` (the destination overloads may instead return a `DestinationRedirectResult`, which is a redirect to follow rather than an empty Experience).
+So an empty-nodes payload flows straight through to `resolveExperience`, which handles it gracefully (no walker iterations, the Experience Template still resolves if present, returns an Experience with `nodes: []`). `fetchExperience` returns `PortableRenderPlan`, never `null` (the destination overloads may instead return a `DestinationRedirectResult`, which is a redirect to follow rather than an empty Experience).
 
 For the missing-experience case, `NotFoundError` is re-exported from the adapter (via `packages/client`) so example call sites can wrap `fetchExperience` in try/catch and use the adapter's dependency on `@contentful/experience-delivery`.
 

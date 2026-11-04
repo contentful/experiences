@@ -325,7 +325,7 @@ PriceTag: defineComponent<PriceTagProps>({
 }),
 ```
 
-The route calls `fetchExperience` once (a Destination path may return a redirect instead of a plan; see above), and it handles the API call and resolution in one step:
+The route calls `fetchExperience` once (a Destination path may return a redirect instead of an Experience; see above), and it handles the API call and resolution in one step:
 
 ```ts
 const result = await fetchExperience(
