@@ -1,6 +1,6 @@
 # @contentful/experiences-react
 
-> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](../../README.md#versioning-and-stability).
 
 The React adapter for the Contentful Experiences SDK. You bring your own React components; it renders Experience payloads from the Experience Delivery API (XDA) with them.
 

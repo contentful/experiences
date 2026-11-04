@@ -1,5 +1,7 @@
 # @contentful/experiences-live-preview
 
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](../../README.md#versioning-and-stability).
+
 Optional live preview for Contentful Experiences.
 
 ## Runtime parameters and Session updates
