@@ -130,7 +130,7 @@ that trusted proxy's upstream authentication. Built-in App roots inherit server
 scope and locale but never copy private server Delivery/Preview tokens. Browser
 defaults use `consent.clientDefaults`, independently of request consent. Literal
 browser configuration is JSON-safe; functions, custom fetch and preview
-initializers require the advanced client-module binding described below.
+configuration requires the advanced client-module binding described below.
 
 The maintained [Next reference](../../implementations/nextjs-sdk/README.md) shows
 `/single-experience` alongside the existing Home/Page Two server routes. Optional
@@ -324,7 +324,7 @@ derives committed Next route inputs; `request.Experience` accepts the complete
 JSON-safe `result` from the server family. Managed and injected roots use the existing
 React/SDK owner. Supplied plans bind preview without a startup fetch. The common path exports only the client renderer component and uses the built-in
 request root. Configure renderer callbacks, custom roots, function-valued options
-and preview initializers in a client module for advanced setup.
+and preview configuration in a client module for advanced setup.
 
 `ExperiencesAnalyticsRoot` accepts opaque server children. It calls the existing
 SDK page operation for browser-owned initial intent and observes only the matching
@@ -348,7 +348,7 @@ route; existing React/SDK reset handles the current visitor. Remove old attribut
 DOM before Reset. Preview sessions deliberately replace the browser owner;
 ordinary navigation retains it. Require deployment enablement plus a trimmed URL
 session and pass `isPreview: false` in inactive cases. Browser preview credentials
-are separately designated; server initializers are never serialized.
+are separately designated; server implementation loaders are never serialized.
 
 ## Public cache conveniences
 
