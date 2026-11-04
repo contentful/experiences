@@ -1,3 +1,17 @@
+## 0.8.6 (2026-11-04)
+
+### 🩹 Fixes
+
+- **examples:** repair the Angular and SvelteKit examples [AIS-571] ([#295](https://github.com/contentful/experiences/pull/295))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.7.12
+- Updated runtime to 0.3.6
+- Updated client to 0.10.12
+- Updated design to 0.13.10
+- Updated core to 0.13.11
+
 ## 0.8.5 (2026-11-03)
 
 ### 🧱 Updated Dependencies
