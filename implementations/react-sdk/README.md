@@ -148,7 +148,7 @@ credential approved and scoped for that use. Do not place management credentials
 or server-only preview tokens in the public allowlist. Configure optional preview with `LIVE_PREVIEW_ENABLED=true` and an explicitly
 browser-approved `BROWSER_PREVIEW_TOKEN`. Optional `BROWSER_PREVIEW_HOST`,
 `LIVE_PREVIEW_EXPERIENCE_ID`, `LIVE_PREVIEW_SESSION_ID`, `LIVE_PREVIEW_SESSION_HOST`
-and `LIVE_PREVIEW_RESOURCE_RESOLUTION` map to the supported public SDK initializer.
+and `LIVE_PREVIEW_RESOURCE_RESOLUTION` map to the supported public SDK preview configuration.
 A blank Experience ID uses the first configured/default ID. The URL can override
 `preview_session_id` and `preview_experience_id`; an explicitly empty
 `?preview_session_id=` selects ordinary mode even when a session default is configured.
@@ -193,7 +193,7 @@ Browser rendering uses the public `@contentful/experiences-react/client` entry;
 static/server integration uses `@contentful/experiences-react/server` where
 applicable. This browser app uses `/client` for managed loading, hooks, supplied
 primary-plan rendering and seeded comparison rendering. Preview integration uses
-the frozen package's public exports and Runtime's supported initializer; see
+the frozen package's public exports and Runtime's supported preview configuration; see
 [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview).
 
 - `src/main.tsx`, `index.html`: bootstrap and document/BFCache lifetime; no application components live in the entrypoint.
