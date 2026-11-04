@@ -40,10 +40,10 @@ export const loadServerPage = cache(async (pathname: string, searchParams: Nextj
       ? { ...config.livePreview, sessionId, experienceId }
       : undefined;
   const livePreview = previewBinding
-    ? async () => ({
+    ? {
         ...previewBinding,
-        implementation: await import('@contentful/experiences-live-preview'),
-      })
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      }
     : undefined;
   const request = bindNextjsExperiencesRequest(sdk, {
     request: { url: page.url, headers: incomingHeaders },

@@ -189,14 +189,14 @@ Server configuration owns private credentials and resolution. Built-in browser
 roots inherit scope and locale; configure browser Delivery explicitly using a
 browser-designated credential or a trusted authenticated proxy. Delivery
 configuration remains required by the existing Runtime even for analytics-only
-browser use. Advanced callbacks and preview initializers stay in a client module.
+browser use. Advanced callbacks and preview configuration stays in a client module.
 Diagnostic multiple-fetch ordering, identity and result handling are application-owned;
 the SDK provides no multi-Experience orchestration or reconciliation.
 
 ## Live preview
 
 React managed content uses the same `Experience` component for ordinary and
-Preview Session content. Configure Web's optional initializer and browser-safe
+Preview Session content. Configure Web's optional preview configuration and browser-safe
 Preview credentials on the root in a client module:
 
 ```tsx
@@ -228,11 +228,11 @@ export function ExperiencePage({
       isPreview={Boolean(activeSessionId)}
       livePreview={
         activeSessionId
-          ? async () => ({
+          ? {
               experienceId,
               sessionId: activeSessionId,
-              implementation: await import('@contentful/experiences-live-preview'),
-            })
+              loadImplementation: () => import('@contentful/experiences-live-preview'),
+            }
           : undefined
       }
     >
