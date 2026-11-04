@@ -40,7 +40,7 @@ npm run dev
 
 `DESTINATION_ID` is server-generated. Run the bootstrap after creating `.env` and it writes the id for you; otherwise paste the id it prints.
 
-Visit `http://localhost:4200/` (the Destination's home node, the `home` Experience) and `http://localhost:4200/demo/landing` (the `landing` Experience). `/welcome` is a redirect node: the server answers with a 307 back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:4200/experiences/landing`; that route also handles preview, which Destinations do not support.
+`/` is also a demo hub ([`demo-hub.component.ts`](./src/app/components/demo-hub.component.ts)): it lists every route, has `?personalization` and `?debug` checkboxes, and sits above the home node. Visit `http://localhost:4200/` (the Destination's home node, the `home` Experience) and `http://localhost:4200/demo/landing` (the `landing` Experience). `/welcome` is a redirect node: the server answers with a 307 back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:4200/experiences/landing`; that route also handles preview, which Destinations do not support.
 
 [`src/server.ts`](./src/server.ts) sends `/experiences/:id` to a by-id `fetchExperience` and every other path to `fetchExperience({ spaceId, destinationId, path }, { accessToken }, ...)`, turns a `DestinationRedirectResult` into an HTTP redirect, and maps `NotFoundError` to a 404. Both are rendered per request, not prerendered (see the `outputMode` note below), so there is no `fetchDestinationSitemap` call here; see the Next.js example for sitemap-driven prerendering.
 
@@ -145,7 +145,7 @@ examples/angular/
 │   ├── main.server.ts                # SSR bootstrap (threads BootstrapContext)
 │   ├── server.ts                     # Express 5 + AngularNodeAppEngine; fetches the plan
 │   └── app/
-│       ├── app.component.ts          # <router-outlet /> + personalization toggle
+│       ├── app.component.ts          # <router-outlet /> + demo hub at /
 │       ├── app.routes.ts             # 'experiences/:id' and '**' → Experience page
 │       ├── app.routes.server.ts      # RenderMode.Server on '**'
 │       ├── app.config.ts             # zoneless + router + client hydration
