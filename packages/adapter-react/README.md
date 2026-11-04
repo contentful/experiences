@@ -190,7 +190,7 @@ Official support is one Experience fetch per page; repeated views may reuse its
 plan. The reference's later-ID comparisons are event-free caller glue, without a
 multi-Experience or cross-fetch guarantee.
 
-Configure optional preview once with Web's `livePreview` initializer and browser-safe
+Configure optional preview once with Web's `livePreview` configuration and browser-safe
 `preview` credentials on the root. The same `<Experience experienceId={id} />`
 loads snapshots and receives resolved updates through `subscribeToPreview`;
 no independent preview client or renderer branch is needed. Session locale and

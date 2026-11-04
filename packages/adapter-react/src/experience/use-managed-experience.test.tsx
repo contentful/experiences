@@ -143,7 +143,11 @@ describe('useManagedExperience', () => {
     'waits for configured preview initialization, enriching only an unrelated ID (%s)',
     async (experienceId) => {
       const source = sourceSdk();
-      Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
+      Object.defineProperty(source.sdk, 'config', {
+        value: {
+          livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
+        },
+      });
       const fetchExperience = vi.fn().mockResolvedValue(plan());
       const context = { revision: {}, fetchExperience, reset() {} };
       await act(async () =>
@@ -167,7 +171,11 @@ describe('useManagedExperience', () => {
 
   it('cancels pending initializer observation on unmount and reports initialization errors', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
+    Object.defineProperty(source.sdk, 'config', {
+      value: {
+        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
+      },
+    });
     await act(async () => root.render(content(source, { experienceId: 'home', config })));
     expect(source.fetchExperience).not.toHaveBeenCalled();
     await act(async () => root.cleanup());
@@ -187,7 +195,11 @@ describe('useManagedExperience', () => {
 
   it('keeps seeded preview setup errors without duplicate startup fetching and recovers through the binding', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
+    Object.defineProperty(source.sdk, 'config', {
+      value: {
+        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
+      },
+    });
     const initialPlan = plan('seed');
     const options = { experienceId: 'home', config, initialPlan };
     await act(async () => root.render(content(source, options)));
@@ -220,7 +232,11 @@ describe('useManagedExperience', () => {
       environmentId: 'master',
       delivery: { accessToken: 'delivery' },
       preview: { accessToken: 'preview' },
-      livePreview: () => ({ experienceId: 'home', sessionId: 'session-a', implementation }),
+      livePreview: {
+        experienceId: 'home',
+        sessionId: 'session-a',
+        loadImplementation: () => implementation,
+      },
     });
     try {
       await act(async () =>
@@ -234,11 +250,11 @@ describe('useManagedExperience', () => {
       );
       expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
       await act(async () =>
-        sdk.replaceLivePreview(() => ({
+        sdk.replaceLivePreview({
           experienceId: 'home',
           sessionId: 'session-b',
-          implementation,
-        }))
+          loadImplementation: () => implementation,
+        })
       );
       expect(sdk.states.preview.current?.status).toBe('static');
       expect(result.data?.nodes[0]?.props.content.title).toBe('retained');
@@ -257,7 +273,11 @@ describe('useManagedExperience', () => {
 
   it('does not invalidate an explicit refresh for connection/status-only notifications', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', { value: { livePreview: () => {} } });
+    Object.defineProperty(source.sdk, 'config', {
+      value: {
+        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
+      },
+    });
     source.preview.emit(previewState());
     await act(async () =>
       root.render(content(source, { experienceId: 'home', config, initialPlan: plan('seed') }))

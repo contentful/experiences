@@ -8,7 +8,7 @@ import { ContentPage } from './ContentPage';
 import { ExperiencesRoot } from './experiences';
 import { useNavigation } from './Navigation';
 import { PageShell } from './PageShell';
-import { createPreviewInitializer, getPreviewBinding } from './preview';
+import { createPreviewConfiguration, getPreviewBinding } from './preview';
 
 const initialPagePayload = {};
 
@@ -17,7 +17,7 @@ export function App({ environment, log }: { environment: PublicEnvironment; log:
   const { url } = intent;
   const binding = getPreviewBinding(environment, url.href);
   const previewKey = JSON.stringify(binding);
-  const livePreview = useMemo(() => createPreviewInitializer(binding), [previewKey]);
+  const livePreview = useMemo(() => createPreviewConfiguration(binding), [previewKey]);
   const isPreview = Boolean(binding || url.searchParams.get('preview_session_id')?.trim());
   const ids = useMemo(
     () =>
