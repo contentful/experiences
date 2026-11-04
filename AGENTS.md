@@ -707,7 +707,7 @@ npx nx run-many -t build --skip-nx-cache
 # 1. Seed the demo Experience into your target space (one-time).
 cd examples/scripts
 cp .env.example .env         # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap            # seeds content + a Destination; writes DESTINATION_ID to the example's .env if it exists
+npm run bootstrap            # seeds content + a Destination; prints the DESTINATION_ID to paste into the example's .env
 
 # 2. Run the app.
 cd ../nextjs

@@ -37,7 +37,7 @@ npm run build                          # build the SDK packages
 
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # one-time; seeds content + a Destination, writes DESTINATION_ID to astro/.env if it exists
+npm run bootstrap                      # one-time; seeds content + a Destination, prints the DESTINATION_ID to paste into astro/.env
 
 cd ../astro
 cp .env.example .env                   # fill in SPACE_ID, DESTINATION_ID, CDA_TOKEN (ENVIRONMENT_ID and CPA_TOKEN for the by-id route)

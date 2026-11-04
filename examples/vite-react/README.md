@@ -36,7 +36,7 @@ cp .env.example .env.local             # fill in VITE_SPACE_ID, VITE_DESTINATION
 npm run dev
 ```
 
-`VITE_DESTINATION_ID` is server-generated. Run the bootstrap after creating `.env.local` and it writes the id for you; otherwise paste the id it prints.
+`VITE_DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
 
 Open [http://localhost:5173/](http://localhost:5173/) (the Destination's home node) and [http://localhost:5173/demo/landing](http://localhost:5173/demo/landing). `/welcome` is a redirect node back to `/`. For one Experience by id, open `/experiences/landing`; that route uses `VITE_ENVIRONMENT_ID`, while Destination delivery is space-scoped.
 

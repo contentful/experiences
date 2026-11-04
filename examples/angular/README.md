@@ -38,7 +38,7 @@ cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-`DESTINATION_ID` is server-generated. Run the bootstrap after creating `.env` and it writes the id for you; otherwise paste the id it prints.
+`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env`.
 
 `/` is also a demo hub ([`demo-hub.component.ts`](./src/app/components/demo-hub.component.ts)): it lists every route, has `?personalization` and `?debug` checkboxes, and sits above the home node. Visit `http://localhost:4200/` (the Destination's home node, the `home` Experience) and `http://localhost:4200/demo/landing` (the `landing` Experience). `/welcome` is a redirect node: the server answers with a 307 back to `/`. Pages are served from a **Destination**: the URL path is the Destination path. To fetch one Experience by id instead, use `http://localhost:4200/experiences/landing`; that route also handles preview, which Destinations do not support.
 

@@ -27,7 +27,7 @@
 /* eslint-disable no-console */
 /* global fetch, RequestInit, Response */
 import { createClient, type PlainClientAPI } from 'contentful-management';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -1021,47 +1021,6 @@ async function seedDestinationNode(
   await publishResource(url, upserted);
 }
 
-/** Example apps, the env file each one reads, and the variable name it expects. */
-const EXAMPLE_ENV_FILES = [
-  { file: '../nextjs/.env.local', key: 'DESTINATION_ID' },
-  { file: '../sveltekit/.env', key: 'DESTINATION_ID' },
-  { file: '../angular/.env', key: 'DESTINATION_ID' },
-  { file: '../astro/.env', key: 'DESTINATION_ID' },
-  // Vite inlines only VITE_* variables into the browser bundle.
-  { file: '../vite-react/.env.local', key: 'VITE_DESTINATION_ID' },
-  { file: '../vite-svelte/.env.local', key: 'VITE_DESTINATION_ID' },
-];
-
-/**
- * DESTINATION_ID is server-generated, so it cannot be a fixture constant. Set it
- * in the env files the example apps already have; never create one, since those
- * files also hold tokens the user copies in from `.env.example`.
- */
-function writeDestinationId(destinationId: string) {
-  const missing: string[] = [];
-  for (const { file: rel, key } of EXAMPLE_ENV_FILES) {
-    const file = resolvePath(__dirname, rel);
-    const shown = rel.replace('../', 'examples/');
-    const line = `${key}=${destinationId}`;
-    if (!existsSync(file)) {
-      missing.push(shown);
-      continue;
-    }
-    const contents = readFileSync(file, 'utf8');
-    const existing = new RegExp(`^${key}=.*$`, 'm');
-    const next = existing.test(contents)
-      ? contents.replace(existing, line)
-      : `${contents}${contents.endsWith('\n') || contents === '' ? '' : '\n'}${line}\n`;
-    if (next !== contents) writeFileSync(file, next);
-    log(`   ✓ ${shown}: ${line}`);
-  }
-  if (missing.length > 0) {
-    log(
-      `   Not found (copy .env.example first, then set the Destination id): ${missing.join(', ')}`
-    );
-  }
-}
-
 async function main() {
   log(`Bootstrapping ExO demo into space ${SPACE_ID} / env ${ENVIRONMENT_ID}\n`);
 
@@ -1105,7 +1064,13 @@ async function main() {
   log(`\n✅ Done.\n`);
   log(`   Destination id: ${destinationId}`);
   log(`   Experience ids: ${homeExperience.id}, ${experienceId}`);
-  writeDestinationId(destinationId);
+  // DESTINATION_ID is server-generated, so it can't be a fixture constant. The
+  // script never edits the example apps' env files (they also hold tokens), so
+  // print the line to paste instead.
+  log(`\n   Add this to the .env of the example you run (examples/nextjs/.env.local,`);
+  log(`   examples/sveltekit/.env, examples/angular/.env, examples/astro/.env):`);
+  log(`\n     DESTINATION_ID=${destinationId}\n`);
+  log(`   The Vite examples (vite-react, vite-svelte .env.local) use VITE_DESTINATION_ID.`);
   log(
     `   Run \`npm run dev\` in examples/nextjs or examples/sveltekit, then visit / and /demo/landing.`
   );

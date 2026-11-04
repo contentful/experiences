@@ -1114,7 +1114,7 @@ npm run build                          # build the SDK packages
 # 1. Seed the demo Experience into your Contentful space (one-time).
 cd examples/scripts
 cp .env.example .env                   # fill in SPACE_ID, ENVIRONMENT_ID, CMA_TOKEN
-npm run bootstrap                      # prints the Destination id and writes DESTINATION_ID to each example's env file that exists
+npm run bootstrap                      # prints the Destination id; paste it into the example's env file as DESTINATION_ID
 
 # 2. Run one of the example apps against the seeded space.
 cd ../nextjs                           # or ../sveltekit, ../angular, ../astro, ../vite-react, ../vite-svelte

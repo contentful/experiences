@@ -48,7 +48,7 @@ cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_T
 npm run dev
 ```
 
-`DESTINATION_ID` is server-generated. Run the bootstrap after creating `.env.local` and it writes the id for you; otherwise paste the id it prints.
+`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
 
 Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
