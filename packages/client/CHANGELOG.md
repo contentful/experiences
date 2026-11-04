@@ -1,3 +1,13 @@
+## 0.10.14 (2026-11-04)
+
+### 🩹 Fixes
+
+- bump experience-delivery to v1.0.0-dev.12 and adapt to resolveByPath breaking change ([#298](https://github.com/contentful/experiences/pull/298))
+
+### 🧱 Updated Dependencies
+
+- Updated core to 0.13.12
+
 ## 0.10.13 (2026-11-04)
 
 ### 🚀 Features
