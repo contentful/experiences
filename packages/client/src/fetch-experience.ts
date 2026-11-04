@@ -172,10 +172,12 @@ export async function fetchExperience(
     return fetchByDestination(
       { spaceId, destinationId, locator: path },
       () =>
-        client.destination.resolveByPath(spaceId, destinationId, {
-          path,
-          ...(extensions === undefined ? {} : { extensions }),
-        }),
+        extensions === undefined
+          ? client.destination.resolveByPath(spaceId, destinationId, { path })
+          : client.destination.resolveByPathWithOverrides(spaceId, destinationId, {
+              path,
+              extensions,
+            }),
       log,
       { config, metadata, debug }
     );
