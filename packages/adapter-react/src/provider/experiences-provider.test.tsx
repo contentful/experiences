@@ -754,7 +754,7 @@ describe('React runtime ownership and activation', () => {
     }
   );
 
-  it('forwards a lazy preview initializer only at commit and keeps preview state separate from root readiness', async () => {
+  it('forwards preview configuration only at commit and keeps preview state separate from root readiness', async () => {
     let value: CoreStates['preview']['current'];
     const listeners = new Set<(state: CoreStates['preview']['current']) => void>();
     const preview: Observable<CoreStates['preview']['current']> = {
@@ -773,9 +773,13 @@ describe('React runtime ownership and activation', () => {
       subscribeOnce: vi.fn(),
     };
     runtime.states.preview = preview;
-    const livePreview = vi.fn<NonNullable<ExperiencesWebConfig['livePreview']>>(() => {
-      throw new Error('React must forward the initializer without invoking it');
-    });
+    const livePreview: NonNullable<ExperiencesWebConfig['livePreview']> = {
+      experienceId: 'hero',
+      sessionId: 'session',
+      loadImplementation: vi.fn(() => {
+        throw new Error('React must not invoke the preview loader');
+      }),
+    };
     const previewValues: Array<CoreStates['preview']['current']> = [];
     function PreviewProbe() {
       previewValues.push(usePreviewState());
@@ -789,12 +793,12 @@ describe('React runtime ownership and activation', () => {
     );
     renderToString(tree);
     expect(construct).not.toHaveBeenCalled();
-    expect(livePreview).not.toHaveBeenCalled();
+    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
     expect(previewValues[0]).toBeUndefined();
     render(tree);
     expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, livePreview });
     // The double does not initialize preview: loading and policy remain Web responsibilities.
-    expect(livePreview).not.toHaveBeenCalled();
+    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
     const states: Array<CoreStates['preview']['current']> = [
       undefined,
       {

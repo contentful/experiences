@@ -123,12 +123,12 @@ describe('published package entry points', () => {
         import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
           from '@contentful/experiences-react/host';
         import { ContentfulExperiences, type ExperiencesWebConfig, type WebExperiencesRuntime,
-          type CoreStates, type RuntimeLivePreviewInitializer }
+          type CoreStates, type RuntimeLivePreviewOptions }
           from '@contentful/experiences-react/web-sdk';
 
         const ui = createReactExperiences({ config: { components: {} } });
         declare const config: ExperiencesWebConfig;
-        declare const livePreview: RuntimeLivePreviewInitializer;
+        declare const livePreview: RuntimeLivePreviewOptions;
         declare const plan: PortableRenderPlan;
         declare const sdk: ContentfulExperiences;
         function ManualContent() {
