@@ -37,11 +37,11 @@ For session snapshots, install the optional Live Preview package and configure
 
 ```ts
 const request = sdk.forRequest({
-  livePreview: async () => ({
+  livePreview: {
     experienceId,
     sessionId,
-    implementation: await import('@contentful/experiences-live-preview'),
-  }),
+    loadImplementation: () => import('@contentful/experiences-live-preview'),
+  },
 });
 try {
   const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
@@ -51,7 +51,9 @@ try {
 }
 ```
 
-The initializer sets preview policy immediately and runs lazily once per request;
+The session configuration sets preview policy immediately; its implementation loads
+lazily once per request, only for the bound Experience ID. Unrelated IDs do not await
+the loader, even if it fails or remains pending.
 `isPreview: false` conflicts with it. Matching IDs load session plans with Runtime →
 request → operation metadata/debug precedence; other IDs and destinations retain their
 sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.

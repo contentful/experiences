@@ -85,25 +85,26 @@ describe('Node ContentfulExperiences', () => {
         createLivePreviewClient: vi.fn(),
         sendPreviewStatus: vi.fn(),
       };
-      const initializer = vi.fn(() => ({
+      const loadImplementation = vi.fn(async () => implementation);
+      const livePreview = {
         experienceId: 'bound',
         sessionId: 'session',
-        implementation,
-      }));
+        loadImplementation,
+      };
       const ordinary = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue(plan);
-      return { runtime, plan, implementation, initializer, ordinary };
+      return { runtime, plan, implementation, livePreview, loadImplementation, ordinary };
     }
 
     it('establishes preview policy before initializing the source', async () => {
       const f = previewFixture();
       const upsert = vi.spyOn(f.runtime.api.experience, 'upsertProfile');
-      const request = f.runtime.forRequest({ livePreview: f.initializer, consent: true });
+      const request = f.runtime.forRequest({ livePreview: f.livePreview, consent: true });
       expect(request.isPreview).toBe(true);
       await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
       expect((await request.prepareRequestHandoff({ routeKey: '/' })).skipped).toBe('preview');
-      expect(f.initializer).not.toHaveBeenCalled();
+      expect(f.loadImplementation).not.toHaveBeenCalled();
       expect(upsert).not.toHaveBeenCalled();
-      expect(() => f.runtime.forRequest({ livePreview: f.initializer, isPreview: false })).toThrow(
+      expect(() => f.runtime.forRequest({ livePreview: f.livePreview, isPreview: false })).toThrow(
         /isPreview: false/
       );
     });
@@ -111,7 +112,7 @@ describe('Node ContentfulExperiences', () => {
     it('adopts the matching snapshot with request and operation resolve defaults', async () => {
       const f = previewFixture();
       const request = f.runtime.forRequest({
-        livePreview: f.initializer,
+        livePreview: f.livePreview,
         profile: { id: 'visitor' },
         resolveOptions: { metadata: { request: true, shared: 'request' } },
       });
@@ -134,12 +135,12 @@ describe('Node ContentfulExperiences', () => {
       expect(f.ordinary).not.toHaveBeenCalled();
       expect(f.implementation.createLivePreviewClient).not.toHaveBeenCalled();
       await request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig });
-      expect(f.initializer).toHaveBeenCalledOnce();
+      expect(f.loadImplementation).toHaveBeenCalledOnce();
     });
 
     it('keeps unrelated IDs on the ordinary source', async () => {
       const f = previewFixture();
-      const request = f.runtime.forRequest({ livePreview: f.initializer });
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
       await expect(
         request.fetchExperience(
           { experienceId: 'other', preview: true },
@@ -153,6 +154,34 @@ describe('Node ContentfulExperiences', () => {
         { config: resolverConfig, metadata: {}, debug: undefined }
       );
       expect(f.implementation.fetchPreviewSession).not.toHaveBeenCalled();
+      expect(f.loadImplementation).not.toHaveBeenCalled();
+    });
+
+    it('isolates unrelated fetches from pending and failed preview initialization', async () => {
+      const f = previewFixture();
+      let reject!: (error: Error) => void;
+      f.loadImplementation.mockReturnValue(
+        new Promise((_, fail) => {
+          reject = fail;
+        })
+      );
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
+      const bound = expect(
+        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
+      ).rejects.toThrow('module unavailable');
+      await expect(
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
+      ).resolves.toBe(f.plan);
+      reject(new Error('module unavailable'));
+      await bound;
+      await expect(
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
+      ).resolves.toBe(f.plan);
+      await expect(
+        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
+      ).rejects.toThrow('module unavailable');
+      expect(f.loadImplementation).toHaveBeenCalledOnce();
+      expect(f.ordinary).toHaveBeenCalledTimes(2);
     });
 
     it('rejects a pending snapshot when its request is disposed', async () => {
@@ -166,7 +195,7 @@ describe('Node ContentfulExperiences', () => {
           });
         });
       });
-      const request = f.runtime.forRequest({ livePreview: f.initializer });
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
       const pending = request.fetchExperience(
         { experienceId: 'bound' },
         { config: resolverConfig }

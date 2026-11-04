@@ -33,7 +33,7 @@ import {
   assertRuntimePreviewRequest,
   fetchRuntimePreviewSession,
   mergeRuntimePreviewResolveOptions,
-  type RuntimeLivePreviewInitializer,
+  type RuntimeLivePreviewOptions,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
@@ -42,6 +42,7 @@ import {
   type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import { signal, untracked } from '@preact/signals-core';
+import { cloneDeepWith } from 'es-toolkit';
 import { isEqual } from 'es-toolkit/predicate';
 import {
   batch,
@@ -105,8 +106,8 @@ export type CoreConfigDefaults = StatefulDefaults;
 export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
   /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
   isPreview?: boolean;
-  /** Optional lazy Preview Session binding. Presence establishes preview policy immediately. */
-  livePreview?: RuntimeLivePreviewInitializer;
+  /** Preview Session configuration with lazy implementation loading; establishes preview policy immediately. */
+  livePreview?: RuntimeLivePreviewOptions;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -190,6 +191,20 @@ function returnedProfileId(
 
 /** A prepared batch after validation: what the delivery queue accepts. */
 type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
+
+function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
+  return cloneDeepWith(plan, (value) => {
+    if (!(value instanceof Error)) return undefined;
+    // Error causes can contain caller-owned functions and other opaque values.
+    return Object.defineProperties(
+      Object.setPrototypeOf(new Error(), Object.getPrototypeOf(value)),
+      {
+        ...Object.getOwnPropertyDescriptors(value),
+        stack: { value: value.stack, writable: true, configurable: true },
+      }
+    );
+  });
+}
 
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences<
@@ -607,11 +622,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       ).then(
         (plan) => {
           if (!current()) return;
-          listener(
-            plan.diagnostics.length
-              ? { error: plan.diagnostics[0]! }
-              : { data: plan, error: previewSignal.peek()?.error }
-          );
+          listener({ data: plan, error: previewSignal.peek()?.error });
         },
         (error: unknown) => {
           if (current())
@@ -627,14 +638,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     };
   }
 
-  async replaceLivePreview(initializer: RuntimeLivePreviewInitializer): Promise<void> {
+  async replaceLivePreview(options: RuntimeLivePreviewOptions): Promise<void> {
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
     if (!this.isPreview) throw new Error('Entering preview requires a new Web SDK instance');
     this.#contentLifetime++;
     this.#pendingContent.clear();
-    if (this.#preview) await this.#preview.replace(initializer);
+    if (this.#preview) await this.#preview.replace(options);
     else {
-      this.#preview = new WebPreview(this.config, initializer);
+      this.#preview = new WebPreview(this.config, options);
       await this.#preview.ready();
     }
   }
@@ -648,14 +659,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     let pending = this.#pendingContent.get(resolve.config);
     if (!pending) this.#pendingContent.set(resolve.config, (pending = new Map()));
     const existing = pending.get(key);
-    if (existing) return existing;
+    if (existing) return existing.then(clonePlan);
     const promise = load().finally(() => {
       if (pending.get(key) === promise) pending.delete(key);
       if (!pending.size && this.#pendingContent.get(resolve.config) === pending)
         this.#pendingContent.delete(resolve.config);
     });
     pending.set(key, promise);
-    return promise;
+    return promise.then(clonePlan);
   }
 
   override async fetchExperience(
@@ -672,9 +683,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       }
     };
     assertCurrent();
-    const binding = this.#preview ? await this.#preview.ready() : undefined;
-    assertCurrent();
-    if (binding?.experienceId === options.experienceId) {
+    if (this.#preview?.experienceId === options.experienceId) {
+      const binding = await this.#preview.ready();
+      assertCurrent();
       assertRuntimePreviewRequest(options);
       this.#gatePersonalizationEvents(options);
       assertCurrent();
@@ -933,12 +944,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#setAdoptedProfileId(undefined);
       this.#interactionTracking?.destroy();
       this.#interactionTracking = undefined;
-      this.#preview?.destroy();
     } finally {
       try {
-        super.destroy();
+        this.#preview?.destroy();
       } finally {
-        releaseWebSingleton(this.#singletonOwner);
+        try {
+          super.destroy();
+        } finally {
+          releaseWebSingleton(this.#singletonOwner);
+        }
       }
     }
   }

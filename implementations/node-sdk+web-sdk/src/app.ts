@@ -86,16 +86,14 @@ for (const [path, route] of Object.entries(routes)) {
         ? {
             experienceId,
             sessionId,
-            resourceResolution: preview?.resourceResolution,
             sessionHost: preview?.sessionHost,
+            resourceResolution: preview?.resourceResolution,
           }
         : undefined;
     const livePreview = binding
-      ? async () => {
-          return {
-            ...binding,
-            implementation: await import('@contentful/experiences-live-preview'),
-          };
+      ? {
+          ...binding,
+          loadImplementation: () => import('@contentful/experiences-live-preview'),
         }
       : undefined;
     const request = sdk.forRequest({

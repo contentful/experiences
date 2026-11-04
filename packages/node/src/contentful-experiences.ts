@@ -42,7 +42,7 @@ import {
   type RuntimeFetchResolveOptions,
   type RuntimeResolveDefaults,
   type RuntimeResolveOptions,
-  type RuntimeLivePreviewInitializer,
+  type RuntimeLivePreviewOptions,
   type RuntimeLivePreviewBinding,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
@@ -66,8 +66,8 @@ type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventB
 export type ExperiencesNodeRequestContext = {
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
-  /** Lazily binds one Experience to a Preview Session; establishes preview policy immediately. */
-  livePreview?: RuntimeLivePreviewInitializer;
+  /** Binds one Experience to a Preview Session with lazy implementation loading. */
+  livePreview?: RuntimeLivePreviewOptions;
   locale?: string;
   resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
   profile?: EventProfile;
@@ -210,7 +210,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
   #profile: EventProfile | undefined;
   #profileRevision = 0;
   #destroyed = false;
-  readonly #previewInitializer: RuntimeLivePreviewInitializer | undefined;
+  readonly #previewOptions: RuntimeLivePreviewOptions | undefined;
   #previewInitialization: Promise<RuntimeLivePreviewBinding> | undefined;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
@@ -237,7 +237,7 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     if (context.livePreview !== undefined && context.isPreview === false) {
       throw new TypeError('livePreview cannot be combined with isPreview: false');
     }
-    this.#previewInitializer = context.livePreview;
+    this.#previewOptions = context.livePreview && { ...context.livePreview };
     this.#isPreview = context.livePreview !== undefined || context.isPreview === true;
     const { experienceOptions, insightsOptions } = context;
     this.#experienceOptions =
@@ -441,25 +441,23 @@ class RequestBoundExperiences implements ExperiencesNodeRequest {
     resolveOptions: RuntimeFetchResolveOptions
   ): Promise<PortableRenderPlan> {
     this.assertActive();
-    if (this.#previewInitializer !== undefined) {
-      // Share success or failure for this request. Decide the source only after initialization.
+    if (this.#previewOptions?.experienceId === options.experienceId) {
+      // Share initialization only for the bound Experience within this request.
       const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
-        this.#previewInitializer
+        this.#previewOptions
       ));
       this.assertActive();
-      if (options.experienceId === binding.experienceId) {
-        assertRuntimePreviewRequest(options);
-        this.gatePersonalizationEvents(options);
-        this.assertActive();
-        const plan = await fetchRuntimePreviewSession(
-          binding,
-          this.runtime.config,
-          mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-        );
-        // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
-        this.assertActive();
-        return plan;
-      }
+      assertRuntimePreviewRequest(options);
+      this.gatePersonalizationEvents(options);
+      this.assertActive();
+      const plan = await fetchRuntimePreviewSession(
+        binding,
+        this.runtime.config,
+        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
+      );
+      // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
+      this.assertActive();
+      return plan;
     }
     return this.fetchPersonalized(options, (final) =>
       this.runtime.fetchExperience(
