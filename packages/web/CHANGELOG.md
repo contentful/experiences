@@ -1,3 +1,11 @@
+## 0.9.7 (2026-11-04)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.7
+- Updated client to 0.10.13
+- Updated node to 0.8.7
+
 ## 0.9.6 (2026-11-04)
 
 ### 🧱 Updated Dependencies

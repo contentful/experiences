@@ -1,3 +1,9 @@
+## 0.10.13 (2026-11-04)
+
+### 🚀 Features
+
+- **examples:** update examples to use Destinations [AIS-571] ([#297](https://github.com/contentful/experiences/pull/297))
+
 ## 0.10.12 (2026-11-04)
 
 ### 🧱 Updated Dependencies

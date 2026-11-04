@@ -1,3 +1,15 @@
+## 0.8.7 (2026-11-04)
+
+### 🚀 Features
+
+- **examples:** update examples to use Destinations [AIS-571] ([#297](https://github.com/contentful/experiences/pull/297))
+
+### 🧱 Updated Dependencies
+
+- Updated live-preview to 0.7.13
+- Updated runtime to 0.3.7
+- Updated client to 0.10.13
+
 ## 0.8.6 (2026-11-04)
 
 ### 🩹 Fixes
