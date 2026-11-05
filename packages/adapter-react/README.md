@@ -18,13 +18,15 @@ This package re-exports everything you need from `@contentful/experiences-sdk-co
 
 ## Import entries
 
-| Import                                          | Available APIs                                                                                                                                                                          |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                           |
-| `@contentful/experiences-react/client`          | Bound factory, managed root, injected provider, managed `Experience`/request hook, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks and shared utilities |
-| `@contentful/experiences-react/host`            | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                      |
-| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                                                                             |
-| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                           |
+| Import                                                 | Available APIs                                                                                                                                                                          |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@contentful/experiences-react` or `/server`           | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                           |
+| `@contentful/experiences-react/client`                 | Bound factory, managed root, injected provider, managed `Experience`/request hook, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks and shared utilities |
+| `@contentful/experiences-react/host`                   | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                      |
+| `@contentful/experiences-react/custom-renderer`        | Existing node rendering and prop-resolution building blocks                                                                                                                             |
+| `@contentful/experiences-react/web-sdk`                | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                           |
+| `@contentful/experiences-react/router/react-router`    | `bindReactRouterExperiences` and router page-payload/props types                                                                                                                        |
+| `@contentful/experiences-react/router/tanstack-router` | `bindTanStackRouterExperiences` and router page-payload/props types                                                                                                                     |
 
 Client APIs previously imported from the root move to `/client`. The root and
 `/server` do not load the live Web SDK. The unbundled ESM build preserves each
@@ -41,7 +43,7 @@ existing standalone APIs are unchanged. General supplied-plan rendering and
 Managed runtime ownership, state/action hooks, `Experience` and
 `useManagedExperience` are available on `/client`. Managed loading and supplied
 plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started. Phase 6 remains complete and explicitly accepted on
+Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started. Phase 6 remains complete and explicitly accepted on
 2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
 
 Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
@@ -408,6 +410,95 @@ observes the shared source. Pending initialization, source errors, static previe
 and session replacement do not change root readiness. Preview errors remain in
 `states.preview.error`; undefined means disabled or initializing. No initial
 fetch or per-view resolved update binding is introduced by a provider.
+
+### Optional router integration
+
+Install the peer for the router you use: `npm install react-router-dom` (>=6.4)
+or `npm install @tanstack/react-router` (>=1). Both peers are optional; ordinary
+React imports and declarations remain independent of them. React Router requires
+a data router because the integration uses `useMatches`; a plain `BrowserRouter`
+is insufficient.
+
+Bind the registry once at module scope with `bindReactRouterExperiences({ config })`
+or `bindTanStackRouterExperiences({ config })`. Each returns the
+`createReactExperiences` result with router-aware `ExperiencesRoot` and
+`ExperiencesProvider`, plus bound `Experience`, `useManagedExperience` and
+`ExperienceRenderer`. Mount one stable wrapper inside the respective router,
+above the primary managed `Experience`. Keep it mounted across navigation rather
+than keying it by location.
+For React Router, use a shared layout route under `RouterProvider`:
+
+```tsx
+import { Outlet } from 'react-router-dom';
+import { bindReactRouterExperiences } from '@contentful/experiences-react/router/react-router';
+
+const { ExperiencesRoot, Experience } = bindReactRouterExperiences({ config: browserRegistry });
+
+function ExperiencesLayout() {
+  return (
+    <ExperiencesRoot
+      {...browserConfig}
+      pagePayload={{ properties: { title: 'Catalog' } }}
+      getPagePayload={({ context }) => ({ properties: { title: context.pathname } })}
+    >
+      <Outlet />
+    </ExperiencesRoot>
+  );
+}
+```
+
+For TanStack Router, use the root route's component inside `RouterProvider`:
+
+```tsx
+import { Outlet } from '@tanstack/react-router';
+import { bindTanStackRouterExperiences } from '@contentful/experiences-react/router/tanstack-router';
+
+const { ExperiencesRoot, Experience } = bindTanStackRouterExperiences({ config: browserRegistry });
+
+function ExperiencesLayout() {
+  return (
+    <ExperiencesRoot
+      {...browserConfig}
+      pagePayload={{ properties: { title: 'Catalog' } }}
+      getPagePayload={({ context }) => ({ properties: { title: context.pathname } })}
+    >
+      <Outlet />
+    </ExperiencesRoot>
+  );
+}
+```
+
+Here `browserConfig` is the same browser SDK configuration used by
+`ExperiencesRoot`. Child routes render the registry-bound
+`<Experience experienceId={experienceId} />` returned by the same router binding.
+The router roots retain the existing root's construction and cleanup lifecycle.
+To inject an application-owned SDK instead, use the returned `ExperiencesProvider`
+with `sdk={sdk}`; the application retains responsibility for destroying it.
+
+Both wrappers accept their existing root/provider props, replacing `routeKey`,
+`buildPagePayload` and `initialPagePayload` with optional static `pagePayload` and
+`getPagePayload({ context, routeKey, isInitialEmission })`. Page arguments deeply
+merge nested records in this order: router metadata, static payload, dynamic
+payload. Later values win and undefined layers are skipped; overriding one nested
+field preserves its siblings. Router metadata supplies `properties.hash`, `path`,
+`query`, `search` and `url`, even without custom payloads.
+
+Each subpath exports its matching `*ExperiencesRootProps`,
+`*ExperiencesProviderProps` and `*AutoPageContext` types, plus `AutoPagePayload`
+(page builder arguments), `AutoPageEmissionContext<TRouteContext>` and
+`AutoPagePayloadOptions<TRouteContext>`. Both router contexts include `location`,
+`matches`, `hash`, `pathname`, `search`, `url` and `routeKey`; `TanStackRouterAutoPageContext` also includes `router`.
+
+Route keys always concatenate pathname and the router's original search string,
+without query re-encoding, matching the existing server-handoff contract. Hash is
+metadata only and does not create a new page identity. TanStack moves the URL
+with settled rendered matches, retaining the previous URL while navigation or
+pending UI is unresolved. The SDK does not generate
+browser handoffs. These wrappers feed page intent into the existing managed XDA
+sequence; explicit `personalization.events` remains authoritative and Retry stays
+event-free.
+They add no tracker or direct page emitter. Existing consent, preview, handoff and
+lifetime rules continue to apply.
 
 ### Live preview
 
@@ -779,6 +870,7 @@ Implementation and colocated tests are grouped by responsibility:
 - `hooks/`: supplied-plan resolution and design hooks.
 - `experience/`: supplied/managed `Experience`, its source controller and request hook, and the registry-bound factory.
 - `runtime/`: owned/injected activation, SDK binding and contexts, route/page sequencing, observable state and event/command hooks.
+- `router/`: optional React Router/TanStack Router wrappers and shared nested page-payload composition.
 - `design/`: CSS conversion utilities.
 - `registry/`: registration definitions, normalization and types.
 - `test/`: shared test utilities and fixture data, excluded from publication.
