@@ -30,6 +30,7 @@ export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
   EventProfileRequiredError,
+  getPreviewSessionBinding,
   InterceptorManager,
   parseExperiencesHandoffEnvelope,
 } from '@contentful/experiences-runtime';
@@ -65,6 +66,7 @@ export type {
   RuntimeResolveDefaults,
   RuntimeResolveOptions,
   RuntimeLivePreviewOptions,
+  PreviewSessionBinding,
   RuntimeLivePreviewBinding,
   RuntimeLivePreviewConfig,
   RuntimeLivePreviewModule,

@@ -51,7 +51,7 @@ export async function buildBrowserImplementationAssets(
     ).LIVE_PREVIEW_ENABLED === 'true';
   await build({
     // Disabled builds tree-shake the optional Preview package and its protocol dependencies.
-    ...browserAssetConfig(root, dist, 'scripts/preview.ts', 'preview.js'),
+    ...browserAssetConfig(root, dist, 'src/preview.ts', 'preview.js'),
     define: { __LIVE_PREVIEW_ENABLED__: JSON.stringify(previewEnabled) },
   });
 }
