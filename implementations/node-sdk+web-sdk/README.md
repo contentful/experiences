@@ -457,10 +457,14 @@ are described above.
   Identify/Reset/Retry callbacks owned by route orchestration.
 - `public/js/tracking.js`: optional browser-attempt sidebar, actual interval display
   grouping, safe text, age timer and caller-owned subscription cleanup.
-- `scripts/build-assets.ts`: copies only the installed Web UMD/map and built shared
+- `scripts/build-assets.ts`: delegates to the repository's shared
+  `scripts/build-browser-implementation-assets.mts` using this app's Vite and dotenv.
+  It copies only the installed Web UMD/map and built shared
   module to generated `public/dist`, then uses Vite with `emptyOutDir: false`
   to build `rich-text.js`. No environment settings or source checkout paths are
   used as bundle inputs.
+- `scripts/preview.ts`: app-local optional-package entry; the server and browser
+  use binding parsing from the shared `scripts/implementation-preview.mts`.
 - `scripts/rich-text.ts`: Contentful Rich Text HTML renderer and the public Web
   `tracking-attributes` helper exports used by the browser renderer.
 - `public/css/theme.css`: local copy of the Experiences Web theme, retaining

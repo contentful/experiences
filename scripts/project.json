@@ -14,7 +14,7 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "eslint scripts/*.ts"
+        "command": "eslint scripts/*.ts scripts/*.mts"
       }
     },
     "typecheck": {
