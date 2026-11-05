@@ -4,9 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { NodeAttribution, PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import { resolveNodeProps } from './custom-renderer';
-import { ServerExperienceRenderer } from './server-renderer';
-import { defineComponent, type Config } from './types';
+import { resolveNodeProps } from '../custom-renderer';
+import { ServerExperienceRenderer } from '../rendering/server-renderer';
+import { defineComponent, type Config } from '../registry/types';
 
 function planNode(
   kind: 'component' | 'experienceTemplate',
@@ -176,6 +176,8 @@ describe('resolveNodeProps', () => {
       />
     );
 
-    expect(hostMarkup).toBe(sdkMarkup);
+    expect(sdkMarkup).toBe(
+      `<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents">${hostMarkup}</div>`
+    );
   });
 });

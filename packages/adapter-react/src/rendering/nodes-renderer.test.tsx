@@ -18,10 +18,9 @@ import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-s
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ClientExperienceRenderer } from './client-renderer';
-import type { Config } from './types';
-import { fetchExperience, type ExperienceParameters } from './index';
+import type { Config } from '../registry/types';
+import { fetchExperience, type ExperienceParameters } from '../index';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {

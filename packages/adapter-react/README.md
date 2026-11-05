@@ -151,6 +151,146 @@ ClientExperienceRenderer; // /client: client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
 ```
 
+### Attributed rendering and DOM roots
+
+Both renderers now add one Experience boundary, a `div` with `display: contents`
+by default, and inject Core scope attributes into registered component/template
+props. Components must forward those attributes to their actual outermost HTML
+element. Existing registration lookup, prop precedence, named slots, context,
+unknown/error fallbacks and the `experience` prop retain their behavior. Rendering
+supplied plans performs no fetch and works identically for preview-derived plans.
+
+```tsx
+import type { HTMLAttributes } from 'react';
+
+function Card({ title, ...rootProps }: HTMLAttributes<HTMLElement>) {
+  return (
+    <article {...rootProps}>
+      <h3>{title}</h3>
+    </article>
+  );
+}
+```
+
+Use `as="section"` (or another HTML element/custom forwarding component) and
+`rootProps` for the single container customization surface. For layout-sensitive
+markup, select its semantic root and style through those same props:
+
+```tsx
+<table>
+  <ServerExperienceRenderer
+    experience={tablePlan}
+    config={rowRegistry}
+    as="tbody"
+    rootProps={{ style: { display: 'table-row-group' } }}
+  />
+</table>
+```
+
+A custom `as` component forwards the boundary attributes, children and client ref
+to its actual root. Server root props exclude DOM refs. The earlier `renderRoot`
+callback is removed.
+
+An empty attribution boundary is still emitted when the plan lacks a usable
+source map, so a nested Experience cannot borrow an ancestor's scopes. Obtain
+attribution with `extensions: { sourceMap: {} }` when application loading owns
+fetching; supplied plans use only the attribution they already carry. Repeated
+presentations receive distinct container elements, while each node's roots keep
+their shared plan-local scope keys. No per-node DOM wrapper is added.
+
+Ordinary single-root components forward HTML attributes and refs, using React
+`forwardRef` for React 18 compatibility. They need no SDK-specific root prop.
+For fragments, multiple HTML roots, or explicit ref composition, optionally declare
+a named root binding. Spread `getRootProps` onto every actual root, with distinct stable
+keys; pass customer attributes and refs as its second argument. SDK scope keys
+remain authoritative, and object/callback refs are composed, including React 19
+callback cleanup. Specialized HTML roots can use `getRootProps<HTMLTableRowElement>()`.
+
+```tsx
+import { defineComponent, type ExperienceRootBinding } from '@contentful/experiences-react/client';
+
+function SplitCard({ experienceRoot }: { experienceRoot: ExperienceRootBinding }) {
+  return (
+    <>
+      <article {...experienceRoot.getRootProps('body', { className: 'card' })}>Body</article>
+      <aside {...experienceRoot.getRootProps('aside')}>Related content</aside>
+    </>
+  );
+}
+
+const splitCard = defineComponent({
+  component: SplitCard,
+  root: { prop: 'experienceRoot' },
+});
+```
+
+The named prop is reserved for the binding. Keep it distinct from content and
+slot props. Text-only roots, dropped root props/refs, SVG roots and portals outside
+the enclosing boundary are unsupported. Named bindings report a development
+warning when attributed roots are not forwarded. A portal needs its own valid
+Experience boundary. Custom `as` implementations must forward the boundary
+attributes; client root callbacks require its ref too. For direct injected manual
+refs, React 18 components use `forwardRef`; React 19 components may forward a ref
+prop. The named binding works with ordinary function components in both versions.
+
+For RSC, default forwarding passes only serializable root attributes. Callable
+named bindings are created inside a client composition boundary: register client
+component references for that path, or create the bound `createExperienceNode`
+component in a client module and pass it serializable snapshots. A server-only
+registration should use direct attribute forwarding. Ordinary React SSR supports
+both paths. Do not pass server-created DOM refs or registration callbacks across
+an RSC boundary.
+
+Tracking controls follow Optimization: `clickable`, `trackViews`, `trackHovers`,
+and `trackClicks`. Undefined retains existing root attributes and Web defaults;
+false disables that automatic kind, and true opts it in subject to SDK consent.
+They apply to each node's real roots, including named-slot descendants. Attribution
+and scope attributes remain available even when all automatic kinds are disabled.
+The earlier automatic/manual/none `tracking` enum is removed.
+
+```tsx
+<ExperienceRenderer
+  experience={plan}
+  config={registry}
+  trackViews={false}
+  trackHovers={true}
+  trackClicks={true}
+  clickable
+/>
+```
+
+Client `onNodeRoot` remains an optional low-level registration seam. It receives
+`{ element, node, attribution, data }` for actual HTML roots and can return cleanup
+for removal, effective node-data replacement or callback replacement. `node` is a
+`NodeSnapshot`; `data` is the SDK-selected innermost rooted scope, ready for the
+Web tracking API. It is undefined if the node roots no scope or attribution is
+unavailable. Stable rerenders and per-kind option changes preserve manual root
+registration. Disable automatic views while explicitly registering manual views:
+
+```tsx
+<ExperienceRenderer
+  experience={plan}
+  config={registry}
+  trackViews={false}
+  onNodeRoot={({ element, data }) => {
+    if (!data) return;
+    sdk.tracking.enableElement('views', element, { data });
+    return () => sdk.tracking.clearElement('views', element);
+  }}
+/>
+```
+
+This explicit example uses an application-owned `sdk`; it performs no attribution
+selection or root collection. Web owns measurement, consent and delivery, and
+measures each manual element independently. The reference's single-root components
+use ordinary forwarding, with no root-count/readiness panel. Phase 5 must provide
+context SDK access and a registry bound once; Phase 6 must carry the same per-kind
+and optional root callback props through managed `Experience` loading. Those
+managed/context APIs are planned, not available yet. The implementation plan
+requires concise consumer examples and checks rather than SDK prop threading,
+root maps or consumer fetch/subscription/page orchestration. XDA workarounds do
+not require root/ref boilerplate.
+
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
 
 For hosts that render a plan themselves instead of using `ServerExperienceRenderer`. `resolveNodeProps` returns each node's component and merged props, `ExperienceNode` renders it the way the SDK renderers do, and `createExperienceNode` renders a node's serializable `snapshot` where components can't be passed as props. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`.
@@ -284,6 +424,24 @@ export function Section({ children }: { children?: ReactNode[] }) {
 For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
+
+## Source organization
+
+Public entry files stay at `src/` so the package's import paths remain explicit.
+Implementation and colocated tests are grouped by responsibility:
+
+- `rendering/`: server/client renderers, traversal, Experience boundaries and render context.
+- `nodes/`: node composition, snapshots and prop resolution.
+- `tracking/`: DOM-root bindings, refs and attribution types.
+- `diagnostics/`: error boundaries, fallbacks and the debug panel.
+- `hooks/`: general supplied-plan and design hooks.
+- `design/`: CSS conversion utilities.
+- `registry/`: registration definitions, normalization and types.
+- `preview/legacy/`: retained standalone preview hooks/tests, excluded from publication.
+- `test-fixtures/`: existing shared test data.
+
+The build remains unbundled and preserves nested module paths and client directives.
+Package entry checks cover the full source tree and its emitted declarations.
 
 ## License
 

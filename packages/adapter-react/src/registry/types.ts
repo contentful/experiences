@@ -69,6 +69,8 @@ export type { RenderContext };
  * `useExperience()` / `useContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
+  /** Named DOM-root binding for components with multiple roots or explicit ref composition. */
+  root?: { prop: string };
   /**
    * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
@@ -105,6 +107,8 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /** Same root-forwarding contract as a component registration. */
+  root?: { prop: string };
   /**
    * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
