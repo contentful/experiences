@@ -1,21 +1,43 @@
 // Shared server configuration; Pages GSSP removes this module from the client bundle.
-import { bindNextjsAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
+import {
+  bindNextjsAppRouterServerExperiences,
+  type NextjsAppRouterServerExperiencesConfig,
+} from '@contentful/experiences-nextjs/app-router/server';
 import { bindNextjsPagesRouterServerExperiences } from '@contentful/experiences-nextjs/pages-router/server';
 import type { NextjsCookieReader } from '@contentful/experiences-nextjs/server';
 import { getServer } from './config';
 import { experienceConfig } from './components/ExperienceContent';
-import { ClientRequestExperience } from './components/SingleExperience';
-import { readConsent } from './server-reference';
+import { AppExperiencesRoot, ClientRequestExperience } from './components/SingleExperience';
+import { readConsent, serverPreview } from './server-reference';
 
-function configuration() {
-  const { nodeConfig, browser, config } = getServer();
+function configuration(): NextjsAppRouterServerExperiencesConfig {
+  const { nodeConfig, config, browser } = getServer();
   return {
     ...nodeConfig,
     config: experienceConfig,
-    browser: { delivery: browser.web.delivery, isPreview: false },
+    browser: {
+      delivery: browser.web.delivery,
+      ...(browser.web.preview ? { preview: browser.web.preview } : {}),
+    },
     consent: { server: ({ cookies }: { cookies: NextjsCookieReader }) => readConsent(cookies) },
+    livePreview: {
+      ...browser.livePreview,
+      enabled: Boolean(browser.livePreview),
+      loadImplementation: () => import('@contentful/experiences-live-preview'),
+    },
     request: {
-      experience: { experienceId: config.experienceIds[0], extensions: { sourceMap: {} } },
+      experience: ({ requestUrl }) => {
+        const url = new URL(requestUrl);
+        const preview = Boolean(serverPreview(url));
+        return {
+          experienceId:
+            (preview &&
+              (url.searchParams.get('preview_experience_id')?.trim() ||
+                browser.livePreview?.experienceId)) ||
+            config.experienceIds[0],
+          ...(preview ? {} : { extensions: { sourceMap: {} } }),
+        };
+      },
       hydration: 'preserve-server' as const,
     },
   };
@@ -23,7 +45,10 @@ function configuration() {
 
 export function singleAppExperiences() {
   return bindNextjsAppRouterServerExperiences(configuration(), {
-    request: { Experience: ClientRequestExperience },
+    request: {
+      ExperiencesRoot: AppExperiencesRoot,
+      Experience: ClientRequestExperience,
+    },
   });
 }
 

@@ -170,7 +170,8 @@ Phase 7 is complete and explicitly accepted on 2026-11-02, including its API ref
 evidence for a superseded design, not validation of this revision. Phases 1–5
 remain accepted. Current implementation and validation results are recorded there.
 
-XDA always invokes the Personalization API (XPAPI) with `preflight: true`.
+XDA currently always invokes the Personalization API (XPAPI) with `preflight: true`,
+without an override.
 It evaluates events and profile changes without committing events or profile
 creation/mutation. Newly returned IDs are provisional; local Node/Web adoption,
 hydration, storage and queue admission do not finalize them. Profile-only XDA uses
@@ -179,8 +180,8 @@ SDK-to-XDA request is POST.
 
 The active content flow is:
 
-- **SSR:** ordinary Node request `fetchExperience`.
-- **CSR:** ordinary Web `fetchExperience`.
+- **SSR:** ordinary Node request `fetchExperience`, without preparing or consuming replay.
+- **CSR:** ordinary Web `fetchExperience`, without a locally produced handoff or replay.
 - **Hybrid transfer:** Node request `fetchExperienceForHandoff(options,
 resolveOptions, { routeKey })` evaluates actual server content and returns
   `FetchExperienceForHandoffResult`: a full `handoff` plus optional `plan`/`error`.
@@ -199,6 +200,32 @@ SSR/CSR XDA-carried events remain uncommitted. This is a tolerated service bug
 awaiting upstream force-commit support; there is no current force flag or SDK
 workaround. Do not introduce Node aggregate commitment, a Web handoff producer,
 standalone XPAPI preparation, or a new API family to compensate.
+
+For an actual hybrid server-to-browser transfer, preflight is intentional:
+Node evaluates content and supplies the events for browser commitment. Node's
+replay path is exercised only in that backend role; ordinary Node SSR has no
+replay requirement. The existing Node + Web and Next references provide those
+hybrid producer/consumer paths. Content display remains independent of replay
+admission and successful delivery.
+
+Once the upstream issue is resolved, ordinary SSR/CSR events are expected to
+commit through XDA, without a replay workflow in SSR integrations. Hybrid server
+evaluation should retain preflight followed by browser commitment; browser-local
+navigation/actions remain ordinary Web fetches. An upstream flag may control this
+choice, and existing integration patterns may permit automatic selection where
+the operation can be identified reliably. No flag name, API or automatic mode
+detection is currently promised; choosing Node alone does not identify SSR versus
+hybrid use.
+
+**Verification and release gates:** Phase 12 may assess the existing reference
+under the accepted current noncommit limitation. Phase 13 verifies the corrected
+service only after all tracked XDA issues affecting the supported integrations
+are resolved, including forced preflight and outstanding built-event metadata
+rejection. It must demonstrate full supported-event acceptance, real commitment
+and profile finalization through the appropriate SSR/CSR and hybrid paths.
+The SDK will not release until those issues are resolved and that verification
+passes against the actual upstream contract. There is no known fix date;
+earlier checks and phase acceptance do not waive these gates.
 
 **Observed Insights limitation (accepted for this workstream on 2026-11-02):**
 The installed API client's `PartialProfile`/Insights batch schema accepts `{ id }`,

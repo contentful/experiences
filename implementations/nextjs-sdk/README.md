@@ -10,8 +10,9 @@ Start with App Router `/single-experience` or Pages Router
 The public binder owns fetching, resolution and management of the primary result;
 App uses its `request.Experience`; Pages imports the bound `Experience` and
 `ExperiencesRoot` components. These routes
-need no comparison loop or custom browser Root. They use the same registrations
-and local configuration as the diagnostics below.
+need no comparison loop. Thin client wrappers reuse the built-in browser roots
+with the same flag-and-URL-session preview policy, registrations and local
+configuration as the diagnostics below.
 
 App Router diagnostic Home (`/`) and Page Two (`/page-two`) and Pages Router Home
 (`/pages`) and Page Two (`/pages/page-two`) share registrations, presentation,
@@ -147,7 +148,9 @@ Optional preview settings are `LIVE_PREVIEW_ENABLED`, `PREVIEW_TOKEN`,
 `LIVE_PREVIEW_SESSION_HOST` and `LIVE_PREVIEW_RESOURCE_RESOLUTION`. The optional
 package is installed from its unchanged artifact. Preview activates only when
 `LIVE_PREVIEW_ENABLED=true` and a nonempty `preview_session_id` is supplied in the
-URL. Experience selection uses local settings or `preview_experience_id`.
+URL. The SDK uses the resolved primary Experience ID for its managed session.
+This diagnostic application can select its primary descriptor from local settings
+or `preview_experience_id`; the SDK does not interpret that override itself.
 `LIVE_PREVIEW_SESSION_ID` is retained in local `.env` only for convenient copying;
 application/build code never reads it. Both preview fields are blank in
 `.env.example`. Missing/empty session parameters and a falsy flag keep the request
@@ -232,19 +235,32 @@ component with the full descriptor and new intent. Comparison results carry an
 explicit event-free descriptor, so adopting or retrying them creates no page intent.
 Router adoption and reset behavior belong to the adapter.
 
+Next's bindings own Contentful Live Preview Session selection and lifetime through
+`livePreview: { enabled, loadImplementation }`. The server supplies deployment configuration in the result; the client binds
+the lazy optional-package loader. The SDK infers
+the primary Experience ID, reads the committed URL session, supplies inactive
+`isPreview: false`, switches sessions in place and replaces its owned SDK on mode
+entry/exit. Consumers need no preview-specific hook, wrapper or React key.
+Request-history guards survive SDK replacement. This configuration controls
+Contentful Live Preview content and event suppression, independently of XPAPI
+preflight and rendering-mode commitment policy.
+
 ## Public server integration
 
 The normal one-Experience example binds the server policy in
 `src/single-experience-server.tsx`. `src/components/SingleExperience.tsx` exports
-the App request renderer and the Pages binding's named `ExperiencesRoot` and
-`Experience` components once, alongside the existing presentation fallbacks. App's
-sibling `(single)` route group calls the lazy `singleAppExperiences()` once,
-destructures `ExperiencesRoot` and `Experience` from its request family, and uses
-plain JSX without manual result plumbing;
-Pages uses native GSSP `request.loadExperience` and plain `<ExperiencesRoot>`
-in `_app`, imported from the client binding. The registry is bound at module
-scope; the allowlisted runtime environment is passed as flat root props because
-this reference reads server configuration lazily. Normal Pages integrations bind
+the App request renderer and SDK App/Pages roots, alongside the existing
+presentation fallbacks. App's sibling `(single)` route group calls the lazy
+`singleAppExperiences()` once, destructures `ExperiencesRoot` and `Experience`
+from its request family, and uses plain JSX without manual result plumbing.
+The server binder receives explicit browser configuration and registered client
+components by name; the SDK projects the allowlisted runtime environment into
+flat root props because this reference reads server configuration lazily.
+Pages uses native GSSP `request.loadExperience` and plain `<ExperiencesRoot>` in
+`_app`, receiving flat browser props and the complete result. Preview configuration
+travels in that result while the client binding retains its lazy loader. The
+registries and lazy implementation loaders are bound at module scope.
+Normal Pages integrations bind
 flat browser SDK options, `consent.clientDefaults` and `cookie` in their client
 configuration module, with no manual browser/defaults/cookie remapping in `_app`.
 
@@ -258,9 +274,9 @@ comparisons on a separate identity-free facade before the result is finalized;
 the layout and page reuse the primary
 result's full handoff and plans. `src/components/BrowserRoot.tsx` binds the public
 App and Pages client families, with the registry and ordinary shared UI in one client
-module. Separate router reads and factories feed the shared preview setup, context,
-consent mirror, shell and attempt log. Each router retains one browser owner across
-navigation; preview binding changes deliberately replace that owner. Pages
+module. Separate router reads and factories feed the shared context, consent mirror,
+shell and attempt log. Each router retains one browser owner across navigation;
+the SDK manages preview session replacement and mode entry/exit. Pages
 destructures the top-level roots and `Experience` from its stable binding; the
 same `Experience` serves primary results and explicit managed diagnostic flows.
 The shared shell reads the current browser route separately from the whole server
@@ -280,8 +296,18 @@ returns a JSON-safe `NextjsRequestResult` directly for GSSP props; raw plan/erro
 data is available inside `composeRequest` only. `_app` passes the `experiences` envelope as `result`
 to the stable request root.
 Pages server-only props contain rendered markup rather than a browser render plan.
+`html-react-parser` converts that completed HTML into React elements for adoption
+on both SSR and hydration, preserving its styles and tracking attributes. This
+does not invoke the Experience renderer, fetch or resolve content in the browser.
 The shared server presentations serve App RSC and Pages GSSP; the browser only adopts
-that output. Initial hybrid plans remain independent of replay admission.
+that output. Server-only repeated presentations use the same manual-view section
+as hybrid content, with automatic views, hovers and clicks disabled. With browser
+analytics enabled, `src/components/ManualServerViews.tsx` registers views using real
+serialized attribution through the public SDK tracking API and releases registrations
+when React replaces the subtree or unmounts it. App passes opaque server children,
+including Server Action results; Pages passes opaque server-rendered HTML. The SDK
+owns measurement; this wrapper performs no browser content fetch, rendering or
+resolution. Initial hybrid plans remain independent of replay admission.
 
 The reference uses explicit host helpers only at real host boundaries. The App
 Server Action reads writable cookies/headers, binds the Node request and calls
@@ -327,19 +353,24 @@ is copied locally from that reference, preserving Optimization stylesheet
 provenance and the MIT license; the local layout retains its Utilities, split presentation and sidebar columns. No adjacent checkout, generator change, source alias, custom server,
 E2E tooling, MSW or temporary consumer is required.
 
-Current Phase 10 DX validation remains pending until the root records source,
-package and installed-reference results. Phase 10 is not accepted; optional React
-Router/TanStack integration remains deferred to Phase 11, and broad example code
+Phase 10 DX validation and Phase 11 optional React Router/TanStack integration are
+complete and accepted. Phase 12 reference completeness/parity review is in progress
+and not accepted. Phase 13 requires Phase 12 acceptance and upstream resolution of
+all tracked XDA issues affecting supported integrations before post-fix verification;
+release remains blocked until Phase 13 is complete and accepted. Broad example code
 migration remains Phase 14.
 
 After setup, run the focused reference regressions from the repository root:
 
 ```sh
-node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts
+node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts implementations/nextjs-sdk/src/components/ManualServerViews.test.tsx
 ```
 
 The comparison tests use the installed Node SDK without network requests or `.env`
 and cover primary identity isolation, comparison content, disposal and preview policy.
+The manual-view tests check escaped server-markup adoption, styles/tracking
+attribute preservation, real attribution selection and direct registration-helper cleanup. They do not exercise live Preview
+transport or React effect cleanup during subtree replacement.
 
 Run scoped build/lint/typecheck after the installed artifacts are refreshed. Inspect
 Home and Page Two directly for delivered content, slots, Rich Text, errors and

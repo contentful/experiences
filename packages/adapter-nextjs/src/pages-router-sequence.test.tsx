@@ -8,6 +8,7 @@ import {
   type ContentfulExperiences,
   type PortableRenderPlan,
 } from '@contentful/experiences-web';
+import { useExperiences } from '@contentful/experiences-react/client';
 import { bindNextjsPagesRouterExperiences } from './pages-router.js';
 import type { NextjsRequestResult } from './request-result.js';
 
@@ -200,5 +201,60 @@ describe('Pages managed request sequence', () => {
     expect(sdk.trackCurrentPage).toHaveBeenCalledOnce();
     expect(fetchExperience).not.toHaveBeenCalled();
     expect(container.textContent).toBe('Server HTML');
+  });
+  it('updates preview on committed shallow queries without changing page intent', async () => {
+    let current!: ContentfulExperiences;
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    function Probe() {
+      current = useExperiences() as ContentfulExperiences;
+      return null;
+    }
+    const { ExperiencesRoot } = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { accessToken: 'delivery' },
+      preview: { accessToken: 'preview' },
+      allowedEventTypes: [],
+      livePreview: {
+        enabled: true,
+        loadImplementation: async () => ({
+          fetchPreviewSession: vi.fn(),
+          sendPreviewStatus() {},
+          createLivePreviewClient() {
+            throw new Error('No socket in this test');
+          },
+        }),
+      },
+    });
+    await act(async () =>
+      root.render(
+        <ExperiencesRoot result={{ ...startup, requestId: 'shallow' }}>
+          <Probe />
+        </ExperiencesRoot>
+      )
+    );
+    const complete = router.events.on.mock.calls.find(
+      ([name]) => name === 'routeChangeComplete'
+    )![1];
+    const shallow = async (session: string) =>
+      act(async () => {
+        router.asPath = '/pages?preview_session_id=' + session;
+        window.history.replaceState(null, '', router.asPath);
+        complete(router.asPath, { shallow: true });
+      });
+    expect(current.isPreview).toBe(false);
+    expect(current.states.profile.current?.id).toBe('server-profile');
+    await shallow('a');
+    expect(current.isPreview).toBe(true);
+    const owner = current;
+    await shallow('b');
+    expect(current).toBe(owner);
+    expect(current.states.preview.current?.sessionId).toBe('b');
+    await shallow('');
+    expect(current.isPreview).toBe(false);
+    expect(current.states.profile.current).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

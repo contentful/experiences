@@ -46,3 +46,5 @@ export type {
   ExperiencesNodeRequestContext,
   ConsentInput,
 } from '@contentful/experiences-node';
+
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';

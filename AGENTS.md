@@ -175,12 +175,20 @@ without descriptor/seed/payload overlays; preserve its `requestId` history guard
 Built-in browser roots inherit scope and locale, but need explicit browser
 credentials or a trusted authenticated proxy. Existing Runtime Delivery
 configuration remains required even for analytics-only browser use. Advanced
-callbacks/preview setup stay in a client module. `composeRequest` is an explicit
+callbacks/preview setup stay in a client module. Next's managed Live Preview
+configuration is `livePreview: { enabled, loadImplementation }` in server and
+client bindings. Request results carry loader-free configuration; roots infer the primary Experience
+and URL session from existing descriptor/route data;
+owned SDKs switch sessions with `replaceLivePreview` and are recreated on preview
+mode entry/exit below the stable request-history boundary. Consumers need no
+preview-specific wrapper, hook or key. Explicit browser credentials remain
+separate from server credentials; optional-package imports stay lazy. The legacy
+initializer/resolver path remains available; injected SDK lifetime stays caller-owned. `composeRequest` is an explicit
 application escape hatch on the existing facade; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.
 Phase 10 is complete and explicitly accepted on 2026-11-03; optional
-React Router/TanStack integration is Phase 11, now in progress and not accepted.
+React Router/TanStack integration is Phase 11, complete and explicitly accepted on 2026-11-03.
 The broad `examples/nextjs` managed API migration is Phase 14; its retired hooks
 are not current guidance.
 Registry/shared ownership, shared page
@@ -290,9 +298,19 @@ accepted incoming replay delivery retry remains queue-owned. Later reference
 comparison IDs also use ordinary event-free fetch, without an SDK multi-Experience
 or cross-fetch guarantee; official support is one Experience per page, unenforced.
 Direct APIs remain callable, not initial prerequisites or compensation.
+Replay is exercised by Node only as the backend of an actual hybrid transfer;
+ordinary Node SSR integrations use normal fetch without producing or consuming
+replay. After the upstream fix, ordinary SSR/CSR events are expected to commit
+through XDA, while hybrid server evaluation retains preflight and browser
+commitment. Any flag or automatic selection follows the actual upstream API and
+supported integration patterns; no override currently exists. The SDK will not
+release until all tracked XDA issues affecting the supported integrations are
+resolved and Phase 13's verification of the corrected service passes. Phase 12's
+reference checkpoint may proceed under the accepted current service limitation;
+Phase 13 starts only after those XDA issues are resolved and Phase 12 is accepted.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
 Phases 1–5 remain accepted.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
@@ -333,10 +351,14 @@ Future framework adapters slot in under the same naming pattern: `packages/adapt
 
 ---
 
-Actual Node transfer producer schema/equality/order/count compatibility must be validated before XDA;
-incompatible wider XDA-only metadata/query arrays throw without a selected plan.
-Ordinary fetch retains the wider XDA contract; refusing an untrusted replay need
-not discard a separately supplied plan.
+Only the actual hybrid Node transfer producer prepares replay. It preserves raw
+final Client events, including supported query arrays, unchanged without an
+additional replay-compatibility check before XDA. Normal SDK builder XPAPI
+validation and Client XDA validation remain; manually built/raw replay retains
+consumer-owned compatibility risk. Receiving browser replay checks still enforce
+schema/order/count, capacity, scope/cache/consent and lifetime. Refusing replay
+does not discard available content. Ordinary fetch retains the wider XDA
+contract; ordinary SSR uses normal fetch and has no replay requirement. See [Runtime replay transport limits](./packages/runtime/README.md#replay-transport-limits).
 
 Prepared event attempts publish only after the whole batch is admitted and before
 transport begins; refusal publishes none. Preserve the original operation revision
@@ -688,7 +710,7 @@ migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
 current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is in progress and not accepted; phases 12–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
+accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
 to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.

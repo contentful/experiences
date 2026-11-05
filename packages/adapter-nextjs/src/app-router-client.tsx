@@ -23,6 +23,8 @@ import type {
   BoundNextjsRequestRootProps,
   NextjsRequestExperienceProps,
 } from './request-result.js';
+import { mergeNextjsLivePreview, type NextjsLivePreviewConfig } from './live-preview.js';
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
 export type {
   BoundNextjsExperiencesRootProps,
   BoundNextjsRequestRootProps,
@@ -37,9 +39,13 @@ type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 export interface NextjsClientExperiencesConfig
   extends
-    Omit<ExperiencesRootProps, RuntimeIdentity | 'children' | 'handoff' | 'snapshot' | 'routeKey'>,
+    Omit<
+      ExperiencesRootProps,
+      RuntimeIdentity | 'children' | 'handoff' | 'snapshot' | 'routeKey' | 'livePreview'
+    >,
     Partial<Pick<ExperiencesRootProps, RuntimeIdentity>> {
   readonly config: Config;
+  readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewConfig;
   readonly consent?: { readonly clientDefaults?: ExperiencesRootProps['defaults'] };
 }
 
@@ -94,20 +100,39 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     config,
   });
 
-  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+  function BrowserRoot(props: BoundNextjsExperiencesRootProps) {
     const effective = {
       ...rootConfig,
       ...(consent?.clientDefaults ? { defaults: consent.clientDefaults } : {}),
       ...props,
     };
-    return <NextjsBrowserRoot {...effective} />;
+    return (
+      <NextjsBrowserRoot
+        {...effective}
+        livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
+      />
+    );
+  }
+
+  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+    const preview = props.livePreview ?? rootConfig.livePreview;
+    return preview && 'enabled' in preview && props.routeKey === undefined ? (
+      <AppRouterRequestOwner
+        initialPagePayload={rootConfig.initialPagePayload}
+        {...props}
+        Root={BrowserRoot}
+        configuredBuilder={rootConfig.buildPagePayload}
+      />
+    ) : (
+      <BrowserRoot {...props} />
+    );
   }
 
   function RequestExperiencesRoot(props: BoundNextjsRequestRootProps) {
     return (
       <AppRouterRequestOwner
         {...props}
-        Root={ExperiencesRoot}
+        Root={BrowserRoot}
         configuredBuilder={rootConfig.buildPagePayload}
       />
     );
@@ -123,7 +148,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     ...props
   }: BoundNextjsExperiencesRootProps & { readonly experienceId?: string }) {
     return (
-      <ExperiencesRoot {...props} pageMode="analytics">
+      <ExperiencesRoot {...props} experienceId={experienceId} pageMode="analytics">
         <ServerPreviewRefresh experienceId={experienceId} />
         {props.children}
       </ExperiencesRoot>
@@ -135,7 +160,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     ...props
   }: BoundNextjsRequestRootProps & { readonly experienceId?: string }) {
     return (
-      <RequestExperiencesRoot {...props} pageMode="analytics">
+      <RequestExperiencesRoot {...props} experienceId={experienceId} pageMode="analytics">
         <ServerPreviewRefresh
           experienceId={experienceId ?? props.result?.experience.experienceId}
         />
@@ -168,10 +193,11 @@ function AppRouterRequestOwner({
   Root,
   configuredBuilder,
   ...props
-}: BoundNextjsRequestRootProps & {
-  Root: typeof NextjsBrowserRoot;
-  configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
-}) {
+}: BoundNextjsRequestRootProps &
+  Pick<BoundNextjsExperiencesRootProps, 'handoff' | 'initialPagePayload' | 'snapshot'> & {
+    Root: typeof NextjsBrowserRoot;
+    configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
+  }) {
   const inputs = useNextAppAutoPageInputs();
   return (
     <NextjsInitialDataBoundary routeKey={inputs.routeKey} requestId={props.result?.requestId}>

@@ -327,7 +327,13 @@ describe('published declarations', () => {
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       } });
-      const appClient = bindNextjsAppRouterClientExperiences({ config });
+      declare const previewModule: import('@contentful/experiences-runtime').RuntimeLivePreviewModule;
+      const livePreviewConfig: import('${packageName}/app-router/client').NextjsLivePreviewConfig = {
+        enabled: true, loadImplementation: async () => previewModule,
+      };
+      const appClient = bindNextjsAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+        livePreview: livePreviewConfig, request: { experience: { experienceId: 'home' } } });
       const pagesServer = bindNextjsPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: { experience: { experienceId: 'home' } } });
       declare const pagesOptions: Parameters<typeof pagesServer.request.loadExperience>[1];
       const composedPagesOptions: typeof pagesOptions = {
@@ -339,7 +345,7 @@ describe('published declarations', () => {
       };
       const pagesClient = bindNextjsPagesRouterExperiences({
         config, spaceId: 'space', environmentId: 'master',
-        delivery: { accessToken: 'browser' },
+        delivery: { accessToken: 'browser' }, livePreview: livePreviewConfig,
         consent: { clientDefaults: { consent: false, persistenceConsent: false } }
       });
       declare const result: NextjsRequestResult;

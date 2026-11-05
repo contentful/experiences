@@ -61,7 +61,7 @@
         <div class="control-panel__fields">
           <span class="control-panel__row-label">Event consent</span>
           <span class="control-panel__row-value" data-testid="consent-status">Not connected</span>
-          <span>
+          <span class="control-panel__row-actions">
             <button class="btn btn--sm btn--secondary" data-testid="consent-button">Grant</button>
             <button class="btn btn--sm btn--secondary" data-testid="unconsent-button">
               Revoke
@@ -71,12 +71,12 @@
           <span class="control-panel__row-value" data-testid="persistence-consent-status">
             Not connected
           </span>
-          <span></span>
+          <span class="control-panel__row-actions"></span>
           <span class="control-panel__row-label">Identify requested</span>
           <span class="control-panel__row-value" data-testid="identified-status"
             >Not connected</span
           >
-          <span>
+          <span class="control-panel__row-actions">
             <button class="btn btn--sm btn--secondary" data-testid="identify-button">
               Identify
             </button>
@@ -164,11 +164,14 @@
         <h1>Page Two</h1>
         <p class="page-header__subtitle">A second route in the standalone Web SDK reference.</p>
       </div>
-      <div class="control-panel__actions" data-custom-action>
-        <button class="btn btn--secondary btn--sm" data-testid="track-custom-action-button">
-          Record custom action
-        </button>
-        <p class="control-panel__note" role="status"></p>
+      <div class="control-panel__row" data-custom-action>
+        <span class="control-panel__row-label">Custom event</span>
+        <span class="control-panel__row-value" role="status"></span>
+        <span class="control-panel__row-actions">
+          <button class="btn btn--secondary btn--sm" data-testid="track-custom-action-button">
+            Record custom action
+          </button>
+        </span>
       </div>
     </template>
 

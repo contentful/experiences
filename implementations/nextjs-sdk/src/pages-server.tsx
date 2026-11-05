@@ -73,17 +73,25 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       : action === 'track'
         ? [{ type: 'track' as const, event: 'reference_custom_action' }]
         : [];
-  const livePreview = serverPreview(url);
+  const preview = Boolean(serverPreview(url));
   let comparisons: ServerContent[] = [];
   const experience = {
-    experienceId: routeIds(url.pathname, config.experienceIds)[0],
-    ...(livePreview ? {} : { extensions: { sourceMap: {} } }),
+    experienceId:
+      (preview &&
+        (url.searchParams.get('preview_experience_id')?.trim() ||
+          browser.livePreview?.experienceId)) ||
+      routeIds(url.pathname, config.experienceIds)[0],
+    ...(preview ? {} : { extensions: { sourceMap: {} } }),
   };
   let html: string | undefined;
   const experiences = await bindNextjsPagesRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
     origin: config.origin,
+    browser: {
+      delivery: browser.web.delivery,
+      ...(browser.web.preview ? { preview: browser.web.preview } : {}),
+    },
     request: {
       hydration: serverOnly ? 'server-only' : 'preserve-server',
       ...(action
@@ -98,7 +106,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
           }),
       experience: {
         ...experience,
-        ...(action && !livePreview ? { personalization: { events } } : {}),
+        ...(action && !preview ? { personalization: { events } } : {}),
       },
 
       composeRequest: async (request, primary) => {
@@ -117,7 +125,11 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       },
     },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    livePreview: () => livePreview,
+    livePreview: {
+      ...browser.livePreview,
+      enabled: Boolean(browser.livePreview),
+      loadImplementation: () => import('@contentful/experiences-live-preview'),
+    },
     cookie: { secure: url.protocol === 'https:' },
   }).request.loadExperience({ ...context, resolvedUrl: `${url.pathname}${url.search}` });
   const props: PagesReferenceProps = { environment: browser, serverOnly, analytics, experiences };
