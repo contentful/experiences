@@ -23,6 +23,7 @@
         "cwd": "packages/live-preview",
         "command": "vitest run"
       }
-    }
+    },
+    "pack": {}
   }
 }
