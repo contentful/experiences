@@ -1,6 +1,6 @@
 import type { Config } from '@contentful/experiences-nextjs/server';
 import { documentToReactComponents } from '@contentful/rich-text-react-renderer';
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode, Ref } from 'react';
 import { BLOCKS } from '@contentful/rich-text-types';
 import type { TypeContentWithoutLinkResolutionResponse } from '../contentful-generated';
 
@@ -59,9 +59,10 @@ function ContentBody({ title, text, richText }: BoundContent) {
   );
 }
 
-type CardProps = BoundContent & Omit<HTMLAttributes<HTMLElement>, 'slot'>;
+export type CardProps = BoundContent &
+  Omit<HTMLAttributes<HTMLElement>, 'slot'> & { ref?: Ref<HTMLElement> };
 
-function ContentCard({ title, text, richText, className, ...attributes }: CardProps) {
+export function ContentCard({ title, text, richText, className, ...attributes }: CardProps) {
   const content = readContent({ title, text, richText }, 'codedComponent');
   return (
     <article {...attributes} className={['entry-card', className].filter(Boolean).join(' ')}>
@@ -70,11 +71,18 @@ function ContentCard({ title, text, richText, className, ...attributes }: CardPr
   );
 }
 
-interface TemplateProps extends CardProps {
+export interface TemplateProps extends CardProps {
   slot?: ReactNode[];
 }
 
-function CodedTemplate({ title, text, richText, slot, className, ...attributes }: TemplateProps) {
+export function CodedTemplate({
+  title,
+  text,
+  richText,
+  slot,
+  className,
+  ...attributes
+}: TemplateProps) {
   const content = readContent({ title, text, richText }, 'codedExperienceTemplate');
   return (
     <section

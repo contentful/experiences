@@ -6,7 +6,7 @@ SDK operations in the public runtime and justify every departure from that examp
 Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 [Node + Web](./node-sdk+web-sdk/README.md), plus the
 [React reference](./react-sdk/README.md) and
-[Next.js server reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
+[Next.js App + server reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
@@ -44,10 +44,27 @@ admission history; event-consent withdrawal purges permitted queued work without
 forgetting accepted replay identity or restoring accepted/blocked intent on grant.
 This admission guard provides no durable or exactly-once transport guarantee.
 
+Automatic fetching, resolution and management of one primary Experience is the
+normal React/Next workflow. The Next reference demonstrates it at
+`/single-experience`, alongside the existing Home/Page Two server routes.
+App request families bind `config` and `resolveOptions` once and expose `request.loadExperience`,
+`request.Experience` and built-in roots. Hydration is `preserve-server` or
+`server-only`; server-only updates use server round-trips without browser content
+loading. Browser roots inherit scope/locale, not private credentials; supply
+explicit browser Delivery credentials or a trusted proxy, even for analytics-only
+use under the existing Runtime requirement. Advanced preview/callback setup belongs
+in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pass
+the complete result without overlays and retain the `requestId` history guard.
+`composeRequest` permits application-owned diagnostic composition on the same
+facade. Do not add multi-prefetch/result lists, identity reconciliation or new
+controllers/cache/barriers. Optional React Router/TanStack integration remains
+deferred.
+
 Official support is one Experience fetch per page. The SDK does not enforce this
 limit in code. Reference implementations fetch multiple IDs only to compare
-rendering scenarios; their loops are not a supported product pattern and provide
-no multi-Experience or cross-fetch guarantee. Reuse plans
+rendering scenarios; their ordering, identity and result handling are application-owned
+diagnostic behavior, not a supported product pattern, and provide no multi-Experience
+or cross-fetch guarantee. Reuse plans
 for repeated presentations. Retry/refresh creates or submits no new visitor events
 and does not rerun event hooks. Standalone Identify and custom track are fresh
 nonpage inputs to ordinary fetch. Initial URL intent pairs identify with the initial
