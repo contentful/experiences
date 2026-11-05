@@ -1,6 +1,6 @@
 # Experiences Node SDK reference implementation
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
 
 This standalone Express/EJS implementation consumes `@contentful/experiences-node`
 from locally built npm tarballs. It has its own dependencies, configuration, and
@@ -51,13 +51,18 @@ PREVIEW_TOKEN=<server-only preview token>
 ```
 
 Visit `/?preview_session_id=<session>`; optional `preview_experience_id` selects
-any Experience ID (default: first presentation ID). The binding can also come from
-`LIVE_PREVIEW_SESSION_ID` / `LIVE_PREVIEW_EXPERIENCE_ID`; optional
-`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. An explicit empty
-`preview_session_id` leaves preview, including when a default session is configured.
+any Experience ID (default: `LIVE_PREVIEW_EXPERIENCE_ID` or first presentation ID).
+Preview activates only when app-local `LIVE_PREVIEW_ENABLED` is exactly `true` and
+the URL supplies a nonempty, trimmed `preview_session_id`. `LIVE_PREVIEW_SESSION_ID`
+is local convenience storage only; runtime/build code never reads it.
+The preview flag is read from the local file on each launch, including PM2 restart,
+so an older inherited environment value cannot keep preview enabled.
+Missing or empty session parameters, or a disabled flag even with a session URL,
+use ordinary mode and events. Optional `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded.
 The presentation ID list stays unchanged; other IDs use Delivery.
-`forRequest({ livePreview })` imports the installed optional package, skips
-page/identify work and fetches the snapshot through the normal renderer.
+`forRequest({ livePreview, isPreview: Boolean(livePreview) })` explicitly sets mode,
+including `false` when inactive. Active preview imports the installed optional
+package, skips page/identify work and fetches the snapshot through the normal renderer.
 `request.destroy()` runs in `finally`. Reload for another snapshot.
 See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
 

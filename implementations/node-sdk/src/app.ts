@@ -7,8 +7,15 @@ import {
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
+import { parseEnv } from 'node:util';
+
+// Read the local flag on each launch; PM2 can retain an older inherited value.
+const previewEnabled =
+  parseEnv(readFileSync(new URL('../.env', import.meta.url), 'utf8')).LIVE_PREVIEW_ENABLED ===
+  'true';
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -37,7 +44,7 @@ const sdk = new ContentfulExperiences({
   spaceId: required('SPACE_ID'),
   environmentId: required('ENVIRONMENT_ID'),
   delivery: { accessToken: required('CDA_TOKEN') },
-  ...(process.env.LIVE_PREVIEW_ENABLED === 'true'
+  ...(previewEnabled
     ? {
         preview: {
           accessToken: required('PREVIEW_TOKEN'),
@@ -74,15 +81,13 @@ app.get('/', async (req, res) => {
     page,
     userAgent: req.get('user-agent') ?? 'node-js-server',
   };
-  const sessionId = url.searchParams.has('preview_session_id')
-    ? url.searchParams.get('preview_session_id')?.trim()
-    : process.env.LIVE_PREVIEW_SESSION_ID?.trim();
+  const sessionId = url.searchParams.get('preview_session_id')?.trim();
   const previewExperienceId =
     url.searchParams.get('preview_experience_id')?.trim() ||
     process.env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() ||
     experienceIds[0];
   const livePreview =
-    process.env.LIVE_PREVIEW_ENABLED === 'true' && sessionId
+    previewEnabled && sessionId
       ? {
           experienceId: previewExperienceId,
           sessionId,
@@ -95,10 +100,7 @@ app.get('/', async (req, res) => {
     locale,
     eventContext,
     livePreview,
-    // A session URL still suppresses events if this deployment disables preview.
-    ...(livePreview
-      ? {}
-      : { isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()) }),
+    isPreview: Boolean(livePreview),
   });
   try {
     const identifyRequested = !request.isPreview && Boolean(userId);
