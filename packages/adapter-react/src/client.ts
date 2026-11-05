@@ -22,19 +22,30 @@ export type {
   UseExperiencePlanResult,
 } from './hooks/use-experience-plan.js';
 
-export { createReactExperiences } from './provider/create-react-experiences.js';
+export { createReactExperiences } from './experience/create-react-experiences.js';
 export type {
   CreateReactExperiencesOptions,
   BoundExperienceRendererProps,
-} from './provider/create-react-experiences.js';
-export { ExperiencesRoot, ExperiencesProvider } from './provider/experiences-provider.js';
+  BoundManagedExperienceProps,
+  BoundManagedExperienceOptions,
+} from './experience/create-react-experiences.js';
+export { ExperiencesRoot, ExperiencesProvider } from './runtime/experiences-provider.js';
 export type {
   ExperiencesRootProps,
   ExperiencesProviderProps,
-} from './provider/experiences-provider.js';
-export { useExperiences, useExperiencesContext } from './context/experiences-context.js';
-export type { ExperiencesContextValue } from './context/experiences-context.js';
-export type { OnStatesReady } from './provider/experiences-root-sdk-binding.js';
+} from './runtime/experiences-provider.js';
+export { useExperiences, useExperiencesContext } from './runtime/experiences-context.js';
+export type { ExperiencesContextValue } from './runtime/experiences-context.js';
+export type { OnStatesReady } from './runtime/experiences-root-sdk-binding.js';
+export { Experience } from './experience/experience.js';
+export type { ManagedExperienceProps, SuppliedExperienceProps } from './experience/experience.js';
+export { useManagedExperience } from './experience/use-managed-experience.js';
+export type {
+  ManagedExperienceOptions,
+  ManagedExperienceResult,
+  ExperienceNotifications,
+} from './experience/use-managed-experience.js';
+export type { BeforeInitialPageOptions } from './runtime/experiences-page-sequence.js';
 export {
   useExperiencesState,
   useProfileState,
@@ -45,6 +56,6 @@ export {
   useEventStreamState,
   useBlockedEventStreamState,
   usePreviewState,
-} from './hooks/use-experiences-state.js';
-export { useExperiencesActions } from './hooks/use-experiences-actions.js';
-export type { UseExperiencesActionsResult } from './hooks/use-experiences-actions.js';
+} from './runtime/use-experiences-state.js';
+export { useExperiencesActions } from './runtime/use-experiences-actions.js';
+export type { UseExperiencesActionsResult } from './runtime/use-experiences-actions.js';

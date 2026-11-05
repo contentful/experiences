@@ -44,8 +44,9 @@ supported product usage or a cross-fetch guarantee.
 - Keep one SDK instance, SDK-owned profile/consent/persistence, and empty SDK resolver
   registries. Render the two current registration kinds through the app DOM
   registry and actual named slots recursively; do not invent composed hierarchy.
-- Phase 6 implementation/checks are pending for the current correction; earlier
-  checks/review are historical. Phase 6 is unaccepted/incomplete; Phase 7 stays gated. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
+- Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
+  acceptance review are recorded in the implementation plan. Earlier checks/review
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
 - Supply explicit page/optional initial URL identify intent through ordinary Web
   fetch, accepting existing type-tagged arguments or raw built events with SDK
   construction once. CSR needs no handoff or direct initial event prerequisite.

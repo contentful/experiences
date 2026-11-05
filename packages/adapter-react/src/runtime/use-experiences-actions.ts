@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import type { WebExperiencesRuntime } from '@contentful/experiences-web';
-import { useExperiences } from '../context/experiences-context.js';
+import { useExperiences } from './experiences-context.js';
+import { useExperienceRequestContext } from './experience-request-context.js';
 
 /** SDK actions safe to destructure, retaining their original signatures/results. */
 export interface UseExperiencesActionsResult {
@@ -22,6 +23,7 @@ export interface UseExperiencesActionsResult {
 /** Bind the current runtime; actions do not initialize pages or refresh content. */
 export function useExperiencesActions(): UseExperiencesActionsResult {
   const sdk = useExperiences();
+  const requests = useExperienceRequestContext();
 
   return useMemo<UseExperiencesActionsResult>(
     () => ({
@@ -29,7 +31,10 @@ export function useExperiencesActions(): UseExperiencesActionsResult {
       flushEvents: (...args) => sdk.flush(...args),
       identifyUser: (...args) => sdk.identify(...args),
       trackPageView: (...args) => sdk.page(...args),
-      resetUser: (...args) => sdk.reset(...args),
+      resetUser: (...args) => {
+        requests?.reset();
+        return sdk.reset(...args);
+      },
       trackEvent: (...args) => sdk.track(...args),
       setLocale: (...args) => sdk.setLocale(...args),
       trackView: (...args) => sdk.trackView(...args),
@@ -37,6 +42,6 @@ export function useExperiencesActions(): UseExperiencesActionsResult {
       trackHover: (...args) => sdk.trackHover(...args),
       trackFlagView: (...args) => sdk.trackFlagView(...args),
     }),
-    [sdk]
+    [sdk, requests]
   );
 }

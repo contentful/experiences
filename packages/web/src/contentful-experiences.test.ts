@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+import { hydrateOptimizationData } from './bridge-support.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -53,6 +54,63 @@ afterEach(() => {
 });
 
 describe('Web ContentfulExperiences', () => {
+  it('rejects content superseded by independent profile hydration while permitting its own intercepted adoption', async () => {
+    let finish!: (plan: unknown) => void;
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }) as never
+      );
+    const runtime = createRuntime({ defaults: { profile: { id: 'first' } } });
+    const pending = runtime.fetchExperience(
+      { experienceId: 'old' },
+      { config: { components: {} } }
+    );
+    const rejected = expect(pending).rejects.toThrow('identity was superseded');
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    await hydrateOptimizationData(runtime, { profile: { id: 'replacement' } });
+    finish({ nodes: [], personalization: { profileId: 'first' } });
+    await rejected;
+    expect(runtime.states.profile.current?.id).toBe('replacement');
+
+    runtime.interceptors.state.add(() => ({ profile: { id: 'intercepted' } }));
+    fetch.mockResolvedValueOnce({ nodes: [], personalization: { profileId: 'selected' } } as never);
+    await expect(
+      runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } })
+    ).resolves.toMatchObject({ personalization: { profileId: 'selected' } });
+    expect(runtime.states.profile.current?.id).toBe('intercepted');
+  });
+
+  it.each(['reset', 'withdraw', 'destroy'] as const)(
+    'rejects selected content completing after %s instead of returning it to a managed view',
+    async (transition) => {
+      let finish!: (plan: unknown) => void;
+      const transport = vi
+        .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+        .mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }) as never
+        );
+      const runtime = createRuntime();
+      const pending = runtime.fetchExperience(
+        { experienceId: 'old-visitor' },
+        {
+          config: { components: {} },
+        }
+      );
+      const rejected = expect(pending).rejects.toThrow(/superseded|destroyed/);
+      await vi.waitFor(() => expect(transport).toHaveBeenCalledOnce());
+      if (transition === 'withdraw') runtime.consent({ events: false });
+      else runtime[transition]();
+      finish({ nodes: [], personalization: { profileId: 'obsolete-profile' } });
+      await rejected;
+      expect(runtime.states.profile.current).toBeUndefined();
+    }
+  );
+
   it('forwards changed parameters and preview flags without retaining fetch values', async () => {
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')

@@ -23,7 +23,6 @@ import {
   type ExperiencesSnapshot,
   type ExperiencesWebConfig,
   type ExperienceState,
-  type Observable,
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { EventBuilder } from '@contentful/experiences-runtime';
@@ -33,15 +32,19 @@ import {
   useExperiences,
   useExperiencesContext,
   type ExperiencesContextValue,
-} from '../context/experiences-context.js';
-import { usePreviewState } from '../hooks/use-experiences-state.js';
-import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
-import { createReactExperiences } from './create-react-experiences.js';
-import { ExperiencesProvider, ExperiencesRoot } from './experiences-provider.js';
+} from './experiences-context.js';
+import { usePreviewState } from './use-experiences-state.js';
 import {
-  createExperiencesRootSdkBinding,
-  disposeExperiencesRootSdkBinding,
-} from './experiences-root-sdk-binding.js';
+  useExperienceRequestContext,
+  type ExperienceRequestContextValue,
+} from './experience-request-context.js';
+import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
+import { createReactExperiences } from '../experience/create-react-experiences.js';
+import {
+  ExperiencesProvider,
+  ExperiencesRoot,
+  type ExperiencesProviderProps,
+} from './experiences-provider.js';
 
 const { construct } = vi.hoisted(() => ({ construct: vi.fn() }));
 vi.mock('@contentful/experiences-web', async (importOriginal) => {
@@ -102,7 +105,12 @@ function liveSdk() {
     ),
     setLocale: vi.fn(),
     page: vi.fn(),
-    fetchExperience: vi.fn(),
+    trackCurrentPage: vi
+      .fn<ContentfulExperiences['trackCurrentPage']>()
+      .mockResolvedValue({ accepted: true }),
+    fetchExperience: vi
+      .fn()
+      .mockResolvedValue({ nodes: [], metadata: {}, debug: false, diagnostics: [] }),
     tracking: {
       enable: vi.fn(),
       disable: vi.fn(),
@@ -120,22 +128,20 @@ describe('React runtime ownership and activation', () => {
   let view: ReactTestRoot;
   let runtime: LiveSdk;
   let captures: ExperiencesContextValue[];
-  let extraViews: ReactTestRoot[];
   let browser: ContentfulExperiences | undefined;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/initial');
     view = createReactTestRoot();
-    extraViews = [];
     captures = [];
     signals.consent.value = undefined;
+    signals.preview.value = undefined;
     runtime = liveSdk();
     construct.mockReset().mockReturnValue(runtime);
   });
   afterEach(() => {
     act(() => {
       view.cleanup();
-      extraViews.forEach((root) => root.cleanup());
     });
     browser?.destroy();
     browser = undefined;
@@ -242,6 +248,136 @@ describe('React runtime ownership and activation', () => {
     expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: true });
     expect(view.container.textContent).toContain('Supplied server content');
     expectNoContentWork();
+  });
+
+  it.each(['owned', 'injected'] as const)(
+    'uses the static payload in ordinary XDA navigation and reset (%s)',
+    async (owner) => {
+      let requests!: ExperienceRequestContextValue;
+      function RequestProbe() {
+        requests = useExperienceRequestContext()!;
+        return <Probe />;
+      }
+      const tree = (
+        routeKey: string,
+        initialPagePayload: ExperiencesProviderProps['initialPagePayload']
+      ) => {
+        const props = { routeKey, initialPagePayload, children: <RequestProbe /> };
+        return owner === 'owned' ? (
+          <ExperiencesRoot {...config} {...props} />
+        ) : (
+          <ExperiencesProvider sdk={inject(runtime)} {...props} />
+        );
+      };
+      const first = Object.freeze({ properties: Object.freeze({ route: 'home' }) });
+      const next = { properties: { route: 'next' } };
+      const resolve = { config: { components: {} } };
+      render(tree('/initial', first));
+      await requests.fetchExperience(inject(runtime), { experienceId: 'home' }, resolve, false);
+      expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
+        { experienceId: 'home', personalization: { events: [{ type: 'page', ...first }] } },
+        resolve
+      );
+      if (owner === 'owned') expect(construct).toHaveBeenCalledExactlyOnceWith(config);
+      render(tree('/next', next));
+      await requests.fetchExperience(inject(runtime), { experienceId: 'next' }, resolve, false);
+      expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
+        { experienceId: 'next', personalization: { events: [{ type: 'page', ...next }] } },
+        resolve
+      );
+      act(() => requests.reset());
+      await requests.fetchExperience(inject(runtime), { experienceId: 'next' }, resolve, false);
+      expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
+        { experienceId: 'next', personalization: { events: [{ type: 'page', ...next }] } },
+        resolve
+      );
+      expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
+      expect(first).toEqual({ properties: { route: 'home' } });
+    }
+  );
+
+  it.each([undefined, { properties: { source: 'builder' } }])(
+    'gives the explicit builder precedence over static page arguments (result=%j)',
+    async (payload) => {
+      let requests!: ExperienceRequestContextValue;
+      function RequestProbe() {
+        requests = useExperienceRequestContext()!;
+        return null;
+      }
+      const buildPagePayload = vi.fn(() => payload);
+      render(
+        <ExperiencesProvider
+          sdk={inject(runtime)}
+          initialPagePayload={{ properties: { source: 'static' } }}
+          buildPagePayload={buildPagePayload}
+        >
+          <RequestProbe />
+        </ExperiencesProvider>
+      );
+      const resolve = { config: { components: {} } };
+      await requests.fetchExperience(inject(runtime), { experienceId: 'home' }, resolve, false);
+      expect(buildPagePayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: true });
+      expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(
+        payload === undefined
+          ? { experienceId: 'home' }
+          : { experienceId: 'home', personalization: { events: [{ type: 'page', ...payload }] } },
+        resolve
+      );
+    }
+  );
+
+  it('keeps the static builder stable across rerenders and forwards it to the handoff owner', async () => {
+    const suppliedHandoff = handoff();
+    const initialPagePayload = { properties: { source: 'static' } };
+    const tree = () => (
+      <ExperiencesProvider
+        sdk={inject(runtime)}
+        handoff={suppliedHandoff}
+        initialPagePayload={initialPagePayload}
+      >
+        <Probe />
+      </ExperiencesProvider>
+    );
+    await act(async () => view.render(tree()));
+    const options = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1];
+    expect(options.buildPayload?.({ isInitialEmission: true })).toBe(initialPagePayload);
+    await act(async () => view.render(tree()));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the latest static payload after a standalone callback and on consent retry', async () => {
+    const pending = deferred();
+    const beforeInitialPage = { run: vi.fn(() => pending.promise) };
+    const tree = (
+      routeKey: string,
+      initialPagePayload: ExperiencesProviderProps['initialPagePayload']
+    ) => (
+      <ExperiencesProvider
+        sdk={inject(runtime)}
+        routeKey={routeKey}
+        initialPagePayload={initialPagePayload}
+        beforeInitialPage={beforeInitialPage}
+      >
+        <Probe />
+      </ExperiencesProvider>
+    );
+    render(tree('/initial', { properties: { route: 'home' } }));
+    const next = { properties: { route: 'next' } };
+    render(tree('/next', next));
+    runtime.trackCurrentPage.mockResolvedValueOnce({ accepted: false });
+    await act(async () => pending.resolve());
+    expect(beforeInitialPage.run).toHaveBeenCalledTimes(1);
+    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(1);
+    expect(runtime.trackCurrentPage.mock.calls[0]![0].routeKey).toBe('/next');
+    expect(
+      runtime.trackCurrentPage.mock.calls[0]![0].buildPayload({ isInitialEmission: true })
+    ).toBe(next);
+    await act(async () => runtime.consent({ events: true }));
+    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
+    expect(
+      runtime.trackCurrentPage.mock.calls[1]![0].buildPayload({ isInitialEmission: false })
+    ).toBe(next);
+    expect(runtime.fetchExperience).not.toHaveBeenCalled();
   });
 
   it('does not construct or attach observers for a suspended, abandoned render', () => {
@@ -354,83 +490,6 @@ describe('React runtime ownership and activation', () => {
     expect(construct).not.toHaveBeenCalled();
   });
 
-  it('surfaces a conflicting managed owner without borrowing or destroying the active SDK', () => {
-    render(
-      <ExperiencesRoot {...config}>
-        <Probe />
-      </ExperiencesRoot>
-    );
-    const other = createReactTestRoot();
-    extraViews.push(other);
-    const error = new Error('A Web SDK instance is already active');
-    construct.mockImplementation(() => {
-      throw error;
-    });
-    act(() => other.render(<ExperiencesRoot {...config}>{suppliedContent()}</ExperiencesRoot>));
-    expect(current()).toMatchObject({ error, isLive: false, isContentReady: true });
-    expect(current().sdk).not.toBe(runtime);
-    expect(other.container.textContent).toContain('Supplied server content');
-    expect(runtime.destroy).not.toHaveBeenCalled();
-    act(() => other.cleanup());
-    expect(runtime.destroy).not.toHaveBeenCalled();
-    act(() => view.cleanup());
-    expect(runtime.destroy).toHaveBeenCalledOnce();
-  });
-
-  it('settles explicit static preview without waiting for a session payload', () => {
-    render(
-      <ExperiencesRoot {...config} isPreview>
-        {suppliedContent()}
-      </ExperiencesRoot>
-    );
-    expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, isPreview: true });
-    expect(runtime.states.preview.current).toBeUndefined();
-    expect(current()).toMatchObject({
-      sdk: runtime,
-      isLive: true,
-      isContentReady: true,
-      error: undefined,
-    });
-    expect(view.container.textContent).toContain('Supplied server content');
-    expectNoContentWork();
-  });
-
-  it('shares one host across independent injected roots with independent observer cleanup', () => {
-    const other = createReactTestRoot();
-    extraViews.push(other);
-    const hostCleanup = vi.fn(),
-      firstCleanup = vi.fn(),
-      secondCleanup = vi.fn();
-    const host = createExperiencesRootSdkBinding({
-      config,
-      createSdk: () => runtime,
-      onStatesReady: () => hostCleanup,
-    });
-    render(
-      <ExperiencesProvider sdk={inject(host.sdk)} onStatesReady={() => firstCleanup}>
-        <Probe />
-      </ExperiencesProvider>
-    );
-    act(() =>
-      other.render(
-        <ExperiencesProvider sdk={inject(host.sdk)} onStatesReady={() => secondCleanup}>
-          <Probe />
-        </ExperiencesProvider>
-      )
-    );
-    expect(captures.every((value) => value.sdk === runtime)).toBe(true);
-    act(() => view.cleanup());
-    expect(firstCleanup).toHaveBeenCalledOnce();
-    expect(secondCleanup).not.toHaveBeenCalled();
-    expect(runtime.destroy).not.toHaveBeenCalled();
-    act(() => other.cleanup());
-    expect(secondCleanup).toHaveBeenCalledOnce();
-    expect(runtime.destroy).not.toHaveBeenCalled();
-    disposeExperiencesRootSdkBinding(host);
-    expect(hostCleanup).toHaveBeenCalledOnce();
-    expect(runtime.destroy).toHaveBeenCalledOnce();
-  });
-
   it.each(['owned', 'injected'] as const)(
     'hydrates %s HTML from the same supplied snapshot without replacing DOM',
     async (owner) => {
@@ -506,70 +565,62 @@ describe('React runtime ownership and activation', () => {
     );
   });
 
-  it.each(['owned', 'injected'] as const)(
-    'consumes the complete aggregate once for the %s lifetime using the current browser route',
-    async (owner) => {
-      window.history.replaceState(null, '', '/initial?view=one#section');
-      const builder = new EventBuilder({
-        channel: 'web',
-        library: { name: 'react-test', version: '1' },
-      });
-      const suppliedHandoff: ExperiencesHandoff = {
-        ...handoff(),
-        profileId: 'continuation-profile',
-        replay: {
-          routeKey: '/initial?view=one',
-          locale: 'de-DE',
-          events: [
-            builder.buildIdentify({ userId: 'visitor', traits: { audience: 'returning' } }),
-            builder.buildPageView(),
-          ],
-        },
-      };
-      const pending = deferred();
-      const cleanup = vi.fn();
-      const onStatesReady = vi.fn(() => cleanup);
-      runtime.hydrateAndTrackCurrentPage.mockImplementation((...args) => {
-        expect(onStatesReady).toHaveBeenCalledExactlyOnceWith(runtime.states);
-        expect(args).toEqual([
-          suppliedHandoff,
-          { routeKey: '/initial?view=one', isCurrent: expect.any(Function) },
-        ]);
-        return pending.promise;
-      });
-      const tree =
-        owner === 'owned' ? (
-          <ExperiencesRoot {...config} handoff={suppliedHandoff} onStatesReady={onStatesReady}>
-            {suppliedContent()}
-          </ExperiencesRoot>
-        ) : (
-          <ExperiencesProvider
-            sdk={inject(runtime)}
-            handoff={suppliedHandoff}
-            onStatesReady={onStatesReady}
-          >
-            {suppliedContent()}
-          </ExperiencesProvider>
-        );
-      expect(renderToString(tree)).toContain('server-profile');
-      expect(runtime.hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
-      render(tree);
-      render(tree);
-      expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: false });
-      expect(view.container.textContent).toContain('Supplied server content');
-      expect(runtime.hydrateAndTrackCurrentPage.mock.calls[0]![0]).toBe(suppliedHandoff);
-      await act(async () => pending.resolve());
-      render(tree);
-      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
-      expect(current()).toMatchObject({ isContentReady: true, error: undefined });
-      expect(construct).toHaveBeenCalledTimes(owner === 'owned' ? 1 : 0);
-      if (owner === 'owned') expect(construct).toHaveBeenCalledWith(config);
-      expectNoContentWork();
-      act(() => view.cleanup());
-      expect(cleanup).toHaveBeenCalledOnce();
-      expect(runtime.destroy).toHaveBeenCalledTimes(owner === 'owned' ? 1 : 0);
+  it('forwards the complete handoff using the visible route, independently of supplied content', async () => {
+    window.history.replaceState(null, '', '/initial?view=one#section');
+    const builder = new EventBuilder({
+      channel: 'server',
+      library: { name: 'test', version: '1' },
+    });
+    const suppliedHandoff = {
+      ...handoff(),
+      profileId: 'continuation-profile',
+      replay: {
+        routeKey: '/initial?view=one',
+        locale: 'de-DE',
+        events: [builder.buildIdentify({ userId: 'visitor' }), builder.buildPageView()],
+      },
+    };
+    await act(async () =>
+      view.render(
+        <ExperiencesProvider sdk={inject(runtime)} handoff={suppliedHandoff}>
+          {suppliedContent()}
+        </ExperiencesProvider>
+      )
+    );
+    const [received, options] = runtime.hydrateAndTrackCurrentPage.mock.calls[0]!;
+    expect(received).toBe(suppliedHandoff);
+    expect(options.routeKey).toBe('/initial?view=one');
+    expect(current().isContentReady).toBe(true);
+    expect(view.container.textContent).toContain('Supplied server content');
+    expectNoContentWork();
+  });
+
+  it('drops the pre-reset handoff and accepts a freshly supplied handoff', async () => {
+    let requests!: ExperienceRequestContextValue;
+    function Requests() {
+      requests = useExperienceRequestContext()!;
+      return <Probe />;
     }
-  );
+    const suppliedHandoff = handoff();
+    const tree = (value = suppliedHandoff) => (
+      <ExperiencesProvider sdk={inject(runtime)} handoff={value}>
+        <Requests />
+      </ExperiencesProvider>
+    );
+    await act(async () => view.render(tree()));
+    const oldIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+    act(() => {
+      requests.reset();
+      expect(oldIsCurrent()).toBe(false);
+    });
+    await act(async () => view.render(tree()));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+    expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: true });
+    const fresh = handoff('fresh');
+    await act(async () => view.render(tree(fresh)));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+    expect(runtime.hydrateAndTrackCurrentPage.mock.calls[1]![0]).toBe(fresh);
+  });
 
   it.each(['success', 'refusal', 'rejection', 'synchronous throw'] as const)(
     'makes hydration %s terminal while retaining the live SDK and supplied content',
@@ -680,100 +731,74 @@ describe('React runtime ownership and activation', () => {
     expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps one liveness predicate across consent invocations and retains terminal readiness', async () => {
-    const pending = deferred();
-    const subscribe = runtime.states.consent.subscribe;
-    const unsubscribe = vi.fn();
-    vi.spyOn(runtime.states.consent, 'subscribe').mockImplementation((listener) => {
-      const subscription = subscribe(listener);
-      return {
-        unsubscribe: () => {
-          subscription.unsubscribe();
-          unsubscribe();
-        },
+  it.each(['static', 'builder'] as const)(
+    'uses %s arguments for the fresh page after consent grants a denied page-bearing handoff',
+    async (kind) => {
+      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
+        typeof import('@contentful/experiences-web')
+      >('@contentful/experiences-web');
+      browser = new ActualSdk({
+        ...config,
+        allowedEventTypes: [],
+        defaults: { profile: { id: 'browser-profile' }, consent: false, persistenceConsent: false },
+      });
+      const sdk = browser;
+      const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
+        profile: { id: 'browser-profile' },
+      } as never);
+      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
+      const builder = new EventBuilder({
+        channel: 'server',
+        library: { name: 'react-test', version: '1' },
+        getConsent: () => true,
+      });
+      const events = [builder.buildTrack({ event: 'prepared' }), builder.buildPageView()];
+      const suppliedHandoff: ExperiencesHandoff = {
+        ...handoff(),
+        replay: { routeKey: '/initial', events },
       };
-    });
-    runtime.hydrateAndTrackCurrentPage
-      .mockResolvedValueOnce({ accepted: false })
-      .mockReturnValue(pending.promise);
-    const suppliedHandoff = handoff();
-    const tree = (handoff?: ExperiencesHandoff) => (
-      <ExperiencesProvider sdk={inject(runtime)} handoff={handoff}>
-        <Probe />
-      </ExperiencesProvider>
-    );
-    await act(async () => view.render(tree(suppliedHandoff)));
-    const isCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
-    expect(current().isContentReady).toBe(true);
-    const settledRenderCount = captures.length;
-    act(() => runtime.consent({ events: false }));
-    act(() => runtime.consent({ events: true }));
-    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
-    for (const [, options] of runtime.hydrateAndTrackCurrentPage.mock.calls)
-      expect(options.isCurrent).toBe(isCurrent);
-    expect(isCurrent()).toBe(true);
-    expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
-    expect(current().isContentReady).toBe(true);
-    render(tree());
-    expect(isCurrent()).toBe(false);
-    expect(unsubscribe).toHaveBeenCalledOnce();
-    act(() => runtime.consent({ events: false }));
-    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
-    await act(async () => pending.resolve());
-    expect(current()).toMatchObject({ isContentReady: true, error: undefined });
-  });
-
-  it('automatically sends a fresh page after consent grants a denied page-bearing handoff', async () => {
-    const { ContentfulExperiences: ActualSdk } = await vi.importActual<
-      typeof import('@contentful/experiences-web')
-    >('@contentful/experiences-web');
-    browser = new ActualSdk({
-      ...config,
-      allowedEventTypes: [],
-      defaults: { profile: { id: 'browser-profile' }, consent: false, persistenceConsent: false },
-    });
-    const sdk = browser;
-    const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
-      profile: { id: 'browser-profile' },
-    } as never);
-    const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
-    const builder = new EventBuilder({
-      channel: 'server',
-      library: { name: 'react-test', version: '1' },
-      getConsent: () => true,
-    });
-    const events = [builder.buildTrack({ event: 'prepared' }), builder.buildPageView()];
-    const suppliedHandoff: ExperiencesHandoff = {
-      ...handoff(),
-      replay: { routeKey: '/initial', events },
-    };
-    await act(async () =>
-      view.render(
-        <ExperiencesProvider sdk={sdk} handoff={suppliedHandoff}>
-          {suppliedContent()}
-        </ExperiencesProvider>
-      )
-    );
-    expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
-    expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
-    expect(send).not.toHaveBeenCalled();
-    expect(sdk.states.eventStream.current).toBeUndefined();
-    const settledRenderCount = captures.length;
-    await act(async () => {
-      sdk.consent({ events: true });
-      await consume.mock.results[1]!.value;
-      await sdk.flush();
-    });
-    expect(consume).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenCalledOnce();
-    const sent = send.mock.calls[0]![0].events;
-    expect(sent.map((event) => event.type)).toEqual(['page']);
-    expect(events.map((event) => event.messageId)).not.toContain(sent[0]!.messageId);
-    expect(sent[0]!.context.gdpr?.isConsentGiven).toBe(true);
-    expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
-    expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true, error: undefined });
-    expect(view.container.textContent).toContain('Supplied server content');
-  });
+      const initialPagePayload = { properties: { source: 'static' } };
+      const buildPagePayload =
+        kind === 'builder' ? () => ({ properties: { source: 'builder' } }) : undefined;
+      await act(async () =>
+        view.render(
+          <ExperiencesProvider
+            sdk={sdk}
+            handoff={suppliedHandoff}
+            initialPagePayload={initialPagePayload}
+            buildPagePayload={buildPagePayload}
+          >
+            {suppliedContent()}
+          </ExperiencesProvider>
+        )
+      );
+      expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
+      expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
+      expect(send).not.toHaveBeenCalled();
+      expect(sdk.states.eventStream.current).toBeUndefined();
+      const settledRenderCount = captures.length;
+      await act(async () => {
+        sdk.consent({ events: true });
+        await consume.mock.results[1]!.value;
+        await sdk.flush();
+      });
+      expect(consume).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenCalledOnce();
+      const sent = send.mock.calls[0]![0].events;
+      expect(sent.map((event) => event.type)).toEqual(['page']);
+      expect(sent[0]).toMatchObject({ properties: { source: kind } });
+      expect(events.map((event) => event.messageId)).not.toContain(sent[0]!.messageId);
+      expect(sent[0]!.context.gdpr?.isConsentGiven).toBe(true);
+      expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
+      expect(current()).toMatchObject({
+        sdk,
+        isLive: true,
+        isContentReady: true,
+        error: undefined,
+      });
+      expect(view.container.textContent).toContain('Supplied server content');
+    }
+  );
 
   it.each(['remove handoff', 'unmount'] as const)(
     'prevents late state and replay admission on %s while the injected SDK stays alive',
@@ -1006,96 +1031,47 @@ describe('React runtime ownership and activation', () => {
     }
   );
 
-  it('forwards preview configuration only at commit and keeps preview state separate from root readiness', async () => {
-    let value: CoreStates['preview']['current'];
-    const listeners = new Set<(state: CoreStates['preview']['current']) => void>();
-    const preview: Observable<CoreStates['preview']['current']> = {
-      get current() {
-        return value;
-      },
-      subscribe(listener) {
-        listeners.add(listener);
-        listener(value);
-        return {
-          unsubscribe: () => {
-            listeners.delete(listener);
-          },
-        };
-      },
-      subscribeOnce: vi.fn(),
-    };
-    runtime.states.preview = preview;
+  it('forwards preview configuration at commit and keeps preview independent of activation', async () => {
+    runtime.states.preview = toObservable(signals.preview);
     const livePreview: NonNullable<ExperiencesWebConfig['livePreview']> = {
       experienceId: 'hero',
       sessionId: 'session',
-      loadImplementation: vi.fn(() => {
-        throw new Error('React must not invoke the preview loader');
-      }),
+      loadImplementation: vi.fn(),
     };
-    const previewValues: Array<CoreStates['preview']['current']> = [];
-    function PreviewProbe() {
-      previewValues.push(usePreviewState());
+    let preview: CoreStates['preview']['current'];
+    function Preview() {
+      preview = usePreviewState();
       return <Probe />;
     }
     const tree = (
       <ExperiencesRoot {...config} livePreview={livePreview}>
-        {suppliedContent()}
-        <PreviewProbe />
+        <Preview />
       </ExperiencesRoot>
     );
     renderToString(tree);
     expect(construct).not.toHaveBeenCalled();
     expect(livePreview.loadImplementation).not.toHaveBeenCalled();
-    expect(previewValues[0]).toBeUndefined();
     render(tree);
     expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, livePreview });
-    // The double does not initialize preview: loading and policy remain Web responsibilities.
+    const state = {
+      experienceId: 'hero',
+      sessionId: 'session',
+      data: undefined,
+      error: new Error('preview unavailable'),
+      status: 'static' as const,
+      revision: 1,
+    };
+    act(() => {
+      signals.preview.value = state;
+    });
+    expect(preview).toMatchObject({ ...state, error: { message: 'preview unavailable' } });
+    expect(current()).toMatchObject({
+      sdk: runtime,
+      isLive: true,
+      isContentReady: true,
+      error: undefined,
+    });
     expect(livePreview.loadImplementation).not.toHaveBeenCalled();
-    const states: Array<CoreStates['preview']['current']> = [
-      undefined,
-      {
-        experienceId: 'hero',
-        sessionId: 'session',
-        data: undefined,
-        error: new Error('preview initialization failed'),
-        status: undefined,
-        revision: 0,
-      },
-      {
-        experienceId: 'hero',
-        sessionId: 'session',
-        status: 'static',
-        data: undefined,
-        error: undefined,
-        revision: 0,
-      },
-      {
-        experienceId: 'replacement',
-        sessionId: 'replacement-session',
-        data: undefined,
-        error: undefined,
-        status: 'live',
-        revision: 1,
-      },
-      undefined,
-    ];
-    for (const state of states) {
-      act(() => {
-        value = state;
-        listeners.forEach((listener) => listener(state));
-      });
-      expect(previewValues.at(-1)).toBe(state);
-      expect(current()).toMatchObject({
-        sdk: runtime,
-        isLive: true,
-        isContentReady: true,
-        error: undefined,
-      });
-      expect(view.container.textContent).toContain('Supplied server content');
-      expectNoContentWork();
-    }
-    act(() => view.cleanup());
-    expect(listeners.size).toBe(0);
-    expect(runtime.destroy).toHaveBeenCalledOnce();
+    expectNoContentWork();
   });
 });

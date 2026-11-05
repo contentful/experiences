@@ -12,13 +12,13 @@ This is the only rendering SDK package you install. It re-exports everything you
 
 ## Import entries
 
-| Import                                          | Available APIs                                                                                                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                         |
-| `@contentful/experiences-react/client`          | Bound factory, managed root, injected provider, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks, `useExperiencePlan`, shared registry/types/utilities |
-| `@contentful/experiences-react/host`            | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                    |
-| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                                                                           |
-| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                         |
+| Import                                          | Available APIs                                                                                                                                                                          |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@contentful/experiences-react` or `/server`    | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                           |
+| `@contentful/experiences-react/client`          | Bound factory, managed root, injected provider, managed `Experience`/request hook, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks and shared utilities |
+| `@contentful/experiences-react/host`            | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                      |
+| `@contentful/experiences-react/custom-renderer` | Existing node rendering and prop-resolution building blocks                                                                                                                             |
+| `@contentful/experiences-react/web-sdk`         | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                           |
 
 Client APIs previously imported from the root move to `/client`. The root and
 `/server` do not load the live Web SDK. The unbundled ESM build preserves each
@@ -32,12 +32,11 @@ using it; ordinary adapter imports and declarations do not require it. Its
 existing standalone APIs are unchanged. General supplied-plan rendering and
 `useExperiencePlan` remain available on `/client`.
 
-Managed runtime ownership and state/action hooks are available on `/client`.
-Managed Experience loading, resolved preview-update presentation and route-page
-coordination belong to gated Phase 7. Current Phase 6 implementation/checks are
-pending; earlier remedy validation/review is historical. Phase 6 is unaccepted/
-incomplete and Phase 7 stays gated. The React reference retains supplied-plan
-rendering and application-owned fetching.
+Managed runtime ownership, state/action hooks, `Experience` and
+`useManagedExperience` are available on `/client`. Managed loading and supplied
+plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
+Phase 8 is in progress; phases 9–13 have not started. Phase 6 remains complete and explicitly accepted on
+2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
 
 Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
 raw built events, built once by the SDK. Optional `handoff?: ExperiencesHandoff`
@@ -50,6 +49,168 @@ and page consent-retry mechanics without a direct initial emission prerequisite.
 See [Runtime's XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
+
+## Managed content
+
+Bind the browser registry once. The root constructs Web after commit; each managed
+view fetches and binds preview updates after commit too.
+
+```tsx
+import {
+  createReactExperiences,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+const { ExperiencesRoot, Experience, useManagedExperience } = createReactExperiences({
+  config: browserRegistry,
+});
+
+function App({
+  experienceId,
+  routeKey,
+  initialPlan,
+}: {
+  experienceId: string;
+  routeKey: string;
+  initialPlan?: PortableRenderPlan;
+}) {
+  return (
+    <ExperiencesRoot {...browserConfig} routeKey={routeKey} initialPagePayload={{}}>
+      <Experience
+        experienceId={experienceId}
+        initialPlan={initialPlan}
+        loadingFallback={<p>Loading…</p>}
+        errorFallback={({ error, retry }) => (
+          <p>
+            {error?.message} <button onClick={() => void retry()}>Retry</button>
+          </p>
+        )}
+      />
+    </ExperiencesRoot>
+  );
+}
+```
+
+`useManagedExperience({ experienceId, ...requestOptions })` returns
+`{ status, data, error, refresh, retry }`; status is `idle`, `loading`, `success` or
+`error`. Use the hook or the component's `children(result)` callback for custom
+presentation, including a usable plan alongside an error or refresh indicator.
+The unbound component/hook accepts `config`; the factory supplies it once.
+`loadingFallback` and `errorFallback` each accept a `ReactNode` or a function
+receiving the full `ManagedExperienceResult`; `children(result)` receives that
+same result and takes precedence over default rendering. Without custom children,
+usable `data` takes precedence over either fallback, including when an error
+coexists with content.
+
+Both the hook and `Experience` accept committed presentation notifications,
+exported together as the `ExperienceNotifications` type from `/client`:
+
+```ts
+import type {
+  ManagedExperienceResult,
+  PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+interface PresentationNotifications {
+  onExperienceResolved?: (
+    result: ManagedExperienceResult & { readonly data: PortableRenderPlan }
+  ) => void;
+  onExperienceError?: (error: Error, result: ManagedExperienceResult) => void;
+}
+```
+
+Notifications run after React commits the current presentation, rather than during
+render or transport completion. A new usable plan triggers `onExperienceResolved`;
+a new error triggers `onExperienceError`, including errors alongside retained
+usable data. Initial and supplied plans can trigger resolution notifications too.
+Unchanged presentations, callback replacement and Strict Mode effect replay do not
+repeat a notification. Superseded or unmounted work does not notify.
+
+`Experience` has two mutually exclusive input modes. `<Experience experience={plan} />`
+accepts `PortableRenderPlan | null | undefined` and renders supplied content
+without fetching, resolving, binding preview updates or joining managed page
+sequencing. Its `refresh()` and `retry()` are inert. A nullish
+supplied plan has `idle` status and uses the loading fallback. For SDK-owned loading,
+use `<Experience experienceId={id} initialPlan={plan} />`; `initialPlan` is an optional
+seed for that managed descriptor. Do not combine `experience` with `experienceId`,
+`initialPlan`, `initialError` or fetch/resolve options. Both modes retain the
+renderer's tracking props, fallbacks, custom children and notifications.
+
+Reuse an already-owned plan through the supplied mode, without another managed
+request or preview subscription:
+
+```tsx
+<Experience experience={plan} loadingFallback={<p>Waiting for content…</p>} />
+```
+
+The consumer owns the registry, route key, visitor intent and presentation. Keep
+one primary managed result as the content owner; pass its `data` to supplied
+presentations instead of copying that plan into application state or starting
+another managed loader for each repeated view. Use `children(result)` to render
+usable content and errors together, and use committed notifications for effects
+that depend on the presented result. The SDK owns request lifetimes, preview
+updates, consent, interaction measurement and event delivery.
+
+An `initialPlan` seeds the first server/browser presentation without a startup
+fetch. The hook and component accept managed `initialError?: Error`, which seeds
+an already-settled failed snapshot with `status: 'error'`, optionally alongside
+usable `initialPlan` data. It retains that failure without a duplicate
+startup fetch while keeping the existing preview binding active, so session updates
+or explicit `refresh()`/`retry()` can recover. Both seeds belong to the initial
+managed descriptor; they do not turn it into an authoritative supplied source.
+`initialError` is presentation state and is excluded from SDK fetch arguments.
+
+```tsx
+<Experience experienceId={experienceId} initialPlan={snapshot.data} initialError={snapshot.error}>
+  {({ data, error, retry }) => (
+    <>
+      {error && (
+        <p>
+          {error.message} <button onClick={() => void retry()}>Retry</button>
+        </p>
+      )}
+      {data ? <Experience experience={data} /> : !error && <p>Waiting for content…</p>}
+    </>
+  )}
+</Experience>
+```
+
+Explicit `refresh()` and `retry()` invalidate older work and refetch the
+current descriptor without personalization events, builders, event hooks or
+replay, retaining the last usable plan while pending or failed. Equivalent
+request/resolve options do not refetch after success or error. Replace these
+inputs when changing them, as with ordinary immutable React props. Changed descriptors,
+runtime replacement, navigation and reset invalidate obsolete presentation work.
+SDK queues retain ownership of already-admitted replay delivery retry.
+
+Ordinary requests obtain attribution even when automatic tracking is disabled.
+`trackViews`, `trackHovers`, `trackClicks` and `onNodeRoot` work on the same managed
+surface as on `ExperienceRenderer`. Supplied plans retain their existing attribution.
+Official support is one Experience fetch per page; repeated views may reuse its
+plan. The reference's later-ID comparisons are event-free caller glue, without a
+multi-Experience or cross-fetch guarantee.
+
+Configure optional preview once with Web's `livePreview` configuration and browser-safe
+`preview` credentials on the root. The same `<Experience experienceId={id} />`
+loads snapshots and receives resolved updates through `subscribeToPreview`;
+no independent preview client or renderer branch is needed. Session locale and
+parameters remain server-owned; explicit unsupported overrides reject. Status
+comes from `usePreviewState`, while view resolution/fetch errors come from the
+managed result. Snapshot data can coexist with an active preview error; committed
+notifications report the current plan/error without repeating unchanged results.
+Correcting unsupported preview overrides permits recovery through the existing
+request/update lifecycle. Initial plans and usable content survive preview failures. See
+[Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
+supported options and frozen transport limits. Switching preview policy requires
+owner replacement; `replaceLivePreview` changes a session within fixed preview mode.
+
+Optional `beforeInitialPage` retains a standalone callback path and never gates
+managed content. Matching incoming replay supersedes a pending callback, and its
+stale continuation cannot submit another page. Reset or owner replacement guards
+callback clients and pending content; remove old attributed content before resetting
+when the host starts a fresh visitor presentation. An accepted eligible page fallback
+completes initialization; capacity refusal is retry-eligible while the complete
+operation remains unaccepted, without resubmitting a batch after successful fallback.
 
 ## Public API
 
@@ -145,14 +306,17 @@ available on an application-owned concrete Web instance.
 tracking. It is distinct from singular `useExperience()`, the render context.
 `useExperiencesContext()` returns `{ sdk, error, isLive, isContentReady }`. Managed
 SSR and initial hydration use a cached inert snapshot; setup failure retains that
-snapshot and supplied content with `error`. `isLive` means a concrete SDK is bound.
+snapshot and supplied content with `error`. The context is a discriminated union:
+checking `context.isLive` narrows `context.sdk` to concrete `ContentfulExperiences`
+when true; false retains the inert `WebExperiencesRuntime` snapshot. Keep the
+context object through that check when calling live-only fetch or preview methods.
 `isContentReady` means activation/state hydration has settled, including failure;
 it does not assert content, visitor identity or preview connection success.
 Supplied-plan rendering preserves content while either flag is false.
 Locale prop failures remain visible when hydration settles. Correcting or removing
 the locale prop clears its failure while preserving any activation/hydration error.
 
-Provide `snapshot` for stable server/browser state. **Phase 6 remedy target:**
+Provide `snapshot` for stable server/browser state. **Accepted Phase 6 remedy:**
 provider/root accept `handoff?: ExperiencesHandoff`, replacing
 `initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
 After activation, the existing effect subscribes to `sdk.states.consent`; its
@@ -168,9 +332,19 @@ return `{ accepted: false }` after internal state application unless `buildPaylo
 explicitly supplies page intent. Only page-bearing intent uses route deduplication,
 and page-bearing refusal retains gated fallback through the existing implicit
 page consent path. There is no dedicated retry facility or mode detector. Basic
-optional consent/lifecycle consumption must complete in Phase 6; current fixes,
-checks and fresh review remain pending. Earlier checks are historical, while
-managed Phase 7 loading/navigation stays not started and gated.
+optional consent/lifecycle consumption is complete in accepted Phase 6; current
+checks and acceptance review are recorded in the implementation plan. Earlier
+checks remain historical. Managed loading uses the same root for later navigation;
+pass an explicit `routeKey` when the host changes pathname/search without replacing
+the document. `buildPagePayload` supplies default page arguments for the first
+ordinary managed request of a route. Root/provider `initialPagePayload` is shorthand
+for static `PageViewBuilderArgs`; update route-varying values on navigation.
+An explicit `buildPagePayload` takes precedence, including when it returns
+`undefined`; neither form creates page intent when both are absent. Explicit
+`personalization.events` remains complete caller intent. Ordinary XDA noncommit is
+tolerated without a compensating XPAPI call or accepted-route mark. Explicit replay
+and page/fallback operations
+retain Web's route admission and consent-change behavior.
 Handoff cache safety and receiving scope are asserted before SSR children render;
 unsafe public/static handoffs and mismatched space/environment IDs throw before
 their profile state can reach presentation. Scope follows the captured managed
@@ -434,11 +608,10 @@ SDK registration remains supported. Neither path performs attribution
 selection or root collection. Web owns measurement, consent and delivery, and
 measures each manual element independently. The reference's single-root components
 use ordinary forwarding, with no root-count/readiness panel. Context SDK access
-and registry binding are available now; Phase 7 carries the same per-kind and
-optional root callback props through managed `Experience` loading. That managed
-loading API remains planned. The implementation plan
-requires concise consumer examples and checks rather than SDK prop threading,
-root maps or consumer fetch/subscription/page orchestration. Ordinary identity
+and registry binding also apply to managed `Experience`: it forwards the same
+per-kind and optional root callback props, including seeded plans. The managed
+surface owns fetch/subscription work; consumers need no SDK prop threading,
+root maps or per-component fetch/subscription/page orchestration. Ordinary identity
 and content flows require no extra root/ref boilerplate.
 
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
@@ -584,12 +757,11 @@ Implementation and colocated tests are grouped by responsibility:
 - `nodes/`: node composition, snapshots and prop resolution.
 - `tracking/`: DOM-root bindings, refs and attribution types.
 - `diagnostics/`: error boundaries, fallbacks and the debug panel.
-- `hooks/`: supplied-plan, design, observable state and bound event/command hooks.
-- `provider/`: owned/injected activation, SDK binding and pure registry factory.
-- `context/`: SDK access and activation/readiness state.
+- `hooks/`: supplied-plan resolution and design hooks.
+- `experience/`: supplied/managed `Experience`, its source controller and request hook, and the registry-bound factory.
+- `runtime/`: owned/injected activation, SDK binding and contexts, route/page sequencing, observable state and event/command hooks.
 - `design/`: CSS conversion utilities.
 - `registry/`: registration definitions, normalization and types.
-- `preview/legacy/`: retained standalone preview hooks/tests, excluded from publication.
 - `test/`: shared test utilities and fixture data, excluded from publication.
 
 The build remains unbundled and preserves nested module paths and client directives.

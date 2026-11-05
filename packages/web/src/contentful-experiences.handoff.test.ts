@@ -918,7 +918,7 @@ describe('Web handoff and current-page lifecycle', () => {
     expect(replacement.states.profile.current).toBeUndefined();
   });
 
-  it('makes adopted identity visible to a fetch during hydration and ignores stale fetch results', async () => {
+  it('makes adopted identity visible during hydration and rejects stale selected content after reset', async () => {
     const first = deferred<{ nodes: []; personalization: { profileId: string } }>();
     const second = deferred<{ nodes: []; personalization: { profileId: string } }>();
     const fetch = vi
@@ -936,6 +936,7 @@ describe('Web handoff and current-page lifecycle', () => {
       { experienceId: 'old' },
       { config: { components: {} } }
     );
+    const rejected = expect(staleFetch).rejects.toThrow('superseded');
     await vi.waitFor(() =>
       expect(fetch.mock.calls[0]?.[0]).toMatchObject({
         personalization: { profileId: 'server-profile' },
@@ -956,7 +957,7 @@ describe('Web handoff and current-page lifecycle', () => {
     second.resolve({ nodes: [], personalization: { profileId: 'new-profile' } });
     await currentFetch;
     first.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });
-    await staleFetch;
+    await rejected;
     expect(runtime.states.profile.current?.id).toBe('new-profile');
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -977,9 +978,10 @@ describe('Web handoff and current-page lifecycle', () => {
       { experienceId: 'earlier' },
       { config: { components: {} } }
     );
+    const rejected = expect(earlierFetch).rejects.toThrow('superseded');
     await runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/new'), { routeKey: '/new' });
     staleResponse.resolve({ nodes: [], personalization: { profileId: 'stale-profile' } });
-    await earlierFetch;
+    await rejected;
     expect(runtime.states.profile.current).toBeUndefined();
     await runtime.fetchExperience({ experienceId: 'current' }, { config: { components: {} } });
     expect(fetch.mock.calls[1]?.[0]).toMatchObject({

@@ -35,18 +35,48 @@ supported product usage or a cross-fetch guarantee.
   document teardown releases them. Deliberate unmount/replacement within a live
   document uses renderer/provider cleanup; persisted pagehide retains ownership.
   Managed loading, navigation,
-  page/identify/reset/retry sequences and preview content remain Phase 7 work.
-  Phase 6 corrects existing Node/Web/hybrid references and owner checks only; do not
-  pull managed React loading forward. The necessary provider/root migration exposes
+  page/identify/reset/retry sequences and preview content are implemented in the
+  validated Phase 7 implementation. API refinements, source cleanup and reference
+  reduction are complete and explicitly accepted on 2026-11-02.
+  Phase 6 corrected existing Node/Web/hybrid references and owner checks; managed
+  React loading belongs to Phase 7. The necessary provider/root migration exposes
   `handoff?: ExperiencesHandoff` instead of `initialization: { routeKey, handoff }`
   and `ExperiencesStateInitialization`; lifecycle consumes the complete operation
   using current browser route, with internal state application and optional-page replay.
-  Phase 6 implementation/checks are pending for the current correction; earlier
-  checks/review are historical. Phase 6 is unaccepted/incomplete; Phase 7 stays gated. Phase 7 uses ordinary Web fetch for CSR and browser-local actions. Optional handoff
+  Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
+  acceptance review are recorded in the implementation plan. Earlier checks/review
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
+  Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Phase 7 uses
+  ordinary Web fetch for CSR and browser-local actions. Optional handoff
   consumption is mode agnostic and consumer supplied only for actual server transfers.
   Same-ID Retry and later comparison IDs use ordinary event-free fetch without
   builders/hooks/replay. No local CSR/navigation producer or new API family applies.
   Preserve pinned ownership, blocked-event rules and the page consent-retry exception.
+- Use `Experience experience={plan}` for supplied presentation without fetch,
+  resolution, preview binding or managed page sequencing; use `experienceId` with
+  optional `initialPlan`/`initialError` only for managed loading. Keep those prop
+  modes exclusive.
+  Presentation notifications run after commit and can report errors alongside usable
+  data. Loading/error fallbacks accept nodes or full-result functions; custom
+  children retain the full result. Check `useExperiencesContext().isLive` before
+  concrete SDK operations. `initialPagePayload` supplies static `PageViewBuilderArgs`;
+  explicit `buildPagePayload` takes precedence. Preserve event-free content Retry.
+- Keep one primary `useManagedExperience` result as the content owner and render
+  its plan through the supplied renderer, including repeated presentations.
+  Do not mirror the primary plan in application state. Later comparison plans seed
+  managed mode with `initialPlan`/`initialError` after the event-free comparison loop
+  settles. Seeded failures retain preview bindings without a duplicate startup
+  fetch; explicit commands can recover. Managed diagnostics/errors/empty content
+  must use the current `children(result)` value, while primary presentation uses
+  the page-owned result. Keep this on the existing seed/controller lifecycle.
+  Use the typed live context for concrete SDK operations without casts. Keep URL
+  and visitor intent together in Navigation, the SDK root alive across ordinary
+  navigation and the synchronous attributed-DOM gap before reset.
+- Keep bootstrap in `main.tsx`; use focused App, Navigation, PageShell, ContentPage,
+  ConsentControls and presentation components. Do not embed the application tree in
+  the entrypoint or introduce an application action queue. Disable visitor actions
+  while initial content is pending. Check binding fields/document roots, leaving
+  recursive Rich Text semantics to the maintained renderer.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy
@@ -57,9 +87,10 @@ supported product usage or a cross-fetch guarantee.
   Home/Page Two links. Describe available rendering truthfully without staged-phase
   panels or fabricated consent, identity or event-attempt counts. Loading/error displays must
   reflect the actual application-owned content request.
-- Optional Preview remains installed but unloaded/unbundled in the shell. Later
-  initialization uses public evidence and Runtime's lazy initializer; the Preview
-  package is frozen and must not be edited or bypassed through private imports.
+- Optional Preview uses the public lazy initializer and ordinary managed rendering.
+  Disabled production builds exclude its chunk; enabled configuration exposes only
+  browser-approved token/session settings. The Preview package is frozen and must
+  not be edited or bypassed through private imports.
 - Serve only generated `dist` on loopback, with API-free health and proper missing
   asset errors. Keep generation/cleanup inside this app, preserving source and `.env`.
 - Manage only `experiences-react-sdk-app` on default port 3400. Stop before setup;

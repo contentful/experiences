@@ -2,8 +2,8 @@
 
 import { act, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { WebExperiencesRuntime } from '@contentful/experiences-web';
-import { ExperiencesContext } from '../context/experiences-context.js';
+import type { ContentfulExperiences, WebExperiencesRuntime } from '@contentful/experiences-web';
+import { ExperiencesContext } from './experiences-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import {
   useExperiencesActions,
@@ -66,7 +66,16 @@ describe('useExperiencesActions', () => {
     act(() =>
       rendered.render(
         <ExperiencesContext.Provider
-          value={{ sdk, error: undefined, isLive, isContentReady: isLive }}
+          value={
+            isLive
+              ? {
+                  sdk: sdk as ContentfulExperiences,
+                  error: undefined,
+                  isLive: true,
+                  isContentReady: true,
+                }
+              : { sdk, error: undefined, isLive: false, isContentReady: false }
+          }
         >
           {children}
         </ExperiencesContext.Provider>
