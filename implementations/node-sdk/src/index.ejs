@@ -73,7 +73,9 @@
         <h2>States</h2>
 
         <p>
-          <% if (identifyRequested) { %>
+          <% if (isPreview) { %>
+            <span>Preview snapshot; no visitor identification</span>
+          <% } else if (identifyRequested) { %>
             <span>Identify event included</span>
           <% } else { %>
             <a href="/?userId=charles">Identify</a>

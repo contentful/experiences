@@ -49,6 +49,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
     this.allowedEventTypes = snapshot.allowedEventTypes ?? DEFAULT_ALLOWED_EVENT_TYPES;
 
     this.states = {
+      preview: staticObservable(undefined),
       blockedEventStream: staticObservable(undefined),
       consent: staticObservable(snapshot.consent),
       persistenceConsent: staticObservable(snapshot.persistenceConsent ?? snapshot.consent),

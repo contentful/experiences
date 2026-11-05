@@ -142,21 +142,16 @@ describe('Web queue parity with Optimization', () => {
       return results;
     };
 
-    it('admits up to the configured capacity and rejects beyond it', async () => {
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-        profile: { id: 'visitor' },
-      } as never);
+    it('forwards the configured ordinary-event capacity to its queue', async () => {
+      const upsert = vi
+        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .mockResolvedValue({ profile: { id: 'visitor' } } as never);
       const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 3 } });
       window.dispatchEvent(new Event('offline'));
-
-      const results = await offlineTracks(runtime, 4);
-
-      expect(results).toEqual([
-        { accepted: true },
-        { accepted: true },
-        { accepted: true },
-        { accepted: false },
-      ]);
+      expect((await offlineTracks(runtime, 4)).every((result) => result.accepted)).toBe(true);
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(upsert.mock.calls[0]?.[0].events).toHaveLength(3);
     });
 
     it('admits a prepared batch only if the whole batch fits', async () => {

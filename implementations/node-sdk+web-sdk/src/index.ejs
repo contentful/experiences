@@ -67,7 +67,9 @@ function content(server) { %>
           <p><%= automatic ? 'Views and hovers are measured by the SDK. Click a Fragment card to record its click.' : 'Elements are registered in code. The SDK measures their views as you scroll; automatic discovery is not used for this presentation.' %></p>
         </header>
         <div class="entry-grid entry-grid--experiences" data-experiences="<%= section %>">
-          <% if (server) for (const id of automatic ? route.automatic : route.manual) experience(plans.get(id), id, section); %>
+          <% if (server) for (const id of automatic ? route.automatic : route.manual) { %>
+            <div data-experience-presentation="<%= id %>"><% experience(plans.get(id), id, section); %></div>
+          <% } %>
         </div>
       </section>
     <% } %>
@@ -187,8 +189,8 @@ function content(server) { %>
         <td class="tracking-log__count"></td>
       </tr>
     </template>
-    <!-- Consumer integration: public configuration and final request profile only.
-         The server escapes '<' for this HTML context; exclude diagnostic strings/plans. -->
+    <!-- Consumer integration: public configuration and final request profile, or preview plans.
+         The server escapes '<' for this HTML context; exclude upstream diagnostic strings. -->
     <script type="application/json" id="experience-bootstrap"><%- bootstrap %></script>
     <script type="module" src="/js/app.js"></script>
   </body>

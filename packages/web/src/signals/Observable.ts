@@ -23,8 +23,8 @@ export interface Observable<T> {
    *
    * @remarks
    * Core state observables return deep-cloned snapshots by default to prevent accidental in-place
-   * mutations from leaking back into internal signal state. High-volume event-stream observables may
-   * return immutable event references to avoid cloning large Contentful entry graphs.
+   * mutations from leaking back into internal signal state. Event and preview streams use
+   * read-only references to avoid cloning large content graphs.
    */
   readonly current: T;
   /**
@@ -35,7 +35,7 @@ export interface Observable<T> {
    *
    * @remarks
    * Core state observable values are deep-cloned before being passed to `next` by default.
-   * High-volume event streams may pass immutable event references.
+   * Event and preview streams may pass read-only references.
    */
   subscribe: (next: (v: T) => void) => Subscription;
   /**
@@ -46,7 +46,7 @@ export interface Observable<T> {
    *
    * @remarks
    * Core state observable values are deep-cloned before being passed to `next` by default.
-   * High-volume event streams may pass immutable event references.
+   * Event and preview streams may pass read-only references.
    */
   subscribeOnce: (next: (v: NonNullable<T>) => void) => Subscription;
 }
@@ -100,8 +100,7 @@ export type SnapshotFn<T> = (value: T) => T;
  * @remarks
  * Emitted values and `current` snapshots are deep-cloned by default to isolate
  * subscriber-side mutation from internal Core state. Pass an identity snapshot
- * only for event streams where values are immutable SDK emissions and may
- * contain large Contentful entry graphs.
+ * for read-only event and preview streams that may contain large content graphs.
  *
  * @public
  */
