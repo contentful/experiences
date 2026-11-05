@@ -19,6 +19,10 @@ import process from 'node:process';
 import { URL } from 'node:url';
 import { config, routes } from './config.js';
 import { readVisitor, writeIdentity } from './cookies.js';
+import {
+  getPreviewBinding,
+  getPreviewSessionId,
+} from '../../../scripts/implementation-preview.mjs';
 
 // Consumer integration: stable transports belong to the process; visitor state
 // and request context belong only to the facade created inside each route.
@@ -75,21 +79,9 @@ for (const [path, route] of Object.entries(routes)) {
   app.get(path, async (req, res) => {
     const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
     const page = pageContext(url, req.get('referer') ?? '');
-    const preview = environment.LIVE_PREVIEW;
-    const sessionId = url.searchParams.has('preview_session_id')
-      ? url.searchParams.get('preview_session_id')?.trim()
-      : preview?.sessionId;
-    const experienceId =
-      url.searchParams.get('preview_experience_id')?.trim() || preview?.experienceId;
-    const binding =
-      config.livePreviewEnabled && sessionId && experienceId
-        ? {
-            experienceId,
-            sessionId,
-            sessionHost: preview?.sessionHost,
-            resourceResolution: preview?.resourceResolution,
-          }
-        : undefined;
+    const sessionId = getPreviewSessionId(environment, url);
+    const candidate = getPreviewBinding(environment, url.href);
+    const binding = config.livePreviewEnabled && candidate?.experienceId ? candidate : undefined;
     const livePreview = binding
       ? {
           ...binding,

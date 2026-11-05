@@ -285,13 +285,17 @@ preflight workflow nor Node handoff.
   API-free health, safe configuration injection, extensionless SPA fallback.
   Missing assets return 404; dot paths, traversal and public symlinks escaping
   the public directory are rejected. Other methods return 405.
-- `scripts/build-assets.ts`: cleans `public/dist`, copies only the installed Web
+- `scripts/build-assets.ts`: delegates to the repository's shared
+  `scripts/build-browser-implementation-assets.mts` using this app's Vite and dotenv.
+  It cleans `public/dist`, copies only the installed Web
   UMD and its source map, then uses Vite's library
   build to create `rich-text.js` from `scripts/rich-text.ts` with
   `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
   and renders live Rich Text documents. The same tiny ES module also exports the
   installed SDK's pure tracking-attribute helper and clickable constant; the UMD
   constructor distribution is unchanged.
+- `scripts/preview.ts`: app-local optional-package entry; binding parsing and preview
+  configuration construction live in the shared `scripts/implementation-preview.mts`.
 - `public/index.html` and `public/js/app.js`: common shell, route headers and shared
   content layout. Native templates also supply cards, event rows
   and status messages; `templates.js` clones their markup while the rendering
