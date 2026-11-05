@@ -23,6 +23,13 @@ describe('Web public entry on the server', () => {
       url: '',
     });
     expect(web.getUserAgent()).toBeUndefined();
+    expect(
+      web.getPreviewSessionBinding(
+        { experienceId: 'hero' },
+        new URLSearchParams('preview_session_id=session')
+      )
+    ).toMatchObject({ experienceId: 'hero', sessionId: 'session' });
+    expect(() => web.getPreviewSessionBinding({ experienceId: 'hero' })).toThrow(ReferenceError);
   });
 
   it('retains live profile state when browser persistence is unavailable', async () => {

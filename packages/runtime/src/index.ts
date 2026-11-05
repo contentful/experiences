@@ -45,6 +45,8 @@ export type {
   ResolveOptions,
 } from './contentful-experiences.js';
 export type { DeliveryClientOptions } from './create-runtime-delivery-client.js';
+export { getPreviewSessionBinding } from './preview-session-binding.js';
+export type { PreviewSessionBinding } from './preview-session-binding.js';
 export {
   assertRuntimePreviewRequest,
   createRuntimePreviewClient,
