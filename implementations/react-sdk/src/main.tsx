@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { createAttemptLog } from './attempt-log';
 import { loadPageContent } from './content-loader';
+import { experiences } from './experiences';
 import type { PublicEnvironment } from '../public-config';
 import './theme.css';
 
@@ -18,8 +20,23 @@ if (!root) throw new Error('The React application root is missing.');
 // replay presentation effects without issuing a second set of content requests.
 const pathname = window.location.pathname;
 const content = loadPageContent(window.ENVIRONMENT, pathname);
-createRoot(root).render(
+const log = createAttemptLog();
+const environment = window.ENVIRONMENT;
+const reactRoot = createRoot(root);
+reactRoot.render(
   <StrictMode>
-    <App pathname={pathname} environment={window.ENVIRONMENT} content={content} />
+    <experiences.ExperiencesRoot
+      spaceId={environment.SPACE_ID}
+      environmentId={environment.ENVIRONMENT_ID}
+      locale={environment.LOCALE}
+      delivery={{ accessToken: environment.CDA_TOKEN }}
+      onStatesReady={log.onStatesReady}
+    >
+      <App pathname={pathname} environment={environment} content={content} log={log} />
+    </experiences.ExperiencesRoot>
   </StrictMode>
 );
+// Web owns interaction completion and its final hide/unload flush. Keep the
+// React owner and attributed roots alive during that drain; document teardown
+// releases them. BFCache retains the same mounted owner for resumption.
+// Deliberate unmount/replacement inside a live document uses provider cleanup.

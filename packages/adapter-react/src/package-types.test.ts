@@ -12,7 +12,7 @@ import {
   type UseExperiencePlanResult,
 } from '@contentful/experiences-react/client';
 import { ContentfulExperiences } from '@contentful/experiences-react/web-sdk';
-import type { RuntimeLivePreviewInitializer } from '@contentful/experiences-runtime';
+import type { RuntimeLivePreviewOptions } from '@contentful/experiences-runtime';
 
 it('retains supplied-plan renderer and helper types on their explicit entries', () => {
   expectTypeOf<ExperienceRendererProps['experience']>().toEqualTypeOf<
@@ -25,8 +25,8 @@ it('retains supplied-plan renderer and helper types on their explicit entries', 
   expectTypeOf<ReturnType<typeof useExperiencePlan>>().toEqualTypeOf<UseExperiencePlanResult>();
 });
 
-it('exposes the structural lazy preview initializer through direct Web configuration', () => {
+it('exposes the structural preview configuration through direct Web configuration', () => {
   expectTypeOf<
     ConstructorParameters<typeof ContentfulExperiences>[0]['livePreview']
-  >().toEqualTypeOf<RuntimeLivePreviewInitializer | undefined>();
+  >().toEqualTypeOf<RuntimeLivePreviewOptions | undefined>();
 });
