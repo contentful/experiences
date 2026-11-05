@@ -19,6 +19,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./preview-session-binding": {
+      "import": {
+        "types": "./dist/preview-session-binding.d.mts",
+        "default": "./dist/preview-session-binding.js"
+      },
+      "require": {
+        "types": "./dist/preview-session-binding.d.cts",
+        "default": "./dist/preview-session-binding.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [

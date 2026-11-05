@@ -86,6 +86,41 @@ defaults with operation options once before snapshot transport. Direct callers o
 `fetchRuntimePreviewSession` must pass already-merged resolve options; the helper
 forwards them unchanged. The resolver registry stays operation-local.
 
+### Preview Session query binding
+
+Runtime exports a pure query parser, also re-exported by the public Node SDK.
+
+The parser and type are also available from
+`@contentful/experiences-runtime/preview-session-binding`, an isolated entry that
+does not load event schemas or other runtime modules.
+
+```ts
+export type PreviewSessionBinding = Pick<
+  RuntimeLivePreviewOptions,
+  'experienceId' | 'sessionId' | 'sessionHost' | 'resourceResolution'
+>;
+
+export function getPreviewSessionBinding(
+  defaults: Omit<PreviewSessionBinding, 'sessionId'>,
+  searchParams: URLSearchParams
+): PreviewSessionBinding | undefined;
+```
+
+The parser trims the first `preview_session_id` and `preview_experience_id`
+query values. A missing or empty Session ID returns `undefined`; a missing or
+empty Experience override uses `defaults.experienceId`. Supply a valid default
+Experience ID. The result is a fresh binding containing the selected IDs and
+only the optional `sessionHost` and `resourceResolution` from defaults. Other
+query parameters are ignored; inputs are neither mutated nor retained.
+
+There is no environment fallback, default Session ID or legacy parsing path.
+The helper reads no globals, performs no network work and does not load the
+optional preview package. Applications select deployment policy, supply
+`loadImplementation` and own session/mode lifetime. Consumers with known IDs
+can still supply `livePreview` directly. Web's thin wrapper uses the same
+argument order, with optional query parameters defaulting to the current
+browser location only when invoked.
+
 ### Shared limitations
 
 - Only Preview tokens (including suppliers), HTTP `preview.host` → `preview.environment`

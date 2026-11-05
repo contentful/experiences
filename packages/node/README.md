@@ -33,7 +33,32 @@ Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.ap
 and standalone free fetches remain outside this policy.
 
 For session snapshots, install the optional Live Preview package and configure
-`preview.accessToken` on the SDK. When preview is enabled, bind the request once:
+`preview.accessToken` on the SDK. When preview is enabled, bind the request once.
+
+For query-based sessions, Node re-exports Runtime's pure
+`getPreviewSessionBinding(defaults, searchParams)` and `PreviewSessionBinding`
+type. Supply the incoming request URL's parameters explicitly:
+
+```ts
+import { getPreviewSessionBinding } from '@contentful/experiences-node';
+
+const requestUrl = new URL(incomingRequest.url);
+const binding = getPreviewSessionBinding({ experienceId }, requestUrl.searchParams);
+const livePreview = binding
+  ? {
+      ...binding,
+      loadImplementation: () => import('@contentful/experiences-live-preview'),
+    }
+  : undefined;
+// Pass livePreview to sdk.forRequest({ livePreview }).
+```
+
+Defaults accept `experienceId` and optional `sessionHost`/`resourceResolution`,
+with no Session ID or environment fallback. Missing or empty Session IDs select
+no binding; see Runtime's [query parsing contract](../runtime/README.md#preview-session-query-binding).
+Call the helper according to your deployment policy; it does not load the preview
+package or manage request/session lifetime. If you already have the IDs, supply
+`livePreview` directly:
 
 ```ts
 const request = sdk.forRequest({

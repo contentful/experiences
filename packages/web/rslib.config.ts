@@ -4,6 +4,7 @@ import packageJson from './package.json';
 const entry = {
   index: './src/index.ts',
   'sdk-info': './src/sdk-info.ts',
+  'preview-session-binding': './src/preview-session-binding.ts',
   runtime: './src/runtime.ts',
   'tracking-attributes': './src/tracking-attributes.ts',
   'bridge-support': './src/bridge-support.ts',
