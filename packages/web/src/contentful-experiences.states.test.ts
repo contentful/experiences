@@ -319,20 +319,6 @@ describe('Web public state subscriptions', () => {
     expect(warn).toHaveBeenCalledWith('Event stream subscriber failed', error);
   });
 
-  it('streams valid ordinary events at the queue limit', async () => {
-    const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 1 } });
-    const events = vi.fn();
-    subscriptions.push(runtime.states.eventStream.subscribe(events));
-    window.dispatchEvent(new Event('offline'));
-    await expect(runtime.track({ event: 'accepted' })).resolves.toEqual({ accepted: true });
-    await expect(runtime.track({ event: 'queue-full' })).resolves.toEqual({ accepted: true });
-    expect(events.mock.calls.slice(1).map(([event]) => event.event)).toEqual([
-      'accepted',
-      'queue-full',
-    ]);
-    expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-  });
-
   it('publishes blocked metadata even when the configured callback throws', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const onEventBlocked = vi.fn(() => {

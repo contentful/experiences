@@ -62,9 +62,16 @@ describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchI
     });
 
     expect(fetch).toHaveBeenCalledExactlyOnceWith(
-      { ...locator, personalization: { profileId: 'explicit', events: [page] } },
+      {
+        ...locator,
+        personalization: {
+          profileId: 'explicit',
+          events: [{ ...page, context: { ...page.context, gdpr: { isConsentGiven: true } } }],
+        },
+      },
       expect.anything()
     );
+    expect(page.context.gdpr.isConsentGiven).toBe(false);
   });
 
   it("sends the request's profile id", async () => {

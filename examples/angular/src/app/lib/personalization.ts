@@ -35,7 +35,6 @@ export function buildPagePersonalization(options: {
     query,
     referrer: options.referrer,
     search: url.search,
-    title: 'Contentful Experiences — Angular example',
     url: url.toString(),
   };
 
@@ -43,24 +42,8 @@ export function buildPagePersonalization(options: {
     locale: options.locale,
     location: EU_LOCATION,
     page,
-    properties: page,
+    properties: { ...page, title: 'Contentful Experiences — Angular example' },
   });
 
-  // EventBuilder targets the full Optimization API schema. XDA embeds a
-  // deliberately narrower page-event schema: consent is not accepted here,
-  // and context.page excludes title (properties.title remains supported).
-  const { gdpr: _gdpr, page: contextPage, ...context } = event.context;
-  const { title: _title, ...xdaContextPage } = contextPage;
-
-  return {
-    events: [
-      {
-        ...event,
-        context: {
-          ...context,
-          page: xdaContextPage,
-        },
-      },
-    ],
-  };
+  return { events: [event] };
 }

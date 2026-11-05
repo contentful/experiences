@@ -328,12 +328,12 @@ class EventBuilder {
     const propertiesCampaign = extractCampaignFromUrl(properties.url);
     const pageProperties = this.getPageProperties();
     const merged = merge(
-      {
-        ...pageProperties,
-        title: pageProperties.title ?? DEFAULT_PAGE_PROPERTIES.title,
-      },
+      { ...pageProperties, title: pageProperties.title ?? DEFAULT_PAGE_PROPERTIES.title },
       properties
     );
+    const contextPage: OptimizationPage =
+      pageProperties.title === undefined ? { ...merged } : merged;
+    if (pageProperties.title === undefined) delete contextPage.title;
 
     warnIfPageContextConflicts(universal.page, merged);
 
@@ -343,7 +343,7 @@ class EventBuilder {
     } = this.buildUniversalEventProperties({
       ...universal,
       campaign: universal.campaign ?? propertiesCampaign,
-      page: universal.page ?? merged,
+      page: universal.page ?? contextPage,
     });
 
     const context = parseOptimizationSchema(OptimizationPageEventContext, universalContext);

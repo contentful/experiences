@@ -4,13 +4,11 @@ import {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
   createExperiencesHandoff,
-  createRequestHandoffFromData,
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type ExperiencesHandoff,
 } from './experiences-handoff.js';
-import type { EventOptimizationData } from './runtime-event-methods.js';
 
 const builder = new EventBuilder({
   channel: 'server',
@@ -150,19 +148,31 @@ describe('Experiences handoff', () => {
     ).toThrow('pathname/search route key');
     expect(() =>
       parseExperiencesHandoff({ ...handoff, replay: { routeKey: '/home', events: [] } })
-    ).toThrow('one page');
+    ).toThrow('final page');
     expect(() =>
       parseExperiencesHandoff({
         ...handoff,
         replay: { routeKey: '/home', events: [builder.buildPageView(), builder.buildPageView()] },
       })
-    ).toThrow('one page');
+    ).toThrow('final page');
     expect(() =>
       parseExperiencesHandoff({
         ...handoff,
         replay: { routeKey: '/home', events: [{ type: 'page' }] },
       })
     ).toThrow();
+    expect(() =>
+      parseExperiencesHandoff(
+        {
+          ...handoff,
+          replay: {
+            routeKey: '/home',
+            events: [{ ...builder.buildTrack({ event: 'opened' }), extra: true }],
+          },
+        },
+        scope
+      )
+    ).toThrow('cannot change the evaluated event bodies');
   });
 
   it('reports and rejects private profile, identity, or replay in public/static cache scopes', () => {
@@ -216,23 +226,44 @@ describe('Experiences handoff', () => {
     ).toEqual({ scope: 'public-permutation', key: 'experience:revision:locale' });
   });
 
-  it('packages evaluated profile state privately', () => {
-    const handoff = privateHandoff();
-    const data = {
-      profile: { id: 'evaluated-profile' },
-      changes: [],
-      selectedOptimizations: [],
-    } as unknown as EventOptimizationData;
-    const packaged = createRequestHandoffFromData({ handoff, data });
+  it('preserves the complete aggregate and frozen producer input', () => {
+    const input = {
+      ...privateHandoff(),
+      state: { profile: { id: 'evaluated-profile' } },
+    };
+    const before = globalThis.structuredClone(input);
+    Object.freeze(input.state.profile);
+    Object.freeze(input.state);
+    Object.freeze(input.cache);
+    for (const event of input.replay!.events) {
+      Object.freeze(event.context.library);
+      Object.freeze(event.context);
+      Object.freeze(event);
+    }
+    Object.freeze(input.replay!.events);
+    Object.freeze(input.replay);
+    Object.freeze(input);
 
-    expect(packaged.state).toEqual({ profile: { id: 'evaluated-profile' } });
-    expect(packaged.profileId).toBe('profile-1');
-    expect(packaged.replay?.events.map((event) => event.messageId)).toEqual(
-      handoff.replay?.events.map((event) => event.messageId)
-    );
-    expect(() =>
-      createRequestHandoffFromData({ handoff: { ...handoff, cache: { scope: 'static' } }, data })
-    ).toThrow('private-request');
+    const created = createExperiencesHandoff(input);
+    const received = parseExperiencesHandoff(JSON.parse(JSON.stringify(created)), scope);
+
+    expect(input).toEqual(before);
+    expect(created).toEqual(before);
+    expect(received).toEqual(before);
+    expect(created.state).not.toBe(input.state);
+    expect(created.state?.profile).not.toBe(input.state.profile);
+    expect(created.replay?.events).not.toBe(input.replay?.events);
+  });
+
+  it('creates and parses identify-only and track-only replays without adding a page', () => {
+    for (const event of [
+      builder.buildIdentify({ userId: 'visitor' }),
+      builder.buildTrack({ event: 'opened' }),
+    ]) {
+      const input = { ...privateHandoff(), replay: { routeKey: '/home', events: [event] } };
+      expect(createExperiencesHandoff(input)).toEqual(input);
+      expect(parseExperiencesHandoff(JSON.parse(JSON.stringify(input)), scope)).toEqual(input);
+    }
   });
 
   it('preserves an in-memory explicit profile clear', () => {

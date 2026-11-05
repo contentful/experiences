@@ -18,7 +18,7 @@ describe('createReactExperiences', () => {
       return <article {...props}>Bound registry</article>;
     }
     const config = { components: { probe: Component } };
-    const ui = createReactExperiences({ config });
+    const { ExperienceRenderer } = createReactExperiences({ config });
     expect(ContentfulExperiences).not.toHaveBeenCalled();
     const plan = await resolveExperience(
       {
@@ -38,7 +38,7 @@ describe('createReactExperiences', () => {
       config
     );
     const html = renderToString(
-      <ui.ExperienceRenderer
+      <ExperienceRenderer
         experience={plan}
         as="section"
         rootProps={{ id: 'bound-root', className: 'bound-container' }}

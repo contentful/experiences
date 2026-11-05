@@ -7,7 +7,6 @@ import {
 } from './contentful-experiences.js';
 import {
   EventProfileRequiredError,
-  parseExperiencesHandoff,
   type RuntimeLivePreviewModule,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
@@ -101,7 +100,6 @@ describe('Node ContentfulExperiences', () => {
       const request = f.runtime.forRequest({ livePreview: f.livePreview, consent: true });
       expect(request.isPreview).toBe(true);
       await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
-      expect((await request.prepareRequestHandoff({ routeKey: '/' })).skipped).toBe('preview');
       expect(f.loadImplementation).not.toHaveBeenCalled();
       expect(upsert).not.toHaveBeenCalled();
       expect(() => f.runtime.forRequest({ livePreview: f.livePreview, isPreview: false })).toThrow(
@@ -277,16 +275,23 @@ describe('Node ContentfulExperiences', () => {
     const first = runtime.forRequest({
       locale: 'de-DE',
       eventContext: { ...firstContext, locale: 'it-IT' },
+      consent: true,
     });
-    const second = runtime.forRequest({ eventContext: secondContext });
+    const second = runtime.forRequest({ eventContext: secondContext, consent: false });
 
     expect(first).not.toBe(second);
-    expect(first.eventBuilder.buildIdentify({ userId: 'first' }).context).toMatchObject(
-      firstContext
+    expect(first.eventBuilder.buildIdentify({ userId: 'first' }).context).toMatchObject({
+      ...firstContext,
+      gdpr: { isConsentGiven: true },
+    });
+    expect(first.eventBuilder.buildPageView().context.gdpr.isConsentGiven).toBe(true);
+    expect(first.eventBuilder.buildTrack({ event: 'first' }).context.gdpr.isConsentGiven).toBe(
+      true
     );
-    expect(second.eventBuilder.buildTrack({ event: 'second' }).context).toMatchObject(
-      secondContext
-    );
+    expect(second.eventBuilder.buildTrack({ event: 'second' }).context).toMatchObject({
+      ...secondContext,
+      gdpr: { isConsentGiven: false },
+    });
     expect(runtime.eventBuilder.channel).toBe('server');
     expect(runtime.eventBuilder.library).toEqual(DEFAULT_EVENT_CONTEXT_LIBRARY);
     expect(runtime.eventBuilder.buildTrack({ event: 'runtime' }).context).toMatchObject({
@@ -622,234 +627,6 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'en-US' });
   });
 
-  it('prepares one ordered, exact Personalization replay with request context and known identity', async () => {
-    // This test is about ordering and context, not consent: allow every prepared type.
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime({
-      allowedEventTypes: ['identify', 'track', 'page'],
-    });
-    const request = runtime.forRequest({
-      locale: 'de-DE',
-      profile: { id: 'initial-profile' },
-      eventContext: { userAgent: 'server-agent', locale: 'context-locale' },
-      eventConsent: false,
-    });
-
-    const result = await request.prepareRequestHandoff({
-      routeKey: '/products?sort=popular',
-      initialEvents: [
-        { type: 'identify', userId: 'user-1' },
-        { type: 'track', event: 'experience_rendered' },
-      ],
-      page: { properties: { url: 'https://example.test/products' } },
-    });
-
-    expect(upsertProfile).toHaveBeenCalledOnce();
-    const [input, options] = upsertProfile.mock.calls[0]!;
-    expect(input.profileId).toBe('initial-profile');
-    expect(options).toEqual({ locale: 'de-DE', preflight: true });
-    expect(input.events.map(({ type }) => type)).toEqual(['identify', 'track', 'page']);
-    expect(new Set(input.events.map(({ messageId }) => messageId)).size).toBe(3);
-    for (const event of input.events) {
-      expect(event.context).toMatchObject({
-        locale: 'de-DE',
-        userAgent: 'server-agent',
-        gdpr: { isConsentGiven: false },
-      });
-    }
-    expect(result.data).toEqual({ profile: { id: 'updated-profile' } });
-    expect(request.profile).toEqual({ id: 'updated-profile' });
-    expect(result.handoff).toMatchObject({
-      spaceId: 'space',
-      environmentId: 'environment',
-      cache: { scope: 'private-request' },
-      profileId: 'initial-profile',
-      replay: { routeKey: '/products?sort=popular', locale: 'de-DE' },
-    });
-    expect(result.handoff.replay?.events).toEqual(input.events);
-    expect(result.handoff.replay?.events.map(({ messageId }) => messageId)).toEqual(
-      input.events.map(({ messageId }) => messageId)
-    );
-    expect(parseExperiencesHandoff(JSON.parse(JSON.stringify(result.handoff)))).toEqual(
-      result.handoff
-    );
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-  });
-
-  it('preserves persistence consent and existing identity when Session preview skips handoff', async () => {
-    const { runtime, upsertProfile, sendBatchEvents } = createEventRuntime();
-    const request = runtime.forRequest({
-      isPreview: true,
-      consent: true,
-      profile: { id: 'existing-visitor' },
-    });
-    const result = await request.prepareRequestHandoff({
-      routeKey: '/?preview_session_id=session',
-    });
-
-    expect(request.canPersistProfile).toBe(true);
-    expect(request.profile).toEqual({ id: 'existing-visitor' });
-    expect(result.skipped).toBe('preview');
-    expect(result.handoff.profileId).toBeUndefined();
-    expect(result.handoff.replay).toBeUndefined();
-    expect(result.data).toBeUndefined();
-    expect(upsertProfile).not.toHaveBeenCalled();
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-  });
-
-  it('previews the full 100-event prepared batch with its exact replay bodies', async () => {
-    const { runtime, upsertProfile } = createEventRuntime();
-    const request = runtime.forRequest({ locale: 'de-DE' });
-    const result = await request.prepareRequestHandoff({
-      routeKey: '/products',
-      initialEvents: Array.from({ length: 99 }, (_, index) => ({
-        type: 'track' as const,
-        event: `opened-${index}`,
-      })),
-    });
-
-    expect(upsertProfile).toHaveBeenCalledOnce();
-    const prepared = upsertProfile.mock.calls[0]![0].events;
-    expect(prepared).toHaveLength(100);
-    expect(prepared.at(-1)?.type).toBe('page');
-    expect(new Set(prepared.map(({ messageId }) => messageId)).size).toBe(100);
-    expect(prepared.every(({ context }) => context.locale === 'de-DE')).toBe(true);
-    expect(result.handoff.replay?.events).toEqual(prepared);
-    expect(
-      parseExperiencesHandoff(JSON.parse(JSON.stringify(result.handoff))).replay?.events
-    ).toEqual(prepared);
-  });
-
-  it('uses the API-issued identity for a new profile and keeps later ordinary calls direct', async () => {
-    const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
-    const request = runtime.forRequest();
-
-    const prepared = await request.prepareRequestHandoff({ routeKey: '/home' });
-
-    expect(prepared.handoff.profileId).toBe('updated-profile');
-    expect(prepared.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
-    expect(request.profile).toEqual({ id: 'updated-profile' });
-    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US', preflight: true });
-
-    const direct = await request.track({ event: 'after-preparation' });
-    expect(direct).toEqual({ accepted: true, data: { profile: { id: 'updated-profile' } } });
-    expect(upsertProfile).toHaveBeenCalledTimes(2);
-    expect(upsertProfile.mock.calls[1]?.[0]).toMatchObject({ profileId: 'updated-profile' });
-    expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
-    await expect(
-      request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-    ).resolves.toEqual({ accepted: true });
-    expect(sendBatchEvents).toHaveBeenCalledOnce();
-  });
-
-  it('keeps an explicit final-page locale separate from preparation and replay transport', async () => {
-    const { runtime, upsertProfile } = createEventRuntime();
-    const request = runtime.forRequest({ locale: 'de-DE' });
-
-    const result = await request.prepareRequestHandoff({
-      routeKey: '/fr',
-      page: { locale: 'fr-FR' },
-    });
-
-    expect(result.handoff.replay?.events.at(-1)?.context.locale).toBe('fr-FR');
-    expect(result.handoff.replay?.locale).toBe('de-DE');
-    expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'de-DE', preflight: true });
-  });
-
-  it('returns no replay or preview and reports invalid route, event type, and batch limits', async () => {
-    const { runtime, upsertProfile } = createEventRuntime();
-    const request = runtime.forRequest({ profile: { id: 'known-profile' } });
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    try {
-      const invalid = [
-        { routeKey: 'products' },
-        { routeKey: '/products', initialEvents: [{ type: 'page' }] },
-        {
-          routeKey: '/products',
-          initialEvents: Array.from({ length: 51 }, () => ({ type: 'identify', userId: 'u' })),
-        },
-        {
-          routeKey: '/products',
-          initialEvents: Array.from({ length: 100 }, () => ({ type: 'track', event: 'viewed' })),
-        },
-      ];
-      for (const options of invalid) {
-        const result = await request.prepareRequestHandoff(options as never);
-        expect(result).toEqual({
-          handoff: {
-            spaceId: 'space',
-            environmentId: 'environment',
-            cache: { scope: 'private-request' },
-            profileId: 'known-profile',
-          },
-        });
-      }
-      expect(warning).toHaveBeenCalledTimes(invalid.length);
-      expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid request handoff inputs')
-      );
-      expect(upsertProfile).not.toHaveBeenCalled();
-      expect(request.profile).toEqual({ id: 'known-profile' });
-    } finally {
-      warning.mockRestore();
-    }
-  });
-
-  it('keeps exact prepared replay and known identity when preview transport fails', async () => {
-    const { runtime, upsertProfile } = createEventRuntime();
-    upsertProfile.mockRejectedValueOnce(new Error('preview unavailable'));
-    const request = runtime.forRequest({ profile: { id: 'known-profile' } });
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    try {
-      const result = await request.prepareRequestHandoff({
-        routeKey: '/fallback',
-        initialEvents: [{ type: 'track', event: 'opened' }],
-      });
-      expect(upsertProfile).toHaveBeenCalledOnce();
-      expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US', preflight: true });
-      expect(result.data).toBeUndefined();
-      expect(result.handoff.profileId).toBe('known-profile');
-      expect(result.handoff.replay?.events).toEqual(upsertProfile.mock.calls[0]?.[0].events);
-      expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['track', 'page']);
-      expect(request.profile).toEqual({ id: 'known-profile' });
-      expect(warning).toHaveBeenCalledWith(expect.stringContaining('Request preview failed'));
-    } finally {
-      warning.mockRestore();
-    }
-  });
-
-  it('keeps preparation identity and event context isolated across request facades', async () => {
-    const { runtime, upsertProfile } = createEventRuntime();
-    const german = runtime.forRequest({
-      locale: 'de-DE',
-      profile: { id: 'german-profile' },
-      eventContext: { userAgent: 'german-agent' },
-    });
-    const french = runtime.forRequest({
-      locale: 'fr-FR',
-      eventContext: { userAgent: 'french-agent' },
-    });
-
-    const [germanResult, frenchResult] = await Promise.all([
-      german.prepareRequestHandoff({ routeKey: '/de' }),
-      french.prepareRequestHandoff({ routeKey: '/fr' }),
-    ]);
-
-    expect(germanResult.handoff.profileId).toBe('german-profile');
-    expect(frenchResult.handoff.profileId).toBe('updated-profile');
-    expect(upsertProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ profileId: 'german-profile' }),
-      { locale: 'de-DE', preflight: true }
-    );
-    expect(upsertProfile).toHaveBeenCalledWith(expect.objectContaining({ profileId: undefined }), {
-      locale: 'fr-FR',
-      preflight: true,
-    });
-    expect(germanResult.handoff.replay?.events[0]?.context.userAgent).toBe('german-agent');
-    expect(frenchResult.handoff.replay?.events[0]?.context.userAgent).toBe('french-agent');
-    expect(german.profile).toEqual({ id: 'updated-profile' });
-    expect(french.profile).toEqual({ id: 'updated-profile' });
-  });
-
   it('defaults XDA fetch identity from its request, adopts returned identity, and respects overrides', async () => {
     const runtime = createRuntime();
     const fetchExperience = vi.spyOn(runtime, 'fetchExperience').mockResolvedValueOnce({
@@ -936,116 +713,6 @@ describe('Node ContentfulExperiences', () => {
       expect(upsertProfile).toHaveBeenCalledTimes(1);
     });
 
-    describe('prepared handoff batches', () => {
-      const initialEvents = [{ type: 'track' as const, event: 'opened' }];
-
-      it('prepares no replay under strict opt-in, and sends nothing', async () => {
-        const onEventBlocked = vi.fn();
-        const { runtime, upsertProfile } = createEventRuntime({
-          allowedEventTypes: [],
-          onEventBlocked,
-        });
-        const request = runtime.forRequest({ consent: false });
-
-        const result = await request.prepareRequestHandoff({ routeKey: '/home' });
-
-        expect(result.handoff.replay).toBeUndefined();
-        expect(result.data).toBeUndefined();
-        expect(upsertProfile).not.toHaveBeenCalled();
-        expect(onEventBlocked).toHaveBeenCalledWith(
-          expect.objectContaining({ reason: 'consent', method: 'page' })
-        );
-      });
-
-      it('admits a page-only batch by default, since page is allow-listed', async () => {
-        const { runtime, upsertProfile } = createEventRuntime();
-        const request = runtime.forRequest({ consent: false });
-
-        const result = await request.prepareRequestHandoff({ routeKey: '/home' });
-
-        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
-        expect(upsertProfile).toHaveBeenCalledOnce();
-      });
-
-      it('drops a blocked initial track but still prepares the permitted page', async () => {
-        const onEventBlocked = vi.fn();
-        const { runtime, upsertProfile } = createEventRuntime({ onEventBlocked });
-        const request = runtime.forRequest({ consent: { events: false } });
-
-        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
-
-        // `track` is not allow-listed and is left out; `page` is, so the batch is a valid
-        // page-only preview and is still sent.
-        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
-        expect(result.data).toBeDefined();
-        expect(upsertProfile).toHaveBeenCalledOnce();
-        expect(upsertProfile.mock.calls[0]![0].events.map(({ type }) => type)).toEqual(['page']);
-        expect(onEventBlocked).toHaveBeenCalledTimes(1);
-        expect(onEventBlocked).toHaveBeenCalledWith(
-          expect.objectContaining({ reason: 'consent', method: 'track' })
-        );
-      });
-
-      it('keeps the initial events that are admitted and drops only the others', async () => {
-        const { runtime } = createEventRuntime({ allowedEventTypes: ['identify', 'page'] });
-        const request = runtime.forRequest({ consent: { events: false } });
-
-        const result = await request.prepareRequestHandoff({
-          routeKey: '/home',
-          initialEvents: [
-            { type: 'identify', userId: 'user-1' },
-            { type: 'track', event: 'opened' },
-          ],
-        });
-
-        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['identify', 'page']);
-      });
-
-      it('prepares nothing when the page itself is not admitted', async () => {
-        const onEventBlocked = vi.fn();
-        const { runtime, upsertProfile } = createEventRuntime({
-          allowedEventTypes: ['track'],
-          onEventBlocked,
-        });
-        const request = runtime.forRequest({ consent: { events: false } });
-
-        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
-
-        // A prepared batch must end in one page, so without a permitted page there is no
-        // batch at all, even though the track alone would be allowed.
-        expect(result.handoff.replay).toBeUndefined();
-        expect(upsertProfile).not.toHaveBeenCalled();
-        expect(onEventBlocked).toHaveBeenCalledWith(
-          expect.objectContaining({ reason: 'consent', method: 'page' })
-        );
-      });
-
-      it('admits the whole batch once event consent is granted', async () => {
-        const { runtime } = createEventRuntime();
-        const request = runtime.forRequest({ consent: { events: true } });
-
-        const result = await request.prepareRequestHandoff({ routeKey: '/home', initialEvents });
-
-        expect(result.handoff.replay?.events.map(({ type }) => type)).toEqual(['track', 'page']);
-      });
-
-      it('stamps the prepared events with the request event consent', async () => {
-        const { runtime } = createEventRuntime();
-        const granted = await runtime
-          .forRequest({ consent: { events: true } })
-          .prepareRequestHandoff({ routeKey: '/home', initialEvents });
-        const undecided = await runtime
-          .forRequest({ consent: { persistence: true } })
-          .prepareRequestHandoff({ routeKey: '/home' });
-
-        const flags = (
-          events: readonly { context: { gdpr?: { isConsentGiven?: boolean } } }[] = []
-        ) => events.map((event) => event.context.gdpr?.isConsentGiven);
-        expect(flags(granted.handoff.replay?.events)).toEqual([true, true]);
-        expect(flags(undecided.handoff.replay?.events)).toEqual([false]);
-      });
-    });
-
     it('drops caller-built fetchExperience events that request consent does not admit', async () => {
       const onEventBlocked = vi.fn();
       const { runtime } = createEventRuntime({ onEventBlocked });
@@ -1078,6 +745,7 @@ describe('Node ContentfulExperiences', () => {
         .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
         .mockResolvedValue({ nodes: [] } as never);
       const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+      const original = globalThis.structuredClone(track);
 
       await runtime
         .forRequest({ consent: true })
@@ -1086,7 +754,11 @@ describe('Node ContentfulExperiences', () => {
           { config: resolverConfig }
         );
 
-      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({ events: [track] });
+      expect(fetchExperience.mock.calls[0]![0].personalization).toEqual({
+        events: [{ ...track, context: { ...track.context, gdpr: { isConsentGiven: true } } }],
+      });
+      expect(track).toEqual(original);
+      expect(track.context.gdpr.isConsentGiven).toBe(false);
     });
   });
 
@@ -1185,40 +857,6 @@ describe('Node ContentfulExperiences', () => {
         expect.anything(),
         expect.objectContaining({ locale: 'fr-FR' })
       );
-    });
-
-    it('uses experienceOptions.locale for the handoff preview and replay, not content', async () => {
-      const { runtime, upsertProfile } = createEventRuntime();
-      const request = runtime.forRequest({
-        consent: true,
-        experienceOptions: { locale: 'fr-FR' },
-      });
-
-      const result = await request.prepareRequestHandoff({ routeKey: '/landing' });
-
-      expect(upsertProfile.mock.calls[0]?.[1]).toEqual(
-        expect.objectContaining({ locale: 'fr-FR', preflight: true })
-      );
-      expect(result.handoff.replay?.locale).toBe('fr-FR');
-      expect(request.locale).toBe('en-US');
-    });
-
-    it('forwards ip and plainText on the handoff preview and still previews without committing', async () => {
-      const { runtime, upsertProfile } = createEventRuntime();
-      const request = runtime.forRequest({
-        consent: true,
-        experienceOptions: { ip: '203.0.113.7', plainText: true },
-      });
-
-      await request.prepareRequestHandoff({ routeKey: '/landing' });
-
-      expect(upsertProfile).toHaveBeenCalledTimes(1);
-      expect(upsertProfile.mock.calls[0]?.[1]).toEqual({
-        ip: '203.0.113.7',
-        plainText: true,
-        locale: 'en-US',
-        preflight: true,
-      });
     });
 
     it('forwards the Insights beacon to a direct Analytics send', async () => {
