@@ -4,6 +4,7 @@ import {
   assertRuntimePreviewRequest,
   createRuntimePreviewClient,
   fetchRuntimePreviewSession,
+  mergeRuntimePreviewResolveOptions,
   type RuntimeLivePreviewConfig,
   type RuntimeLivePreviewModule,
 } from './live-preview.js';
@@ -49,13 +50,12 @@ describe('Runtime Live Preview wrapper', () => {
       ...config,
       preview: { accessToken: async () => 'token', host: 'https://preview.test' },
     };
-    await expect(
-      fetchRuntimePreviewSession(binding, scoped, {
-        ...resolve,
-        debug: false,
-        metadata: { shared: 'operation' },
-      })
-    ).resolves.toBe(plan);
+    const preparedResolve = mergeRuntimePreviewResolveOptions(scoped, {
+      ...resolve,
+      debug: false,
+      metadata: { shared: 'operation' },
+    });
+    await expect(fetchRuntimePreviewSession(binding, scoped, preparedResolve)).resolves.toBe(plan);
     expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
       {
         spaceId: 'space',
@@ -66,6 +66,7 @@ describe('Runtime Live Preview wrapper', () => {
       { previewToken: 'token', host: 'https://preview.test' },
       { ...resolve, debug: false, metadata: { base: true, shared: 'operation' } }
     );
+    expect(implementation.fetchPreviewSession.mock.calls[0]![2]).toBe(preparedResolve);
   });
 
   it('maps subscription credentials and session configuration into the public client', async () => {
@@ -85,7 +86,11 @@ describe('Runtime Live Preview wrapper', () => {
   it('requires a preview token before transport', async () => {
     const { binding, implementation } = fixture();
     await expect(
-      fetchRuntimePreviewSession(binding, { ...config, preview: undefined }, resolve)
+      fetchRuntimePreviewSession(
+        binding,
+        { ...config, preview: undefined },
+        mergeRuntimePreviewResolveOptions(config, resolve)
+      )
     ).rejects.toThrow(/accessToken/);
     expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
   });
@@ -105,7 +110,13 @@ describe('Runtime Live Preview wrapper', () => {
     );
 
     host.mockResolvedValueOnce('https://preview.test');
-    await expect(fetchRuntimePreviewSession(binding, scoped, resolve)).resolves.toBe(plan);
+    await expect(
+      fetchRuntimePreviewSession(
+        binding,
+        scoped,
+        mergeRuntimePreviewResolveOptions(scoped, resolve)
+      )
+    ).resolves.toBe(plan);
     expect(host).toHaveBeenCalledOnce();
     expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
       expect.anything(),
