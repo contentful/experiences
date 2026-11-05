@@ -13,7 +13,7 @@ npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. Adapters expose the resolver, types, renderer, design utilities, the Runtime-owned `EventBuilder`, and the experience delivery client. Next.js uses explicit subpaths such as `/server`, `/app-router/server`, `/app-router/client`; its root entry has no runtime exports. React hooks and client renderers come from `@contentful/experiences-react/client`, while the React root and `/server` provide server rendering and pure utilities. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, `@contentful/experiences-client`, and `@contentful/experiences-runtime` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. Adapters expose the resolver, types, renderer, design utilities, the Runtime-owned `EventBuilder`, and the experience delivery client. Next.js uses explicit subpaths such as `/server`, `/app-router/server`, `/app-router/client` and `/pages-router`; its root entry has no runtime exports. React hooks and client renderers come from `@contentful/experiences-react/client`, while the React root and `/server` provide server rendering and pure utilities. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, `@contentful/experiences-client`, and `@contentful/experiences-runtime` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
 The React, Svelte and Angular rendering adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable example apps live in [`examples/`](#examples).
 
@@ -114,20 +114,23 @@ The signature is three grouped params: what to fetch (space, env, experience), h
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-This explicit supplied-plan pattern is also used in [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). That example has not yet migrated to the current Next/React managed APIs. For current Next.js integration, use the [Next adapter guide](./packages/adapter-nextjs/README.md).
+This explicit supplied-plan pattern is also used in [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). That example has not yet migrated to the current Next/React managed APIs; its broader migration is Phase 14. For current Next.js integration, use the [Next adapter guide](./packages/adapter-nextjs/README.md).
 
 ---
 
 ## Next.js managed integration
 
 For a normal Next.js page, bind one primary Experience and let the Next adapter
-fetch, resolve and manage its presentation. The App Router bindings provide
-`request.loadExperience`, `request.Experience` and built-in browser roots. The
+fetch, resolve and manage its presentation. App Router and Pages Router server
+families provide `request.loadExperience`. Pages client configuration exports
+plain `ExperiencesRoot` and `Experience` components from the binding; `Experience`
+accepts a server `result` or existing managed props. App retains its request
+presentation and built-in browser roots. The
 `preserve-server` hydration mode retains server HTML and the supplied plan without
 a startup browser refetch; `server-only` keeps content updates on a server
 round-trip and can attach browser analytics without browser content rendering.
 
-Start with the [one-Experience App setup](./packages/adapter-nextjs/README.md#automatic-single-experience-setup).
+Start with the [one-Experience App/Pages setup](./packages/adapter-nextjs/README.md#automatic-single-experience-setup).
 Server configuration owns private credentials and resolution. Built-in browser
 roots inherit scope and locale; configure browser Delivery explicitly using a
 browser-designated credential or a trusted authenticated proxy. Delivery
@@ -280,7 +283,7 @@ workaround. Direct event APIs remain callable but are not compensation.
 
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02.
 Current checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
 five-owner static-check and no-production-findings review results describe the
 superseded remedy only. Earlier installed-reference checks likewise remain historical;
 no live XDA/XPAPI events were exercised. Phases 1–5 remain accepted.
@@ -1058,11 +1061,11 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 ## Examples
 
-Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. `examples/nextjs` remains unmigrated to the current managed Next/React APIs, including its retired React preview-hook usage. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for current App integration.
+Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. `examples/nextjs` remains unmigrated to the current managed Next/React APIs, including its retired React preview-hook usage. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for current App/Pages integration; broad example code migration remains Phase 14.
 
 | Example                                          | Stack                           | Shows                                                                                                   |
 | ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Existing supplied-plan example; managed API migration pending                                           |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Existing supplied-plan example; managed API migration remains Phase 14                                  |
 | [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                         |
 | [`examples/angular`](./examples/angular)         | Angular 20 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
 | [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
@@ -1566,7 +1569,7 @@ This is an Nx monorepo. Install the framework adapter for rendering. `@contentfu
 | [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context, persisted profile, direct events, and prepared-batch admission. |
 | [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                                  |
 | [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React rendering and managed browser integration.                                                           |
-| [`packages/adapter-nextjs`](./packages/adapter-nextjs)   | `@contentful/experiences-nextjs`       | **Public.** App request loading, built-in roots and React rendering via explicit subpaths.                             |
+| [`packages/adapter-nextjs`](./packages/adapter-nextjs)   | `@contentful/experiences-nextjs`       | **Public.** App/Pages request loading, built-in roots and React rendering via explicit subpaths.                       |
 | [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                          |
 | [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                                 |
 

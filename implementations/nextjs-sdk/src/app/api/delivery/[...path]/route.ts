@@ -23,9 +23,7 @@ async function proxy(request: NextRequest, { params }: { params: Promise<{ path:
     return new NextResponse('Unknown Experience', { status: 404 });
   const url = new URL(path.map(encodeURIComponent).join('/'), 'https://xdn.contentful.com/');
   url.search = request.nextUrl.search;
-  const headers = new Headers({
-    Authorization: `Bearer ${config.delivery.accessToken}`,
-  });
+  const headers = new Headers({ Authorization: `Bearer ${config.delivery.accessToken}` });
   // Preserve generated-client wire conventions, including its rename header;
   // authentication remains proxy-owned rather than caller-supplied.
   for (const name of ['x-contentful-enable-alpha-feature', 'x-contentful-exo-enable-api-names']) {

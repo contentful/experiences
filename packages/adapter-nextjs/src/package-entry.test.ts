@@ -17,12 +17,15 @@ const entries = [
   '/request-handler',
   '/app-router/server',
   '/app-router/client',
+  '/pages-router',
+  '/pages-router/server',
   '/cache-middleware',
 ];
 const entryFile = (suffix: string) =>
   ({
     '/app-router/server': 'app-router-server',
     '/app-router/client': 'app-router-client',
+    '/pages-router/server': 'pages-router-server',
   })[suffix] ?? (suffix ? suffix.slice(1) : 'index');
 
 function runModule(source: string, forbidden: string[] = []): string {
@@ -64,6 +67,8 @@ describe('published package entries', () => {
         './package.json',
         './app-router/server',
         './app-router/client',
+        './pages-router',
+        './pages-router/server',
         './cache-middleware',
       ].sort()
     );
@@ -106,7 +111,7 @@ describe('published package entries', () => {
   });
 
   it.each(entries.filter(Boolean))('%s imports from dist without eager preview', (suffix) => {
-    const forbidden = ['/client', '/app-router/client'].includes(suffix)
+    const forbidden = ['/client', '/app-router/client', '/pages-router'].includes(suffix)
       ? []
       : suffix === '/app-router/server'
         ? []
@@ -216,6 +221,8 @@ describe('published declarations', () => {
       import * as root from '${packageName}';
       import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
       import { bindNextjsAppRouterClientExperiences, type NextjsRequestResult } from '${packageName}/app-router/client';
+      import { bindNextjsPagesRouterServerExperiences } from '${packageName}/pages-router/server';
+      import { bindNextjsPagesRouterExperiences } from '${packageName}/pages-router';
       import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
       import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
@@ -321,6 +328,20 @@ describe('published declarations', () => {
         }
       } });
       const appClient = bindNextjsAppRouterClientExperiences({ config });
+      const pagesServer = bindNextjsPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: { experience: { experienceId: 'home' } } });
+      declare const pagesOptions: Parameters<typeof pagesServer.request.loadExperience>[1];
+      const composedPagesOptions: typeof pagesOptions = {
+        ...pagesOptions,
+        composeRequest: async (request, primary, context) => {
+          const facade: ExperiencesNodeRequest = request;
+          void [facade, primary.plan, primary.error, context.routeKey];
+        }
+      };
+      const pagesClient = bindNextjsPagesRouterExperiences({
+        config, spaceId: 'space', environmentId: 'master',
+        delivery: { accessToken: 'browser' },
+        consent: { clientDefaults: { consent: false, persistenceConsent: false } }
+      });
       declare const result: NextjsRequestResult;
       {
         const { ExperiencesRoot, Experience } = appClient.request;
@@ -333,11 +354,26 @@ describe('published declarations', () => {
         // @ts-expect-error Request roots obtain handoff from their result.
         ExperiencesRoot({ result, handoff: result.handoff });
       }
+      {
+        const { ExperiencesRoot, ExperiencesAnalyticsRoot, Experience, ExperienceRenderer: PagesExperienceRenderer, useManagedExperience } = pagesClient;
+        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
+        const analytics = <ExperiencesAnalyticsRoot result={result}><p>Server content</p></ExperiencesAnalyticsRoot>;
+        void [tree, analytics];
+        Experience({ experienceId: 'home', initialPlan: plan, parameters: { variant: 'home' } });
+        Experience({ experience: plan });
+        PagesExperienceRenderer({ experience: plan });
+        useManagedExperience({ experienceId: 'home' });
+        // @ts-expect-error Descriptor overlays cannot change the supplied request result.
+        Experience({ result, experienceId: 'different' });
+        // @ts-expect-error Seeds are part of the complete request result.
+        Experience({ result, initialPlan: plan });
+      }
+      pagesServer.request.loadExperience({ resolvedUrl: '/home' } as Parameters<typeof pagesServer.request.loadExperience>[0], pagesOptions);
       // @ts-expect-error Request server roots cannot receive browser callbacks.
       ExperiencesRoot({ beforeInitialPage: () => {} });
       const tree = <ExperiencesRoot><Experience {...requestProps} /></ExperiencesRoot>;
       const cacheMiddleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => undefined });
-      void [appServer, appClient, cacheMiddleware, requestProps, tree];
+      void [appServer, appClient, pagesServer, pagesClient, cacheMiddleware, requestProps, composedPagesOptions, tree];
       const serverProps: ServerExperienceRendererProps = { experience: null, config };
       const clientProps: ExperienceRendererProps = { experience: null, config };
       const attrs: TrackingAttributes = getTrackingAttributes(undefined);
