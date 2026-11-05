@@ -686,10 +686,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
-    const generation = this.#contentLifetime;
-    const token = this.#resetToken;
-    const source = this.#preview?.revision;
-    const assertCurrent = () => this.#assertContentCurrent(generation, source, token);
+    const { source, assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
     if (this.#preview !== undefined) {
       const preview = await this.#fetchPreview(options, resolveOptions, assertCurrent);
@@ -757,10 +754,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       ) => Promise<TResult>;
     }
   ): Promise<TResult> {
-    const generation = this.#contentLifetime;
-    const token = this.#resetToken;
-    const source = this.#preview?.revision;
-    const assertCurrent = () => this.#assertContentCurrent(generation, source, token);
+    const { generation, assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
     const identityReady = this.#awaitCurrentHandoffIdentity();
     if (identityReady !== undefined) {
@@ -791,14 +785,23 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       : load();
   }
 
-  #assertContentCurrent(generation: number, source: number | undefined, token: object): void {
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (
-      generation !== this.#contentLifetime ||
-      (!this.isPreview && token !== this.#resetToken) ||
-      source !== this.#preview?.revision
-    )
-      throw new Error('Experiences fetch was superseded');
+  #createFreshnessGuard() {
+    const generation = this.#contentLifetime;
+    const token = this.#resetToken;
+    const source = this.#preview?.revision;
+    return {
+      generation,
+      source,
+      assertCurrent: () => {
+        if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
+        if (
+          generation !== this.#contentLifetime ||
+          (!this.isPreview && token !== this.#resetToken) ||
+          source !== this.#preview?.revision
+        )
+          throw new Error('Experiences fetch was superseded');
+      },
+    };
   }
 
   async #fetchPreview(
@@ -823,7 +826,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             'snapshot'
           );
     return this.#shareContent(key, resolve, async () => {
-      const plan = await fetchRuntimePreviewSession(binding, this.config, resolveOptions);
+      const plan = await fetchRuntimePreviewSession(binding, this.config, resolve);
       // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
       assertCurrent();
       return plan;

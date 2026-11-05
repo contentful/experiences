@@ -8,6 +8,7 @@ import {
   buildFetchPersonalization,
   assertRuntimePreviewRequest,
   fetchRuntimePreviewSession,
+  mergeRuntimePreviewResolveOptions,
   initializeRuntimeLivePreview,
   InterceptorManager,
   withEventConsent,
@@ -434,7 +435,8 @@ class RequestBoundExperiences implements RequestRuntime {
     assertRuntimePreviewRequest(options);
     this.gatePersonalizationEvents(options);
     this.assertActive();
-    const plan = await fetchRuntimePreviewSession(binding, this.runtime.config, resolveOptions);
+    const resolve = mergeRuntimePreviewResolveOptions(this.runtime.config, resolveOptions);
+    const plan = await fetchRuntimePreviewSession(binding, this.runtime.config, resolve);
     // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
     this.assertActive();
     return plan;

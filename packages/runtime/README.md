@@ -82,8 +82,10 @@ public exports through `RuntimeLivePreviewOptions.loadImplementation`.
 Runtime exports structural types and wrappers without requiring that package: Node
 owns request snapshots, and Web owns one preview source and its subscriptions.
 `fetchRuntimePreviewSession` adopts the resolved plan; `createRuntimePreviewClient`
-creates the public subscription client. Metadata/debug defaults merge with operation
-options, and the resolver registry stays operation-local.
+creates the public subscription client. Node and Web merge applicable metadata/debug
+defaults with operation options once before snapshot transport. Direct callers of
+`fetchRuntimePreviewSession` must pass already-merged resolve options; the helper
+forwards them unchanged. The resolver registry stays operation-local.
 
 ### Shared limitations
 
