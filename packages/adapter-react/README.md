@@ -11,8 +11,7 @@ npm install @contentful/experiences-react
 For React, this is the rendering adapter you install. Next.js applications should
 use [`@contentful/experiences-nextjs`](../adapter-nextjs/README.md) for the common
 automatic one-Experience App/Pages setup, with request loading and built-in roots.
-The Next adapter uses these React rendering and runtime owners; the broader
-`examples/nextjs` migration remains Phase 14.
+The Next adapter uses these React rendering and runtime owners.
 
 This package re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
@@ -28,23 +27,20 @@ This package re-exports everything you need from `@contentful/experiences-sdk-co
 | `@contentful/experiences-react/router/react-router`    | `bindReactRouterExperiences` and router page-payload/props types                                                                                                                        |
 | `@contentful/experiences-react/router/tanstack-router` | `bindTanStackRouterExperiences` and router page-payload/props types                                                                                                                     |
 
-Client APIs previously imported from the root move to `/client`. The root and
-`/server` do not load the live Web SDK. The unbundled ESM build preserves each
+Import client APIs from `/client`. The root and `/server` do not load the live
+Web SDK. The unbundled ESM build preserves each
 module's client directive. Next.js is not a React dependency or peer.
 
-The standalone `useLivePreview` and `useLivePreviewExperience` hooks and their
-option/result types are no longer exported. Preview Session functions, errors,
-client/session types and `PREVIEW_WEBSOCKET_HOST` move to direct imports from
-`@contentful/experiences-live-preview`. Install that optional package only when
-using it; ordinary adapter imports and declarations do not require it. Its
-existing standalone APIs are unchanged. General supplied-plan rendering and
+Import standalone Preview Session functions, errors, client/session types and
+`PREVIEW_WEBSOCKET_HOST` directly from `@contentful/experiences-live-preview`.
+Install that optional package only when using it; ordinary adapter imports and
+declarations do not require it. General supplied-plan rendering and
 `useExperiencePlan` remain available on `/client`.
 
 Managed runtime ownership, state/action hooks, `Experience` and
 `useManagedExperience` are available on `/client`. Managed loading and supplied
-plans share the standard renderer. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started. Phase 6 remains complete and explicitly accepted on
-2026-11-02. Application-owned fetching and supplied-plan rendering remain supported.
+plans share the standard renderer. Application-owned fetching and supplied-plan
+rendering remain supported.
 
 Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
 raw built events, built once by the SDK. Optional `handoff?: ExperiencesHandoff`
@@ -212,7 +208,7 @@ notifications report the current plan/error without repeating unchanged results.
 Correcting unsupported preview overrides permits recovery through the existing
 request/update lifecycle. Initial plans and usable content survive preview failures. See
 [Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
-supported options and frozen transport limits. Switching preview policy requires
+supported options and current transport limits. Switching preview policy requires
 owner replacement; `replaceLivePreview` changes a session within fixed preview mode.
 
 Optional `beforeInitialPage` retains a standalone callback path and never gates
@@ -327,9 +323,8 @@ Supplied-plan rendering preserves content while either flag is false.
 Locale prop failures remain visible when hydration settles. Correcting or removing
 the locale prop clears its failure while preserving any activation/hydration error.
 
-Provide `snapshot` for stable server/browser state. **Accepted Phase 6 remedy:**
-provider/root accept `handoff?: ExperiencesHandoff`, replacing
-`initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
+Provide `snapshot` for stable server/browser state. Provider/root accept
+`handoff?: ExperiencesHandoff` for optional server handoff consumption.
 After activation, the existing effect subscribes to `sdk.states.consent`; its
 immediate emission and later consent changes invoke the complete
 `hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` operation using the
@@ -342,11 +337,9 @@ identify/track-only replay never adds or falls back to a page. Replay-less aggre
 return `{ accepted: false }` after internal state application unless `buildPayload`
 explicitly supplies page intent. Only page-bearing intent uses route deduplication,
 and page-bearing refusal retains gated fallback through the existing implicit
-page consent path. There is no dedicated retry facility or mode detector. Basic
-optional consent/lifecycle consumption is complete in accepted Phase 6; current
-checks and acceptance review are recorded in the implementation plan. Earlier
-checks remain historical. Managed loading uses the same root for later navigation;
-pass an explicit `routeKey` when the host changes pathname/search without replacing
+page consent path. There is no dedicated retry facility or mode detector.
+Managed loading uses the same root for later navigation; pass an explicit
+`routeKey` when the host changes pathname/search without replacing
 the document. `buildPagePayload` supplies default page arguments for the first
 ordinary managed request of a route. Root/provider `initialPagePayload` is shorthand
 for static `PageViewBuilderArgs`; update route-varying values on navigation.
@@ -572,7 +565,7 @@ MissingComponent; // Default fallback for unregistered component types
 
 ### Attributed rendering and DOM roots
 
-Both renderers now add one Experience boundary, a `div` with `display: contents`
+Both renderers add one Experience boundary, a `div` with `display: contents`
 by default, and inject Core scope attributes into registered component/template
 props. Components must forward those attributes to their actual outermost HTML
 element. Existing registration lookup, prop precedence, named slots, context,
@@ -607,8 +600,7 @@ markup, select its semantic root and style through those same props:
 ```
 
 A custom `as` component forwards the boundary attributes, children and client ref
-to its actual root. Server root props exclude DOM refs. The earlier `renderRoot`
-callback is removed.
+to its actual root. Server root props exclude DOM refs.
 
 An empty attribution boundary is still emitted when the plan lacks a usable
 source map, so a nested Experience cannot borrow an ancestor's scopes. Obtain
@@ -665,7 +657,6 @@ and `trackClicks`. Undefined retains existing root attributes and Web defaults;
 false disables that automatic kind, and true opts it in subject to SDK consent.
 They apply to each node's real roots, including named-slot descendants. Attribution
 and scope attributes remain available even when all automatic kinds are disabled.
-The earlier automatic/manual/none `tracking` enum is removed.
 
 ```tsx
 <ExperienceRenderer

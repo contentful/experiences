@@ -150,21 +150,17 @@ hook/schema failures reject before transport; content fetch/resolve failure afte
 finalization retains usable replay. Pages are optional and never synthesized. Retries and browser
 prepared replay never rerun event hooks; browser replay still applies browser
 consent and its metadata. Hooks preserve the existing transport boundaries, and
-stateless free fetch functions gain no global registry. This final-type gate is a
-local correction of the Optimization reference's original-type-only gate at `70dfa7f`.
+stateless free fetch functions gain no global registry.
 
 ## Shared handoff primitives
 
-The remedy adapts the pinned Optimization complete-operation ownership to XDA
-consumer-supplied intent. The pin defaults absent/nonpage replay to ordinary page
-tracking; that default must not be ported because it would invent an event absent
-from the consumer's XDA evaluation. Optional-page replay and explicit-only page
-intent are required XDA adaptations, pending remedy validation and acceptance.
+Complete-operation ownership follows the pinned Optimization reference while
+preserving XDA consumer-supplied intent. Optional-page replay and explicit-only
+page intent prevent inventing an event absent from the consumer's XDA evaluation.
 
 The full `ExperiencesHandoff` aggregate carries scope, cache policy, optional
 profile/continuation identity and final Client XDA events for optional replay. The actual server Node producer
-is its XDA producer; separate supplied-data producers and standalone XPAPI preparation
-are removed by the remedy. Necessary state application is internal to the complete
+is its XDA producer. Necessary state application is internal to the complete
 Web `hydrateAndTrackCurrentPage` operation. Create/parse/validation primitives
 validate untrusted scope, cache safety, event schema, count and order on receiving
 paths without sending or mutating owner state. The Node producer captures final
@@ -194,16 +190,10 @@ and application; Runtime supplies no cache engine.
 
 Profileless internal state application preserves existing browser continuity.
 It does not commit preflight results or transfer selected-optimization state.
-No journal-specific 64 KiB cap or version field applies to the aggregate or
-`PortableRenderPlan`; callers own safe serialization and response-size policy.
+No 64 KiB cap or version field applies to the aggregate or `PortableRenderPlan`;
+callers own safe serialization and response-size policy.
 
 ## XDA preflight and profile finalization
-
-**Current correction: complete and explicitly accepted on 2026-11-02.** Current
-checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
-evidence for a superseded design, not validation of this revision. Phases 1–5
-remain accepted. Current implementation and validation results are recorded there.
 
 XDA currently always invokes the Personalization API (XPAPI) with `preflight: true`,
 without an override.
@@ -252,17 +242,16 @@ the operation can be identified reliably. No flag name, API or automatic mode
 detection is currently promised; choosing Node alone does not identify SSR versus
 hybrid use.
 
-**Verification and release gates:** Phase 12 may assess the existing reference
-under the accepted current noncommit limitation. Phase 13 verifies the corrected
-service only after all tracked XDA issues affecting the supported integrations
-are resolved, including forced preflight and outstanding built-event metadata
-rejection. It must demonstrate full supported-event acceptance, real commitment
-and profile finalization through the appropriate SSR/CSR and hybrid paths.
-The SDK will not release until those issues are resolved and that verification
-passes against the actual upstream contract. There is no known fix date;
-earlier checks and phase acceptance do not waive these gates.
+**Verification and release gates:** Reference integrations can be assessed under
+the current noncommit limitation. Verification of the corrected service requires
+all tracked XDA issues affecting the supported integrations to be resolved,
+including forced preflight and outstanding built-event metadata rejection.
+It must demonstrate full supported-event acceptance, real commitment and profile
+finalization through the appropriate SSR/CSR and hybrid paths. The SDK will not
+release until those issues are resolved and that verification passes against the
+actual upstream contract. There is no known fix date.
 
-**Observed Insights limitation (accepted for this workstream on 2026-11-02):**
+**Observed Insights limitation:**
 The installed API client's `PartialProfile`/Insights batch schema accepts `{ id }`,
 but the current Insights service returns HTTP 400 / `ERR_INVALID_DATA` when
 `stableId`, `random`, `audiences`, `traits`, `location` and `session` are absent.
@@ -280,8 +269,6 @@ The browser commits the server-supplied replay through
 `hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })`, independently of SSR display
 and without startup refetch or a complete-plan barrier. Do not reconstruct replay
 from raw arrays, create local CSR/navigation handoffs, or use handoff as content input.
-Remove `Node.commitRequestHandoff`, `Web.fetchExperienceForHandoff` and all
-handoff-as-content re-evaluation union branches/helpers.
 
 Content Retry refetches the same Experience ID through ordinary fetch without
 events, builders, event hooks, publication, admission or replay. Ordinary refresh
@@ -310,9 +297,8 @@ consent, route and lifetime guards. This is Optimization's normal implicit page
 path, with no dedicated API, scheduler, controller, state class or mode detector.
 Current React optional consumption subscribes to `sdk.states.consent` within its
 existing effect and reinvokes that complete operation with one stable `isCurrent`
-lifetime guard. This basic consent/lifecycle behavior is complete in accepted Phase 6;
-managed React loading/navigation, API refinements and source cleanup are complete and explicitly accepted as Phase 7 on 2026-11-02. Queue-capacity
-refusal remains retry-eligible while the complete operation is unaccepted; accepted eligible
+lifetime guard. Queue-capacity refusal remains retry-eligible while the complete
+operation is unaccepted; accepted eligible
 page fallback completes initialization without resubmitting the original refused batch. Accepted replay never triggers
 fallback or application resubmission because delivery fails. Admission does not
 prove delivery.
@@ -341,7 +327,7 @@ visitor work cannot publish after reset, consent withdrawal, supersession or des
 Optimization PR #549 at `f76f1ff04df1b466c98fc6ce5db6b569f9212438`
 remains the pinned ownership, consent, queues and lifetime reference. XDA content
 evaluation and its current noncommit service behavior require the differences
-above; this revision does not claim full commit parity. Actual XPAPI delivery
+above; full commit parity is not established. Actual XPAPI delivery
 retains generic retry ambiguity and no durable/exactly-once guarantee.
 
 The default Web page provider omits `title`, `hash`, `width` and `height`
@@ -374,7 +360,6 @@ Prepared event attempts publish only after the whole batch is admitted and befor
 transport begins; refusal publishes none. Preserve the original operation revision
 through asynchronous interception and final admission/state publication, so reset,
 consent withdrawal, supersession or destroy cannot admit or publish stale visitor work.
-These are remedy correctness/test obligations, not claims of completed validation.
 
 ## Personalization delivery
 

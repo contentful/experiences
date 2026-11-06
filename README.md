@@ -114,7 +114,7 @@ The signature is three grouped params: what to fetch (space, env, experience), h
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-This explicit supplied-plan pattern is also used in [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). That example has not yet migrated to the current Next/React managed APIs; its broader migration is Phase 14. For current Next.js integration, use the [Next adapter guide](./packages/adapter-nextjs/README.md).
+This explicit supplied-plan pattern is also used in [`examples/nextjs/app/[slug]/page.tsx`](./examples/nextjs/app/[slug]/page.tsx). That example's preview component imports APIs unavailable in the current React adapter. For managed Next.js integration, use the [Next adapter guide](./packages/adapter-nextjs/README.md).
 
 ---
 
@@ -198,8 +198,7 @@ managed result retains the initial or last usable plan alongside errors. An
 uses the same owners through its [router bindings](./packages/adapter-nextjs/README.md#router-bindings);
 server-only preview updates render through a server round-trip.
 
-React's standalone `useLivePreview` and `useLivePreviewExperience` hooks have been
-retired. For application-supplied payloads use `useExperiencePlan` from
+For application-supplied payloads use `useExperiencePlan` from
 `@contentful/experiences-react/client`; it resolves data but owns no connection.
 For framework-neutral code, import `createLivePreviewClient` directly from
 `@contentful/experiences-live-preview`. Svelte retains its `useLivePreview` getter
@@ -281,13 +280,6 @@ profile changes. SSR/CSR XDA events remain uncommitted: this tolerated service b
 awaits upstream force-commit support. There is no current force flag or SDK
 workaround. Direct event APIs remain callable but are not compensation.
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02.
-Current checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier 1008-test,
-five-owner static-check and no-production-findings review results describe the
-superseded remedy only. Earlier installed-reference checks likewise remain historical;
-no live XDA/XPAPI events were exercised. Phases 1–5 remain accepted.
-
 Only an actual server-to-browser transfer uses the Node producer:
 
 ```ts
@@ -317,8 +309,7 @@ navigation uses ordinary Web fetch absent a new server handoff.
 
 Content Retry refetches the same Experience ID using ordinary fetch without
 events, builders, event hooks, publication, admission or replay. Incoming accepted
-replay delivery retry belongs to the existing queue. Remove Node aggregate
-commitment, the Web handoff producer and handoff-as-content re-evaluation branches.
+replay delivery retry belongs to the existing queue.
 
 Official support is one Experience per page, unenforced in code. Reference multi-ID
 loops compare rendering scenarios only; later IDs use ordinary event-free fetch,
@@ -334,7 +325,7 @@ Built XDA events retain consent context. Web's default browser page provider omi
 custom providers/arguments, raw caller-built XDA events and Node/Client metadata
 remain unchanged. See [Node handoff](./packages/node/README.md#actual-server-to-browser-transfer)
 and [Web content evaluation](./packages/web/README.md#ordinary-content-evaluation-and-optional-incoming-handoff).
-Phase 7 adapts the usual React controllers/root to this XDA flow, preserving
+React controllers/root use this XDA flow, preserving
 Optimization's page consent-retry exception without mandatory direct
 `beforeInitialPage` emission. Current supplied-plan rendering remains supported.
 
@@ -372,11 +363,8 @@ Safe serialization and preflight limitations are described below.
 ### Paired server-to-browser replay
 
 For an actual hybrid transfer, evaluate events through the Node XDA producer
-shown above. Optionally consume the returned full aggregate through the browser owner. Separate
-XPAPI preparation, supplied-data producers and public state-only hydration are
-removed by the remedy. The pinned Optimization PR #549 source at
-`f76f1ff04df1b466c98fc6ce5db6b569f9212438` informs ownership and lifecycle mechanics;
-XDA supplies the content evaluation here, while XPAPI commits the finalized events.
+shown above. Optionally consume the returned full aggregate through the browser owner.
+XDA supplies the content evaluation, while XPAPI commits the finalized events.
 
 The application supplies a route key made from the visible pathname and search
 string. It must begin with `/`. A handoff with profile, continuation identity,
@@ -1061,11 +1049,11 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 ## Examples
 
-Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. `examples/nextjs` remains unmigrated to the current managed Next/React APIs, including its retired React preview-hook usage. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for current App/Pages integration; broad example code migration remains Phase 14.
+Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. The Next.js example's preview component imports APIs unavailable in the current React adapter. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for managed App/Pages integration.
 
 | Example                                          | Stack                           | Shows                                                                                                   |
 | ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Existing supplied-plan example; managed API migration remains Phase 14                                  |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Server-side fetch, resolve, and supplied-plan rendering                                                 |
 | [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                         |
 | [`examples/angular`](./examples/angular)         | Angular 20 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay          |
 | [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Custom renderer with `@contentful/experiences-react/custom-renderer`: native islands, static by default |
@@ -1468,10 +1456,10 @@ First-party debug panel. Renders the resolved `PortableRenderPlan` as pretty, ci
 
 Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experience`) sees an experience context. The shape:
 
-| Field      | Type                      | Available in        | Description                                                                                                                                                                                                                             |
-| ---------- | ------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`    | `boolean`                 | render, resolveData | The single observability switch (replaces the old `isPreview`). Drives verbose logging, the visible missing-component box, and the auto-mounted `<DebugExperience>` panel. Components can branch on it for their own debug affordances. |
-| `metadata` | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` / `fetchExperience` opts, carried on the plan. The renderer's `metadata` prop shallow-merges over it. Free-form and untyped on purpose — see below.                                 |
+| Field      | Type                      | Available in        | Description                                                                                                                                                                                              |
+| ---------- | ------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`    | `boolean`                 | render, resolveData | The single observability switch. Drives verbose logging, the visible missing-component box, and the auto-mounted `<DebugExperience>` panel. Components can branch on it for their own debug affordances. |
+| `metadata` | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` / `fetchExperience` opts, carried on the plan. The renderer's `metadata` prop shallow-merges over it. Free-form and untyped on purpose — see below.  |
 
 `RenderContext` is declared once in the SDK core and re-exported by every adapter, so all three expose exactly the same shape — `useExperience()` in React, `getExperience()` in Svelte, `injectExperience()` in Angular.
 

@@ -86,10 +86,7 @@ and never fetches an Experience.
 
 The interaction buttons send a fixed demo entity. The panel also starts
 `startInteractionTracking()`, but no rendered node is stamped for it yet, so views,
-hovers and clicks on the page are not tracked automatically. Stamping rendered nodes
-is waiting on the scope-based attribution in
-[#225](https://github.com/contentful/experiences/pull/225), which replaces
-`data-ctfl-node-id`.
+hovers and clicks on the page are not tracked automatically.
 
 ### Optional: preview mode
 
