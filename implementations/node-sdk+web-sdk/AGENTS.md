@@ -4,16 +4,14 @@ Official support is one Experience fetch per page, without code enforcement.
 Reference multi-ID loops exist only to compare rendering scenarios, not as
 supported product usage or a cross-fetch guarantee.
 
-- Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
-  acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Replay-less aggregates apply state
+- Replay-less aggregates apply state
   internally and return `{ accepted: false }` unless explicit `buildPayload` supplies
   page intent. Only page-bearing intent participates in route deduplication.
 - Read the parent implementation instructions and this app's README before editing.
 - Keep this application outside root workspaces. Consume installed local tarballs
   of the public Node/Web SDKs with Client, Runtime and Core overrides. Use the
   maintained installer and pack both dependency chains. No workspace source aliases,
-  internal Runtime imports, SDK changes, or adjacent Optimization runtime dependency.
+  internal Runtime imports or adjacent Optimization runtime dependency.
 - Use app-local npm tools through `implementation-node-sdk-web-sdk` Nx targets.
   Refresh setup/install after SDK artifact changes; asset build copies only the
   installed Web UMD/map and bundles Rich Text/pure tracking helpers separately.
@@ -118,4 +116,4 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
   Use `replaceLivePreview` for binding changes within
   preview and reload the document when entering or leaving preview.
   Release subscriptions on route replacement/final exit and retain them for BFCache.
-  Keep `packages/live-preview` and local `.env` files unchanged.
+  Use the installed optional Preview package's public exports and preserve local `.env` files.

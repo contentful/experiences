@@ -1,7 +1,5 @@
 # Experiences Node SDK reference implementation
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
-
 This standalone Express/EJS implementation consumes `@contentful/experiences-node`
 from locally built npm tarballs. It has its own dependencies, configuration, and
 tooling, outside the root npm workspaces. It follows Optimization's Express/EJS
@@ -122,13 +120,12 @@ Do not edit that copy. Its current output describes CDA entries, not the Experie
 component/template properties, so those declarations are not imported by this app.
 The app uses the SDK's `PortableRenderPlan` type; no local content interfaces are
 maintained. The installed generator is 3.0.1 and produces only CDA declarations;
-running it requires Node 24 or later. Custom Experience type generation is outside this task’s scope.
+running it requires Node 24 or later. Custom Experience type generation is not included in this reference.
 
 ## Prerequisites
 
 - Node.js 24 or later for repository tooling, including content-type generation.
-  The standalone app declares Node.js 22.13 or later. Validation uses Node 24.15
-  and npm 12.0.2.
+  The standalone app declares Node.js 22.13 or later.
 - The repository's root dependencies installed with `npm ci`.
 
 ## Setup
@@ -211,8 +208,8 @@ npx nx run implementation-node-sdk:clean
 ```
 
 The app uses ordinary package scripts for its local tools, with Nx coordinating
-them. There are no implementation-owned runner or verification scripts. Isolation
-is demonstrated by installing and running a copy outside the repository.
+them. There are no implementation-owned runner or verification scripts. To verify
+isolation, install and run a copy outside the repository.
 
 `clean` removes only `dist` and `coverage`; it preserves `.env`, dependencies, and
 processes. Root build/test/lint/typecheck commands exclude implementations, so a

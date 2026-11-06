@@ -1,7 +1,5 @@
 # Experiences Web SDK reference implementation
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
-
 This standalone application consumes the locally packed `@contentful/experiences-web`
 SDK as a classic UMD script. Browser application files are vanilla JavaScript;
 the HTTP server and asset builder use TypeScript. The app lives outside the root
@@ -163,7 +161,7 @@ runtime; do not intercept or rewrite responses, silently retry content fetches,
 or simulate successful selection. The coded and composed Experiences should
 change their personalized fragment from baseline to variant content; the third
 Experience's identified variant reverses Content 1 and Content 2. Compare actual
-rendered content when checking these paths. Live confirmation of the cleaned flow
+rendered content when checking these paths. Live confirmation
 must use refreshed installed SDK artifacts; source changes alone are not evidence
 of service behavior.
 
@@ -177,8 +175,7 @@ node attributes contain opaque local keys. Only event attribution fields are
 serialized; duplicate scope keys and unrelated caller fields are excluded. The
 SDK encodes slot names when generating keys so whitespace cannot split a DOM token. DOM container identity separates repeated
 plans, while shared keys within one container preserve multi-root occurrences.
-Plans are unchanged. The former lookup, namespace and tracking-session API are
-removed rather than retained alongside another setup API.
+Plans are unchanged.
 
 The SDK discovers these attributes automatically with tracking enabled by default.
 Views use the default viewport root, which accounts for scroll-container clipping.
@@ -203,7 +200,7 @@ is involved. Page Two's separate Record custom action calls
 literal track arguments for `reference_custom_action` and supplies that intent to
 ordinary Web fetch as nonpage intent. It creates no local handoff or commit; navigation to Page Two still carries a page.
 
-The Tracking pill now counts every non-undefined notification from the public
+The Tracking pill counts every non-undefined notification from the public
 `states.eventStream`, including ordinary identify and page events. These are attempts:
 ordinary notifications can precede queue capacity refusal, and neither observation
 nor admission confirms HTTP delivery. Blocked calls do not enter this counter;
@@ -303,7 +300,7 @@ into source or generated assets. Environment files are ignored by Git and cannot
 be served by the public-file server.
 
 `CDA_TOKEN` is intentionally browser-visible. Use a delivery credential scoped for
-that use with an appropriate endpoint CORS policy. The accepted transport is
+that use with an appropriate endpoint CORS policy. The transport is
 direct browser delivery using the SDK's default live endpoints and
 `delivery: { accessToken: window.ENVIRONMENT.CDA_TOKEN }`, with the injected space,
 environment and locale. There is no delivery proxy, alternate endpoint selector,
@@ -351,10 +348,11 @@ uncommitted pending upstream service support. It has no Node server handoff.
   sidebar above the scrollable main area because the reference's fixed 340px
   sidebar leaves insufficient phone-width content space.
 
-Server, template navigation and installed-asset preparation patterns also derive
-from that commit's `implementations/web-sdk`. npm/Nx, scoped PM2, ESLint, Prettier,
+The active Optimization parity baseline is PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`.
+npm/Nx, scoped PM2, ESLint, Prettier,
 local tarball overrides and the shared installer follow Experiences tooling.
-Vite bundles Rich Text and the pure public tracking helper; Web's accepted Rslib distribution
+Vite bundles Rich Text and the pure public tracking helper; Web's Rslib distribution
 is consumed unchanged. No adjacent checkout is needed to build or run this app.
 
 ### Retained differences from Optimization
@@ -372,7 +370,7 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
   labels use Experience/ExperienceFragment semantics.
 - npm/Nx, ESLint/Prettier, scoped PM2 and local tarball installation retain this
   repository's maintained tooling. Vite prepares Rich Text/pure-helper assets;
-  the installed SDK keeps its accepted Rslib distribution. The theme is vendored
+  the installed SDK keeps its Rslib distribution. The theme is vendored
   locally, and a narrow-screen layout stacks sidebar/content for usable phone widths.
 
 ## Validation and scope
@@ -390,12 +388,11 @@ An event-stream notification denotes an event attempt, not admission or
 successful delivery. HTTP 200 alone does not prove personalization; compare the
 actual selected content and report service failures without compensating retries.
 
-Live verification has not reached empty-plan, missing-Experience, transport-failure
-or content loading after queued page admission without a profile, offline/capacity
-refusal, retry, SDK pending-response
-isolation, subscriber-exception, or back/forward-cache suspension scenarios.
-Local SDK unit tests and source review cover those branches where applicable;
-they do not establish live service outcomes. Ordinary browser back navigation
+Validate empty-plan, missing-Experience, transport-failure, content loading after
+queued page admission without a profile, offline/capacity refusal, retry,
+SDK pending-response isolation, subscriber-exception and back/forward-cache
+suspension scenarios directly. Local SDK unit tests and source review do not
+establish live service outcomes. Ordinary browser back navigation
 does not establish back/forward-cache behavior. Visual comparison uses the pinned
 Optimization source/theme rather than a running pixel comparison.
 
