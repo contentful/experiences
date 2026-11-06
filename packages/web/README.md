@@ -297,8 +297,7 @@ const plan = await experiences.fetchExperience(
 
 Web/React optionally consume an explicitly supplied server handoff through
 `hydrateAndTrackCurrentPage`, independently of display. Web has no local
-handoff producer: remove `Web.fetchExperienceForHandoff` and all
-handoff-as-content Retry branches/helpers. Browser navigation uses ordinary fetch
+handoff producer. Browser navigation uses ordinary fetch
 unless an actual new server response provides another handoff.
 
 Retry refetches the same ID through ordinary fetch without events, builders,
@@ -308,8 +307,7 @@ navigation still supplies page intent. Direct event APIs remain callable without
 becoming an initial prerequisite or XDA noncommit workaround.
 
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
-for the tolerated SSR/CSR service bug and incoming replay rules. This correction is
-complete and explicitly accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
+for the tolerated SSR/CSR service bug and incoming replay rules.
 
 ## Custom flags
 
@@ -458,8 +456,7 @@ event type against current consent before publication, sending, or queueing.
 Invalid output is a schema failure, not a consent drop. A valid transformed event
 blocked by consent is reported with its transformed method/type through
 `onEventBlocked` and `blockedEventStream`. Every event method returns
-`{ accepted: false }` for consent refusal. This
-final-type gate corrects the original-type-only bypass in the Optimization reference at `70dfa7f`.
+`{ accepted: false }` for consent refusal.
 
 XDA runs event chains concurrently with `Promise.all`, preserving the input array
 order; each event's handler chain remains sequential. Valid consent-blocked events
@@ -928,8 +925,8 @@ roots, and one root can belong to several scopes.
   before disconnecting its last root. Unrelated occurrences continue measuring.
   Disabling automatic tracking does not cancel finals already captured by removal;
   reset and consent withdrawal still invalidate delayed work.
-  This replaces the former application-owned stop-before-removal behavior; pinned
-  Optimization drops intervals on unobserve, so this is an Experiences adaptation.
+  Pinned Optimization drops intervals on unobserve, so completing qualified
+  intervals on removal is an Experiences adaptation.
 - A node without an id cannot be tracked, and neither can a plan fetched without
   a source map.
 - `@contentful/experiences-web/tracking-attributes` has no browser dependencies,
@@ -949,8 +946,6 @@ roots, and one root can belong to several scopes.
   it synchronously in a page-hide handler and cancel its pending final durations.
 
 ## Server event handoff
-
-**Current correction:** Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy checks/review are historical evidence for the superseded design.
 
 Create one browser runtime, then pass the `ExperiencesHandoff` prepared by Node
 to `hydrateAndTrackCurrentPage`. Supply the visible pathname plus search as the
@@ -997,9 +992,8 @@ the hybrid bootstrap observe `sdk.states.consent` and reinvoke this operation wi
 a stable `isCurrent` lifetime guard. After grant, still-current refused page intent
 uses the existing gated `trackCurrentPage` fallback; blocked nonpage replay stays
 dropped. This adds no dedicated retry facility, mode detector, extra page call,
-content refetch or CSR capture, and basic optional consumption belongs to Phase 6. `trackCurrentPage` remains
+content refetch or CSR capture. `trackCurrentPage` remains
 available for explicitly owned ordinary page intent; direct `page()` is not deduplicated.
-The public separate `hydrateHandoffState` workflow is removed by this remedy.
 
 At the start of a still-current initialization, the SDK selects and publishes
 continuation identity atomically, capturing the target before hydration: current
@@ -1036,13 +1030,12 @@ resumes eligible discovery immediately. Register replacement manual elements aft
 insertion, and unsubscribe application subscriptions during cleanup. See the [XDA server/browser recipe](../../README.md#xda-rendering-and-browser-submission).
 
 The actual server Node producer returns one full aggregate; the optional browser consumer owns
-internal state application and replay. Separate supplied-data producers and XPAPI
-preparation are removed. SSR display remains independent of submission. State
-application cannot finalize XDA preflight; XPAPI is the commit transport.
+internal state application and replay. SSR display remains independent of
+submission. State application cannot finalize XDA preflight; XPAPI is the commit transport.
 
 ## SSR import safety
 
-The package can be imported by server-rendered applications, but importing it must not read browser globals or start browser work. Import safety does not make the live Web runtime a server runtime: create and use browser-owned SDK state only in client-side lifecycle code, and use the Node SDK plus a serializable `PortableRenderPlan` for server rendering. The separate SSR test configuration protects the public-entry import and pure browser-context fallbacks without promising that future stateful Web construction will run on the server.
+The package can be imported by server-rendered applications, but importing it must not read browser globals or start browser work. Import safety does not make the live Web runtime a server runtime: create and use browser-owned SDK state only in client-side lifecycle code, and use the Node SDK plus a serializable `PortableRenderPlan` for server rendering. The separate SSR test configuration protects the public-entry import and pure browser-context fallbacks without promising that stateful Web construction will run on the server.
 
 For presentation layers that consume already-resolved state, `createSnapshotRuntime()`
 creates a read-only `ExperiencesRuntime` without browser ownership or transport:
@@ -1104,4 +1097,3 @@ Prepared event attempts publish only after the whole batch is admitted and befor
 transport begins; refusal publishes none. Preserve the original operation revision
 through asynchronous interception and final admission/state publication, so reset,
 consent withdrawal, supersession or destroy cannot admit or publish stale visitor work.
-These are remedy correctness/test obligations, not claims of completed validation.

@@ -158,8 +158,8 @@ SDK per-resource state. `replaceLivePreview` switches sessions. SSR-only adapter
 observe matching content revisions for server refresh without browser resolution.
 Snapshot runtimes expose inert undefined preview state; other states are unchanged.
 
-React managed integration ports Optimization's source/presentation controllers
-with the thin binding; the obsolete standalone preview hooks have been retired.
+React managed integration uses Optimization's source/presentation controllers
+with the thin binding.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
 automatically fetches, resolves and manages one primary Experience. App and Pages
 server request families expose `request.loadExperience`. Pages client bindings
@@ -184,19 +184,14 @@ and URL session from existing descriptor/route data;
 owned SDKs switch sessions with `replaceLivePreview` and are recreated on preview
 mode entry/exit below the stable request-history boundary. Consumers need no
 preview-specific wrapper, hook or key. Explicit browser credentials remain
-separate from server credentials; optional-package imports stay lazy. The legacy
+separate from server credentials; optional-package imports stay lazy. The
 initializer/resolver path remains available; injected SDK lifetime stays caller-owned. `composeRequest` is an explicit
 application escape hatch on the existing facade; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.
-Phase 10 is complete and explicitly accepted on 2026-11-03; optional
-React Router/TanStack integration is Phase 11, complete and explicitly accepted on 2026-11-03.
-The broad `examples/nextjs` managed API migration is Phase 14; its retired hooks
-are not current guidance.
 Registry/shared ownership, shared page
 initialization, request memoization, applicable handoff envelopes and attribution
-remain required. Managed React content/root sequencing belongs to phase 7, Next
-utilities to phase 9 and router request families to phase 10; no complete-plan
+remain required. No complete-plan
 preparation barrier or per-descriptor identify requirement applies. See the
 canonical [Runtime preview limits](./packages/runtime/README.md#optional-runtime-live-preview).
 
@@ -280,12 +275,10 @@ dev.10 generated request contract and passthrough behavior, since dev.11 removed
 `./serialization`. It supplements `context.gdpr` and `context.page.title` with
 boolean and optional-string constraints. Preserve XDA's existing context/event
 contracts, including `page.query` values of `string | string[]`; do not impose
-the full Optimization context schema. The old generated contract alone did not
-validate the added fields. Keep Client's `zod` dependency direct; do not add an
+the full Optimization context schema. Keep Client's `zod` dependency direct; do not add an
 Optimization API client dependency or a Runtime import. Validate final transformed
 output before final consent callbacks/publication, preserving input immutability.
-The Phase 6 correction is complete and explicitly accepted on 2026-11-02; earlier
-companion checks/review are historical. Ordinary SSR uses Node fetch; CSR and
+Ordinary SSR uses Node fetch; CSR and
 browser-local navigation/actions use Web fetch, accepting existing type-tagged arguments or raw built events
 with SDK-owned construction once. Only actual server-to-browser transfers retain
 the Node `fetchExperienceForHandoff` producer with `{ routeKey }` as its third
@@ -293,8 +286,7 @@ argument, returning full handoff plus optional plan/error. Web/React optionally
 consume explicitly supplied server handoffs, independently of display.
 
 SSR/CSR XDA events remain uncommitted as a tolerated service bug awaiting upstream
-force-commit support. Add no SDK workaround or current force flag. Remove the Node
-aggregate commit path, Web handoff producer and handoff-as-content reuse helpers.
+force-commit support. Add no SDK workaround or current force flag.
 Same-ID Retry is ordinary event-free fetch without builders, event hooks or replay;
 accepted incoming replay delivery retry remains queue-owned. Later reference
 comparison IDs also use ordinary event-free fetch, without an SDK multi-Experience
@@ -307,13 +299,9 @@ through XDA, while hybrid server evaluation retains preflight and browser
 commitment. Any flag or automatic selection follows the actual upstream API and
 supported integration patterns; no override currently exists. The SDK will not
 release until all tracked XDA issues affecting the supported integrations are
-resolved and Phase 13's verification of the corrected service passes. Phase 12's
-reference checkpoint may proceed under the accepted current service limitation;
-Phase 13 starts only after those XDA issues are resolved and Phase 12 is accepted.
+resolved and the corrected service behavior is verified.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
-for replay, identity, consent, queues and lifetime. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
-Phases 1–5 remain accepted.
+for replay, identity, consent, queues and lifetime.
 
 Events are consent-gated. Consent is `{ events, persistence }`, where undecided
 means not granted. Until event consent is granted only `allowedEventTypes`
@@ -366,8 +354,7 @@ Prepared event attempts publish only after the whole batch is admitted and befor
 transport begins; refusal publishes none. Preserve the original operation revision
 through asynchronous interception and final admission/state publication, so reset,
 consent withdrawal, supersession or destroy cannot admit or publish stale visitor work.
-These remain correctness/test obligations; Phase 6 validation and acceptance are
-recorded in the implementation plan.
+Cover these lifecycle and publication rules in maintained tests.
 
 ## Parity with the Optimization SDK
 
@@ -376,7 +363,7 @@ Optimization (`contentful/optimization`) is the behavioral reference for submiss
 The active parity baseline is Optimization PR #549,
 `restore/runtime-preview-after-release`, at committed source
 `f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`.
-Use this baseline rather than main or the historical `59add9d` pin.
+Use this pinned baseline when assessing parity.
 Web state and subscription mechanics follow that baseline. Web owns module signals backed by
 `@preact/signals-core` (`^1.13.0`) and `es-toolkit` (`^1.46.0`), and reactive
 persistence, consent, and connectivity effects. Its readonly `states: CoreStates`
@@ -481,7 +468,7 @@ Retained differences:
   history. New visitor/actions need fresh message IDs; reset/destroy clear history,
   while consent withdrawal never restores accepted or blocked replay intent.
 
-- The remedy's XDA aggregate preserves caller-built event intent: identify/track-only
+- The XDA aggregate preserves caller-built event intent: identify/track-only
   replay permits an optional single final page, and replay-less consumption emits no
   page without explicit `buildPayload`. The pin's `hydrateAndTrackCurrentPage` requires
   a final page and defaults absent/nonmatching replay to ordinary page tracking.
@@ -625,7 +612,7 @@ wins over the delivery/preview default. The `{ client }` branch ignores
 
 The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`). A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
 
-**We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` does not set the alpha header. The one header it does set is `X-Contentful-User-Agent` (see below). Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
+The generated `@contentful/experience-delivery` client sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` does not set the alpha header. The one header it does set is `X-Contentful-User-Agent` (see below).
 
 ### How does the SDK report its version?
 
@@ -635,7 +622,7 @@ Package versions come from the `RELEASE_VERSION`/`package.json` build defines, s
 
 One sharp edge in the generated merge order: `mergeHeaders(authHeaders, this._options.headers, <per-request default>, requestOptions.headers)`, later wins. The per-request default lands **after** client-level `headers`, so a `createClient({ headers: { 'x-contentful-enable-alpha-feature': … } })` entry is silently clobbered. Only `requestOptions.headers` (or `requestOptions.xContentfulEnableAlphaFeature`) can override it. Do not document client-level `headers` as an override path for this key.
 
-Why this still matters for types: the delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because the generator can't know which header was sent. dev.7 did not collapse that union, so `fetch-experience.ts` still narrows to `HydratedExperienceView` by hand — the cast is sound because the header is now guaranteed, not because we set it.
+The delivery client types `GetExperienceResponse` as a union of the shapes the endpoint can return, because the generator can't know which header was sent. `fetch-experience.ts` narrows to `HydratedExperienceView` by hand — the cast is sound because the generated client guarantees the header.
 
 ### Why `createClient` in addition to the raw `ContentfulViewDeliveryClient` constructor?
 
@@ -671,7 +658,7 @@ Going JS-first; CSS-vars opt-in is a future feature flag (`defineComponent({ des
 
 ### Why no auto-generated node IDs?
 
-We had `generateId()` early on. It's gone. The XDA payload sometimes carries `node.id`; when it does, we pass it through as `node.nodeId` on the IR. When it doesn't, `node.nodeId` is `undefined` and React keys fall back to array index, missing-component warnings omit the id. Generating fake IDs internally added a `crypto.getRandomValues` call per node and gave customers a surface to mistakenly rely on for stable references.
+The XDA payload sometimes carries `node.id`; when it does, we pass it through as `node.nodeId` on the IR. When it doesn't, `node.nodeId` is `undefined` and React keys fall back to array index, missing-component warnings omit the id. Generated IDs would not provide stable references for customers.
 
 ### Why is `Server` separate from `Client` instead of one component?
 
@@ -716,7 +703,7 @@ Keep changes unstaged during implementation and review. Stage only for a ready c
 
 Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.). Enforced via `commitlint.config.js` + `.husky/commit-msg`. **`feat:` and `fix:` trigger version bumps via `nx release`. `chore:` does NOT trigger a release.**
 
-**Alpha-phase bump behavior**: `nx.json` sets `version.adjustSemverBumpsForZeroMajorVersion: true`, which applies SemVer V2 semantics for 0.x versions. While packages are on 0.x:
+**Alpha version bump behavior**: `nx.json` sets `version.adjustSemverBumpsForZeroMajorVersion: true`, which applies SemVer V2 semantics for 0.x versions. While packages are on 0.x:
 
 - `feat!` / `BREAKING CHANGE:` → minor bump (e.g., `0.4.0` → `0.5.0`), NOT major
 - `feat:` → patch bump (e.g., `0.4.0` → `0.4.1`), NOT minor
@@ -745,23 +732,14 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 
 ### Tests
 
-For the Phase 6 remedy, replace tests asserting rejected behavior and add focused
-maintained unit/contract cases at the owning layer. Cover optional-page ordering,
+Add focused maintained unit/contract cases at the owning layer. Cover optional-page ordering,
 nonpage replay without fallback/route marking, replay-less internal state and explicit
 page intent, aggregate ownership, consent/preview/schema, content failure, event-free same-ID
 Retry without repeated hooks/events/commit, and reset/destroy/supersession.
 Verify React `handoff` prop/exports and complete-operation lifecycle with current route.
-Do not add network calls, MSW, E2E or server-simulation infrastructure. Temporary
-throwaway verification code must not change reference use cases
-or create maintained consumers/apps. Root records validation. Phase 6 corrects
-existing Node/Web/hybrid flows and owner checks, plus the necessary React provider/root
-migration to `handoff?: ExperiencesHandoff` instead of `initialization` and
-`ExperiencesStateInitialization`. Lifecycle consumes the complete operation using the
-current browser route. Other managed React roots/loaders/page bindings remain Phase 7.
-Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
-acceptance review are recorded in the implementation plan. Phases 1–5 remain
-accepted. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied. Adapt source/presentation ports
-to XDA-built events without mandatory direct `beforeInitialPage` emission. Preserve
+Lifecycle consumes the complete operation using the current browser route.
+Managed source/presentation controllers use XDA-built events without mandatory
+direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
 
@@ -791,7 +769,7 @@ unchanged. Rslib's generated `packages/web/.rstack/` directory is disposable.
 - Treat reproducible generated code, assets, build outputs, caches, and installed dependencies as disposable. Preserving unrelated work means preserving authored source and data, not stale generated artifacts.
 - When build, test, typecheck, or module-resolution failures plausibly involve stale generated state, clear the relevant generated directories and regenerate early. Do not repeatedly retry against the same suspect cache, archive disposable outputs for safekeeping, or introduce source/configuration workarounds just to preserve them.
 - This includes `.nx/`, `packages/*/dist`, `out-tsc/`, `*.tsbuildinfo`, example `.next/`, `.svelte-kit/`, `.angular/cache/`, generated bundles, and coverage output. Remove an accidental package-local dependency installation when it interferes with workspace resolution; restore dependencies using the repository's existing package manager and lockfile.
-- Routine scoped cleanup and regeneration within the authorized repository requires no additional user confirmation. Coordinate with active builds or other agents using the same outputs, then clean and rebuild in dependency order. Do not clean the concurrently owned Optimization repository.
+- Routine scoped cleanup and regeneration within the authorized repository requires no additional user confirmation. Coordinate with active builds or other agents using the same outputs, then clean and rebuild in dependency order.
 - Ignored does not by itself mean disposable: preserve `.env` files, credentials, local databases, user-created assets, and other non-reproducible data. Avoid blanket `git clean -fdx`; delete known generated paths explicitly. For tracked generated files, fix the source/generator and regenerate through the maintained workflow.
 - After a clean rebuild, investigate a persisting failure using its actual diagnostics. Do not label a cache as corrupt or claim a product limitation merely because disabling caching changes the result.
 - Keep resolved local cache/build blips out of PR descriptions. Report final validation and only unresolved limitations that materially affect review confidence or reproducibility; keep machine-specific troubleshooting in the local conversation when needed.

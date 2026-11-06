@@ -47,14 +47,14 @@ and remains independent of replay admission or successful event delivery.
 
 ## Setup and lifecycle
 
-From the repository root, once the SDK contracts and artifacts are ready:
+From the repository root:
 
 ```sh
 npx nx run implementation-nextjs-sdk:setup
 npx nx run implementation-nextjs-sdk:dev
 ```
 
-`install` packs Next, Node, Web and React dependency chains plus the existing frozen
+`install` packs Next, Node, Web and React dependency chains plus the existing
 Preview artifact through `package-tools:pack-preview`. It uses the existing
 `scripts/install-implementation.ts` helper. Installation replaces only this app's
 `node_modules`, disables workspaces, install scripts and lockfile generation, and
@@ -66,7 +66,7 @@ Next version's opt-out for automatic SWC lockfile repair. This standalone app
 intentionally has no local lockfile; Next must not search upward and patch the
 repository lockfile. Scoped PM2 launch/restart passes the same flag, with
 `--update-env` on restart. Dependency installation remains the maintained setup
-helper's responsibility; versions and the root lockfile are unchanged.
+helper's responsibility.
 
 The `scope:implementation` project tag includes this app in root
 `npm run implementation:install` and Build CI's reference build/lint/typecheck
@@ -160,7 +160,7 @@ handling. The browser owner and sidebar use the same explicit policy, subject to
 consent and identity requirements. Active preview supplies a lazy implementation loader that imports the
 public Preview package. Node owns policy and snapshot loading through ordinary
 `fetchExperience`. Matching session requests omit ordinary locale/source-map fetch
-options. Session transport uses the frozen helper without a custom fetch wrapper.
+options. Session transport uses the installed helper without a custom fetch wrapper.
 Both content routes are dynamic and use `force-no-store`; ordinary Delivery uses
 `createNextjsPrivateFetch`. There is no preview broker or application preview client.
 
@@ -211,8 +211,7 @@ uses its writable response to persist the final identity. Preview suppresses
 identity writes and deletions. There is no HTML update API or cross-router proxy.
 
 These routes request `Cache-Control: private, no-store` and disable framework
-content caching. Production inspection returned `Cache-Control: private, no-store` while retaining
-Next's framework `Vary` headers.
+content caching while retaining Next's framework `Vary` headers.
 Hybrid plans use the public safe serializer and the actual Node handoff crosses
 the private/no-store framework boundary. The browser preserves that initial batch;
 later comparisons do not change its replay ID, route, locale or contents. Server-only
@@ -335,8 +334,7 @@ shared ContentBody with the bare component registry and content checks. Generate
 CDA declarations derive the source field types; this file expresses the configured
 assembly aliases and Rich Text wrapper, as in the React reference. Components
 retain checks for unknown-valued SDK bindings. Invalid bindings still produce the
-generic renderer failure; removing duplicate identity `resolveData` checks removes
-only their extra resolver diagnostic and corresponding banner. Generated declarations
+generic renderer failure. Generated declarations
 and typecheck do not validate every live content variant. Before rendering Rich Text,
 the maintained `@contentful/rich-text-types` validator checks the document's node
 shapes and parent/child rules for both cards and templates.
@@ -355,12 +353,8 @@ is copied locally from that reference, preserving Optimization stylesheet
 provenance and the MIT license; the local layout retains its Utilities, split presentation and sidebar columns. No adjacent checkout, generator change, source alias, custom server,
 E2E tooling, MSW or temporary consumer is required.
 
-Phase 10 DX validation and Phase 11 optional React Router/TanStack integration are
-complete and accepted. Phase 12 reference completeness/parity review is in progress
-and not accepted. Phase 13 requires Phase 12 acceptance and upstream resolution of
-all tracked XDA issues affecting supported integrations before post-fix verification;
-release remains blocked until Phase 13 is complete and accepted. Broad example code
-migration remains Phase 14.
+Release requires upstream resolution of all tracked XDA issues affecting supported
+integrations and verification of the corrected service behavior.
 
 After setup, run the focused reference regressions from the repository root:
 
@@ -378,5 +372,5 @@ Run scoped build/lint/typecheck after the installed artifacts are refreshed. Ins
 Home and Page Two directly for delivered content, slots, Rich Text, errors and
 repeated attributed containers. Static checks establish artifact/type consumption;
 live content and server behavior require configured services. Production build, direct lint and typecheck validate installed tarball consumption.
-Browser/service inspection and final packed SDK verification belong to the coordinating
-owner. The generated declaration remains byte-for-byte unchanged.
+Browser/service inspection and final packed SDK verification are also required.
+The generated declaration is copied unchanged.
