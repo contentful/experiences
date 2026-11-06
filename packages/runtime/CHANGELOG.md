@@ -1,3 +1,14 @@
+## 0.3.9 (2026-11-06)
+
+### 🩹 Fixes
+
+- **web:** keep repeated query values and align with optimization api-client 2.2.3 [NT-4512] ([#308](https://github.com/contentful/experiences/pull/308))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.15
+- Updated core to 0.13.13
+
 ## 0.3.8 (2026-11-04)
 
 ### 🧱 Updated Dependencies

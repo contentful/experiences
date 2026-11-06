@@ -1,3 +1,10 @@
+## 0.7.15 (2026-11-06)
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.15
+- Updated core to 0.13.13
+
 ## 0.7.14 (2026-11-04)
 
 ### 🧱 Updated Dependencies
