@@ -18,6 +18,18 @@ describe('getPageProperties', () => {
     expect(getPageProperties().query).toEqual({ tag: ['a', 'b', 'c'], sort: 'asc' });
   });
 
+  it('keeps a __proto__ query key as a plain entry', () => {
+    window.history.replaceState({}, '', '/?__proto__=a&__proto__=b&tag=c');
+
+    const { query } = getPageProperties();
+
+    expect(Object.getPrototypeOf(query)).toBe(Object.prototype);
+    expect(Object.entries(query)).toEqual([
+      ['__proto__', ['a', 'b']],
+      ['tag', 'c'],
+    ]);
+  });
+
   it('returns an empty query when the URL has none', () => {
     window.history.replaceState({}, '', '/');
 

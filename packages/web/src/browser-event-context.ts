@@ -7,14 +7,13 @@ type Page = ReturnType<NonNullable<EventBuilderConfig['getPageProperties']>>;
  * `createQueryFromSearchParams` does: a key that appears once maps to its value.
  */
 function getQuery(searchParams: URL['searchParams']): Page['query'] {
-  const query: Page['query'] = {};
-
-  for (const key of new Set(searchParams.keys())) {
-    const values = searchParams.getAll(key);
-    query[key] = values.length === 1 ? (values[0] ?? '') : values;
-  }
-
-  return query;
+  // Object.fromEntries defines own properties, so a `__proto__` key stays a plain entry.
+  return Object.fromEntries(
+    Array.from(new Set(searchParams.keys()), (key) => {
+      const values = searchParams.getAll(key);
+      return [key, values.length === 1 ? (values[0] ?? '') : values];
+    })
+  );
 }
 
 /**
