@@ -6,6 +6,7 @@ import { InsightsApiClient } from '@contentful/optimization-api-client';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { setDocumentVisibility } from './test-fixtures/dom.js';
+import { completeProfile } from './test-fixtures/profile.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -16,7 +17,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    defaults: { profile: { id: 'visitor' } },
+    defaults: { profile: completeProfile('visitor') },
     ...overrides,
   } as ExperiencesWebConfig);
   runtimes.add(runtime);

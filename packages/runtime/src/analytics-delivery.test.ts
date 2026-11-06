@@ -1,6 +1,6 @@
 import type {
   InsightsEvent as AnalyticsEvent,
-  PartialProfile as EventProfile,
+  Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnalyticsDelivery } from './analytics-delivery.js';
@@ -13,7 +13,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const profile: EventProfile = { id: 'profile-1' };
+const completeProfile = (id: string): EventProfile => ({
+  id,
+  stableId: id,
+  random: 0.5,
+  audiences: [],
+  traits: {},
+  location: {},
+  session: {
+    isReturningVisitor: false,
+    landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
+    count: 1,
+    activeSessionLength: 0,
+    averageSessionLength: 0,
+  },
+});
+
+const profile = completeProfile('profile-1');
 const builder = new EventBuilder({
   channel: 'web',
   library: { name: '@contentful/experiences-web', version: 'test' },
@@ -168,13 +184,13 @@ describe('AnalyticsDelivery', () => {
   it('flushes when the queue reaches its size limit, batching per profile', async () => {
     const { delivery, owner, sendBatchEvents } = setup({ maxEvents: 3 });
     await delivery.send(event(1), profile);
-    await delivery.send(event(2), { id: 'profile-2' });
+    await delivery.send(event(2), completeProfile('profile-2'));
     expect(sendBatchEvents).not.toHaveBeenCalled();
     await delivery.send(event(3), profile);
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(sendBatchEvents.mock.calls[0]?.[0]).toEqual([
       { profile, events: [event(1), event(3)] },
-      { profile: { id: 'profile-2' }, events: [event(2)] },
+      { profile: completeProfile('profile-2'), events: [event(2)] },
     ]);
     expect(delivery.queuedEventCount).toBe(0);
     void owner.destroy();
@@ -344,18 +360,18 @@ describe('AnalyticsDelivery', () => {
       let resolve!: (ok: boolean) => void;
       sendBatchEvents.mockReturnValueOnce(new Promise<boolean>((r) => (resolve = r)));
       await delivery.send(event(1), profile);
-      await delivery.send(event(2), { id: 'profile-2' });
+      await delivery.send(event(2), completeProfile('profile-2'));
 
       const flushing = delivery.flush();
       // Appended while the snapshot is on the wire: must survive the success.
       await delivery.send(event(3), profile);
-      await delivery.send(event(4), { id: 'profile-3' });
+      await delivery.send(event(4), completeProfile('profile-3'));
       resolve(true);
       await flushing;
 
       expect(sendBatchEvents.mock.calls[0]?.[0]).toEqual([
         { profile, events: [event(1)] },
-        { profile: { id: 'profile-2' }, events: [event(2)] },
+        { profile: completeProfile('profile-2'), events: [event(2)] },
       ]);
       expect(delivery.queuedEventCount).toBe(2);
       void owner.destroy();

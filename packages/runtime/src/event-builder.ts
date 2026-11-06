@@ -334,6 +334,11 @@ class EventBuilder {
       },
       properties
     );
+    // The Experience API requires a page event title; a caller override may not be a string.
+    const pageViewProperties = {
+      ...merged,
+      title: typeof merged.title === 'string' ? merged.title : '',
+    };
 
     warnIfPageContextConflicts(universal.page, merged);
 
@@ -352,7 +357,7 @@ class EventBuilder {
       ...universalProperties,
       context,
       type: 'page',
-      properties: merged,
+      properties: pageViewProperties,
     };
   }
 

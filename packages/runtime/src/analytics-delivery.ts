@@ -2,7 +2,7 @@ import type { InsightsApiClientRequestOptions } from '@contentful/optimization-a
 import type {
   BatchInsightsEventArray,
   InsightsEvent as AnalyticsEvent,
-  PartialProfile as EventProfile,
+  Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {

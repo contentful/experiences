@@ -6,14 +6,14 @@ import type {
 } from '@contentful/optimization-api-client';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
-  PartialProfile as EventProfileSchema,
   InsightsEvent as InsightsEventSchema,
+  Profile,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
   type InsightsEvent as AnalyticsEvent,
   type OptimizationData as EventOptimizationData,
-  type PartialProfile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
+import * as z from 'zod/mini';
 import {
   type AllowedEventType,
   type BlockedEvent,
@@ -50,9 +50,18 @@ export type ExperienceRequestOptions = Pick<
   'ip' | 'locale' | 'plainText'
 >;
 
-/** Runtime schema for profiles retained by public runtime leaves. */
-export { EventProfileSchema };
-export type { EventOptimizationData, EventProfile };
+/**
+ * Runtime schema for profiles retained by public runtime leaves: a complete Experience API
+ * profile, or only its id when the runtime learned the id without the profile (for example
+ * from a Delivery response). Personalization needs only the id; Insights needs a complete
+ * profile.
+ */
+export const EventProfileSchema = z.union([
+  Profile,
+  z.catchall(z.object({ id: z.string() }), z.json()),
+]);
+export type EventProfile = z.infer<typeof EventProfileSchema>;
+export type { EventOptimizationData };
 
 export type PersonalizationEventMethod = 'identify' | 'page' | 'track';
 export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
@@ -69,7 +78,7 @@ export interface RuntimeEventDispatch {
     event: PersonalizationEvent,
     profile: EventProfile | undefined
   ): Promise<EventEmissionResult>;
-  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
+  analytics(event: AnalyticsEvent, profile: Profile): Promise<void | false>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
@@ -136,7 +145,7 @@ export class EventProfileRequiredError extends Error {
 
   constructor(method: AnalyticsEventMethod) {
     super(
-      `${method}() requires a current event profile. Supply an initial profile or await identify(), page(), or track() first.`
+      `${method}() requires a complete event profile. Supply an initial profile or await identify(), page(), or track() first.`
     );
     this.name = 'EventProfileRequiredError';
     this.method = method;
@@ -275,7 +284,8 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     event: AnalyticsEvent
   ): Promise<EventEmissionResult> {
     if (!this.admit(method, [args])) return { accepted: false };
-    const profile = this.profile;
+    // Insights requires a complete profile, as in Optimization; an id-only profile counts as missing.
+    const profile = completeProfile(this.profile);
     if (profile === undefined) {
       // Stateless requests are bound to a profile, so a missing one is a caller error.
       // Stateful runtimes follow Optimization's queue: warn and drop the event.
@@ -286,6 +296,11 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     const admitted = await this.dispatch.analytics(this.withConsent(event), profile);
     return { accepted: admitted !== false };
   }
+}
+
+function completeProfile(profile: EventProfile | undefined): Profile | undefined {
+  const result = Profile.safeParse(profile);
+  return result.success ? result.data : undefined;
 }
 
 function createDirectEventDispatch(

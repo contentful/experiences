@@ -1,6 +1,27 @@
+import type { EventProfile as Profile } from '@contentful/experiences-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences, type ExperiencesNodeConfig } from './contentful-experiences.js';
 import type { OptimizationEventStreamEvent } from './index.js';
+
+/** A complete Experience API profile, which Insights requires. */
+function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
+  return {
+    id,
+    stableId: id,
+    random: 0.5,
+    audiences: [],
+    traits: {},
+    location: {},
+    session: {
+      isReturningVisitor: false,
+      landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
+      count: 1,
+      activeSessionLength: 0,
+      averageSessionLength: 0,
+    },
+    ...overrides,
+  };
+}
 
 const instances: ContentfulExperiences[] = [];
 const resolver = { config: { components: {} } };
@@ -14,7 +35,7 @@ function setup(policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEven
   instances.push(sdk);
   const upsert = vi
     .spyOn(sdk.api.experience, 'upsertProfile')
-    .mockResolvedValue({ profile: { id: 'response' } } as never);
+    .mockResolvedValue({ profile: completeProfile('response') } as never);
   const analytics = vi.spyOn(sdk.api.insights, 'sendBatchEvents').mockResolvedValue(true);
   return { sdk, upsert, analytics };
 }
@@ -51,7 +72,7 @@ describe('Node event interceptors', () => {
       return event;
     });
     sdk.interceptors.event.add(hook);
-    const request = sdk.forRequest({ consent: true, profile: { id: 'visitor' } });
+    const request = sdk.forRequest({ consent: true, profile: completeProfile('visitor') });
     await request.page();
     await request.trackClick({ entityId: 'entity', entityKind: 'Experience' });
     expect(hook).toHaveBeenCalledTimes(2);

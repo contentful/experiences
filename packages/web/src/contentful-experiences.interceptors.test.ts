@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred } from './test-fixtures/dom.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 const resolveOptions = { config: { components: {} } };
@@ -22,7 +23,7 @@ function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
     spaceId: 'space',
     environmentId: 'environment',
     delivery: { accessToken: 'delivery-token' },
-    defaults: { profile: { id: 'visitor' }, consent: false },
+    defaults: { profile: completeProfile('visitor'), consent: false },
     ...config,
   });
   runtimes.add(runtime);
@@ -206,7 +207,9 @@ describe('Web event interception consent', () => {
   it.each(['reset', 'destroy'] as const)(
     'discards pending direct and XDA hooks after %s',
     async (action) => {
-      const runtime = createRuntime({ defaults: { consent: true, profile: { id: 'visitor' } } });
+      const runtime = createRuntime({
+        defaults: { consent: true, profile: completeProfile('visitor') },
+      });
       const gate = deferred<void>();
       const hook = vi.fn(async (event: OptimizationEventStreamEvent) => {
         await gate.promise;

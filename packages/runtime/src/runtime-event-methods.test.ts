@@ -1,4 +1,5 @@
 import type { InsightsApiClientRequestOptions } from '@contentful/optimization-api-client';
+import type { Profile } from '@contentful/optimization-api-client/api-schemas';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AllowedEventType, BlockedEvent, ConsentState } from './consent.js';
@@ -7,6 +8,7 @@ import type { EventInterceptors } from './event-interceptors.js';
 import {
   createRuntimeEventMethods,
   EventProfileRequiredError,
+  EventProfileSchema,
   type EventOptimizationData,
   type EventProfile,
   type ExperienceRequestOptions,
@@ -22,10 +24,32 @@ const interaction = {
   variantId: 'variant-1',
 };
 
+/** A complete Experience API profile, which Insights requires. */
+function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
+  return {
+    id,
+    stableId: id,
+    random: 0.5,
+    audiences: [],
+    traits: {},
+    location: {},
+    session: {
+      isReturningVisitor: false,
+      landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
+      count: 1,
+      activeSessionLength: 0,
+      averageSessionLength: 0,
+    },
+    ...overrides,
+  };
+}
+
+const visitor = completeProfile('visitor');
+
 function optimizationData(profileId: string): EventOptimizationData {
   return {
     changes: [],
-    profile: { id: profileId },
+    profile: completeProfile(profileId),
     selectedOptimizations: [],
   } as unknown as EventOptimizationData;
 }
@@ -142,7 +166,7 @@ describe('RuntimeEventMethods', () => {
       const f = createFixture({
         consent: { events: false },
         allowedEventTypes: ['component'],
-        profile: { id: 'visitor' },
+        profile: visitor,
         eventInterceptors: { run },
         onEventBlocked,
       });
@@ -164,7 +188,7 @@ describe('RuntimeEventMethods', () => {
         const run = vi.fn<EventInterceptors['run']>().mockResolvedValue({ type: 'track' });
         const onEventBlocked = vi.fn();
         const f = createFixture({
-          profile: { id: 'visitor' },
+          profile: visitor,
           allowedEventTypes: ['page', 'component'],
           eventInterceptors: { run },
           onEventBlocked,
@@ -269,7 +293,7 @@ describe('RuntimeEventMethods', () => {
       }),
       { locale: 'en-US' }
     );
-    expect(methods.profile).toEqual({ id: 'profile-from-api' });
+    expect(methods.profile).toEqual(completeProfile('profile-from-api'));
     expect(onEventBlocked).not.toHaveBeenCalled();
   });
 
@@ -313,7 +337,7 @@ describe('RuntimeEventMethods', () => {
   it('sends each interaction immediately through Analytics and reports admission even when the transport fails', async () => {
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
-      profile: { id: 'profile-1' },
+      profile: completeProfile('profile-1'),
       sendResult: false,
     });
 
@@ -332,7 +356,7 @@ describe('RuntimeEventMethods', () => {
       'component',
     ]);
     for (const [[batch]] of sendBatchEvents.mock.calls) {
-      expect(batch.profile).toEqual({ id: 'profile-1' });
+      expect(batch.profile).toEqual(completeProfile('profile-1'));
       expect(batch.events).toHaveLength(1);
     }
   });
@@ -366,11 +390,74 @@ describe('RuntimeEventMethods', () => {
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 
+  describe('id-only profiles', () => {
+    const idOnly = { id: 'profile-1' };
+
+    it('accepts both a complete profile and an id-only profile as an event profile', () => {
+      expect(EventProfileSchema.safeParse(completeProfile('profile-1')).success).toBe(true);
+      expect(EventProfileSchema.safeParse(idOnly).success).toBe(true);
+      expect(EventProfileSchema.safeParse({}).success).toBe(false);
+    });
+
+    it('keeps the extra fields of an incomplete profile instead of narrowing it to its id', () => {
+      const stored = { id: 'profile-1', traits: { plan: 'pro' }, audiences: ['a'] };
+
+      expect(EventProfileSchema.parse(stored)).toEqual(stored);
+    });
+
+    it('keeps sending Personalization events with an id-only profile', async () => {
+      const { methods, upsertProfile } = createFixture({
+        consent: { events: true },
+        profile: idOnly,
+      });
+
+      await methods.page();
+
+      expect(upsertProfile.mock.calls[0]?.[0].profileId).toBe('profile-1');
+    });
+
+    it('drops a stateful Analytics event with an id-only profile, since Insights needs a complete one', async () => {
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: true },
+        profile: idOnly,
+      });
+
+      await expect(
+        methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
+      ).resolves.toEqual({ accepted: true });
+      await expect(methods.trackClick(interaction)).resolves.toEqual({ accepted: true });
+      await expect(
+        methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 })
+      ).resolves.toEqual({ accepted: true });
+      await expect(methods.trackFlagView({ componentId: 'flag-1' })).resolves.toEqual({
+        accepted: true,
+      });
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stateless Analytics event with an id-only profile', async () => {
+      const { methods, sendBatchEvents } = createFixture({
+        consent: { events: true },
+        profile: idOnly,
+        requireProfile: true,
+      });
+
+      await expect(methods.trackClick(interaction)).rejects.toMatchObject({
+        name: 'EventProfileRequiredError',
+        method: 'trackClick',
+      } satisfies Partial<EventProfileRequiredError>);
+      await expect(
+        methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
+      ).rejects.toBeInstanceOf(EventProfileRequiredError);
+      expect(sendBatchEvents).not.toHaveBeenCalled();
+    });
+  });
+
   it('forwards request-scoped Insights options with a direct Analytics send', async () => {
     const beacon = vi.fn(() => true);
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
-      profile: { id: 'profile-1' },
+      profile: completeProfile('profile-1'),
       insightsOptions: { beacon },
     });
 
@@ -413,7 +500,7 @@ describe('RuntimeEventMethods', () => {
     const { methods, sendBatchEvents, upsertProfile, setProfile } = createFixture({
       consent: { events: true },
       dispatch,
-      profile: { id: 'initial-profile' },
+      profile: completeProfile('initial-profile'),
     });
 
     await methods.page();
@@ -424,13 +511,13 @@ describe('RuntimeEventMethods', () => {
         type: 'page',
         context: expect.objectContaining({ gdpr: { isConsentGiven: true } }),
       }),
-      { id: 'initial-profile' }
+      completeProfile('initial-profile')
     );
     expect(dispatch.analytics).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'exo_node_click' }),
-      { id: 'initial-profile' }
+      completeProfile('initial-profile')
     );
-    expect(methods.profile).toEqual({ id: 'initial-profile' });
+    expect(methods.profile).toEqual(completeProfile('initial-profile'));
     expect(setProfile).not.toHaveBeenCalled();
     expect(upsertProfile).not.toHaveBeenCalled();
     expect(sendBatchEvents).not.toHaveBeenCalled();
@@ -471,7 +558,7 @@ describe('RuntimeEventMethods', () => {
     it('emits everything once event consent is granted', async () => {
       const { methods, upsertProfile, sendBatchEvents } = createFixture({
         consent: { events: true },
-        profile: { id: 'visitor' },
+        profile: visitor,
       });
 
       await methods.track({ event: 'purchase' });
@@ -482,7 +569,7 @@ describe('RuntimeEventMethods', () => {
     });
 
     it('maps interaction methods to their own selectors', async () => {
-      const profile = { id: 'visitor' };
+      const profile = visitor;
       const cases = [
         ['trackView', 'component'],
         ['trackClick', 'component_click'],
@@ -507,7 +594,7 @@ describe('RuntimeEventMethods', () => {
     });
 
     it('admits flag views through the narrower flag selector or through component', async () => {
-      const profile = { id: 'visitor' };
+      const profile = visitor;
       const args = { componentId: 'flag-1' };
 
       for (const allowedEventTypes of [['flag'], ['component']] as const) {

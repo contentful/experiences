@@ -19,6 +19,7 @@ import type { Subscription } from './signals/Observable.js';
 import * as signals from './signals/signals.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred, setDocumentVisibility } from './test-fixtures/dom.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 const subscriptions: Subscription[] = [];
@@ -30,7 +31,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    defaults: { profile: { id: 'visitor' } },
+    defaults: { profile: completeProfile('visitor') },
     ...overrides,
   });
   runtimes.add(runtime);

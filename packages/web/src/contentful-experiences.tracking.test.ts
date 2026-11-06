@@ -14,6 +14,7 @@ import {
 } from './test-fixtures/dom.js';
 import type { TrackingAttribution } from './tracking/attribution.js';
 import { getTrackingAttributes } from './tracking-attributes.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const ATTRIBUTIONS: Record<string, TrackingAttribution> = {
   'node:page': { entityId: 'landing', entityKind: 'Experience' },
@@ -225,9 +226,9 @@ describe('ContentfulExperiences interaction tracking', () => {
   it('drops active measurements on reset and resumes fresh visitor measurements', async () => {
     const io = installIOPolyfill();
     vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-      profile: { id: 'new-visitor' },
+      profile: completeProfile('new-visitor'),
     } as never);
-    const runtime = createRuntime({ defaults: { profile: { id: 'old-visitor' } } });
+    const runtime = createRuntime({ defaults: { profile: completeProfile('old-visitor') } });
     const qualifying = deferred<void>();
     const intercept = vi.fn();
     runtime.interceptors.event.add(async (event) => {
@@ -253,7 +254,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     await advance(0);
     runtime.reset();
     await runtime.page();
-    expect(runtime.states.profile.current).toEqual({ id: 'new-visitor' });
+    expect(runtime.states.profile.current).toEqual(completeProfile('new-visitor'));
     qualifying.resolve();
     await advance(0);
 
@@ -299,7 +300,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     expect(trackClick).toHaveBeenCalledOnce();
   });
 
-  it('attributes tracked clicks to an adopted continuation while delivery is pending', async () => {
+  it('drops tracked clicks under a bare continuation ID until delivery commits a complete profile', async () => {
     vi.useRealTimers();
     const builder = new EventBuilder({
       channel: 'server',
@@ -329,19 +330,28 @@ describe('ContentfulExperiences interaction tracking', () => {
     ).resolves.toEqual({ accepted: true });
     const hero = await render('node:hero', 'button');
 
+    const trackClick = vi.spyOn(runtime, 'trackClick');
+
     runtime.tracking.disable('views');
     click(hero);
-    await vi.waitFor(() => expect(runtime.states.eventStream.current?.type).toBe('exo_node_click'));
-    // The replay is held open on purpose, so start the flush and wait for Analytics.
-    void runtime.flush();
-    await vi.waitFor(() => expect(sendBatchEvents).toHaveBeenCalledOnce());
+    // Insights rejects an id-only profile, so the click under the continuation ID is
+    // admitted but not sent.
+    await vi.waitFor(() => expect(trackClick).toHaveBeenCalledOnce());
+    await expect(trackClick.mock.results[0]!.value).resolves.toEqual({ accepted: true });
+    expect(sendBatchEvents).not.toHaveBeenCalled();
+
+    finishReplay({ profile: completeProfile('committed-profile') });
+    await vi.waitFor(() => expect(runtime.states.profile.current?.id).toBe('committed-profile'));
+    click(hero);
+    await vi.waitFor(() => expect(trackClick).toHaveBeenCalledTimes(2));
+    await runtime.flush();
 
     const [[batch]] = sendBatchEvents.mock.calls as unknown as [
       [[{ profile: { id: string }; events: { type: string }[] }]],
     ];
-    expect(batch[0]!.profile.id).toBe('server-profile');
-    expect(batch[0]!.events[0]!.type).toBe('exo_node_click');
-    finishReplay({ profile: { id: 'committed-profile' } });
+    expect(sendBatchEvents).toHaveBeenCalledOnce();
+    expect(batch[0]!.profile.id).toBe('committed-profile');
+    expect(batch[0]!.events.map((event) => event.type)).toEqual(['exo_node_click']);
     await removeRendered();
   });
 
@@ -349,7 +359,10 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('drops clicks while event consent is denied and sends them once granted', async () => {
       seedConsent({ events: false });
       const onEventBlocked = vi.fn();
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } }, onEventBlocked });
+      const runtime = createRuntime({
+        defaults: { profile: completeProfile('visitor') },
+        onEventBlocked,
+      });
       const send = spyOnTransport(runtime);
       const hero = await render('node:hero', 'button');
 
@@ -382,7 +395,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('admits clicks under a click-only allow-list', async () => {
       seedConsent({ events: false });
       const runtime = createRuntime({
-        defaults: { profile: { id: 'visitor' } },
+        defaults: { profile: completeProfile('visitor') },
         allowedEventTypes: ['component_click'],
       });
       const send = spyOnTransport(runtime);
@@ -400,7 +413,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('does not observe views while event consent is denied, and starts once it is granted', async () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const page = await render('node:page', 'main');
 
@@ -422,7 +435,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('keeps allowlisted views and hovers live across withdrawal, regrant and boundary mutation', async () => {
       const io = installIOPolyfill();
       const runtime = createRuntime({
-        defaults: { profile: { id: 'visitor' } },
+        defaults: { profile: completeProfile('visitor') },
         allowedEventTypes: ['component', 'component_hover'],
       });
       const send = spyOnTransport(runtime);
@@ -477,7 +490,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       async (lifecycle) => {
         const io = installIOPolyfill();
         const runtime = createRuntime({
-          defaults: { profile: { id: 'visitor' } },
+          defaults: { profile: completeProfile('visitor') },
           allowedEventTypes: ['component', 'component_hover'],
         });
         const qualifying = deferred<void>();
@@ -554,7 +567,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('measures a hover from the grant, not from before consent', async () => {
       seedConsent({ events: false });
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const hero = await render('node:hero', 'button');
       runtime.tracking.disable('views');
@@ -577,7 +590,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('starts a fresh view measurement at the grant, not at the earlier intersection', async () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const page = await render('node:page', 'main');
       runtime.tracking.disable('hovers');
@@ -601,7 +614,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('stops a view in progress when consent is withdrawn, and reports nothing afterwards', async () => {
       seedConsent({ events: true });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const page = await render('node:page', 'main');
       runtime.tracking.disable('hovers');
@@ -621,7 +634,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('stops a hover in progress when consent is withdrawn, and reports nothing afterwards', async () => {
       seedConsent({ events: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const hero = await render('node:hero', 'button');
       runtime.tracking.disable('views');
@@ -640,7 +653,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('does not carry a hover across a withdrawal and a regrant', async () => {
       seedConsent({ events: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const hero = await render('node:hero', 'button');
       runtime.tracking.disable('views');
@@ -665,7 +678,7 @@ describe('ContentfulExperiences interaction tracking', () => {
     it('does not carry a view across a withdrawal and a regrant', async () => {
       seedConsent({ events: true });
       const io = installIOPolyfill();
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const page = await render('node:page', 'main');
       runtime.tracking.disable('hovers');
@@ -697,7 +710,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     it('leaves a running interaction alone when only persistence consent changes', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'visitor' } } });
+      const runtime = createRuntime({ defaults: { profile: completeProfile('visitor') } });
       const send = spyOnTransport(runtime);
       const hero = await render('node:hero', 'button');
       runtime.tracking.disable('views');
@@ -721,7 +734,7 @@ describe('ContentfulExperiences interaction tracking', () => {
       seedConsent({ events: false });
       const io = installIOPolyfill();
       const runtime = createRuntime({
-        defaults: { profile: { id: 'visitor' } },
+        defaults: { profile: completeProfile('visitor') },
         allowedEventTypes: ['component_hover'],
       });
       const send = spyOnTransport(runtime);

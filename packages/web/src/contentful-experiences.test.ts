@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 
@@ -28,7 +29,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
 
 function mockOptimization(
   runtime: ContentfulExperiences,
-  profile: EventProfile = { id: 'updated-profile' }
+  profile: EventProfile = completeProfile('updated-profile')
 ) {
   return {
     upsertProfile: vi
@@ -96,7 +97,7 @@ describe('Web ContentfulExperiences', () => {
       userAgent: window.navigator.userAgent,
       page: {
         path: '/first',
-        query: { utm_source: 'search', tag: 'two' },
+        query: { utm_source: 'search', tag: ['one', 'two'] },
         search: '?utm_source=search&tag=one&tag=two',
         hash: '#details',
         title: 'First page',
@@ -274,11 +275,10 @@ describe('Web ContentfulExperiences', () => {
   });
 
   it('restores the persisted profile and passes its id to fetchExperience', async () => {
-    const storedProfile = {
-      id: 'stored-profile',
+    const storedProfile = completeProfile('stored-profile', {
       audiences: ['developers'],
       traits: { plan: 'pro' },
-    };
+    });
     window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(storedProfile));
     const runtime = createRuntime();
     const fetch = vi
@@ -454,7 +454,7 @@ describe('Web ContentfulExperiences', () => {
       runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
     ).resolves.toEqual({ accepted: true });
 
-    respond({ profile: { id: 'issued-profile' } });
+    respond({ profile: completeProfile('issued-profile') });
     await pending;
     await runtime.flush();
     expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
@@ -463,7 +463,7 @@ describe('Web ContentfulExperiences', () => {
     await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
     await runtime.flush();
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
-      expect.objectContaining({ profile: { id: 'issued-profile' } }),
+      expect.objectContaining({ profile: completeProfile('issued-profile') }),
     ]);
   });
 
@@ -485,7 +485,7 @@ describe('Web ContentfulExperiences', () => {
     await runtime.flush();
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
-      expect.objectContaining({ profile: { id: 'updated-profile' } }),
+      expect.objectContaining({ profile: completeProfile('updated-profile') }),
     ]);
   });
 
@@ -507,7 +507,7 @@ describe('Web ContentfulExperiences', () => {
     resolveResponse({ profile: { id: 'first-profile-from-api' } });
 
     await pending;
-    expect(runtime.states.profile.current).toEqual({ id: 'updated-profile' });
+    expect(runtime.states.profile.current).toEqual(completeProfile('updated-profile'));
   });
 
   it('uses the SDK locale for ordinary Personalization independently of event overrides', async () => {
@@ -534,7 +534,7 @@ describe('Web ContentfulExperiences', () => {
   it('uses the latest redacted browser context and locale, with consent from the runtime', async () => {
     const runtime = createRuntime({
       locale: 'en-US',
-      defaults: { profile: { id: 'visitor' } },
+      defaults: { profile: completeProfile('visitor') },
       browserContext: {
         getPageProperties: () => ({
           path: window.location.pathname,
@@ -548,7 +548,7 @@ describe('Web ContentfulExperiences', () => {
       },
     });
     runtime.consent({ events: false, persistence: false });
-    const optimization = mockOptimization(runtime, { id: 'visitor' });
+    const optimization = mockOptimization(runtime, completeProfile('visitor'));
 
     window.history.replaceState({}, '', '/latest?secret=omit');
     document.title = 'Latest page';
@@ -568,7 +568,7 @@ describe('Web ContentfulExperiences', () => {
 
     expect(optimization.sendBatchEvents).toHaveBeenCalledWith([
       {
-        profile: { id: 'visitor' },
+        profile: completeProfile('visitor'),
         events: [
           expect.objectContaining({
             context: expect.objectContaining({
