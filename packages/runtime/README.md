@@ -42,6 +42,28 @@ Direct Experience and ExperienceFragment interaction builders use `default` when
 
 See the [Node](../node/README.md), [Web](../web/README.md), and [root paired replay guide](../../README.md#paired-server-to-browser-replay) for the current public operations and handoff handling.
 
+## Custom flags
+
+`resolveFlagChange(name, changes?: readonly unknown[])` returns the last valid
+matching Optimization `Variable` record, retaining its attribution metadata and
+normalizing its `value` to `Json`. Invalid records are ignored; missing flags
+return `undefined`. Resolved values include JSON scalars (including falsy values),
+objects, arrays, and `null`. Optimization's `{ value: object | array | null }` wrapper
+is unwrapped. Runtime exports the helper and `Json`, `ChangeArray`, and
+`VariableChange`; the framework adapters re-export them. Node and Web re-export
+the helper and the types.
+
+The current structured `value`-property heuristic also unwraps authored JSON with
+that shape, dropping sibling fields. The API schema cannot distinguish a legacy
+wrapper from authored JSON; an authoritative wire contract is needed before
+narrowing this behavior.
+
+The base `getFlag(name, changes?)` returns only the resolved value and is pure:
+it retains no changes and emits no exposure. Web adds browser-owned state and
+exposure through the [existing flag-view method](../web/README.md#custom-flags).
+Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentation
+`ExperiencesRuntime` contract.
+
 ## Shared event interceptors
 
 Runtime owns `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
@@ -68,25 +90,29 @@ local correction of the Optimization reference's original-type-only gate at `70d
 
 Runtime also exports `ExperiencesHandoff`, `createExperiencesHandoff`, `parseExperiencesHandoff`, `buildPreparedEvents`, `validatePreparedEvents`, cache-safety diagnostics, and `createRequestHandoffFromData`. Node uses these primitives for `prepareRequestHandoff()`, and Web validates the resulting handoff before state hydration or event admission.
 
-The new handoff carries its Contentful space and environment, cache scope, optional evaluated profile, optional continuation ID, and optional prepared Personalization replay. `buildPreparedEvents` captures event IDs, timestamps, request context, locale, and current event-consent metadata once without sending; browser consent remains the permission gate. A prepared replay has identify/track events followed by exactly one final page, with SDK limits of 100 total events and 50 identify events. These are handoff limits, not asserted limits of the single-profile API endpoint. Server preparation reuses the validated batch when constructing the handoff and adding continuation identity. The exported create/parse operations validate each event batch once. The exported strict parser validates untrusted data, optional receiving-runtime scope, cache safety, and replay order. Browser `hydrateAndTrackCurrentPage` consumption validates the envelope first and defers prepared event validation to admission so rejection can fall back to ordinary current-page tracking. Parsing does not send events or alter SDK state.
+The new handoff carries its Contentful space and environment, cache scope, optional evaluated profile and changes, optional continuation ID, and optional prepared Personalization replay. `buildPreparedEvents` captures event IDs, timestamps, request context, locale, and current event-consent metadata once without sending; browser consent remains the permission gate. A prepared replay has identify/track events followed by exactly one final page, with SDK limits of 100 total events and 50 identify events. These are handoff limits, not asserted limits of the single-profile API endpoint. Server preparation reuses the validated batch when constructing the handoff and adding continuation identity. The exported create/parse operations validate each event batch once. The exported strict parser validates untrusted data, optional receiving-runtime scope, cache safety, and replay order. Browser `hydrateAndTrackCurrentPage` consumption validates the envelope first and defers prepared event validation to admission so rejection can fall back to ordinary current-page tracking. Parsing does not send events or alter SDK state.
 
 Web's shared state-application helper also serves the public
-`@contentful/experiences-web/bridge-support` entry. It applies profile state
+`@contentful/experiences-web/bridge-support` entry. It applies profile and changes state
 through Web's state interceptors and atomically marks the request state successful,
 including for profileless hydration; a profileless handoff leaves current profile
 continuity unchanged. This helper does not run as part of an XDA content fetch.
 
-Cache warnings are advisory; `assertExperiencesCacheSafety` and the create/parse operations reject a public or static handoff containing a profile, continuation ID, or replay. `public-permutation` requires a nonempty application-owned key covering Experience identity and content revision, environment, locale, and every dimension that changes rendered output. A profileless `static` handoff needs no key. Runtime does not set response headers or prove that application-rendered content is safe to cache.
+Cache warnings are advisory; `assertExperiencesCacheSafety` and the create/parse operations reject a public or static handoff containing a profile, changes, continuation ID, or replay. `public-permutation` requires a nonempty application-owned key covering Experience identity and content revision, environment, locale, and every dimension that changes rendered output. A `static` handoff without profile or changes needs no key. Runtime does not set response headers or prove that application-rendered content is safe to cache.
+
+Handoff `state.changes` is optional and validated with the Optimization API's
+`ChangeArray` schema. Any supplied changes, including `[]` without a profile,
+require private-request cache scope.
 
 Runtime's internal `createRequestHandoffFromData({ handoff, data? })` adds the
-evaluated API profile to an existing private handoff and can preserve its replay.
-Its existing shape and behavior remain unchanged. The distinct public Node free
+evaluated API profile and supplied changes to an existing private handoff and can
+preserve its replay. The distinct public Node free
 function `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
 constructs a state-only, private-request envelope through Runtime validation;
 it emits no replay or top-level continuation ID. It accepts an ID-only profile,
-omits `state` when no profile is supplied, and performs no events or network work.
-Profileless hydration preserves existing browser state. Neither helper commits a
-preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
+omits `state` when neither profile nor changes is supplied, and performs no events or network work.
+Profileless hydration preserves the browser profile; supplied changes replace flag state.
+Neither helper commits a preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 
 The generated XDA request currently has no preflight option. Ordinary by-ID
 Experience fetches still pass profile IDs and events through Client's Delivery

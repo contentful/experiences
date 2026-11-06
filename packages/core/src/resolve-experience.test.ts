@@ -873,6 +873,42 @@ describe('resolveExperience — render context carried on the plan', () => {
 
     expect('personalization' in plan).toBe(false);
   });
+
+  it('preserves mixed XDA changes beside a valid profile id', async () => {
+    const changes = [
+      {
+        type: 'Variable',
+        key: 'custom-flag',
+        value: { enabled: false, options: [1, 'two', null] },
+        meta: { experienceId: 'flag-experience', variantIndex: 2, extra: 'retained' },
+      },
+      { type: 'Other', key: 'opaque-change', value: { future: true } },
+      { type: 'Variable', key: 'custom-flag', value: true },
+      null,
+    ];
+    const experience: ExperiencePayload = {
+      nodes: [],
+      extensions: { personalization: { profile: { id: 'profile-id' }, changes } },
+    };
+
+    const plan = await resolveExperience(experience, emptyConfig);
+
+    expect(plan.personalization).toEqual({ profileId: 'profile-id', changes });
+    expect(plan.personalization?.changes).toBe(changes);
+    expect(JSON.parse(JSON.stringify(plan)).personalization).toEqual(plan.personalization);
+  });
+
+  it('preserves an explicit empty changes array beside a valid profile id', async () => {
+    const changes: unknown[] = [];
+    const plan = await resolveExperience(
+      { nodes: [], extensions: { personalization: { profile: { id: 'profile-id' }, changes } } },
+      emptyConfig
+    );
+
+    expect(plan.personalization).toEqual({ profileId: 'profile-id', changes: [] });
+    expect(plan.personalization?.changes).toBe(changes);
+    expect(JSON.parse(JSON.stringify(plan)).personalization).toEqual(plan.personalization);
+  });
 });
 
 describe('resolveExperience — delivery diagnostics', () => {

@@ -28,8 +28,15 @@ export type {
   ExperienceParameterOrder,
   PersonalizationOptions,
 } from '@contentful/experiences-client';
-export { ANONYMOUS_ID_COOKIE, EventProfileRequiredError } from '@contentful/experiences-runtime';
+export {
+  ANONYMOUS_ID_COOKIE,
+  EventProfileRequiredError,
+  resolveFlagChange,
+  ChangeArray,
+  VariableChange,
+} from '@contentful/experiences-runtime';
 export type {
+  Json,
   AllowedEventType,
   BlockedEvent,
   BlockedEventReason,

@@ -17,6 +17,14 @@ const builder = new EventBuilder({
   library: { name: '@contentful/experiences-node', version: 'test' },
 });
 const scope = { spaceId: 'space', environmentId: 'master' };
+const changes = [
+  {
+    type: 'Variable' as const,
+    key: 'flag',
+    value: false,
+    meta: { experienceId: 'experiment', variantIndex: 1 },
+  },
+];
 
 function privateHandoff(): ExperiencesHandoff {
   return {
@@ -225,7 +233,7 @@ describe('Experiences handoff', () => {
     } as unknown as EventOptimizationData;
     const packaged = createRequestHandoffFromData({ handoff, data });
 
-    expect(packaged.state).toEqual({ profile: { id: 'evaluated-profile' } });
+    expect(packaged.state).toEqual({ profile: { id: 'evaluated-profile' }, changes: [] });
     expect(packaged.profileId).toBe('profile-1');
     expect(packaged.replay?.events.map((event) => event.messageId)).toEqual(
       handoff.replay?.events.map((event) => event.messageId)
@@ -243,5 +251,80 @@ describe('Experiences handoff', () => {
     });
 
     expect(Object.prototype.hasOwnProperty.call(handoff.state, 'profile')).toBe(true);
+  });
+
+  it.each([{ changes }, { changes: [] }])(
+    'round-trips flag-only state through JSON (%j)',
+    ({ changes }) => {
+      const input: ExperiencesHandoff = {
+        ...scope,
+        cache: { scope: 'private-request' },
+        state: { changes },
+      };
+      const created = createExperiencesHandoff(input);
+      expect(parseExperiencesHandoff(JSON.parse(JSON.stringify(created)), scope)).toEqual(input);
+      expect(created.replay).toBeUndefined();
+      expect(created.profileId).toBeUndefined();
+      expect(() => parseExperiencesHandoff(created, { ...scope, spaceId: 'other' })).toThrow(
+        'does not match'
+      );
+    }
+  );
+
+  it.each(['static', 'public-permutation'] as const)(
+    'rejects flag-only state in %s caches, including an empty change list',
+    (cacheScope) => {
+      for (const list of [changes, []]) {
+        const input: ExperiencesHandoff = {
+          ...scope,
+          cache: { scope: cacheScope, key: 'public' },
+          state: { changes: list },
+        };
+        expect(getExperiencesCacheSafetyWarnings(input)[0]?.path).toEqual(['state', 'changes']);
+        expect(() => createExperiencesHandoff(input)).toThrow('changes');
+        expect(() => parseExperiencesHandoffEnvelope(input, scope)).toThrow('changes');
+      }
+    }
+  );
+
+  it.each(
+    [null, {}, [{ ...changes[0], value: undefined }], [{ ...changes[0], meta: {} }]].map(
+      (changes) => ({ changes })
+    )
+  )('rejects malformed change state in both consumer parsers (%j)', ({ changes }) => {
+    const input = { ...scope, cache: { scope: 'private-request' }, state: { changes } };
+    expect(() => parseExperiencesHandoff(input, scope)).toThrow();
+    expect(() => parseExperiencesHandoffEnvelope(input, scope)).toThrow();
+    expect(() => createExperiencesHandoff(input as ExperiencesHandoff)).toThrow();
+  });
+
+  it('preserves omitted and explicit undefined changes separately in memory', () => {
+    const base: ExperiencesHandoff = { ...scope, cache: { scope: 'private-request' } };
+    expect(createExperiencesHandoff(base)).not.toHaveProperty('state');
+    expect(createExperiencesHandoff({ ...base, state: {} }).state).not.toHaveProperty('changes');
+    expect(
+      createExperiencesHandoff({ ...base, state: { changes: undefined } }).state
+    ).toHaveProperty('changes', undefined);
+  });
+
+  it('packages sparse evaluated changes while preserving prepared replay', () => {
+    const handoff = { ...privateHandoff(), state: { changes } };
+    expect(createRequestHandoffFromData({ handoff }).state).toEqual({ changes });
+    for (const data of [
+      { profile: undefined },
+      { profile: undefined, changes: [] },
+      { profile: undefined, changes: undefined },
+    ]) {
+      const packaged = createRequestHandoffFromData({
+        handoff,
+        data: data as unknown as EventOptimizationData,
+      });
+      expect(packaged.state).toEqual({
+        profile: undefined,
+        changes: Object.prototype.hasOwnProperty.call(data, 'changes') ? data.changes : changes,
+      });
+      expect(packaged.replay).toEqual(handoff.replay);
+      expect(packaged.profileId).toEqual(handoff.profileId);
+    }
   });
 });

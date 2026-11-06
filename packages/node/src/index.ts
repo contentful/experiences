@@ -33,8 +33,12 @@ export {
   ANONYMOUS_ID_COOKIE,
   EventProfileRequiredError,
   InterceptorManager,
+  resolveFlagChange,
 } from '@contentful/experiences-runtime';
 export type {
+  ChangeArray,
+  Json,
+  VariableChange,
   Interceptor,
   InterceptorMerge,
   MaybePromise,

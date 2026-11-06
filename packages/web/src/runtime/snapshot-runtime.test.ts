@@ -17,6 +17,7 @@ describe('SnapshotRuntime', () => {
     expect(
       Object.fromEntries(Object.entries(runtime.states).map(([key, state]) => [key, state.current]))
     ).toEqual({
+      flag: undefined,
       profile: { id: 'server-visitor' },
       locale: 'de-DE',
       consent: false,

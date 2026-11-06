@@ -1,14 +1,15 @@
 import {
   createExperiencesHandoff,
+  type ChangeArray,
   type EventProfile,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
 
-/** Package completed request profile data without emitting events or making requests. */
+/** Package completed request data without emitting events or making requests. */
 export function createRequestHandoffFromData(input: {
   readonly spaceId: string;
   readonly environmentId: string;
-  readonly data?: { readonly profile?: EventProfile };
+  readonly data?: { readonly profile?: EventProfile; readonly changes?: ChangeArray };
   readonly cache?: Extract<ExperiencesHandoff['cache'], { scope: 'private-request' }>;
 }): ExperiencesHandoff {
   const cache = input.cache ?? { scope: 'private-request' };
@@ -19,6 +20,13 @@ export function createRequestHandoffFromData(input: {
     spaceId: input.spaceId,
     environmentId: input.environmentId,
     cache,
-    ...(input.data?.profile === undefined ? {} : { state: { profile: input.data.profile } }),
+    ...(input.data?.profile === undefined && input.data?.changes === undefined
+      ? {}
+      : {
+          state: {
+            ...(input.data.profile === undefined ? {} : { profile: input.data.profile }),
+            ...(input.data.changes === undefined ? {} : { changes: input.data.changes }),
+          },
+        }),
   });
 }

@@ -1,4 +1,4 @@
-import type { EventProfile } from '@contentful/experiences-runtime';
+import type { ChangeArray, EventProfile } from '@contentful/experiences-runtime';
 
 /**
  * Stateful defaults accepted by the Web SDK runtime.
@@ -12,6 +12,8 @@ export interface StatefulDefaults {
   persistenceConsent?: boolean;
   /** Default active profile used for personalization and analytics. */
   profile?: EventProfile;
+  /** Default Custom Flag changes. */
+  changes?: ChangeArray;
 }
 
 export type PersistedDefaultLoader<T> = () => T | undefined;
@@ -29,6 +31,7 @@ export interface PersistedStatefulDefaults {
   persistenceConsent?: boolean;
   /** Persisted active profile, read only when persistence consent permits it. */
   profile?: PersistedDefaultValue<EventProfile>;
+  changes?: PersistedDefaultValue<ChangeArray>;
 }
 
 /**
@@ -79,6 +82,11 @@ export function resolveStatefulDefaults(
     defaults: {
       consent,
       persistenceConsent,
+      changes: resolveContinuityDefault(
+        defaults.changes,
+        persisted.changes,
+        canLoadPersistedContinuity
+      ),
       profile: resolveContinuityDefault(
         defaults.profile,
         persisted.profile,

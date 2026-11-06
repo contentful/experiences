@@ -116,17 +116,24 @@ export type { TrackingAttributes } from '@contentful/experiences-sdk-core';
 export type { ResolverConfig, ResolveExperienceOptions } from '@contentful/experiences-sdk-core';
 
 // ─── Event builder (re-exported from runtime) ─────────────────────────────
-export { DEFAULT_PAGE_PROPERTIES, EventBuilder } from '@contentful/experiences-runtime';
+export {
+  DEFAULT_PAGE_PROPERTIES,
+  EventBuilder,
+  resolveFlagChange,
+} from '@contentful/experiences-runtime';
 export type {
+  ChangeArray,
   ClickBuilderArgs,
   EventBuilderConfig,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   InteractionBuilderArgsBase,
+  Json,
   PageViewBuilderArgs,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
+  VariableChange,
   ViewBuilderArgs,
 } from '@contentful/experiences-runtime';
 

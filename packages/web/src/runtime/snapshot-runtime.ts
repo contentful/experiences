@@ -1,5 +1,8 @@
 import {
   DEFAULT_ALLOWED_EVENT_TYPES,
+  resolveFlagChange,
+  type ChangeArray,
+  type Json,
   hasEventConsent,
   type AllowedEventType,
   type EventEmissionResult,
@@ -16,7 +19,7 @@ import type { ExperiencesRuntime } from '../runtime.js';
  */
 export interface ExperiencesSnapshot {
   /** Profile state used by a server-side, static, or edge render. */
-  readonly data?: { readonly profile?: EventProfile };
+  readonly data?: { readonly profile?: EventProfile; readonly changes?: ChangeArray };
   /** Tracking consent for the current request or render. */
   readonly consent?: boolean;
   /** Persistence consent for the current request or render. */
@@ -49,6 +52,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
     this.allowedEventTypes = snapshot.allowedEventTypes ?? DEFAULT_ALLOWED_EVENT_TYPES;
 
     this.states = {
+      flag: (name) => staticObservable(this.getFlag(name)),
       blockedEventStream: staticObservable(undefined),
       consent: staticObservable(snapshot.consent),
       persistenceConsent: staticObservable(snapshot.persistenceConsent ?? snapshot.consent),
@@ -57,6 +61,13 @@ class SnapshotRuntime implements ExperiencesRuntime {
       experienceRequestState: staticObservable({ status: 'success' }),
       profile: staticObservable(snapshot.data?.profile),
     };
+  }
+
+  getFlag(
+    name: string,
+    changes: readonly unknown[] | undefined = this.snapshot.data?.changes
+  ): Json | undefined {
+    return resolveFlagChange(name, changes)?.value;
   }
 
   get locale(): string | undefined {

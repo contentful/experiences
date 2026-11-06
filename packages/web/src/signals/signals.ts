@@ -1,5 +1,6 @@
 import type {
   BlockedEvent,
+  ChangeArray,
   EventProfile,
   ExperienceRequestState,
   OptimizationEventStreamEvent,
@@ -51,11 +52,10 @@ export const locale: Signal<string | undefined> = signal<string | undefined>();
  */
 export const online = signal<boolean | undefined>(true);
 
-/**
- * Active profile associated with current runtime state.
- *
- * @public
- */
+/** SDK-owned Custom Flag changes associated with the active visitor. @internal */
+export const changes = signal<ChangeArray | undefined>();
+
+/** Active profile associated with current runtime state. @public */
 export const profile: Signal<EventProfile | undefined> = signal<EventProfile | undefined>();
 
 /**
