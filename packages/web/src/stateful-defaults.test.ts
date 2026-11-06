@@ -6,7 +6,12 @@ describe('resolveStatefulDefaults', () => {
     const persisted = { consent: true, persistenceConsent: true };
     expect(resolveStatefulDefaults(undefined, persisted).defaults).toMatchObject(persisted);
     expect(resolveStatefulDefaults({ consent: false }, persisted)).toEqual({
-      defaults: { consent: false, persistenceConsent: false, profile: undefined },
+      defaults: {
+        consent: false,
+        persistenceConsent: false,
+        profile: undefined,
+        changes: undefined,
+      },
       canLoadPersistedContinuity: false,
     });
     expect(
@@ -34,4 +39,21 @@ describe('resolveStatefulDefaults', () => {
     ).toBe(profile);
     expect(loadProfile).toHaveBeenCalledOnce();
   });
+});
+
+it('loads changes lazily only with persistence consent and no configured changes', () => {
+  const loadChanges = vi.fn(() => []);
+  expect(
+    resolveStatefulDefaults(undefined, { changes: loadChanges }).defaults.changes
+  ).toBeUndefined();
+  expect(
+    resolveStatefulDefaults({ changes: [], persistenceConsent: true }, { changes: loadChanges })
+      .defaults.changes
+  ).toEqual([]);
+  expect(loadChanges).not.toHaveBeenCalled();
+  expect(
+    resolveStatefulDefaults(undefined, { persistenceConsent: true, changes: loadChanges }).defaults
+      .changes
+  ).toEqual([]);
+  expect(loadChanges).toHaveBeenCalledOnce();
 });

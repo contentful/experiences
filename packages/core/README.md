@@ -33,6 +33,15 @@ Upstream strings may contain private information. Prefer a generic visitor
 warning/count, inspect fields explicitly for diagnosis, and exclude them from
 public bootstrap/handoff payloads and logs. The whitelist is not a privacy filter.
 
+## Personalization changes
+
+`plan.personalization` is optional and emitted only when a nonempty profile id
+is returned. When present, it contains required `profileId: string` and optional
+raw XDA `changes: unknown[]`, including an explicit empty array. Core neither validates
+flag records nor selects values or emits exposures. Use the adapter-exported
+`resolveFlagChange(name, plan.personalization?.changes)` or an explicit SDK
+`getFlag` read; see the [custom flag guide](../../README.md#custom-flags).
+
 ## Why a separate package?
 
 Future Angular, Svelte, Vue, SwiftUI, and Compose adapters consume the same plan. Sharing core means each adapter has zero plan-building or prop-classification logic to duplicate — the seam is the `PortableRenderPlan` contract.

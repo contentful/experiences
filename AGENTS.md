@@ -219,6 +219,7 @@ Web state and subscription mechanics follow Optimization at pinned commit
 persistence, consent, and connectivity effects. Its readonly `states: CoreStates`
 exposes `profile`, `locale`, `consent`, `persistenceConsent`,
 `experienceRequestState`, `eventStream`, and `blockedEventStream` as observables.
+`states.flag(name)` adds key-scoped flag observables through the same utilities.
 `current` and subscription snapshots are cloned except for immutable
 `eventStream` references. Subscriptions are caller-owned; `subscribe` emits the
 current value immediately, and `subscribeOnce` stops at the first non-nullish
@@ -226,8 +227,8 @@ value, including `false`. Ordinary event attempts stream after validation and
 consent, before transport or queue admission (including later capacity refusal),
 never on retries or transport completion. Prepared admission emits each accepted
 event once and batch refusal emits none. Blocked publication follows `onEventBlocked`. Reset clears
-profile, request outcome, and event streams while retaining consent and locale.
-Web startup values use `defaults: CoreConfigDefaults` (`profile`, `consent`, and
+profile, changes, request outcome, and event streams while retaining consent and locale.
+Web startup values use `defaults: CoreConfigDefaults` (`profile`, `changes`, `consent`, and
 `persistenceConsent`). Constructor locale and `setLocale()` use the copied
 Optimization `normalizeExplicitLocale`/`normalizeLocale` rules; both helpers are
 exported by Web. Capture the incoming identity cookie before installing effects.
@@ -242,16 +243,16 @@ Web also ports the pinned reference's `InterceptorManager` mechanics through
 `interceptors.event` and `interceptors.state`. Events are intercepted before
 wire-event revalidation, publication, and transport or queue admission, including caller-built
 XDA fetch events; prepared server replay preserves evaluated event contents and
-is not rewritten. Incoming Personalization, XDA, and private handoff profile state
-is intercepted before commit. Sparse state results retain an omitted profile;
-an explicit `profile: undefined` clears it. Only profile state is supported here
-because XDA owns personalization resolution.
+is not rewritten. Incoming Personalization and private hydration profile/changes state
+is intercepted before commit; XDA contributes profile state only. Sparse state results
+retain omitted fields; explicit `profile: undefined` or `changes: undefined` clears
+that field. XDA owns content selection.
 
 The Web entry also exports `./bridge-support`, with
-`hydrateOptimizationData(sdk, { profile })`, `CoreBridgeCapabilities`,
+`hydrateOptimizationData(sdk, { profile, changes })`, `CoreBridgeCapabilities`,
 `CoreBridgeHost`, and the bridge symbol.
 This follows the reference bridge shape for compatible SDK integrations and
-supports profile state only; it does not expose Optimization's Preview Panel
+supports profile and changes state; it does not expose Optimization's Preview Panel
 bridge. Shared state application publishes `experienceRequestState: success`
 atomically with hydration, including profileless hydration. A profileless shared
 handoff reports successful hydration while leaving the browser's existing profile
@@ -264,9 +265,22 @@ anonymous identity only with persistence consent. `resolveStatefulDefaults` and
 its exported types preserve configured-default precedence and lazy persisted
 profile loading. `createSnapshotRuntime`, `ExperiencesRuntime`,
 `ExperiencesSnapshot`, and `SnapshotRuntime` are exported from the Web root and
-`./runtime` entry. Snapshot runtimes expose the same seven static observables and
+`./runtime` entry. Snapshot runtimes expose static observables, including `flag(name)`, pure `getFlag`, and
 inert event/command methods, with no fetch or resolve API. See the
 [Web SSR reference](./packages/web/README.md#ssr-import-safety).
+
+Custom flag API behavior uses focused Optimization reference
+`c402da2a2ada5cfafebc7f6dd076832c5d1718a5`, whose stateful lifecycle uses runtime
+tokens; this does not repin the broader mechanics above. Runtime owns pure
+`resolveFlagChange` and base/Node `getFlag(name, changes?)`; only Web retains
+changes and automatically attempts exposure. Core emits `plan.personalization`
+only when XDA returns a nonempty profile id; it carries required `profileId` and
+optional raw XDA changes. XDA fetches must not replace global
+flag state: their completeness has not been verified against a live backend.
+Applications read plan changes explicitly or resolve them into existing metadata;
+keep flag state out of renderer context and framework hooks. Handoff changes use
+API `ChangeArray` validation and require private-request scope, including `[]`.
+See the [Web flag contract](./packages/web/README.md#custom-flags).
 
 A difference is justified only when the content sources and their properties require it, or when server-side personalization here replaces client-side variant resolution there. A retained difference names that requirement. Existing code and new documentation are not a justification.
 

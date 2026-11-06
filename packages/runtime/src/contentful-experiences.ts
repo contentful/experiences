@@ -18,6 +18,8 @@ import type {
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
 import type { ApiClient } from '@contentful/optimization-api-client';
+import type { Json } from '@contentful/optimization-api-client/api-schemas';
+import { resolveFlagChange } from './resolve-flag-change.js';
 import {
   createRuntimeDeliveryClient,
   type RuntimeDeliveryClientOptions,
@@ -87,6 +89,7 @@ export interface ExperienceRuntime {
   readonly environmentId: string;
   readonly locale: string | undefined;
   readonly eventBuilder: EventBuilder;
+  getFlag(name: string, changes?: readonly unknown[]): Json | undefined;
   destroy(): void;
   resolveExperience(
     payload: ExperiencePayload,
@@ -174,6 +177,11 @@ export class ContentfulExperiences<
 
   get locale(): string | undefined {
     return this.#locale;
+  }
+
+  /** Pure lookup in caller-owned changes; no state is retained or exposure emitted. */
+  getFlag(name: string, changes?: readonly unknown[]): Json | undefined {
+    return resolveFlagChange(name, changes)?.value;
   }
 
   protected createEventMethods(

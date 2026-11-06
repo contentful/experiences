@@ -1,4 +1,5 @@
 import {
+  ChangeArray,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent,
 } from '@contentful/optimization-api-client/api-schemas';
@@ -23,8 +24,7 @@ export interface ExperiencesHandoff {
   readonly spaceId: string;
   readonly environmentId: string;
   readonly cache: ExperiencesCacheMetadata;
-  /** Only a profile is consumed by the current Web runtime; no selected-content state is copied. */
-  readonly state?: { readonly profile?: EventProfile };
+  readonly state?: { readonly profile?: EventProfile; readonly changes?: ChangeArray };
   /** Continuation identity, not proof that prepared events were committed. */
   readonly profileId?: string;
   readonly replay?: {
@@ -64,7 +64,9 @@ const ExperiencesHandoffEnvelopeSchema = z.object({
   spaceId: z.string(),
   environmentId: z.string(),
   cache: CacheSchema,
-  state: z.optional(z.object({ profile: z.optional(EventProfileSchema) })),
+  state: z.optional(
+    z.object({ profile: z.optional(EventProfileSchema), changes: z.optional(ChangeArray) })
+  ),
   profileId: z.optional(z.string()),
   replay: z.optional(ReplayEnvelopeSchema),
 });
@@ -77,6 +79,7 @@ type HandoffEnvelope = Omit<ExperiencesHandoff, 'replay'> & {
 
 function getPrivateHandoffPath(handoff: HandoffEnvelope): readonly string[] | undefined {
   if (handoff.state?.profile !== undefined) return ['state', 'profile'];
+  if (handoff.state?.changes !== undefined) return ['state', 'changes'];
   if (handoff.profileId !== undefined) return ['profileId'];
   if (handoff.replay !== undefined) return ['replay'];
   return undefined;
@@ -92,7 +95,7 @@ export function getExperiencesCacheSafetyWarnings(
     warnings.push({
       code: 'profile-state-in-public-cache',
       message:
-        'Profile state, identity and replay must not be included in public or static Experiences caches.',
+        'Profile state, changes, identity and replay must not be included in public or static Experiences caches.',
       path: privatePath,
     });
   }
@@ -173,6 +176,14 @@ export function createRequestHandoffFromData(input: {
     ...input.handoff,
     ...(input.data === undefined
       ? {}
-      : { state: { ...input.handoff.state, profile: input.data.profile } }),
+      : {
+          state: {
+            ...input.handoff.state,
+            profile: input.data.profile,
+            ...(Object.prototype.hasOwnProperty.call(input.data, 'changes')
+              ? { changes: input.data.changes }
+              : {}),
+          },
+        }),
   });
 }

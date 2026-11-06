@@ -1,5 +1,6 @@
 import type {
   BlockedEvent,
+  ChangeArray,
   EventProfile,
   ExperienceRequestState,
   OptimizationEventStreamEvent,
@@ -51,11 +52,10 @@ export const locale: Signal<string | undefined> = signal<string | undefined>();
  */
 export const online = signal<boolean | undefined>(true);
 
-/**
- * Active profile associated with current runtime state.
- *
- * @public
- */
+/** Raw Custom Flag changes associated with the active visitor. @public */
+export const changes = signal<ChangeArray | undefined>();
+
+/** Active profile associated with current runtime state. @public */
 export const profile: Signal<EventProfile | undefined> = signal<EventProfile | undefined>();
 
 /**
@@ -88,6 +88,7 @@ export interface Signals {
   persistenceConsent: typeof persistenceConsent;
   /** Active profile signal. */
   profile: typeof profile;
+  changes: typeof changes;
   /** Outcome of the most recent Experience API request. */
   experienceRequestState: typeof experienceRequestState;
 }
@@ -121,6 +122,7 @@ export const signals: Signals = {
   online,
   persistenceConsent,
   profile,
+  changes,
   experienceRequestState,
 };
 

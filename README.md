@@ -22,6 +22,7 @@ All three adapters share the same public-API shape: the same `Config`, the same 
 - [Destinations](#destinations)
 - [Live preview](#live-preview)
 - [Event tracking](#event-tracking)
+- [Custom flags](#custom-flags)
 - [Styling components](#styling-components)
 - [Design tokens](#design-tokens)
 - [Advanced setup](#advanced-setup)
@@ -326,11 +327,11 @@ Use the request builder rather than shared interceptor closures for visitor data
 Building sends nothing and invokes no hooks. Each identify-bearing fetch is a
 separate event submission; this flow adds no duplicate-delivery guarantee.
 
-The public Node producer accepts optional profile data and optional
+The public Node producer accepts optional profile/changes data and optional
 `cache: { scope: 'private-request' }` (the default). It validates the explicit
 space/environment scope and profile, accepts an ID-only profile, and packages no
-replay or top-level continuation ID. An absent profile omits `state` and preserves
-an existing browser profile on hydration. It performs no events or network work.
+replay or top-level continuation ID. Missing both fields omits `state`; an absent
+profile preserves the browser profile on hydration. Changes use API `ChangeArray` validation. It performs no events or network work.
 The internal Runtime helper of the same name takes `{ handoff, data? }` and
 retains its separate replay-preserving behavior.
 
@@ -406,9 +407,9 @@ const { handoff, data } = await request.prepareRequestHandoff({
 ```
 
 The application supplies a route key made from the visible pathname and search
-string. It must begin with `/`. A handoff with profile, continuation identity,
-or replay uses `cache: { scope: 'private-request' }`. A profileless public or
-static handoff can carry state without event replay; a public permutation
+string. It must begin with `/`. A handoff with profile, changes, continuation identity,
+or replay uses `cache: { scope: 'private-request' }`. A public or
+static handoff can carry neither profile nor changes nor event replay; a public permutation
 requires an application-owned key covering every dimension that changes the
 rendered Experience. The handoff parser checks these metadata rules but does
 not set HTTP cache headers or certify the rest of a response.
@@ -494,6 +495,29 @@ XDA content preview. Typed XDA preflight and a content-and-handoff operation
 will be integrated after upstream support is available, before public release.
 
 ---
+
+## Custom flags
+
+Read Personalization custom flags in the browser with `sdk.getFlag(name)` or
+observe `sdk.states.flag(name)`. Reads return JSON values, including `false`, `0`,
+`''`, and `null`; a missing flag returns `undefined`. Browser reads automatically
+attempt a consent- and preview-gated flag-view event. See the [Web flag reference](./packages/web/README.md#custom-flags)
+for state, persistence, subscriptions, and exposure deduplication.
+
+XDA changes remain scoped to the fetched plan; fetching does not adopt them into browser
+flag state because their completeness has not been verified. Read
+them explicitly, or use the pure helper re-exported by every framework adapter:
+
+```ts
+import { resolveFlagChange } from '@contentful/experiences-react';
+
+const value = resolveFlagChange('checkout-layout', plan.personalization?.changes)?.value;
+// With an SDK: sdk.getFlag('checkout-layout', plan.personalization?.changes ?? []).
+```
+
+Node's `getFlag` is pure and retains no flags. Applications may pass resolved
+values through existing renderer `metadata`; the renderer context is unchanged.
+See the [Node reference](./packages/node/README.md#custom-flags) for server reads and handoffs.
 
 ## Styling components
 

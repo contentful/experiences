@@ -68,6 +68,29 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
 }
 
 describe('ContentfulExperiences', () => {
+  it('looks up flags only from explicit caller data without transport or retained state', () => {
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents');
+    const personalize = vi.spyOn(runtime.api.experience, 'upsertProfile');
+    const changes = [
+      {
+        type: 'Variable',
+        key: 'flag',
+        value: false,
+        meta: { experienceId: 'experiment', variantIndex: 0 },
+      },
+    ];
+    expect(runtime.getFlag('flag', changes)).toBe(false);
+    expect(runtime.getFlag('flag')).toBeUndefined();
+    expect(send).not.toHaveBeenCalled();
+    expect(personalize).not.toHaveBeenCalled();
+  });
+
   it('forwards per-fetch parameters to Delivery and Preview without retaining them', async () => {
     mockFetchExperience.mockClear();
     const runtime = createRuntime({

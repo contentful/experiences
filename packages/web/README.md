@@ -189,6 +189,47 @@ make a separate XDA fetch render its uncommitted mutations. Applications that
 independently use both paths for the same events may duplicate them; the SDK
 adds no interim suppression.
 
+## Custom flags
+
+`experiences.getFlag(name, changes?: readonly unknown[])` returns a JSON value
+or `undefined` for a missing flag. Omitted changes default to current browser
+state; explicit changes affect only that read. `false`, `0`, `''`, and `null`
+remain values. The last valid matching `Variable` wins value and attribution;
+see the [shared normalization contract](../runtime/README.md#custom-flags).
+The root exports `resolveFlagChange` and the `Json`, `ChangeArray`, and `VariableChange` types.
+
+```ts
+const value = experiences.getFlag('checkout-layout');
+const subscription = experiences.states.flag('checkout-layout').subscribe((value) => {
+  // Render or update application state; narrow the JSON value as needed.
+});
+subscription.unsubscribe(); // During application cleanup.
+```
+
+Reads, including explicit-change reads and `states.flag(name).current`, attempt
+`trackFlagView`; subscriptions also observe values and exposure-relevant state.
+`states.flag(name).current` participates in signal dependency tracking; exposure
+work runs untracked. Subscription callbacks receive distinct value snapshots.
+Exposure uses the existing consent/preview gates and requires a current profile.
+Deduplication compares value, key, experience/variant metadata, and profile against
+the last accepted exposure and pending attempts. Refused attempts do not count as
+accepted; reset and event-consent withdrawal invalidate exposure bookkeeping.
+Subscriptions use the existing observable contract below; `subscribeOnce` waits
+for a non-nullish value, so `null` does not settle it while `false` does.
+
+Personalization responses and private handoffs supply current changes through
+state interceptors, atomically with profile and request success. Optional
+`defaults.changes` takes precedence over stored changes. Changes are restored and
+persisted only with persistence consent; denying it removes stored changes and
+keeps in-memory values. `reset()` clears changes and exposure history. A changed
+profile identity clears old changes when no replacement changes are supplied.
+
+XDA `plan.personalization?.changes` remains plan-local: completeness has not been
+verified, so content fetches do not adopt its changes globally. Identity changes
+can still clear old flags. To read that plan,
+use `experiences.getFlag(name, plan.personalization?.changes ?? [])`; use the pure
+adapter-exported `resolveFlagChange` for metadata preparation without exposure.
+
 ## Browser-safe configuration
 
 Each browser fetch or resolve call receives its own `config`; event-only use does not need one. Keep `resolveData`, `resolveToken`, and component configuration browser-safe, without server-only imports, secrets, or privileged calls. Treat resolver `metadata` as browser-visible too: pass only values that are safe to expose to the current user. Debug logging remains opt-in. Automatic interaction tracking requests source maps, which can expose raw CMS data.
@@ -210,6 +251,7 @@ has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 | State                    | Value                                                                                                                                                |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `profile`                | Current profile, or `undefined`.                                                                                                                     |
+| `flag(name)`             | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                |
 | `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
 | `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
 | `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
@@ -246,7 +288,7 @@ when the whole batch is admitted; a refused prepared batch publishes none of its
 events. Embedded `fetchExperience()` events appear after consent filtering and
 serialization to XDA's event schema, using those serialized fields. Streams do not
 report HTTP delivery or retries. Blocked events are published after the
-`onEventBlocked` callback. `reset()` clears the profile, request outcome, and
+`onEventBlocked` callback. `reset()` clears the profile, changes, request outcome, and
 both event streams while retaining locale and consent decisions.
 
 Subscriber callbacks and snapshot functions run untracked: reading another SDK
@@ -268,7 +310,7 @@ For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
 The supported state names follow Optimization's shared browser-state contract;
-Experiences has no flags, selected-optimization, optimization-eligibility, or
+Experiences has no selected-optimization, optimization-eligibility, or
 preview state in `states`.
 
 ### Interceptors
@@ -305,18 +347,17 @@ names with one event registry per SDK instance. Web retains its separate state
 registry. The `./runtime` entry and snapshot runtimes remain unchanged and expose
 no interceptor registry.
 
-State interceptors receive incoming `{ profile }` state from Personalization,
-XDA, and private handoff hydration before it is committed. A sparse result that
-omits `profile` retains the previous value in the chain; `{ profile: undefined }`
-explicitly clears it. The package exports `InterceptorManager`, `Interceptor`,
+State interceptors receive incoming `{ profile, changes }` state from Personalization
+and private hydration; XDA contributes profile state only. A sparse result that
+omits either field retains its previous value in the chain; an explicit
+`profile: undefined` or `changes: undefined` clears that field. The package exports `InterceptorManager`, `Interceptor`,
 `InterceptorMerge`, `MaybePromise`, `ExperienceState`, `LifecycleInterceptors`, and
-`mergeExperienceState`. XDA owns personalization resolution, so state interception
-supports profile state only.
+`mergeExperienceState`. Changes supply custom flags; XDA still owns content selection.
 
 The `@contentful/experiences-web/bridge-support` entry exports
-`hydrateOptimizationData(sdk, { profile })`, `CoreBridgeCapabilities`,
+`hydrateOptimizationData(sdk, { profile, changes })`, `CoreBridgeCapabilities`,
 `CoreBridgeHost`, and the shared bridge symbol for compatible integrations. It
-supports profile hydration only; it does not expose the Optimization Preview
+supports profile and changes hydration; it does not expose the Optimization Preview
 Panel bridge. Shared state application reports request-state success atomically
 with hydration, even when the incoming state is profileless. Profileless shared
 handoffs therefore preserve existing profile and continuity. Ordinary XDA
@@ -355,7 +396,7 @@ The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile through `defaults.profile` when creating the runtime, or identify
 a profile before sending Analytics events. `CoreConfigDefaults` describes the
-`defaults` object with `profile`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
+`defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
 persisted and restored from LocalStorage once persistence consent is granted.
 `getAnonymousId` is an optional configuration callback whose returned id takes
@@ -463,18 +504,18 @@ the Optimization SDK's consent model.
   before notification; subscriber errors still propagate to the caller.
   A request already on the wire cannot be recalled. A persistence-only change
   leaves the queue alone.
-- **Persistence consent.** The profile is written to LocalStorage only when
-  `persistence` is `true`. `false` removes the stored profile but keeps the
-  in-memory one; undecided neither restores nor clears it.
+- **Persistence consent.** Profile and changes are written to LocalStorage only when
+  `persistence` is `true`. `false` removes stored values but keeps them
+  in memory; undecided neither restores nor clears them.
 - **Startup defaults.** `defaults: { consent, persistenceConsent }` take
   precedence over a stored decision, as in the Optimization SDK, and
   `persistenceConsent` falls back to `consent` when it is not set. An axis you leave
-  unset keeps its stored value. Consent is resolved first and the profile is loaded
-  after, so a default that denies persistence never loads the stored profile.
+  unset keeps its stored value. Consent is resolved before profile and changes are loaded,
+  so a default that denies persistence never loads either stored value.
   Defaults have the same storage effects as in the Optimization SDK: the effective
   decisions are written to the consent keys, so a default **becomes the stored
   decision** and removing it later does not restore the visitor's earlier choice, and
-  a default that denies persistence **deletes the stored profile**. A visitor who has
+  a default that denies persistence **deletes the stored profile and changes**. A visitor who has
   not decided, with no defaults, has nothing written.
 - **Consent itself** is always stored in LocalStorage, so a visitor's choice
   survives reloads. It is global to the runtime, not per call. It uses the
@@ -489,12 +530,12 @@ the Optimization SDK's consent model.
 
 `resolveStatefulDefaults(configured?, persisted?)` exposes the same startup
 resolution independently of browser storage. It returns `{ defaults,
-canLoadPersistedContinuity }`; a persisted profile may be a lazy loader and is
-read only when persistence is granted and no configured profile is supplied.
+canLoadPersistedContinuity }`; persisted profile and changes may be lazy loaders,
+read only when persistence is granted and the respective configured value is absent.
 The constructor uses this lazy path for LocalStorage. The package exports
 `StatefulDefaults`, `PersistedDefaultLoader`, `PersistedDefaultValue`,
 `PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `CoreConfigDefaults`
-uses the same supported profile and consent fields.
+uses the same supported profile, changes, and consent fields.
 
 Personalization methods (`identify`, `page`, `track`) resolve
 `{ accepted, data? }`, where `data` is the Personalization response.
@@ -813,7 +854,7 @@ queue work intact. A concurrent `fetchExperience()` joins the current identity
 initialization boundary without waiting for replay HTTP. Evaluated profile-state
 hydration remains separate from the captured replay target.
 
-A private handoff containing a profile, identity, or replay is browser-visible
+A private handoff containing a profile, changes, identity, or replay is browser-visible
 sensitive data: escape its
 serialization into a private, no-store response, and never cache, log, or
 persist it. The application owns safe caching for profileless public/static
@@ -826,9 +867,10 @@ The public Node `createRequestHandoffFromData({ spaceId, environmentId, data?, c
 packages final request profile state without replay, events, or network work. Call
 it after the last sequential server fetch, using `request.profile`; an earlier
 response can contain stale identity. Its private-request cache scope is the
-default and only accepted scope. An absent profile omits `state` entirely and
-preserves the current browser profile and continuity, including after a JSON round
-trip. This producer differs from Runtime's unchanged internal replay-preserving
+default and only accepted scope. Optional `data.changes: ChangeArray` supplies flag state,
+including without a profile. Missing both fields omits `state`; an absent profile
+preserves browser profile and continuity, including after a JSON round
+trip. This producer differs from Runtime's internal replay-preserving
 helper with the same name.
 
 For the committed-server flow, await a direct server page with an accepted result
@@ -868,9 +910,10 @@ const runtime = createSnapshotRuntime({
 });
 ```
 
-Its seven `states` observables are static: profile, locale, and consent come from
+Its `states` observables are static: profile, locale, and consent come from
 the snapshot, persistence consent falls back to event consent, request state is
-`{ status: 'success' }`, and both event streams are `undefined`. `hasConsent()`
+`{ status: 'success' }`, and both event streams are `undefined`. `data.changes`
+supplies static `states.flag(name)` and pure `getFlag(name, changes?)` reads without exposure. `hasConsent()`
 uses the snapshot's consent and optional `allowedEventTypes`. Event methods and
 state-changing commands warn and do no work; methods returning an admission
 result resolve `{ accepted: false }`. `destroy()` needs no cleanup. Fetching and

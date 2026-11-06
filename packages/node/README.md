@@ -171,6 +171,23 @@ API; it does not make a later XDA fetch render those uncommitted changes. An
 application that independently sends the same events through both operations
 may duplicate them. The SDK does not suppress or deduplicate those calls.
 
+## Custom flags
+
+The process-long `experiences.getFlag(name, changes?: readonly unknown[])` is a
+pure lookup: it returns the last valid matching flag's JSON value, or `undefined`,
+without retaining changes or emitting an exposure. Read caller-owned Personalization
+response `data.changes` or `plan.personalization?.changes` explicitly:
+
+```ts
+const value = experiences.getFlag('checkout-layout', plan.personalization?.changes);
+```
+
+Node re-exports `resolveFlagChange` and the `Json`, `ChangeArray`, and `VariableChange` types.
+Use the helper for the winning record's metadata;
+see the [shared resolution contract](../runtime/README.md#custom-flags).
+The request facade retains no flag state; use `request.trackFlagView()` for an
+explicit consent- and preview-gated server exposure if required.
+
 ## Request-scoped events
 
 Event methods live on the request facade, never on the process-long SDK instance. Supply the
@@ -293,18 +310,20 @@ const handoff = createRequestHandoffFromData({
 ```
 
 The input requires explicit `spaceId` and `environmentId`, optional
-`data: { profile?: EventProfile }`, and an optional private-request cache value.
+`data: { profile?: EventProfile; changes?: ChangeArray }`, and an optional private-request cache value.
 An ID-only profile is valid. It returns a validated `ExperiencesHandoff` with
-`state.profile` when supplied, and no top-level `profileId` or replay. Missing data
-or `profile: undefined` omits `state` entirely, including after JSON serialization;
-hydrating it preserves an existing browser profile. An explicit non-private cache
+`state.profile` and/or `state.changes` when supplied, and no top-level `profileId` or replay.
+Missing both omits `state` entirely, including after JSON serialization;
+hydration without a profile preserves the browser profile. Changes are validated
+with the API's `ChangeArray` schema; flag-only state, including `[]`, is private.
+An explicit non-private cache
 scope throws `TypeError`; Runtime's scope/profile validation errors propagate.
 
 This function packages data only: it emits no events, invokes no event hooks,
 makes no network requests, mutates no request state, and sets no cookies or
 headers. Use `hydrateHandoffState()` to consume it without a browser page event.
 The separate Runtime helper with the same name takes `{ handoff, data? }` and can
-preserve replay; that internal API remains unchanged. See the [complete startup
+preserve replay and carry evaluated changes. See the [complete startup
 sequence](../../README.md#committed-server-rendering-and-state-only-hydration)
 for serialization and tracking activation.
 

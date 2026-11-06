@@ -1,4 +1,5 @@
 import {
+  ChangeArray,
   ANONYMOUS_ID_KEY,
   ANONYMOUS_ID_KEY_LEGACY,
   CONSENT_CACHE_KEY,
@@ -10,6 +11,8 @@ import {
   resolvePersistedPersistenceConsent,
   type EventProfile,
 } from '@contentful/experiences-runtime';
+
+const CHANGES_CACHE_KEY = '__ctfl_opt_changes__';
 
 type SafeParser<T> = {
   safeParse(value: unknown): { success: true; data: T } | { success: false };
@@ -34,6 +37,7 @@ const LocalStore = {
 
   /** Remove the profile and both anonymous id keys. */
   clearProfileContinuity(): void {
+    LocalStore.setCache(CHANGES_CACHE_KEY, undefined);
     LocalStore.setCache(PROFILE_CACHE_KEY, undefined);
     LocalStore.setCache(ANONYMOUS_ID_KEY, undefined);
     LocalStore.setCache(ANONYMOUS_ID_KEY_LEGACY, undefined);
@@ -79,6 +83,14 @@ const LocalStore = {
 
   set profile(profile: EventProfile | undefined) {
     LocalStore.setCache(PROFILE_CACHE_KEY, profile);
+  },
+
+  get changes(): ChangeArray | undefined {
+    return LocalStore.getCache(CHANGES_CACHE_KEY, ChangeArray);
+  },
+
+  set changes(changes: ChangeArray | undefined) {
+    LocalStore.setCache(CHANGES_CACHE_KEY, changes);
   },
 
   /** Safely read and parse typed data from LocalStorage. */
