@@ -3,6 +3,21 @@ import { DEFAULT_PAGE_PROPERTIES, type EventBuilderConfig } from '@contentful/ex
 type Page = ReturnType<NonNullable<EventBuilderConfig['getPageProperties']>>;
 
 /**
+ * Keeps every value of a repeated query key, as Optimization's
+ * `createQueryFromSearchParams` does: a key that appears once maps to its value.
+ */
+function getQuery(searchParams: URL['searchParams']): Page['query'] {
+  const query: Page['query'] = {};
+
+  for (const key of new Set(searchParams.keys())) {
+    const values = searchParams.getAll(key);
+    query[key] = values.length === 1 ? (values[0] ?? '') : values;
+  }
+
+  return query;
+}
+
+/**
  * Reads the current browser page at event-build time. Keeping this lazy makes
  * navigation updates visible to an existing SDK instance and keeps SSR safe.
  */
@@ -13,7 +28,7 @@ export function getPageProperties(): Page {
 
   try {
     const { location } = window;
-    const query = Object.fromEntries(new URL(location.href).searchParams.entries());
+    const query = getQuery(new URL(location.href).searchParams);
 
     return {
       ...DEFAULT_PAGE_PROPERTIES,
