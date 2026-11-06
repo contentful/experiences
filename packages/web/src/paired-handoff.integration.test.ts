@@ -8,6 +8,7 @@ import { ContentfulExperiences as NodeExperiences } from '../../node/src/content
 import { createRequestHandoffFromData } from '../../node/src/handoff.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
 
@@ -265,16 +266,20 @@ describe('paired Node preparation and Web delivery', () => {
     ).resolves.toEqual({ accepted: true });
     expect(upsert.mock.calls[1]?.[0].profileId).toBe('issued-profile');
     expect(upsert.mock.calls[1]?.[0].events).toEqual(prepared.handoff.replay?.events);
-    await browser.trackClick({ entityId: 'hero', entityKind: 'Experience' });
-    // The replayed delivery is held open, so start the flush and wait for Analytics.
-    void browser.flush();
-    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
-    expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('issued-profile');
+    // The continuation ID is id-only, which Insights rejects: the click is admitted but
+    // not sent until the Experience API commits a complete profile.
+    await expect(
+      browser.trackClick({ entityId: 'hero', entityKind: 'Experience' })
+    ).resolves.toEqual({ accepted: true });
+    expect(analytics).not.toHaveBeenCalled();
 
-    delivery.resolve({ profile: { id: 'committed-profile' } });
-    await vi.waitFor(() =>
-      expect(browser.states.profile.current).toEqual({ id: 'committed-profile' })
-    );
+    const committed = completeProfile('committed-profile');
+    delivery.resolve({ profile: committed });
+    await vi.waitFor(() => expect(browser.states.profile.current).toEqual(committed));
+    await browser.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+    await browser.flush();
+    expect(analytics).toHaveBeenCalledOnce();
+    expect(analytics.mock.calls[0]?.[0][0]?.profile.id).toBe('committed-profile');
   });
 
   it('retains replay after preview failure and uses an ordinary page on a different route', async () => {

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred, setDocumentVisibility } from './test-fixtures/dom.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   admit(
@@ -26,7 +27,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
-    defaults: { profile: { id: 'visitor' } },
+    defaults: { profile: completeProfile('visitor') },
     ...overrides,
   } as ExperiencesWebConfig);
   runtimes.add(runtime);

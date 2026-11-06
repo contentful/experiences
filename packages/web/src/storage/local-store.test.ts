@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedConsent } from '../test-fixtures/consent.js';
 import LocalStore from './local-store.js';
+import { completeProfile } from '../test-fixtures/profile.js';
 
 beforeEach(() => window.localStorage.clear());
 afterEach(() => vi.restoreAllMocks());
@@ -19,15 +20,20 @@ describe('LocalStore', () => {
   const store = LocalStore;
 
   it('reads and writes the complete profile', () => {
-    const profile = {
-      id: 'profile-id',
+    const profile = completeProfile('profile-id', {
       audiences: ['developers'],
       traits: { plan: 'pro' },
-    };
+    });
     store.profile = profile;
 
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
     expect(store.profile).toEqual(profile);
+  });
+
+  it('reads and writes an id-only profile learned without the complete profile', () => {
+    store.profile = { id: 'profile-id' };
+
+    expect(store.profile).toEqual({ id: 'profile-id' });
   });
 
   it('deletes malformed profile JSON', () => {

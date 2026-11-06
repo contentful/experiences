@@ -36,7 +36,7 @@
   "dependencies": {
     "@contentful/experiences-client": "0.10.14",
     "@contentful/experiences-sdk-core": "0.13.12",
-    "@contentful/optimization-api-client": "^2.2.1",
+    "@contentful/optimization-api-client": "^2.2.3",
     "es-toolkit": "^1.52.0",
     "zod": "^4.6.7"
   }

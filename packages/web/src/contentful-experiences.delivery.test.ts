@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { deferred } from './test-fixtures/dom.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 class TestContentfulExperiences extends ContentfulExperiences {
   admit(
@@ -102,7 +103,7 @@ describe('Web prepared Personalization delivery', () => {
     expect(runtime.states.experienceRequestState.current.status).toBe('idle');
   });
 
-  it('uses a continuation ID for early Analytics without persisting a synthetic profile', async () => {
+  it('drops early Analytics under a bare continuation ID without persisting a synthetic profile', async () => {
     const pending = deferred<{ profile: { id: string } }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
@@ -119,22 +120,26 @@ describe('Web prepared Personalization delivery', () => {
     expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
 
+    // Insights rejects an id-only profile, so a click under the bare continuation ID is
+    // accepted but never sent.
     await expect(
       runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
     ).resolves.toEqual({ accepted: true });
-    // Personalization is held open on purpose, so start the flush and wait for Analytics.
-    void runtime.flush();
-    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
-    expect(analytics).toHaveBeenCalledWith([
-      expect.objectContaining({ profile: { id: 'server-profile' } }),
-    ]);
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
 
-    pending.resolve({ profile: { id: 'api-profile' } });
-    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual({ id: 'api-profile' }));
-    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
-      id: 'api-profile',
-    });
+    const apiProfile = completeProfile('api-profile');
+    pending.resolve({ profile: apiProfile });
+    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual(apiProfile));
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(apiProfile);
+    await runtime.flush();
+    expect(analytics).not.toHaveBeenCalled();
+
+    // Once the Experience API returns the complete profile, Analytics flows again.
+    await runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' });
+    await runtime.flush();
+    expect(analytics).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ profile: apiProfile }),
+    ]);
   });
 
   it('prefers an established browser profile over a handoff continuation ID', async () => {
@@ -195,15 +200,12 @@ describe('Web prepared Personalization delivery', () => {
     ).resolves.toEqual({ accepted: true });
     expect(upsert).toHaveBeenCalledTimes(1);
 
+    // The adopted continuation ID is id-only, which Insights cannot accept: the click is
+    // admitted but not sent.
     await expect(
       runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
     ).resolves.toEqual({ accepted: true });
-    // Personalization is held open on purpose, so start the flush and wait for Analytics.
-    void runtime.flush();
-    await vi.waitFor(() => expect(analytics).toHaveBeenCalled());
-    expect(analytics).toHaveBeenCalledWith([
-      expect.objectContaining({ profile: { id: 'first-profile' } }),
-    ]);
+    expect(analytics).not.toHaveBeenCalled();
 
     first.resolve({ profile: { id: 'first-committed-profile' } });
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));

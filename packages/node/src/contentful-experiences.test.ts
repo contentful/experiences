@@ -1,3 +1,4 @@
+import type { EventProfile as Profile } from '@contentful/experiences-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,6 +11,26 @@ import {
   parseExperiencesHandoff,
 } from '@contentful/experiences-runtime';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
+
+/** A complete Experience API profile, which Insights requires. */
+function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
+  return {
+    id,
+    stableId: id,
+    random: 0.5,
+    audiences: [],
+    traits: {},
+    location: {},
+    session: {
+      isReturningVisitor: false,
+      landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
+      count: 1,
+      activeSessionLength: 0,
+      averageSessionLength: 0,
+    },
+    ...overrides,
+  };
+}
 
 const runtimes = new Set<ContentfulExperiences>();
 const resolverConfig = { components: {} };
@@ -388,13 +409,13 @@ describe('Node ContentfulExperiences', () => {
     });
     const german = runtime.forRequest({
       locale: 'de-DE',
-      profile: { id: 'german-profile' },
+      profile: completeProfile('german-profile'),
       eventContext: { locale: 'context-locale', userAgent: 'german-agent' },
       consent: { events: false },
     });
     const french = runtime.forRequest({
       locale: 'fr-FR',
-      profile: { id: 'french-profile' },
+      profile: completeProfile('french-profile'),
       eventContext: { userAgent: 'french-agent' },
       eventConsent: true,
     });
@@ -438,7 +459,7 @@ describe('Node ContentfulExperiences', () => {
     expect(sendBatchEvents).toHaveBeenCalledTimes(1);
     expect(sendBatchEvents).toHaveBeenCalledWith([
       expect.objectContaining({
-        profile: { id: 'french-profile' },
+        profile: completeProfile('french-profile'),
         events: [
           expect.objectContaining({
             context: expect.objectContaining({
@@ -561,17 +582,20 @@ describe('Node ContentfulExperiences', () => {
 
   it('uses the API-issued identity for a new profile and keeps later ordinary calls direct', async () => {
     const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
+    // The Experience API issues a complete profile, which Insights requires.
+    const issued = completeProfile('updated-profile');
+    upsertProfile.mockResolvedValue({ profile: issued } as never);
     const request = runtime.forRequest();
 
     const prepared = await request.prepareRequestHandoff({ routeKey: '/home' });
 
     expect(prepared.handoff.profileId).toBe('updated-profile');
     expect(prepared.handoff.replay?.events.map(({ type }) => type)).toEqual(['page']);
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual(issued);
     expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US', preflight: true });
 
     const direct = await request.track({ event: 'after-preparation' });
-    expect(direct).toEqual({ accepted: true, data: { profile: { id: 'updated-profile' } } });
+    expect(direct).toEqual({ accepted: true, data: { profile: issued } });
     expect(upsertProfile).toHaveBeenCalledTimes(2);
     expect(upsertProfile.mock.calls[1]?.[0]).toMatchObject({ profileId: 'updated-profile' });
     expect(upsertProfile.mock.calls[1]?.[1]).toEqual({ locale: 'en-US' });
@@ -1066,7 +1090,7 @@ describe('Node ContentfulExperiences', () => {
       const beacon = vi.fn(() => true);
       const request = runtime.forRequest({
         consent: true,
-        profile: { id: 'visitor' },
+        profile: completeProfile('visitor'),
         insightsOptions: { beacon },
       });
 
