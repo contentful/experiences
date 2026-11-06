@@ -1185,26 +1185,23 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     changes: readonly unknown[] | undefined = changesSignal.value
   ): Json | undefined {
     const selected = resolveFlagChange(name, changes);
-    this.#attemptFlagView(name, selected);
+    untracked(() => this.#attemptFlagView(name, selected));
     return selected?.value;
   }
 
+  #eligibleFlagProfileId(): string | undefined {
+    if (this.#destroyed || this.isPreview || !this.hasConsent('trackFlagView')) return;
+    return profileSignal.peek()?.id;
+  }
+
   #attemptFlagView(name: string, selected: ReturnType<typeof resolveFlagChange>): void {
-    if (this.#destroyed) return;
+    const profileId = this.#eligibleFlagProfileId();
+    if (profileId === undefined) return;
     const payload = {
       componentId: name,
       experienceId: selected?.meta.experienceId,
       variantIndex: selected?.meta.variantIndex,
     };
-    if (this.isPreview || !this.hasConsent('trackFlagView')) {
-      // Preserve the existing event path's preview/consent reporting, including absent flags.
-      void this.trackFlagView(payload).catch((error: unknown) =>
-        console.warn('Flag view failed', error)
-      );
-      return;
-    }
-    const profileId = profileSignal.peek()?.id;
-    if (profileId === undefined) return;
     const signature = [
       selected?.value,
       name,
@@ -1241,6 +1238,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   #retryActiveFlagViews(): void {
+    if (this.#eligibleFlagProfileId() === undefined) return;
     const token = this.#resetToken;
     const changes = changesSignal.peek();
     for (const name of [...this.#activeFlags.keys()]) {

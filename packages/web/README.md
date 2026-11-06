@@ -208,12 +208,16 @@ subscription.unsubscribe(); // During application cleanup.
 
 Reads, including explicit-change reads and `states.flag(name).current`, attempt
 `trackFlagView`; subscriptions also observe values and exposure-relevant state.
-`states.flag(name).current` participates in signal dependency tracking; exposure
-work runs untracked. Subscription callbacks receive distinct value snapshots.
-Exposure uses the existing consent/preview gates and requires a current profile.
+`getFlag(name)` and `states.flag(name).current` participate in signal dependency
+tracking for flag values; exposure work runs untracked. Subscription callbacks
+receive distinct value snapshots. Automatic exposure quietly skips preview,
+disallowed consent, and missing profiles, without reporting blocked events.
+Manual `trackFlagView()` calls retain blocked-event reporting.
 Deduplication compares value, key, experience/variant metadata, and profile against
 the last accepted exposure and pending attempts. Refused attempts do not count as
 accepted; reset and event-consent withdrawal invalidate exposure bookkeeping.
+Active subscriptions retry exposure when changes, profile, or consent changes,
+including when `flag` is allowlisted without event consent.
 Subscriptions use the existing observable contract below; `subscribeOnce` waits
 for a non-nullish value, so `null` does not settle it while `false` does.
 
@@ -309,6 +313,9 @@ For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `effect`, `toObservable`, and `toDistinctObservable`, plus the types `Observable`,
 `Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
+Flag changes remain SDK-owned and are absent from the public `signals` aggregate;
+use `getFlag` or `states.flag(name)` to read them and bridge or handoff hydration
+to supply evaluated state through interceptors and lifecycle guards.
 The supported state names follow Optimization's shared browser-state contract;
 Experiences has no selected-optimization, optimization-eligibility, or
 preview state in `states`.

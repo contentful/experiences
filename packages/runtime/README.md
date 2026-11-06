@@ -53,9 +53,16 @@ is unwrapped. Runtime exports the helper and `Json`, `ChangeArray`, and
 `VariableChange`; the framework adapters re-export them. Node and Web re-export
 the helper and the types.
 
+The current structured `value`-property heuristic also unwraps authored JSON with
+that shape, dropping sibling fields. The API schema cannot distinguish a legacy
+wrapper from authored JSON; an authoritative wire contract is needed before
+narrowing this behavior.
+
 The base `getFlag(name, changes?)` returns only the resolved value and is pure:
 it retains no changes and emits no exposure. Web adds browser-owned state and
 exposure through the [existing flag-view method](../web/README.md#custom-flags).
+Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentation
+`ExperiencesRuntime` contract.
 
 ## Shared event interceptors
 

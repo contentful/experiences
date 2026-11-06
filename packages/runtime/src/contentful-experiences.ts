@@ -89,7 +89,6 @@ export interface ExperienceRuntime {
   readonly environmentId: string;
   readonly locale: string | undefined;
   readonly eventBuilder: EventBuilder;
-  getFlag(name: string, changes?: readonly unknown[]): Json | undefined;
   destroy(): void;
   resolveExperience(
     payload: ExperiencePayload,

@@ -172,7 +172,7 @@ describe('Web Custom Flags', () => {
     const sdk = createRuntime({ defaults: { changes: changes(), consent: false } });
     const track = vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: false });
     const subscription = sdk.states.flag('banner').subscribe(vi.fn());
-    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).not.toHaveBeenCalled();
     track.mockClear();
     sdk.consent({ events: true });
     expect(track).not.toHaveBeenCalled();
@@ -198,15 +198,12 @@ describe('Web Custom Flags', () => {
     }
   );
 
-  it('suppresses exposure in preview through the existing event path', async () => {
+  it('quietly suppresses automatic exposure in preview', async () => {
     const sdk = createRuntime({ isPreview: true });
     sdk.getFlag('banner');
     await settle();
     expect(sdk.states.eventStream.current).toBeUndefined();
-    expect(sdk.states.blockedEventStream.current).toMatchObject({
-      reason: 'preview',
-      method: 'trackFlagView',
-    });
+    expect(sdk.states.blockedEventStream.current).toBeUndefined();
   });
 
   it.each(['reset', 'withdraw', 'destroy'] as const)(

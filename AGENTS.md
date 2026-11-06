@@ -280,6 +280,9 @@ flag state: their completeness has not been verified against a live backend.
 Applications read plan changes explicitly or resolve them into existing metadata;
 keep flag state out of renderer context and framework hooks. Handoff changes use
 API `ChangeArray` validation and require private-request scope, including `[]`.
+The changes signal stays internal; the public `Signals` interface and `signals`
+aggregate expose no mutable changes member. Use flag reads/observables and the
+guarded bridge or handoff ingestion paths.
 See the [Web flag contract](./packages/web/README.md#custom-flags).
 
 A difference is justified only when the content sources and their properties require it, or when server-side personalization here replaces client-side variant resolution there. A retained difference names that requirement. Existing code and new documentation are not a justification.
@@ -287,6 +290,18 @@ A difference is justified only when the content sources and their properties req
 Retained differences:
 
 - `onOfflineDrop` is not ported. It is deprecated and inactive in Optimization.
+- The changes signal stays internal, deliberately differing from the focused
+  Optimization reference's public mutable extension surface. No current supported
+  consumer requires that new member; guarded bridge/handoff ingestion and flag
+  reads/observables suffice and keep flag state SDK-owned.
+- Automatic flag exposure quietly skips preview, disallowed consent, and missing
+  profiles so reactive value reads do not emit blocked-event reports. Manual
+  `trackFlagView()` retains those reports; active subscriptions still retry when
+  changes, profile, or consent changes, including allowlisted exposure.
+  `getFlag()` and `states.flag(name).current` track flag-value dependencies while
+  exposure runs untracked, preventing event interceptors or subscribers from
+  adding unrelated dependencies to the caller's reactive computation. These flag
+  behaviors are local differences from the focused Optimization reference.
 - Observable snapshot functions and subscribers run untracked so callback reads
   cannot add dependencies to a subscription. Event-stream publication reports
   synchronous subscriber errors without interrupting delivery or prepared-replay

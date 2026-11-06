@@ -489,7 +489,7 @@ export async function resolveExperience(
   if (profileId) {
     plan.personalization = {
       profileId,
-      ...(changes !== undefined ? { changes } : {}),
+      ...(Array.isArray(changes) ? { changes } : {}),
     };
   }
   return plan;

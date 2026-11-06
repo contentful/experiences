@@ -501,7 +501,8 @@ will be integrated after upstream support is available, before public release.
 Read Personalization custom flags in the browser with `sdk.getFlag(name)` or
 observe `sdk.states.flag(name)`. Reads return JSON values, including `false`, `0`,
 `''`, and `null`; a missing flag returns `undefined`. Browser reads automatically
-attempt a consent- and preview-gated flag-view event. See the [Web flag reference](./packages/web/README.md#custom-flags)
+attempt a flag-view event when consent permits it, preview is off, and a profile
+is available; otherwise they quietly return the value. See the [Web flag reference](./packages/web/README.md#custom-flags)
 for state, persistence, subscriptions, and exposure deduplication.
 
 XDA changes remain scoped to the fetched plan; fetching does not adopt them into browser
