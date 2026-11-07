@@ -68,7 +68,7 @@
     "@contentful/experiences-client": "0.10.15",
     "@contentful/experiences-runtime": "0.3.9",
     "@contentful/experiences-sdk-core": "0.13.13",
-    "@preact/signals-core": "^1.13.0",
+    "@preact/signals-core": "^1.14.5",
     "es-toolkit": "^1.46.0"
   },
   "devDependencies": {
