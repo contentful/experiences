@@ -34,7 +34,9 @@ function useObservableState<T>(observable: Observable<T>): T {
 }
 
 /** Observe SDK state without changing runtime policy or provider readiness. */
-export function useExperiencesState<K extends keyof CoreStates>(key: K): CoreStates[K]['current'] {
+export function useExperiencesState<K extends Exclude<keyof CoreStates, 'flag'>>(
+  key: K
+): CoreStates[K]['current'] {
   const sdk = useExperiences();
   return useObservableState<CoreStates[K]['current']>(sdk.states[key]);
 }
