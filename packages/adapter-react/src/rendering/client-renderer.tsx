@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
@@ -59,6 +59,7 @@ export function ClientExperienceRenderer({
   renderError = ComponentError,
 }: ClientExperienceRendererProps): ReactNode {
   const boundary = useRef<HTMLElement | null>(null);
+  const warnedBoundary = useRef(false);
   const callerRef = rootProps?.ref;
   const boundaryRef = useMemo(() => {
     let cleanup: (() => void) | undefined;
@@ -81,6 +82,22 @@ export function ClientExperienceRenderer({
       }
     };
   }, [callerRef]);
+  useEffect(() => {
+    if (
+      process.env.NODE_ENV === 'production' ||
+      warnedBoundary.current ||
+      !experience ||
+      !onNodeRoot ||
+      boundary.current
+    ) {
+      return;
+    }
+    warnedBoundary.current = true;
+    console.warn(
+      '[@contentful/experiences-react] ClientExperienceRenderer could not attach its plan boundary ref. ' +
+        'Custom "as" components must forward the ref to their HTML root for "onNodeRoot" registration.'
+    );
+  }, [as, experience, onNodeRoot]);
   const [renderDiagnostics, setRenderDiagnostics] = useState<Error[]>([]);
   // A `setState` updater rather than the SSR renderer's plain-array push: this
   // tree stays mounted and interactive, so a component that throws well after

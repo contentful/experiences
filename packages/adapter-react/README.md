@@ -183,6 +183,10 @@ element. Existing registration lookup, prop precedence, named slots, context,
 unknown/error fallbacks and the `experience` prop retain their behavior. Rendering
 supplied plans performs no fetch and works identically for preview-derived plans.
 
+The boundary is a real DOM element even with `display: contents`, so direct-child
+and positional selectors and DOM snapshots may change. Update affected selectors
+or choose a suitable semantic container with `as`.
+
 ```tsx
 import type { HTMLAttributes } from 'react';
 
@@ -212,7 +216,9 @@ markup, select its semantic root and style through those same props:
 
 A custom `as` component forwards the boundary attributes, children and client ref
 to its actual root. Server root props exclude DOM refs. The earlier `renderRoot`
-callback is removed.
+callback is removed. In development, the client renderer warns once if
+`onNodeRoot` is supplied but the boundary ref is missing. Root registration
+remains disabled until the boundary ref is forwarded.
 
 An empty attribution boundary is still emitted when the plan lacks a usable
 source map, so a nested Experience cannot borrow an ancestor's scopes. Obtain
@@ -324,6 +330,13 @@ ExperienceNode; // Renders one resolved node or snapshot exactly as the SDK rend
 createExperienceNode(components, experienceTemplates?); // ExperienceNode with its registry bound, for snapshots
 type ResolvedNode, NodeSnapshot, ExperienceNodeProps;
 ```
+
+Custom hosts must spread `getTrackingAttributes(plan.attribution ?? { scopes: {} })`
+onto one DOM container per rendered plan, including repeated presentations. These
+node primitives do not create that boundary. Keep the empty boundary when
+attribution is unavailable: automatic tracking resolves scope keys through the
+nearest boundary, so omitting it can resolve an inner plan's keys against an
+ancestor's attribution.
 
 ### Styling + render context (hooks)
 
