@@ -9,6 +9,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "test": "node --import tsx --test src/Content.test.mjs",
     "build": "npm run clean && vite build",
     "dev": "npm run build && tsx server.ts",
     "serve": "npm run build && pm2 start ./node_modules/tsx/dist/cli.mjs --name experiences-react-sdk-app -- server.ts",

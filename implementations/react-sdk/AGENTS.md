@@ -75,8 +75,8 @@ supported product usage or a cross-fetch guarantee.
 - Keep bootstrap in `main.tsx`; use focused App, Navigation, PageShell, ContentPage,
   ConsentControls and presentation components. Do not embed the application tree in
   the entrypoint or introduce an application action queue. Disable visitor actions
-  while initial content is pending. Check binding fields/document roots, leaving
-  recursive Rich Text semantics to the maintained renderer.
+  while initial content is pending. Validate Rich Text with the maintained
+  `validateRichTextDocument` before rendering; do not add a custom recursive validator.
 - Preserve `.env`; read only this app's file. Keep `.env.example` credential-free.
   Project browser configuration through the explicit allowlist, escape inline
   JSON and disable Vite environment exposure. Never print credentials or copy
