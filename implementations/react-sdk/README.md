@@ -270,11 +270,13 @@ The read-only space export at
 The title/text/document value types derive from
 `TypeContentWithoutLinkResolutionResponse['fields']`, rather than schema markers.
 The SDK's incoming content remains unknown-valued. Registration `resolveData`
-checks strings and the Rich Text document root; rendering repeats these narrow
-binding checks because the SDK may render a node after resolver failure. Missing or
-malformed values produce field-specific errors rather than asserted content or
-invented defaults. Child-node semantics belong to the maintained Rich Text renderer; the reference
-does not implement another recursive document validator.
+checks strings and validates Rich Text document structure with Contentful's
+`validateRichTextDocument`; rendering repeats these checks because the SDK may
+render a node after resolver failure. Missing or malformed values produce
+field-specific errors rather than asserted content or invented defaults.
+Parent/child constraints and node shapes come from the existing
+`@contentful/rich-text-types` dependency, without a custom recursive validator.
+Run `npm test` for the binding-validation regressions.
 Linked entries/assets are not separately fetched or resolved by this reference;
 the maintained Rich Text renderer uses its default handling for those nodes.
 Changed admin mappings or different override IDs may require new registrations.
