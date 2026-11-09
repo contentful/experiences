@@ -287,6 +287,12 @@ families. Bind the server Node configuration and render registry once; configure
 the browser registry and callbacks in a client module. `consent.server` resolves
 independent request consent, while `consent.clientDefaults` configures Web defaults.
 
+For RSC node rendering, server-only components use ordinary attribute forwarding.
+Named root bindings (`root: { prop: 'experienceRoot' }`) require a component
+exported from a `'use client'` module, or a client-bound `createExperienceNode`
+receiving serializable snapshots. Slot JSX can cross this boundary; server-created
+handlers and DOM refs cannot. See [React root bindings](../adapter-react/README.md#attributed-rendering-and-dom-roots).
+
 The server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: NextjsRequestResult`:
