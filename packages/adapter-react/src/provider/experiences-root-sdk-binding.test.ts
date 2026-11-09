@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWebSnapshotRuntime, type ExperiencesWebConfig } from '@contentful/experiences-web';
+import { createWebSnapshotRuntime, type Config } from '@contentful/experiences-web';
 import {
   createExperiencesRootSdkBinding,
   disposeExperiencesRootSdkBinding,
@@ -8,7 +8,7 @@ import {
 // Ownership follows Optimization's optimizationRootRuntime.ts and provider tests
 // at 59add9d6ebff503b9033a59a2eee0149d4b4e925. Experiences additionally disposes
 // owned SDKs in finally when application subscription cleanup throws.
-const config: ExperiencesWebConfig = {
+const config: Config = {
   spaceId: 'space',
   environmentId: 'master',
   delivery: { accessToken: 'delivery' },

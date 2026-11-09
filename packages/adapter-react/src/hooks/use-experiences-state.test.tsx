@@ -3,7 +3,7 @@
 import { act, StrictMode, Suspense, startTransition, type ReactNode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { CoreStates, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
+import type { States, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
 import { ExperiencesContext } from '../context/experiences-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { profileFixture } from '../test/profile.js';
@@ -64,7 +64,7 @@ function observable<T>(initial: T) {
 }
 
 // Only the observable boundary is exercised; no real SDK or transport is created.
-function runtime(states: Partial<CoreStates>): WebExperiencesRuntime {
+function runtime(states: Partial<States>): WebExperiencesRuntime {
   return { states } as WebExperiencesRuntime;
 }
 
@@ -91,23 +91,23 @@ describe('Experiences state hooks', () => {
     );
   }
 
-  it('retains exact CoreStates value types', () => {
-    expectTypeOf(hooks.useProfileState).returns.toEqualTypeOf<CoreStates['profile']['current']>();
-    expectTypeOf(hooks.useLocaleState).returns.toEqualTypeOf<CoreStates['locale']['current']>();
-    expectTypeOf(hooks.useConsentState).returns.toEqualTypeOf<CoreStates['consent']['current']>();
+  it('retains exact States value types', () => {
+    expectTypeOf(hooks.useProfileState).returns.toEqualTypeOf<States['profile']['current']>();
+    expectTypeOf(hooks.useLocaleState).returns.toEqualTypeOf<States['locale']['current']>();
+    expectTypeOf(hooks.useConsentState).returns.toEqualTypeOf<States['consent']['current']>();
     expectTypeOf(hooks.usePersistenceConsentState).returns.toEqualTypeOf<
-      CoreStates['persistenceConsent']['current']
+      States['persistenceConsent']['current']
     >();
-    expectTypeOf(hooks.useExperienceRequestState).returns.toEqualTypeOf<
-      CoreStates['experienceRequestState']['current']
+    expectTypeOf(hooks.usePersonalizationRequestState).returns.toEqualTypeOf<
+      States['personalizationRequestState']['current']
     >();
     expectTypeOf(hooks.useEventStreamState).returns.toEqualTypeOf<
-      CoreStates['eventStream']['current']
+      States['eventStream']['current']
     >();
     expectTypeOf(hooks.useBlockedEventStreamState).returns.toEqualTypeOf<
-      CoreStates['blockedEventStream']['current']
+      States['blockedEventStream']['current']
     >();
-    expectTypeOf(hooks.usePreviewState).returns.toEqualTypeOf<CoreStates['preview']['current']>();
+    expectTypeOf(hooks.usePreviewState).returns.toEqualTypeOf<States['preview']['current']>();
   });
 
   const cases = [
@@ -115,20 +115,20 @@ describe('Experiences state hooks', () => {
     ['locale', hooks.useLocaleState],
     ['consent', hooks.useConsentState],
     ['persistenceConsent', hooks.usePersistenceConsentState],
-    ['experienceRequestState', hooks.useExperienceRequestState],
+    ['personalizationRequestState', hooks.usePersonalizationRequestState],
     ['eventStream', hooks.useEventStreamState],
     ['blockedEventStream', hooks.useBlockedEventStreamState],
     ['preview', hooks.usePreviewState],
   ] as const;
 
   it.each(cases)('observes only %s and disposes its subscription', (key, useState) => {
-    const initial = key === 'experienceRequestState' ? { status: 'idle' } : undefined;
+    const initial = key === 'personalizationRequestState' ? { status: 'idle' } : undefined;
     const next = {
       profile: profileFixture('visitor'),
       locale: 'de-DE',
       consent: false,
       persistenceConsent: false,
-      experienceRequestState: { status: 'success' },
+      personalizationRequestState: { status: 'success' },
       eventStream: { type: 'track', event: 'purchase' },
       blockedEventStream: { reason: 'consent', method: 'track', args: [] },
       preview: { data: undefined, error: undefined, status: 'static', revision: 1 },
@@ -151,7 +151,7 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches cloned current values across renders and uses immediate/latest emissions', () => {
-    const state = observable<CoreStates['profile']['current']>(profileFixture('before-commit'));
+    const state = observable<States['profile']['current']>(profileFixture('before-commit'));
     const sdk = runtime({ profile: state.store });
     const captures: unknown[] = [];
     function Probe() {
@@ -318,7 +318,7 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches server snapshots and hydrates cloned objects without loops or mismatches', async () => {
-    const state = observable<CoreStates['profile']['current']>(profileFixture('server'));
+    const state = observable<States['profile']['current']>(profileFixture('server'));
     const sdk = runtime({ profile: state.store });
     function Probe() {
       return <output>{hooks.useProfileState()?.id}</output>;

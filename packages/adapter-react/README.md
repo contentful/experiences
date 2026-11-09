@@ -189,7 +189,7 @@ Web's interaction completion and final hide flush; browser teardown releases tha
 document. Persisted BFCache `pagehide` retains ownership for resumption.
 
 The state hooks are `useProfileState`, `useLocaleState`, `useConsentState`,
-`usePersistenceConsentState`, `useExperienceRequestState`, `useEventStreamState`,
+`usePersistenceConsentState`, `usePersonalizationRequestState`, `useEventStreamState`,
 `useBlockedEventStreamState`, and `usePreviewState`. They preserve SDK value types,
 including `undefined` and `false`, and cache observable emissions for React.
 Event state reads the last attempt; it is not a new attempt notification. For an
@@ -399,7 +399,9 @@ for removal, effective node-data replacement or callback replacement. `node` is 
 `NodeSnapshot`; `data` is the SDK-selected innermost rooted scope, ready for the
 Web tracking API. It is undefined if the node roots no scope or attribution is
 unavailable. Stable rerenders and per-kind option changes preserve manual root
-registration. Disable automatic views while explicitly registering manual views:
+registration. Memoize `onNodeRoot` with `useCallback`; changing its identity runs
+cleanup and registers roots again, which can restart manual measurements.
+Disable automatic views while explicitly registering manual views:
 
 ```tsx
 import { useCallback } from 'react';

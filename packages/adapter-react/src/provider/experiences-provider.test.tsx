@@ -15,10 +15,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
   type ContentfulExperiences,
-  type CoreStates,
+  type States,
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
-  type ExperiencesWebConfig,
+  type Config,
   type Observable,
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
@@ -48,7 +48,7 @@ vi.mock('@contentful/experiences-web', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@contentful/experiences-web')>();
   return {
     ...actual,
-    ContentfulExperiences: vi.fn(function (config: ExperiencesWebConfig) {
+    ContentfulExperiences: vi.fn(function (config: Config) {
       return construct(config);
     }),
   };
@@ -57,7 +57,7 @@ vi.mock('@contentful/experiences-web', async (importOriginal) => {
 // Ported ownership/activation expectations from OptimizationProvider.onStatesReady
 // at 59add9d6ebff503b9033a59a2eee0149d4b4e925. Experiences always retains a
 // presentation runtime, replaces injected SDKs, and leaves page/content work to callers.
-const config: ExperiencesWebConfig = {
+const config: Config = {
   spaceId: 'space',
   environmentId: 'master',
   delivery: { accessToken: 'delivery' },
@@ -759,9 +759,9 @@ describe('React runtime ownership and activation', () => {
   );
 
   it('forwards preview configuration only at commit and keeps preview state separate from root readiness', async () => {
-    let value: CoreStates['preview']['current'];
-    const listeners = new Set<(state: CoreStates['preview']['current']) => void>();
-    const preview: Observable<CoreStates['preview']['current']> = {
+    let value: States['preview']['current'];
+    const listeners = new Set<(state: States['preview']['current']) => void>();
+    const preview: Observable<States['preview']['current']> = {
       get current() {
         return value;
       },
@@ -777,14 +777,14 @@ describe('React runtime ownership and activation', () => {
       subscribeOnce: vi.fn(),
     };
     runtime.states.preview = preview;
-    const livePreview: NonNullable<ExperiencesWebConfig['livePreview']> = {
+    const livePreview: NonNullable<Config['livePreview']> = {
       experienceId: 'hero',
       sessionId: 'session',
       loadImplementation: vi.fn(() => {
         throw new Error('React must not invoke the preview loader');
       }),
     };
-    const previewValues: Array<CoreStates['preview']['current']> = [];
+    const previewValues: Array<States['preview']['current']> = [];
     function PreviewProbe() {
       previewValues.push(usePreviewState());
       return <Probe />;
@@ -803,7 +803,7 @@ describe('React runtime ownership and activation', () => {
     expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, livePreview });
     // The double does not initialize preview: loading and policy remain Web responsibilities.
     expect(livePreview.loadImplementation).not.toHaveBeenCalled();
-    const states: Array<CoreStates['preview']['current']> = [
+    const states: Array<States['preview']['current']> = [
       undefined,
       {
         experienceId: 'hero',

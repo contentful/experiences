@@ -2,7 +2,7 @@
 // 59add9d6ebff503b9033a59a2eee0149d4b4e925 (MIT).
 import {
   ContentfulExperiences,
-  type ExperiencesWebConfig,
+  type Config,
   type WebExperiencesRuntime,
 } from '@contentful/experiences-web';
 
@@ -26,8 +26,8 @@ export interface CreateInjectedExperiencesRootSdkBindingOptions<
 export interface CreateOwnedExperiencesRootSdkBindingOptions<
   TSdk extends WebExperiencesRuntime = ContentfulExperiences,
 > {
-  readonly config: ExperiencesWebConfig;
-  readonly createSdk?: (config: ExperiencesWebConfig) => TSdk;
+  readonly config: Config;
+  readonly createSdk?: (config: Config) => TSdk;
   readonly onStatesReady?: OnStatesReady;
 }
 
@@ -35,7 +35,7 @@ export function createExperiencesRootSdkBinding<TSdk extends WebExperiencesRunti
   options:
     | CreateInjectedExperiencesRootSdkBindingOptions<TSdk>
     | (CreateOwnedExperiencesRootSdkBindingOptions<TSdk> & {
-        readonly createSdk: (config: ExperiencesWebConfig) => TSdk;
+        readonly createSdk: (config: Config) => TSdk;
       })
 ): ExperiencesRootSdkBinding<TSdk>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.

@@ -15,7 +15,7 @@ import {
   createWebSnapshotRuntime,
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
-  type ExperiencesWebConfig,
+  type Config,
 } from '@contentful/experiences-web';
 import {
   assertExperiencesCacheSafety,
@@ -47,7 +47,7 @@ interface PresentationOptions {
 export type ExperiencesProviderProps = PropsWithChildren<
   PresentationOptions & { readonly sdk: ContentfulExperiences }
 >;
-export type ExperiencesRootProps = PropsWithChildren<ExperiencesWebConfig & PresentationOptions>;
+export type ExperiencesRootProps = PropsWithChildren<Config & PresentationOptions>;
 
 type ActivationProps = ExperiencesProviderProps | ExperiencesRootProps;
 type Target = {

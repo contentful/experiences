@@ -42,7 +42,7 @@ export {
   useLocaleState,
   useConsentState,
   usePersistenceConsentState,
-  useExperienceRequestState,
+  usePersonalizationRequestState,
   useEventStreamState,
   useBlockedEventStreamState,
   usePreviewState,

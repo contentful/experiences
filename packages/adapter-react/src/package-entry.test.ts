@@ -122,12 +122,12 @@ describe('published package entry points', () => {
         } from '@contentful/experiences-react/client';
         import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
           from '@contentful/experiences-react/host';
-        import { ContentfulExperiences, type ExperiencesWebConfig, type WebExperiencesRuntime,
-          type CoreStates, type RuntimeLivePreviewOptions }
+        import { ContentfulExperiences, type Config, type WebExperiencesRuntime,
+          type States, type RuntimeLivePreviewOptions }
           from '@contentful/experiences-react/web-sdk';
 
         const ui = createReactExperiences({ config: { components: {} } });
-        declare const config: ExperiencesWebConfig;
+        declare const config: Config;
         declare const livePreview: RuntimeLivePreviewOptions;
         declare const plan: PortableRenderPlan;
         declare const sdk: ContentfulExperiences;
@@ -139,8 +139,8 @@ describe('published package entry points', () => {
             return () => runtime.tracking.clearElement('views', element);
           }, [runtime]);
           const { setConsent, trackEvent, setLocale } = useExperiencesActions();
-          const consent: CoreStates['consent']['current'] = useConsentState();
-          const preview: CoreStates['preview']['current'] = usePreviewState();
+          const consent: States['consent']['current'] = useConsentState();
+          const preview: States['preview']['current'] = usePreviewState();
           const context: { sdk: WebExperiencesRuntime; error: Error | undefined;
             isLive: boolean; isContentReady: boolean } = useExperiencesContext();
           const track: WebExperiencesRuntime['track'] = trackEvent;

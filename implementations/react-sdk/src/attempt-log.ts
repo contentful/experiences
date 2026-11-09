@@ -1,4 +1,4 @@
-import type { CoreStates } from '@contentful/experiences-web';
+import type { States } from '@contentful/experiences-web';
 
 // Optional presentation diagnostics, adapted from Optimization's
 // AnalyticsEventDisplay at 59add9d6ebff503b9033a59a2eee0149d4b4e925 (MIT).
@@ -54,7 +54,7 @@ export function createAttemptLog() {
       };
     },
     // Keep this callback identity stable and attach before runtime-driven work.
-    onStatesReady: (states: CoreStates) => {
+    onStatesReady: (states: States) => {
       let subscribing = true;
       const subscription = states.eventStream.subscribe((event) => {
         // subscribe emits current immediately. A historical last attempt is state,
