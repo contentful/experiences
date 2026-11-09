@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import {
   buildPreparedEvents,
   PROFILE_CACHE_KEY,
@@ -25,7 +26,7 @@ class TestContentfulExperiences extends ContentfulExperiences {
 
 const runtimes = new Set<TestContentfulExperiences>();
 
-function createRuntime(profile?: { id: string }) {
+function createRuntime(profile?: EventProfile) {
   const runtime = new TestContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -62,7 +63,7 @@ afterEach(() => {
 
 describe('Web prepared Personalization delivery', () => {
   it('admits the exact batch before HTTP completes and stamps the browser consent', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValue(pending.promise as never);
@@ -83,11 +84,13 @@ describe('Web prepared Personalization delivery', () => {
     ).toBe(true);
     expect(runtime.states.profile.current).toBeUndefined();
 
-    pending.resolve({ profile: { id: 'api-profile' } });
-    await vi.waitFor(() => expect(runtime.states.profile.current).toEqual({ id: 'api-profile' }));
-    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
-      id: 'api-profile',
-    });
+    pending.resolve({ profile: completeProfile('api-profile') });
+    await vi.waitFor(() =>
+      expect(runtime.states.profile.current).toEqual(completeProfile('api-profile'))
+    );
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(
+      completeProfile('api-profile')
+    );
   });
 
   it('refuses an oversized prepared batch atomically', async () => {
@@ -145,8 +148,8 @@ describe('Web prepared Personalization delivery', () => {
   it('prefers an established browser profile over a handoff continuation ID', async () => {
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
-    const runtime = createRuntime({ id: 'browser-profile' });
+      .mockResolvedValue({ profile: completeProfile('browser-profile') } as never);
+    const runtime = createRuntime(completeProfile('browser-profile'));
 
     await expect(
       runtime.hydrateAndTrackCurrentPage(
@@ -164,11 +167,11 @@ describe('Web prepared Personalization delivery', () => {
   });
 
   it('keeps the adopted continuation ID when another prepared handoff arrives', async () => {
-    const first = deferred<{ profile: { id: string } }>();
+    const first = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(first.promise as never)
-      .mockResolvedValueOnce({ profile: { id: 'committed-profile' } } as never);
+      .mockResolvedValueOnce({ profile: completeProfile('committed-profile') } as never);
     const analytics = vi
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
@@ -207,39 +210,39 @@ describe('Web prepared Personalization delivery', () => {
     ).resolves.toEqual({ accepted: true });
     expect(analytics).not.toHaveBeenCalled();
 
-    first.resolve({ profile: { id: 'first-committed-profile' } });
+    first.resolve({ profile: completeProfile('first-committed-profile') });
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
     expect(upsert.mock.calls[1]?.[0].profileId).toBe('first-profile');
   });
 
   it('sends an ordinary online event while prepared HTTP is pending', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(pending.promise as never)
-      .mockResolvedValueOnce({ profile: { id: 'direct-profile' } } as never);
-    const runtime = createRuntime({ id: 'existing-profile' });
+      .mockResolvedValueOnce({ profile: completeProfile('direct-profile') } as never);
+    const runtime = createRuntime(completeProfile('existing-profile'));
 
     await runtime.admit(prepared(runtime));
     await expect(runtime.track({ event: 'ordinary' })).resolves.toMatchObject({
       accepted: true,
-      data: { profile: { id: 'direct-profile' } },
+      data: { profile: completeProfile('direct-profile') },
     });
     expect(upsert).toHaveBeenCalledTimes(2);
     expect(upsert.mock.calls[1]?.[0].events).toHaveLength(1);
-    expect(runtime.states.profile.current).toEqual({ id: 'direct-profile' });
+    expect(runtime.states.profile.current).toEqual(completeProfile('direct-profile'));
 
-    pending.resolve({ profile: { id: 'stale-prepared-profile' } });
+    pending.resolve({ profile: completeProfile('stale-prepared-profile') });
     await vi.waitFor(() =>
       expect(runtime.states.experienceRequestState.current.status).toBe('success')
     );
-    expect(runtime.states.profile.current).toEqual({ id: 'direct-profile' });
+    expect(runtime.states.profile.current).toEqual(completeProfile('direct-profile'));
   });
 
   it('queues while offline and flushes on reconnect', async () => {
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValue({ profile: { id: 'connected-profile' } } as never);
+      .mockResolvedValue({ profile: completeProfile('connected-profile') } as never);
     const runtime = createRuntime();
     window.dispatchEvent(new Event('offline'));
 
@@ -250,13 +253,13 @@ describe('Web prepared Personalization delivery', () => {
     window.dispatchEvent(new Event('online'));
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
     await vi.waitFor(() =>
-      expect(runtime.states.profile.current).toEqual({ id: 'connected-profile' })
+      expect(runtime.states.profile.current).toEqual(completeProfile('connected-profile'))
     );
   });
 
   it('ignores stale prepared responses after reset and cleans up a failed retry', async () => {
     vi.useFakeTimers();
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(pending.promise as never)
@@ -265,7 +268,7 @@ describe('Web prepared Personalization delivery', () => {
 
     await runtime.admit(prepared(runtime));
     runtime.reset();
-    pending.resolve({ profile: { id: 'old-profile' } });
+    pending.resolve({ profile: completeProfile('old-profile') });
     await Promise.resolve();
     await Promise.resolve();
     expect(runtime.states.profile.current).toBeUndefined();
@@ -286,7 +289,7 @@ describe('Web prepared Personalization delivery', () => {
   });
 
   it('ignores a late prepared response after destroy', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
       pending.promise as never
     );
@@ -294,7 +297,7 @@ describe('Web prepared Personalization delivery', () => {
 
     await runtime.admit(prepared(runtime));
     runtime.destroy();
-    pending.resolve({ profile: { id: 'old-profile' } });
+    pending.resolve({ profile: completeProfile('old-profile') });
     await Promise.resolve();
     await Promise.resolve();
     expect(runtime.states.profile.current).toBeUndefined();
@@ -302,7 +305,7 @@ describe('Web prepared Personalization delivery', () => {
   });
 
   it('does not persist a late ordinary Personalization response after destroy', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
       pending.promise as never
     );
@@ -311,39 +314,39 @@ describe('Web prepared Personalization delivery', () => {
     await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
 
     runtime.destroy();
-    pending.resolve({ profile: { id: 'late-profile' } });
+    pending.resolve({ profile: completeProfile('late-profile') });
     await send;
     expect(runtime.states.profile.current).toBeUndefined();
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
   it('cancels an old destroy drain without clearing a replacement Web profile', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(pending.promise as never)
-      .mockResolvedValue({ profile: { id: 'later-profile' } } as never);
+      .mockResolvedValue({ profile: completeProfile('later-profile') } as never);
     const oldRuntime = createRuntime();
     await oldRuntime.admit(prepared(oldRuntime), undefined, 'de-DE');
     await oldRuntime.admit(prepared(oldRuntime), undefined, 'fr-FR');
     expect(upsert).toHaveBeenCalledTimes(1);
 
     oldRuntime.destroy();
-    const replacement = createRuntime({ id: 'replacement-profile' });
+    const replacement = createRuntime(completeProfile('replacement-profile'));
     oldRuntime.reset();
-    pending.resolve({ profile: { id: 'old-profile' } });
+    pending.resolve({ profile: completeProfile('old-profile') });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(upsert).toHaveBeenCalledTimes(1);
-    expect(replacement.states.profile.current).toEqual({ id: 'replacement-profile' });
-    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual({
-      id: 'replacement-profile',
-    });
+    expect(replacement.states.profile.current).toEqual(completeProfile('replacement-profile'));
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(
+      completeProfile('replacement-profile')
+    );
   });
 
   it('does not send ordinary Analytics after destroy releases ownership', async () => {
     const analytics = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents');
-    const runtime = createRuntime({ id: 'browser-profile' });
+    const runtime = createRuntime(completeProfile('browser-profile'));
 
     runtime.destroy();
     await expect(

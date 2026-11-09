@@ -30,10 +30,11 @@ describe('LocalStore', () => {
     expect(store.profile).toEqual(profile);
   });
 
-  it('reads and writes an id-only profile learned without the complete profile', () => {
-    store.profile = { id: 'profile-id' };
+  it('clears an id-only cached profile instead of retaining an incomplete snapshot', () => {
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'profile-id' }));
 
-    expect(store.profile).toEqual({ id: 'profile-id' });
+    expect(store.profile).toBeUndefined();
+    expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
   it('deletes malformed profile JSON', () => {
@@ -67,7 +68,7 @@ describe('LocalStore', () => {
     });
 
     expect(() => {
-      store.profile = { id: 'profile-id' };
+      store.profile = completeProfile('profile-id');
     }).not.toThrow();
     expect(store.profile).toBeUndefined();
   });
@@ -165,14 +166,14 @@ describe('LocalStore consent persistence', () => {
 
   it('reads the stored profile independently of consent', () => {
     LocalStore.persistenceConsent = false;
-    LocalStore.profile = { id: 'stored-profile' };
+    LocalStore.profile = completeProfile('stored-profile');
 
-    expect(LocalStore.profile).toEqual({ id: 'stored-profile' });
+    expect(LocalStore.profile).toEqual(completeProfile('stored-profile'));
   });
 
   it('reset clears continuity and preserves consent decisions', () => {
     seedConsent({ events: true, persistence: false });
-    LocalStore.profile = { id: 'stored-profile' };
+    LocalStore.profile = completeProfile('stored-profile');
     window.localStorage.setItem(ANONYMOUS_ID_KEY, 'current');
     window.localStorage.setItem(ANONYMOUS_ID_KEY_LEGACY, 'legacy');
 
@@ -193,7 +194,7 @@ describe('LocalStore consent persistence', () => {
       expect(LocalStore.persistenceConsent).toBeUndefined();
       expect(LocalStore.anonymousId).toBeUndefined();
       expect(() => {
-        LocalStore.profile = { id: 'server' };
+        LocalStore.profile = completeProfile('server');
         LocalStore.consent = true;
         LocalStore.persistenceConsent = true;
         LocalStore.anonymousId = 'server';

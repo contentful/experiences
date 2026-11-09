@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -64,7 +65,7 @@ describe('paired Node preparation and Web delivery', () => {
   it('packages final request state without evaluating server or browser event hooks', async () => {
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValue({ profile: { id: 'evaluated-profile' } } as never);
+      .mockResolvedValue({ profile: completeProfile('evaluated-profile') } as never);
     const server = node();
     const serverHook = vi.fn((event) =>
       event.type === 'track' ? { ...event, event: 'server-enriched' } : event
@@ -81,7 +82,7 @@ describe('paired Node preparation and Web delivery', () => {
       environmentId: 'environment',
       data: { profile: request.profile },
     });
-    expect(stateOnly).toMatchObject({ state: { profile: { id: 'evaluated-profile' } } });
+    expect(stateOnly).toMatchObject({ state: { profile: completeProfile('evaluated-profile') } });
     expect(stateOnly.replay).toBeUndefined();
     expect(serverHook).toHaveBeenCalledTimes(2);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -106,7 +107,7 @@ describe('paired Node preparation and Web delivery', () => {
     async ({ configuredLocale, requestLocale, transportLocale }) => {
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValue({ profile: { id: 'profile' } } as never);
+        .mockResolvedValue({ profile: completeProfile('profile') } as never);
       const server = new NodeExperiences({
         spaceId: 'space',
         environmentId: 'environment',
@@ -152,11 +153,11 @@ describe('paired Node preparation and Web delivery', () => {
   it('round trips one exact prepared batch and accepts it before a failed HTTP send retries', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
-    const firstDelivery = deferred<{ profile: { id: string } }>();
-    const secondDelivery = deferred<{ profile: { id: string } }>();
+    const firstDelivery = deferred<{ profile: EventProfile }>();
+    const secondDelivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
+      .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
       .mockReturnValueOnce(firstDelivery.promise as never)
       .mockReturnValueOnce(secondDelivery.promise as never);
     // Event consent is denied, but the prepared types are allow-listed, so the batch is
@@ -233,17 +234,17 @@ describe('paired Node preparation and Web delivery', () => {
     expect(upsert.mock.calls[2]).toEqual([firstBody, firstOptions]);
     expect(serverHook).toHaveBeenCalledTimes(3);
     expect(browserHook).not.toHaveBeenCalled();
-    secondDelivery.resolve({ profile: { id: 'committed-profile' } });
+    secondDelivery.resolve({ profile: completeProfile('committed-profile') });
     await vi.waitFor(() =>
-      expect(browser.states.profile.current).toEqual({ id: 'committed-profile' })
+      expect(browser.states.profile.current).toEqual(completeProfile('committed-profile'))
     );
   });
 
   it('carries a preview-issued continuation ID across JSON for a new visitor', async () => {
-    const delivery = deferred<{ profile: { id: string } }>();
+    const delivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-      .mockResolvedValueOnce({ profile: { id: 'issued-profile' } } as never)
+      .mockResolvedValueOnce({ profile: completeProfile('issued-profile') } as never)
       .mockReturnValueOnce(delivery.promise as never);
     const analytics = vi
       .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
@@ -287,7 +288,7 @@ describe('paired Node preparation and Web delivery', () => {
     const upsert = vi
       .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
       .mockRejectedValueOnce(new Error('preview unavailable'))
-      .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
+      .mockResolvedValue({ profile: completeProfile('committed-profile') } as never);
     const server = node();
     const prepared = await server
       .forRequest({ profile: { id: 'known-profile' }, consent: true })
@@ -323,13 +324,13 @@ describe('paired Node preparation and Web delivery', () => {
   it.each([true, false])(
     'uses ordinary fallback guards at prepared capacity when online is %s',
     async (online) => {
-      const firstDelivery = deferred<{ profile: { id: string } }>();
+      const firstDelivery = deferred<{ profile: EventProfile }>();
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
-        .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
+        .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
+        .mockResolvedValueOnce({ profile: completeProfile('preview-profile') } as never)
         .mockReturnValueOnce(firstDelivery.promise as never)
-        .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
+        .mockResolvedValue({ profile: completeProfile('committed-profile') } as never);
       const server = node();
       const request = server.forRequest({ profile: { id: 'known-profile' }, consent: true });
       const full = await request.prepareRequestHandoff({
@@ -365,7 +366,7 @@ describe('paired Node preparation and Web delivery', () => {
       });
       expect(result).toEqual(
         online
-          ? { accepted: true, data: { profile: { id: 'committed-profile' } } }
+          ? { accepted: true, data: { profile: completeProfile('committed-profile') } }
           : { accepted: false }
       );
       expect(buildPayload).toHaveBeenCalledExactlyOnceWith({ isInitialEmission: false });
@@ -384,7 +385,7 @@ describe('paired Node preparation and Web delivery', () => {
         );
       }
 
-      firstDelivery.resolve({ profile: { id: 'committed-profile' } });
+      firstDelivery.resolve({ profile: completeProfile('committed-profile') });
       window.dispatchEvent(new Event('online'));
       await browser.flush();
       expect(browser.states.experienceRequestState.current.status).toBe('success');

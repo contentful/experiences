@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { buildPreparedEvents } from '@contentful/experiences-runtime';
 import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,7 +66,7 @@ describe('Web queue parity with Optimization', () => {
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
         .mockRejectedValueOnce(new Error('offline'))
-        .mockResolvedValue({ profile: { id: 'visitor' } } as never);
+        .mockResolvedValue({ profile: completeProfile('visitor') } as never);
       vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
       const runtime = createRuntime();
 
@@ -90,7 +91,7 @@ describe('Web queue parity with Optimization', () => {
     it('awaits Analytics before flushing Personalization and waits for both queues', async () => {
       vi.spyOn(Math, 'random').mockReturnValue(0);
       const analyticsPending = deferred<boolean>();
-      const personalizationPending = deferred<{ profile: { id: string } }>();
+      const personalizationPending = deferred<{ profile: EventProfile }>();
       const analytics = vi
         .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
         .mockReturnValue(analyticsPending.promise);
@@ -128,7 +129,7 @@ describe('Web queue parity with Optimization', () => {
       expect(upsert).toHaveBeenCalledTimes(2);
       expect(settled).toBe(false);
 
-      personalizationPending.resolve({ profile: { id: 'visitor' } });
+      personalizationPending.resolve({ profile: completeProfile('visitor') });
       await flushing;
       expect(settled).toBe(true);
     });
@@ -146,7 +147,7 @@ describe('Web queue parity with Optimization', () => {
     it('forwards the configured ordinary-event capacity to its queue', async () => {
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValue({ profile: { id: 'visitor' } } as never);
+        .mockResolvedValue({ profile: completeProfile('visitor') } as never);
       const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 3 } });
       window.dispatchEvent(new Event('offline'));
       expect((await offlineTracks(runtime, 4)).every((result) => result.accepted)).toBe(true);
@@ -184,9 +185,9 @@ describe('Web queue parity with Optimization', () => {
     it('sends a queued offline page on destroy under the current profile, not an older one', async () => {
       const upsert = vi
         .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
-        .mockResolvedValueOnce({ profile: { id: 'profile-A' } } as never)
-        .mockResolvedValueOnce({ profile: { id: 'profile-B' } } as never)
-        .mockResolvedValue({ profile: { id: 'profile-B' } } as never);
+        .mockResolvedValueOnce({ profile: completeProfile('profile-A') } as never)
+        .mockResolvedValueOnce({ profile: completeProfile('profile-B') } as never)
+        .mockResolvedValue({ profile: completeProfile('profile-B') } as never);
       const runtime = createRuntime({ defaults: { profile: undefined } });
 
       // A completed drain under A.

@@ -1,3 +1,4 @@
+import { profileFixture } from './test/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type ExperiencesNodeConfig } from './contentful-experiences.js';
@@ -91,14 +92,14 @@ describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchI
     );
   });
 
-  it('keeps the profile id XDA returns on the request', async () => {
+  it('keeps the full profile XDA returns on the request', async () => {
     const sdk = setup();
-    spyOnRuntime(sdk, { nodes: [], personalization: { profileId: 'returned' } });
+    spyOnRuntime(sdk, { nodes: [], personalization: { profile: profileFixture('returned') } });
     const request = sdk.forRequest({ profile: { id: 'initial' } });
 
     await fetchIt(request);
 
-    expect(request.profile).toEqual({ id: 'returned' });
+    expect(request.profile).toEqual(profileFixture('returned'));
   });
 
   it('returns a redirect unchanged and leaves the profile alone', async () => {

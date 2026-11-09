@@ -484,11 +484,11 @@ export async function resolveExperience(
     if (attribution) plan.attribution = attribution;
   }
   const personalization = isPlainPayload ? payload.extensions?.personalization : undefined;
-  const profileId = personalization?.profile?.id;
+  const profile = personalization?.profile;
   const changes = personalization?.changes;
-  if (profileId) {
+  if (profile?.id) {
     plan.personalization = {
-      profileId,
+      profile,
       ...(Array.isArray(changes) ? { changes } : {}),
     };
   }

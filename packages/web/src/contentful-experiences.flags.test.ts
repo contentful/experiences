@@ -11,6 +11,7 @@ import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-e
 import { hydrateOptimizationData } from './bridge-support.js';
 import { signalFns } from './signals/signals.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 const key = '__ctfl_opt_changes__';
@@ -27,7 +28,7 @@ function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
     environmentId: 'environment',
     delivery: { accessToken: 'token' },
     autoTrackEntryInteraction: { views: false, clicks: false, hovers: false },
-    defaults: { profile: { id: 'visitor' }, changes: changes(), consent: true },
+    defaults: { profile: completeProfile('visitor'), changes: changes(), consent: true },
     ...config,
   });
   runtimes.add(sdk);
@@ -139,7 +140,7 @@ describe('Web Custom Flags', () => {
     expect(next).toHaveBeenCalledExactlyOnceWith(true);
     expect(track).toHaveBeenCalledTimes(2);
     await hydrateOptimizationData(sdk, {
-      profile: { id: 'second' },
+      profile: completeProfile('second'),
       changes: changes(true, 'second', 2),
     });
     await settle();
@@ -161,7 +162,9 @@ describe('Web Custom Flags', () => {
     const next = vi.fn();
     const dispose = signalFns.effect(() => next(flag.current));
     sdk.consent({ events: false });
-    await hydrateOptimizationData(sdk, { profile: { id: 'visitor', traits: { example: true } } });
+    await hydrateOptimizationData(sdk, {
+      profile: completeProfile('visitor', { traits: { example: true } }),
+    });
     expect(next).toHaveBeenCalledExactlyOnceWith(true);
     await hydrateOptimizationData(sdk, { changes: changes(false) });
     expect(next.mock.calls).toEqual([[true], [false]]);
@@ -177,7 +180,10 @@ describe('Web Custom Flags', () => {
     sdk.consent({ events: true });
     expect(track).not.toHaveBeenCalled();
     track.mockResolvedValue({ accepted: true });
-    await hydrateOptimizationData(sdk, { profile: { id: 'eligible' }, changes: changes() });
+    await hydrateOptimizationData(sdk, {
+      profile: completeProfile('eligible'),
+      changes: changes(),
+    });
     expect(track).toHaveBeenCalledTimes(1);
     subscription.unsubscribe();
   });
@@ -186,7 +192,7 @@ describe('Web Custom Flags', () => {
     'uses existing consent/allowlist admission (flag allowed: %s)',
     async (allow) => {
       const sdk = createRuntime({
-        defaults: { profile: { id: 'visitor' }, changes: changes(), consent: false },
+        defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
         allowedEventTypes: allow ? ['flag'] : [],
       });
       const event = vi.fn();
@@ -226,7 +232,10 @@ describe('Web Custom Flags', () => {
         expect(track).toHaveBeenCalledTimes(1);
         return;
       }
-      await hydrateOptimizationData(sdk, { profile: { id: 'visitor' }, changes: changes() });
+      await hydrateOptimizationData(sdk, {
+        profile: completeProfile('visitor'),
+        changes: changes(),
+      });
       sdk.consent({ events: true });
       sdk.getFlag('banner');
       expect(track).toHaveBeenCalledTimes(2);
@@ -259,9 +268,14 @@ describe('Web Custom Flags', () => {
     const subscription = sdk.states.profile.subscribe(() =>
       snapshots.push([sdk.getFlag('banner'), sdk.states.experienceRequestState.current.status])
     );
-    await hydrateOptimizationData(sdk, { profile: { id: 'next' }, changes: changes(false) });
+    await hydrateOptimizationData(sdk, {
+      profile: completeProfile('next'),
+      changes: changes(false),
+    });
     expect(snapshots.at(-1)).toEqual([false, 'success']);
-    sdk.interceptors.state.add(() => ({ profile: { id: 'next', traits: { updated: true } } }));
+    sdk.interceptors.state.add(() => ({
+      profile: completeProfile('next', { traits: { updated: true } }),
+    }));
     await hydrateOptimizationData(sdk, { changes: changes('retained') });
     expect(sdk.getFlag('banner')).toBe('retained');
     subscription.unsubscribe();
@@ -270,9 +284,9 @@ describe('Web Custom Flags', () => {
   it('clears old flags on a profile-only identity replacement but retains same-identity flags', async () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    await hydrateOptimizationData(sdk, { profile: { id: 'visitor' } });
+    await hydrateOptimizationData(sdk, { profile: completeProfile('visitor') });
     expect(sdk.getFlag('banner')).toBe(true);
-    await hydrateOptimizationData(sdk, { profile: { id: 'new-visitor' } });
+    await hydrateOptimizationData(sdk, { profile: completeProfile('new-visitor') });
     expect(sdk.getFlag('banner')).toBeUndefined();
     expect(window.localStorage.getItem(key)).toBeNull();
   });
@@ -281,7 +295,7 @@ describe('Web Custom Flags', () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
     vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
-      personalization: { profileId: 'new-visitor', changes: changes('plan-only') },
+      personalization: { profile: completeProfile('new-visitor'), changes: changes('plan-only') },
       nodes: [],
     } as never);
     await sdk.fetchExperience({ experienceId: 'experience' }, { config: { components: {} } });
@@ -301,7 +315,7 @@ describe('Web Custom Flags', () => {
       });
       const pending = hydrateOptimizationData(sdk, {
         changes: changes(false),
-        profile: { id: 'late' },
+        profile: completeProfile('late'),
       });
       if (action === 'reset') sdk.reset();
       else if (action === 'withdraw') sdk.consent({ events: false });
@@ -333,7 +347,7 @@ describe('Web Custom Flags', () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
     vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-      profile: { id: 'visitor' },
+      profile: completeProfile('visitor'),
       changes: changes(false),
     } as never);
     await sdk.page();
@@ -360,7 +374,7 @@ describe('Web Custom Flags', () => {
     expect(next.getFlag('banner')).toBeUndefined();
   });
   it('stops subscribeOnce bookkeeping after the first false value and supports cleanup while missing', async () => {
-    const sdk = createRuntime({ defaults: { profile: { id: 'visitor' }, consent: true } });
+    const sdk = createRuntime({ defaults: { profile: completeProfile('visitor'), consent: true } });
     const track = vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
     const next = vi.fn();
     const subscription = sdk.states.flag('banner').subscribeOnce(next);
@@ -376,7 +390,10 @@ describe('Web Custom Flags', () => {
     await settle();
     waiting.unsubscribe();
     track.mockClear();
-    await hydrateOptimizationData(sdk, { profile: { id: 'different' }, changes: changes() });
+    await hydrateOptimizationData(sdk, {
+      profile: completeProfile('different'),
+      changes: changes(),
+    });
     expect(track).not.toHaveBeenCalled();
   });
 
@@ -412,7 +429,10 @@ describe('Web Custom Flags', () => {
       await settle();
       expect(sdk.states.profile.current).toBeUndefined();
       const current = action === 'reset then destroy' ? createRuntime() : sdk;
-      await hydrateOptimizationData(current, { profile: { id: 'visitor' }, changes: changes() });
+      await hydrateOptimizationData(current, {
+        profile: completeProfile('visitor'),
+        changes: changes(),
+      });
       current.consent({ events: true });
       current.getFlag('banner');
       await settle();
@@ -423,7 +443,7 @@ describe('Web Custom Flags', () => {
   it('preserves browser identity when an interceptor adds profile to a private flag-only handoff', async () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    sdk.interceptors.state.add(() => ({ profile: { id: 'invented' } }));
+    sdk.interceptors.state.add(() => ({ profile: completeProfile('invented') }));
     await sdk.hydrateHandoffState(
       {
         spaceId: 'space',
@@ -441,7 +461,7 @@ describe('Web Custom Flags', () => {
     { value: [true, { nested: true }] },
   ])('keeps exposure signatures stable after returned value mutation: %j', async (value) => {
     const sdk = createRuntime({
-      defaults: { profile: { id: 'visitor' }, changes: changes(value), consent: true },
+      defaults: { profile: completeProfile('visitor'), changes: changes(value), consent: true },
     });
     const pending = deferred<EventEmissionResult>();
     const track = vi
@@ -462,7 +482,7 @@ describe('Web Custom Flags', () => {
 
   it('retries active flag exposure after repeated denial invalidates pending allowlisted work', async () => {
     const sdk = createRuntime({
-      defaults: { profile: { id: 'visitor' }, changes: changes(), consent: false },
+      defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
       allowedEventTypes: ['flag'],
     });
     const pending = deferred<void>();
@@ -489,7 +509,10 @@ describe('Web Custom Flags', () => {
     async (scope) => {
       const sdk = createRuntime();
       vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-      sdk.interceptors.state.add(() => ({ profile: { id: 'invented' }, changes: changes(false) }));
+      sdk.interceptors.state.add(() => ({
+        profile: completeProfile('invented'),
+        changes: changes(false),
+      }));
       await sdk.hydrateHandoffState(
         {
           spaceId: 'space',

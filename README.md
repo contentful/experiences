@@ -329,9 +329,11 @@ separate event submission; this flow adds no duplicate-delivery guarantee.
 
 The public Node producer accepts optional profile/changes data and optional
 `cache: { scope: 'private-request' }` (the default). It validates the explicit
-space/environment scope and profile, accepts an ID-only profile, and packages no
-replay or top-level continuation ID. Missing both fields omits `state`; an absent
-profile preserves the browser profile on hydration. Changes use API `ChangeArray` validation. It performs no events or network work.
+space/environment scope and packages complete profiles in `state.profile` or
+ID-only input in the top-level continuation `profileId`, without replay. An absent
+profile omits both profile fields and preserves the browser profile on hydration.
+Changes use API `ChangeArray` validation and are packaged in `state.changes` when
+supplied; missing both profile and changes omits `state`. It performs no events or network work.
 The internal Runtime helper of the same name takes `{ handoff, data? }` and
 retains its separate replay-preserving behavior.
 

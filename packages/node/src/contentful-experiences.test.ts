@@ -84,7 +84,7 @@ function createEventRuntime(
   );
   const upsertProfile = vi
     .spyOn(runtime.api.experience, 'upsertProfile')
-    .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
+    .mockResolvedValue({ profile: completeProfile('updated-profile') } as never);
   const sendBatchEvents = vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true);
 
   return { runtime, sendBatchEvents, upsertProfile };
@@ -117,7 +117,7 @@ describe('Node ContentfulExperiences', () => {
         metadata: {},
         debug: false,
         diagnostics: [],
-        personalization: { profileId: 'preview-profile' },
+        personalization: { profile: completeProfile('preview-profile') },
       };
       const implementation: RuntimeLivePreviewModule = {
         fetchPreviewSession: vi.fn().mockResolvedValue(plan),
@@ -297,7 +297,7 @@ describe('Node ContentfulExperiences', () => {
     await expect(runtime.forRequest().page()).resolves.toMatchObject({ accepted: true });
     expect(upsertProfile).toHaveBeenCalledTimes(2);
     expect(disposed.profile).toBeUndefined();
-    expect(sibling.profile).toEqual({ id: 'updated-profile' });
+    expect(sibling.profile).toEqual(completeProfile('updated-profile'));
   });
 
   it('binds event construction to each request without changing the shared builder', () => {
@@ -560,14 +560,14 @@ describe('Node ContentfulExperiences', () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
 
-    const data = { profile: { id: 'updated-profile' } };
+    const data = { profile: completeProfile('updated-profile') };
     expect(await request.identify({ userId: 'user-1' })).toEqual({ accepted: true, data });
 
     expect(upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ profileId: 'initial-profile' }),
       { locale: 'en-US' }
     );
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
     expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US' });
   });
 
@@ -695,8 +695,8 @@ describe('Node ContentfulExperiences', () => {
         gdpr: { isConsentGiven: false },
       });
     }
-    expect(result.data).toEqual({ profile: { id: 'updated-profile' } });
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(result.data).toEqual({ profile: completeProfile('updated-profile') });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
     expect(result.handoff).toMatchObject({
       spaceId: 'space',
       environmentId: 'environment',
@@ -888,15 +888,15 @@ describe('Node ContentfulExperiences', () => {
     });
     expect(germanResult.handoff.replay?.events[0]?.context.userAgent).toBe('german-agent');
     expect(frenchResult.handoff.replay?.events[0]?.context.userAgent).toBe('french-agent');
-    expect(german.profile).toEqual({ id: 'updated-profile' });
-    expect(french.profile).toEqual({ id: 'updated-profile' });
+    expect(german.profile).toEqual(completeProfile('updated-profile'));
+    expect(french.profile).toEqual(completeProfile('updated-profile'));
   });
 
   it('defaults XDA fetch identity from its request, adopts returned identity, and respects overrides', async () => {
     const runtime = createRuntime();
     const fetchExperience = vi.spyOn(runtime, 'fetchExperience').mockResolvedValueOnce({
       nodes: [],
-      personalization: { profileId: 'xda-profile' },
+      personalization: { profile: completeProfile('xda-profile') },
     } as never);
     fetchExperience.mockResolvedValue({ nodes: [] } as never);
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
@@ -905,7 +905,7 @@ describe('Node ContentfulExperiences', () => {
     expect(fetchExperience.mock.calls[0]?.[0]).toMatchObject({
       personalization: { profileId: 'initial-profile' },
     });
-    expect(request.profile).toEqual({ id: 'xda-profile' });
+    expect(request.profile).toEqual(completeProfile('xda-profile'));
 
     await request.fetchExperience(
       {
@@ -917,7 +917,7 @@ describe('Node ContentfulExperiences', () => {
     expect(fetchExperience.mock.calls[1]?.[0]).toMatchObject({
       personalization: { profileId: 'explicit-profile', events: [] },
     });
-    expect(request.profile).toEqual({ id: 'xda-profile' });
+    expect(request.profile).toEqual(completeProfile('xda-profile'));
   });
 
   it('does not let a stale XDA response replace a newer request profile', async () => {
@@ -935,10 +935,13 @@ describe('Node ContentfulExperiences', () => {
       personalization: { profileId: 'initial-profile' },
     });
     await request.identify({ userId: 'new-user' });
-    resolveFetch({ nodes: [], personalization: { profileId: 'stale-profile' } } as never);
+    resolveFetch({
+      nodes: [],
+      personalization: { profile: completeProfile('stale-profile') },
+    } as never);
     await pending;
 
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
   });
 
   describe('consent', () => {

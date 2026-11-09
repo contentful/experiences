@@ -143,9 +143,9 @@ until activation completes. Independently of tracking, the app awaits
 `page()`, `trackCurrentPage()` or `fetchExperience()` during startup and does not
 replace or rerender the server DOM.
 State hydration transfers profile state; it does not select content or provide a
-DOM hydration engine. Analytics needs a current profile identity at event emission;
-the constructor can adopt persisted profile or cookie identity, and the server
-handoff is another source.
+DOM hydration engine. Analytics needs a complete profile snapshot at event emission,
+from persisted profile state, an XDA/Personalization response, or full server handoff
+state. A cookie supplies identity for Personalization requests, not an Analytics profile.
 
 SDK consent still gates automatic and manual measurements. The SDK owns dwell,
 intervals, event queues and delivery; a submission/attempt is not a delivery promise.

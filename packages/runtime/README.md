@@ -36,6 +36,13 @@ blocks report the transformed method/type; every event method returns `{ accepte
 directly. `BlockedEvent.method` is typed as `string`, matching
 Optimization's public event payload contract.
 
+XDA plans retain the complete response profile in `plan.personalization.profile`.
+Core mirrors Delivery's profile shape without adding a runtime dependency. Node and Web
+validate and adopt that snapshot for subsequent requests and Analytics. Node request
+identity may be ID-only, while Analytics and browser profile state require complete
+snapshots, following Optimization at `e19139ac47619988b9db0e312cc37bb7c4fdaf89`.
+Personalized plans contain visitor-specific data; keep their serialization and caching private.
+
 The generated Experience Delivery dependency is declared only by Client. Runtime directly declares its Optimization API client, `es-toolkit`, and `zod` dependencies. Its package metadata is injected into `sdk-info` during build and checked by `verify-release-artifact`.
 
 Direct Experience and ExperienceFragment interaction builders use `default` when `variantId` is omitted or empty. Fragment builders also use `default` when `parentVariantId` is omitted or empty; a supplied root Experience variant remains separate from the Fragment's own variant. Experience builders leave omitted parent fields unset.
@@ -154,9 +161,11 @@ Runtime's internal `createRequestHandoffFromData({ handoff, data? })` adds the
 evaluated API profile and supplied changes to an existing private handoff and can
 preserve its replay. The distinct public Node free
 function `createRequestHandoffFromData({ spaceId, environmentId, data?, cache? })`
-constructs a state-only, private-request envelope through Runtime validation;
-it emits no replay or top-level continuation ID. It accepts an ID-only profile,
-omits `state` when neither profile nor changes is supplied, and performs no events or network work.
+constructs a private-request envelope through Runtime validation, without replay.
+A complete profile is packaged in `state.profile`; ID-only input is packaged as
+top-level continuation `profileId`. An absent profile omits both profile fields.
+Supplied changes are packaged in `state.changes`; missing both profile and changes
+omits `state`. The producer performs no events or network work.
 Profileless hydration preserves the browser profile; supplied changes replace flag state.
 Neither helper commits a preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 

@@ -35,8 +35,9 @@
   without a hydration gate; explicit
   per-element controls coexist with automatic tracking and remain consent-gated.
   Attach optional diagnostics/control subscriptions early; they do not gate tracking.
-  Analytics requires current profile identity at emission, which may come from
-  persisted browser state, an adopted cookie, or the handoff. Preserve SSR on failure.
+  Analytics requires a complete profile at emission, from persisted browser state,
+  XDA/Personalization responses, or full handoff state. An adopted cookie supplies
+  Personalization request identity only. Preserve SSR on failure.
 - Browser consent comes from SDK observables; mirror effective snapshots one way
   to independent app cookies. Grant/Revoke changes both axes with SDK commands,
   without content fetch/page calls. Release subscriptions on final exit and preserve

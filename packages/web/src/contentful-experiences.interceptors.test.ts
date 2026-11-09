@@ -33,7 +33,7 @@ function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
 beforeEach(() => {
   seedConsent({ events: false, persistence: false });
   vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
-    profile: { id: 'visitor' },
+    profile: completeProfile('visitor'),
   } as never);
   vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
