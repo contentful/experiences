@@ -13,6 +13,7 @@ type RuntimeMembers =
   | 'destroy'
   | 'flush'
   | 'hasConsent'
+  | 'getFlag'
   | 'identify'
   | 'locale'
   | 'page'

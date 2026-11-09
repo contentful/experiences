@@ -1,5 +1,6 @@
 import type {
   BlockedEvent,
+  Json,
   EventProfile,
   ExperienceRequestState,
   OptimizationEventStreamEvent,
@@ -12,6 +13,8 @@ import type { Observable } from './signals/index.js';
  * @public
  */
 export interface CoreStates {
+  /** Key-scoped Custom Flag value. Reads and subscriptions track exposure. */
+  flag: (name: string) => Observable<Json | undefined>;
   /** Current consent value (if any). */
   consent: Observable<boolean | undefined>;
   /** Current durable profile-continuity persistence consent value (if any). */

@@ -28,6 +28,9 @@ export type {
   EventType,
 } from './consent.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
+export { resolveFlagChange } from './resolve-flag-change.js';
+export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
+export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
   ContentfulExperiencesConfig,
   ExperienceRuntime,

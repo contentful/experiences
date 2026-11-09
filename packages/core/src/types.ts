@@ -322,10 +322,12 @@ export interface PortableRenderPlan {
   sourceMap?: ExperienceSourceMap;
   /** Reportable scopes resolved from `sourceMap`. Absent when there is no usable map. */
   attribution?: PlanAttribution;
-  /** Present when XDA returned personalization state for this Experience. */
+  /** Present only when XDA returned a nonempty profile id for this Experience. */
   personalization?: {
     /** Profile id to use for subsequent personalized requests. */
     profileId: string;
+    /** XDA changes preserved as returned, including custom flags and their metadata. */
+    changes?: unknown[];
   };
   /**
    * Recognized Delivery field-resolution errors, copied as serializable records.

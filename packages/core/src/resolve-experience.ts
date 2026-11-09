@@ -483,9 +483,14 @@ export async function resolveExperience(
     const attribution = resolveAttribution(sourceMap, nodes, log);
     if (attribution) plan.attribution = attribution;
   }
-  const profileId = isPlainPayload && payload.extensions?.personalization?.profile?.id;
+  const personalization = isPlainPayload ? payload.extensions?.personalization : undefined;
+  const profileId = personalization?.profile?.id;
+  const changes = personalization?.changes;
   if (profileId) {
-    plan.personalization = { profileId };
+    plan.personalization = {
+      profileId,
+      ...(Array.isArray(changes) ? { changes } : {}),
+    };
   }
   return plan;
 }

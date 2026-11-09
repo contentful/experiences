@@ -1,4 +1,6 @@
 import {
+  resolveFlagChange,
+  type Json,
   AnalyticsDelivery,
   type AnalyticsFlushOptions,
   ContentfulExperiences as RuntimeContentfulExperiences,
@@ -37,10 +39,15 @@ import {
   type DestinationRedirectResult,
   type PersonalizationOptions,
 } from '@contentful/experiences-client';
-import { signal, untracked } from '@preact/signals-core';
+import { computed, signal, untracked } from '@preact/signals-core';
 import { isEqual } from 'es-toolkit/predicate';
+import { cloneDeep } from 'es-toolkit';
 import {
   batch,
+  changes as changesSignal,
+  toDistinctObservable,
+  type Observable,
+  type Subscription,
   blockedEvent as blockedEventSignal,
   consent as consentSignal,
   effect,
@@ -212,10 +219,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #identityRevision = 0;
   #currentInitialization: HandoffInitialization | undefined;
   readonly #currentPage = new AcceptedCurrentPageTracker();
-  #generation = 0;
   #destroyed = false;
+  readonly #acceptedFlagViews = new Map<string, { id: number; signature: readonly unknown[] }>();
+  readonly #pendingFlagViews = new Map<string, { id: number; signature: readonly unknown[] }[]>();
+  readonly #activeFlags = new Map<string, number>();
+  #flagAttemptId = 0;
   /**
-   * Lifecycle token the Analytics queue reads. Reset and
+   * Owner lifecycle token shared by async work, Analytics and detectors. Reset and
    * consent withdrawal replace it; destroy() makes it read `undefined`.
    */
   #resetToken: object = {};
@@ -252,6 +262,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   /** Observable state shared with application subscriptions and internal effects. */
   readonly states: CoreStates = {
+    flag: (name) => this.#flagObservable(name),
     blockedEventStream: toObservable(blockedEventSignal),
     consent: toObservable(consentSignal),
     persistenceConsent: toObservable(persistenceConsentSignal),
@@ -318,11 +329,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         consent: LocalStore.consent,
         persistenceConsent: LocalStore.persistenceConsent,
         profile: () => LocalStore.profile,
+        changes: () => LocalStore.changes,
       });
       batch(() => {
         consentSignal.value = resolvedDefaults.consent;
         persistenceConsentSignal.value = resolvedDefaults.persistenceConsent;
         profileSignal.value = resolvedDefaults.profile;
+        changesSignal.value = resolvedDefaults.changes;
         localeSignal.value = locale;
         onlineSignal.value = globalThis.navigator?.onLine !== false;
         eventSignal.value = undefined;
@@ -372,11 +385,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         }
       );
       installCoreBridgeCapabilities(this, (data) => {
-        const generation = this.#generation;
-        return this.#applyOptimizationDataToSignals(
-          data,
-          () => !this.#destroyed && this.#generation === generation
-        );
+        const token = this.#resetToken;
+        return this.#applyOptimizationDataToSignals(data, () => this.#isCurrent(token));
       });
       // Capture the incoming cookie before the profile-persistence effect can replace it.
       const incoming = persistenceConsentSignal.value === true ? this.#identity.read() : undefined;
@@ -465,9 +475,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       // the SDK (including destroy()) or throw. clearQueue() also publishes state.
       // A persistence-only change leaves the queues and measurements alone.
       if (next.events === false) {
-        this.#generation += 1;
-        this.experienceQueue.clearQueue();
         this.#resetToken = {};
+        this.experienceQueue.clearQueue();
+        this.#pendingFlagViews.clear();
+        this.#acceptedFlagViews.clear();
         this.insightsQueue.clearQueuedEvents();
         this.#profileRevision += 1;
         // A discarded queued page must not leave its route looking admitted, or a later
@@ -489,7 +500,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       } finally {
         // Cookie deletion can throw in a restricted document. Queues and old
         // measurements are already discarded; permitted detectors still restart.
-        if (next.events === false) this.#interactionTracking?.syncConsent();
+        if (next.events === false) {
+          this.#interactionTracking?.syncConsent();
+          this.#retryActiveFlagViews();
+        }
       }
     });
   }
@@ -585,10 +599,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     const profileRevision = this.#profileRevision;
     const identityRevision = this.#identityRevision;
-    const generation = this.#generation;
+    const token = this.#resetToken;
     const gated = this.#gatePersonalizationEvents(request.prepare?.(options) ?? options);
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    if (!this.#isCurrent(token)) throw new Error('Experiences fetch was superseded');
     const intercepted =
       gated.personalization?.events === undefined
         ? gated.personalization
@@ -599,7 +613,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             ),
           };
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    if (!this.#isCurrent(token)) throw new Error('Experiences fetch was superseded');
     const serialized =
       intercepted === undefined ? undefined : serializePersonalization(intercepted);
     const personalization =
@@ -611,17 +625,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             events: serialized.events.filter((event) => {
               const admitted = this.#admitEvent(event, true);
               if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-              if (this.#generation !== generation)
-                throw new Error('Experiences fetch was superseded');
+              if (!this.#isCurrent(token)) throw new Error('Experiences fetch was superseded');
               return admitted;
             }),
           };
     if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+    if (!this.#isCurrent(token)) throw new Error('Experiences fetch was superseded');
     for (const event of personalization?.events ?? []) {
       this.#publishEvent(event);
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-      if (this.#generation !== generation) throw new Error('Experiences fetch was superseded');
+      if (!this.#isCurrent(token)) throw new Error('Experiences fetch was superseded');
     }
     const profileId = this.isPreview
       ? undefined
@@ -651,13 +664,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           mergeExperienceState
         );
         if (
-          !this.#destroyed &&
-          this.#generation === generation &&
+          this.#isCurrent(token) &&
           this.#identityRevision === identityRevision &&
-          this.#profileRevision === profileRevision &&
-          !isEqual(profileSignal.value, next.profile)
+          this.#profileRevision === profileRevision
         )
-          profileSignal.value = next.profile;
+          batch(() => this.#commitIncomingState(next));
       }
     }
     return result;
@@ -670,18 +681,20 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       return;
     }
     batch(() => {
-      this.#generation += 1;
+      this.#resetToken = {};
       this.#interactionTracking?.reset();
       this.#currentInitialization = undefined;
       this.#currentPage.reset();
       this.#setAdoptedProfileId(undefined);
       this.experienceQueue.reset();
-      this.#resetToken = {};
+      this.#pendingFlagViews.clear();
+      this.#acceptedFlagViews.clear();
       this.insightsQueue.clearQueuedEvents();
       this.#profileRevision += 1;
       LocalStore.reset();
       this.#identity.clear();
       profileSignal.value = undefined;
+      changesSignal.value = undefined;
       eventSignal.value = undefined;
       blockedEventSignal.value = undefined;
       experienceRequestStateSignal.value = { status: 'idle' };
@@ -707,10 +720,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       flushPersonalizationOnDestroy(this.experienceQueue);
     }
     this.#destroyed = true;
+    this.#pendingFlagViews.clear();
+    this.#acceptedFlagViews.clear();
+    this.#activeFlags.clear();
     this.#disposeEffects();
     this.insightsQueue.clearPeriodicFlushTimer();
     this.insightsQueue.clearScheduledRetry();
-    this.#generation += 1;
     this.#currentInitialization = undefined;
     this.#currentPage.reset();
     try {
@@ -730,6 +745,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         releaseWebSingleton(this.#singletonOwner);
       }
     }
+  }
+
+  #isCurrent(token: object): boolean {
+    return !this.#destroyed && this.#resetToken === token;
   }
 
   #ensureInteractionTracking(): InteractionTracking | undefined {
@@ -838,8 +857,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.#destroyed) return Promise.resolve({ accepted: false });
     if (this.isPreview)
       return Promise.resolve(this.#skipPreviewEvent('sendPreparedExperienceEvents', [events]));
-    const generation = this.#generation;
-    const isCurrent = (): boolean => !this.#destroyed && this.#generation === generation;
+    const token = this.#resetToken;
+    const isCurrent = (): boolean => this.#isCurrent(token);
     const admitted = this.#admitPreparedEvents(events);
     if (admitted === undefined || !isCurrent()) return Promise.resolve({ accepted: false });
     const result = this.experienceQueue.sendPrepared(admitted, { profileId, locale });
@@ -943,14 +962,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const current = this.#currentInitialization;
     if (current?.routeKey === routeKey && current.key === key) return current;
 
-    const generation = this.#generation;
+    const token = this.#resetToken;
     const initialization: HandoffInitialization = {
       key,
       routeKey,
-      isCurrent: () =>
-        !this.#destroyed &&
-        this.#generation === generation &&
-        this.#currentInitialization === initialization,
+      isCurrent: () => this.#isCurrent(token) && this.#currentInitialization === initialization,
     };
     this.#currentInitialization = initialization;
     return initialization;
@@ -986,9 +1002,17 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       if (!initialization.isCurrent() || this.#profileRevision !== profileRevision) return;
       // Profileless/cacheable hydration declares success without changing continuity.
       await this.#applyOptimizationDataToSignals(
-        shouldApplyHandoffProfile(handoff) ? { profile: handoff.state?.profile } : {},
+        {
+          ...(shouldApplyHandoffProfile(handoff) ? { profile: handoff.state?.profile } : {}),
+          ...(handoff.cache.scope === 'private-request' &&
+          handoff.state &&
+          Object.hasOwn(handoff.state, 'changes')
+            ? { changes: handoff.state.changes }
+            : {}),
+        },
         initialization.isCurrent,
-        () => shouldApplyHandoffProfile(handoff)
+        () => shouldApplyHandoffProfile(handoff),
+        () => handoff.cache.scope === 'private-request'
       );
     });
     initialization.hydration = hydration.catch((error: unknown) => {
@@ -1031,26 +1055,46 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   async #applyOptimizationDataToSignals(
     data: ExperienceState,
     isCurrent: () => boolean,
-    canApplyProfile: () => boolean = () => true
+    canApplyProfile: () => boolean = () => true,
+    canApplyChanges: () => boolean = () => true
   ): Promise<void> {
     if (this.#destroyed) return;
     const profileRevision = this.#profileRevision;
+    const token = this.#resetToken;
     const next = mergeExperienceState(
       data,
       await this.interceptors.state.run(data, mergeExperienceState)
     );
-    if (!isCurrent()) return;
+    if (!isCurrent() || !this.#isCurrent(token)) return;
     batch(() => {
-      if (
-        canApplyProfile() &&
-        this.#profileRevision === profileRevision &&
-        Object.hasOwn(next, 'profile')
-      ) {
-        if (!isEqual(profileSignal.value, next.profile)) profileSignal.value = next.profile;
-        this.#setAdoptedProfileId(undefined);
+      if (this.#profileRevision === profileRevision) {
+        this.#commitIncomingState(next, canApplyProfile(), canApplyChanges());
       }
       experienceRequestStateSignal.value = { status: 'success' };
     });
+  }
+
+  #commitIncomingState(
+    next: ExperienceState,
+    canApplyProfile = true,
+    canApplyChanges = true
+  ): void {
+    if (canApplyProfile && Object.hasOwn(next, 'profile')) {
+      if (profileSignal.peek()?.id !== next.profile?.id) {
+        this.#pendingFlagViews.clear();
+        this.#acceptedFlagViews.clear();
+        if (!Object.hasOwn(next, 'changes')) changesSignal.value = undefined;
+      }
+      if (!isEqual(profileSignal.value, next.profile)) profileSignal.value = next.profile;
+      this.#setAdoptedProfileId(undefined);
+    }
+    if (
+      canApplyChanges &&
+      Object.hasOwn(next, 'changes') &&
+      !isEqual(changesSignal.value, next.changes)
+    ) {
+      changesSignal.value = next.changes;
+    }
   }
 
   #skipPreviewEvent(method: string, args: readonly unknown[]): EventEmissionResult {
@@ -1060,13 +1104,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   #reportBlockedEvent(event: BlockedEvent): void {
     if (this.#destroyed) return;
-    const generation = this.#generation;
+    const token = this.#resetToken;
     try {
       this.onEventBlocked?.(event);
     } catch (error) {
       console.warn(`onEventBlocked callback failed for method "${event.method}"`, error);
     }
-    if (!this.#destroyed && this.#generation === generation) blockedEventSignal.value = event;
+    if (this.#isCurrent(token)) blockedEventSignal.value = event;
   }
 
   #initializeEffects(): void {
@@ -1105,10 +1149,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.#effects.push(
       effect(() => {
         const profile = profileSignal.value;
+        const changes = changesSignal.value;
         const persistenceConsent = persistenceConsentSignal.value;
         const handoffId = this.#adoptedProfileId.value;
         if (persistenceConsent !== true) return;
         LocalStore.profile = profile;
+        LocalStore.changes = changes;
         this.#identity.persist(this.#identity.resolve({ profileId: profile?.id, handoffId }));
       })
     );
@@ -1123,6 +1169,139 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         );
       })
     );
+    this.#effects.push(
+      effect(() => {
+        void changesSignal.value;
+        void profileSignal.value;
+        void consentSignal.value;
+        untracked(() => this.#retryActiveFlagViews());
+      })
+    );
+  }
+
+  /** Read a Custom Flag and track its selected value and attribution. */
+  override getFlag(
+    name: string,
+    changes: readonly unknown[] | undefined = changesSignal.value
+  ): Json | undefined {
+    const selected = resolveFlagChange(name, changes);
+    untracked(() => this.#attemptFlagView(name, selected));
+    return selected?.value;
+  }
+
+  #eligibleFlagProfileId(): string | undefined {
+    if (this.#destroyed || this.isPreview || !this.hasConsent('trackFlagView')) return;
+    return profileSignal.peek()?.id;
+  }
+
+  #attemptFlagView(name: string, selected: ReturnType<typeof resolveFlagChange>): void {
+    const profileId = this.#eligibleFlagProfileId();
+    if (profileId === undefined) return;
+    const payload = {
+      componentId: name,
+      experienceId: selected?.meta.experienceId,
+      variantIndex: selected?.meta.variantIndex,
+    };
+    const signature = [
+      selected?.value,
+      name,
+      payload.experienceId,
+      payload.variantIndex,
+      profileId,
+    ];
+    if (isEqual(this.#acceptedFlagViews.get(name)?.signature, signature)) return;
+    let pending = this.#pendingFlagViews.get(name);
+    if (pending?.some((attempt) => isEqual(attempt.signature, signature))) return;
+    pending ??= [];
+    this.#pendingFlagViews.set(name, pending);
+    const attempt = { id: this.#flagAttemptId++, signature: cloneDeep(signature) };
+    pending.push(attempt);
+    const token = this.#resetToken;
+    void this.trackFlagView(payload)
+      .then((result) => {
+        if (
+          !result.accepted ||
+          !this.#isCurrent(token) ||
+          this.#pendingFlagViews.get(name) !== pending
+        )
+          return;
+        const accepted = this.#acceptedFlagViews.get(name);
+        if (!accepted || attempt.id > accepted.id) this.#acceptedFlagViews.set(name, attempt);
+      })
+      .catch((error: unknown) => console.warn('Flag view failed', error))
+      .finally(() => {
+        const index = pending.indexOf(attempt);
+        if (index !== -1) pending.splice(index, 1);
+        if (pending.length === 0 && this.#pendingFlagViews.get(name) === pending)
+          this.#pendingFlagViews.delete(name);
+      });
+  }
+
+  #retryActiveFlagViews(): void {
+    if (this.#eligibleFlagProfileId() === undefined) return;
+    const token = this.#resetToken;
+    const changes = changesSignal.peek();
+    for (const name of [...this.#activeFlags.keys()]) {
+      if (!this.#isCurrent(token)) return;
+      this.#attemptFlagView(name, resolveFlagChange(name, changes));
+    }
+  }
+
+  #flagObservable(name: string): Observable<Json | undefined> {
+    const selected = computed(() => resolveFlagChange(name, changesSignal.value));
+    const values = toDistinctObservable(
+      computed(() => selected.value?.value),
+      isEqual
+    );
+    const read = (): Json | undefined => {
+      const winner = selected.value;
+      untracked(() => this.#attemptFlagView(name, winner));
+      return values.current;
+    };
+    const register = (): (() => void) => {
+      if (this.#destroyed) return () => undefined;
+      this.#activeFlags.set(name, (this.#activeFlags.get(name) ?? 0) + 1);
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        const count = (this.#activeFlags.get(name) ?? 0) - 1;
+        if (count <= 0) this.#activeFlags.delete(name);
+        else this.#activeFlags.set(name, count);
+      };
+    };
+    const subscribe = <T>(
+      start: (next: (value: T) => void) => Subscription,
+      next: (value: T) => void,
+      once = false
+    ): Subscription => {
+      const unregister = register();
+      try {
+        // A missing one-shot value remains active until the first non-nullish value or cleanup.
+        if (once) this.getFlag(name);
+        const subscription = start((value) => {
+          if (once) unregister();
+          this.getFlag(name);
+          next(value);
+        });
+        return {
+          unsubscribe: () => {
+            subscription.unsubscribe();
+            unregister();
+          },
+        };
+      } catch (error) {
+        unregister();
+        throw error;
+      }
+    };
+    return {
+      get current() {
+        return read();
+      },
+      subscribe: (next) => subscribe(values.subscribe, next),
+      subscribeOnce: (next) => subscribe(values.subscribeOnce, next, true),
+    };
   }
 
   #disposeEffects(): void {

@@ -204,3 +204,28 @@ describe('LocalStore consent persistence', () => {
     }
   });
 });
+
+it('round trips changes and clears their continuity cache on reset', () => {
+  const changes = [
+    {
+      type: 'Variable' as const,
+      key: 'banner',
+      value: false,
+      meta: { experienceId: 'experiment', variantIndex: 1 },
+    },
+  ];
+  LocalStore.changes = changes;
+  expect(LocalStore.changes).toEqual(changes);
+  expect(JSON.parse(window.localStorage.getItem('__ctfl_opt_changes__')!)).toEqual(changes);
+  LocalStore.reset();
+  expect(LocalStore.changes).toBeUndefined();
+});
+
+it.each(['{bad-json', JSON.stringify([{ type: 'Variable', key: 'banner', value: true }])])(
+  'removes invalid changes cache %s',
+  (value) => {
+    window.localStorage.setItem('__ctfl_opt_changes__', value);
+    expect(LocalStore.changes).toBeUndefined();
+    expect(window.localStorage.getItem('__ctfl_opt_changes__')).toBeNull();
+  }
+);
