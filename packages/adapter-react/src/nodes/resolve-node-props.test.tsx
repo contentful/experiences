@@ -149,7 +149,7 @@ describe('resolveNodeProps', () => {
     });
   });
 
-  it('gives a host-rendered node the same markup as ServerExperienceRenderer', () => {
+  it("wraps host-rendered node markup in the standard renderer's plan boundary", () => {
     function Card({ title, color, badge }: { title: string; color: string; badge: string }) {
       return (
         <article style={{ color }}>

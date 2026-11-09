@@ -74,7 +74,7 @@ const cardNode = planNode(
 const experience = { debug: false, metadata: { slug: 'home' } };
 
 describe('ExperienceNode', () => {
-  it('renders a resolved node exactly as ServerExperienceRenderer does', () => {
+  it("wraps resolved node markup in ServerExperienceRenderer's plan boundary", () => {
     const host = renderToStaticMarkup(
       <ExperienceNode node={resolve(cardNode, config)} experience={experience} />
     );

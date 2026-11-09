@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, forwardRef, type HTMLAttributes } from 'react';
+import { act, forwardRef, StrictMode, type HTMLAttributes } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ const roots: Root[] = [];
 afterEach(async () => {
   await act(async () => roots.splice(0).forEach((root) => root.unmount()));
   document.body.innerHTML = '';
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -46,7 +47,46 @@ const plan = (withMap = true) =>
   resolveExperience(payload, config, withMap ? { sourceMap: minimalSourceMap() } : undefined);
 
 describe('standard attributed Experience rendering', () => {
+  it.each([
+    ['development', 1],
+    ['production', 0],
+  ] as const)(
+    'warns once for a missing custom boundary ref in %s',
+    async (environment, warnings) => {
+      vi.stubEnv('NODE_ENV', environment);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const experience = await plan(false);
+      const ForwardedNode = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>((props, ref) => (
+        <article {...props} ref={ref} />
+      ));
+      const DroppedRef = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>((props, _ref) => (
+        <section {...props} />
+      ));
+      const callback = vi.fn<OnExperienceNodeRoot>();
+      const container = document.createElement('div');
+      document.body.append(container);
+      const root = createRoot(container);
+      roots.push(root);
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <ClientExperienceRenderer
+              experience={experience}
+              config={{ components: { probe: ForwardedNode } }}
+              as={DroppedRef}
+              onNodeRoot={callback}
+            />
+          </StrictMode>
+        )
+      );
+      expect(warn).toHaveBeenCalledTimes(warnings);
+      if (warnings) expect(warn).toHaveBeenCalledWith(expect.stringContaining('forward the ref'));
+      expect(callback).not.toHaveBeenCalled();
+    }
+  );
+
   it('disables automatic views while retaining data and independent click/hover overrides with ordinary forwarding', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const experience = await plan();
     const Forwarded = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>((props, ref) => (
       <article {...props} ref={ref} />
@@ -79,6 +119,7 @@ describe('standard attributed Experience rendering', () => {
     expect(article.getAttribute('data-ctfl-track-hovers')).toBe('true');
     expect(article.getAttribute('data-ctfl-clickable')).toBe('true');
     expect(callback).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
     expect(callback.mock.calls[0]![0].data).toBe(experience.nodes[0]!.attribution!.roots.at(-1));
     expect(
       JSON.parse(container.firstElementChild!.getAttribute('data-ctfl-attribution')!).scopes
