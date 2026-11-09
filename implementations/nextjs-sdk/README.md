@@ -237,7 +237,9 @@ assembly aliases and Rich Text wrapper, as in the React reference. Components
 retain checks for unknown-valued SDK bindings. Invalid bindings still produce the
 generic renderer failure; removing duplicate identity `resolveData` checks removes
 only their extra resolver diagnostic and corresponding banner. Generated declarations
-and typecheck do not validate every live content variant.
+and typecheck do not validate every live content variant. Before rendering Rich Text,
+the maintained `@contentful/rich-text-types` validator checks the document's node
+shapes and parent/child rules for both cards and templates.
 
 `src/components/ServerContentPage.tsx` owns the page shell and passes Next's
 search-params object unchanged to the cached loader, which owns page context.
