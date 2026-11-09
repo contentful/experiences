@@ -1,7 +1,7 @@
 import type { Config } from '@contentful/experiences-nextjs/server';
 import { documentToReactComponents } from '@contentful/rich-text-react-renderer';
 import type { HTMLAttributes, ReactNode } from 'react';
-import { BLOCKS } from '@contentful/rich-text-types';
+import { validateRichTextDocument } from '@contentful/rich-text-types';
 import type { TypeContentWithoutLinkResolutionResponse } from '../contentful-generated';
 
 type ContentFields = TypeContentWithoutLinkResolutionResponse['fields'];
@@ -16,15 +16,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// The assembly binding supplies a document root; the maintained renderer owns
-// child-node semantics. This deliberately does not validate the whole document.
 function isDocument(value: unknown): value is ContentFields['richText'] {
-  return (
-    isRecord(value) &&
-    value.nodeType === BLOCKS.DOCUMENT &&
-    isRecord(value.data) &&
-    Array.isArray(value.content)
-  );
+  return validateRichTextDocument(value as ContentFields['richText']).length === 0;
 }
 
 function readContent(content: Record<string, unknown>, registration: string): BoundContent {
@@ -38,7 +31,9 @@ function readContent(content: Record<string, unknown>, registration: string): Bo
   }
   const document = isRecord(content.richText) ? content.richText.document : undefined;
   if (!isDocument(document)) {
-    throw new Error(`${registration}: expected richText.document to contain a Rich Text document.`);
+    throw new Error(
+      `${registration}: expected richText.document to be a valid Contentful Rich Text document.`
+    );
   }
   return {
     title: content.title,
