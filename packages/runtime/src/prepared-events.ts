@@ -1,6 +1,6 @@
 import {
-  ExperienceEventArray,
-  type ExperienceEvent,
+  ExperienceEventArray as PersonalizationEventArray,
+  type ExperienceEvent as PersonalizationEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import { isEqual } from 'es-toolkit/predicate';
 
@@ -10,7 +10,7 @@ const MAX_IDENTIFY_EVENTS = 50;
 
 /** Event types permitted in a finalized evaluated replay. */
 export type PreparedExperienceEvent = Extract<
-  ExperienceEvent,
+  PersonalizationEvent,
   { type: 'identify' | 'track' | 'page' }
 >;
 
@@ -28,7 +28,7 @@ export function withEventConsent<
 export function validatePreparedEvents(
   events: readonly unknown[]
 ): readonly PreparedExperienceEvent[] {
-  const validEvents = ExperienceEventArray.parse(events);
+  const validEvents = PersonalizationEventArray.parse(events);
   if (
     validEvents.length > MAX_PREPARED_EVENTS ||
     validEvents.filter(({ type }) => type === 'identify').length > MAX_IDENTIFY_EVENTS ||

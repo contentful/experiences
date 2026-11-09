@@ -19,7 +19,11 @@ const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery')
 
 type PersonalizationApi = Pick<PersonalizationApiClient, 'upsertProfile'>;
 type DeliveryRequest = { profileId?: string; locale?: string };
-type QueuedBatch = { events: ExperienceEvent[]; request?: DeliveryRequest; publishing?: boolean };
+type QueuedBatch = {
+  events: PersonalizationEvent[];
+  request?: DeliveryRequest;
+  publishing?: boolean;
+};
 /** A teardown-authorized delivery with a captured identity. */
 type QueuedDelivery = { token: object | undefined; profileId?: string };
 
@@ -99,7 +103,7 @@ export class PersonalizationDelivery {
 
   /** Ordinary online events go direct; offline events use the same queued transport. */
   async send(
-    event: ExperienceEvent,
+    event: PersonalizationEvent,
     isCurrent: () => boolean = () => true
   ): Promise<EventEmissionResult> {
     if (!this.#isAcceptingEvents()) return { accepted: false };

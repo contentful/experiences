@@ -303,7 +303,7 @@ async function loadExperiences(destinations, isCurrent, requestOptions) {
       personalization = undefined;
       const plan = await sdk.fetchExperience(options, resolveOptions);
       if (!isCurrent()) return failures.size > 0;
-      profileId = plan.personalization?.profileId ?? profileId;
+      profileId = plan.personalization?.profile.id ?? profileId;
       renderPresentations(plan, experienceId, targets);
       rendered.add(experienceId);
       if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))

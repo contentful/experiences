@@ -250,7 +250,7 @@ describe('PersonalizationDelivery', () => {
   );
 
   it('keeps a newer profile when an older event resumes from its event interceptor', async () => {
-    const intercepted = deferred<ExperienceEvent>();
+    const intercepted = deferred<PersonalizationEvent>();
     const f = fixture({ profileId: 'original' });
     const older = builder.buildPageView();
     let publishedProfile = 'original';

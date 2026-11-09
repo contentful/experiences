@@ -125,7 +125,7 @@ app.get('/', async (req, res) => {
       events = undefined;
       try {
         const plan = await request.fetchExperience(options, resolveOptions);
-        profileId = plan.personalization?.profileId ?? profileId;
+        profileId = plan.personalization?.profile.id ?? profileId;
         plans.set(experienceId, plan);
       } catch (error) {
         if (request.isPreview) throw error;
