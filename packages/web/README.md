@@ -238,7 +238,7 @@ const plan = await experiences.fetchExperience(
 Events built by the Web runtime use the `web` channel and its browser context
 providers. Caller-built `personalization.events` must already contain the intended
 context; submitting an event does not merge missing page/user-agent/locale values
-into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
+into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy.
 
 The current XDA event-bearing POST has no noncommitting preflight option and
 may commit supplied events. A Node-prepared Personalization handoff does not
@@ -462,8 +462,9 @@ The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile through `defaults.profile` when creating the runtime, or identify
 a profile before sending Analytics events. `ConfigDefaults` describes the
-`defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
-the runtime, while XDA responses can supply its id. The current profile is
+`defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`.
+Personalization event responses and XDA plans supply complete profiles to the
+runtime. The current profile is
 persisted and restored from LocalStorage once persistence consent is granted.
 `getAnonymousId` is an optional configuration callback whose returned id takes
 precedence over the active profile id. The default provider reads the stored
@@ -522,9 +523,10 @@ their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
 are queued in memory rather than sent one by one. Every Analytics method resolves
-`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a profile
-or an adopted continuation ID, such as a new visitor's call made while the first profile request is
-still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
+`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a complete profile, such as a
+new visitor's call made while the first profile request is still pending, the call
+warns and is dropped, as in Optimization, and does not throw. A cookie or handoff
+continuation ID is sufficient for Personalization requests but not Analytics. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
 or unloaded (`visibilitychange`, `pagehide`, `beforeunload`). On hide, active views and
 hovers end first, then both queues get a final forced attempt: Analytics uses
@@ -636,7 +638,7 @@ one. Everything here is gated on **persistence consent**; nothing is written wit
 - **What it holds.** A complete profile's id, else an identity adopted from a handoff, else
   the id already stored. The fallback means a visitor keeps their continuity while the
   profile is absent, and a static or public handoff, which carries no profile, cannot erase
-  it. It follows profile responses, XDA profile ids and handoff state.
+  it. It follows Personalization and XDA profile responses and handoff state.
 - **At startup, and when persistence is granted later,** the SDK adopts an identity the
   browser already holds, such as one a server wrote, and migrates a legacy `ntaid` cookie.
   That id is what the next request is sent under. A cookie for a different visitor than the
@@ -832,8 +834,9 @@ roots, and one root can belong to several scopes.
   innermost Fragment occurrence of the nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
-  current profile identity at event emission, which can come from persisted
-  browser state, a cookie adopted at construction, or handoff state. They do not
+  complete profile at event emission, which can come from persisted browser state,
+  an XDA/Personalization response, or full handoff state. Cookie identity alone is
+  sufficient for Personalization continuity, but not Analytics. They do not
   wait for handoff hydration or prepared Personalization HTTP delivery. A rejected
   call is logged as a warning and does not stop tracking.
 - Withdrawing event consent discards active view/hover measurements and delayed

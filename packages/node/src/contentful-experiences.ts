@@ -28,6 +28,7 @@ import {
   type EventEmissionResult,
   type EventOptimizationData,
   type EventProfile,
+  EventProfileSchema,
   type PersonalizationRequestOptions,
   type ExperiencesHandoff,
   type AnalyticsRequestOptions,
@@ -70,7 +71,8 @@ export type RequestContext = {
   livePreview?: RuntimeLivePreviewOptions;
   locale?: string;
   resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
-  profile?: EventProfile;
+  /** An ID for request continuity or a complete profile snapshot for Analytics. */
+  profile?: Pick<EventProfile, 'id'> | EventProfile;
   eventContext?: UniversalEventBuilderArgs;
   /**
    * Request-scoped consent: `true` or `false` sets event and persistence consent
@@ -141,7 +143,7 @@ export interface RequestRuntime extends NodePersonalizationMethods, NodeAnalytic
   destroy(): void;
   readonly isPreview: boolean;
   readonly locale: string | undefined;
-  readonly profile: EventProfile | undefined;
+  readonly profile: RequestContext['profile'];
   /** Builds events without submitting them; explicit inputs override request context. */
   readonly eventBuilder: RequestEventBuilder;
   /** Whether the host application may persist this request's profile id. */
@@ -206,7 +208,7 @@ class RequestBoundExperiences implements RequestRuntime {
   readonly #isPreview: boolean;
   readonly locale: string | undefined;
   readonly eventBuilder: RequestEventBuilder;
-  #profile: EventProfile | undefined;
+  #profile: RequestContext['profile'];
   #profileRevision = 0;
   #destroyed = false;
   readonly #previewOptions: RuntimeLivePreviewOptions | undefined;
@@ -319,7 +321,7 @@ class RequestBoundExperiences implements RequestRuntime {
     return this.#isPreview;
   }
 
-  get profile(): EventProfile | undefined {
+  get profile(): RequestContext['profile'] {
     return this.#profile;
   }
 
@@ -518,14 +520,14 @@ class RequestBoundExperiences implements RequestRuntime {
     );
     this.assertActive();
     // A Destination redirect carries no personalization.
-    const returnedProfileId =
-      'personalization' in result ? result.personalization?.profileId : undefined;
+    const returnedProfile =
+      'personalization' in result ? result.personalization?.profile : undefined;
     if (
       !this.isPreview &&
-      returnedProfileId !== undefined &&
+      returnedProfile !== undefined &&
       this.#profileRevision === profileRevision
     ) {
-      this.setProfile({ id: returnedProfileId });
+      this.setProfile(EventProfileSchema.parse(returnedProfile));
     }
     return result;
   }

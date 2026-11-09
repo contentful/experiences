@@ -1,3 +1,4 @@
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   ContentfulExperiences as Runtime,
@@ -30,7 +31,7 @@ function preview() {
   const implementation: RuntimeLivePreviewModule = {
     fetchPreviewSession: vi.fn(async () => ({
       ...plan,
-      personalization: { profileId: 'preview-profile' },
+      personalization: { profile: profileFixture('preview-profile') },
     })),
     createLivePreviewClient: vi.fn(() => ({
       getResult: () => ({ data, error: undefined }),
@@ -169,7 +170,7 @@ it('coalesces equivalent fetches with independent plans and one profile adoption
   );
   const fetch = vi
     .spyOn(Runtime.prototype, 'fetchExperience')
-    .mockResolvedValue({ ...source, personalization: { profileId: 'evaluated' } });
+    .mockResolvedValue({ ...source, personalization: { profile: profileFixture('evaluated') } });
   const [first, second] = await Promise.all([
     sdk.fetchExperience({ experienceId: 'hero' }, resolveOptions),
     sdk.fetchExperience(
@@ -251,7 +252,7 @@ it('discards a pending preview resolution after reset', async () => {
 
 it('honors explicit startup persistence denial while preview never adopts visitor identity', () => {
   seedConsent({ events: true, persistence: true });
-  window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: 'visitor' }));
+  window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profileFixture('visitor')));
   document.cookie = `${ANONYMOUS_ID_COOKIE_LEGACY}=visitor; Path=/`;
   const sdk = runtime({ isPreview: true, defaults: { persistenceConsent: false } });
   expect(sdk.states.persistenceConsent.current).toBe(false);

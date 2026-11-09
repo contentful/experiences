@@ -56,7 +56,7 @@ function optimizationData(profileId: string): EventOptimizationData {
 
 function createFixture(
   options: {
-    profile?: EventProfile;
+    profile?: ReturnType<RuntimeEventBindings['getProfile']>;
     eventInterceptors?: EventInterceptors;
     consent?: ConsentState;
     allowedEventTypes?: readonly AllowedEventType[];
@@ -132,7 +132,7 @@ describe('RuntimeEventMethods', () => {
     });
     const f = createFixture({
       consent: { events: true },
-      profile: { id: 'visitor' },
+      profile: completeProfile('visitor'),
       isActive: () => active,
       eventInterceptors: { run },
     });
@@ -161,7 +161,7 @@ describe('RuntimeEventMethods', () => {
     let active = true;
     const f = createFixture({
       consent: { events: true },
-      profile: { id: 'visitor' },
+      profile: completeProfile('visitor'),
       isActive: () => active,
     });
     f.sendBatchEvents.mockImplementationOnce(async () => {
@@ -443,16 +443,17 @@ describe('RuntimeEventMethods', () => {
   describe('id-only profiles', () => {
     const idOnly = { id: 'profile-1' };
 
-    it('accepts both a complete profile and an id-only profile as an event profile', () => {
+    it('requires complete profile state while accepting id-only request profiles', () => {
       expect(EventProfileSchema.safeParse(completeProfile('profile-1')).success).toBe(true);
-      expect(EventProfileSchema.safeParse(idOnly).success).toBe(true);
+      expect(EventProfileSchema.safeParse(idOnly).success).toBe(false);
+      expect(createFixture({ profile: idOnly }).methods.profile).toEqual(idOnly);
       expect(EventProfileSchema.safeParse({}).success).toBe(false);
     });
 
     it('keeps the extra fields of an incomplete profile instead of narrowing it to its id', () => {
       const stored = { id: 'profile-1', traits: { plan: 'pro' }, audiences: ['a'] };
 
-      expect(EventProfileSchema.parse(stored)).toEqual(stored);
+      expect(createFixture({ profile: stored }).methods.profile).toEqual(stored);
     });
 
     it('keeps sending Personalization events with an id-only profile', async () => {

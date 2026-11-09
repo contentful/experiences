@@ -6,14 +6,14 @@ import type {
 } from '@contentful/optimization-api-client';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
+  Profile as EventProfileSchema,
   InsightsEvent as AnalyticsEventSchema,
-  Profile,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
   type InsightsEvent as AnalyticsEvent,
   type OptimizationData as EventOptimizationData,
+  type Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
-import * as z from 'zod/mini';
 import {
   type AllowedEventType,
   type BlockedEvent,
@@ -50,18 +50,9 @@ export type PersonalizationRequestOptions = Pick<
   'ip' | 'locale' | 'plainText'
 >;
 
-/**
- * Runtime schema for profiles retained by public runtime leaves: a complete Personalization API
- * profile, or only its id when the runtime learned the id without the profile (for example
- * from a Delivery response). Personalization needs only the id; Analytics needs a complete
- * profile.
- */
-export const EventProfileSchema = z.union([
-  Profile,
-  z.catchall(z.object({ id: z.string() }), z.json()),
-]);
-export type EventProfile = z.infer<typeof EventProfileSchema>;
-export type { EventOptimizationData };
+/** Runtime schema for profiles retained by public runtime leaves. */
+export { EventProfileSchema };
+export type { EventOptimizationData, EventProfile };
 
 export type PersonalizationEventMethod = 'identify' | 'page' | 'track';
 export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
@@ -76,14 +67,14 @@ export interface EventApi {
 export interface RuntimeEventDispatch {
   personalization(
     event: PersonalizationEvent,
-    profile: EventProfile | undefined
+    profile: ReturnType<RuntimeEventBindings['getProfile']>
   ): Promise<EventEmissionResult>;
-  analytics(event: AnalyticsEvent, profile: Profile): Promise<void | false>;
+  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
 export interface RuntimeEventBindings {
-  getProfile: () => EventProfile | undefined;
+  getProfile: () => EventProfile | Pick<EventProfile, 'id'> | undefined;
   /** Fixed preview intent of the owning instance/request. */
   getIsPreview?: () => boolean;
   getEventContext?: () => UniversalEventBuilderArgs;
@@ -128,7 +119,7 @@ export interface DirectEventBindings extends Omit<RuntimeEventBindings, 'reportB
  * blocked Analytics call resolves `{ accepted: false }`.
  */
 export interface RuntimeEventMethods {
-  readonly profile: EventProfile | undefined;
+  readonly profile: ReturnType<RuntimeEventBindings['getProfile']>;
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
@@ -138,13 +129,13 @@ export interface RuntimeEventMethods {
   trackFlagView(args: FlagViewBuilderArgs): Promise<EventEmissionResult>;
 }
 
-/** Thrown when an Analytics event is triggered before a profile is available. */
+/** Thrown when an Analytics event is triggered before a complete profile is available. */
 export class EventProfileRequiredError extends Error {
   readonly method: AnalyticsEventMethod;
 
   constructor(method: AnalyticsEventMethod) {
     super(
-      `${method}() requires a complete event profile. Supply an initial profile or await identify(), page(), or track() first.`
+      `${method}() requires a complete event profile. Supply a complete initial profile or await identify(), page(), or track() first.`
     );
     this.name = 'EventProfileRequiredError';
     this.method = method;
@@ -158,7 +149,7 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     private readonly dispatch: RuntimeEventDispatch
   ) {}
 
-  get profile(): EventProfile | undefined {
+  get profile(): ReturnType<RuntimeEventBindings['getProfile']> {
     return this.bindings.getProfile();
   }
 
@@ -283,23 +274,17 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     event: AnalyticsEvent
   ): Promise<EventEmissionResult> {
     if (!this.admit(method, [args])) return { accepted: false };
-    // Analytics requires a complete profile, as in Optimization; an id-only profile counts as missing.
-    const profile = completeProfile(this.profile);
-    if (profile === undefined) {
+    const profile = EventProfileSchema.safeParse(this.profile);
+    if (!profile.success) {
       // Stateless requests are bound to a profile, so a missing one is a caller error.
       // Stateful runtimes follow Optimization's queue: warn and drop the event.
       if (this.bindings.requireProfile === true) throw new EventProfileRequiredError(method);
-      eventLogger.warn('Attempting to emit an event without an Optimization profile');
+      eventLogger.warn('Attempting to emit an event without a complete Optimization profile');
       return { accepted: true };
     }
-    const admitted = await this.dispatch.analytics(this.withConsent(event), profile);
+    const admitted = await this.dispatch.analytics(this.withConsent(event), profile.data);
     return { accepted: admitted !== false };
   }
-}
-
-function completeProfile(profile: EventProfile | undefined): Profile | undefined {
-  const result = Profile.safeParse(profile);
-  return result.success ? result.data : undefined;
 }
 
 function createDirectEventDispatch(

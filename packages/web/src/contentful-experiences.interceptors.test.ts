@@ -36,7 +36,7 @@ function createRuntime(config: Partial<Config> = {}) {
 beforeEach(() => {
   seedConsent({ events: false, persistence: false });
   vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
-    profile: { id: 'visitor' },
+    profile: completeProfile('visitor'),
   } as never);
   vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });

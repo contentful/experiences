@@ -1,3 +1,4 @@
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let runtime: import('./contentful-experiences.js').ContentfulExperiences | undefined;
@@ -31,10 +32,10 @@ describe('Web public entry on the server', () => {
       spaceId: 'space',
       environmentId: 'environment',
       delivery: { accessToken: 'delivery-token' },
-      defaults: { profile: { id: 'server-render-profile' } },
+      defaults: { profile: profileFixture('server-render-profile') },
     });
 
-    expect(runtime.states.profile.current).toEqual({ id: 'server-render-profile' });
+    expect(runtime.states.profile.current).toEqual(profileFixture('server-render-profile'));
 
     runtime.reset();
     expect(runtime.states.profile.current).toBeUndefined();

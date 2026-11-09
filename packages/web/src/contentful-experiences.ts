@@ -14,6 +14,7 @@ import {
   type Config as BaseConfig,
   type EventBuilderConfig,
   type EventEmissionResult,
+  EventProfileSchema,
   type ExperiencesHandoff,
   type OptimizationEventStreamEvent,
   type PageViewBuilderArgs,
@@ -44,9 +45,8 @@ import {
   type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import { computed, signal, untracked } from '@preact/signals-core';
-import { cloneDeepWith } from 'es-toolkit';
+import { cloneDeep, cloneDeepWith } from 'es-toolkit';
 import { isEqual } from 'es-toolkit/predicate';
-import { cloneDeep } from 'es-toolkit';
 import {
   batch,
   changes as changesSignal,
@@ -96,7 +96,6 @@ import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 import { WebPreview } from './web-preview.js';
 import { getExperienceSourceKey } from './experience-source-key.js';
-import type { Subscription } from './signals/index.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type EventContextProviders = Pick<EventBuilderConfig, 'getPageProperties' | 'getUserAgent'>;
@@ -184,13 +183,6 @@ function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void 
       error
     );
   });
-}
-
-/** The profile id XDA returned. A Destination redirect carries no personalization. */
-function returnedProfileId(
-  result: PortableRenderPlan | DestinationRedirectResult
-): string | undefined {
-  return 'personalization' in result ? result.personalization?.profileId : undefined;
 }
 
 /** A prepared batch after validation: what the delivery queue accepts. */
@@ -403,10 +395,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       });
       this.#eventMethods = this.createEventMethods(
         {
-          getProfile: () => {
-            const id = this.#requestIdentity();
-            return profileSignal.value ?? (id === undefined ? undefined : { id });
-          },
+          getProfile: () => profileSignal.value,
           getConsent: () => this.#getConsent(),
           getIsPreview: () => this.isPreview,
           allowedEventTypes: this.allowedEventTypes,
@@ -685,8 +674,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const currentGeneration = () => this.#contentLifetime;
-    let generation = currentGeneration();
-    let token = this.#resetToken;
+    const generation = currentGeneration();
+    const token = this.#resetToken;
     const source = this.#preview?.revision;
     const assertCurrent = () => {
       if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
@@ -874,14 +863,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         request.preview !== true &&
         this.#identityRevision === identityRevision
       ) {
-        const nextProfileId = returnedProfileId(result);
+        const returnedProfile =
+          'personalization' in result ? result.personalization?.profile : undefined;
         if (
-          nextProfileId !== undefined &&
+          returnedProfile !== undefined &&
           this.#profileRevision === profileRevision &&
-          profileSignal.value?.id !== nextProfileId
+          !isEqual(profileSignal.value, returnedProfile)
         ) {
           const next = await this.interceptors.state.run(
-            { profile: { id: nextProfileId } },
+            { profile: EventProfileSchema.parse(returnedProfile) },
             mergePersonalizationState
           );
           if (

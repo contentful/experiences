@@ -24,8 +24,8 @@ persist profiles, or add cookies or sessions. Requests assume `consent: true`, l
 the Optimization reference; this is not a consent-management implementation.
 
 The page shows whether an identify event was included and renders the Experience
-content. Fetch results expose a profile ID, not profile traits, so that label does
-not assert a separately confirmed identification result. SDK exceptions
+content. Fetch results retain the full profile, but the label describes application
+intent rather than interpreting its traits or asserting confirmed identification. SDK exceptions
 produce a short error response. The app does not inspect raw XDA responses;
 application-level errors that the runtime does not surface remain an SDK limitation.
 Responses are private/no-store and profiles remain request-local. The rate limiter
