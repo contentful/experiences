@@ -375,7 +375,7 @@ async function loadExperiences(destinations, isCurrent, initialPlans, requestOpt
         personalization = undefined;
         plan = await sdk.fetchExperience(options, resolveOptions);
       }
-      if (plan) profileId = plan.personalization?.profileId ?? profileId;
+      if (plan) profileId = plan.personalization?.profile.id ?? profileId;
       if (!isCurrent()) return failures.size > 0;
       if (!plan) throw new Error('Initial preview content is unavailable.');
       if (initialPlans === undefined) renderPresentations(plan, experienceId, targets);
