@@ -14,11 +14,14 @@ const config: NextjsServerExperiencesConfig = {
   request: { experience: { experienceId: 'home' } },
 };
 const context: NextjsServerRequestContext = {
-  request: { url: 'https://example.com/page?q=a+b', headers: new globalThis.Headers() },
+  request: {
+    url: 'https://example.com/page?q=a+b&tag=first&tag=last',
+    headers: new globalThis.Headers(),
+  },
   headers: new globalThis.Headers(),
   cookies: { get: () => undefined },
-  requestUrl: 'https://example.com/page?q=a+b',
-  routeKey: '/page?q=a+b',
+  requestUrl: 'https://example.com/page?q=a+b&tag=first&tag=last',
+  routeKey: '/page?q=a+b&tag=first&tag=last',
 };
 const plan = { nodes: [], diagnostics: [], metadata: {}, debug: false };
 const fetchExperience = vi.fn(async () => plan);
@@ -83,7 +86,8 @@ describe('Next primary request policy', () => {
         properties: expect.objectContaining({
           path: '/page',
           url: context.requestUrl,
-          query: { q: 'a b' },
+          search: '?q=a+b&tag=first&tag=last',
+          query: { q: 'a b', tag: ['first', 'last'] },
         }),
       },
     ]);
