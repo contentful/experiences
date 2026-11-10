@@ -596,9 +596,13 @@ describe('React runtime ownership and activation', () => {
     expectNoContentWork();
   });
 
-  it.each([false, true])(
-    'drops the pre-reset handoff and accepts a fresh handoff (replay: %s)',
-    async (withReplay) => {
+  it.each([
+    [false, undefined],
+    [true, undefined],
+    [false, 'original'],
+  ] as const)(
+    'drops the pre-reset handoff and accepts a fresh handoff (replay: %s, key: %s)',
+    async (withReplay, handoffKey) => {
       let requests!: ExperienceRequestContextValue;
       function Requests() {
         requests = useExperienceRequestContext()!;
@@ -619,10 +623,14 @@ describe('React runtime ownership and activation', () => {
           : undefined,
       };
       const initialPagePayload = {};
-      const tree = (value: ExperiencesHandoff = suppliedHandoff) => (
+      const tree = (
+        value: ExperiencesHandoff = suppliedHandoff,
+        key: string | undefined = handoffKey
+      ) => (
         <ExperiencesProvider
           sdk={inject(runtime)}
           handoff={value}
+          handoffKey={key}
           initialPagePayload={initialPagePayload}
         >
           <Requests />
@@ -653,6 +661,10 @@ describe('React runtime ownership and activation', () => {
       expect(runtime.hydrateAndTrackCurrentPage.mock.calls[1]![0]).toBe(fresh);
       await act(async () => view.render(tree(globalThis.structuredClone(suppliedHandoff))));
       expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+      await act(async () =>
+        view.render(tree(globalThis.structuredClone(suppliedHandoff), 'fresh'))
+      );
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
     }
   );
 

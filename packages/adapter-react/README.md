@@ -372,6 +372,10 @@ Handoff cache safety and receiving scope are asserted before SSR children render
 unsafe public/static handoffs and mismatched space/environment IDs throw before
 their profile state can reach presentation. Scope follows the captured managed
 configuration or the actual injected SDK.
+Reset invalidates equivalent copies of the current handoff. An optional
+`handoffKey` identifies a server transfer: keep it stable for copies of that
+transfer, and supply a fresh key to admit a new transfer with identical data after
+reset. It does not replace the SDK's replay admission or event deduplication.
 Hydration rejection retains the live binding and exposes its error. Snapshot and
 handoff state never become startup `defaults`, which have separate persistence
 and consent semantics. `onStatesReady(states)` runs after commit, before this

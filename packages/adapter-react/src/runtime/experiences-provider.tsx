@@ -38,6 +38,8 @@ import { sameValue } from '../experience/experience-source-controller.js';
 interface PresentationOptions {
   readonly snapshot?: ExperiencesSnapshot;
   readonly handoff?: ExperiencesHandoff;
+  /** Server-transfer identity; a fresh key can admit identical handoff data after reset. */
+  readonly handoffKey?: string;
   readonly onStatesReady?: OnStatesReady;
   readonly routeKey?: string;
   readonly buildPagePayload?: CurrentPageOptions['buildPayload'];
@@ -110,8 +112,8 @@ function ActivationProvider(props: ActivationProps) {
   const activeRef = useRef<ExperiencesRootSdkBinding | undefined>(undefined);
   const { target: stateTarget, ...presentation } = state;
   const context = stateTarget === target ? presentation : target.initial;
-  const latestHandoff = useRef(props.handoff);
-  latestHandoff.current = props.handoff;
+  const latestHandoff = useRef({ handoff: props.handoff, key: props.handoffKey });
+  latestHandoff.current = { handoff: props.handoff, key: props.handoffKey };
   const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
     () =>
       props.buildPagePayload ??
@@ -123,8 +125,11 @@ function ActivationProvider(props: ActivationProps) {
     (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
   const [resetRevision, setResetRevision] = useState<object>(() => ({}));
   const operationRevision = useRef(resetRevision);
-  const [resetHandoff, setResetHandoff] = useState<ExperiencesHandoff>();
-  const handoff = sameValue(props.handoff, resetHandoff) ? undefined : props.handoff;
+  const [resetHandoff, setResetHandoff] = useState<typeof latestHandoff.current>();
+  const handoff =
+    props.handoffKey === resetHandoff?.key && sameValue(props.handoff, resetHandoff?.handoff)
+      ? undefined
+      : props.handoff;
   const resetRequests = useMemo(
     () => () => {
       const revision = {};
@@ -153,6 +158,7 @@ function ActivationProvider(props: ActivationProps) {
           children: _children,
           snapshot: _snapshot,
           handoff: _handoff,
+          handoffKey: _handoffKey,
           onStatesReady,
           routeKey: _routeKey,
           buildPagePayload: _buildPagePayload,
@@ -211,7 +217,7 @@ function ActivationProvider(props: ActivationProps) {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [target, handoff, routeKey, buildPagePayload, resetRevision]);
+  }, [target, handoff, props.handoffKey, routeKey, buildPagePayload, resetRevision]);
 
   const locale = 'sdk' in props ? undefined : props.locale;
   useCommitEffect(() => {
