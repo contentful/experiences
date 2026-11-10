@@ -656,13 +656,19 @@ describe('React runtime ownership and activation', () => {
         { type: 'page' },
       ]);
       const fresh = handoff('fresh');
-      await act(async () => view.render(tree(fresh)));
+      if (handoffKey !== undefined) {
+        await act(async () => view.render(tree(fresh)));
+        expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      }
+      await act(async () =>
+        view.render(tree(fresh, handoffKey === undefined ? undefined : 'fresh'))
+      );
       expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
       expect(runtime.hydrateAndTrackCurrentPage.mock.calls[1]![0]).toBe(fresh);
       await act(async () => view.render(tree(globalThis.structuredClone(suppliedHandoff))));
       expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
       await act(async () =>
-        view.render(tree(globalThis.structuredClone(suppliedHandoff), 'fresh'))
+        view.render(tree(globalThis.structuredClone(suppliedHandoff), 'identical'))
       );
       expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
     }
