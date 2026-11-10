@@ -1,5 +1,6 @@
 import {
   resolveFlagChange,
+  ChangeArray,
   type Json,
   AnalyticsDelivery,
   type AnalyticsFlushOptions,
@@ -228,7 +229,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     Map<string, Promise<PortableRenderPlan>>
   >();
   #contentLifetime = 0;
-  #profileRevision = 0;
+  #stateRevision = 0;
   readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
   protected readonly experienceQueue: PersonalizationDelivery;
@@ -387,7 +388,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.experienceQueue = delivery = new PersonalizationDelivery({
         api: this.api.experience,
         getProfileId: () => this.#requestIdentity(),
-        getProfileRevision: () => this.#profileRevision,
+        getProfileRevision: () => this.#stateRevision,
         getOnline: () => this.online,
         getLocale: () => this.locale,
         flushPolicy: resolvedQueuePolicy.flush,
@@ -526,7 +527,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         this.#pendingFlagViews.clear();
         this.#acceptedFlagViews.clear();
         this.insightsQueue.clearQueuedEvents();
-        this.#profileRevision += 1;
+        this.#stateRevision += 1;
         // A discarded queued page must not leave its route looking admitted, or a later
         // permitted attempt for the same route would be answered from the cache and
         // never sent. This also forgets routes already sent, so one can be sent again
@@ -618,13 +619,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       if (data === previous || state.experienceId !== experienceId) return;
       previous = data;
       const lifetime = this.#contentLifetime;
+      const stateRevision = this.#stateRevision;
       const source = this.#preview?.revision;
-      const current = () =>
-        active &&
+      const currentSource = () =>
         !this.#destroyed &&
         lifetime === this.#contentLifetime &&
         source === this.#preview?.revision &&
         previewSignal.peek()?.data === data;
+      const current = () => active && currentSource();
       const key = getExperienceSourceKey(
         { request: { experienceId }, revision: [lifetime, state.revision] },
         resolve,
@@ -633,9 +635,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       );
       // Unlike resolved snapshots, the preview client emits raw payloads.
       // Resolve streamed content with the caller's registry before publishing a plan.
-      void this.#shareContent(key, resolve, async () =>
-        this.resolveExperience(data, resolveOptions)
-      ).then(
+      void this.#shareContent(key, resolve, async () => {
+        const plan = await this.resolveExperience(data, resolveOptions);
+        await this.#adoptFetchedState(
+          plan.personalization,
+          () => currentSource() && stateRevision === this.#stateRevision,
+          false
+        );
+        return plan;
+      }).then(
         (plan) => {
           if (!current()) return;
           listener({ data: plan, error: previewSignal.peek()?.error });
@@ -764,9 +772,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       await identityReady;
       assertCurrent();
     }
-    const profileRevision = this.#profileRevision;
+    const stateRevision = this.#stateRevision;
     const identityRevision = this.#identityRevision;
-    const adoptProfile = this.#createProfileAdopter({ preview: request.preview });
     const prepared = await this.#prepareContentRequest(
       request.prepare?.(options) ?? options,
       assertCurrent
@@ -783,23 +790,24 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       assertCurrent();
       if (
         !this.isPreview &&
-        (this.#profileRevision !== profileRevision || this.#identityRevision !== identityRevision)
+        (this.#stateRevision !== stateRevision || this.#identityRevision !== identityRevision)
       )
         throw new Error('Experiences fetch identity was superseded');
-      const adopted = await adoptProfile(
-        'personalization' in result ? result.personalization?.profile : undefined
+      await this.#adoptFetchedState(
+        'personalization' in result ? result.personalization : undefined,
+        () => {
+          assertCurrent();
+          if (this.#stateRevision !== stateRevision || this.#identityRevision !== identityRevision)
+            throw new Error('Experiences fetch identity was superseded');
+          return true;
+        },
+        !this.isPreview && request.preview !== true
       );
       assertCurrent();
-      if (
-        !this.isPreview &&
-        (this.#profileRevision !== profileRevision + (adopted === undefined ? 0 : 1) ||
-          this.#identityRevision !== identityRevision)
-      )
-        throw new Error('Experiences fetch identity was superseded');
       return result;
     };
     return request.share
-      ? request.share(load, final, [generation, profileRevision, identityRevision])
+      ? request.share(load, final, [generation, stateRevision, identityRevision])
       : load();
   }
 
@@ -844,8 +852,22 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
             'snapshot'
           );
     return this.#shareContent(key, resolve, async () => {
+      const stateRevision = this.#stateRevision;
+      const previewRevision = previewSignal.peek()?.revision;
       const plan = await fetchRuntimePreviewSession(binding, this.config, resolve);
       // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
+      assertCurrent();
+      await this.#adoptFetchedState(
+        plan.personalization,
+        () => {
+          assertCurrent();
+          return (
+            stateRevision === this.#stateRevision &&
+            previewRevision === previewSignal.peek()?.revision
+          );
+        },
+        false
+      );
       assertCurrent();
       return plan;
     });
@@ -902,36 +924,22 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return { ...gated, personalization: valid };
   }
 
-  #createProfileAdopter(
-    options: Pick<RuntimeFetchExperienceOptions, 'preview'>
-  ): (
-    profile: NonNullable<PortableRenderPlan['personalization']>['profile'] | undefined
-  ) => Promise<ExperienceState | undefined> {
-    const token = this.#resetToken;
-    const profileRevision = this.#profileRevision;
-    const identityRevision = this.#identityRevision;
-    return async (profile) => {
-      const canAdopt = () =>
-        !this.#destroyed &&
-        this.#isCurrent(token) &&
-        this.#identityRevision === identityRevision &&
-        this.#profileRevision === profileRevision;
-      if (
-        this.isPreview ||
-        options.preview === true ||
-        profile === undefined ||
-        !canAdopt() ||
-        isEqual(profileSignal.value, profile)
-      )
-        return undefined;
-      const next = await this.interceptors.state.run(
-        { profile: EventProfileSchema.parse(profile) },
-        mergeExperienceState
-      );
-      if (!canAdopt()) return undefined;
-      batch(() => this.#commitIncomingState(next));
-      return next;
-    };
+  async #adoptFetchedState(
+    personalization: PortableRenderPlan['personalization'],
+    isCurrent: () => boolean,
+    canApplyProfile = !this.isPreview
+  ): Promise<void> {
+    if (!personalization || !isCurrent()) return;
+    await this.#applyOptimizationDataToSignals(
+      {
+        ...(canApplyProfile ? { profile: EventProfileSchema.parse(personalization.profile) } : {}),
+        ...(personalization.changes !== undefined
+          ? { changes: ChangeArray.parse(personalization.changes) }
+          : {}),
+      },
+      isCurrent,
+      () => canApplyProfile
+    );
   }
 
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
@@ -954,7 +962,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#pendingFlagViews.clear();
       this.#acceptedFlagViews.clear();
       this.insightsQueue.clearQueuedEvents();
-      this.#profileRevision += 1;
+      this.#stateRevision += 1;
       LocalStore.reset();
       this.#identity.clear();
       profileSignal.value = undefined;
@@ -1313,9 +1321,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     if (initialization.hydration !== undefined) return initialization.hydration;
 
-    const profileRevision = this.#profileRevision;
+    const stateRevision = this.#stateRevision;
     const hydration = Promise.resolve().then(async () => {
-      if (!initialization.isCurrent() || this.#profileRevision !== profileRevision) return;
+      if (!initialization.isCurrent() || this.#stateRevision !== stateRevision) return;
       // Profileless/cacheable hydration declares success without changing continuity.
       await this.#applyOptimizationDataToSignals(
         {
@@ -1378,7 +1386,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     canApplyChanges: () => boolean = () => true
   ): Promise<void> {
     if (this.#destroyed) return;
-    const profileRevision = this.#profileRevision;
+    const stateRevision = this.#stateRevision;
     const token = this.#resetToken;
     const next = mergeExperienceState(
       data,
@@ -1386,7 +1394,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     );
     if (!isCurrent() || !this.#isCurrent(token)) return;
     batch(() => {
-      if (this.#profileRevision === profileRevision) {
+      if (this.#stateRevision === stateRevision) {
         this.#commitIncomingState(next, canApplyProfile(), canApplyChanges());
       }
       experienceRequestStateSignal.value = { status: 'success' };
@@ -1434,12 +1442,15 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   #initializeEffects(): void {
     let previousProfile = profileSignal.peek();
+    let previousChanges = changesSignal.peek();
     this.#effects.push(
       effect(() => {
         const profile = profileSignal.value;
-        if (profile !== previousProfile) {
+        const changes = changesSignal.value;
+        if (profile !== previousProfile || changes !== previousChanges) {
           previousProfile = profile;
-          this.#profileRevision += 1;
+          previousChanges = changes;
+          this.#stateRevision += 1;
         }
       })
     );
@@ -1515,13 +1526,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   #attemptFlagView(name: string, selected: ReturnType<typeof resolveFlagChange>): void {
-    const profileId = this.#eligibleFlagProfileId();
-    if (profileId === undefined) return;
+    if (this.#destroyed || this.isPreview) return;
     const payload = {
       componentId: name,
       experienceId: selected?.meta.experienceId,
       variantIndex: selected?.meta.variantIndex,
     };
+    if (!this.hasConsent('trackFlagView')) {
+      this.#reportBlockedEvent({ reason: 'consent', method: 'trackFlagView', args: [payload] });
+      return;
+    }
+    const profileId = this.#eligibleFlagProfileId();
+    if (profileId === undefined) return;
     const signature = [
       selected?.value,
       name,

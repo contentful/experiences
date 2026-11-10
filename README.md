@@ -523,13 +523,18 @@ actual XPAPI commits. See
 Read Personalization custom flags in the browser with `sdk.getFlag(name)` or
 observe `sdk.states.flag(name)`. Reads return JSON values, including `false`, `0`,
 `''`, and `null`; a missing flag returns `undefined`. Browser reads automatically
-attempt a flag-view event when consent permits it, preview is off, and a profile
-is available; otherwise they quietly return the value. See the [Web flag reference](./packages/web/README.md#custom-flags)
-for state, persistence, subscriptions, and exposure deduplication.
+attempt a flag-view event when preview is off and a profile is available.
+Consent refusals report blocked events; preview suppresses exposure quietly.
+See the [Web flag reference](./packages/web/README.md#custom-flags) for state,
+persistence, subscriptions, and exposure deduplication.
 
-XDA changes remain scoped to the fetched plan; fetching does not adopt them into browser
-flag state because their completeness has not been verified. Read
-them explicitly, or use the pure helper re-exported by every framework adapter:
+Web automatically adopts XDA changes from by-ID, destination, and preview fetches
+through the same state-interceptor path as direct Personalization responses.
+Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
+retain them unless profile identity changes. Treating XDA changes as a complete
+snapshot follows XPAPI/Optimization behavior and remains an assumption pending
+live-backend verification. To read a particular plan explicitly, use the pure
+helper re-exported by every framework adapter:
 
 ```ts
 import { resolveFlagChange } from '@contentful/experiences-react';

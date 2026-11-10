@@ -72,7 +72,12 @@ The base `getFlag(name, changes?)` returns only the resolved value and is pure:
 it retains no changes and emits no exposure. Web adds browser-owned state and
 exposure through the [existing flag-view method](../web/README.md#custom-flags).
 Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentation
-`ExperiencesRuntime` contract.
+`ExperiencesRuntime` contract. XDA fetches and direct Personalization responses
+feed the same browser flag-state path; supplied changes replace the snapshot,
+`[]` clears it, and omission retains it unless profile identity changes. This
+complete-snapshot interpretation follows XPAPI/Optimization and remains an
+assumption pending live-backend verification. Node carries returned changes in
+private handoffs without retaining global flag state.
 
 ## Optional runtime Live Preview
 

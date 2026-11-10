@@ -194,12 +194,14 @@ describe('Web Custom Flags', () => {
       const sdk = createRuntime({
         defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
         allowedEventTypes: allow ? ['flag'] : [],
+        onEventBlocked: vi.fn(),
       });
       const event = vi.fn();
       const subscription = sdk.states.eventStream.subscribe(event);
       sdk.getFlag('banner');
       await settle();
       expect(event.mock.calls.filter(([value]) => value !== undefined)).toHaveLength(allow ? 1 : 0);
+      expect(sdk.config.onEventBlocked).toHaveBeenCalledTimes(allow ? 0 : 1);
       subscription.unsubscribe();
     }
   );
@@ -291,17 +293,78 @@ describe('Web Custom Flags', () => {
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 
-  it('clears old flags when XDA replaces identity without adopting plan changes', async () => {
-    const sdk = createRuntime();
-    vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
-      personalization: { profile: completeProfile('new-visitor'), changes: changes('plan-only') },
-      nodes: [],
-    } as never);
-    await sdk.fetchExperience({ experienceId: 'experience' }, { config: { components: {} } });
-    expect(sdk.states.profile.current?.id).toBe('new-visitor');
-    expect(sdk.getFlag('banner')).toBeUndefined();
-  });
+  it.each(['fetchExperience', 'fetchByDestinationNode', 'fetchByDestinationPath'] as const)(
+    'shares flag snapshots between %s and direct XPAPI responses',
+    async (method) => {
+      const sdk = createRuntime();
+      vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
+      const profile = completeProfile('visitor');
+      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
+        personalization: { profile, changes: changes(false) },
+        nodes: [],
+      } as never);
+      const next = vi.fn();
+      const subscription = sdk.states.flag('banner').subscribe(next);
+      const load = () =>
+        sdk[method](
+          { experienceId: 'experience', destinationId: 'destination', nodeId: 'node', path: '/' },
+          { config: { components: {} } }
+        );
+      await load();
+      await load();
+      expect(next.mock.calls).toEqual([[true], [false]]);
+      vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
+        profile,
+        changes: changes('XPAPI'),
+      } as never);
+      await sdk.page();
+      expect(sdk.getFlag('banner')).toBe('XPAPI');
+      fetch.mockResolvedValueOnce({ nodes: [], personalization: { profile } } as never);
+      await load();
+      expect(sdk.getFlag('banner')).toBe('XPAPI');
+      fetch.mockResolvedValueOnce({
+        nodes: [],
+        personalization: { profile, changes: [] },
+      } as never);
+      await load();
+      expect(sdk.getFlag('banner')).toBeUndefined();
+      subscription.unsubscribe();
+    }
+  );
+
+  it.each(['XDA', 'XPAPI'] as const)(
+    'discards a late %s snapshot after the other source updates flags',
+    async (source) => {
+      const sdk = createRuntime();
+      vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
+      const profile = completeProfile('visitor');
+      const stale = deferred<never>();
+      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
+      const upsert = vi.spyOn(sdk.api.experience, 'upsertProfile');
+      const load = () =>
+        sdk.fetchExperience({ experienceId: 'experience' }, { config: { components: {} } });
+      const data = { profile, changes: changes('fresh') };
+      if (source === 'XDA') fetch.mockReturnValue(stale.promise);
+      else upsert.mockReturnValue(stale.promise);
+      const pending = source === 'XDA' ? load() : sdk.page();
+      const completed = source === 'XDA' ? expect(pending).rejects.toThrow('superseded') : pending;
+      await vi.waitFor(() => expect(source === 'XDA' ? fetch : upsert).toHaveBeenCalledOnce());
+      if (source === 'XDA') {
+        upsert.mockResolvedValue(data as never);
+        await sdk.page();
+      } else {
+        fetch.mockResolvedValue({ nodes: [], personalization: data } as never);
+        await load();
+      }
+      stale.resolve(
+        (source === 'XDA'
+          ? { nodes: [], personalization: { profile, changes: [] } }
+          : { profile, changes: [] }) as never
+      );
+      await completed;
+      expect(sdk.getFlag('banner')).toBe('fresh');
+    }
+  );
 
   it.each(['reset', 'withdraw', 'destroy'] as const)(
     'guards changes while a state interceptor awaits across %s',
