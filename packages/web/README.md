@@ -331,9 +331,9 @@ Reads, including explicit-change reads and `states.flag(name).current`, attempt
 `trackFlagView`; subscriptions also observe values and exposure-relevant state.
 `getFlag(name)` and `states.flag(name).current` participate in signal dependency
 tracking for flag values; exposure work runs untracked. Subscription callbacks
-receive distinct value snapshots. Automatic exposure quietly skips preview,
-disallowed consent, and missing profiles, without reporting blocked events.
-Manual `trackFlagView()` calls retain blocked-event reporting.
+receive distinct value snapshots. Automatic exposure quietly skips preview and
+missing profiles. Consent refusals report through `onEventBlocked` and
+`states.blockedEventStream`, following the normal `trackFlagView()` path.
 Deduplication compares value, key, experience/variant metadata, and profile against
 the last accepted exposure and pending attempts. Refused attempts do not count as
 accepted; reset and event-consent withdrawal invalidate exposure bookkeeping.
@@ -342,18 +342,22 @@ including when `flag` is allowlisted without event consent.
 Subscriptions use the existing observable contract below; `subscribeOnce` waits
 for a non-nullish value, so `null` does not settle it while `false` does.
 
-Personalization responses and private handoffs supply current changes through
-state interceptors, atomically with profile and request success. Optional
+Direct Personalization responses, XDA fetches (by ID, destination, and preview),
+and private handoffs supply current changes through the existing state-interceptor
+and publication path, atomically with profile and request success. Supplied
+changes replace the snapshot: `[]` clears flags; omitted changes retain them
+unless profile identity changes. Changed values notify flag subscriptions; changed
+attribution can refresh exposure without emitting a duplicate value. Stale
+asynchronous state interception cannot overwrite a later state update. Optional
 `defaults.changes` takes precedence over stored changes. Changes are restored and
 persisted only with persistence consent; denying it removes stored changes and
 keeps in-memory values. `reset()` clears changes and exposure history. A changed
 profile identity clears old changes when no replacement changes are supplied.
 
-XDA `plan.personalization?.changes` remains plan-local: completeness has not been
-verified, so content fetches do not adopt its changes globally. Identity changes
-can still clear old flags. To read that plan,
-use `experiences.getFlag(name, plan.personalization?.changes ?? [])`; use the pure
-adapter-exported `resolveFlagChange` for metadata preparation without exposure.
+Treating XDA changes as a complete snapshot follows XPAPI/Optimization behavior;
+this remains an assumption pending live-backend verification. To read a particular
+plan explicitly, use `experiences.getFlag(name, plan.personalization?.changes ?? [])`;
+use the pure adapter-exported `resolveFlagChange` for metadata preparation without exposure.
 
 ## Browser-safe configuration
 
@@ -438,8 +442,9 @@ For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `Subscription`, `States`, `PersonalizationRequestState`, `PersonalizationRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
 Flag changes remain SDK-owned and are absent from the public `signals` aggregate;
-use `getFlag` or `states.flag(name)` to read them and bridge or handoff hydration
-to supply evaluated state through interceptors and lifecycle guards.
+use `getFlag` or `states.flag(name)` to read them. XDA/Personalization responses
+and bridge/handoff hydration supply evaluated state through interceptors and
+lifecycle guards.
 Preview types are `PreviewState` and `PreviewUpdate`. Other state names follow
 Optimization's shared browser-state contract; Experiences has no
 selected-optimization or optimization-eligibility state.
@@ -479,8 +484,8 @@ names with one event registry per SDK instance. Web retains its separate state
 registry. The `./runtime` entry and snapshot runtimes expose no interceptor registry;
 `states.preview` is inert and undefined there.
 
-State interceptors receive incoming `{ profile, changes }` state from Personalization
-and private hydration; XDA contributes profile state only. A sparse result that
+State interceptors receive incoming `{ profile, changes }` state from direct
+Personalization responses, XDA fetches, and private hydration. A sparse result that
 omits either field retains its previous value in the chain; an explicit
 `profile: undefined` or `changes: undefined` clears that field. The package exports `InterceptorManager`, `Interceptor`,
 `InterceptorMerge`, `MaybePromise`, `PersonalizationState`, `LifecycleInterceptors`, and
