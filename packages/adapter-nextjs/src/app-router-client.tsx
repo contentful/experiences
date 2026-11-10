@@ -37,7 +37,10 @@ type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 export interface NextjsClientExperiencesConfig
   extends
-    Omit<ExperiencesRootProps, RuntimeIdentity | 'children' | 'handoff' | 'snapshot' | 'routeKey'>,
+    Omit<
+      ExperiencesRootProps,
+      RuntimeIdentity | 'children' | 'handoff' | 'handoffKey' | 'snapshot' | 'routeKey'
+    >,
     Partial<Pick<ExperiencesRootProps, RuntimeIdentity>> {
   readonly config: Config;
   readonly consent?: { readonly clientDefaults?: ExperiencesRootProps['defaults'] };
