@@ -63,7 +63,8 @@ describe('ExperienceSourceController', () => {
     const source = sourceSdk();
     const controller = new ExperienceSourceController();
     const request = { experienceId: 'home', parameters: { a: 1, b: { y: 2, x: 3 } } };
-    controller.updateOptions(options(source, { request }));
+    const resolve = { config, metadata: { at: new Date(0) } };
+    controller.updateOptions(options(source, { request, resolve }));
     await settle();
     controller.updateOptions(
       options(source, {
@@ -72,19 +73,24 @@ describe('ExperienceSourceController', () => {
           parameters: { b: { x: 3, y: 2 }, a: 1 },
           locale: undefined,
         },
-        resolve: { config, metadata: {}, debug: false },
+        resolve: { config, metadata: { at: new Date(0) }, debug: false },
       })
     );
     expect(source.fetchExperience).toHaveBeenCalledTimes(1);
     source.fetchExperience.mockRejectedValue('failed');
     await controller.retry();
-    controller.updateOptions(options(source, { request }));
+    controller.updateOptions(options(source, { request, resolve }));
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
     expect(controller.getSnapshot().error?.message).toBe('failed');
     expect(controller.getSnapshot().data).toBeDefined();
+    controller.updateOptions(
+      options(source, { request, resolve: { config, metadata: { at: new Date(1) } } })
+    );
+    await settle();
+    expect(source.fetchExperience).toHaveBeenCalledTimes(3);
   });
 
-  it.each([() => new Date(0), () => new Map(), () => new (class Context {})()])(
+  it.each([() => new Map(), () => new (class Context {})()])(
     'retains opaque metadata references and refetches on replacement (%#)',
     async (createOpaque) => {
       const source = sourceSdk();
