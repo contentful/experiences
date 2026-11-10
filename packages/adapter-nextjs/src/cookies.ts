@@ -86,6 +86,29 @@ function serializeCookie({
   return parts.join('; ');
 }
 
+function isCookieAtScope(
+  header: string,
+  name: string,
+  options: NextjsAnonymousIdCookieOptions
+): boolean {
+  if (header.slice(0, header.indexOf('=')).trim() !== name) return false;
+  const [, ...attributes] = header.split(';');
+  let domain = '';
+  let path = '';
+  for (const attribute of attributes) {
+    const separator = attribute.indexOf('=');
+    if (separator === -1) continue;
+    const key = attribute.slice(0, separator).trim().toLowerCase();
+    const value = attribute.slice(separator + 1).trim();
+    if (key === 'domain') domain = value.toLowerCase().replace(/^\./, '');
+    if (key === 'path') path = value;
+  }
+  return (
+    domain === (options.domain ?? '').toLowerCase().replace(/^\./, '') &&
+    path === (options.path ?? '/')
+  );
+}
+
 /** Append at a writable response boundary using the facade's current identity. */
 export function persistNextjsAnonymousId(
   response: NextjsResponseLike,
@@ -97,14 +120,22 @@ export function persistNextjsAnonymousId(
   if (response.cookies) {
     const previous = response.headers.getSetCookie();
     response.cookies.set(cookie.name, cookie.value, cookie.options);
-    // Retain application headers written outside the Next cookie jar as well.
-    const names = new Set(
-      response.headers.getSetCookie().map((value) => value.slice(0, value.indexOf('=')))
-    );
+    // Next's jar is name-keyed; preserve raw application headers in their original order.
+    const written = response.headers.getSetCookie();
+    if (
+      previous.every(
+        (value) => written.includes(value) || isCookieAtScope(value, cookie.name, cookie.options)
+      )
+    )
+      return;
+    const identity = written.find((value) => isCookieAtScope(value, cookie.name, cookie.options));
+    if (identity === undefined) return;
+    response.headers.delete('set-cookie');
     for (const value of previous) {
-      const name = value.slice(0, value.indexOf('='));
-      if (!names.has(name)) response.headers.append('set-cookie', value);
+      if (isCookieAtScope(value, cookie.name, cookie.options)) continue;
+      response.headers.append('set-cookie', value);
     }
+    response.headers.append('set-cookie', identity);
   } else {
     response.headers.append('set-cookie', serializeCookie(cookie));
   }

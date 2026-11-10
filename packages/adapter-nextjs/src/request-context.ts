@@ -73,6 +73,17 @@ export function createNextjsRouteKey(input: string | URL): string {
   return `${url.pathname}${url.search}`;
 }
 
+function queryFromSearchParams(
+  params: globalThis.URLSearchParams
+): NonNullable<UniversalEventBuilderArgs['page']>['query'] {
+  return Object.fromEntries(
+    Array.from(new Set(params.keys()), (key) => {
+      const values = params.getAll(key);
+      return [key, values.length === 1 ? (values[0] ?? '') : values];
+    })
+  );
+}
+
 export function createNextjsPageContext({
   path,
   origin,
@@ -90,7 +101,7 @@ export function createNextjsPageContext({
     }
   }
   const search = params.size ? `?${params}` : '';
-  const query = Object.fromEntries(params);
+  const query = queryFromSearchParams(params);
   return {
     path,
     search,
@@ -112,16 +123,36 @@ export function createNextjsRequestContext(
     ? {
         path: parsedUrl.pathname,
         search: parsedUrl.search,
-        query: Object.fromEntries(parsedUrl.searchParams),
+        query: queryFromSearchParams(parsedUrl.searchParams),
         url: parsedUrl.toString(),
         referrer: headers?.get('referer') ?? eventContext?.page?.referrer ?? '',
       }
     : undefined;
-  const provided =
-    page &&
-    ('query' in page && 'search' in page && 'url' in page ? page : createNextjsPageContext(page));
-  const base = derived ?? eventContext?.page ?? provided;
-  const mergedPage = base ? { ...base, ...eventContext?.page, ...provided } : undefined;
+  const inherited = derived ? { ...derived, ...eventContext?.page } : eventContext?.page;
+  let provided: UniversalEventBuilderArgs['page'];
+  if (page) {
+    if ('query' in page && 'search' in page && 'url' in page) provided = page;
+    else {
+      let origin = page.origin;
+      if (origin === undefined && page.url === undefined) {
+        origin = parsedUrl?.origin;
+        if (eventContext?.page?.url) {
+          try {
+            const inheritedOrigin = new URL(eventContext.page.url).origin;
+            if (inheritedOrigin !== 'null') origin = inheritedOrigin;
+          } catch {
+            // Relative or opaque caller URLs cannot supply an origin.
+          }
+        }
+      }
+      provided = createNextjsPageContext({
+        ...page,
+        origin,
+        referrer: page.referrer ?? inherited?.referrer,
+      });
+    }
+  }
+  const mergedPage = provided ? { ...inherited, ...provided } : inherited;
   return {
     ...eventContext,
     ...(mergedPage ? { page: mergedPage } : {}),

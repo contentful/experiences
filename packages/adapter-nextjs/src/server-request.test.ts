@@ -19,9 +19,13 @@ describe('one explicit Node facade', () => {
       consent: { events: false, persistence: true },
       locale: 'de',
       request: {
-        url: 'https://example.com/page',
-        headers: new globalThis.Headers({ cookie: 'ctfl-opt-aid=existing' }),
+        url: 'https://example.com/page?utm_source=email&tag=a&tag=b',
+        headers: new globalThis.Headers({
+          cookie: 'ctfl-opt-aid=existing',
+          referer: 'https://referrer.test',
+        }),
       },
+      page: { path: '/page', searchParams: { utm_source: 'email', tag: ['a', 'b'] } },
       experienceOptions: { ip: 'host-trusted' },
     });
     expect(forRequest).toHaveBeenCalledTimes(1);
@@ -35,6 +39,14 @@ describe('one explicit Node facade', () => {
       eventContext: { page: { path: '/page' } },
     });
     expect(Object.hasOwn(request, 'fetchExperience')).toBe(false);
+    expect(request.eventBuilder.buildPageView().context).toMatchObject({
+      page: {
+        url: 'https://example.com/page?utm_source=email&tag=a&tag=b',
+        referrer: 'https://referrer.test',
+        query: { utm_source: 'email', tag: ['a', 'b'] },
+      },
+      campaign: { source: 'email' },
+    });
     const response = {
       headers: new globalThis.Headers({
         vary: 'RSC, Next-Router-State-Tree',
