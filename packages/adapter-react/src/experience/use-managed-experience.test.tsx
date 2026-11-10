@@ -322,25 +322,55 @@ describe('useManagedExperience', () => {
 
   it('updates effective request/resolve values and inherited locale, preserving unchanged results', async () => {
     const source = sourceSdk();
+    const pending = deferred<PortableRenderPlan>();
+    source.fetchExperience.mockReturnValueOnce(pending.promise);
     const initial = {
       experienceId: 'home',
       config,
       parameters: { segment: 'one' },
+      personalization: {
+        events: [
+          {
+            type: 'track' as const,
+            event: 'initial',
+            properties: { at: new Date(0) },
+            channel: 'web' as const,
+            messageId: 'initial',
+            timestamp: '1970-01-01T00:00:00.000Z',
+            context: { library: { name: 'test', version: '1' } },
+          },
+        ],
+      },
       resolveOptions: { metadata: { theme: 'light' } },
     };
     await act(async () => root.render(content(source, initial)));
     await act(async () =>
-      root.render(content(source, { ...initial, parameters: { segment: 'one' } }))
+      root.render(
+        content(source, {
+          ...initial,
+          parameters: { segment: 'one' },
+          personalization: globalThis.structuredClone(initial.personalization),
+        })
+      )
     );
     expect(source.fetchExperience).toHaveBeenCalledTimes(1);
     expect(source.subscribeToPreview).toHaveBeenCalledTimes(1);
-    await act(async () =>
-      root.render(content(source, { ...initial, resolveOptions: { debug: true } }))
-    );
+    await act(async () => pending.resolve(plan('settled')));
+    expect(root.container.textContent).toBe('success:settled');
+    const changedDate = {
+      ...initial,
+      personalization: globalThis.structuredClone(initial.personalization),
+    };
+    changedDate.personalization.events[0]!.properties.at = new Date(1);
+    await act(async () => root.render(content(source, changedDate)));
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
+    await act(async () =>
+      root.render(content(source, { ...changedDate, resolveOptions: { debug: true } }))
+    );
+    expect(source.fetchExperience).toHaveBeenCalledTimes(3);
     await act(async () => source.locale.emit('de-DE'));
     expect(source.fetchExperience.mock.calls.at(-1)?.[0].locale).toBe('de-DE');
-    expect(source.fetchExperience).toHaveBeenCalledTimes(3);
+    expect(source.fetchExperience).toHaveBeenCalledTimes(4);
   });
 
   it('refetches for a route/reset revision while guarding previous results', async () => {

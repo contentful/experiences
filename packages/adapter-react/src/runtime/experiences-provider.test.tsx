@@ -596,32 +596,65 @@ describe('React runtime ownership and activation', () => {
     expectNoContentWork();
   });
 
-  it('drops the pre-reset handoff and accepts a freshly supplied handoff', async () => {
-    let requests!: ExperienceRequestContextValue;
-    function Requests() {
-      requests = useExperienceRequestContext()!;
-      return <Probe />;
+  it.each([false, true])(
+    'drops the pre-reset handoff and accepts a fresh handoff (replay: %s)',
+    async (withReplay) => {
+      let requests!: ExperienceRequestContextValue;
+      function Requests() {
+        requests = useExperienceRequestContext()!;
+        return <Probe />;
+      }
+      const suppliedHandoff = {
+        ...handoff(),
+        replay: withReplay
+          ? {
+              routeKey: '/initial',
+              events: [
+                new EventBuilder({
+                  channel: 'server',
+                  library: { name: 'test', version: '1' },
+                }).buildPageView(),
+              ],
+            }
+          : undefined,
+      };
+      const initialPagePayload = {};
+      const tree = (value: ExperiencesHandoff = suppliedHandoff) => (
+        <ExperiencesProvider
+          sdk={inject(runtime)}
+          handoff={value}
+          initialPagePayload={initialPagePayload}
+        >
+          <Requests />
+        </ExperiencesProvider>
+      );
+      await act(async () => view.render(tree()));
+      const oldIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+      act(() => {
+        requests.reset();
+        expect(oldIsCurrent()).toBe(false);
+      });
+      await act(async () => view.render(tree()));
+      await act(async () => view.render(tree(globalThis.structuredClone(suppliedHandoff))));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: true });
+      await requests.fetchExperience(
+        inject(runtime),
+        { experienceId: 'home' },
+        { config: { components: {} } },
+        false
+      );
+      expect(runtime.fetchExperience.mock.calls[0]![0].personalization.events).toEqual([
+        { type: 'page' },
+      ]);
+      const fresh = handoff('fresh');
+      await act(async () => view.render(tree(fresh)));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+      expect(runtime.hydrateAndTrackCurrentPage.mock.calls[1]![0]).toBe(fresh);
+      await act(async () => view.render(tree(globalThis.structuredClone(suppliedHandoff))));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
     }
-    const suppliedHandoff = handoff();
-    const tree = (value = suppliedHandoff) => (
-      <ExperiencesProvider sdk={inject(runtime)} handoff={value}>
-        <Requests />
-      </ExperiencesProvider>
-    );
-    await act(async () => view.render(tree()));
-    const oldIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
-    act(() => {
-      requests.reset();
-      expect(oldIsCurrent()).toBe(false);
-    });
-    await act(async () => view.render(tree()));
-    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
-    expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: true });
-    const fresh = handoff('fresh');
-    await act(async () => view.render(tree(fresh)));
-    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
-    expect(runtime.hydrateAndTrackCurrentPage.mock.calls[1]![0]).toBe(fresh);
-  });
+  );
 
   it.each(['success', 'refusal', 'rejection', 'synchronous throw'] as const)(
     'makes hydration %s terminal while retaining the live SDK and supplied content',

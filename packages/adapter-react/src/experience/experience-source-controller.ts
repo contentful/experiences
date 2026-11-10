@@ -40,6 +40,8 @@ const toError = (error: unknown): Error =>
 /** Value comparison for immutable descriptors; registries and route revisions use identity. */
 export function sameValue(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
+  if (left instanceof Date && right instanceof Date)
+    return Object.is(left.getTime(), right.getTime());
   if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
   if (Array.isArray(left) !== Array.isArray(right)) return false;
   if (Array.isArray(left) && left.length !== (right as unknown[]).length) return false;

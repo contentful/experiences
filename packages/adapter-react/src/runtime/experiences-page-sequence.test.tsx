@@ -218,16 +218,34 @@ describe('React route request and page coordination', () => {
     await render();
     const request = {
       experienceId: 'home',
-      personalization: { events: [{ type: 'track' as const, event: 'initial' }] },
+      personalization: {
+        events: [
+          {
+            type: 'track' as const,
+            event: 'initial',
+            properties: { at: new Date(0) },
+            channel: 'web' as const,
+            messageId: 'initial',
+            timestamp: '1970-01-01T00:00:00.000Z',
+            context: { library: { name: 'test', version: '1' } },
+          },
+        ],
+      },
     };
-    const first = requests.fetchExperience(runtime, request, { config }, false);
+    const resolve = { config, metadata: { at: new Date(0) } };
+    const first = requests.fetchExperience(runtime, request, resolve, false);
     expect(
-      requests.fetchExperience(runtime, globalThis.structuredClone(request), { config }, false)
+      requests.fetchExperience(
+        runtime,
+        globalThis.structuredClone(request),
+        { config, metadata: { at: new Date(0) } },
+        false
+      )
     ).toBe(first);
     await act(async () => {
       consent.value = true;
     });
-    expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(request, { config });
+    expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(request, resolve);
     expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
     pending.resolve(plan);
     await expect(first).resolves.toBe(plan);

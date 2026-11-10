@@ -33,6 +33,7 @@ import {
   ExperiencesPageSequence,
   type BeforeInitialPageOptions,
 } from './experiences-page-sequence.js';
+import { sameValue } from '../experience/experience-source-controller.js';
 
 interface PresentationOptions {
   readonly snapshot?: ExperiencesSnapshot;
@@ -111,7 +112,6 @@ function ActivationProvider(props: ActivationProps) {
   const context = stateTarget === target ? presentation : target.initial;
   const latestHandoff = useRef(props.handoff);
   latestHandoff.current = props.handoff;
-  const handoff = props.handoff;
   const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
     () =>
       props.buildPagePayload ??
@@ -123,12 +123,13 @@ function ActivationProvider(props: ActivationProps) {
     (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
   const [resetRevision, setResetRevision] = useState<object>(() => ({}));
   const operationRevision = useRef(resetRevision);
-  const resetHandoff = useRef<ExperiencesHandoff | undefined>(undefined);
+  const [resetHandoff, setResetHandoff] = useState<ExperiencesHandoff>();
+  const handoff = sameValue(props.handoff, resetHandoff) ? undefined : props.handoff;
   const resetRequests = useMemo(
     () => () => {
       const revision = {};
       operationRevision.current = revision;
-      resetHandoff.current = latestHandoff.current;
+      setResetHandoff(latestHandoff.current);
       setResetRevision(revision);
     },
     []
@@ -181,7 +182,7 @@ function ActivationProvider(props: ActivationProps) {
   useCommitEffect(() => {
     const active = activeRef.current;
     if (!active) return;
-    if (!handoff || resetHandoff.current === handoff) {
+    if (!handoff) {
       publishLive(active.sdk, true);
       return;
     }
@@ -234,7 +235,7 @@ function ActivationProvider(props: ActivationProps) {
     <ExperiencesContext.Provider value={value}>
       <ExperiencesPageSequence
         routeKey={routeKey}
-        handoff={resetHandoff.current === handoff ? undefined : handoff}
+        handoff={handoff}
         buildPagePayload={buildPagePayload}
         beforeInitialPage={props.beforeInitialPage}
         resetRevision={resetRevision}
