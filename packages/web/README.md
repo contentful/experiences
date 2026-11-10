@@ -274,7 +274,7 @@ calling direct `identify()` / `page()` first or waiting for browser commit.
 Independent profile-only reads with a concrete profile can still run concurrently.
 
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
-[documented provider omissions](../runtime/README.md#xda-preflight-and-profile-finalization);
+[documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
 Event-bearing XDA forces XPAPI preflight and does not commit events or
 profile changes. Local adoption and storage do not finalize the returned ID.

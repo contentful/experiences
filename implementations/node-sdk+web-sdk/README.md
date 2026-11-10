@@ -357,10 +357,9 @@ differ from the XDA continuation ID; it does not guarantee the evaluated profile
 is finalized or reproduce the evaluated selection/response. Retries still have
 generic commit ambiguity and no exactly-once guarantee.
 
-The default Web page provider omits `title`, `hash`, `width` and `height` under the
-[SDK workaround comment](../../packages/web/src/browser-event-context.ts). Custom providers/arguments,
-raw caller-built events and Node/Client metadata remain unchanged. Refresh the
-installed SDK artifacts to use the updated provider.
+The default Web page provider includes `title`, `hash`, `width` and `height`.
+Custom providers/arguments, raw caller-built events and Node/Client metadata
+remain caller-owned.
 Inspect actual selected content using
 refreshed installed artifacts; URL intent and HTTP 200 do not prove personalization.
 

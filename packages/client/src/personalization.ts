@@ -1,9 +1,8 @@
 import * as z from 'zod/mini';
 import type { PersonalizationOptions } from './fetch-experience.js';
 
-// dev.11 removed ./serialization. Preserve the dev.10 generated
-// GetWithOverridesExperienceRequestExtensionsPersonalization schema locally,
-// including recursive passthrough and its optional/record parsing semantics.
+// Validate the generated Delivery client's personalization request contract,
+// preserving recursive passthrough and optional/record parsing semantics.
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== 'object' || value === null) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -42,6 +41,7 @@ const contextSchema = object({
       content: optional(z.string()),
     })
   ),
+  gdpr: optional(object({ isConsentGiven: z.boolean() })),
   library: object({ name: z.string(), version: z.string() }),
   locale: optional(z.string()),
   location: optional(
@@ -116,7 +116,6 @@ const personalizationSchema = object({
 // Supplement fields absent from the generated XDA context without revalidating
 // existing fields against the direct transport's narrower schemas.
 const supplementalContextSchema = z.object({
-  gdpr: z.optional(z.object({ isConsentGiven: z.boolean() })),
   page: z.optional(z.object({ title: z.optional(z.string()) })),
 });
 
@@ -124,7 +123,7 @@ const supplementalContextSchema = z.object({
 export function serializePersonalization(personalization: unknown): PersonalizationOptions {
   try {
     const valid = personalizationSchema.parse(personalization);
-    // Keep the generated-equivalent result intact; these checks only validate gdpr/title.
+    // Keep the generated-equivalent result intact; this only validates page title.
     for (const event of valid.events ?? []) supplementalContextSchema.parse(event.context);
     return valid;
   } catch (cause) {

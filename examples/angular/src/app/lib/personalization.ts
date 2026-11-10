@@ -35,6 +35,7 @@ export function buildPagePersonalization(options: {
     query,
     referrer: options.referrer,
     search: url.search,
+    title: 'Contentful Experiences — Angular example',
     url: url.toString(),
   };
 
@@ -42,7 +43,7 @@ export function buildPagePersonalization(options: {
     locale: options.locale,
     location: EU_LOCATION,
     page,
-    properties: { ...page, title: 'Contentful Experiences — Angular example' },
+    properties: page,
   });
 
   return { events: [event] };

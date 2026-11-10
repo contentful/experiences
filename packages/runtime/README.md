@@ -288,7 +288,7 @@ hybrid use.
 **Verification and release gates:** Reference integrations can be assessed under
 the current noncommit limitation. Verification of the corrected service requires
 all tracked XDA issues affecting the supported integrations to be resolved,
-including forced preflight and outstanding built-event metadata rejection.
+including forced preflight.
 It must demonstrate full supported-event acceptance, real commitment and profile
 finalization through the appropriate SSR/CSR and hybrid paths. The SDK will not
 release until those issues are resolved and that verification passes against the
@@ -375,14 +375,11 @@ evaluation and its current noncommit service behavior require the differences
 above; full commit parity is not established. Actual XPAPI delivery
 retains generic retry ambiguity and no durable/exactly-once guarantee.
 
-The default Web page provider omits `title`, `hash`, `width` and `height`
-under its [temporary workaround comment](../web/src/browser-event-context.ts).
-Shared `buildPageView` retains the required `properties.title` string fallback
-while respecting provider omission of `context.page.title`. Explicit page
-context, raw caller-built events and Node/Client metadata remain caller-owned.
-The Next.js, SvelteKit and Angular example helpers omit title from their explicit
-`context.page` input while retaining `properties.title` and `context.gdpr`; this
-narrow input change adds no shared-builder stripping, instance wrapper or post-build sanitizer.
+The default Web page provider includes `title`, `hash`, `width` and `height`.
+Shared `buildPageView` retains the required `properties.title` string fallback.
+Explicit page context, raw caller-built events and Node/Client metadata remain
+caller-owned. The Next.js, SvelteKit and Angular example helpers include title in
+explicit `context.page` input alongside `properties.title` and `context.gdpr`.
 
 ### Replay transport limits
 

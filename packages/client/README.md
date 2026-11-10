@@ -39,17 +39,15 @@ stamp admitted events with owner consent before interception, preserving caller
 input and allowing explicit interceptor transforms. They validate transformed
 events after interception and before final consent callbacks or Web event
 publication; malformed transformed fields
-reject before transport. With `@contentful/experience-delivery@1.0.0-dev.10`, the
-generated serializer preserves these fields through passthrough but does not
-validate them. Client supplements generated validation with checks for only
-`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
-using local primitive constraints in `zod/mini`.
-The generated XDA schema continues to validate existing context fields and event
-types, including `page.query` values of `string | string[]`. Client retains the
-generated passthrough result; the supplemental checks do not replace it or impose
-the full Optimization context contract. Client directly declares `zod` at the
-existing workspace version; it does not depend on the Optimization API client or
-import Runtime.
+reject before transport. Client validates personalization with local `zod/mini`
+schemas preserving the generated request contract and recursive passthrough,
+including boolean `context.gdpr.isConsentGiven`. Supplemental validation checks
+optional-string `context.page.title`. Existing context fields and event types,
+including `page.query` values of `string | string[]`, retain generated parsing
+semantics. Client retains the passthrough result without imposing the full
+Optimization context contract. Client directly declares `zod` at the existing
+workspace version; it does not depend on the Optimization API client or import
+Runtime.
 
 Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
 commit events or profile changes. Newly returned IDs are provisional, and
@@ -71,9 +69,8 @@ names, requiredness, fallbacks and values. Collection order is one signed
 
 GET uses `parameter.<id>` and `parameter.<id>.<field>` in the generated client's
 `queryParams`, separate from `locale`. Empty Records or defined extensions select
-POST, with structured, unprefixed `parameters` in the body. dev.10 supports that
-body through serializer passthrough, although its generated type omits the key;
-the SDK uses a local typed request extension. Authentication and rename headers
+POST, with structured, unprefixed `parameters` in the body supported by the
+generated client. Authentication and rename headers
 remain owned by the generated client. Refetch with changed values and replace
 the renderer's plan; see the [runtime parameters example](../../README.md#runtime-experience-parameters).
 
@@ -259,7 +256,7 @@ const client = new ContentfulViewDeliveryClient({
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
 - Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
-- Keep generated XDA validation for existing event/context fields. Supplement only `context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string) with local `zod/mini` constraints; do not add an Optimization API client dependency or import Runtime or `EventBuilder` into Client.
+- Keep generated XDA validation for existing event/context fields, including boolean `context.gdpr.isConsentGiven`. Supplement only optional `context.page.title` (string) with local `zod/mini` constraints; do not add an Optimization API client dependency or import Runtime or `EventBuilder` into Client.
 - Name mappings between SDK options and delivery-client options live in `create-delivery-client.ts` — one place to change.
 
 ## License

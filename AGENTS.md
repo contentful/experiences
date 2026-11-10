@@ -243,10 +243,8 @@ Records of string/number leaves. Experience.parameters declares IDs and bindings
 use `$parameters/<id>`; there is no dynamic flag. Client flattens GET values into
 `parameter.<id>[.<field>]` through the generated client's `queryParams`; empty
 Records or defined extensions select POST with an unprefixed structured map.
-`@contentful/experience-delivery@1.0.0-dev.10` omits `parameters` in its generated
-POST request type but preserves it through serializer passthrough; the SDK extends
-the request type locally and transport tests verify the actual wire body, auth,
-and rename header. Collection order is a single signed `fields.<apiName>` or
+The generated client supports POST `parameters`; transport tests verify the
+actual wire body, auth, and rename header. Collection order is a single signed `fields.<apiName>` or
 `sys.<id>` string, never binding `OrderTerm[]`. Delivery owns parameter validation
 and fallbacks. Runtime/Node/Web forward values without retaining them; refetch and
 replace the renderer's plan to swap content. Preview Sessions keep their existing
@@ -264,20 +262,18 @@ IDs locally; adoption does not finalize them. See the canonical
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 Preserve generic retry ambiguity for actual XPAPI commits.
 
-Built XDA events retain `context.gdpr`. Web's default browser page provider omits
-`title`, `hash`, `width` and `height` under its [single temporary workaround comment](./packages/web/src/browser-event-context.ts).
-Shared `buildPageView` keeps the required `properties.title` string fallback while
-respecting provider title omission in `context.page`; explicit `page` context and
-raw caller-built XDA/Node/Client metadata remain caller-owned. Keep this in the
-default provider, without instance wrappers or per-request/post-build sanitizers.
+Built XDA events retain `context.gdpr`. Web's default browser page provider
+includes `title`, `hash`, `width` and `height`. Shared `buildPageView` keeps the
+required `properties.title` string fallback; explicit `page` context and raw
+caller-built XDA/Node/Client metadata remain caller-owned.
 Client validates personalization with local `zod/mini` schemas preserving the
-dev.10 generated request contract and passthrough behavior, since dev.11 removed
-`./serialization`. It supplements `context.gdpr` and `context.page.title` with
-boolean and optional-string constraints. Preserve XDA's existing context/event
-contracts, including `page.query` values of `string | string[]`; do not impose
-the full Optimization context schema. Keep Client's `zod` dependency direct; do not add an
-Optimization API client dependency or a Runtime import. Validate final transformed
-output before final consent callbacks/publication, preserving input immutability.
+generated request contract and passthrough behavior, including boolean
+`context.gdpr.isConsentGiven`. Supplemental validation checks optional-string
+`context.page.title`. Preserve XDA's existing context/event contracts, including
+`page.query` values of `string | string[]`; do not impose the full Optimization
+context schema. Keep Client's `zod` dependency direct; do not add an Optimization
+API client dependency or a Runtime import. Validate final transformed output
+before final consent callbacks/publication, preserving input immutability.
 Ordinary SSR uses Node fetch; CSR and
 browser-local navigation/actions use Web fetch, accepting existing type-tagged arguments or raw built events
 with SDK-owned construction once. Only actual server-to-browser transfers retain
