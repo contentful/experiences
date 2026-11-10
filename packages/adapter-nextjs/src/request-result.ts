@@ -38,7 +38,7 @@ export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sd
 
 export type BoundNextjsRequestRootProps = Omit<
   BoundNextjsExperiencesRootProps,
-  'handoff' | 'snapshot' | 'routeKey' | 'initialPagePayload'
+  'handoff' | 'handoffKey' | 'snapshot' | 'routeKey' | 'initialPagePayload'
 > & { readonly result?: NextjsRequestResult };
 
 export type NextjsRequestExperienceProps = Omit<

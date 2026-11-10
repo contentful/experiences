@@ -124,6 +124,7 @@ export function NextjsRequestPresentation({
       {...props}
       routeKey={routeKey}
       handoff={canAdopt && (ready || typeof window === 'undefined') ? result?.handoff : undefined}
+      handoffKey={result?.requestId}
       // Returning undefined from a builder still permits Web's empty page fallback.
       buildPagePayload={pageFree ? undefined : buildPagePayload}
       initialPagePayload={undefined}
