@@ -510,6 +510,7 @@ merge nested records in this order: router metadata, static payload, dynamic
 payload. Later values win and undefined layers are skipped; overriding one nested
 field preserves its siblings. Router metadata supplies `properties.hash`, `path`,
 `query`, `search` and `url`, even without custom payloads.
+Query keys with one value map to strings; repeated keys map to ordered string arrays.
 
 Each subpath exports its matching `*ExperiencesRootProps`,
 `*ExperiencesProviderProps` and `*AutoPageContext` types, plus `AutoPagePayload`
