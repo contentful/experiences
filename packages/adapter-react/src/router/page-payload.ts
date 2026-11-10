@@ -78,6 +78,13 @@ export function buildRouterPagePayload({
   search: string;
   url: string;
 }): AutoPagePayload {
+  const params = new globalThis.URLSearchParams(search);
+  const query = Object.fromEntries(
+    Array.from(new Set(params.keys()), (key) => {
+      const values = params.getAll(key);
+      return [key, values.length === 1 ? (values[0] ?? '') : values];
+    })
+  );
   let absoluteUrl = url;
   if (typeof window !== 'undefined') {
     try {
@@ -90,7 +97,7 @@ export function buildRouterPagePayload({
     properties: {
       hash: hash === '' || hash.startsWith('#') ? hash : `#${hash}`,
       path: pathname,
-      query: Object.fromEntries(new globalThis.URLSearchParams(search)),
+      query,
       search,
       url: absoluteUrl,
     },

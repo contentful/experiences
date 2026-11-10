@@ -120,6 +120,12 @@ describe('TanStack Router mapping', () => {
   }
 
   it('maps location/context through the provider and fetches the same ID once per route', async () => {
+    location = {
+      ...location,
+      searchStr: '?tab=featured&tag=first&tag=last',
+      href: '/products?tab=featured&tag=first&tag=last#details',
+    };
+    routerState.resolvedLocation = location;
     const getPagePayload = vi.fn(
       (_context: AutoPageEmissionContext<TanStackRouterAutoPageContext>) => undefined
     );
@@ -135,9 +141,9 @@ describe('TanStack Router mapping', () => {
               properties: {
                 hash: '#details',
                 path: '/products',
-                query: { tab: 'featured' },
-                search: '?tab=featured',
-                url: `${window.location.origin}/products?tab=featured#details`,
+                query: { tab: 'featured', tag: ['first', 'last'] },
+                search: '?tab=featured&tag=first&tag=last',
+                url: `${window.location.origin}/products?tab=featured&tag=first&tag=last#details`,
               },
             },
           ],
@@ -147,16 +153,16 @@ describe('TanStack Router mapping', () => {
     );
     expect(getPagePayload).toHaveBeenCalledExactlyOnceWith({
       isInitialEmission: true,
-      routeKey: '/products?tab=featured',
+      routeKey: '/products?tab=featured&tag=first&tag=last',
       context: {
         hash: 'details',
         router,
         location,
         matches,
         pathname: '/products',
-        routeKey: '/products?tab=featured',
-        search: '?tab=featured',
-        url: '/products?tab=featured#details',
+        routeKey: '/products?tab=featured&tag=first&tag=last',
+        search: '?tab=featured&tag=first&tag=last',
+        url: '/products?tab=featured&tag=first&tag=last#details',
       },
     });
     expect(getPagePayload.mock.calls[0]![0].context.router).toBe(router);
@@ -174,7 +180,7 @@ describe('TanStack Router mapping', () => {
     location = {
       ...location,
       hash: 'other-section',
-      href: '/products?tab=featured#other-section',
+      href: '/products?tab=featured&tag=first&tag=last#other-section',
     };
     routerState.resolvedLocation = location;
     await render(props);

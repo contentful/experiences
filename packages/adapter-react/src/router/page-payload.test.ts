@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildAutoPagePayload, composePagePayload } from './page-payload.js';
+import {
+  buildAutoPagePayload,
+  buildRouterPagePayload,
+  composePagePayload,
+} from './page-payload.js';
 
 describe('page payload composition', () => {
   it('merges nested records in router, static, dynamic order without changing inputs', () => {
-    const router = { properties: { path: '/products', query: { tab: 'featured', sort: 'name' } } };
+    const search =
+      '?tab=featured&sort=name&tag=first%20value&tag=last+value&__proto__=a&__proto__=b';
+    const url = `https://example.com/products${search}#details`;
+    const router = buildRouterPagePayload({ pathname: '/products', search, hash: '#details', url });
     const pagePayload = {
       properties: {
         title: 'Products',
@@ -29,8 +36,16 @@ describe('page payload composition', () => {
       locale: 'de-DE',
       properties: {
         path: '/products',
+        hash: '#details',
+        search,
+        url,
         title: 'Products',
-        query: { tab: 'dynamic', sort: 'name' },
+        query: {
+          tab: 'dynamic',
+          sort: 'name',
+          tag: ['first value', 'last value'],
+          ['__proto__']: ['a', 'b'],
+        },
         campaign: { source: 'email', details: { season: 'spring', placement: 'header' } },
       },
     });

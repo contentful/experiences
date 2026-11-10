@@ -101,6 +101,7 @@ describe('React Router mapping', () => {
   }
 
   it('maps location/context through the provider and fetches the same ID once per route', async () => {
+    location = { ...location, search: '?tab=featured&tag=first&tag=last' };
     const getPagePayload = vi.fn(
       (_context: AutoPageEmissionContext<ReactRouterAutoPageContext>) => undefined
     );
@@ -116,9 +117,9 @@ describe('React Router mapping', () => {
               properties: {
                 hash: '#details',
                 path: '/products',
-                query: { tab: 'featured' },
-                search: '?tab=featured',
-                url: `${window.location.origin}/products?tab=featured#details`,
+                query: { tab: 'featured', tag: ['first', 'last'] },
+                search: '?tab=featured&tag=first&tag=last',
+                url: `${window.location.origin}/products?tab=featured&tag=first&tag=last#details`,
               },
             },
           ],
@@ -128,15 +129,15 @@ describe('React Router mapping', () => {
     );
     expect(getPagePayload).toHaveBeenCalledExactlyOnceWith({
       isInitialEmission: true,
-      routeKey: '/products?tab=featured',
+      routeKey: '/products?tab=featured&tag=first&tag=last',
       context: {
         hash: '#details',
         location,
         matches,
         pathname: '/products',
-        routeKey: '/products?tab=featured',
-        search: '?tab=featured',
-        url: '/products?tab=featured#details',
+        routeKey: '/products?tab=featured&tag=first&tag=last',
+        search: '?tab=featured&tag=first&tag=last',
+        url: '/products?tab=featured&tag=first&tag=last#details',
       },
     });
     expect(getPagePayload.mock.calls[0]![0].context.location).toBe(location);
