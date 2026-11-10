@@ -218,6 +218,8 @@ describe('published package entry points', () => {
           getNewLine: () => '\n',
         })
       ).toBe('');
-    }
+    },
+    // Cold TypeScript compilation can exceed Vitest's default 5s on CI runners.
+    15_000
   );
 });
