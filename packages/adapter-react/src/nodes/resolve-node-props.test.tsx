@@ -2,50 +2,47 @@ import { describe, expect, it } from 'vitest';
 import { memo } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { NodeAttribution, PortableRenderNode } from '@contentful/experiences-sdk-core';
+import type { NodeAttribution } from '@contentful/experiences-sdk-core';
 
+import { planNode } from '../test/fixtures/plan-node.js';
 import { resolveNodeProps } from '../custom-renderer';
 import { ServerExperienceRenderer } from '../rendering/server-renderer';
 import { defineComponent, type Config } from '../registry/types';
 
-function planNode(
-  kind: 'component' | 'experienceTemplate',
-  id: string,
-  props: Partial<PortableRenderNode['props']> = {},
-  rest: Partial<PortableRenderNode> = {}
-): PortableRenderNode {
-  return {
-    registration: { kind, id },
-    props: { content: {}, design: {}, designRaw: {}, ...props },
-    slots: {},
-    ...rest,
-  };
-}
-
 const Noop = () => null;
 
 describe('resolveNodeProps', () => {
-  it('merges defaults < design < content < resolveData', () => {
-    const config: Config = {
-      components: {
-        card: defineComponent({
-          component: Noop,
-          defaults: { a: 'default', b: 'default', c: 'default', d: 'default' },
-        }),
-      },
-    };
-    const node = planNode('component', 'card', {
-      design: { b: 'design', c: 'design', d: 'design' },
-      content: { c: 'content', d: 'content' },
-      resolved: { d: 'resolved' },
-    });
+  it.each(['component', 'experienceTemplate'] as const)(
+    'merges defaults < design < content < resolveData for %s, preserving empty content',
+    (kind) => {
+      const config: Config = {
+        components: {},
+        [kind === 'component' ? 'components' : 'experienceTemplates']: {
+          card: defineComponent({
+            component: Noop,
+            defaults: { a: 'default', b: 'default', c: 'default', d: 'default', empty: 'default' },
+          }),
+        },
+      };
+      const node = planNode(kind, 'card', {
+        design: { b: 'design', c: 'design', d: 'design' },
+        content: { c: 'content', d: 'content', empty: '' },
+        resolved: { d: 'resolved' },
+      });
 
-    const result = resolveNodeProps(node, config);
+      const result = resolveNodeProps(node, config);
 
-    expect(result.status).toBe('resolved');
-    if (result.status !== 'resolved') return;
-    expect(result.props).toEqual({ a: 'default', b: 'design', c: 'content', d: 'resolved' });
-  });
+      expect(result.status).toBe('resolved');
+      if (result.status !== 'resolved') return;
+      expect(result.props).toEqual({
+        a: 'default',
+        b: 'design',
+        c: 'content',
+        d: 'resolved',
+        empty: '',
+      });
+    }
+  );
 
   it('does not add slot props; the host renders slots itself', () => {
     const config: Config = { components: { section: Noop, text: Noop } };

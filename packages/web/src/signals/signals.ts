@@ -5,7 +5,7 @@ import type {
   ExperienceRequestState,
   OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
-import type { PreviewState } from '../states.js';
+import type { PreviewState } from '../state/states.js';
 import { batch, computed, effect, signal, type Signal, untracked } from '@preact/signals-core';
 
 /** Bound Preview Session source; absent when preview integration is disabled. */

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { click, enter, leave } from '../test/tracking-harness.js';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +9,7 @@ import {
   installIOPolyfill,
   makeElement,
   setDocumentVisibility,
-} from '../test-fixtures/dom.js';
+} from '../test/dom.js';
 
 import { TRACKING_SCOPES_ATTRIBUTE } from '../tracking-attributes.js';
 
@@ -39,10 +40,6 @@ const keyOf = (element: Element): string => {
 const lookup = (map: Map<Element, TrackingAttribution>) => (key: string) => {
   for (const [element, attribution] of map) if (keyOf(element) === key) return attribution;
   return undefined;
-};
-
-const click = (target: Node): void => {
-  target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 };
 
 beforeEach(() => {
@@ -210,9 +207,9 @@ describe('createViewDetector', () => {
 
 describe('createHoverDetector', () => {
   const hover = async (element: Element, ms: number): Promise<void> => {
-    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    enter(element);
     await advance(ms);
-    element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    leave(element);
     await advance(0);
   };
 
@@ -272,11 +269,11 @@ describe('createHoverDetector', () => {
     detector.onElementAdded(element, keyOf(element));
     detector.start();
 
-    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    enter(element);
     await advance(1000);
     expect(trackHover).toHaveBeenCalledTimes(1);
 
-    element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    leave(element);
     await advance(0);
 
     attributions.set(element, { ...FRAGMENT, entityId: 'B' });

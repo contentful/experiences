@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, type ReactElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -33,15 +33,8 @@ function ExperiencePlanProbe({ value }: { value: UseExperiencePlanOptions }): Re
   return <output>{typeof title === 'string' ? title : ''}</output>;
 }
 
-function renderRoot(): { container: HTMLElement; root: Root } {
-  const container = document.createElement('div');
-  document.body.append(container);
-  const root = createRoot(container);
-  return { container, root };
-}
-
 describe('useExperiencePlan', () => {
-  let root: Root | undefined;
+  let root: ReactTestRoot | undefined;
   let container: HTMLElement | undefined;
 
   const initialPlan = {
@@ -68,14 +61,14 @@ describe('useExperiencePlan', () => {
 
   afterEach(() => {
     if (root) {
-      act(() => root?.unmount());
+      act(() => root?.cleanup());
     }
-    container?.remove();
     vi.unstubAllGlobals();
   });
 
   it('keeps the initial plan until raw data resolves', async () => {
-    ({ container, root } = renderRoot());
+    root = createReactTestRoot();
+    container = root.container;
 
     await act(async () => {
       root!.render(
@@ -106,7 +99,8 @@ describe('useExperiencePlan', () => {
       },
     };
 
-    ({ container, root } = renderRoot());
+    root = createReactTestRoot();
+    container = root.container;
 
     await act(async () => {
       root!.render(
@@ -148,7 +142,8 @@ describe('useExperiencePlan', () => {
       },
     };
 
-    ({ container, root } = renderRoot());
+    root = createReactTestRoot();
+    container = root.container;
 
     await act(async () => {
       root!.render(

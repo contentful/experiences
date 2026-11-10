@@ -6,7 +6,7 @@ import type { ExperiencesHandoff, ExperiencesWebConfig } from '@contentful/exper
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { sourceSdk } from '../test/managed-experience.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
-import { profileFixture } from '../test/profile.js';
+import { profileFixture } from '../test/fixtures/profile.js';
 import {
   bindTanStackRouterExperiences,
   type AutoPageEmissionContext,

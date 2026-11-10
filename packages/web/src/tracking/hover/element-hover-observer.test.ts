@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
+import { enter, leave, observeHover } from '../../test/tracking-harness.js';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { advance, deferred, makeElement, setDocumentVisibility } from '../../test-fixtures/dom.js';
+import { advance, deferred, makeElement, setDocumentVisibility } from '../../test/dom.js';
 
 import { type ElementHoverCallbackInfo, ElementHoverObserver } from './element-hover-observer.js';
 
@@ -15,14 +17,6 @@ const infoAt = (
   const info = cb.mock.calls[index]?.[0];
   if (!info) throw new Error(`No callback at index ${index}`);
   return info;
-};
-
-const enter = (element: Element, pointerType = 'mouse'): void => {
-  element.dispatchEvent(new PointerEvent('pointerenter', { pointerType }));
-};
-
-const leave = (element: Element, pointerType = 'mouse'): void => {
-  element.dispatchEvent(new PointerEvent('pointerleave', { pointerType }));
 };
 
 describe('ElementHoverObserver', () => {
@@ -39,9 +33,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('fires a start callback once the dwell threshold is reached', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element);
     await advance(999);
@@ -53,9 +45,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('emits a final callback with the same hoverId and total duration when the hover ends', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element);
     await advance(1300);
@@ -71,9 +61,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('emits nothing for a hover that ends before the dwell threshold', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element);
     await advance(500);
@@ -84,9 +72,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('assigns a new hoverId to each hover', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element);
     await advance(1000);
@@ -99,9 +85,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('ends the hover when the page hides and needs a fresh pointer entry after', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element);
     await advance(300);
@@ -116,9 +100,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('ignores touch pointers', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementHoverObserver(cb).observe(element);
+    const { element, cb } = observeHover();
 
     enter(element, 'touch');
     await advance(2000);
@@ -167,10 +149,7 @@ describe('ElementHoverObserver', () => {
   });
 
   it('cancels a pending dwell and detaches listeners when unobserved', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementHoverObserver(cb);
-    observer.observe(element);
+    const { element, cb, observer } = observeHover();
 
     enter(element);
     observer.unobserve(element);
@@ -197,10 +176,7 @@ describe('ElementHoverObserver', () => {
   it('endActive is idempotent and emits nothing for a sub-dwell hover', async () => {
     const qualified = makeElement();
     const subDwell = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementHoverObserver(cb);
-    observer.observe(qualified);
-    observer.observe(subDwell);
+    const { cb, observer } = observeHover(qualified, subDwell);
 
     enter(qualified);
     await advance(1500);
@@ -213,15 +189,10 @@ describe('ElementHoverObserver', () => {
   });
 
   describe('sharedSession', () => {
-    const shared = (cb: ReturnType<typeof vi.fn<Callback>>) => new ElementHoverObserver(cb);
-
     it('stays hovered while any member is, under one hoverId', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeHover(a, b);
 
       enter(a);
       await advance(400);
@@ -248,10 +219,7 @@ describe('ElementHoverObserver', () => {
     it('does not restart when a second member is entered mid-hover', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeHover(a, b);
 
       enter(a);
       await advance(900);
@@ -264,10 +232,7 @@ describe('ElementHoverObserver', () => {
     it('keeps one hover when the pointer crosses between touching members', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = new ElementHoverObserver(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeHover(a, b);
 
       enter(a);
       await advance(1000);
@@ -290,8 +255,7 @@ describe('ElementHoverObserver', () => {
 
     it('ignores touch pointers', async () => {
       const a = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      shared(cb).observe(a);
+      const { cb } = observeHover(a);
 
       enter(a, 'touch');
       await advance(2000);
@@ -302,10 +266,7 @@ describe('ElementHoverObserver', () => {
     it('endActive flushes the shared hover once', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb, observer } = observeHover(a, b);
 
       enter(a);
       enter(b);
@@ -319,10 +280,7 @@ describe('ElementHoverObserver', () => {
     it('keeps the hover when one of two hovered members is unobserved', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb, observer } = observeHover(a, b);
 
       enter(a);
       enter(b);
@@ -335,9 +293,7 @@ describe('ElementHoverObserver', () => {
 
     it('drops the hover silently when the last member is unobserved', async () => {
       const a = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
+      const { cb, observer } = observeHover(a);
 
       enter(a);
       await advance(500);

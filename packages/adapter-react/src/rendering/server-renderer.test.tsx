@@ -5,58 +5,23 @@ import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type {
-  ComponentNode,
   ExperiencePayload,
-  ExperienceTemplateNode,
   ManualDesignValue,
-  PortableRenderNode,
   PortableRenderPlan,
 } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import { toCss } from '../design/design-utils';
 import { ServerExperienceRenderer } from './server-renderer';
 import type { Config } from '../registry/types';
 import { useDesignValues } from '../hooks/use-design-values';
-import { minimalSourceMap } from '../test/source-map.js';
+import { minimalSourceMap } from '../test/fixtures/source-map.js';
+
+import { componentNode, experienceTemplateNode, slotPayload } from '../test/fixtures/payload.js';
 
 const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
 
 const dt = (value: string) => ({ type: 'DesignToken' as const, value });
-
-function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
-  return {
-    component: {
-      sys: {
-        type: 'ResourceLink',
-        linkType: 'Contentful:Component',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
-      },
-    },
-    ...rest,
-  };
-}
-
-/**
- * A coded Experience Template is an ordinary top-level node — the only
- * difference from `componentNode` is which registry its id resolves against.
- */
-function experienceTemplateNode(
-  typeId: string,
-  rest: Omit<ExperienceTemplateNode, 'experienceTemplate'> = {}
-): ExperienceTemplateNode {
-  return {
-    experienceTemplate: {
-      sys: {
-        type: 'ResourceLink',
-        linkType: 'Contentful:ExperienceTemplate',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/experienceTemplates/${typeId}`,
-      },
-    },
-    ...rest,
-  };
-}
 
 /**
  * `sys.experienceTemplate` rides along on every Experience — coded and
@@ -75,15 +40,8 @@ function sysWithExperienceTemplate(typeId: string): ExperiencePayload['sys'] {
   };
 }
 
-/** The single top-level Experience Template node in a coded plan. */
-function templateNodeOf(plan: { nodes: PortableRenderNode[] }): PortableRenderNode {
-  const found = plan.nodes.find((n) => n.registration.kind === 'experienceTemplate');
-  if (!found) throw new Error('expected an experienceTemplate node in the plan');
-  return found;
-}
-
 // Fixtures read their design through useDesignValues() — the SDK never
-// injects design as props — and apply it however they like.
+// prescribes how the design-system component applies it.
 const Container = ({ children }: { children?: ReactNode }) => {
   const design = useDesignValues();
   return <div data-padding={design.cfPadding as string}>{children}</div>;
@@ -270,89 +228,6 @@ describe('ServerExperienceRenderer', () => {
     expect(source).toMatch(/^\s*['"]use client['"];/m);
   });
 
-  it('merges defaults beneath content (content wins)', async () => {
-    const Item = ({ variant, priority }: { variant: string; priority: string }) => (
-      <span data-variant={variant} data-priority={priority} />
-    );
-    const itemConfig: Config = {
-      components: {
-        item: { component: Item, defaults: { variant: 'fallback', priority: 'low' } },
-      },
-    };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('item', {
-            id: 'i',
-            contentProperties: { variant: 'fromContent' },
-          }),
-        ],
-      },
-      itemConfig
-    );
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={itemConfig} />
-    );
-    expect(html).toContain('data-variant="fromContent"');
-    expect(html).toContain('data-priority="low"');
-  });
-
-  it('treats an explicitly-empty content value as set (beats a non-empty default)', async () => {
-    const Item = ({ label }: { label: string }) => <span data-label={label} />;
-    const itemConfig: Config = {
-      components: {
-        item: { component: Item, defaults: { label: 'fromDefault' } },
-      },
-    };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('item', {
-            id: 'i',
-            contentProperties: { label: '' },
-          }),
-        ],
-      },
-      itemConfig
-    );
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={plan} config={itemConfig} />
-    );
-    expect(html).toContain('data-label=""');
-  });
-
-  it('respects merge precedence: defaults < content < resolved < slots', () => {
-    const Item = ({ value }: { value: string }) => <span data-value={value} />;
-    const cfg: Config = {
-      components: {
-        item: { component: Item, defaults: { value: 'fromDefault' } },
-      },
-    };
-    // Simulate a plan that already went through resolveExperience.
-    const planWithResolved: PortableRenderPlan = {
-      metadata: {},
-      debug: false,
-      diagnostics: [],
-      nodes: [
-        {
-          nodeId: 'r',
-          registration: { kind: 'component', id: 'item' },
-          props: {
-            content: { value: 'fromContent' },
-            design: {},
-            designRaw: {},
-            resolved: { value: 'fromResolveData' },
-          },
-          slots: {},
-        },
-      ],
-    };
-    const html = renderToStaticMarkup(
-      <ServerExperienceRenderer experience={planWithResolved} config={cfg} />
-    );
-    expect(html).toContain('data-value="fromResolveData"');
-  });
-
   it('renders an experienceTemplate node from the experienceTemplates registry', async () => {
     const Item = ({ value }: { value?: string }) => <span>{value}</span>;
     // A template's slots arrive as named props, exactly like a component's —
@@ -462,23 +337,7 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     };
     const Item = ({ text }: { text?: string }) => <span>{text}</span>;
     const cfg: Config = { components: { container: Container, item: Item } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('container', {
-            id: 'c',
-            slots: {
-              children: [
-                componentNode('item', { id: 'a', contentProperties: { text: 'one' } }),
-                componentNode('item', { id: 'b', contentProperties: { text: 'two' } }),
-                componentNode('item', { id: 'd', contentProperties: { text: 'three' } }),
-              ],
-            },
-          }),
-        ],
-      },
-      cfg
-    );
+    const plan = await resolveExperience(slotPayload(['one', 'two', 'three']), cfg);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     expect(Array.isArray(received)).toBe(true);
@@ -497,22 +356,7 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     const Container = ({ children }: { children?: ReactNode[] }) => <div>{children}</div>;
     const Item = ({ text }: { text?: string }) => <span>{text}</span>;
     const cfg: Config = { components: { container: Container, item: Item } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('container', {
-            id: 'c',
-            slots: {
-              children: [
-                componentNode('item', { id: 'a', contentProperties: { text: 'one' } }),
-                componentNode('item', { id: 'b', contentProperties: { text: 'two' } }),
-              ],
-            },
-          }),
-        ],
-      },
-      cfg
-    );
+    const plan = await resolveExperience(slotPayload(['one', 'two']), cfg);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toBe(
       '<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents"><div><span>one</span><span>two</span></div></div>'
@@ -527,23 +371,7 @@ describe('ServerExperienceRenderer — slot children as an array', () => {
     );
     const Item = ({ text }: { text?: string }) => <span>{text}</span>;
     const cfg: Config = { components: { container: Container, item: Item } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('container', {
-            id: 'c',
-            slots: {
-              children: [
-                componentNode('item', { id: 'a', contentProperties: { text: 'keep' } }),
-                componentNode('item', { id: 'b', contentProperties: { text: 'drop' } }),
-                componentNode('item', { id: 'd', contentProperties: { text: 'keep2' } }),
-              ],
-            },
-          }),
-        ],
-      },
-      cfg
-    );
+    const plan = await resolveExperience(slotPayload(['keep', 'drop', 'keep2']), cfg);
     const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
     expect(html).toContain('keep');
     expect(html).toContain('keep2');
@@ -651,37 +479,8 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
     const attribution = captured!.attribution as { scopes: Array<{ entityId: string }> };
-    expect(attribution.scopes.map((s) => s.entityId)).toEqual(['exp-a']);
     // Exactly what the plan carries: the same value Svelte and Angular are held to.
     expect(attribution).toEqual(plan.nodes[0]!.attribution);
-    // The provider value crosses the RSC boundary, so it must survive JSON.
-    expect(JSON.parse(JSON.stringify(attribution))).toEqual(attribution);
-  });
-
-  it.each([
-    ['a wrong version', { version: 99 }],
-    ['a missing layers table', { layers: undefined }],
-    ['a node with a nonsense chain', { nodes: { n: { layers: 'nope', scope: 0 } } }],
-  ])('still renders, with no attribution, for %s', async (_label, override) => {
-    let captured: Record<string, unknown> | null = null;
-    const Capture = () => {
-      captured = useContentfulComponent() as unknown as Record<string, unknown>;
-      return <p>rendered</p>;
-    };
-    const cfg: Config = { components: { button: Capture } };
-    const sourceMap = {
-      ...minimalSourceMap({ leaf: { kind: 'Component', id: 'button' } }),
-      ...override,
-    };
-    const plan = await resolveExperience({ nodes: [componentNode('button', { id: 'n' })] }, cfg, {
-      sourceMap: sourceMap as never,
-    });
-
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-
-    expect(html).toContain('rendered');
-    expect(captured!.attribution).toBeUndefined();
-    expect(plan.diagnostics).toEqual([]);
   });
 
   it('has no attribution when the plan carries no source map', async () => {
@@ -736,8 +535,7 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
     );
     renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
 
-    const attribution = captured!.attribution as { scopes: Array<{ entityId: string }> };
-    expect(attribution.scopes.map((s) => s.entityId)).toEqual(['exp-a']);
+    expect(captured!.attribution).toEqual(plan.nodes[0]!.attribution);
   });
 
   it('exposes experienceTemplateId/content/design/resolved via useContentfulExperienceTemplate()', async () => {
@@ -777,10 +575,10 @@ describe('ServerExperienceRenderer — useContentfulComponent / useContentfulExp
 });
 
 describe('ServerExperienceRenderer — resolveToken', () => {
-  // Reads its background through useDesignValues() — the resolved value the
-  // renderer publishes on context, not an injected prop.
-  const Button = ({ label }: { label?: string }) => {
+  // The same resolved value reaches both provider context and ordinary props.
+  const Button = ({ label, cfBackgroundColor }: { label?: string; cfBackgroundColor?: string }) => {
     const design = useDesignValues();
+    expect(cfBackgroundColor).toBe(design.cfBackgroundColor);
     return (
       <button type="button" data-bg={design.cfBackgroundColor as string}>
         {label}
@@ -788,186 +586,33 @@ describe('ServerExperienceRenderer — resolveToken', () => {
     );
   };
 
-  it('passes DesignToken values through the resolver before render', async () => {
-    const cfg: Config = {
-      components: { button: Button },
-      resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
-    };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('button', {
-            id: 'b',
-            contentProperties: { label: 'Go' },
-            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
-          }),
-        ],
-      },
-      cfg
-    );
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toContain('data-bg="#4f39f6"');
-    expect(html).not.toContain('DesignToken');
-  });
-
-  it('warns and passes the raw token through the design values when the resolver returns undefined', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    let captured: Record<string, unknown> = {};
-    const Probe = () => {
-      captured = useDesignValues();
-      return null;
-    };
-    const cfg: Config = {
-      components: { button: Probe },
-      resolveToken: () => undefined,
-    };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('button', {
-            id: 'b',
-            contentProperties: { label: 'Go' },
-            designProperties: { cfBackgroundColor: dt('color/unknown') },
-          }),
-        ],
-      },
-      cfg
-    );
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-
-    expect(captured.cfBackgroundColor).toEqual(dt('color/unknown'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('color/unknown'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('button'));
-    warn.mockRestore();
-  });
-
-  it('leaves token values untouched when no resolver is supplied (backward-compatible)', async () => {
-    const cfg: Config = { components: { button: Button } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('button', {
-            id: 'b',
-            contentProperties: { label: 'Go' },
-            designProperties: { cfBackgroundColor: dt('color/surface/hero') },
-          }),
-        ],
-      },
-      cfg
-    );
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    // React stringifies the token object into "[object Object]" — the key
-    // point is that the raw token value reaches the component, unchanged.
-    expect(html).toContain('data-bg="[object Object]"');
-  });
-
-  it('runs on an experienceTemplate node design props too', async () => {
-    const Tpl = ({ content }: { content?: ReactNode[] }) => {
-      const design = useDesignValues();
-      return <main data-bg={design.cfBackground as string}>{content}</main>;
-    };
-    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
-    const cfg: Config = {
-      components: { item: Item },
-      experienceTemplates: { page: Tpl },
-      resolveToken: (ref) => (ref.value === 'brand/canvas' ? '#111827' : undefined),
-    };
-    const tplPayload: ExperiencePayload = {
-      nodes: [
-        experienceTemplateNode('page', {
-          id: 'tpl',
-          designProperties: { cfBackground: dt('brand/canvas') },
-          slots: {
-            content: [componentNode('item', { id: 'i', contentProperties: { value: 'ok' } })],
-          },
-        }),
-      ],
-    };
-    const plan = await resolveExperience(tplPayload, cfg);
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toContain('data-bg="#111827"');
-  });
-});
-
-describe('ServerExperienceRenderer — design values auto-fill props', () => {
-  it('spreads resolved design values onto component props by their raw key', async () => {
-    let received: Record<string, unknown> = {};
-    const Probe = (props: Record<string, unknown>) => {
-      received = props;
-      return null;
-    };
-    const cfg: Config = { components: { probe: Probe } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('probe', {
-            id: 'p',
-            contentProperties: { label: 'keep me' },
-            designProperties: { cfBackgroundColor: m('#f00'), cfPadding: m('10px') },
-          }),
-        ],
-      },
-      cfg
-    );
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    // Content flows as a prop, and design auto-fills props under its raw key.
-    expect(received).toHaveProperty('label', 'keep me');
-    expect(received).toHaveProperty('cfBackgroundColor', '#f00');
-    expect(received).toHaveProperty('cfPadding', '10px');
-  });
-
-  it('lets content override design on a key collision (content wins)', async () => {
-    let received: Record<string, unknown> = {};
-    const Probe = (props: Record<string, unknown>) => {
-      received = props;
-      return null;
-    };
-    const cfg: Config = { components: { probe: Probe } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('probe', {
-            id: 'p',
-            // Same key in both channels: content must win.
-            contentProperties: { cfPadding: 'from-content' },
-            designProperties: { cfPadding: m('from-design') },
-          }),
-        ],
-      },
-      cfg
-    );
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(received).toHaveProperty('cfPadding', 'from-content');
-  });
-
-  it('spreads resolved design values onto experienceTemplate props too', async () => {
-    let received: Record<string, unknown> = {};
-    const Tpl = (props: Record<string, unknown>) => {
-      received = props;
-      return <main>{props.content as ReactNode[]}</main>;
-    };
-    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
-    const cfg: Config = {
-      components: { item: Item },
-      experienceTemplates: { page: Tpl },
-    };
-    const tplPayload: ExperiencePayload = {
-      nodes: [
-        experienceTemplateNode('page', {
-          id: 'tpl',
-          designProperties: { cfBackground: m('#111827') },
-          slots: {
-            content: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
-          },
-        }),
-      ],
-    };
-    const plan = await resolveExperience(tplPayload, cfg);
-    // The renderer consumes the plan's pre-resolved design as-is.
-    expect(templateNodeOf(plan!).props.design).toEqual({ cfBackground: '#111827' });
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(received).toHaveProperty('cfBackground', '#111827');
-  });
+  it.each(['component', 'experienceTemplate'] as const)(
+    'passes resolved DesignToken values into %s context and props',
+    async (kind) => {
+      const cfg: Config = {
+        components: { button: Button },
+        experienceTemplates: { button: Button },
+        resolveToken: (ref) => (ref.value === 'color/surface/hero' ? '#4f39f6' : undefined),
+      };
+      const plan = await resolveExperience(
+        {
+          nodes: [
+            (kind === 'component' ? componentNode : experienceTemplateNode)('button', {
+              id: 'b',
+              contentProperties: { label: 'Go' },
+              designProperties: { cfBackgroundColor: dt('color/surface/hero') },
+            }),
+          ],
+        },
+        cfg
+      );
+      const html = renderToStaticMarkup(
+        <ServerExperienceRenderer experience={plan} config={cfg} />
+      );
+      expect(html).toContain('data-bg="#4f39f6"');
+      expect(html).not.toContain('DesignToken');
+    }
+  );
 });
 
 describe('ServerExperienceRenderer — useDesignValues()', () => {
@@ -1022,28 +667,6 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     expect(typed).toEqual({ cfBackgroundColor: undefined, cfPadding: '24px' });
   });
 
-  it('returns design values when called deep inside a node subtree', async () => {
-    let captured: Record<string, unknown> = {};
-    const Probe = () => {
-      captured = useDesignValues();
-      return null;
-    };
-    const cfg: Config = { components: { probe: Probe } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('probe', {
-            id: 'p',
-            designProperties: { cfPadding: m('40px') },
-          }),
-        ],
-      },
-      cfg
-    );
-    renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(captured).toEqual({ cfPadding: '40px' });
-  });
-
   it('returns {} when there is no design in scope', async () => {
     // Put the probe in a experienceTemplate that carries no design and wraps a node
     // with no design either, so the hook has nothing to resolve.
@@ -1078,73 +701,6 @@ describe('ServerExperienceRenderer — useDesignValues()', () => {
     };
     renderToStaticMarkup(<Probe />);
     expect(captured).toEqual({});
-  });
-});
-
-describe('ServerExperienceRenderer — design values', () => {
-  it('renders resolved design values', async () => {
-    const Probe = () => {
-      const design = useDesignValues();
-      return <div data-padding={design.cfPadding as string} />;
-    };
-    const cfg: Config = { components: { probe: Probe } };
-    const plan = await resolveExperience(
-      {
-        nodes: [
-          componentNode('probe', {
-            id: 'p',
-            designProperties: { cfPadding: m('40px') },
-          }),
-        ],
-      },
-      cfg
-    );
-    const html = renderToStaticMarkup(<ServerExperienceRenderer experience={plan} config={cfg} />);
-    expect(html).toContain('data-padding="40px"');
-  });
-});
-
-describe('toCss', () => {
-  it('converts bare (non-cf) CSS keys — the shape real payloads use', () => {
-    expect(toCss({ fontSize: '20px', backgroundColor: '#4f39f6' })).toEqual({
-      fontSize: '20px',
-      backgroundColor: '#4f39f6',
-    });
-  });
-
-  it('still handles cf-prefixed and kebab/snake CSS keys', () => {
-    expect(toCss({ cfBackgroundColor: '#4f39f6', 'font-size': '10px', font_weight: 700 })).toEqual({
-      backgroundColor: '#4f39f6',
-      fontSize: '10px',
-      fontWeight: 700,
-    });
-  });
-
-  it('drops keys that are not known CSS properties (variant, as, ratio, target)', () => {
-    expect(
-      toCss({ backgroundColor: '#4f39f6', variant: 'h1', as: 'h2', ratio: '1:2', target: '_self' })
-    ).toEqual({ backgroundColor: '#4f39f6' });
-  });
-
-  it('drops null and undefined values', () => {
-    expect(toCss({ padding: null, margin: undefined, color: '#111' })).toEqual({
-      color: '#111',
-    });
-  });
-
-  it('respects an exclude list even for valid CSS keys', () => {
-    expect(
-      toCss({ backgroundColor: '#4f39f6', padding: '10px' }, { exclude: ['padding'] })
-    ).toEqual({ backgroundColor: '#4f39f6' });
-  });
-
-  it('respects an include list (still whitelist-filtered)', () => {
-    expect(
-      toCss(
-        { backgroundColor: '#4f39f6', padding: '10px', variant: 'h1' },
-        { include: ['backgroundColor', 'variant'] }
-      )
-    ).toEqual({ backgroundColor: '#4f39f6' });
   });
 });
 

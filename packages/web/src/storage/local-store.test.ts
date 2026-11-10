@@ -9,9 +9,9 @@ import {
 } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { seedConsent } from '../test-fixtures/consent.js';
+import { seedConsent } from '../test/fixtures/consent.js';
 import LocalStore from './local-store.js';
-import { completeProfile } from '../test-fixtures/profile.js';
+import { completeProfile } from '../test/fixtures/profile.js';
 
 beforeEach(() => window.localStorage.clear());
 afterEach(() => vi.restoreAllMocks());

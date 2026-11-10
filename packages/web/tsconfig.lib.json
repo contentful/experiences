@@ -10,7 +10,7 @@
   "exclude": [
     "**/*.test.ts",
     "**/*.spec.ts",
-    "src/test-fixtures/**/*",
+    "src/test/**/*",
     "vitest.config.ts",
     "vitest.ssr.config.ts",
     "rslib.config.ts"

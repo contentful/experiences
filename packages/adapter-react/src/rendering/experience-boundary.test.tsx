@@ -1,14 +1,14 @@
 /** @vitest-environment jsdom */
 
 import { act, forwardRef, StrictMode, type HTMLAttributes } from 'react';
-import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
+import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ClientExperienceRenderer } from './client-renderer.js';
 import { ServerExperienceRenderer } from './server-renderer.js';
-import { minimalSourceMap } from '../test/source-map.js';
+import { minimalSourceMap } from '../test/fixtures/source-map.js';
 import type { Config } from '../registry/types.js';
 import type {
   ExperienceRootBinding,
@@ -16,9 +16,9 @@ import type {
 } from '../tracking/root-binding-types.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const roots: Root[] = [];
+const roots: ReactTestRoot[] = [];
 afterEach(async () => {
-  await act(async () => roots.splice(0).forEach((root) => root.unmount()));
+  await act(async () => roots.splice(0).forEach((root) => root.cleanup()));
   document.body.innerHTML = '';
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -63,9 +63,7 @@ describe('standard attributed Experience rendering', () => {
         <section {...props} />
       ));
       const callback = vi.fn<OnExperienceNodeRoot>();
-      const container = document.createElement('div');
-      document.body.append(container);
-      const root = createRoot(container);
+      const root = createReactTestRoot();
       roots.push(root);
       await act(async () =>
         root.render(
@@ -93,9 +91,8 @@ describe('standard attributed Experience rendering', () => {
     ));
     const ordinaryConfig: Config = { components: { probe: Forwarded } };
     const callback = vi.fn<OnExperienceNodeRoot>();
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
+    const root = createReactTestRoot();
+    const { container } = root;
     roots.push(root);
     await act(async () =>
       root.render(
@@ -144,9 +141,8 @@ describe('standard attributed Experience rendering', () => {
       defaults: { label: 'first' },
     };
     const boundConfig: Config = { components: { probe: registration } };
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
+    const root = createReactTestRoot();
+    const { container } = root;
     roots.push(root);
     const element = () => (
       <ClientExperienceRenderer
@@ -264,17 +260,15 @@ describe('standard attributed Experience rendering', () => {
     const html = renderToString(
       <ServerExperienceRenderer experience={experience} config={config} as="section" />
     );
-    const container = document.createElement('div');
-    document.body.append(container);
+    const root = createReactTestRoot();
+    const { container } = root;
+    roots.push(root);
     container.innerHTML = html;
     const recoverable = vi.fn();
     await act(async () =>
-      roots.push(
-        hydrateRoot(
-          container,
-          <ClientExperienceRenderer experience={experience} config={config} as="section" />,
-          { onRecoverableError: recoverable }
-        )
+      root.hydrate(
+        <ClientExperienceRenderer experience={experience} config={config} as="section" />,
+        { onRecoverableError: recoverable }
       )
     );
     expect(recoverable).not.toHaveBeenCalled();
@@ -302,9 +296,8 @@ describe('standard attributed Experience rendering', () => {
     const boundConfig: Config = {
       components: { probe: { component: Bound, root: { prop: 'experienceRoot' } } },
     };
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
+    const root = createReactTestRoot();
+    const { container } = root;
     roots.push(root);
     await act(async () =>
       root.render(

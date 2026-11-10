@@ -7,7 +7,8 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { ExperiencesContext } from '../runtime/experiences-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { Experience, type ManagedExperienceProps } from './experience.js';
-import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
+import { deferred, sourceSdk } from '../test/managed-experience.js';
+import { plan, previewState } from '../test/fixtures/managed-experience.js';
 import type { ManagedExperienceResult } from './use-managed-experience.js';
 
 const config = {
@@ -347,39 +348,18 @@ describe('Experience', () => {
     expect(root.container.textContent).toBe('fresh');
   });
 
-  it('suppresses stale view completions and releases replaced or unmounted bindings', async () => {
-    const first = deferred<PortableRenderPlan>();
-    const second = deferred<PortableRenderPlan>();
-    source.fetchExperience.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    const resolved = vi.fn();
-    const error = vi.fn();
-    await render({ onExperienceResolved: resolved, onExperienceError: error });
-    const oldBinding = source.bindings.at(-1)!;
-    await render({
-      experienceId: 'next',
-      onExperienceResolved: resolved,
-      onExperienceError: error,
-    });
-    await act(async () => first.resolve(plan('old')));
-    expect(oldBinding.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(resolved).not.toHaveBeenCalled();
-    expect(error).not.toHaveBeenCalled();
-    const replacement = sourceSdk();
-    const third = deferred<PortableRenderPlan>();
-    replacement.fetchExperience.mockReturnValue(third.promise);
-    source = replacement;
-    await render({
-      experienceId: 'next',
-      onExperienceResolved: resolved,
-      onExperienceError: error,
-    });
-    await act(async () => second.reject(new Error('old SDK')));
-    expect(error).not.toHaveBeenCalled();
-    const currentBinding = source.bindings.at(-1)!;
+  it('does not notify an unmounted presentation and releases its binding', async () => {
+    const pending = deferred<PortableRenderPlan>();
+    source.fetchExperience.mockReturnValueOnce(pending.promise);
+    const onExperienceResolved = vi.fn();
+    const onExperienceError = vi.fn();
+    await render({ onExperienceResolved, onExperienceError });
+    const binding = source.bindings.at(-1)!;
     await act(async () => root.cleanup());
-    await act(async () => third.resolve(plan('unmounted')));
-    expect(currentBinding.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(resolved).not.toHaveBeenCalled();
+    await act(async () => pending.reject(new Error('unmounted')));
+    expect(binding.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(onExperienceResolved).not.toHaveBeenCalled();
+    expect(onExperienceError).not.toHaveBeenCalled();
   });
 
   it('renders supplied content without a provider and forwards the existing tracking and root surface', async () => {

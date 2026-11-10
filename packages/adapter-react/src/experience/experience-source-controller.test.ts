@@ -4,7 +4,8 @@ import {
   ExperienceSourceController,
   type ExperienceSourceOptions,
 } from './experience-source-controller.js';
-import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
+import { deferred, sourceSdk } from '../test/managed-experience.js';
+import { plan, previewState } from '../test/fixtures/managed-experience.js';
 
 const config = { components: {} };
 const options = (

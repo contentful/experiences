@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { plan } from './fixtures/managed-experience.js';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   createWebSnapshotRuntime,
@@ -10,22 +11,6 @@ import {
   type RuntimeFetchExperienceOptions,
   type RuntimeFetchResolveOptions,
 } from '@contentful/experiences-web';
-
-export function plan(title = 'content'): PortableRenderPlan {
-  return {
-    nodes: [
-      {
-        nodeId: 'hero',
-        registration: { kind: 'component', id: 'hero' },
-        props: { content: { title }, design: {}, designRaw: {} },
-        slots: {},
-      },
-    ],
-    metadata: {},
-    debug: false,
-    diagnostics: [],
-  };
-}
 
 export function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -126,16 +111,4 @@ export function sourceSdk() {
     subscribeToPreview,
   } as unknown as ContentfulExperiences;
   return { sdk, preview, consent, locale, profile, fetchExperience, subscribeToPreview, bindings };
-}
-
-export function previewState(overrides: Partial<PreviewState> = {}): PreviewState {
-  return {
-    experienceId: 'home',
-    sessionId: 'session-a',
-    revision: 1,
-    data: undefined,
-    error: undefined,
-    status: 'live',
-    ...overrides,
-  };
 }

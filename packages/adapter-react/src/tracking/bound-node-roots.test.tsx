@@ -12,7 +12,7 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { createRoot, type Root } from 'react-dom/client';
+import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,13 +54,12 @@ function Named({ root }: { root: ExperienceRootBinding }) {
 }
 
 let container: HTMLDivElement;
-let renderer: Root | undefined;
+let renderer: ReactTestRoot | undefined;
 
 async function render(element: ReactElement) {
   if (!renderer) {
-    container = document.createElement('div');
-    document.body.append(container);
-    renderer = createRoot(container);
+    renderer = createReactTestRoot();
+    container = renderer.container;
   }
   await act(async () => {
     renderer!.render(element);
@@ -68,7 +67,7 @@ async function render(element: ReactElement) {
 }
 
 async function unmount() {
-  await act(async () => renderer?.unmount());
+  await act(async () => renderer?.cleanup());
   renderer = undefined;
 }
 

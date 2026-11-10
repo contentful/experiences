@@ -4,7 +4,7 @@ export {
   configureNextjsServerExperiences,
   bindNextjsExperiencesRequest,
   type BindNextjsExperiencesRequestOptions,
-} from './server-request.js';
+} from './request/server-request.js';
 export {
   createNextjsPageContext,
   createNextjsRequestContext,
@@ -17,29 +17,29 @@ export {
   type NextjsSearchParams,
   type NextjsCookieReader,
   type NextjsRequestLike,
-} from './request-context.js';
+} from './request/request-context.js';
 export {
   createNextjsAnonymousIdSetCookieHeader,
   persistNextjsAnonymousId,
   type NextjsAnonymousIdCookieOptions,
   type PersistNextjsAnonymousIdOptions,
   type NextjsResponseLike,
-} from './cookies.js';
+} from './request/cookies.js';
 export {
   createNextjsPrivateFetch,
   applyNextjsPrivateResponseCache,
   assertNextjsPublicRequestPolicy,
-} from './cache.js';
+} from './cache/policy.js';
 export {
   serializeNextjsPlan,
   serializeNextjsHandoff,
   serializeNextjsJsonForHtml,
-} from './serialization.js';
+} from './cache/serialization.js';
 export {
   createExperiencesCacheKey,
   createPublicPermutationCacheMetadata,
   type NextjsExperiencesCacheKeyInput,
-} from './cache-key.js';
+} from './cache/cache-key.js';
 export type {
   ExperiencesNodeConfig,
   ExperiencesNodeRequest,
@@ -47,4 +47,7 @@ export type {
   ConsentInput,
 } from '@contentful/experiences-node';
 
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type {
+  NextjsLivePreviewConfig,
+  NextjsLivePreviewOptions,
+} from './presentation/live-preview.js';

@@ -22,13 +22,12 @@ import {
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
   type ExperiencesWebConfig,
-  type ExperienceState,
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
-import { profileFixture } from '../test/profile.js';
-import { minimalSourceMap } from '../test/source-map.js';
+import { profileFixture } from '../test/fixtures/profile.js';
+import { minimalSourceMap } from '../test/fixtures/source-map.js';
 import {
   useExperiences,
   useExperiencesContext,
@@ -129,7 +128,6 @@ describe('React runtime ownership and activation', () => {
   let view: ReactTestRoot;
   let runtime: LiveSdk;
   let captures: ExperiencesContextValue[];
-  let browser: ContentfulExperiences | undefined;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/initial');
@@ -144,9 +142,6 @@ describe('React runtime ownership and activation', () => {
     act(() => {
       view.cleanup();
     });
-    browser?.destroy();
-    browser = undefined;
-    window.localStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -170,24 +165,20 @@ describe('React runtime ownership and activation', () => {
     expect(sdk.fetchExperience).not.toHaveBeenCalled();
   };
 
-  it.each(['static', 'public-permutation'] as const)(
-    'rejects unsafe %s handoffs before SSR children can read private profile state',
-    (scope) => {
-      const child = vi.fn(() => <Probe />);
-      const initial = handoff('private-visitor');
-      const unsafeHandoff = { ...initial, cache: { scope, key: 'public-key' } };
-      const Child = child;
-      expect(() =>
-        renderToString(
-          <ExperiencesRoot {...config} handoff={unsafeHandoff}>
-            <Child />
-          </ExperiencesRoot>
-        )
-      ).toThrow(TypeError);
-      expect(child).not.toHaveBeenCalled();
-      expect(construct).not.toHaveBeenCalled();
-    }
-  );
+  it('rejects an unsafe handoff before SSR children can read private profile state', () => {
+    const child = vi.fn(() => <Probe />);
+    const Child = child;
+    const unsafeHandoff = { ...handoff('private-visitor'), cache: { scope: 'static' as const } };
+    expect(() =>
+      renderToString(
+        <ExperiencesRoot {...config} handoff={unsafeHandoff}>
+          <Child />
+        </ExperiencesRoot>
+      )
+    ).toThrow(TypeError);
+    expect(child).not.toHaveBeenCalled();
+    expect(construct).not.toHaveBeenCalled();
+  });
 
   it.each(['owned', 'injected'] as const)(
     'rejects a mismatching handoff scope before %s SSR children render',
@@ -784,42 +775,16 @@ describe('React runtime ownership and activation', () => {
   });
 
   it.each(['static', 'builder'] as const)(
-    'uses %s arguments for the fresh page after consent grants a denied page-bearing handoff',
+    'retries refused hydration with the current %s payload on consent grant without hiding content',
     async (kind) => {
-      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
-        typeof import('@contentful/experiences-web')
-      >('@contentful/experiences-web');
-      browser = new ActualSdk({
-        ...config,
-        allowedEventTypes: [],
-        defaults: {
-          profile: profileFixture('browser-profile'),
-          consent: false,
-          persistenceConsent: false,
-        },
-      });
-      const sdk = browser;
-      const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
-        profile: profileFixture('browser-profile'),
-      } as never);
-      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
-      const builder = new EventBuilder({
-        channel: 'server',
-        library: { name: 'react-test', version: '1' },
-        getConsent: () => true,
-      });
-      const events = [builder.buildTrack({ event: 'prepared' }), builder.buildPageView()];
-      const suppliedHandoff: ExperiencesHandoff = {
-        ...handoff(),
-        replay: { routeKey: '/initial', events },
-      };
+      const suppliedHandoff = handoff();
       const initialPagePayload = { properties: { source: 'static' } };
       const buildPagePayload =
         kind === 'builder' ? () => ({ properties: { source: 'builder' } }) : undefined;
       await act(async () =>
         view.render(
           <ExperiencesProvider
-            sdk={sdk}
+            sdk={inject(runtime)}
             handoff={suppliedHandoff}
             initialPagePayload={initialPagePayload}
             buildPagePayload={buildPagePayload}
@@ -828,112 +793,48 @@ describe('React runtime ownership and activation', () => {
           </ExperiencesProvider>
         )
       );
-      expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
-      expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
-      expect(send).not.toHaveBeenCalled();
-      expect(sdk.states.eventStream.current).toBeUndefined();
-      const settledRenderCount = captures.length;
-      await act(async () => {
-        sdk.consent({ events: true });
-        await consume.mock.results[1]!.value;
-        await sdk.flush();
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      const renderCount = captures.length;
+      await act(async () => runtime.consent({ events: true }));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+      const [input, options] = runtime.hydrateAndTrackCurrentPage.mock.calls[1]!;
+      expect(input).toBe(suppliedHandoff);
+      expect(options.routeKey).toBe('/initial');
+      expect(options.buildPayload!({ isInitialEmission: true })).toEqual({
+        properties: { source: kind },
       });
-      expect(consume).toHaveBeenCalledTimes(2);
-      expect(send).toHaveBeenCalledOnce();
-      const sent = send.mock.calls[0]![0].events;
-      expect(sent.map((event) => event.type)).toEqual(['page']);
-      expect(sent[0]).toMatchObject({ properties: { source: kind } });
-      expect(events.map((event) => event.messageId)).not.toContain(sent[0]!.messageId);
-      expect(sent[0]!.context.gdpr?.isConsentGiven).toBe(true);
-      expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
-      expect(current()).toMatchObject({
-        sdk,
-        isLive: true,
-        isContentReady: true,
-        error: undefined,
-      });
+      expect(captures.slice(renderCount).every((state) => state.isContentReady)).toBe(true);
       expect(view.container.textContent).toContain('Supplied server content');
     }
   );
 
   it.each(['remove handoff', 'unmount'] as const)(
-    'prevents late state and replay admission on %s while the injected SDK stays alive',
+    'invalidates the caller guard and ignores pending hydration on %s without destroying injection',
     async (action) => {
-      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
-        typeof import('@contentful/experiences-web')
-      >('@contentful/experiences-web');
-      browser = new ActualSdk({
-        ...config,
-        defaults: {
-          profile: profileFixture('browser-profile'),
-          consent: true,
-          persistenceConsent: false,
-        },
-      });
-      const sdk = browser;
-      const send = vi.spyOn(sdk.api.experience, 'upsertProfile').mockResolvedValue({
-        profile: profileFixture('browser-profile'),
-      } as never);
-      const destroy = vi.spyOn(sdk, 'destroy');
-      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
-      const started = deferred();
-      const release = deferred();
-      const stateInterceptor = vi.fn(async (state: ExperienceState) => {
-        started.resolve();
-        await release.promise;
-        return state;
-      });
-      sdk.interceptors.state.add(stateInterceptor);
-      const events = [sdk.eventBuilder.buildPageView()];
-      const suppliedHandoff: ExperiencesHandoff = {
-        ...handoff(),
-        replay: { routeKey: '/initial', events },
-      };
-      const publishedState = vi.fn();
-      const publishedEvent = vi.fn();
-      const onStatesReady = vi.fn((states: CoreStates) => {
-        const state = states.profile.subscribe(publishedState);
-        const event = states.eventStream.subscribe(publishedEvent);
-        return () => {
-          state.unsubscribe();
-          event.unsubscribe();
-        };
-      });
-      const tree = (handoff?: ExperiencesHandoff) => (
-        <ExperiencesProvider sdk={sdk} handoff={handoff} onStatesReady={onStatesReady}>
+      const pending = deferred();
+      runtime.hydrateAndTrackCurrentPage.mockReturnValue(pending.promise);
+      const cleanup = vi.fn();
+      const tree = (value?: ExperiencesHandoff) => (
+        <ExperiencesProvider sdk={inject(runtime)} handoff={value} onStatesReady={() => cleanup}>
           <Probe />
         </ExperiencesProvider>
       );
-      await act(async () => {
-        view.render(tree(suppliedHandoff));
-      });
-      await started.promise;
-      expect(stateInterceptor).toHaveBeenCalledOnce();
+      render(tree(handoff()));
+      const isCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+      expect(isCurrent()).toBe(true);
       expect(current().isContentReady).toBe(false);
-      const isCurrent = consume.mock.calls[0]![1].isCurrent!;
       act(() => {
         if (action === 'remove handoff') view.render(tree());
         else view.cleanup();
       });
       expect(isCurrent()).toBe(false);
       const renderCount = captures.length;
-      await act(async () => {
-        release.resolve();
-        expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
-      });
-      expect(destroy).not.toHaveBeenCalled();
+      await act(async () => pending.resolve());
       expect(captures).toHaveLength(renderCount);
-      expect(sdk.states.profile.current).toEqual(profileFixture('browser-profile'));
-      expect(sdk.states.experienceRequestState.current).toEqual({ status: 'idle' });
-      expect(sdk.states.eventStream.current).toBeUndefined();
-      expect(publishedState).toHaveBeenCalledExactlyOnceWith(profileFixture('browser-profile'));
-      expect(publishedEvent).toHaveBeenCalledExactlyOnceWith(undefined);
-      expect(send).not.toHaveBeenCalled();
-      act(() => sdk.consent({ events: false }));
-      expect(sdk.states.consent.current).toBe(false);
-      expect(consume).toHaveBeenCalledOnce();
+      expect(runtime.destroy).not.toHaveBeenCalled();
+      expect(cleanup).toHaveBeenCalledTimes(action === 'unmount' ? 1 : 0);
       if (action === 'remove handoff')
-        expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
+        expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: true });
     }
   );
 

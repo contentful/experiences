@@ -12,21 +12,8 @@ import {
 import { createExperienceNode, ExperienceNode, resolveNodeProps } from '../custom-renderer';
 import { ServerExperienceRenderer } from '../rendering/server-renderer';
 import { defineComponent, type Config } from '../registry/types';
+import { planNode } from '../test/fixtures/plan-node.js';
 import { useDesignValues } from '../hooks/use-design-values';
-
-function planNode(
-  kind: 'component' | 'experienceTemplate',
-  id: string,
-  props: Partial<PortableRenderNode['props']> = {},
-  rest: Partial<PortableRenderNode> = {}
-): PortableRenderNode {
-  return {
-    registration: { kind, id },
-    props: { content: {}, design: {}, designRaw: {}, ...props },
-    slots: {},
-    ...rest,
-  };
-}
 
 const plan = (nodes: PortableRenderNode[]): PortableRenderPlan => ({
   nodes,

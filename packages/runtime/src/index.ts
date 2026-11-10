@@ -4,7 +4,7 @@ export {
   ANONYMOUS_ID_KEY,
   ANONYMOUS_ID_KEY_LEGACY,
   PROFILE_CACHE_KEY,
-} from './constants.js';
+} from './runtime/constants.js';
 export {
   CONSENT_CACHE_KEY,
   DEFAULT_ALLOWED_EVENT_TYPES,
@@ -16,7 +16,7 @@ export {
   PERSISTENCE_CONSENT_CACHE_KEY,
   resolvePersistedPersistenceConsent,
   toConsentState,
-} from './consent.js';
+} from './events/consent.js';
 export type {
   AllowedEventType,
   BlockedEvent,
@@ -26,9 +26,12 @@ export type {
   ConsentStorageValue,
   EventMethod,
   EventType,
-} from './consent.js';
-export { ContentfulExperiences, buildFetchPersonalization } from './contentful-experiences.js';
-export { resolveFlagChange } from './resolve-flag-change.js';
+} from './events/consent.js';
+export {
+  ContentfulExperiences,
+  buildFetchPersonalization,
+} from './runtime/contentful-experiences.js';
+export { resolveFlagChange } from './flags/resolve-flag-change.js';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
@@ -43,17 +46,17 @@ export type {
   RuntimeFetchResolveOptions,
   RuntimeResolveDefaults,
   RuntimeResolveOptions,
-} from './contentful-experiences.js';
-export type { RuntimeDeliveryClientOptions } from './create-runtime-delivery-client.js';
-export { getPreviewSessionBinding } from './preview-session-binding.js';
-export type { PreviewSessionBinding } from './preview-session-binding.js';
+} from './runtime/contentful-experiences.js';
+export type { RuntimeDeliveryClientOptions } from './runtime/create-runtime-delivery-client.js';
+export { getPreviewSessionBinding } from './preview/preview-session-binding.js';
+export type { PreviewSessionBinding } from './preview/preview-session-binding.js';
 export {
   assertRuntimePreviewRequest,
   createRuntimePreviewClient,
   fetchRuntimePreviewSession,
   initializeRuntimeLivePreview,
   mergeRuntimePreviewResolveOptions,
-} from './live-preview.js';
+} from './preview/live-preview.js';
 export type {
   RuntimeLivePreviewBinding,
   RuntimeLivePreviewConfig,
@@ -62,41 +65,51 @@ export type {
   RuntimePreviewClient,
   RuntimePreviewSessionIdentity,
   RuntimePreviewStatus,
-} from './live-preview.js';
-export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
-export { default as EventBuilder } from './event-builder.js';
-export * from './event-builder.js';
-export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
-export type { ExperienceRequestOptions, InsightsRequestOptions } from './runtime-event-methods.js';
-export type { EventEmissionResult } from './event-emission-result.js';
-export { AnalyticsDelivery } from './analytics-delivery.js';
+} from './preview/live-preview.js';
+export type { RuntimeOptimizationConfig } from './runtime/create-optimization-client.js';
+export { default as EventBuilder } from './events/event-builder.js';
+export * from './events/event-builder.js';
+export {
+  EventProfileRequiredError,
+  EventProfileSchema,
+  warnMissingEventProfile,
+} from './events/runtime-event-methods.js';
+export type {
+  ExperienceRequestOptions,
+  InsightsRequestOptions,
+} from './events/runtime-event-methods.js';
+export type { EventEmissionResult } from './events/event-emission-result.js';
+export { AnalyticsDelivery } from './delivery/analytics-delivery.js';
 export type {
   QueueFlushFailureContext,
   QueueFlushPolicy,
   QueueFlushRecoveredContext,
   QueuePolicy,
-} from './lib/queue/index.js';
-export { resolveQueuePolicy } from './lib/queue/index.js';
-export type { AnalyticsFlushOptions } from './analytics-delivery.js';
-export { PersonalizationDelivery } from './personalization-delivery.js';
+} from './delivery/queue/index.js';
+export { resolveQueuePolicy } from './delivery/queue/index.js';
+export type { AnalyticsFlushOptions } from './delivery/analytics-delivery.js';
+export { PersonalizationDelivery } from './delivery/personalization-delivery.js';
 export type {
   ExperienceRequestState,
   ExperienceRequestFailureReason,
-} from './experience-request-state.js';
-export { validatePersonalizationEvent } from './event-interceptors.js';
-export type { EventInterceptors, OptimizationEventStreamEvent } from './event-interceptors.js';
+} from './delivery/experience-request-state.js';
+export { validatePersonalizationEvent } from './events/event-interceptors.js';
+export type {
+  EventInterceptors,
+  OptimizationEventStreamEvent,
+} from './events/event-interceptors.js';
 export {
   InterceptorManager,
   type Interceptor,
   type InterceptorMerge,
   type MaybePromise,
-} from './lib/interceptor/InterceptorManager.js';
+} from './events/interceptor/InterceptorManager.js';
 export type {
   ExperienceEvent,
   InsightsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
-export { validatePreparedEvents, withEventConsent } from './prepared-events.js';
-export type { PreparedExperienceEvent } from './prepared-events.js';
+export { validatePreparedEvents, withEventConsent } from './events/prepared-events.js';
+export type { PreparedExperienceEvent } from './events/prepared-events.js';
 export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
@@ -104,7 +117,7 @@ export {
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
-} from './experiences-handoff.js';
+} from './handoff/experiences-handoff.js';
 export type {
   FetchExperienceForHandoffResult,
   ExperiencesCacheMetadata,
@@ -112,14 +125,12 @@ export type {
   ExperiencesCacheSafetyWarningCode,
   ExperiencesHandoff,
   ExperiencesScope,
-} from './experiences-handoff.js';
+} from './handoff/experiences-handoff.js';
 export type {
   EventOptimizationData,
   EventProfile,
   AnalyticsEventMethod,
   PersonalizationEventMethod,
-  RuntimeEventBindings,
   RuntimeDirectEventBindings,
-  RuntimeEventDispatch,
   RuntimeEventMethods,
-} from './runtime-event-methods.js';
+} from './events/runtime-event-methods.js';

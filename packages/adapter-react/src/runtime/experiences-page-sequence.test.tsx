@@ -16,7 +16,7 @@ import {
   type ExperienceRequestContextValue,
 } from './experience-request-context.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
-import { profileFixture } from '../test/profile.js';
+import { deferred } from '../test/managed-experience.js';
 import {
   ExperiencesPageSequence,
   type BeforeInitialPageOptions,
@@ -26,14 +26,6 @@ const plan: PortableRenderPlan = { nodes: [], metadata: {}, debug: false, diagno
 const config = { components: {} };
 const resetRevision = {};
 const onReset = () => undefined;
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((yes) => {
-    resolve = yes;
-  });
-  return { promise, resolve };
-}
-
 describe('React route request and page coordination', () => {
   let view: ReactTestRoot;
   let runtime: ContentfulExperiences;
@@ -288,41 +280,34 @@ describe('React route request and page coordination', () => {
     expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
     expect(runtime.fetchExperience).toHaveBeenCalledTimes(1);
   });
-  it('lets XDA finish during the callback and delegates overlapping page attempts to Web', async () => {
-    const { ContentfulExperiences: ActualSdk } = await import('@contentful/experiences-web');
-    const sdk = new ActualSdk({
-      spaceId: 'space',
-      environmentId: 'master',
-      delivery: { accessToken: 'delivery' },
-      defaults: { profile: profileFixture('visitor'), consent: false, persistenceConsent: false },
-    });
-    runtime = sdk;
-    const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue(plan);
-    const send = vi
-      .spyOn(sdk.api.experience, 'upsertProfile')
-      .mockResolvedValue({ profile: profileFixture('visitor') } as never);
+  it('lets content finish during the callback and delegates the page after callback actions', async () => {
     const pending = deferred<void>();
+    const order: string[] = [];
+    const identify = vi.spyOn(runtime, 'identify').mockImplementation(async () => {
+      order.push('identify');
+      return { accepted: true };
+    });
+    vi.mocked(runtime.trackCurrentPage).mockImplementation(async () => {
+      order.push('page');
+      return { accepted: true };
+    });
     const run = vi.fn(async (client: Parameters<BeforeInitialPageOptions['run']>[0]) => {
       await pending.promise;
       await client.identify({ userId: 'visitor' });
     });
-    try {
-      await render({ beforeInitialPage: { run }, fetch: true });
-      expect(fetch).toHaveBeenCalledOnce();
-      await expect(fetch.mock.results[0]!.value).resolves.toBe(plan);
-      await act(async () => sdk.consent({ events: true }));
-      expect(send).not.toHaveBeenCalled();
-      await act(async () => pending.resolve());
-      expect(run).toHaveBeenCalledOnce();
-      expect(
-        send.mock.calls.flatMap(([request]) => request.events.map((event) => event.type))
-      ).toEqual(['identify', 'page']);
-      expect(fetch).toHaveBeenCalledOnce();
-    } finally {
-      await act(async () => view.cleanup());
-      sdk.destroy();
-      window.localStorage.clear();
-    }
+    await render({ beforeInitialPage: { run }, fetch: true });
+    expect(runtime.fetchExperience).toHaveBeenCalledOnce();
+    await expect(vi.mocked(runtime.fetchExperience).mock.results[0]!.value).resolves.toBe(plan);
+    await act(async () => {
+      consent.value = true;
+    });
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
+    await act(async () => pending.resolve());
+    expect(run).toHaveBeenCalledOnce();
+    expect(identify).toHaveBeenCalledExactlyOnceWith({ userId: 'visitor' });
+    // Both standalone and consent-change decisions delegate; Web owns route deduplication.
+    expect(order).toEqual(['identify', 'page', 'page']);
+    expect(runtime.fetchExperience).toHaveBeenCalledOnce();
   });
   it('supersedes a pending optional callback when matching replay arrives', async () => {
     vi.useFakeTimers();

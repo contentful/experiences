@@ -1,4 +1,4 @@
-export { getPageProperties, getUserAgent } from './browser-event-context.js';
+export { getPageProperties, getUserAgent } from './browser/browser-event-context.js';
 export { getPreviewSessionBinding } from './preview-session-binding.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
@@ -82,7 +82,7 @@ export type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 
-export type { CoreStates, PreviewState, PreviewUpdate } from './states.js';
+export type { CoreStates, PreviewState, PreviewUpdate } from './state/states.js';
 export {
   batch,
   effect,
@@ -97,7 +97,7 @@ export {
   type SnapshotFn,
   type Subscription,
 } from './signals/index.js';
-export { normalizeLocale, normalizeExplicitLocale } from './locale.js';
+export { normalizeLocale, normalizeExplicitLocale } from './state/locale.js';
 export {
   InterceptorManager,
   type Interceptor,
@@ -108,7 +108,7 @@ export {
   mergeExperienceState,
   type ExperienceState,
   type LifecycleInterceptors,
-} from './interceptors.js';
+} from './state/interceptors.js';
 export {
   resolveStatefulDefaults,
   type StatefulDefaults,
@@ -116,7 +116,7 @@ export {
   type PersistedDefaultValue,
   type PersistedStatefulDefaults,
   type ResolvedStatefulDefaults,
-} from './stateful-defaults.js';
+} from './state/stateful-defaults.js';
 export {
   createSnapshotRuntime,
   type ExperiencesRuntime,
@@ -139,6 +139,6 @@ export type {
   EntryViewInteractionElementOptions,
   EntryHoverInteractionElementOptions,
   EntryViewInteractionStartOptions,
-} from './interaction-tracking.js';
+} from './tracking/interaction-tracking.js';
 
 export { createWebSnapshotRuntime, type WebExperiencesRuntime } from './runtime.js';

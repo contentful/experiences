@@ -5,36 +5,22 @@
  * where `ComponentErrorBoundary`'s own `getDerivedStateFromError`/`render()`
  * branch actually runs (see the long comment on that class in
  * `nodes-renderer.tsx`, and `nodes-renderer.ssr.test.tsx` for why neither SSR
- * renderer ever reaches it). This is the only test file in this package that
- * needs jsdom — the rest of the suite renders via `react-dom/server` and
- * needs no DOM (see AGENTS.md's "Run tests" section) — so the environment is
- * scoped to just this file via the docblock above rather than changed globally.
+ * renderer ever reaches it). jsdom is scoped to this suite so server-only
+ * suites continue to exercise the Node environment.
  */
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
+import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ClientExperienceRenderer } from './client-renderer';
+import { componentNode } from '../test/fixtures/payload.js';
 import type { Config } from '../registry/types';
-import { fetchExperience, type ExperienceParameters } from '../index';
+import { plan } from '../test/fixtures/managed-experience.js';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-
-function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
-  return {
-    component: {
-      sys: {
-        type: 'ResourceLink',
-        linkType: 'Contentful:Component',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
-      },
-    },
-    ...rest,
-  };
-}
 
 function Broken(): never {
   throw new Error('boom');
@@ -43,7 +29,7 @@ function Broken(): never {
 const Fine = () => <span data-fine>sibling</span>;
 
 let container: HTMLDivElement | null = null;
-let root: Root | null = null;
+let root: ReactTestRoot | null = null;
 
 // Render-time diagnostics (component-not-registered, malformed-slot,
 // experience-template-not-registered) reach ClientExperienceRenderer's state
@@ -60,9 +46,8 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 async function mount(element: React.ReactElement): Promise<void> {
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
+  root = createReactTestRoot();
+  container = root.container;
   act(() => {
     root!.render(element);
   });
@@ -71,62 +56,25 @@ async function mount(element: React.ReactElement): Promise<void> {
 
 afterEach(() => {
   act(() => {
-    root?.unmount();
+    root?.cleanup();
   });
-  container?.remove();
   container = null;
   root = null;
 });
 
-describe('runtime parameter refetch → renderer', () => {
-  it('replaces content for the same Experience and node after parameters change', async () => {
-    const get = vi.fn(
-      async (
-        _space: string,
-        _environment: string,
-        _id: string,
-        _request: unknown,
-        options: { queryParams?: Record<string, unknown> } = {}
-      ) => ({
-        sys: { id: 'collection', type: 'Experience' },
-        nodes: [
-          componentNode('posts', {
-            id: 'stable-node',
-            contentProperties: {
-              title: `${options.queryParams?.['parameter.featuredPosts.limit']} posts`,
-            },
-          }),
-        ],
-      })
-    );
-    const client = { experience: { get } } as never;
-    const resolveData = vi.fn(({ content }: { content: Record<string, unknown> }) => ({
-      title: String(content.title).toUpperCase(),
-    }));
+describe('replacing renderer plans', () => {
+  it('updates content for the same Experience and node without remounting its DOM', async () => {
     const config: Config = {
-      components: {
-        posts: { component: ({ title }: { title: string }) => <p>{title}</p>, resolveData },
-      },
+      components: { hero: ({ title }: { title: string }) => <p>{title}</p> },
     };
-    const options = { spaceId: 'space', environmentId: 'master', experienceId: 'collection' };
-    const parameters: ExperienceParameters = {
-      featuredPosts: { limit: 6, order: '-fields.title' },
-    };
-    const first = await fetchExperience({ ...options, parameters }, { client }, { config });
-    await mount(<ClientExperienceRenderer experience={first} config={config} />);
-    expect(container!.textContent).toBe('6 POSTS');
-
-    const second = await fetchExperience(
-      { ...options, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
-      { client },
-      { config }
-    );
+    await mount(<ClientExperienceRenderer experience={plan('first')} config={config} />);
+    const paragraph = container!.querySelector('p');
+    expect(paragraph?.textContent).toBe('first');
     await act(async () => {
-      root!.render(<ClientExperienceRenderer experience={second} config={config} />);
+      root!.render(<ClientExperienceRenderer experience={plan('replacement')} config={config} />);
     });
-    expect(container!.textContent).toBe('12 POSTS');
-    expect(first.nodes[0]?.nodeId).toBe(second.nodes[0]?.nodeId);
-    expect(resolveData).toHaveBeenCalledTimes(2);
+    expect(container!.querySelector('p')).toBe(paragraph);
+    expect(paragraph?.textContent).toBe('replacement');
   });
 });
 

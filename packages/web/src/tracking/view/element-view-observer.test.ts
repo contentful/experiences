@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { observeView } from '../../test/tracking-harness.js';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,7 +10,7 @@ import {
   installIOPolyfill,
   makeElement,
   setDocumentVisibility,
-} from '../../test-fixtures/dom.js';
+} from '../../test/dom.js';
 
 import type { ElementViewCallbackInfo } from './element-view-observer-support.js';
 import { ElementViewObserver } from './element-view-observer.js';
@@ -39,9 +41,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('fires a start callback once the dwell threshold is reached', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, true, 0.6);
     await advance(999);
@@ -53,9 +53,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('emits a final callback with the same viewId and total duration when the view ends', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, true);
     await advance(1400);
@@ -71,9 +69,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('ignores a non-intersecting entry regardless of its ratio', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, false, 0.05);
     await advance(2000);
@@ -82,9 +78,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('qualifies on any part of the element being visible', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, true, 0.01);
     await advance(1000);
@@ -93,9 +87,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('does not accumulate dwell across separate visibility sessions', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, true);
     await advance(600);
@@ -107,9 +99,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('assigns a new viewId to each visibility session', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element, cb } = observeView();
 
     io.getLast().trigger(element, true);
     await advance(1000);
@@ -125,10 +115,7 @@ describe('ElementViewObserver', () => {
   it('ends the view when the page hides and restarts only in-view elements on return', async () => {
     const onScreen = makeElement();
     const offScreen = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementViewObserver(cb);
-    observer.observe(onScreen);
-    observer.observe(offScreen);
+    const { cb } = observeView(onScreen, offScreen);
 
     io.getLast().trigger(onScreen, true);
     io.getLast().trigger(offScreen, false);
@@ -142,10 +129,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('ends once for duplicate hide signals and starts a fresh view on pageshow', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementViewObserver(cb);
-    observer.observe(element);
+    const { element, cb, observer } = observeView();
 
     io.getLast().trigger(element, true);
     await advance(1250);
@@ -204,10 +188,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('cancels a pending dwell when unobserved', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementViewObserver(cb);
-    observer.observe(element);
+    const { element, cb, observer } = observeView();
 
     io.getLast().trigger(element, true);
     observer.unobserve(element);
@@ -217,9 +198,7 @@ describe('ElementViewObserver', () => {
   });
 
   it('stops observing an element removed from the document on the next sweep', async () => {
-    const element = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    new ElementViewObserver(cb).observe(element);
+    const { element } = observeView();
 
     element.remove();
     await advance(30_000);
@@ -243,9 +222,7 @@ describe('ElementViewObserver', () => {
   it('endActive is idempotent and emits nothing for a sub-dwell view', async () => {
     const qualified = makeElement();
     const subDwell = makeElement();
-    const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-    const observer = new ElementViewObserver(cb);
-    observer.observe(qualified);
+    const { cb, observer } = observeView(qualified);
 
     io.getLast().trigger(qualified, true);
     await advance(1750);
@@ -268,8 +245,7 @@ describe('ElementViewObserver', () => {
       const wrapper = asContents(makeElement());
       const child = document.createElement('section');
       wrapper.append(child);
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      new ElementViewObserver(cb).observe(wrapper);
+      const { cb } = observeView(wrapper);
 
       expect(io.getLast().observed.has(child)).toBe(true);
       io.getLast().trigger(child, true);
@@ -289,8 +265,7 @@ describe('ElementViewObserver', () => {
         getClientRects: () => [rect] as unknown as DOMRectList,
         detach: () => undefined,
       } as unknown as Range);
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      new ElementViewObserver(cb).observe(wrapper);
+      const { cb } = observeView(wrapper);
 
       expect(io.getLast().observed.size).toBe(0);
       await advance(1020);
@@ -301,8 +276,7 @@ describe('ElementViewObserver', () => {
     it('treats virtual contents as not visible where Range client rects are unavailable', async () => {
       const wrapper = asContents(makeElement());
       wrapper.append(document.createElement('p'), document.createElement('p'));
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      new ElementViewObserver(cb).observe(wrapper);
+      const { cb } = observeView(wrapper);
 
       await advance(2000);
 
@@ -330,10 +304,7 @@ describe('ElementViewObserver', () => {
     it('keeps one view across overlapping members, timed from the first to the last visible', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       await advance(500);
@@ -360,10 +331,7 @@ describe('ElementViewObserver', () => {
     it('reports one view when several are visible at once', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       io.getLast().trigger(b, true);
@@ -375,10 +343,7 @@ describe('ElementViewObserver', () => {
     it('endActive flushes the shared view once', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb, observer } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       io.getLast().trigger(b, true);
@@ -393,10 +358,7 @@ describe('ElementViewObserver', () => {
     it('keeps the view when one of two visible members is unobserved', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb, observer } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       io.getLast().trigger(b, true);
@@ -410,10 +372,7 @@ describe('ElementViewObserver', () => {
     it('ends a qualified view when the last visible member is unobserved but others remain', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb, observer } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       await advance(1200);
@@ -426,9 +385,7 @@ describe('ElementViewObserver', () => {
 
     it('drops the view silently when the last member is unobserved', async () => {
       const a = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
+      const { cb, observer } = observeView(a);
 
       io.getLast().trigger(a, true);
       await advance(500);
@@ -442,10 +399,7 @@ describe('ElementViewObserver', () => {
     it('starts a fresh view with a new viewId once the group has fully left view', async () => {
       const a = makeElement();
       const b = makeElement();
-      const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-      const observer = shared(cb);
-      observer.observe(a);
-      observer.observe(b);
+      const { cb } = observeView(a, b);
 
       io.getLast().trigger(a, true);
       await advance(1000);
@@ -466,10 +420,7 @@ describe('ElementViewObserver', () => {
       async (_name, order) => {
         const a = makeElement();
         const b = makeElement();
-        const cb = vi.fn<Callback>().mockResolvedValue(undefined);
-        const observer = shared(cb);
-        observer.observe(a);
-        observer.observe(b);
+        const { cb } = observeView(a, b);
 
         io.getLast().trigger(a, true);
         await advance(1000);

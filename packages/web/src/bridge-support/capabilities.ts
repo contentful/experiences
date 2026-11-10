@@ -1,4 +1,4 @@
-import type { ExperienceState } from '../interceptors.js';
+import type { ExperienceState } from '../state/interceptors.js';
 import {
   CORE_BRIDGE_CAPABILITIES_SYMBOL,
   type CoreBridgeCapabilities,

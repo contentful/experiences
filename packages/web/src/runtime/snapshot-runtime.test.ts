@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { completeProfile as profileFixture } from '../test-fixtures/profile.js';
+import { completeProfile as profileFixture } from '../test/fixtures/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { signals } from '../signals/signals.js';
 import { createSnapshotRuntime } from '../runtime.js';

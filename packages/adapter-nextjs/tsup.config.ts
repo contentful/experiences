@@ -1,7 +1,15 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/**/*.test.ts', '!src/**/*.test.tsx'],
+  entry: [
+    'src/**/*.ts',
+    'src/**/*.tsx',
+    '!src/**/*.test.ts',
+    '!src/**/*.test.tsx',
+    '!src/**/*.spec.ts',
+    '!src/**/*.spec.tsx',
+    '!src/test/**',
+  ],
   format: ['esm'],
   dts: true,
   clean: true,
