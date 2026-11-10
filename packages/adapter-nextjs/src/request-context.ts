@@ -81,7 +81,8 @@ export function createNextjsRouteKey(input: string | URL): string {
   return `${url.pathname}${url.search}`;
 }
 
-function queryFromSearchParams(
+/** @internal Shared by server context and browser page payloads. */
+export function queryFromSearchParams(
   params: globalThis.URLSearchParams
 ): NonNullable<UniversalEventBuilderArgs['page']>['query'] {
   return Object.fromEntries(

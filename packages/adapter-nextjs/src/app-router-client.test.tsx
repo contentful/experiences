@@ -54,25 +54,29 @@ describe('App committed route inputs', () => {
   });
 
   it('normalizes encoded queries/hashes and keeps the last browser-confirmed retained-layout route', async () => {
+    navigation.search = 'q=hello%20world&tag=a&tag=b';
+    window.history.replaceState(null, '', '/page?q=hello+world&tag=a&tag=b');
     await act(async () => root.render(<Probe />));
-    expect(inputs.routeKey).toBe('/page?q=hello+world');
+    expect(inputs.routeKey).toBe('/page?q=hello+world&tag=a&tag=b');
     expect(inputs.buildPagePayload({ isInitialEmission: true })?.properties).toMatchObject({
       path: '/page',
-      query: { q: 'hello world' },
+      search: '?q=hello+world&tag=a&tag=b',
+      query: { q: 'hello world', tag: ['a', 'b'] },
     });
     navigation.pathname = '/destination';
-    navigation.search = 'q=changed';
-    window.history.replaceState(null, '', '/destination?q=changed#anchor');
+    navigation.search = 'q=changed&tag=c&tag=d';
+    window.history.replaceState(null, '', '/destination?q=changed&tag=c&tag=d#anchor');
     await act(async () => root.render(<Probe />));
-    expect(inputs.routeKey).toBe('/destination?q=changed');
+    expect(inputs.routeKey).toBe('/destination?q=changed&tag=c&tag=d');
     // Retained layouts can replay old hooks while browser history stays committed.
     navigation.pathname = '/page';
-    navigation.search = 'q=hello+world';
+    navigation.search = 'q=hello+world&tag=a&tag=b';
     await act(async () => root.render(<Probe />));
-    expect(inputs.routeKey).toBe('/destination?q=changed');
+    expect(inputs.routeKey).toBe('/destination?q=changed&tag=c&tag=d');
     expect(inputs.buildPagePayload({ isInitialEmission: false })?.properties).toMatchObject({
       path: '/destination',
-      query: { q: 'changed' },
+      search: '?q=changed&tag=c&tag=d',
+      query: { q: 'changed', tag: ['c', 'd'] },
     });
   });
 

@@ -8,7 +8,7 @@ import {
 } from '@contentful/experiences-react/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createNextjsRouteKey } from './request-context.js';
+import { createNextjsRouteKey, queryFromSearchParams } from './request-context.js';
 import {
   NextjsInitialDataBoundary,
   NextjsRequestPresentation,
@@ -82,7 +82,7 @@ export function useNextAppAutoPageInputs() {
       properties: {
         path: pathname,
         search: currentSearch,
-        query: Object.fromEntries(searchParams),
+        query: queryFromSearchParams(searchParams),
         url,
       },
     };
