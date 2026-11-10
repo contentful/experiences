@@ -165,12 +165,14 @@ describe('ContentfulExperiences', () => {
     expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
       1,
       { accessToken: 'delivery' },
+      { spaceId: 'space', environmentId: 'env' },
       undefined,
       userAgentHeaders
     );
     expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
       2,
       { accessToken: 'preview' },
+      { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
       userAgentHeaders
     );
@@ -344,6 +346,7 @@ describe('ContentfulExperiences', () => {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
       },
+      { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
       userAgentHeaders
     );
@@ -370,6 +373,7 @@ describe('ContentfulExperiences', () => {
         environment: 'https://preview-environment.example',
         host: 'https://preview-host.example',
       },
+      { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
       userAgentHeaders
     );
@@ -389,11 +393,16 @@ describe('ContentfulExperiences', () => {
       },
     });
 
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(expect.anything(), undefined, {
-      'X-Contentful-User-Agent': expect.stringMatching(
-        /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
-      ),
-    });
+    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+      expect.anything(),
+      { spaceId: 'space', environmentId: 'env' },
+      undefined,
+      {
+        'X-Contentful-User-Agent': expect.stringMatching(
+          /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
+        ),
+      }
+    );
   });
 
   it('creates a stable build-only EventBuilder with runtime locale defaults and caller overrides', () => {

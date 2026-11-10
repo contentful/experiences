@@ -62,6 +62,8 @@ describe('fetchPreviewSession', () => {
     expect(mockCreateClient).toHaveBeenCalledWith({
       accessToken: 'preview-token',
       host: 'https://preview.xdn.contentful.com',
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
     expect(mockClient.fetch).toHaveBeenCalledWith(
       '/spaces/space-1/environments/master/preview_sessions/session-1/experience'
@@ -108,6 +110,8 @@ describe('fetchPreviewSession', () => {
     expect(mockCreateClient).toHaveBeenCalledWith({
       accessToken: 'preview-token',
       host: 'https://session.example.test/base',
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
     expect(mockClient.fetch).toHaveBeenCalledWith(
       '/spaces/space-1/environments/master/preview_sessions/session-1/experience'

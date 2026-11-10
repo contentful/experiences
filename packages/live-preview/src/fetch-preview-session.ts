@@ -47,6 +47,8 @@ export async function fetchPreviewSession(
   const client = createClient({
     accessToken: previewToken,
     host: host ?? PREVIEW_HOST,
+    spaceId,
+    environmentId,
   });
 
   log.log('fetching preview session experience', { spaceId, environmentId, sessionId });
