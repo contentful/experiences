@@ -112,8 +112,8 @@ function ActivationProvider(props: ActivationProps) {
   const activeRef = useRef<ExperiencesRootSdkBinding | undefined>(undefined);
   const { target: stateTarget, ...presentation } = state;
   const context = stateTarget === target ? presentation : target.initial;
-  const latestHandoff = useRef({ handoff: props.handoff, key: props.handoffKey });
-  latestHandoff.current = { handoff: props.handoff, key: props.handoffKey };
+  const latestProps = useRef(props);
+  latestProps.current = props;
   const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
     () =>
       props.buildPagePayload ??
@@ -125,16 +125,23 @@ function ActivationProvider(props: ActivationProps) {
     (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
   const [resetRevision, setResetRevision] = useState<object>(() => ({}));
   const operationRevision = useRef(resetRevision);
-  const [resetHandoff, setResetHandoff] = useState<typeof latestHandoff.current>();
+  const [resetHandoff, setResetHandoff] = useState<{
+    key?: string;
+    handoff?: ExperiencesHandoff;
+  }>();
   const handoff =
-    props.handoffKey === resetHandoff?.key && sameValue(props.handoff, resetHandoff?.handoff)
+    resetHandoff &&
+    (resetHandoff.key !== undefined
+      ? props.handoffKey === resetHandoff.key
+      : props.handoffKey === undefined && sameValue(props.handoff, resetHandoff.handoff))
       ? undefined
       : props.handoff;
   const resetRequests = useMemo(
     () => () => {
       const revision = {};
       operationRevision.current = revision;
-      setResetHandoff(latestHandoff.current);
+      const { handoff, handoffKey } = latestProps.current;
+      setResetHandoff(handoffKey === undefined ? { handoff } : { key: handoffKey });
       setResetRevision(revision);
     },
     []
