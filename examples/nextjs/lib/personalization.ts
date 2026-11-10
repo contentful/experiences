@@ -37,6 +37,7 @@ export function buildPagePersonalization(options: {
     query,
     referrer: options.referrer,
     search: url.search,
+    title: 'Contentful Experiences — Next.js example',
     url: url.toString(),
   };
 
@@ -44,7 +45,7 @@ export function buildPagePersonalization(options: {
     locale: options.locale,
     location: EU_LOCATION,
     page,
-    properties: { ...page, title: 'Contentful Experiences — Next.js example' },
+    properties: page,
   });
 
   return { events: [event] };

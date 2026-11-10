@@ -167,8 +167,8 @@ describe('Web ContentfulExperiences', () => {
     });
     expect(second.context.campaign).toEqual({});
     const page = runtime.eventBuilder.buildPageView();
-    expect(page.context.page!.title).toBeUndefined();
-    expect(page.properties.title).toBe('');
+    expect(page.context.page!.title).toBe('Second page');
+    expect(page.properties.title).toBe('Second page');
   });
 
   it('allows browser context providers to redact page and user-agent data', () => {

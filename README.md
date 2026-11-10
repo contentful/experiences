@@ -374,10 +374,9 @@ to Page Two still supplies page intent.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for ownership, consent, queue/lifetime and replay limits.
 
-Built XDA events retain consent context. Web's default browser page provider omits
-`title`, `hash`, `width` and `height` under the [commented workaround](./packages/web/src/browser-event-context.ts);
-custom providers/arguments, raw caller-built XDA events and Node/Client metadata
-remain unchanged. See [Node handoff](./packages/node/README.md#actual-server-to-browser-transfer)
+Built XDA events retain consent context. Web's default browser page provider
+includes `title`, `hash`, `width` and `height`; custom providers/arguments, raw
+caller-built XDA events and Node/Client metadata remain caller-owned. See [Node handoff](./packages/node/README.md#actual-server-to-browser-transfer)
 and [Web content evaluation](./packages/web/README.md#ordinary-content-evaluation-and-optional-incoming-handoff).
 React controllers/root use this XDA flow, preserving
 Optimization's page consent-retry exception without mandatory direct
@@ -397,8 +396,7 @@ with the current profile; the host can report that event outcome independently.
 Building sends nothing and invokes no hooks. Low-level `personalization.events`
 remains supported for actual event-bearing XDA calls and prepared composition.
 Client preserves the supported event shape, including `context.gdpr` and
-`context.page.title`; Web's default provider omits the unsupported fields above,
-without stripping raw caller-built events. Node/Web copy owner consent into admitted inputs'
+`context.page.title`, without stripping raw caller-built events. Node/Web copy owner consent into admitted inputs'
 `context.gdpr.isConsentGiven`, overwriting any caller-supplied flag, before running
 interceptors. Hooks may explicitly transform valid metadata; final validation and current-consent
 admission still apply, with caller input unchanged. Reusing an event in another
