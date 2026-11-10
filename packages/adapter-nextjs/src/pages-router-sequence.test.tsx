@@ -189,11 +189,21 @@ describe('Pages managed request sequence', () => {
       listener('routeChangeError')();
     });
     expect(fetchExperience).not.toHaveBeenCalled();
-    await commit('/pages?q=changed');
+    await commit('/pages?q=changed&tag=first&tag=last');
     expect(fetchExperience).toHaveBeenCalledTimes(1);
     expect(fetchExperience.mock.calls[0]![0]).toMatchObject({
       personalization: {
-        events: [{ type: 'page', properties: { path: '/pages', query: { q: 'changed' } } }],
+        events: [
+          {
+            type: 'page',
+            properties: {
+              path: '/pages',
+              search: '?q=changed&tag=first&tag=last',
+              query: { q: 'changed', tag: ['first', 'last'] },
+              url: window.location.href,
+            },
+          },
+        ],
       },
     });
   });
