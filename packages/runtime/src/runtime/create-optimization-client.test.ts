@@ -1,19 +1,19 @@
 import { ApiClient as OptimizationApiClient } from '@contentful/optimization-api-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRuntimeOptimizationClient } from './create-optimization-client.js';
+import { createOptimizationClient } from './create-optimization-client.js';
 
 vi.mock('@contentful/optimization-api-client', () => ({
   ApiClient: vi.fn().mockImplementation((options) => ({
-    options,
+    config: options,
     experience: { upsertProfile: vi.fn() },
     insights: { sendBatchEvents: vi.fn() },
   })),
 }));
 
-describe('createRuntimeOptimizationClient', () => {
+describe('createOptimizationClient', () => {
   it('maps runtime identity and Optimization overrides to the API client', () => {
-    const client = createRuntimeOptimizationClient({
+    const client = createOptimizationClient({
       spaceId: 'space',
       environmentId: 'staging',
       locale: 'de-DE',
@@ -34,6 +34,11 @@ describe('createRuntimeOptimizationClient', () => {
       },
       insights: { baseUrl: 'https://analytics.example' },
     });
-    expect(client).toBe(vi.mocked(OptimizationApiClient).mock.results[0]?.value);
+    const rawApi = vi.mocked(OptimizationApiClient).mock.results[0]?.value;
+    expect(OptimizationApiClient).toHaveBeenCalledTimes(1);
+    expect(client.config).toBe(rawApi.config);
+    expect(client.personalization).toBe(rawApi.experience);
+    expect(client.analytics).toBe(rawApi.insights);
+    expect(Object.keys(client)).toEqual(['config', 'personalization', 'analytics']);
   });
 });

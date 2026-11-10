@@ -1,9 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import {
-  mergeNextjsLivePreview,
-  resolveNextjsLivePreview,
-  type NextjsLivePreviewOptions,
-} from './live-preview.js';
+import { mergeLivePreview, resolveLivePreview, type LivePreviewOptions } from './live-preview.js';
 
 it.each([
   [false, '?preview_session_id=a', undefined],
@@ -13,8 +9,8 @@ it.each([
 ] as const)(
   'activates only enabled nonempty URL sessions (%s, %s)',
   async (enabled, search, expected) => {
-    const loadImplementation = vi.fn<NonNullable<NextjsLivePreviewOptions['loadImplementation']>>();
-    const previewOptions = resolveNextjsLivePreview(
+    const loadImplementation = vi.fn<NonNullable<LivePreviewOptions['loadImplementation']>>();
+    const previewOptions = resolveLivePreview(
       { enabled, loadImplementation, experienceId: 'fallback' },
       '/' + search,
       'primary'
@@ -38,7 +34,7 @@ it('merges supplied preview policy over configuration while retaining the lazy c
     resourceResolution: 'resolved',
   };
   expect(
-    mergeNextjsLivePreview(
+    mergeLivePreview(
       {
         enabled: false,
         experienceId: 'fallback',

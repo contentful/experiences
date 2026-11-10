@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server.js';
-import { createNextjsPublicPermutationCacheMiddleware } from './middleware.js';
+import { createPublicPermutationCacheMiddleware } from './middleware.js';
 
 const cache = {
   scope: 'public-permutation' as const,
@@ -19,7 +19,7 @@ it('rewrites an approved key while retaining response data and authoritative hea
   });
   response.headers.set('vary', 'RSC');
   response.cookies.set('host', 'value');
-  const middleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => cache });
+  const middleware = createPublicPermutationCacheMiddleware({ resolveCache: () => cache });
   expect(await middleware(request, response)).toBe(response);
   expect(
     new URL(response.headers.get('x-middleware-rewrite')!).searchParams.get('ctfl-exp-cache-key')
@@ -34,7 +34,7 @@ it('rewrites an approved key while retaining response data and authoritative hea
 it('uses the pinned custom rewrite convention and preserves terminal responses', async () => {
   const request = new NextRequest('https://example.com/home');
   const resolveCache = vi.fn(() => cache);
-  const middleware = createNextjsPublicPermutationCacheMiddleware({
+  const middleware = createPublicPermutationCacheMiddleware({
     resolveCache,
     rewrite: ({ pathname, encodedCacheKey }) => `/public/${encodedCacheKey}${pathname}`,
   });
@@ -55,12 +55,10 @@ it('uses the pinned custom rewrite convention and preserves terminal responses',
 it('rejects invalid public metadata at the routing boundary', async () => {
   const request = new NextRequest('https://example.com/home');
   await expect(
-    createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => ({ ...cache, key: '' }) })(
-      request
-    )
+    createPublicPermutationCacheMiddleware({ resolveCache: () => ({ ...cache, key: '' }) })(request)
   ).rejects.toThrow('key');
   await expect(
-    createNextjsPublicPermutationCacheMiddleware({
+    createPublicPermutationCacheMiddleware({
       resolveCache: () => ({ ...cache, tags: ['bad,tag'] }),
     })(request)
   ).rejects.toThrow('tags');

@@ -1,55 +1,43 @@
 // Request/response adaptation follows Optimization's pages-router-server.ts at
 // f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). XDA owns content evaluation.
 import type { GetServerSidePropsContext } from 'next';
-import type { NextjsRequestResult } from '../presentation/request-result.js';
+import type { RequestResult } from '../presentation/request-result.js';
 import {
-  createNextjsAnonymousIdSetCookieHeader,
-  toNextjsAnonymousIdCookieOptions,
-  type NextjsCookieConfig,
+  createAnonymousIdSetCookieHeader,
+  toAnonymousIdCookieOptions,
+  type CookieConfig,
 } from '../request/cookies.js';
 import {
   cookieReaderFromHeader,
-  createNextjsRouteKey,
-  isNextjsSpeculativeRequest,
+  createRouteKey,
+  isSpeculativeRequest,
   normalizedRequestUrl,
-} from '../request/request-context.js';
+} from '../request/context.js';
+import { bindExperiencesRequest, configureServerExperiences } from '../request/server-request.js';
 import {
-  bindNextjsExperiencesRequest,
-  configureNextjsServerExperiences,
-} from '../request/server-request.js';
-import {
-  resolveNextjsServerValue,
-  serializeNextjsRequestResult,
-  type NextjsServerExperiencesConfig,
-  type NextjsServerRequestContext,
-  type NextjsServerRequestOverrides,
+  resolveServerValue,
+  serializeRequestResult,
+  type ServerConfig,
+  type ServerRequestContext,
+  type ServerRequestOverrides,
 } from '../request/server-config.js';
-import {
-  loadNextjsPrimaryExperience,
-  resolveNextjsRequestPolicy,
-} from '../request/request-policy.js';
-import { resolveNextjsLivePreview } from '../presentation/live-preview.js';
+import { loadPrimaryExperience, resolveRequestPolicy } from '../request/policy.js';
+import { resolveLivePreview } from '../presentation/live-preview.js';
 
-export type { NextjsRequestResult, NextjsHydrationMode } from '../presentation/request-result.js';
-export { serializeNextjsRequestResult } from '../request/server-config.js';
-export type { NextjsCookieConfig } from '../request/cookies.js';
-export type {
-  NextjsServerRequestOverrides,
-  NextjsServerRequestPolicy,
-} from '../request/server-config.js';
-export type {
-  NextjsLivePreviewConfig,
-  NextjsLivePreviewOptions,
-} from '../presentation/live-preview.js';
+export type { RequestResult, HydrationMode } from '../presentation/request-result.js';
+export { serializeRequestResult } from '../request/server-config.js';
+export type { CookieConfig } from '../request/cookies.js';
+export type { ServerRequestOverrides, ServerRequestPolicy } from '../request/server-config.js';
+export type { LivePreviewConfig, LivePreviewOptions } from '../presentation/live-preview.js';
 
-export interface NextjsPagesRouterServerExperiencesConfig extends NextjsServerExperiencesConfig {
+export interface PagesRouterServerConfig extends ServerConfig {
   /** Explicit origin, otherwise derived from the native request headers. */
   readonly origin?: string;
 }
 
-export type NextjsPagesRouterRequestOptions = NextjsServerRequestOverrides & {
+export type PagesRouterRequestOptions = ServerRequestOverrides & {
   readonly origin?: string;
-  readonly cookie?: NextjsCookieConfig;
+  readonly cookie?: CookieConfig;
 };
 
 function pagesRequest(context: GetServerSidePropsContext, origin?: string) {
@@ -81,9 +69,7 @@ function pagesRequest(context: GetServerSidePropsContext, origin?: string) {
   };
 }
 
-export function bindNextjsPagesRouterServerExperiences(
-  options: NextjsPagesRouterServerExperiencesConfig
-) {
+export function bindPagesRouterServerExperiences(options: PagesRouterServerConfig) {
   const {
     config: _config,
     consent,
@@ -94,62 +80,50 @@ export function bindNextjsPagesRouterServerExperiences(
     origin,
     ...nodeConfig
   } = options;
-  const sdk = configureNextjsServerExperiences(nodeConfig);
+  const sdk = configureServerExperiences(nodeConfig);
 
   async function loadExperience(
     nativeContext: GetServerSidePropsContext,
-    overrides: NextjsPagesRouterRequestOptions = {}
-  ): Promise<NextjsRequestResult> {
+    overrides: PagesRouterRequestOptions = {}
+  ): Promise<RequestResult> {
     const incoming = pagesRequest(nativeContext, overrides.origin ?? origin);
-    const context: NextjsServerRequestContext = {
+    const context: ServerRequestContext = {
       request: incoming,
       headers: incoming.headers,
       cookies: incoming.cookies,
       requestUrl: incoming.url,
-      routeKey: createNextjsRouteKey(incoming.url),
+      routeKey: createRouteKey(incoming.url),
     };
-    const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
+    const resolved = await resolveRequestPolicy(options, overrides, context);
     nativeContext.res.setHeader('Cache-Control', 'private, no-store');
     const dataRequest = incoming.headers.get('x-nextjs-data') === '1';
     const preview =
       typeof livePreview === 'function'
         ? await livePreview(context)
         : livePreview
-          ? resolveNextjsLivePreview(
-              livePreview,
-              context.requestUrl,
-              resolved.descriptor.experienceId
-            )
+          ? resolveLivePreview(livePreview, context.requestUrl, resolved.descriptor.experienceId)
           : undefined;
     if (
-      isNextjsSpeculativeRequest(incoming.headers) ||
+      isSpeculativeRequest(incoming.headers) ||
       (resolved.result.hydration === 'preserve-server' && dataRequest && !preview)
     )
-      return serializeNextjsRequestResult(resolved.result, resolved.policy);
-    const request = bindNextjsExperiencesRequest(sdk, {
+      return serializeRequestResult(resolved.result, resolved.policy);
+    const request = bindExperiencesRequest(sdk, {
       request: incoming,
       cookies: incoming.cookies,
       consent:
         overrides.consent ??
-        (consent?.server === undefined
-          ? false
-          : await resolveNextjsServerValue(consent.server, context)),
+        (consent?.server === undefined ? false : await resolveServerValue(consent.server, context)),
       locale: overrides.locale ?? options.locale ?? nativeContext.locale,
       livePreview: preview,
       isPreview: overrides.isPreview === true || preview !== undefined,
     });
     try {
-      const result = await loadNextjsPrimaryExperience(
-        request,
-        resolved,
-        context,
-        options,
-        !dataRequest
-      );
+      const result = await loadPrimaryExperience(request, resolved, context, options, !dataRequest);
       // GSSP is a native JSON boundary. Raw content is available to composeRequest only.
-      const serialized = serializeNextjsRequestResult(result, resolved.policy);
-      const identityCookie = createNextjsAnonymousIdSetCookieHeader(request, {
-        cookieOptions: toNextjsAnonymousIdCookieOptions(overrides.cookie ?? cookie),
+      const serialized = serializeRequestResult(result, resolved.policy);
+      const identityCookie = createAnonymousIdSetCookieHeader(request, {
+        cookieOptions: toAnonymousIdCookieOptions(overrides.cookie ?? cookie),
       });
       if (identityCookie !== undefined) {
         const previous = nativeContext.res.getHeader('Set-Cookie');

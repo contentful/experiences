@@ -49,9 +49,9 @@ Optimization context contract. Client directly declares `zod` at the existing
 workspace version; it does not depend on the Optimization API client or import
 Runtime.
 
-Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
+Event-bearing XDA forces Personalization API `preflight: true`, with no override; it does not
 commit events or profile changes. Newly returned IDs are provisional, and
-profile-only XDA uses XPAPI GET internally even when SDK-to-XDA uses POST.
+profile-only XDA uses Personalization API GET internally even when SDK-to-XDA uses POST.
 See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
 for finalization requirements and the subsequent GET limitation. Node's
 `fetchExperienceForHandoff` producer is retained only for an actual server-to-browser

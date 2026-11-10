@@ -9,7 +9,7 @@
  * suites continue to exercise the Node environment.
  */
 import { act } from 'react';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
@@ -29,7 +29,7 @@ function Broken(): never {
 const Fine = () => <span data-fine>sibling</span>;
 
 let container: HTMLDivElement | null = null;
-let root: ReactTestRoot | null = null;
+let root: DomTestRoot | null = null;
 
 // Render-time diagnostics (component-not-registered, malformed-slot,
 // experience-template-not-registered) reach ClientExperienceRenderer's state
@@ -46,7 +46,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 async function mount(element: React.ReactElement): Promise<void> {
-  root = createReactTestRoot();
+  root = createDomTestRoot();
   container = root.container;
   act(() => {
     root!.render(element);

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, forwardRef, StrictMode, type HTMLAttributes } from 'react';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
@@ -16,7 +16,7 @@ import type {
 } from '../tracking/root-binding-types.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const roots: ReactTestRoot[] = [];
+const roots: DomTestRoot[] = [];
 afterEach(async () => {
   await act(async () => roots.splice(0).forEach((root) => root.cleanup()));
   document.body.innerHTML = '';
@@ -63,7 +63,7 @@ describe('standard attributed Experience rendering', () => {
         <section {...props} />
       ));
       const callback = vi.fn<OnExperienceNodeRoot>();
-      const root = createReactTestRoot();
+      const root = createDomTestRoot();
       roots.push(root);
       await act(async () =>
         root.render(
@@ -91,7 +91,7 @@ describe('standard attributed Experience rendering', () => {
     ));
     const ordinaryConfig: Config = { components: { probe: Forwarded } };
     const callback = vi.fn<OnExperienceNodeRoot>();
-    const root = createReactTestRoot();
+    const root = createDomTestRoot();
     const { container } = root;
     roots.push(root);
     await act(async () =>
@@ -141,7 +141,7 @@ describe('standard attributed Experience rendering', () => {
       defaults: { label: 'first' },
     };
     const boundConfig: Config = { components: { probe: registration } };
-    const root = createReactTestRoot();
+    const root = createDomTestRoot();
     const { container } = root;
     roots.push(root);
     const element = () => (
@@ -260,7 +260,7 @@ describe('standard attributed Experience rendering', () => {
     const html = renderToString(
       <ServerExperienceRenderer experience={experience} config={config} as="section" />
     );
-    const root = createReactTestRoot();
+    const root = createDomTestRoot();
     const { container } = root;
     roots.push(root);
     container.innerHTML = html;
@@ -296,7 +296,7 @@ describe('standard attributed Experience rendering', () => {
     const boundConfig: Config = {
       components: { probe: { component: Bound, root: { prop: 'experienceRoot' } } },
     };
-    const root = createReactTestRoot();
+    const root = createDomTestRoot();
     const { container } = root;
     roots.push(root);
     await act(async () =>

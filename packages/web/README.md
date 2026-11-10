@@ -150,8 +150,8 @@ helper. The build tools require Node.js 22.12 or later.
 
 This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
 
-The inherited readonly `api` is the actual Optimization API client, with
-`api.experience` and `api.insights`; inherited readonly `config` retains the
+The inherited readonly `api` exposes the Optimization configuration and actual service clients
+through `api.config`, `api.personalization`, and `api.analytics`; inherited readonly `config` retains the
 typed Web configuration. Web keeps its queue references, event allowlist,
 blocked-event callback, and connectivity accessor protected for subclasses.
 
@@ -207,7 +207,7 @@ field-resolution errors. The public `ExperienceDeliveryDiagnostic` type contains
 readonly string `fieldPath` and `message` only; Core copies records in input order
 and omits `originalError` and extra fields. Raw resolve, by-ID, and destination
 fetches share that normalization. The existing local `diagnostics: Error[]`,
-profile adoption, exceptions, and Personalization `experienceRequestState` retain
+profile adoption, exceptions, and Personalization `personalizationRequestState` retain
 their meanings.
 
 This is a partial projection, not a personalization outcome signal. An absent
@@ -266,7 +266,7 @@ const plan = await experiences.fetchExperience(
 `PageViewBuilderArgs` and `TrackBuilderArgs` tagged with `type`. Web consent-gates
 inputs, then builds only arguments once using its `web` channel/browser providers.
 Raw built events retain their supplied context; missing page/user-agent/locale values
-are not merged into them. Direct builder calls remain an advanced option. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy. Adoption and LocalStorage do not finalize a newly previewed ID; a subsequent profile-only fetch can fail with XPAPI GET 404.
+are not merged into them. Direct builder calls remain an advanced option. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy. Adoption and LocalStorage do not finalize a newly previewed ID; a subsequent profile-only fetch can fail with Personalization API GET 404.
 
 Explicit initial page and optional identify arguments are built once by the owner and embedded in
 `personalization.events` on XDA fetches. Rendering uses the selected plan without
@@ -276,7 +276,7 @@ Independent profile-only reads with a concrete profile can still run concurrentl
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
 [documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
-Event-bearing XDA forces XPAPI preflight and does not commit events or
+Event-bearing XDA forces Personalization API preflight and does not commit events or
 profile changes. Local adoption and storage do not finalize the returned ID.
 Successful submission commits against the selected live target, which may differ
 from the XDA continuation ID; admission and generic SDK success are not
@@ -353,7 +353,7 @@ persisted only with persistence consent; denying it removes stored changes and
 keeps in-memory values. `reset()` clears changes and exposure history. A changed
 profile identity clears old changes when no replacement changes are supplied.
 
-Treating XDA changes as a complete snapshot follows XPAPI/Optimization behavior;
+Treating XDA changes as a complete snapshot follows Personalization API/Optimization behavior;
 this remains an assumption pending live-backend verification. To read a particular
 plan explicitly, use `experiences.getFlag(name, plan.personalization?.changes ?? [])`;
 use the pure adapter-exported `resolveFlagChange` for metadata preparation without exposure.
@@ -376,17 +376,17 @@ validation used by the constructor and setter.
 `experiences.states` exposes the browser SDK's observable state. Each observable
 has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 
-| State                    | Value                                                                                                                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`                | Current profile, or `undefined`.                                                                                                                                       |
-| `flag(name)`             | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                                  |
-| `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                                      |
-| `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                            |
-| `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                                      |
-| `experienceRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.                   |
-| `eventStream`            | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                                  |
-| `blockedEventStream`     | Most recently blocked event metadata, or `undefined`.                                                                                                                  |
-| `preview`                | Shared `PreviewState` or `undefined`: optional `experienceId`/`sessionId`, raw `ExperiencePayload` data, error, `live`/`static`/undefined status and content revision. |
+| State                         | Value                                                                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                     | Current profile, or `undefined`.                                                                                                                                       |
+| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                                  |
+| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                                      |
+| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                            |
+| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                                      |
+| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.                   |
+| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                                  |
+| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                                  |
+| `preview`                     | Shared `PreviewState` or `undefined`: optional `experienceId`/`sessionId`, raw `ExperiencePayload` data, error, `live`/`static`/undefined status and content revision. |
 
 `subscribe` immediately invokes its callback with the current value, including
 `undefined`, then observes changes. `subscribeOnce` waits for the first
@@ -438,7 +438,7 @@ subscriptions still require the caller's `unsubscribe()` cleanup.
 
 For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `effect`, `toObservable`, and `toDistinctObservable`, plus the types `Observable`,
-`Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
+`Subscription`, `States`, `PersonalizationRequestState`, `PersonalizationRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
 Flag changes remain SDK-owned and are absent from the public `signals` aggregate;
 use `getFlag` or `states.flag(name)` to read them. XDA/Personalization responses
@@ -472,7 +472,7 @@ ordinary fetch runs the chain again and is not exact replay. The actual server N
 retains finalized events for XDA evaluation and optional browser commit without repeating hooks.
 The actual Node transfer producer runs event chains sequentially, matching Optimization; browser
 replay and transport retries do not rerun event hooks; the admitted batch retains
-IDs and timestamps under existing XPAPI schema/transport rules. Browser replay still applies its current consent gate and
+IDs and timestamps under existing Personalization API schema/transport rules. Browser replay still applies its current consent gate and
 metadata. State-only handoff production and hydration invoke no event hooks.
 Hooks transform supplied events and preserve Personalization, Analytics, and XDA
 transport boundaries.
@@ -487,8 +487,8 @@ State interceptors receive incoming `{ profile, changes }` state from direct
 Personalization responses, XDA fetches, and private hydration. A sparse result that
 omits either field retains its previous value in the chain; an explicit
 `profile: undefined` or `changes: undefined` clears that field. The package exports `InterceptorManager`, `Interceptor`,
-`InterceptorMerge`, `MaybePromise`, `ExperienceState`, `LifecycleInterceptors`, and
-`mergeExperienceState`. Changes supply custom flags; XDA still owns content selection.
+`InterceptorMerge`, `MaybePromise`, `PersonalizationState`, `LifecycleInterceptors`, and
+`mergePersonalizationState`. Changes supply custom flags; XDA still owns content selection.
 
 The `@contentful/experiences-web/bridge-support` entry exports
 `hydrateOptimizationData(sdk, { profile, changes })`, `CoreBridgeCapabilities`,
@@ -534,7 +534,7 @@ const experiences = new ContentfulExperiences({
 The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile through `defaults.profile` when creating the runtime, or identify
-a profile before sending Analytics events. `CoreConfigDefaults` describes the
+a profile before sending Analytics events. `ConfigDefaults` describes the
 `defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`.
 Personalization event responses and XDA plans supply complete profiles to the
 runtime. The current profile is
@@ -590,7 +590,7 @@ admitted whole or refused before publication, matching the active Optimization b
 Capacity is `queuePolicy.offlineMaxEvents`
 (default 100; a non-positive or non-finite value falls back to the default, and a
 fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
-completion. Read `states.experienceRequestState.current` for the latest
+completion. Read `states.personalizationRequestState.current` for the latest
 Personalization request status (`idle`, `pending`, `success`, or `failed`);
 failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
@@ -676,7 +676,7 @@ canLoadPersistedContinuity }`; persisted profile and changes may be lazy loaders
 read only when persistence is granted and the respective configured value is absent.
 The constructor uses this lazy path for LocalStorage. The package exports
 `StatefulDefaults`, `PersistedDefaultLoader`, `PersistedDefaultValue`,
-`PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `CoreConfigDefaults`
+`PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `ConfigDefaults`
 uses the same supported profile, changes, and consent fields.
 
 Personalization methods (`identify`, `page`, `track`) resolve
@@ -1036,7 +1036,7 @@ insertion, and unsubscribe application subscriptions during cleanup. See the [XD
 
 The actual server Node producer returns one full aggregate; the optional browser consumer owns
 internal state application and replay. SSR display remains independent of
-submission. State application cannot finalize XDA preflight; XPAPI is the commit transport.
+submission. State application cannot finalize XDA preflight; Personalization API is the commit transport.
 
 ## SSR import safety
 

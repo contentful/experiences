@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  bindNextjsAppRouterClientExperiences,
-  type NextjsRequestExperienceProps,
+  bindAppRouterClientExperiences,
+  type RequestExperienceProps,
 } from '@contentful/experiences-nextjs/app-router/client';
-import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
+import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
 const livePreview = {
@@ -13,9 +13,9 @@ const livePreview = {
 };
 
 const { ExperiencesRoot: AppExperiencesRoot, Experience: AppRequestExperience } =
-  bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
+  bindAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
 export { AppExperiencesRoot };
-export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+export const { ExperiencesRoot, Experience } = bindPagesRouterExperiences({
   config: browserRegistry,
   livePreview,
 });
@@ -32,6 +32,6 @@ export const singleExperienceFallbacks = {
   ),
 };
 
-export function ClientRequestExperience(props: NextjsRequestExperienceProps) {
+export function ClientRequestExperience(props: RequestExperienceProps) {
   return <AppRequestExperience {...singleExperienceFallbacks} {...props} />;
 }

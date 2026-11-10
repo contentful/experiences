@@ -12,7 +12,7 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,11 +54,11 @@ function Named({ root }: { root: ExperienceRootBinding }) {
 }
 
 let container: HTMLDivElement;
-let renderer: ReactTestRoot | undefined;
+let renderer: DomTestRoot | undefined;
 
 async function render(element: ReactElement) {
   if (!renderer) {
-    renderer = createReactTestRoot();
+    renderer = createDomTestRoot();
     container = renderer.container;
   }
   await act(async () => {

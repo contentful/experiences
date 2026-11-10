@@ -7,7 +7,7 @@ import {
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
   type ExperienceParameters,
-  type PersonalizationOptions,
+  type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
 import type {
@@ -23,25 +23,19 @@ import type {
   PageViewBuilderArgs,
   TrackBuilderArgs,
 } from '../events/event-builder.js';
-import type { ApiClient } from '@contentful/optimization-api-client';
+import type { ApiClient } from './create-optimization-client.js';
 import type { Json } from '@contentful/optimization-api-client/api-schemas';
 import { resolveFlagChange } from '../flags/resolve-flag-change.js';
-import {
-  createRuntimeDeliveryClient,
-  type RuntimeDeliveryClientOptions,
-} from './create-runtime-delivery-client.js';
-import {
-  createRuntimeOptimizationClient,
-  type RuntimeOptimizationConfig,
-} from './create-optimization-client.js';
+import { createDeliveryClient, type DeliveryClientOptions } from './create-delivery-client.js';
+import { createOptimizationClient, type OptimizationConfig } from './create-optimization-client.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
 import {
-  createRuntimeEventMethods,
-  type RuntimeDirectEventBindings,
-  type RuntimeEventMethods,
-} from '../events/runtime-event-methods.js';
+  createDirectEventMethods,
+  type DirectEventBindings,
+  type DirectEventMethods,
+} from '../events/methods.js';
 
-export type RuntimeResolveOptions = {
+export type ResolveOptions = {
   config: ResolverConfig;
   metadata?: Record<string, unknown>;
   debug?: boolean;
@@ -57,11 +51,11 @@ export type RuntimeResolveOptions = {
  * Resolve options for the fetch methods. A fetch takes its source map from its
  * own response, so `sourceMap` is not accepted here.
  */
-export type RuntimeFetchResolveOptions = Omit<RuntimeResolveOptions, 'sourceMap'>;
+export type FetchResolveOptions = Omit<ResolveOptions, 'sourceMap'>;
 /** Metadata/debug may be shared, while registrations remain per resolution. */
-export type RuntimeResolveDefaults = Pick<RuntimeResolveOptions, 'metadata' | 'debug'>;
+export type ResolveDefaults = Pick<ResolveOptions, 'metadata' | 'debug'>;
 
-export type RuntimeEventBuilderConfig = Omit<EventBuilderConfig, 'channel' | 'library'> & {
+export type EventBuilderOptions = Omit<EventBuilderConfig, 'channel' | 'library'> & {
   channel: EventBuilderConfig['channel'];
   library?: Partial<EventBuilderConfig['library']>;
 };
@@ -70,36 +64,33 @@ type FetchEventArguments =
   | ({ type: 'identify' } & IdentifyBuilderArgs)
   | ({ type: 'page' } & PageViewBuilderArgs)
   | ({ type: 'track' } & TrackBuilderArgs);
-type BuiltFetchEvent = NonNullable<PersonalizationOptions['events']>[number];
+type BuiltFetchEvent = NonNullable<BuiltPersonalizationOptions['events']>[number];
 
-export type RuntimePersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
+export type PersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'> & {
   /** Event builder arguments or already-built XDA events; no page is added implicitly. */
   events?: (FetchEventArguments | BuiltFetchEvent)[];
 };
 
-export type RuntimeFetchExperienceOptions = {
+export type FetchExperienceOptions = {
   experienceId: string;
   locale?: string;
   parameters?: ExperienceParameters;
-  personalization?: RuntimePersonalizationOptions;
+  personalization?: PersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
 };
 
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
-export type BuiltRuntimeFetchExperienceOptions = Omit<
-  RuntimeFetchExperienceOptions,
-  'personalization'
-> & {
-  personalization?: PersonalizationOptions;
+export type BuiltFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
+  personalization?: BuiltPersonalizationOptions;
 };
 
 /** @internal Use the owner's existing builder; retain caller-built messages unchanged. */
 export function buildFetchPersonalization(
-  input: RuntimePersonalizationOptions | undefined,
+  input: PersonalizationOptions | undefined,
   builder: Pick<EventBuilder, 'buildIdentify' | 'buildPageView' | 'buildTrack'>
-): PersonalizationOptions | undefined {
-  if (input?.events === undefined) return input as PersonalizationOptions | undefined;
+): BuiltPersonalizationOptions | undefined {
+  if (input?.events === undefined) return input as BuiltPersonalizationOptions | undefined;
   return {
     ...input,
     events: input.events.map((event) => {
@@ -119,16 +110,16 @@ export function buildFetchPersonalization(
   };
 }
 
-export type RuntimeFetchByDestinationNodeOptions = {
+export type FetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
-  personalization?: PersonalizationOptions;
+  personalization?: BuiltPersonalizationOptions;
 };
 
-export type RuntimeFetchByDestinationPathOptions = {
+export type FetchByDestinationPathOptions = {
   destinationId: string;
   path: string;
-  personalization?: PersonalizationOptions;
+  personalization?: BuiltPersonalizationOptions;
 };
 
 /** Structural contract implemented by the shared runtime. */
@@ -140,39 +131,37 @@ export interface ExperienceRuntime {
   destroy(): void;
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions: RuntimeResolveOptions
+    resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationNodeOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationPathOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
 }
 
-export type ContentfulExperiencesConfig = {
+export type Config = {
   spaceId: string;
   environmentId: string;
   locale?: string;
   /** Configuration for the runtime-owned Content Delivery API client. */
-  delivery: RuntimeDeliveryClientOptions;
+  delivery: DeliveryClientOptions;
   /** Optional configuration for the runtime-owned Content Preview API client. */
-  preview?: RuntimeDeliveryClientOptions;
+  preview?: DeliveryClientOptions;
   /** Overrides for the runtime-owned Personalization and Analytics event transport. */
-  optimization?: RuntimeOptimizationConfig;
-  resolveDefaults?: RuntimeResolveDefaults;
-  eventBuilder: RuntimeEventBuilderConfig;
+  optimization?: OptimizationConfig;
+  resolveDefaults?: ResolveDefaults;
+  eventBuilder: EventBuilderOptions;
 };
 
-export class ContentfulExperiences<
-  TConfig extends ContentfulExperiencesConfig = ContentfulExperiencesConfig,
-> implements ExperienceRuntime {
+export class ContentfulExperiences<TConfig extends Config = Config> implements ExperienceRuntime {
   readonly config: TConfig;
   readonly api: ApiClient;
   readonly spaceId: string;
@@ -182,7 +171,7 @@ export class ContentfulExperiences<
   readonly #locale: string | undefined;
   readonly #deliveryClient: ContentfulViewDeliveryClient;
   readonly #previewClient: ContentfulViewDeliveryClient | undefined;
-  readonly #resolveDefaults: RuntimeResolveDefaults;
+  readonly #resolveDefaults: ResolveDefaults;
   #destroyed = false;
 
   constructor(config: TConfig) {
@@ -192,16 +181,12 @@ export class ContentfulExperiences<
     this.#locale = config.locale;
     const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
     const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
-    this.#deliveryClient = createRuntimeDeliveryClient(
-      config.delivery,
-      undefined,
-      userAgentHeaders
-    );
+    this.#deliveryClient = createDeliveryClient(config.delivery, undefined, userAgentHeaders);
     this.#previewClient =
       config.preview === undefined
         ? undefined
-        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST, userAgentHeaders);
-    this.api = createRuntimeOptimizationClient({
+        : createDeliveryClient(config.preview, PREVIEW_HOST, userAgentHeaders);
+    this.api = createOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
       locale: config.locale,
@@ -231,8 +216,8 @@ export class ContentfulExperiences<
     return resolveFlagChange(name, changes)?.value;
   }
 
-  protected createEventMethods(bindings: RuntimeDirectEventBindings): RuntimeEventMethods {
-    return createRuntimeEventMethods(this.api, this.eventBuilder, {
+  protected createEventMethods(bindings: DirectEventBindings): DirectEventMethods {
+    return createDirectEventMethods(this.api, this.eventBuilder, {
       getLocale: () => this.locale,
       ...bindings,
     });
@@ -240,7 +225,7 @@ export class ContentfulExperiences<
 
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions: RuntimeResolveOptions
+    resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan> {
     return resolveCoreExperience(payload, requireResolverConfig(resolveOptions), {
       ...this.#mergeFetchResolveOptions(resolveOptions),
@@ -249,8 +234,8 @@ export class ContentfulExperiences<
   }
 
   fetchExperience(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
     const payload = this.fetchExperiencePayload(options, resolveOptions);
     const { config } = resolveOptions;
@@ -260,8 +245,8 @@ export class ContentfulExperiences<
 
   /** Fetch a payload for a leaf operation that must retain identity before resolution. */
   protected fetchExperiencePayload(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<ExperiencePayload> {
     if (options.preview === true && this.#previewClient === undefined) {
       throw new Error(
@@ -287,8 +272,8 @@ export class ContentfulExperiences<
   }
 
   fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationNodeOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
@@ -304,8 +289,8 @@ export class ContentfulExperiences<
   }
 
   fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationPathOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const resolverConfig = requireResolverConfig(resolveOptions);
     return fetchExperience(
@@ -320,7 +305,7 @@ export class ContentfulExperiences<
     );
   }
 
-  #mergeFetchResolveOptions(options: RuntimeFetchResolveOptions): RuntimeResolveDefaults {
+  #mergeFetchResolveOptions(options: FetchResolveOptions): ResolveDefaults {
     return {
       metadata: { ...this.#resolveDefaults.metadata, ...options.metadata },
       debug: options.debug ?? this.#resolveDefaults.debug,
@@ -328,7 +313,7 @@ export class ContentfulExperiences<
   }
 }
 
-function requireResolverConfig(options: RuntimeResolveOptions | undefined): ResolverConfig {
+function requireResolverConfig(options: ResolveOptions | undefined): ResolverConfig {
   if (options?.config === undefined) {
     throw new TypeError('A resolver config is required in resolveOptions.config');
   }

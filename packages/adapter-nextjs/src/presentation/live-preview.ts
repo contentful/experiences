@@ -1,35 +1,35 @@
 import type {
-  RuntimeLivePreviewOptions,
-  RuntimeLivePreviewModule,
+  LivePreviewOptions as SessionPreviewOptions,
+  LivePreviewModule,
 } from '@contentful/experiences-runtime';
 
-/** Contentful Live Preview configuration; unrelated to XPAPI preflight. */
-export interface NextjsLivePreviewOptions {
+/** Contentful Live Preview configuration; unrelated to Personalization API preflight. */
+export interface LivePreviewOptions {
   readonly enabled: boolean;
   /** Request roots infer this from the primary Experience. */
   readonly experienceId?: string;
   readonly sessionHost?: string;
   readonly resourceResolution?: string;
-  readonly loadImplementation?: () => RuntimeLivePreviewModule | Promise<RuntimeLivePreviewModule>;
+  readonly loadImplementation?: () => LivePreviewModule | Promise<LivePreviewModule>;
 }
 
-export interface NextjsLivePreviewConfig extends NextjsLivePreviewOptions {
-  readonly loadImplementation: NonNullable<NextjsLivePreviewOptions['loadImplementation']>;
+export interface LivePreviewConfig extends LivePreviewOptions {
+  readonly loadImplementation: NonNullable<LivePreviewOptions['loadImplementation']>;
 }
 
-export function nextjsLivePreviewSessionId(config: NextjsLivePreviewOptions, url: string) {
+export function livePreviewSessionId(config: LivePreviewOptions, url: string) {
   return config.enabled
     ? new URL(url, 'https://nextjs.invalid').searchParams.get('preview_session_id')?.trim() ||
         undefined
     : undefined;
 }
 
-export function resolveNextjsLivePreview(
-  config: NextjsLivePreviewOptions,
+export function resolveLivePreview(
+  config: LivePreviewOptions,
   url: string,
   experienceId = config.experienceId
-): RuntimeLivePreviewOptions | undefined {
-  const sessionId = nextjsLivePreviewSessionId(config, url);
+): SessionPreviewOptions | undefined {
+  const sessionId = livePreviewSessionId(config, url);
   const load = config.loadImplementation;
   if (!sessionId || !load) return undefined;
   if (!experienceId) throw new TypeError('Live Preview requires a primary Experience ID.');
@@ -43,9 +43,9 @@ export function resolveNextjsLivePreview(
 }
 
 /** Server data overrides configuration while the client retains its lazy loader. */
-export function mergeNextjsLivePreview(
-  configured: RuntimeLivePreviewOptions | NextjsLivePreviewOptions | undefined,
-  supplied: RuntimeLivePreviewOptions | NextjsLivePreviewOptions | undefined
+export function mergeLivePreview(
+  configured: SessionPreviewOptions | LivePreviewOptions | undefined,
+  supplied: SessionPreviewOptions | LivePreviewOptions | undefined
 ) {
   return configured && supplied && 'enabled' in configured && 'enabled' in supplied
     ? { ...configured, ...supplied }

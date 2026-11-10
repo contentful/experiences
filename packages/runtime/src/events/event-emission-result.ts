@@ -1,5 +1,5 @@
 import type { BlockedEventReason } from './consent.js';
-import type { EventOptimizationData } from './runtime-event-methods.js';
+import type { EventOptimizationData } from './methods.js';
 
 /** Admission result; queued delivery can be accepted without response data. */
 export type EventEmissionResult<TData = EventOptimizationData> =

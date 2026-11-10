@@ -1,6 +1,6 @@
 import {
-  ExperienceEventArray,
-  type ExperienceEvent,
+  ExperienceEventArray as PersonalizationEventArray,
+  type ExperienceEvent as PersonalizationEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import { isEqual } from 'es-toolkit/predicate';
 
@@ -9,8 +9,8 @@ export const MAX_PREPARED_EVENTS = 100;
 const MAX_IDENTIFY_EVENTS = 50;
 
 /** Event types permitted in a finalized evaluated replay. */
-export type PreparedExperienceEvent = Extract<
-  ExperienceEvent,
+export type PreparedPersonalizationEvent = Extract<
+  PersonalizationEvent,
   { type: 'identify' | 'track' | 'page' }
 >;
 
@@ -27,8 +27,8 @@ export function withEventConsent<
 /** Validate one prepared Personalization batch without rebuilding its events. */
 export function validatePreparedEvents(
   events: readonly unknown[]
-): readonly PreparedExperienceEvent[] {
-  const validEvents = ExperienceEventArray.parse(events);
+): readonly PreparedPersonalizationEvent[] {
+  const validEvents = PersonalizationEventArray.parse(events);
   if (
     validEvents.length > MAX_PREPARED_EVENTS ||
     validEvents.filter(({ type }) => type === 'identify').length > MAX_IDENTIFY_EVENTS ||
@@ -44,5 +44,5 @@ export function validatePreparedEvents(
   if (!isEqual(validEvents, events)) {
     throw new TypeError('Prepared replay cannot change the evaluated event bodies');
   }
-  return validEvents as readonly PreparedExperienceEvent[];
+  return validEvents as readonly PreparedPersonalizationEvent[];
 }

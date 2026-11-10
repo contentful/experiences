@@ -24,7 +24,7 @@ describe('SnapshotRuntime', () => {
       locale: 'de-DE',
       consent: false,
       persistenceConsent: false,
-      experienceRequestState: { status: 'success' },
+      personalizationRequestState: { status: 'success' },
       eventStream: undefined,
       blockedEventStream: undefined,
     });

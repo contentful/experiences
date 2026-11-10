@@ -1,27 +1,22 @@
 import {
   InterceptorManager,
   ContentfulExperiences as RuntimeContentfulExperiences,
-  type ContentfulExperiencesConfig,
+  type Config as BaseConfig,
   type OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
 
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
 
 import { RequestBoundExperiences } from '../request/facade.js';
-import type {
-  ConsentPolicy,
-  ExperiencesNodeConfig,
-  ExperiencesNodeRequest,
-  ExperiencesNodeRequestContext,
-} from '../request/types.js';
+import type { ConsentPolicy, Config, RequestRuntime, RequestContext } from '../request/types.js';
 /** Node SDK with stable transport configuration and request-local event state. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences<
-  ExperiencesNodeConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
+  Config & Pick<BaseConfig, 'eventBuilder'>
 > {
   readonly #consentPolicy: ConsentPolicy;
   readonly interceptors = { event: new InterceptorManager<OptimizationEventStreamEvent>() };
 
-  constructor(config: ExperiencesNodeConfig) {
+  constructor(config: Config) {
     const { app, allowedEventTypes, onEventBlocked } = config;
     super({
       ...config,
@@ -34,7 +29,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.#consentPolicy = { allowedEventTypes, onEventBlocked };
   }
 
-  forRequest(context: ExperiencesNodeRequestContext = {}): ExperiencesNodeRequest {
+  forRequest(context: RequestContext = {}): RequestRuntime {
     return new RequestBoundExperiences(
       this,
       context,

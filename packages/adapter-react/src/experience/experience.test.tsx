@@ -4,8 +4,8 @@ import { act, StrictMode, Suspense, useEffect, useState, type HTMLAttributes } f
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import { ExperiencesContext } from '../runtime/experiences-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { RuntimeContext } from '../runtime/context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { Experience, type ManagedExperienceProps } from './experience.js';
 import { deferred, sourceSdk } from '../test/managed-experience.js';
 import { plan, previewState } from '../test/fixtures/managed-experience.js';
@@ -20,11 +20,11 @@ const config = {
 };
 
 describe('Experience', () => {
-  let root: ReactTestRoot;
+  let root: DomTestRoot;
   let source: ReturnType<typeof sourceSdk>;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    root = createReactTestRoot();
+    root = createDomTestRoot();
     source = sourceSdk();
   });
   afterEach(() => {
@@ -36,11 +36,11 @@ describe('Experience', () => {
   ) => {
     await act(async () =>
       root.render(
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: true }}
         >
           <Experience experienceId="home" config={config} {...props} />
-        </ExperiencesContext.Provider>
+        </RuntimeContext.Provider>
       )
     );
   };
@@ -238,7 +238,7 @@ describe('Experience', () => {
     const error = vi.fn();
     const content = (onExperienceResolved = resolved) => (
       <StrictMode>
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: true }}
         >
           <Experience
@@ -248,7 +248,7 @@ describe('Experience', () => {
             onExperienceResolved={onExperienceResolved}
             onExperienceError={error}
           />
-        </ExperiencesContext.Provider>
+        </RuntimeContext.Provider>
       </StrictMode>
     );
     await act(async () => root.render(content()));
@@ -304,7 +304,7 @@ describe('Experience', () => {
     const seed = plan('server');
     const resolved = vi.fn();
     const content = (
-      <ExperiencesContext.Provider
+      <RuntimeContext.Provider
         value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: true }}
       >
         <Experience
@@ -313,7 +313,7 @@ describe('Experience', () => {
           initialPlan={seed}
           onExperienceResolved={resolved}
         />
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
     root.container.innerHTML = renderToString(content);
     const serverNode = root.container.querySelector('h1');
@@ -409,11 +409,11 @@ describe('Experience', () => {
     source.fetchExperience.mockReturnValue(pending.promise);
     await act(async () =>
       root.render(
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: true }}
         >
           <Experience experience={seed} config={config} />
-        </ExperiencesContext.Provider>
+        </RuntimeContext.Provider>
       )
     );
     await render({ loadingFallback: 'loading' });
@@ -504,7 +504,7 @@ describe('Experience', () => {
     const onExperienceResolved = vi.fn();
     const rootProps = { ref: rootRef };
     const content = (managed: boolean) => (
-      <ExperiencesContext.Provider
+      <RuntimeContext.Provider
         value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: true }}
       >
         {managed ? (
@@ -525,7 +525,7 @@ describe('Experience', () => {
             onExperienceResolved={onExperienceResolved}
           />
         )}
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
     await act(async () => root.render(content(false)));
     const suppliedNode = root.container.querySelector('button')!;

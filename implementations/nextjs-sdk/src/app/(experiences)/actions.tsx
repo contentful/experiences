@@ -1,8 +1,8 @@
 'use server';
 
 import { cookies, headers } from 'next/headers';
-import { persistNextjsAnonymousId } from '@contentful/experiences-nextjs/server';
-import type { RuntimeFetchExperienceOptions } from '@contentful/experiences-node';
+import { persistAnonymousId } from '@contentful/experiences-nextjs/server';
+import type { FetchExperienceOptions } from '@contentful/experiences-node';
 import { getServer } from '../../config';
 import { createContentRequest, loadReferenceContent } from '../../server-reference';
 import { ServerPresentations } from '../../components/ServerPresentations';
@@ -10,7 +10,7 @@ import { ServerPresentations } from '../../components/ServerPresentations';
 // A Server Action is a writable cookie boundary and returns a normal RSC subtree.
 export async function updateServerContent(
   routeKey: string,
-  personalization?: RuntimeFetchExperienceOptions['personalization']
+  personalization?: FetchExperienceOptions['personalization']
 ) {
   const { config } = getServer();
   const url = new URL(routeKey, config.origin);
@@ -24,7 +24,7 @@ export async function updateServerContent(
     // Next rerenders the current route after a cookie mutation. Avoid repeating
     // content work when the evaluated identity has not changed.
     if (request.canPersistProfile ? request.profile?.id !== currentId : currentId !== undefined)
-      persistNextjsAnonymousId({ headers: new Headers(), cookies: cookieStore }, request, {
+      persistAnonymousId({ headers: new Headers(), cookies: cookieStore }, request, {
         cookieOptions: { httpOnly: false, secure: url.protocol === 'https:' },
       });
     return <ServerPresentations all={all} routeKey={routeKey} ids={config.experienceIds} />;

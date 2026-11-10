@@ -2,17 +2,14 @@ import { trackRuntime, spyOnEventApi } from '../test/runtime.js';
 import { profileFixture as completeProfile } from '../test/fixtures/profile.js';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesNodeConfig } from '../contentful-experiences.js';
-import {
-  EventProfileRequiredError,
-  type RuntimeLivePreviewModule,
-} from '@contentful/experiences-runtime';
+import { ContentfulExperiences, type Config } from '../contentful-experiences.js';
+import { EventProfileRequiredError, type LivePreviewModule } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
 
 const resolverConfig = { components: {} };
 
-function createRuntime(overrides: Partial<ExperiencesNodeConfig> = {}) {
+function createRuntime(overrides: Partial<Config> = {}) {
   return trackRuntime(
     new ContentfulExperiences({
       spaceId: 'space',
@@ -26,9 +23,7 @@ function createRuntime(overrides: Partial<ExperiencesNodeConfig> = {}) {
   );
 }
 
-function createEventRuntime(
-  policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}
-) {
+function createEventRuntime(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
   const runtime = trackRuntime(
     new ContentfulExperiences({
       ...policy,
@@ -57,7 +52,7 @@ describe('Node ContentfulExperiences', () => {
         diagnostics: [],
         personalization: { profile: completeProfile('preview-profile') },
       };
-      const implementation: RuntimeLivePreviewModule = {
+      const implementation: LivePreviewModule = {
         fetchPreviewSession: vi.fn().mockResolvedValue(plan),
         createLivePreviewClient: vi.fn(),
         sendPreviewStatus: vi.fn(),
@@ -74,7 +69,7 @@ describe('Node ContentfulExperiences', () => {
 
     it('establishes preview policy before initializing the source', async () => {
       const f = previewFixture();
-      const upsert = vi.spyOn(f.runtime.api.experience, 'upsertProfile');
+      const upsert = vi.spyOn(f.runtime.api.personalization, 'upsertProfile');
       const request = f.runtime.forRequest({ livePreview: f.livePreview, consent: true });
       expect(request.isPreview).toBe(true);
       await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
@@ -628,11 +623,11 @@ describe('Node ContentfulExperiences', () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const first = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.1' },
+        personalizationOptions: { ip: '203.0.113.1' },
       });
       const second = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.2', plainText: true },
+        personalizationOptions: { ip: '203.0.113.2', plainText: true },
       });
       const third = runtime.forRequest({ consent: true });
 
@@ -651,10 +646,10 @@ describe('Node ContentfulExperiences', () => {
 
     it('copies options at construction so later mutation cannot change a request', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
-      const experienceOptions = { ip: '203.0.113.1' };
-      const request = runtime.forRequest({ consent: true, experienceOptions });
+      const personalizationOptions = { ip: '203.0.113.1' };
+      const request = runtime.forRequest({ consent: true, personalizationOptions });
 
-      experienceOptions.ip = '198.51.100.99';
+      personalizationOptions.ip = '198.51.100.99';
       await request.page();
 
       expect(upsertProfile).toHaveBeenCalledWith(
@@ -663,12 +658,12 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('lets the request locale take precedence over experienceOptions.locale', async () => {
+    it('lets the request locale take precedence over personalizationOptions.locale', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
         locale: 'de-DE',
-        experienceOptions: { locale: 'fr-FR' },
+        personalizationOptions: { locale: 'fr-FR' },
       });
 
       await request.page();
@@ -681,14 +676,14 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('uses experienceOptions.locale for Personalization only, not for content', async () => {
+    it('uses personalizationOptions.locale for Personalization only, not for content', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const fetchExperience = vi
         .spyOn(runtime, 'fetchExperience')
         .mockImplementation(async (options) => ({ locale: options.locale }) as never);
       const request = runtime.forRequest({
         consent: true,
-        experienceOptions: { locale: 'fr-FR' },
+        personalizationOptions: { locale: 'fr-FR' },
       });
 
       // The request (content) locale stays on the runtime default, as in Optimization.
@@ -704,13 +699,13 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('forwards the Insights beacon to a direct Analytics send', async () => {
+    it('forwards the Analytics beacon to a direct Analytics send', async () => {
       const { runtime, sendBatchEvents } = createEventRuntime();
       const beacon = vi.fn(() => true);
       const request = runtime.forRequest({
         consent: true,
         profile: completeProfile('visitor'),
-        insightsOptions: { beacon },
+        analyticsOptions: { beacon },
       });
 
       await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });

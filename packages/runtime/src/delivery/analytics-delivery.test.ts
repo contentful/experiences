@@ -21,7 +21,7 @@ const baseEvent = builder.buildFlagView({ componentId: 'flag', experienceId: 'ex
 const event = (n: number): AnalyticsEvent => ({ ...baseEvent, componentId: `c${n}` });
 
 /**
- * The queue has no lifecycle of its own; like Optimization's InsightsQueue it reads an
+ * The queue has no lifecycle of its own; like Optimization's Analytics queue it reads an
  * owner-provided reset token. This fixture plays that owner, as Web does.
  */
 function setup(
@@ -337,7 +337,7 @@ describe('AnalyticsDelivery', () => {
     void owner.destroy();
   });
 
-  describe('owner-provided lifecycle, as Optimization InsightsQueue', () => {
+  describe('owner-provided lifecycle, as Optimization Analytics queue', () => {
     it('removes sent events by the batch snapshot, keeping events added in flight', async () => {
       const { delivery, owner, sendBatchEvents } = setup();
       const { promise, resolve } = deferred<boolean>();

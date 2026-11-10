@@ -6,7 +6,7 @@ import {
   hasEventConsent,
   PersonalizationDelivery,
   resolveQueuePolicy,
-  type RuntimeFetchExperienceOptions,
+  type FetchExperienceOptions,
 } from '@contentful/experiences-runtime';
 import { installCoreBridgeCapabilities } from '../bridge-support/capabilities.js';
 import {
@@ -15,7 +15,7 @@ import {
   blockedEvent as blockedEventSignal,
   consent as consentSignal,
   event as eventSignal,
-  experienceRequestState as experienceRequestStateSignal,
+  personalizationRequestState as personalizationRequestStateSignal,
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
 } from '../signals/index.js';
@@ -24,8 +24,8 @@ import { normalizeExplicitLocale } from '../state/locale.js';
 import { beaconHandler } from '../browser/beacon.js';
 import { IdentityCookie } from '../browser/identity-cookie.js';
 import { createVisibilityChangeListener } from '../browser/visibility.js';
-import { WebPreview } from '../preview/web-preview.js';
-import { acquireWebSingleton, releaseWebSingleton } from '../sdk/web-singleton.js';
+import { PreviewSession } from '../preview/session.js';
+import { acquireSingleton, releaseSingleton } from './singleton.js';
 import LocalStore from '../storage/local-store.js';
 import {
   createInteractionTracking,
@@ -33,18 +33,18 @@ import {
 } from '../tracking/interaction-tracking.js';
 
 import { flushPersonalizationOnDestroy } from '../events/destroy-drains.js';
-import { WebHandoffRuntime } from '../handoff/web-handoff-runtime.js';
-import { browserRuntimeConfig } from './browser-config.js';
-import type { ExperiencesTrackingApi, ExperiencesWebConfig } from './types.js';
+import { HandoffRuntime } from '../handoff/runtime.js';
+import { createRuntimeConfig } from './config.js';
+import type { ExperiencesTrackingApi, Config } from './types.js';
 
 /** Browser configuration, tracking and ordered SDK lifetime orchestration. */
-export class ContentfulExperiences extends WebHandoffRuntime {
+export class ContentfulExperiences extends HandoffRuntime {
   readonly #singletonOwner: string;
-  protected readonly experienceQueue: PersonalizationDelivery;
-  protected readonly insightsQueue: AnalyticsDelivery;
+  protected readonly personalizationQueue: PersonalizationDelivery;
+  protected readonly analyticsQueue: AnalyticsDelivery;
   #cleanupVisibilityListener: (() => void) | undefined;
   protected readonly allowedEventTypes: AllowedEventType[];
-  protected readonly onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
+  protected readonly onEventBlocked: Config['onEventBlocked'];
   #interactionTracking: InteractionTracking | undefined;
   /** Automatic and per-element interaction controls, matching Optimization. */
   readonly tracking: ExperiencesTrackingApi = {
@@ -64,7 +64,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     this.online = false;
   };
 
-  constructor(config: ExperiencesWebConfig) {
+  constructor(config: Config) {
     const { allowedEventTypes, onEventBlocked, getAnonymousId, queuePolicy, defaults, cookie } =
       config;
     const locale = normalizeExplicitLocale(config.locale);
@@ -72,7 +72,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     // inside a `try`: when a bundler lowers private fields and arrow-function fields,
     // it hoists `var _this = this` to the top of the constructor, which then runs
     // before `super()` and throws a ReferenceError. Next.js (SWC) does exactly this.
-    super(browserRuntimeConfig(config, locale));
+    super(createRuntimeConfig(config, locale));
     if (config.livePreview !== undefined && config.isPreview === false) {
       throw new TypeError('livePreview cannot be combined with isPreview: false');
     }
@@ -85,7 +85,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     // The lock is taken after the base class has validated its configuration, so a
     // failed construction never holds it. Construction is synchronous, so nothing
     // else can acquire it in between.
-    const singletonOwner = acquireWebSingleton();
+    const singletonOwner = acquireSingleton();
     this.#singletonOwner = singletonOwner;
     const resolvedQueuePolicy = resolveQueuePolicy(queuePolicy);
     let delivery: PersonalizationDelivery | undefined;
@@ -96,23 +96,23 @@ export class ContentfulExperiences extends WebHandoffRuntime {
       this.initializeState(defaults, locale, getAnonymousId);
       this.eventBuilder.getConsent = () => consentSignal.value;
       this.identity = new IdentityCookie(LocalStore, cookie);
-      this.experienceQueue = delivery = new PersonalizationDelivery({
-        api: this.api.experience,
+      this.personalizationQueue = delivery = new PersonalizationDelivery({
+        api: this.api.personalization,
         getProfileId: () => this.requestIdentity(),
         getProfileRevision: () => this.stateRevision,
         getOnline: () => this.online,
         getLocale: () => this.locale,
         flushPolicy: resolvedQueuePolicy.flush,
         maxEvents: resolvedQueuePolicy.offlineMaxEvents,
-        experienceRequestState: experienceRequestStateSignal,
+        personalizationRequestState: personalizationRequestStateSignal,
         eventInterceptors: this.interceptors.event,
         publishEvent: this.publishEvent,
         admitEvent: (event) => this.admitEvent(event, true),
         applyOptimizationData: (data, isCurrent) =>
           this.applyOptimizationDataToSignals(data, isCurrent),
       });
-      this.insightsQueue = analytics = new AnalyticsDelivery({
-        api: this.api.insights,
+      this.analyticsQueue = analytics = new AnalyticsDelivery({
+        api: this.api.analytics,
         getOnline: () => this.online,
         getResetToken: () => (this.destroyed ? undefined : this.resetToken),
         flushPolicy: resolvedQueuePolicy.flush,
@@ -147,7 +147,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
         await this.#interactionTracking?.endActive();
         await this.flushQueues({ force: true, beacon: beaconHandler });
       });
-      if (config.livePreview) this.preview = new WebPreview(this.config, config.livePreview);
+      if (config.livePreview) this.preview = new PreviewSession(this.config, config.livePreview);
     } catch (error) {
       this.preview?.destroy();
       this.#interactionTracking?.destroy();
@@ -168,7 +168,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
         try {
           super.destroy();
         } finally {
-          releaseWebSingleton(this.#singletonOwner);
+          releaseSingleton(this.#singletonOwner);
         }
       }
       throw error;
@@ -185,15 +185,15 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     isCurrent: () => boolean = () => true
   ): Promise<void> {
     if (this.isPreview || !isCurrent()) return;
-    await this.insightsQueue.flush(options);
+    await this.analyticsQueue.flush(options);
     if (!isCurrent()) return;
-    await this.experienceQueue.flush({ force: options.force });
+    await this.personalizationQueue.flush({ force: options.force });
   }
   protected withdrawEventConsent(): void {
     this.resetToken = {};
-    this.experienceQueue.clearQueue();
+    this.personalizationQueue.clearQueue();
     this.clearFlagViews();
-    this.insightsQueue.clearQueuedEvents();
+    this.analyticsQueue.clearQueuedEvents();
     this.stateRevision += 1;
     // A discarded queued page must not leave its route looking admitted, or a later
     // permitted attempt for the same route would be answered from the cache and
@@ -214,7 +214,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
   reset(): void {
     if (this.destroyed) {
-      this.experienceQueue.reset();
+      this.personalizationQueue.reset();
       return;
     }
     batch(() => {
@@ -224,9 +224,9 @@ export class ContentfulExperiences extends WebHandoffRuntime {
       this.#interactionTracking?.reset();
       this.clearCurrentPage();
       this.setAdoptedProfileId(undefined);
-      this.experienceQueue.reset();
+      this.personalizationQueue.reset();
       this.clearFlagViews();
-      this.insightsQueue.clearQueuedEvents();
+      this.analyticsQueue.clearQueuedEvents();
       this.stateRevision += 1;
       LocalStore.reset();
       this.identity.clear();
@@ -234,7 +234,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
       changesSignal.value = undefined;
       eventSignal.value = undefined;
       blockedEventSignal.value = undefined;
-      experienceRequestStateSignal.value = { status: 'idle' };
+      personalizationRequestStateSignal.value = { status: 'idle' };
       // Resume only after old work is invalidated and the new visitor token exists.
       this.#interactionTracking?.syncConsent();
     });
@@ -248,20 +248,20 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     // Analytics request captures the live token, so it is sent, and its late result no
     // longer applies once the token reads `undefined`.
     if (!this.isPreview) {
-      void this.insightsQueue.flush({ force: true }).catch((error: unknown) => {
+      void this.analyticsQueue.flush({ force: true }).catch((error: unknown) => {
         console.warn(
           '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
           error
         );
       });
-      flushPersonalizationOnDestroy(this.experienceQueue);
+      flushPersonalizationOnDestroy(this.personalizationQueue);
     }
     this.destroyed = true;
     this.clearFlagViews(true);
     this.invalidateContent();
     this.disposeEffects();
-    this.insightsQueue.clearPeriodicFlushTimer();
-    this.insightsQueue.clearScheduledRetry();
+    this.analyticsQueue.clearPeriodicFlushTimer();
+    this.analyticsQueue.clearScheduledRetry();
     this.clearCurrentPage();
     try {
       if (typeof window !== 'undefined') {
@@ -280,7 +280,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
         try {
           super.destroy();
         } finally {
-          releaseWebSingleton(this.#singletonOwner);
+          releaseSingleton(this.#singletonOwner);
         }
       }
     }
@@ -299,9 +299,7 @@ export class ContentfulExperiences extends WebHandoffRuntime {
     ));
   }
 
-  protected withTrackingSourceMap(
-    options: RuntimeFetchExperienceOptions
-  ): RuntimeFetchExperienceOptions {
+  protected withTrackingSourceMap(options: FetchExperienceOptions): FetchExperienceOptions {
     return this.#ensureInteractionTracking()?.hasAutoTracking()
       ? {
           ...options,

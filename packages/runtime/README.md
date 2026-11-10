@@ -2,12 +2,12 @@
 
 > **Internal package.** The public Node and Web SDKs consume this shared runtime. Framework adapters re-export its `EventBuilder` API but do not construct the runtime.
 
-Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, direct Optimization transport, event methods for Node, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser event dispatch through `WebEventEmitter`, browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
+Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, direct Optimization transport, event methods for Node, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser event dispatch through `EventEmitter`, browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
 
 Web exposes
 its browser state through `states` observables and owns the module signals and
 persistence, consent, and connectivity effects; Node retains its request-local
-profile getter. Runtime supplies the `ExperienceRequestState` transport outcome
+profile getter. Runtime supplies the `PersonalizationRequestState` transport outcome
 type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
@@ -21,9 +21,11 @@ contracts and the generated passthrough result are preserved. Core remains depen
 
 Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction and handoff preparation require no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID `preview: true` requires a configured Preview client; destination operations remain delivery-only.
 
-The readonly `api` property is the actual Optimization API client (`api.experience`
-and `api.insights`); readonly `config` retains the typed configuration supplied
-by the public leaf. Delivery and Preview clients remain internal to Runtime.
+The readonly `api: ApiClient` property exposes `config`, `personalization`, and
+`analytics`, retaining the actual Optimization client configuration and service
+instances. The SDK-owned service names are `api.personalization` and `api.analytics`.
+The runtime's readonly `config` retains the typed configuration supplied by the
+public leaf. Delivery and Preview clients remain internal to Runtime.
 
 Delivery and Preview options accept a token or token supplier. A tokenless trusted proxy requires an explicit `host` and disables generated bearer authentication. Endpoint precedence is explicit `host`, then the generated client's `environment`, then the Delivery or Preview default. `environmentId` is the Contentful environment identifier used by by-ID requests, not the generated client's endpoint-valued `environment` option.
 
@@ -71,24 +73,24 @@ narrowing this behavior.
 The base `getFlag(name, changes?)` returns only the resolved value and is pure:
 it retains no changes and emits no exposure. Web adds browser-owned state and
 exposure through the [existing flag-view method](../web/README.md#custom-flags).
-Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentation
+Custom flags add `flag(name)` to `States` and `getFlag` to Web's presentation
 `ExperiencesRuntime` contract. XDA fetches and direct Personalization responses
 feed the same browser flag-state path; supplied changes replace the snapshot,
 `[]` clears it, and omission retains it unless profile identity changes. This
-complete-snapshot interpretation follows XPAPI/Optimization and remains an
+complete-snapshot interpretation follows Personalization API/Optimization and remains an
 assumption pending live-backend verification. Node carries returned changes in
 private handoffs without retaining global flag state.
 
 ## Optional runtime Live Preview
 
 Applications supply synchronous session configuration and the optional package's
-public exports through `RuntimeLivePreviewOptions.loadImplementation`.
+public exports through `LivePreviewOptions.loadImplementation`.
 Runtime exports structural types and wrappers without requiring that package: Node
 owns request snapshots, and Web owns one preview source and its subscriptions.
-`fetchRuntimePreviewSession` adopts the resolved plan; `createRuntimePreviewClient`
+`fetchPreviewSession` adopts the resolved plan; `createPreviewClient`
 creates the public subscription client. Node and Web merge applicable metadata/debug
 defaults with operation options once before snapshot transport. Direct callers of
-`fetchRuntimePreviewSession` must pass already-merged resolve options; the helper
+`fetchPreviewSession` must pass already-merged resolve options; the helper
 forwards them unchanged. The resolver registry stays operation-local.
 
 ### Preview Session query binding
@@ -101,7 +103,7 @@ does not load event schemas or other runtime modules.
 
 ```ts
 export type PreviewSessionBinding = Pick<
-  RuntimeLivePreviewOptions,
+  LivePreviewOptions,
   'experienceId' | 'sessionId' | 'sessionHost' | 'resourceResolution'
 >;
 
@@ -152,7 +154,7 @@ decide whether reducing them warrants additional package or protocol support.
 | String credentials/endpoints; no injected transport or client reconfiguration  | [Runtime](./src/preview/live-preview.ts) evaluates SDK suppliers; [Web](../web/src/preview/web-preview.ts) replaces the client for session/token changes.                                                      | Supplier or transport support could reduce adaptation, with more authentication and lifecycle semantics in the package. |
 | Snapshots return plans; subscriptions and `initialPayload` use raw payloads    | [Web's binding](../web/src/content/web-content-runtime.ts) resolves streamed payloads separately. Snapshot results cannot directly seed the client's existing payload support.                                 | Optional raw snapshot access could align these paths while retaining convenient resolved snapshots.                     |
 | Snapshot helper has no `AbortSignal`                                           | [Node](../node/src/request/facade.ts) and [Web](../web/src/content/web-content-runtime.ts) discard obsolete results; HTTP work continues.                                                                      | Cancellation support could stop wasted HTTP work; caller/resolver lifetime checks would still be necessary.             |
-| Separate result/status subscriptions; retained payload with no clear operation | [WebPreview](../web/src/preview/web-preview.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                            | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.            |
+| Separate result/status subscriptions; retained payload with no clear operation | [PreviewSession](../web/src/preview/web-preview.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                        | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.            |
 | No shared snapshot/stream revision or initial-frame identity                   | Web uses a local payload sequence and cannot skip an equivalent first socket payload reliably.                                                                                                                 | Shared identity could avoid redundant initial work, but may require server/protocol changes as well as package changes. |
 | Unbundled ESM distribution                                                     | The [Web](../../implementations/web-sdk/scripts/build-assets.ts) and [hybrid](../../implementations/node-sdk+web-sdk/scripts/build-assets.ts) references prepare browser assets; CJS hosts use dynamic import. | Additional distribution formats could reduce consumer setup at the cost of more package build/release maintenance.      |
 
@@ -238,12 +240,12 @@ callers own safe serialization and response-size policy.
 
 ## XDA preflight and profile finalization
 
-XDA currently always invokes the Personalization API (XPAPI) with `preflight: true`,
+XDA currently always invokes the Personalization API (Personalization API) with `preflight: true`,
 without an override.
 It evaluates events and profile changes without committing events or profile
 creation/mutation. Newly returned IDs are provisional; local Node/Web adoption,
 hydration, storage and queue admission do not finalize them. Profile-only XDA uses
-XPAPI GET internally and may return 404 for an uncommitted ID, even when the
+Personalization API GET internally and may return 404 for an uncommitted ID, even when the
 SDK-to-XDA request is POST.
 
 The active content flow is:
@@ -267,7 +269,7 @@ neither an initial rendering prerequisite nor compensation for XDA noncommit.
 SSR/CSR XDA-carried events remain uncommitted. This is a tolerated service bug
 awaiting upstream force-commit support; there is no current force flag or SDK
 workaround. Do not introduce Node aggregate commitment, a Web handoff producer,
-standalone XPAPI preparation, or a new API family to compensate.
+standalone Personalization API preparation, or a new API family to compensate.
 
 For an actual hybrid server-to-browser transfer, preflight is intentional:
 Node evaluates content and supplies the events for browser commitment. Node's
@@ -294,14 +296,14 @@ finalization through the appropriate SSR/CSR and hybrid paths. The SDK will not
 release until those issues are resolved and that verification passes against the
 actual upstream contract. There is no known fix date.
 
-**Insights profiles:**
-Optimization API client 2.2.3 requires complete profiles for Insights batches,
+**Analytics profiles:**
+Optimization API client 2.2.3 requires complete profiles for Analytics batches,
 including `stableId`, `random`, `audiences`, `traits`, `location` and `session`.
 ID-only request identity remains valid for Personalization and content continuity;
-Analytics requires a full snapshot supplied by the caller or returned by XDA/XPAPI.
+Analytics requires a full snapshot supplied by the caller or returned by XDA/Personalization API.
 Node throws `EventProfileRequiredError` without one; Web warns and drops the event.
 Earlier service checks returned HTTP 400 / `ERR_INVALID_DATA` without those fields,
-while complete XPAPI profiles produced HTTP 200 responses. The SDK does not
+while complete Personalization API profiles produced HTTP 200 responses. The SDK does not
 fabricate those fields or synthesize an initial commit. These observations do not
 establish whether profile existence is validated; a complete snapshot does not
 prove upstream commitment.
@@ -372,7 +374,7 @@ visitor work cannot publish after reset, consent withdrawal, supersession or des
 Optimization PR #549 at `f76f1ff04df1b466c98fc6ce5db6b569f9212438`
 remains the pinned ownership, consent, queues and lifetime reference. XDA content
 evaluation and its current noncommit service behavior require the differences
-above; full commit parity is not established. Actual XPAPI delivery
+above; full commit parity is not established. Actual Personalization API delivery
 retains generic retry ambiguity and no durable/exactly-once guarantee.
 
 The default Web page provider includes `title`, `hash`, `width` and `height`.
@@ -385,7 +387,7 @@ explicit `context.page` input alongside `properties.title` and `context.gdpr`.
 
 The actual Node transfer producer captures raw final Client events unchanged,
 including supported `context.page.query` arrays, and preserves available content.
-Normal SDK-built events already pass XPAPI builder validation and Client XDA
+Normal SDK-built events already pass Personalization API builder validation and Client XDA
 validation; no additional server replay-compatibility validation is required before
 XDA. Manually built/raw transmission remains the consumer's compatibility risk.
 `ExperiencesHandoff.replay.events` uses a union of raw Client and normal SDK event
@@ -393,7 +395,7 @@ types in the existing wire contract, without a new DTO.
 
 The receiving browser retains existing replay schema/order/count, capacity,
 scope/cache/consent and lifetime checks. It may refuse unsupported replay while
-available content remains usable. The pinned XPAPI client's schema/serialization
+available content remains usable. The pinned Personalization API client's schema/serialization
 remains the commit boundary; wider XDA metadata/query arrays do not establish
 exact replay compatibility. Add no SDK safety-validation layer, custom transport
 or dependency upgrade.
@@ -405,7 +407,7 @@ consent withdrawal, supersession or destroy cannot admit or publish stale visito
 
 ## Personalization delivery
 
-`PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, the offline queue refuses a new ordinary event before publication, without evicting accepted events, matching the active Optimization baseline. Prepared batches are admitted whole or refused before publication; the queue never splits them. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Node's Runtime event methods and Web's `WebEventEmitter` enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
+`PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, the offline queue refuses a new ordinary event before publication, without evicting accepted events, matching the active Optimization baseline. Prepared batches are admitted whole or refused before publication; the queue never splits them. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Node's Runtime event methods and Web's `EventEmitter` enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
 
 Owner bindings may supply fixed `getIsPreview` intent. Shared event methods check it before
 building or profile lookup and return `{ accepted: false, reason: 'preview' }`; request/browser

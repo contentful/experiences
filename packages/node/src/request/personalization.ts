@@ -1,6 +1,6 @@
 import {
   serializePersonalization,
-  type PersonalizationOptions,
+  type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import {
   buildFetchPersonalization,
@@ -10,30 +10,27 @@ import {
   type ConsentState,
   type InterceptorManager,
   type OptimizationEventStreamEvent,
-  type RuntimePersonalizationOptions,
+  type PersonalizationOptions,
 } from '@contentful/experiences-runtime';
-import type { ConsentPolicy, ExperiencesNodeRequest } from './types.js';
+import type { ConsentPolicy, RequestRuntime } from './types.js';
 export type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
-  personalization?: PersonalizationOptions;
+  personalization?: BuiltPersonalizationOptions;
 };
-type PersonalizationBindings = Pick<
-  ExperiencesNodeRequest,
-  'locale' | 'isPreview' | 'eventBuilder'
-> & {
-  getProfile(): ExperiencesNodeRequest['profile'];
+type PersonalizationBindings = Pick<RequestRuntime, 'locale' | 'isPreview' | 'eventBuilder'> & {
+  getProfile(): RequestRuntime['profile'];
   readonly consent: ConsentState;
   readonly consentPolicy: ConsentPolicy;
   getInterceptors(): InterceptorManager<OptimizationEventStreamEvent>;
   assertActive(): void;
 };
 /** Reads the request owner's state; never retains independent identity or lifetime state. */
-export class RequestPersonalization {
+export class PersonalizationPreparation {
   constructor(private readonly bindings: PersonalizationBindings) {}
   /**
    * Drops XDA event intent before building when this request's consent does not admit it. The
    * profile id still travels, since it is not an event.
    */
-  gate<T extends { personalization?: RuntimePersonalizationOptions; locale?: string }>(
+  gate<T extends { personalization?: PersonalizationOptions; locale?: string }>(
     options: T
   ): BuiltFetchOptions<T> {
     const profileId = options.personalization?.profileId ?? this.bindings.getProfile()?.id;
@@ -72,7 +69,9 @@ export class RequestPersonalization {
     };
   }
 
-  async intercept<T extends { personalization?: PersonalizationOptions }>(options: T): Promise<T> {
+  async intercept<T extends { personalization?: BuiltPersonalizationOptions }>(
+    options: T
+  ): Promise<T> {
     const personalization = options.personalization;
     if (personalization?.events === undefined) return options;
     const events = await Promise.all(
@@ -82,7 +81,7 @@ export class RequestPersonalization {
     return this.finalize(options, { ...personalization, events });
   }
 
-  finalize<T extends { personalization?: PersonalizationOptions }>(
+  finalize<T extends { personalization?: BuiltPersonalizationOptions }>(
     options: T,
     personalization: unknown = options.personalization
   ): T {

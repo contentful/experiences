@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { completeProfile as profileFixture } from '../../test/fixtures/profile.js';
+import { completeProfile as profileFixture } from '../fixtures/profile.js';
 
 describe('ssr', () => {
   let runtime: import('../../contentful-experiences.js').ContentfulExperiences | undefined;

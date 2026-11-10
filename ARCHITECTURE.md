@@ -107,7 +107,7 @@ utilities from their public entry points.
 taking the dependency. The public adapter/free-function surface still supports
 `fetchExperience(..., { client })`, `createClient`, and a raw delivery client.
 Those are deliberately separate from Node/Web runtime construction: a runtime
-takes `RuntimeDeliveryClientOptions` and constructs its own delivery clients.
+takes `DeliveryClientOptions` and constructs its own delivery clients.
 The rationale is in AGENTS.md; the structural point is that this keeps `core` at
 zero dependencies, which is the invariant every future adapter inherits.
 
@@ -123,7 +123,7 @@ Runtime. `runtime` depends on Client's public boundary and owns the complete
 `EventBuilder`, Optimization transport, event methods, handoff contracts, and
 the lower-layer shared `ContentfulExperiences` base. Runtime, not Client,
 declares the Optimization API client, `es-toolkit`, and `zod` dependencies.
-Runtime constructors accept `RuntimeDeliveryClientOptions` configuration, then
+Runtime constructors accept `DeliveryClientOptions` configuration, then
 construct and retain their own Delivery, optional Preview, and Optimization
 clients; a caller cannot inject a pre-built delivery client. `accessToken` can
 be the generated client's token supplier. It may be omitted only with an
@@ -158,7 +158,7 @@ and later visits remain trackable. Admission can precede HTTP completion and
 retry can duplicate a request whose first result was ambiguous. Ordinary
 online Personalization calls remain direct; offline ordinary Personalization
 calls use the same in-memory queue. Web queues Analytics events in a separate
-in-memory queue, adapted from Optimization's InsightsQueue, flushed at 25
+in-memory queue, adapted from Optimization's Analytics queue, flushed at 25
 events, every 30 seconds, on reconnect, and on page hide via the Beacon API; page hide
 also forces a final Personalization attempt, and `queuePolicy.offlineMaxEvents` sets the
 offline Personalization capacity.
@@ -172,11 +172,11 @@ a handoff. A batch may omit the page event; pages are never synthesized.
 Web admits an already prepared batch whole, because it is replayed as previewed.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
-XDA invokes XPAPI with `preflight: true` and commits neither events nor profile
+XDA invokes Personalization API with `preflight: true` and commits neither events nor profile
 changes. Ordinary SSR/CSR event-bearing fetches remain uncommitted pending
 upstream force-commit support; no override or SDK commit workaround exists.
 Only actual hybrid browser replay commits the supplied batch. Newly returned
-profile IDs remain provisional until an actual XPAPI commit. See
+profile IDs remain provisional until an actual Personalization API commit. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for the known service limitations and required verification before release.
 

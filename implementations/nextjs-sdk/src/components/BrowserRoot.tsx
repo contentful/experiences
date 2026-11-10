@@ -1,12 +1,12 @@
 'use client';
 
 import {
-  bindNextjsAppRouterClientExperiences,
-  useNextAppAutoPageInputs,
-  type BoundNextjsRequestRootProps,
-  type NextjsRequestExperienceProps,
+  bindAppRouterClientExperiences,
+  useAppAutoPageInputs,
+  type BoundRequestRootProps,
+  type RequestExperienceProps,
 } from '@contentful/experiences-nextjs/app-router/client';
-import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
+import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import type { BoundManagedExperienceProps } from '@contentful/experiences-nextjs/client';
 import { useRouter as useAppRouter } from 'next/navigation';
 import { useRouter as usePagesRouter } from 'next/router';
@@ -32,7 +32,7 @@ interface ReferenceContextValue {
   serverOnly: boolean;
   navigate: (href: string, replace?: boolean, shallow?: boolean) => void;
   Experience: (props: BoundManagedExperienceProps) => ReactNode;
-  RequestExperience: (props: NextjsRequestExperienceProps) => ReactNode;
+  RequestExperience: (props: RequestExperienceProps) => ReactNode;
 }
 const ReferenceContext = createContext<ReferenceContextValue | undefined>(undefined);
 export function useReference() {
@@ -44,9 +44,9 @@ export function useReference() {
 export function AppBrowserRoot({
   environment,
   ...props
-}: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
+}: BoundRequestRootProps & { environment: BrowserEnvironment }) {
   const [app] = useState(() =>
-    bindNextjsAppRouterClientExperiences({
+    bindAppRouterClientExperiences({
       ...environment.web,
       config: browserRegistry,
       livePreview: {
@@ -56,7 +56,7 @@ export function AppBrowserRoot({
     })
   );
   const router = useAppRouter();
-  const { routeKey } = useNextAppAutoPageInputs();
+  const { routeKey } = useAppAutoPageInputs();
   return (
     <ReferenceBrowserRoot
       {...props}
@@ -80,9 +80,9 @@ export function AppBrowserRoot({
 export function PagesBrowserRoot({
   environment,
   ...props
-}: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
+}: BoundRequestRootProps & { environment: BrowserEnvironment }) {
   const [{ ExperiencesRoot, ExperiencesAnalyticsRoot, Experience }] = useState(() =>
-    bindNextjsPagesRouterExperiences({
+    bindPagesRouterExperiences({
       ...environment.web,
       config: browserRegistry,
       livePreview: {
@@ -120,11 +120,11 @@ function ReferenceBrowserRoot({
   RequestExperience,
   navigate,
   ...props
-}: BoundNextjsRequestRootProps &
+}: BoundRequestRootProps &
   Pick<ReferenceContextValue, 'environment' | 'Experience' | 'RequestExperience' | 'navigate'> & {
     currentRouteKey: string;
-    ContentRoot: ComponentType<BoundNextjsRequestRootProps>;
-    AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps & { experienceId?: string }>;
+    ContentRoot: ComponentType<BoundRequestRootProps>;
+    AnalyticsRoot: ComponentType<BoundRequestRootProps & { experienceId?: string }>;
   }) {
   const url = new URL(currentRouteKey, 'https://nextjs.invalid');
   const [log] = useState(createAttemptLog);

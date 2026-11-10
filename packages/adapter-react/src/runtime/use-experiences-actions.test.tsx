@@ -3,8 +3,8 @@
 import { act, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { ContentfulExperiences, WebExperiencesRuntime } from '@contentful/experiences-web';
-import { ExperiencesContext } from './experiences-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { RuntimeContext } from './context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import {
   useExperiencesActions,
   type UseExperiencesActionsResult,
@@ -43,12 +43,12 @@ function runtimeDouble() {
 }
 
 describe('useExperiencesActions', () => {
-  let rendered: ReactTestRoot;
+  let rendered: DomTestRoot;
   let captures: UseExperiencesActionsResult[];
 
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    rendered = createReactTestRoot();
+    rendered = createDomTestRoot();
     captures = [];
   });
 
@@ -65,7 +65,7 @@ describe('useExperiencesActions', () => {
   function render(sdk: WebExperiencesRuntime, children: ReactNode = <Probe />, isLive = true) {
     act(() =>
       rendered.render(
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={
             isLive
               ? {
@@ -78,7 +78,7 @@ describe('useExperiencesActions', () => {
           }
         >
           {children}
-        </ExperiencesContext.Provider>
+        </RuntimeContext.Provider>
       )
     );
     return captures.at(-1)!;

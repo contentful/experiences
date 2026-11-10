@@ -35,49 +35,51 @@ export { resolveFlagChange } from './flags/resolve-flag-change.js';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
-  ContentfulExperiencesConfig,
+  Config,
   ExperienceRuntime,
-  RuntimeFetchExperienceOptions,
-  RuntimePersonalizationOptions,
-  BuiltRuntimeFetchExperienceOptions,
-  RuntimeFetchByDestinationNodeOptions,
-  RuntimeFetchByDestinationPathOptions,
-  RuntimeEventBuilderConfig,
-  RuntimeFetchResolveOptions,
-  RuntimeResolveDefaults,
-  RuntimeResolveOptions,
+  FetchExperienceOptions,
+  PersonalizationOptions,
+  BuiltFetchExperienceOptions,
+  FetchByDestinationNodeOptions,
+  FetchByDestinationPathOptions,
+  EventBuilderOptions,
+  FetchResolveOptions,
+  ResolveDefaults,
+  ResolveOptions,
 } from './runtime/contentful-experiences.js';
-export type { RuntimeDeliveryClientOptions } from './runtime/create-runtime-delivery-client.js';
+export type { DeliveryClientOptions } from './runtime/create-delivery-client.js';
 export { getPreviewSessionBinding } from './preview/preview-session-binding.js';
 export type { PreviewSessionBinding } from './preview/preview-session-binding.js';
 export {
-  assertRuntimePreviewRequest,
-  createRuntimePreviewClient,
-  fetchRuntimePreviewSession,
-  initializeRuntimeLivePreview,
-  mergeRuntimePreviewResolveOptions,
+  assertPreviewRequest,
+  createPreviewClient,
+  fetchPreviewSession,
+  initializeLivePreview,
+  mergePreviewResolveOptions,
 } from './preview/live-preview.js';
 export type {
-  RuntimeLivePreviewBinding,
-  RuntimeLivePreviewConfig,
-  RuntimeLivePreviewOptions,
-  RuntimeLivePreviewModule,
-  RuntimePreviewClient,
-  RuntimePreviewSessionIdentity,
-  RuntimePreviewStatus,
+  LivePreviewBinding,
+  LivePreviewConfig,
+  LivePreviewOptions,
+  LivePreviewModule,
+  PreviewClient,
+  PreviewSessionIdentity,
+  PreviewStatus,
 } from './preview/live-preview.js';
-export type { RuntimeOptimizationConfig } from './runtime/create-optimization-client.js';
+export type {
+  ApiClient,
+  PersonalizationApiClient,
+  AnalyticsApiClient,
+  OptimizationConfig,
+} from './runtime/create-optimization-client.js';
 export { default as EventBuilder } from './events/event-builder.js';
 export * from './events/event-builder.js';
 export {
   EventProfileRequiredError,
   EventProfileSchema,
   warnMissingEventProfile,
-} from './events/runtime-event-methods.js';
-export type {
-  ExperienceRequestOptions,
-  InsightsRequestOptions,
-} from './events/runtime-event-methods.js';
+} from './events/methods.js';
+export type { PersonalizationRequestOptions, AnalyticsRequestOptions } from './events/methods.js';
 export type { EventEmissionResult } from './events/event-emission-result.js';
 export { AnalyticsDelivery } from './delivery/analytics-delivery.js';
 export type {
@@ -90,9 +92,9 @@ export { resolveQueuePolicy } from './delivery/queue/index.js';
 export type { AnalyticsFlushOptions } from './delivery/analytics-delivery.js';
 export { PersonalizationDelivery } from './delivery/personalization-delivery.js';
 export type {
-  ExperienceRequestState,
-  ExperienceRequestFailureReason,
-} from './delivery/experience-request-state.js';
+  PersonalizationRequestState,
+  PersonalizationRequestFailureReason,
+} from './delivery/personalization-request-state.js';
 export { validatePersonalizationEvent } from './events/event-interceptors.js';
 export type {
   EventInterceptors,
@@ -105,11 +107,11 @@ export {
   type MaybePromise,
 } from './events/interceptor/InterceptorManager.js';
 export type {
-  ExperienceEvent,
-  InsightsEvent,
+  ExperienceEvent as PersonalizationEvent,
+  InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 export { validatePreparedEvents, withEventConsent } from './events/prepared-events.js';
-export type { PreparedExperienceEvent } from './events/prepared-events.js';
+export type { PreparedPersonalizationEvent } from './events/prepared-events.js';
 export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
@@ -131,6 +133,6 @@ export type {
   EventProfile,
   AnalyticsEventMethod,
   PersonalizationEventMethod,
-  RuntimeDirectEventBindings,
-  RuntimeEventMethods,
-} from './events/runtime-event-methods.js';
+  DirectEventBindings,
+  DirectEventMethods,
+} from './events/methods.js';

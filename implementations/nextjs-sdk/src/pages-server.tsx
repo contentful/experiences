@@ -1,11 +1,11 @@
 import {
-  bindNextjsPagesRouterServerExperiences,
-  type NextjsRequestResult,
+  bindPagesRouterServerExperiences,
+  type RequestResult,
 } from '@contentful/experiences-nextjs/pages-router/server';
 import {
-  createNextjsPageContext,
-  createNextjsRouteKey,
-  serializeNextjsJsonForHtml,
+  createPageContext,
+  createRouteKey,
+  serializeJsonForHtml,
 } from '@contentful/experiences-nextjs/server';
 import type { GetServerSideProps } from 'next';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -25,7 +25,7 @@ export type PagesReferenceProps = {
   environment: BrowserEnvironment;
   serverOnly: boolean;
   analytics: boolean;
-  experiences: NextjsRequestResult;
+  experiences: RequestResult;
   html?: string;
   comparisons?: ContentSeed[];
 };
@@ -60,7 +60,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
     url = visible;
   }
   const analytics = url.searchParams.get('analytics') !== 'off';
-  const page = createNextjsPageContext({
+  const page = createPageContext({
     path: url.pathname,
     origin: config.origin,
     searchParams: url.searchParams,
@@ -84,7 +84,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
     ...(preview ? {} : { extensions: { sourceMap: {} } }),
   };
   let html: string | undefined;
-  const experiences = await bindNextjsPagesRouterServerExperiences({
+  const experiences = await bindPagesRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
     origin: config.origin,
@@ -115,7 +115,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
           html = renderToStaticMarkup(
             <ServerPresentations
               all={[primary, ...comparisons]}
-              routeKey={createNextjsRouteKey(url)}
+              routeKey={createRouteKey(url)}
               ids={config.experienceIds}
               title={
                 analytics ? undefined : url.pathname.endsWith('/page-two') ? 'Page Two' : 'Next SDK'
@@ -138,5 +138,5 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
   } else {
     props.comparisons = contentSeeds(comparisons, experiences);
   }
-  return { props: JSON.parse(serializeNextjsJsonForHtml(props)) as PagesReferenceProps };
+  return { props: JSON.parse(serializeJsonForHtml(props)) as PagesReferenceProps };
 };

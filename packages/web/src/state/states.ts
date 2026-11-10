@@ -2,9 +2,9 @@ import type {
   BlockedEvent,
   Json,
   EventProfile,
-  ExperienceRequestState,
+  PersonalizationRequestState,
   OptimizationEventStreamEvent,
-  RuntimePreviewStatus,
+  PreviewStatus,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { Observable } from '../signals/index.js';
@@ -19,7 +19,7 @@ export interface PreviewState {
   readonly sessionId?: string;
   readonly data: ExperiencePayload | undefined;
   readonly error: Error | undefined;
-  readonly status: RuntimePreviewStatus | undefined;
+  readonly status: PreviewStatus | undefined;
   readonly revision: number;
 }
 
@@ -30,7 +30,7 @@ export interface PreviewUpdate {
 }
 
 /** Combined observable state exposed by the Web SDK. */
-export interface CoreStates {
+export interface States {
   /** Key-scoped Custom Flag value. Reads and subscriptions track exposure. */
   flag: (name: string) => Observable<Json | undefined>;
   /** Current bound preview source. Payloads are shared read-only references. */
@@ -43,10 +43,10 @@ export interface CoreStates {
   blockedEventStream: Observable<BlockedEvent | undefined>;
   /** Stream of the most recent event emitted. */
   eventStream: Observable<OptimizationEventStreamEvent | undefined>;
-  /** Live view of the SDK Experience API/event locale. */
+  /** Live view of the SDK Personalization API/event locale. */
   locale: Observable<string | undefined>;
   /** Live view of the current profile. */
   profile: Observable<EventProfile | undefined>;
-  /** Outcome of the most recent Experience API request. */
-  experienceRequestState: Observable<ExperienceRequestState>;
+  /** Outcome of the most recent Personalization API request. */
+  personalizationRequestState: Observable<PersonalizationRequestState>;
 }

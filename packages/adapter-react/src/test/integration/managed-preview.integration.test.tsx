@@ -2,19 +2,19 @@
 import { act } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ContentfulExperiences, type PortableRenderPlan } from '@contentful/experiences-web';
-import type { RuntimeLivePreviewModule } from '@contentful/experiences-runtime';
-import { ExperiencesContext } from '../../runtime/experiences-context.js';
+import type { LivePreviewModule } from '@contentful/experiences-runtime';
+import { RuntimeContext } from '../../runtime/context.js';
 import {
   useManagedExperience,
   type ManagedExperienceOptions,
   type ManagedExperienceResult,
 } from '../../experience/use-managed-experience.js';
-import { createReactTestRoot, type ReactTestRoot } from '../react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../dom-root.js';
 import { deferred } from '../managed-experience.js';
 import { plan } from '../fixtures/managed-experience.js';
 
 const config = { components: {} };
-let root: ReactTestRoot;
+let root: DomTestRoot;
 let result: ManagedExperienceResult;
 function Probe({ options }: { options: ManagedExperienceOptions }) {
   result = useManagedExperience(options);
@@ -22,7 +22,7 @@ function Probe({ options }: { options: ManagedExperienceOptions }) {
 }
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  root = createReactTestRoot();
+  root = createDomTestRoot();
 });
 afterEach(() => {
   act(() => root.cleanup());
@@ -31,7 +31,7 @@ afterEach(() => {
 
 it('automatically fetches a replacement matching session when preview is static', async () => {
   const snapshot = deferred<PortableRenderPlan>();
-  const implementation: RuntimeLivePreviewModule = {
+  const implementation: LivePreviewModule = {
     fetchPreviewSession: vi.fn(() => snapshot.promise),
     createLivePreviewClient() {
       throw new Error('socket unavailable');
@@ -52,11 +52,11 @@ it('automatically fetches a replacement matching session when preview is static'
   try {
     await act(async () =>
       root.render(
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={{ sdk, error: undefined, isLive: true, isContentReady: true }}
         >
           <Probe options={{ experienceId: 'home', config, initialPlan: plan('retained') }} />
-        </ExperiencesContext.Provider>
+        </RuntimeContext.Provider>
       )
     );
     expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();

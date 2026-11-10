@@ -8,15 +8,15 @@ import {
   type RouterState,
 } from '@tanstack/react-router';
 import {
-  createReactExperiences,
-  type CreateReactExperiencesOptions,
-} from '../experience/create-react-experiences.js';
+  createExperiences,
+  type CreateExperiencesOptions,
+} from '../experience/create-experiences.js';
 import {
   buildRouterPagePayload,
   useRouterPageInputs,
   type AutoPagePayloadOptions,
-  type RouterExperiencesRootProps,
-  type RouterExperiencesProviderProps,
+  type RouterRootProps,
+  type RouterProviderProps,
 } from './page-payload.js';
 
 export type {
@@ -39,10 +39,9 @@ export interface TanStackRouterAutoPageContext {
   readonly url: TanStackLocation['href'];
 }
 
-export type TanStackRouterExperiencesRootProps =
-  RouterExperiencesRootProps<TanStackRouterAutoPageContext>;
+export type TanStackRouterExperiencesRootProps = RouterRootProps<TanStackRouterAutoPageContext>;
 export type TanStackRouterExperiencesProviderProps =
-  RouterExperiencesProviderProps<TanStackRouterAutoPageContext>;
+  RouterProviderProps<TanStackRouterAutoPageContext>;
 
 function usePageOptions(options: AutoPagePayloadOptions<TanStackRouterAutoPageContext>) {
   const router = useRouter();
@@ -77,8 +76,8 @@ function usePageOptions(options: AutoPagePayloadOptions<TanStackRouterAutoPageCo
 }
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
-export function bindTanStackRouterExperiences(options: CreateReactExperiencesOptions) {
-  const bound = createReactExperiences(options);
+export function bindTanStackRouterExperiences(options: CreateExperiencesOptions) {
+  const bound = createExperiences(options);
   function ExperiencesRoot({
     pagePayload,
     getPagePayload,

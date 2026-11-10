@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act } from 'react';
-import { createReactTestRoot, type ReactTestRoot } from '../react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../dom-root.js';
 import { componentNode } from '../fixtures/payload.js';
 import { minimalSourceMap } from '../fixtures/source-map.js';
 import { planNode } from '../fixtures/plan-node.js';
@@ -25,7 +25,7 @@ function Box() {
 const config: Config = { components: { box: Box } };
 const nodes = [componentNode('box', { id: 'n' })];
 const sourceMap = minimalSourceMap({ leaf: { kind: 'Component', id: 'box' } });
-let root: ReactTestRoot | undefined;
+let root: DomTestRoot | undefined;
 
 afterEach(() => {
   act(() => root?.cleanup());
@@ -40,7 +40,7 @@ describe('hydrating a server-rendered tree that carries attribution', () => {
       : { nodes: [planNode('component', 'box')], metadata: {}, debug: false, diagnostics: [] };
     const element = <ServerExperienceRenderer experience={plan} config={config} />;
     const serverHtml = renderToString(element);
-    root = createReactTestRoot();
+    root = createDomTestRoot();
     const { container } = root;
     container.innerHTML = serverHtml;
     const recoverable = vi.fn();

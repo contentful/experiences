@@ -3,31 +3,31 @@ import {
   type AllowedEventType,
   type BlockedEvent,
   type ConsentInput,
-  type ContentfulExperiencesConfig,
+  type Config as BaseConfig,
   type EventBuilder,
   type EventBuilderConfig,
   type EventEmissionResult,
   type EventProfile,
-  type ExperienceRequestOptions,
+  type PersonalizationRequestOptions,
   type FetchExperienceForHandoffResult,
   type IdentifyBuilderArgs,
-  type InsightsRequestOptions,
+  type AnalyticsRequestOptions,
   type PageViewBuilderArgs,
-  type RuntimeEventMethods,
-  type RuntimeFetchByDestinationNodeOptions,
-  type RuntimeFetchByDestinationPathOptions,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
-  type RuntimeLivePreviewOptions,
-  type RuntimeResolveDefaults,
-  type RuntimeResolveOptions,
+  type DirectEventMethods,
+  type FetchByDestinationNodeOptions,
+  type FetchByDestinationPathOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
+  type LivePreviewOptions,
+  type ResolveDefaults,
+  type ResolveOptions,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
 /** Stable SDK configuration; request-sensitive values belong to forRequest(). */
-export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder'> & {
+export type Config = Omit<BaseConfig, 'eventBuilder'> & {
   app?: EventBuilderConfig['app'];
   /** Event types emitted while event consent is not granted. Defaults to identify and page. */
   allowedEventTypes?: readonly AllowedEventType[];
@@ -35,16 +35,16 @@ export type ExperiencesNodeConfig = Omit<ContentfulExperiencesConfig, 'eventBuil
   onEventBlocked?: (event: BlockedEvent) => void;
 };
 
-export type ConsentPolicy = Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'>;
+export type ConsentPolicy = Pick<Config, 'allowedEventTypes' | 'onEventBlocked'>;
 
 /** Context scoped to one incoming Node request. */
-export type ExperiencesNodeRequestContext = {
+export type RequestContext = {
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
   /** Binds one Experience to a Preview Session with lazy implementation loading. */
-  livePreview?: RuntimeLivePreviewOptions;
+  livePreview?: LivePreviewOptions;
   locale?: string;
-  resolveOptions?: RuntimeResolveDefaults & Pick<RuntimeResolveOptions, 'sourceMap'>;
+  resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
   /** An ID for request continuity or a complete profile snapshot for Analytics. */
   profile?: Pick<EventProfile, 'id'> | EventProfile;
   eventContext?: UniversalEventBuilderArgs;
@@ -57,68 +57,67 @@ export type ExperiencesNodeRequestContext = {
   /** @deprecated Use `consent.events`. Ignored when `consent.events` is set. */
   eventConsent?: boolean;
   /**
-   * Experience API options shared by Personalization calls made through this request, such
+   * Personalization API options shared by Personalization calls made through this request, such
    * as the visitor's `ip` (the API otherwise analyses the server's IP). A request `locale`
-   * takes precedence over `experienceOptions.locale`.
+   * takes precedence over `personalizationOptions.locale`.
    */
-  experienceOptions?: ExperiencesNodeExperienceOptions;
-  /** Insights API options shared by Analytics calls made through this request. */
-  insightsOptions?: ExperiencesNodeInsightsOptions;
+  personalizationOptions?: PersonalizationRequestOptions;
+  /** Analytics API options shared by Analytics calls made through this request. */
+  analyticsOptions?: AnalyticsRequestOptions;
 };
 
-/** Request-bound Experience API options for stateless requests. */
-export type ExperiencesNodeExperienceOptions = ExperienceRequestOptions;
+export type {
+  PersonalizationRequestOptions,
+  AnalyticsRequestOptions,
+} from '@contentful/experiences-runtime';
 
-/** Request-bound Insights API options for stateless requests. */
-export type ExperiencesNodeInsightsOptions = InsightsRequestOptions;
-
-export type NodePersonalizationMethods = {
+export type PersonalizationMethods = {
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
 };
 
-export type NodeAnalyticsMethods = Pick<
-  RuntimeEventMethods,
+export type AnalyticsMethods = Pick<
+  DirectEventMethods,
   'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
 /** Personalization event construction with request-local context defaults. */
-export type ExperiencesNodeEventBuilder = Pick<
+export type RequestEventBuilder = Pick<
   EventBuilder,
   'buildIdentify' | 'buildPageView' | 'buildTrack'
 >;
 
 /** A request-bound facade; many facades may share the one Node SDK instance. */
-export interface ExperiencesNodeRequest extends NodePersonalizationMethods, NodeAnalyticsMethods {
+export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods {
   /** Invalidates unfinished request work without destroying the shared SDK. */
   destroy(): void;
   readonly isPreview: boolean;
   readonly locale: string | undefined;
-  readonly profile: ExperiencesNodeRequestContext['profile'];
+  readonly profile: RequestContext['profile'];
   /** Builds events without submitting them; explicit inputs override request context. */
-  readonly eventBuilder: ExperiencesNodeEventBuilder;
+  readonly eventBuilder: RequestEventBuilder;
   /** Whether the host application may persist this request's profile id. */
   readonly canPersistProfile: boolean;
   resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions: RuntimeResolveOptions
+    resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperienceForHandoff(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions,
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions,
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult>;
   fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationNodeOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationPathOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
 }

@@ -1,9 +1,9 @@
-import type { RuntimeFetchExperienceOptions } from '@contentful/experiences-web';
+import type { FetchExperienceOptions } from '@contentful/experiences-web';
 
 // GSSP sees the action; the router's committed route remains the visible page.
 export function pagesContentActionUrls(
   routeKey: string,
-  personalization?: RuntimeFetchExperienceOptions['personalization']
+  personalization?: FetchExperienceOptions['personalization']
 ) {
   const url = new URL(routeKey, 'https://nextjs.invalid');
   const visibleHref = url.pathname + url.search;

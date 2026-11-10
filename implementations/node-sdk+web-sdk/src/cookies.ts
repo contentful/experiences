@@ -1,7 +1,7 @@
 import {
   ANONYMOUS_ID_COOKIE,
   type ConsentState,
-  type ExperiencesNodeRequest,
+  type RequestRuntime,
 } from '@contentful/experiences-node';
 import type { Response } from 'express';
 
@@ -26,11 +26,7 @@ export function readVisitor(cookies: unknown) {
   return { consent, profile: id ? { id } : undefined };
 }
 
-export function writeIdentity(
-  response: Response,
-  request: ExperiencesNodeRequest,
-  secure: boolean
-) {
+export function writeIdentity(response: Response, request: RequestRuntime, secure: boolean) {
   const options = { path: '/', sameSite: 'lax' as const, secure, httpOnly: false };
   if (request.canPersistProfile && request.profile?.id) {
     response.cookie(ANONYMOUS_ID_COOKIE, request.profile.id, {

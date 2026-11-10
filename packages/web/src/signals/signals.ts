@@ -2,7 +2,7 @@ import type {
   BlockedEvent,
   ChangeArray,
   EventProfile,
-  ExperienceRequestState,
+  PersonalizationRequestState,
   OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
 import type { PreviewState } from '../state/states.js';
@@ -63,12 +63,12 @@ export const changes = signal<ChangeArray | undefined>();
 export const profile: Signal<EventProfile | undefined> = signal<EventProfile | undefined>();
 
 /**
- * Outcome signal for the most recent Experience API request.
+ * Outcome signal for the most recent Personalization API request.
  *
  * @public
  */
-export const experienceRequestState: Signal<ExperienceRequestState> =
-  signal<ExperienceRequestState>({
+export const personalizationRequestState: Signal<PersonalizationRequestState> =
+  signal<PersonalizationRequestState>({
     status: 'idle',
   });
 
@@ -94,8 +94,8 @@ export interface Signals {
   persistenceConsent: typeof persistenceConsent;
   /** Active profile signal. */
   profile: typeof profile;
-  /** Outcome of the most recent Experience API request. */
-  experienceRequestState: typeof experienceRequestState;
+  /** Outcome of the most recent Personalization API request. */
+  personalizationRequestState: typeof personalizationRequestState;
 }
 
 /**
@@ -128,7 +128,7 @@ export const signals: Signals = {
   online,
   persistenceConsent,
   profile,
-  experienceRequestState,
+  personalizationRequestState,
 };
 
 /**

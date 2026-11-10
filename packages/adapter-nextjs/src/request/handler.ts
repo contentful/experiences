@@ -3,61 +3,58 @@ import type {
   ContentfulExperiences,
   ConsentInput,
   MaybePromise,
-  RuntimeLivePreviewOptions,
+  LivePreviewOptions,
 } from '@contentful/experiences-node';
-import { applyNextjsPrivateResponseCache } from '../cache/policy.js';
-import { persistNextjsAnonymousId, type PersistNextjsAnonymousIdOptions } from './cookies.js';
+import { applyPrivateResponseCache } from '../cache/policy.js';
+import { persistAnonymousId, type PersistAnonymousIdOptions } from './cookies.js';
 import {
   cookieReaderFromHeader,
   normalizedRequestUrl,
-  isNextjsSpeculativeRequest,
+  isSpeculativeRequest,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
-  type NextjsCookieReader,
-  type NextjsRequestLike,
-} from './request-context.js';
-import {
-  bindNextjsExperiencesRequest,
-  type BindNextjsExperiencesRequestOptions,
-} from './server-request.js';
+  type CookieReader,
+  type RequestLike,
+} from './context.js';
+import { bindExperiencesRequest, type BindExperiencesRequestOptions } from './server-request.js';
 
 import {
   isMiddlewareContinuation,
   createForwardedRequestHeaders,
   applyForwardedRequestHeaders,
-} from './forwarded-request-headers.js';
+} from './forwarded-headers.js';
 
-export interface NextjsExperiencesResolverContext {
+export interface ExperiencesResolverContext {
   readonly request: NextRequest;
   readonly headers: globalThis.Headers;
-  readonly cookies: NextjsCookieReader;
+  readonly cookies: CookieReader;
 }
 
-export type NextjsLivePreviewResolver = (context: {
-  readonly request: NextjsRequestLike;
-}) => MaybePromise<RuntimeLivePreviewOptions | undefined>;
+export type LivePreviewResolver = (context: {
+  readonly request: RequestLike;
+}) => MaybePromise<LivePreviewOptions | undefined>;
 
-export interface NextjsExperiencesContextHandlerOptions
+export interface ExperiencesContextHandlerOptions
   extends
     Omit<
-      BindNextjsExperiencesRequestOptions,
+      BindExperiencesRequestOptions,
       'request' | 'headers' | 'cookies' | 'consent' | 'livePreview'
     >,
-    PersistNextjsAnonymousIdOptions {
+    PersistAnonymousIdOptions {
   readonly sdk: ContentfulExperiences;
   readonly consent:
-    ConsentInput | ((context: NextjsExperiencesResolverContext) => MaybePromise<ConsentInput>);
-  readonly livePreview?: NextjsLivePreviewResolver;
+    ConsentInput | ((context: ExperiencesResolverContext) => MaybePromise<ConsentInput>);
+  readonly livePreview?: LivePreviewResolver;
 }
 
-export type NextjsExperiencesRequestHandler = (
+export type ExperiencesRequestHandler = (
   request: NextRequest,
   responseOrEvent?: NextResponse | NextFetchEvent
 ) => Promise<NextResponse>;
 
 /** Context-only Node middleware. Existing terminal responses never initialize visitor work. */
-export function createNextjsExperiencesContextHandler(
-  options?: NextjsExperiencesContextHandlerOptions
-): NextjsExperiencesRequestHandler {
+export function createExperiencesContextHandler(
+  options?: ExperiencesContextHandlerOptions
+): ExperiencesRequestHandler {
   return async (request, responseOrEvent) => {
     const existing =
       responseOrEvent instanceof globalThis.Response
@@ -69,10 +66,10 @@ export function createNextjsExperiencesContextHandler(
       NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
       normalizedRequestUrl(request.url).toString()
     );
-    let experiencesRequest: ReturnType<typeof bindNextjsExperiencesRequest> | undefined;
+    let experiencesRequest: ReturnType<typeof bindExperiencesRequest> | undefined;
     if (
       options &&
-      !isNextjsSpeculativeRequest(headers) &&
+      !isSpeculativeRequest(headers) &&
       headers.get('rsc') !== '1' &&
       headers.get('x-nextjs-data') !== '1'
     ) {
@@ -84,7 +81,7 @@ export function createNextjsExperiencesContextHandler(
         deleteWhenProfileCannotPersist: _delete,
         ...requestOptions
       } = options;
-      experiencesRequest = bindNextjsExperiencesRequest(sdk, {
+      experiencesRequest = bindExperiencesRequest(sdk, {
         ...requestOptions,
         request,
         headers,
@@ -98,8 +95,8 @@ export function createNextjsExperiencesContextHandler(
       const response = existing ?? NextResponse.next();
       applyForwardedRequestHeaders(response, headers);
       if (experiencesRequest && options) {
-        applyNextjsPrivateResponseCache(response);
-        persistNextjsAnonymousId(response, experiencesRequest, {
+        applyPrivateResponseCache(response);
+        persistAnonymousId(response, experiencesRequest, {
           anonymousIdCookieName: options.anonymousIdCookieName,
           cookieOptions: { ...options.cookieOptions, httpOnly: false },
           deleteWhenProfileCannotPersist: options.deleteWhenProfileCannotPersist,

@@ -1,13 +1,13 @@
 import {
-  bindNextjsExperiencesRequest,
-  createNextjsPageContext,
-  serializeNextjsPlan,
-  type ExperiencesNodeRequest,
-  type NextjsCookieReader,
+  bindExperiencesRequest,
+  createPageContext,
+  serializePlan,
+  type RequestRuntime,
+  type CookieReader,
   type PortableRenderPlan,
 } from '@contentful/experiences-nextjs/server';
-import type { RuntimeFetchExperienceOptions } from '@contentful/experiences-node';
-import type { NextjsRequestResult } from '@contentful/experiences-nextjs/app-router/client';
+import type { FetchExperienceOptions } from '@contentful/experiences-node';
+import type { RequestResult } from '@contentful/experiences-nextjs/app-router/client';
 
 import { getServer } from './config';
 import {
@@ -28,7 +28,7 @@ export interface ServerContent {
 
 export function contentSeeds(
   contents: readonly ServerContent[],
-  result: NextjsRequestResult
+  result: RequestResult
 ): ContentSeed[] {
   return contents.map(({ experienceId, plan, error }) => {
     if (experienceId === result.experience.experienceId) return result;
@@ -36,12 +36,12 @@ export function contentSeeds(
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: { experienceId, personalization: { events: [] } },
-      ...(plan ? { plan: serializeNextjsPlan(plan) } : {}),
+      ...(plan ? { plan: serializePlan(plan) } : {}),
       ...(error ? { contentError: 'Experience content unavailable.' } : {}),
     };
   });
 }
-export function readConsent(cookies: NextjsCookieReader) {
+export function readConsent(cookies: CookieReader) {
   const value = (name: string) => {
     const cookie = cookies.get(name);
     return typeof cookie === 'string' ? cookie : cookie?.value;
@@ -60,12 +60,12 @@ export function serverPreview(url: URL) {
 export function createContentRequest(
   url: URL,
   headers: Headers,
-  cookies: NextjsCookieReader,
-  profile?: ExperiencesNodeRequest['profile']
+  cookies: CookieReader,
+  profile?: RequestRuntime['profile']
 ) {
   const { sdk, config } = getServer();
   const livePreview = serverPreview(url);
-  return bindNextjsExperiencesRequest(sdk, {
+  return bindExperiencesRequest(sdk, {
     request: { url: url.toString(), headers },
     cookies,
     profile,
@@ -73,7 +73,7 @@ export function createContentRequest(
     locale: config.locale,
     livePreview,
     isPreview: Boolean(livePreview),
-    page: createNextjsPageContext({
+    page: createPageContext({
       path: url.pathname,
       origin: config.origin,
       searchParams: url.searchParams,
@@ -83,9 +83,9 @@ export function createContentRequest(
 }
 
 export async function loadReferenceContent(
-  request: ExperiencesNodeRequest,
+  request: RequestRuntime,
   url: URL,
-  personalization?: RuntimeFetchExperienceOptions['personalization']
+  personalization?: FetchExperienceOptions['personalization']
 ) {
   const experienceId = routeIds(url.pathname, getServer().config.experienceIds)[0];
   const plan = await request.fetchExperience(
@@ -101,11 +101,7 @@ export async function loadReferenceContent(
 
 // Comparisons have no visitor intent. Keep primary preflight identity on its own
 // request: a newly returned ID may not exist for a later profile-only lookup.
-export async function loadComparisons(
-  request: ExperiencesNodeRequest,
-  primary: ServerContent,
-  url: URL
-) {
+export async function loadComparisons(request: RequestRuntime, primary: ServerContent, url: URL) {
   const { sdk, browser } = getServer();
   const comparisons = sdk.forRequest({
     locale: request.locale,

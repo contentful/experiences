@@ -3,15 +3,15 @@
 import { useMemo } from 'react';
 import { useLocation, useMatches, type Location, type UIMatch } from 'react-router-dom';
 import {
-  createReactExperiences,
-  type CreateReactExperiencesOptions,
-} from '../experience/create-react-experiences.js';
+  createExperiences,
+  type CreateExperiencesOptions,
+} from '../experience/create-experiences.js';
 import {
   buildRouterPagePayload,
   useRouterPageInputs,
   type AutoPagePayloadOptions,
-  type RouterExperiencesRootProps,
-  type RouterExperiencesProviderProps,
+  type RouterRootProps,
+  type RouterProviderProps,
 } from './page-payload.js';
 
 export type {
@@ -30,10 +30,8 @@ export interface ReactRouterAutoPageContext {
   readonly url: string;
 }
 
-export type ReactRouterExperiencesRootProps =
-  RouterExperiencesRootProps<ReactRouterAutoPageContext>;
-export type ReactRouterExperiencesProviderProps =
-  RouterExperiencesProviderProps<ReactRouterAutoPageContext>;
+export type ReactRouterExperiencesRootProps = RouterRootProps<ReactRouterAutoPageContext>;
+export type ReactRouterExperiencesProviderProps = RouterProviderProps<ReactRouterAutoPageContext>;
 
 function usePageOptions(options: AutoPagePayloadOptions<ReactRouterAutoPageContext>) {
   const location = useLocation();
@@ -54,8 +52,8 @@ function usePageOptions(options: AutoPagePayloadOptions<ReactRouterAutoPageConte
 }
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
-export function bindReactRouterExperiences(options: CreateReactExperiencesOptions) {
-  const bound = createReactExperiences(options);
+export function bindReactRouterExperiences(options: CreateExperiencesOptions) {
+  const bound = createExperiences(options);
   function ExperiencesRoot({
     pagePayload,
     getPagePayload,

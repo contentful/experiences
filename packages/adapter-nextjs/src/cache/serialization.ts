@@ -118,7 +118,7 @@ function jsonData(
 }
 
 /** Project browser data deliberately; server errors and metadata remain server-local by default. */
-export function serializeNextjsPlan(
+export function serializePlan(
   plan: PortableRenderPlan,
   options: { readonly metadataKeys?: readonly string[] } = {}
 ): PortableRenderPlan {
@@ -142,7 +142,7 @@ export function serializeNextjsPlan(
 }
 
 /** Preserve canonical evaluated events, continuation identity and complete profile state. */
-export function serializeNextjsHandoff(
+export function serializeHandoff(
   handoff: ExperiencesHandoff,
   scope: Pick<ExperiencesHandoff, 'spaceId' | 'environmentId'>
 ): ExperiencesHandoff {
@@ -150,7 +150,7 @@ export function serializeNextjsHandoff(
 }
 
 /** Safe for a JSON script body. This does not permit unsafe markup interpolation. */
-export function serializeNextjsJsonForHtml(value: unknown): string {
+export function serializeJsonForHtml(value: unknown): string {
   return JSON.stringify(jsonData(value))
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')

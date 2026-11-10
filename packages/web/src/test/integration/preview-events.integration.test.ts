@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import type { RuntimeEventMethods } from '@contentful/experiences-runtime';
+import type { DirectEventMethods } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getPageProperties } from '../../browser/browser-event-context.js';
+import { getPageProperties } from '../../browser/event-context.js';
 import { ContentfulExperiences as WebExperiences } from '../../contentful-experiences.js';
-import { installIOPolyfill, setDocumentVisibility } from '../../test/dom.js';
-import { clearIdentityCookies, seedConsent } from '../../test/fixtures/consent.js';
-import { completeProfile as profileFixture } from '../../test/fixtures/profile.js';
+import { installIOPolyfill, setDocumentVisibility } from '../dom.js';
+import { clearIdentityCookies, seedConsent } from '../fixtures/consent.js';
+import { completeProfile as profileFixture } from '../fixtures/profile.js';
 import { getTrackingAttributes } from '../../tracking-attributes.js';
 
 const active = new Set<WebExperiences>();
@@ -73,7 +73,7 @@ function web(options: Partial<ConstructorParameters<typeof WebExperiences>[0]> =
   return sdk;
 }
 
-function allEvents(runtime: Omit<RuntimeEventMethods, 'profile'>) {
+function allEvents(runtime: Omit<DirectEventMethods, 'profile'>) {
   return Promise.all([
     runtime.identify({ userId: 'editor' }),
     runtime.page(),

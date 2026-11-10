@@ -4,17 +4,17 @@ import {
   useConsentState,
   usePersistenceConsentState,
   useExperiencesActions,
-  useExperiencesContext,
+  useRuntimeContext,
   usePreviewState,
   useProfileState,
   type ManagedExperienceResult,
 } from '@contentful/experiences-nextjs/client';
-import type { RuntimeFetchExperienceOptions } from '@contentful/experiences-web';
+import type { FetchExperienceOptions } from '@contentful/experiences-web';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { useReference } from './BrowserRoot';
 
-export type Personalization = RuntimeFetchExperienceOptions['personalization'];
+export type Personalization = FetchExperienceOptions['personalization'];
 export function Utilities({
   result,
   identifyIntent,
@@ -33,7 +33,7 @@ export function Utilities({
   const events = useConsentState();
   const persistence = usePersistenceConsentState();
   const { setConsent, resetUser } = useExperiencesActions();
-  const { error, isLive, sdk } = useExperiencesContext();
+  const { error, isLive, sdk } = useRuntimeContext();
   const preview = usePreviewState();
   const isPreview = isLive && sdk.isPreview;
   const { routeKey, navigate, serverOnly } = useReference();

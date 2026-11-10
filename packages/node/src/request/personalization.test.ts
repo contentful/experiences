@@ -2,7 +2,7 @@ import { createRuntime, spyOnEventApi } from '../test/runtime.js';
 import { deferred } from '../test/deferred.js';
 import { profileFixture } from '../test/fixtures/profile.js';
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentfulExperiences, ExperiencesNodeConfig } from '../contentful-experiences.js';
+import type { ContentfulExperiences, Config } from '../contentful-experiences.js';
 import type { OptimizationEventStreamEvent } from '../index.js';
 
 describe('Node request personalization', () => {
@@ -149,7 +149,7 @@ describe('Node request personalization', () => {
   );
 
   const resolver = { config: { components: {} } };
-  function setup(policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
+  function setup(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
     const sdk = createRuntime(policy);
     return { sdk, ...spyOnEventApi(sdk, 'response') };
   }

@@ -1,9 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { ContentfulExperiences, ExperiencesNodeRequest } from '@contentful/experiences-node';
-import { bindNextjsExperiencesRequest } from './server-request.js';
+import type { ContentfulExperiences, RequestRuntime } from '@contentful/experiences-node';
+import { bindExperiencesRequest } from './server-request.js';
 
 function nodeBoundary() {
-  const facade = {} as ExperiencesNodeRequest;
+  const facade = {} as RequestRuntime;
   const forRequest = vi.fn<ContentfulExperiences['forRequest']>(() => facade);
   const sdk = { forRequest } as unknown as ContentfulExperiences;
   return { sdk, forRequest, facade };
@@ -12,23 +12,23 @@ function nodeBoundary() {
 describe('one explicit Node facade', () => {
   it('binds once and returns the actual facade without decorating methods', () => {
     const { sdk, forRequest, facade } = nodeBoundary();
-    const request = bindNextjsExperiencesRequest(sdk, {
+    const request = bindExperiencesRequest(sdk, {
       consent: { events: false, persistence: true },
       locale: 'de',
       request: {
         url: 'https://example.com/page',
         headers: new globalThis.Headers({ cookie: 'ctfl-opt-aid=existing' }),
       },
-      experienceOptions: { ip: 'host-trusted' },
+      personalizationOptions: { ip: 'host-trusted' },
     });
     expect(forRequest).toHaveBeenCalledTimes(1);
-    expectTypeOf(request).toEqualTypeOf<ExperiencesNodeRequest>();
+    expectTypeOf(request).toEqualTypeOf<RequestRuntime>();
     expect(request).toBe(facade);
     expect(forRequest.mock.calls[0]![0]).toMatchObject({
       profile: { id: 'existing' },
       locale: 'de',
       consent: { events: false, persistence: true },
-      experienceOptions: { ip: 'host-trusted' },
+      personalizationOptions: { ip: 'host-trusted' },
       eventContext: { page: { path: '/page' } },
     });
   });
@@ -44,14 +44,14 @@ describe('one explicit Node facade', () => {
       { cookies: { get: () => undefined } },
       { headers: new globalThis.Headers() },
     ]) {
-      bindNextjsExperiencesRequest(sdk, {
+      bindExperiencesRequest(sdk, {
         consent: { persistence: true },
         request: incoming,
         ...extra,
       });
       expect(forRequest.mock.calls.at(-1)![0]?.profile).toBeUndefined();
     }
-    bindNextjsExperiencesRequest(sdk, {
+    bindExperiencesRequest(sdk, {
       consent: false,
       request: incoming,
       profile: { id: 'explicit' },
@@ -61,7 +61,7 @@ describe('one explicit Node facade', () => {
 
   it('requires consent before binding and forwards preview policy unchanged', () => {
     const { sdk, forRequest } = nodeBoundary();
-    expect(() => bindNextjsExperiencesRequest(sdk, { consent: undefined! })).toThrow('consent');
+    expect(() => bindExperiencesRequest(sdk, { consent: undefined! })).toThrow('consent');
     expect(forRequest).not.toHaveBeenCalled();
     const livePreview = {
       experienceId: 'home',
@@ -70,7 +70,7 @@ describe('one explicit Node facade', () => {
         throw new Error('initializer must stay lazy');
       },
     };
-    bindNextjsExperiencesRequest(sdk, { consent: true, livePreview });
+    bindExperiencesRequest(sdk, { consent: true, livePreview });
     expect(forRequest).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ livePreview, profile: undefined })
     );
@@ -98,7 +98,7 @@ it('does not read cookie identity without persistence consent or during preview'
     },
   ]) {
     for (const profile of [undefined, { id: 'app-approved' }]) {
-      bindNextjsExperiencesRequest(sdk, { ...context, cookies: { get }, profile });
+      bindExperiencesRequest(sdk, { ...context, cookies: { get }, profile });
       expect(forRequest.mock.calls.at(-1)![0]?.profile).toEqual(
         'isPreview' in context || 'livePreview' in context ? undefined : profile
       );

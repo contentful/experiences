@@ -1,27 +1,27 @@
 import { type DestinationRedirectResult } from '@contentful/experiences-client';
 import {
-  assertRuntimePreviewRequest,
+  assertPreviewRequest,
   EventProfileSchema,
-  fetchRuntimePreviewSession,
-  initializeRuntimeLivePreview,
-  mergeRuntimePreviewResolveOptions,
+  fetchPreviewSession,
+  initializeLivePreview,
+  mergePreviewResolveOptions,
   toConsentState,
   withEventConsent,
-  type BuiltRuntimeFetchExperienceOptions,
+  type BuiltFetchExperienceOptions,
   type ConsentState,
   type EventProfile,
   type ExperiencesHandoff,
   type FetchExperienceForHandoffResult,
-  type RuntimeDirectEventBindings,
-  type RuntimeEventMethods,
-  type RuntimeFetchByDestinationNodeOptions,
-  type RuntimeFetchByDestinationPathOptions,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
-  type RuntimeLivePreviewBinding,
-  type RuntimeLivePreviewOptions,
-  type RuntimePersonalizationOptions,
-  type RuntimeResolveOptions,
+  type DirectEventBindings,
+  type DirectEventMethods,
+  type FetchByDestinationNodeOptions,
+  type FetchByDestinationPathOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
+  type LivePreviewBinding,
+  type LivePreviewOptions,
+  type PersonalizationOptions,
+  type ResolveOptions,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
@@ -29,49 +29,49 @@ import { fetchHandoff } from './handoff.js';
 
 import type {
   ConsentPolicy,
-  ExperiencesNodeEventBuilder,
-  ExperiencesNodeExperienceOptions,
-  ExperiencesNodeInsightsOptions,
-  ExperiencesNodeRequest,
-  ExperiencesNodeRequestContext,
-  NodeAnalyticsMethods,
-  NodePersonalizationMethods,
+  RequestEventBuilder,
+  PersonalizationRequestOptions,
+  AnalyticsRequestOptions,
+  RequestRuntime,
+  RequestContext,
+  AnalyticsMethods,
+  PersonalizationMethods,
 } from '../request/types.js';
 import type { ContentfulExperiences } from '../sdk/contentful-experiences.js';
-import { RequestPersonalization, type BuiltFetchOptions } from './personalization.js';
-export class RequestBoundExperiences implements ExperiencesNodeRequest {
-  readonly #personalization: RequestPersonalization;
+import { PersonalizationPreparation, type BuiltFetchOptions } from './personalization.js';
+export class RequestBoundExperiences implements RequestRuntime {
+  readonly #personalization: PersonalizationPreparation;
   readonly #isPreview: boolean;
   readonly locale: string | undefined;
-  readonly eventBuilder: ExperiencesNodeEventBuilder;
-  #profile: ExperiencesNodeRequestContext['profile'];
+  readonly eventBuilder: RequestEventBuilder;
+  #profile: RequestContext['profile'];
   #profileRevision = 0;
   #destroyed = false;
-  readonly #previewOptions: RuntimeLivePreviewOptions | undefined;
-  #previewInitialization: Promise<RuntimeLivePreviewBinding> | undefined;
+  readonly #previewOptions: LivePreviewOptions | undefined;
+  #previewInitialization: Promise<LivePreviewBinding> | undefined;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
   /** Copied at construction so a caller mutating the originals cannot leak into this request. */
-  readonly #experienceOptions: ExperiencesNodeExperienceOptions | undefined;
-  readonly #insightsOptions: ExperiencesNodeInsightsOptions | undefined;
+  readonly #personalizationOptions: PersonalizationRequestOptions | undefined;
+  readonly #analyticsOptions: AnalyticsRequestOptions | undefined;
   readonly #personalizationLocale: string | undefined;
 
-  readonly identify: NodePersonalizationMethods['identify'];
-  readonly page: NodePersonalizationMethods['page'];
-  readonly track: NodePersonalizationMethods['track'];
-  readonly trackView: NodeAnalyticsMethods['trackView'];
-  readonly trackClick: NodeAnalyticsMethods['trackClick'];
-  readonly trackHover: NodeAnalyticsMethods['trackHover'];
-  readonly trackFlagView: NodeAnalyticsMethods['trackFlagView'];
+  readonly identify: PersonalizationMethods['identify'];
+  readonly page: PersonalizationMethods['page'];
+  readonly track: PersonalizationMethods['track'];
+  readonly trackView: AnalyticsMethods['trackView'];
+  readonly trackClick: AnalyticsMethods['trackClick'];
+  readonly trackHover: AnalyticsMethods['trackHover'];
+  readonly trackFlagView: AnalyticsMethods['trackFlagView'];
 
   constructor(
     private readonly runtime: ContentfulExperiences,
-    private readonly context: ExperiencesNodeRequestContext,
-    createEventMethods: (bindings: RuntimeDirectEventBindings) => RuntimeEventMethods,
+    private readonly context: RequestContext,
+    createEventMethods: (bindings: DirectEventBindings) => DirectEventMethods,
     consentPolicy: ConsentPolicy,
     private readonly fetchPayload: (
-      options: BuiltRuntimeFetchExperienceOptions,
-      resolveOptions: RuntimeFetchResolveOptions
+      options: BuiltFetchExperienceOptions,
+      resolveOptions: FetchResolveOptions
     ) => Promise<ExperiencePayload>
   ) {
     if (context.livePreview !== undefined && context.isPreview === false) {
@@ -79,22 +79,22 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
     }
     this.#previewOptions = context.livePreview && { ...context.livePreview };
     this.#isPreview = context.livePreview !== undefined || context.isPreview === true;
-    const { experienceOptions, insightsOptions } = context;
-    this.#experienceOptions =
-      experienceOptions === undefined
+    const { personalizationOptions, analyticsOptions } = context;
+    this.#personalizationOptions =
+      personalizationOptions === undefined
         ? undefined
         : {
-            ip: experienceOptions.ip,
-            plainText: experienceOptions.plainText,
-            locale: experienceOptions.locale,
+            ip: personalizationOptions.ip,
+            plainText: personalizationOptions.plainText,
+            locale: personalizationOptions.locale,
           };
-    this.#insightsOptions = insightsOptions === undefined ? undefined : { ...insightsOptions };
+    this.#analyticsOptions = analyticsOptions === undefined ? undefined : { ...analyticsOptions };
     // Content locale comes from the request and the runtime default only, as in Optimization's
-    // stateless request. `experienceOptions.locale` is a Personalization transport option.
+    // stateless request. `personalizationOptions.locale` is a Personalization transport option.
     this.locale = context.locale ?? runtime.locale;
     // Personalization transport locale: the request locale wins over the transport option.
     this.#personalizationLocale =
-      context.locale ?? this.#experienceOptions?.locale ?? runtime.locale;
+      context.locale ?? this.#personalizationOptions?.locale ?? runtime.locale;
     this.#profile = context.profile;
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
@@ -118,7 +118,7 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
         ),
     };
 
-    this.#personalization = new RequestPersonalization({
+    this.#personalization = new PersonalizationPreparation({
       getProfile: () => this.profile,
       locale: this.locale,
       isPreview: this.isPreview,
@@ -129,7 +129,7 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
       assertActive: () => this.assertActive(),
     });
 
-    const eventBindings: RuntimeDirectEventBindings = {
+    const eventBindings: DirectEventBindings = {
       getProfile: () => this.#profile,
       getIsPreview: () => this.isPreview,
       setProfile: (profile) => this.setProfile(profile),
@@ -137,8 +137,8 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
       isActive: () => this.isActive(),
       getLocale: () => this.#personalizationLocale,
       getEventContext: () => this.getRequestEventContext(),
-      getExperienceOptions: () => this.#experienceOptions,
-      getInsightsOptions: () => this.#insightsOptions,
+      getPersonalizationOptions: () => this.#personalizationOptions,
+      getAnalyticsOptions: () => this.#analyticsOptions,
       getConsent: () => this.#consent,
       allowedEventTypes: consentPolicy.allowedEventTypes,
       onEventBlocked: consentPolicy.onEventBlocked,
@@ -180,13 +180,13 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
     return this.#isPreview;
   }
 
-  get profile(): ExperiencesNodeRequestContext['profile'] {
+  get profile(): RequestContext['profile'] {
     return this.#profile;
   }
 
   async resolveExperience(
     payload: ExperiencePayload,
-    resolveOptions: RuntimeResolveOptions
+    resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan> {
     this.assertActive();
     const plan = await this.runtime.resolveExperience(
@@ -198,8 +198,8 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   async fetchExperience(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
     this.assertActive();
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
@@ -213,8 +213,8 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   async fetchExperienceForHandoff(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions,
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions,
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult> {
     this.assertActive();
@@ -252,28 +252,28 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   private async fetchPreview(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | undefined> {
     if (this.#previewOptions?.experienceId !== options.experienceId) return undefined;
     // The matching request shares the approved lazy initialization.
-    const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
+    const binding = await (this.#previewInitialization ??= initializeLivePreview(
       this.#previewOptions
     ));
     this.assertActive();
-    assertRuntimePreviewRequest(options);
+    assertPreviewRequest(options);
     this.#personalization.gate(options);
     this.assertActive();
-    const resolve = mergeRuntimePreviewResolveOptions(this.runtime.config, resolveOptions);
-    const plan = await fetchRuntimePreviewSession(binding, this.runtime.config, resolve);
+    const resolve = mergePreviewResolveOptions(this.runtime.config, resolveOptions);
+    const plan = await fetchPreviewSession(binding, this.runtime.config, resolve);
     // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
     this.assertActive();
     return plan;
   }
 
   fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationNodeOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.fetchPersonalized(options, (request) =>
       this.runtime.fetchByDestinationNode(
@@ -284,8 +284,8 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationPathOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.fetchPersonalized(options, (request) =>
       this.runtime.fetchByDestinationPath(
@@ -296,7 +296,7 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
   }
 
   private async fetchPersonalized<
-    TOptions extends { personalization?: RuntimePersonalizationOptions; locale?: string },
+    TOptions extends { personalization?: PersonalizationOptions; locale?: string },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(
     options: TOptions,
@@ -339,9 +339,9 @@ export class RequestBoundExperiences implements ExperiencesNodeRequest {
 }
 
 function mergeResolveOptions(
-  request: ExperiencesNodeRequestContext['resolveOptions'],
-  method: RuntimeResolveOptions
-): RuntimeResolveOptions {
+  request: RequestContext['resolveOptions'],
+  method: ResolveOptions
+): ResolveOptions {
   return {
     ...mergeFetchResolveOptions(request, method),
     sourceMap: method.sourceMap ?? request?.sourceMap,
@@ -349,9 +349,9 @@ function mergeResolveOptions(
 }
 
 function mergeFetchResolveOptions(
-  request: ExperiencesNodeRequestContext['resolveOptions'],
-  method: RuntimeFetchResolveOptions
-): RuntimeFetchResolveOptions {
+  request: RequestContext['resolveOptions'],
+  method: FetchResolveOptions
+): FetchResolveOptions {
   return {
     config: method.config,
     metadata: { ...request?.metadata, ...method.metadata },

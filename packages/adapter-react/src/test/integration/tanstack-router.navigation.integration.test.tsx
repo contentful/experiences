@@ -12,13 +12,13 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { sourceSdk, deferred } from '../managed-experience.js';
-import { createReactTestRoot } from '../react-root.js';
+import { createDomTestRoot } from '../dom-root.js';
 import { bindTanStackRouterExperiences } from '../../router/tanstack-router.js';
 
 it('pairs a destination descriptor and URL when matches commit before the resolved location', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-  const view = createReactTestRoot();
+  const view = createDomTestRoot();
   const source = sourceSdk();
   const loader = deferred<void>();
   const { ExperiencesProvider, useManagedExperience } = bindTanStackRouterExperiences({

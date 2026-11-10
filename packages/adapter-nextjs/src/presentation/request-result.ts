@@ -1,4 +1,4 @@
-import type { NextjsBrowserConfig } from './browser-config.js';
+import type { BrowserConfig } from './browser-config.js';
 import type {
   BoundManagedExperienceProps,
   ExperiencesProviderProps,
@@ -7,57 +7,54 @@ import type {
 import type {
   ExperiencesHandoff,
   PortableRenderPlan,
-  RuntimeFetchExperienceOptions,
-  ExperiencesWebConfig,
+  FetchExperienceOptions,
+  Config,
 } from '@contentful/experiences-web';
 
-import type { NextjsLivePreviewOptions } from './live-preview.js';
+import type { LivePreviewOptions } from './live-preview.js';
 
-export type NextjsHydrationMode = 'preserve-server' | 'server-only';
+export type HydrationMode = 'preserve-server' | 'server-only';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 /** Detached request data shared by the router root and content presentation. */
-export interface NextjsRequestResult {
+export interface RequestResult {
   readonly requestId: string;
   readonly routeKey: string;
-  readonly experience: RuntimeFetchExperienceOptions;
+  readonly experience: FetchExperienceOptions;
   readonly plan?: PortableRenderPlan;
   readonly contentError?: string;
   readonly handoff?: ExperiencesHandoff;
   readonly initialPagePayload?: ExperiencesRootProps['initialPagePayload'];
   /** Configuration only; the browser derives session and identity from its route and descriptor. */
-  readonly livePreview?: Omit<NextjsLivePreviewOptions, 'loadImplementation' | 'experienceId'>;
+  readonly livePreview?: Omit<LivePreviewOptions, 'loadImplementation' | 'experienceId'>;
 }
 
-export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
+export type BoundRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
   Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
-    readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewOptions;
+    readonly livePreview?: ExperiencesRootProps['livePreview'] | LivePreviewOptions;
     readonly experienceId?: string;
   };
 
-export type BoundNextjsRequestRootProps = Omit<
-  BoundNextjsExperiencesRootProps,
+export type BoundRequestRootProps = Omit<
+  BoundRootProps,
   'handoff' | 'handoffKey' | 'snapshot' | 'routeKey' | 'initialPagePayload'
-> & { readonly result?: NextjsRequestResult };
+> & { readonly result?: RequestResult };
 
-export type NextjsRequestExperienceProps = Omit<
+export type RequestExperienceProps = Omit<
   Extract<BoundManagedExperienceProps, { experienceId: string }>,
-  keyof RuntimeFetchExperienceOptions | 'initialPlan' | 'initialError' | 'resolveOptions'
-> & { readonly result: NextjsRequestResult };
+  keyof FetchExperienceOptions | 'initialPlan' | 'initialError' | 'resolveOptions'
+> & { readonly result: RequestResult };
 
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */
-export type NextjsDefaultRequestRootProps = Omit<
-  BoundNextjsRequestRootProps,
+export type DefaultRequestRootProps = Omit<
+  BoundRequestRootProps,
   RuntimeIdentity | 'defaults' | 'isPreview' | 'livePreview'
 > &
   Pick<ExperiencesRootProps, 'spaceId' | 'environmentId' | 'locale'> & {
-    readonly browser: NextjsBrowserConfig;
-    readonly defaults?: Pick<
-      NonNullable<ExperiencesWebConfig['defaults']>,
-      'consent' | 'persistenceConsent'
-    >;
-    readonly cookie?: ExperiencesWebConfig['cookie'];
+    readonly browser: BrowserConfig;
+    readonly defaults?: Pick<NonNullable<Config['defaults']>, 'consent' | 'persistenceConsent'>;
+    readonly cookie?: Config['cookie'];
     readonly experienceId?: string;
   };

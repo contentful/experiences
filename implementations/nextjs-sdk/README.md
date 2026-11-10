@@ -162,7 +162,7 @@ public Preview package. Node owns policy and snapshot loading through ordinary
 `fetchExperience`. Matching session requests omit ordinary locale/source-map fetch
 options. Session transport uses the installed helper without a custom fetch wrapper.
 Both content routes are dynamic and use `force-no-store`; ordinary Delivery uses
-`createNextjsPrivateFetch`. There is no preview broker or application preview client.
+`createPrivateFetch`. There is no preview broker or application preview client.
 
 Ordinary SSR uses the primary request facade and ordinary Experience fetching.
 The single-Experience routes select one configured primary ID and let the SDK
@@ -177,7 +177,7 @@ comparisons leave ordering, identity and result handling to the application and
 provide no SDK multi-Experience or cross-fetch guarantee. Only an actual
 server-to-browser transfer uses the Node full handoff result producer. Content
 presentation does not depend on replay or submission success. XDA preflight leaves
-ordinary SSR/CSR events uncommitted; this app adds no XPAPI compensation or force flag.
+ordinary SSR/CSR events uncommitted; this app adds no Personalization API compensation or force flag.
 
 The initial ordinary fetch carries literal page-builder arguments and, only for
 `?userId=charles`, literal identify arguments with `traits: { identified: true }`.
@@ -199,7 +199,7 @@ persistence method. Pages GSSP persists the primary's evaluated identity after c
 persistence consent permits. Without JavaScript, Server Components cannot persist
 a newly evaluated profile. Middleware forwards context only and does not capture
 final RSC evaluation identity. App Server Actions bind the actual request, fetch content, persist the final cookie
-through `persistNextjsAnonymousId`, and return a server-rendered subtree. Pages
+through `persistAnonymousId`, and return a server-rendered subtree. Pages
 controls use `router.replace(internalHref, visibleHref)` to run GSSP with explicit
 identify/custom-track or event-free Retry intent while retaining the visible page.
 The app-local `actionRouteKey` query carries that visible path and query; server-only
@@ -221,7 +221,7 @@ only actual browser attempts and real interval IDs, not server events or confirm
 delivery. Reset removes attributed DOM synchronously before `resetUser`, removes
 URL identify intent, and retains the same browser root. View keys clear nonpage
 action intent on route changes; Utilities reads initial URL intent, successful server
-Identify intent and the SDK profile. Each `NextjsRequestResult` carries its
+Identify intent and the SDK profile. Each `RequestResult` carries its
 request identity, route, descriptor, optional plan/error and optional handoff.
 App passes that result to `request.ExperiencesRoot` and `request.Experience`;
 Pages uses the top-level bound `ExperiencesRoot` and `Experience`. Roots accept an
@@ -241,7 +241,7 @@ the primary Experience ID, reads the committed URL session, supplies inactive
 `isPreview: false`, switches sessions in place and replaces its owned SDK on mode
 entry/exit. Consumers need no preview-specific hook, wrapper or React key.
 Request-history guards survive SDK replacement. This configuration controls
-Contentful Live Preview content and event suppression, independently of XPAPI
+Contentful Live Preview content and event suppression, independently of Personalization API
 preflight and rendering-mode commitment policy.
 
 ## Public server integration
@@ -264,7 +264,7 @@ flat browser SDK options, `consent.clientDefaults` and `cookie` in their client
 configuration module, with no manual browser/defaults/cookie remapping in `_app`.
 
 `src/config.ts` owns lazy server configuration and its explicit browser projection.
-`src/server-loader.ts` uses `bindNextjsAppRouterServerExperiences` with the
+`src/server-loader.ts` uses `bindAppRouterServerExperiences` with the
 single-Experience request policy, bound `config`/`request.resolveOptions`, separate
 `consent.server`/`consent.clientDefaults`, `cookie`, preview and initial-event policy. The adapter reads framework
 request context and memoizes the actual descriptor result. The reference's
@@ -287,11 +287,11 @@ matching server preview revisions, falling back to the result's descriptor ID
 when omitted. That presentation input does not replace the supplied result.
 
 `src/pages-server.tsx` uses ordinary `getServerSideProps` with
-`bindNextjsPagesRouterServerExperiences(...).request.loadExperience`. The app supplies
+`bindPagesRouterServerExperiences(...).request.loadExperience`. The app supplies
 the trusted origin with bound registry, request, consent, cookie and preview policy. The adapter maps the native
 request to one facade, fetches the primary, runs the reference's event-free
 comparison callback, persists the final cookie and destroys that facade. The helper
-returns a JSON-safe `NextjsRequestResult` directly for GSSP props; raw plan/error
+returns a JSON-safe `RequestResult` directly for GSSP props; raw plan/error
 data is available inside `composeRequest` only. `_app` passes the `experiences` envelope as `result`
 to the stable request root.
 Pages server-only props contain rendered markup rather than a browser render plan.
@@ -310,7 +310,7 @@ resolution. Initial hybrid plans remain independent of replay admission.
 
 The reference uses explicit host helpers only at real host boundaries. The App
 Server Action reads writable cookies/headers, binds the Node request and calls
-`persistNextjsAnonymousId` after content evaluation. Its request is destroyed in
+`persistAnonymousId` after content evaluation. Its request is destroyed in
 `finally`. Pages GSSP's public server binder handles its writable response cookie
 boundary and JSON-safe result projection, without a manual serializer call in GSSP.
 App's loader still exposes a raw server result, and its bound roots project

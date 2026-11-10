@@ -1,7 +1,7 @@
-import { ANONYMOUS_ID_COOKIE, type ExperiencesNodeRequest } from '@contentful/experiences-node';
-import type { ExperiencesWebConfig } from '@contentful/experiences-web';
+import { ANONYMOUS_ID_COOKIE, type RequestRuntime } from '@contentful/experiences-node';
+import type { Config } from '@contentful/experiences-web';
 
-export interface NextjsAnonymousIdCookieOptions {
+export interface AnonymousIdCookieOptions {
   readonly domain?: string;
   readonly expires?: Date;
   readonly httpOnly?: boolean;
@@ -11,27 +11,27 @@ export interface NextjsAnonymousIdCookieOptions {
   readonly secure?: boolean;
 }
 
-export interface PersistNextjsAnonymousIdOptions {
+export interface PersistAnonymousIdOptions {
   readonly anonymousIdCookieName?: string;
-  readonly cookieOptions?: NextjsAnonymousIdCookieOptions;
+  readonly cookieOptions?: AnonymousIdCookieOptions;
   /** Explicit host withdrawal policy. Defaults to true, following Optimization. */
   readonly deleteWhenProfileCannotPersist?: boolean;
 }
 
-export interface NextjsResponseLike {
+export interface ResponseLike {
   readonly headers: globalThis.Headers;
   readonly cookies?: {
-    set(name: string, value: string, options?: NextjsAnonymousIdCookieOptions): unknown;
+    set(name: string, value: string, options?: AnonymousIdCookieOptions): unknown;
   };
 }
 
 function resolveAnonymousIdCookie(
-  request: ExperiencesNodeRequest,
+  request: RequestRuntime,
   {
     anonymousIdCookieName = ANONYMOUS_ID_COOKIE,
     cookieOptions,
     deleteWhenProfileCannotPersist = true,
-  }: PersistNextjsAnonymousIdOptions = {}
+  }: PersistAnonymousIdOptions = {}
 ) {
   if (request.isPreview || (!request.canPersistProfile && !deleteWhenProfileCannotPersist))
     return undefined;
@@ -61,9 +61,9 @@ function resolveAnonymousIdCookie(
   return { name: anonymousIdCookieName, value, options: { ...options, sameSite } };
 }
 
-export function createNextjsAnonymousIdSetCookieHeader(
-  request: ExperiencesNodeRequest,
-  options?: PersistNextjsAnonymousIdOptions
+export function createAnonymousIdSetCookieHeader(
+  request: RequestRuntime,
+  options?: PersistAnonymousIdOptions
 ): string | undefined {
   const cookie = resolveAnonymousIdCookie(request, options);
   return cookie === undefined ? undefined : serializeCookie(cookie);
@@ -87,11 +87,7 @@ function serializeCookie({
   return parts.join('; ');
 }
 
-function isCookieAtScope(
-  header: string,
-  name: string,
-  options: NextjsAnonymousIdCookieOptions
-): boolean {
+function isCookieAtScope(header: string, name: string, options: AnonymousIdCookieOptions): boolean {
   if (header.slice(0, header.indexOf('=')).trim() !== name) return false;
   const [, ...attributes] = header.split(';');
   let domain = '';
@@ -111,10 +107,10 @@ function isCookieAtScope(
 }
 
 /** Append at a writable response boundary using the facade's current identity. */
-export function persistNextjsAnonymousId(
-  response: NextjsResponseLike,
-  request: ExperiencesNodeRequest,
-  options?: PersistNextjsAnonymousIdOptions
+export function persistAnonymousId(
+  response: ResponseLike,
+  request: RequestRuntime,
+  options?: PersistAnonymousIdOptions
 ): void {
   const cookie = resolveAnonymousIdCookie(request, options);
   if (cookie === undefined) return;
@@ -143,11 +139,9 @@ export function persistNextjsAnonymousId(
 }
 
 /** Shared high-level cookie attributes; expires is a number of days, as in Web. */
-export type NextjsCookieConfig = NonNullable<ExperiencesWebConfig['cookie']>;
+export type CookieConfig = NonNullable<Config['cookie']>;
 
-export function toNextjsAnonymousIdCookieOptions(
-  cookie: NextjsCookieConfig = {}
-): NextjsAnonymousIdCookieOptions {
+export function toAnonymousIdCookieOptions(cookie: CookieConfig = {}): AnonymousIdCookieOptions {
   const { expires = 365, ...attributes } = cookie;
   if (!Number.isFinite(expires)) throw new TypeError('Invalid cookie expires');
   return { ...attributes, maxAge: Math.trunc(expires * 86_400), httpOnly: false };

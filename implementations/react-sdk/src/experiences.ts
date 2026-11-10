@@ -1,4 +1,4 @@
-import { createReactExperiences } from '@contentful/experiences-react/client';
+import { createExperiences } from '@contentful/experiences-react/client';
 
 import { experienceConfig } from './experience-config';
 
@@ -9,6 +9,6 @@ export const {
   ExperienceRenderer,
   Experience,
   useManagedExperience,
-} = createReactExperiences({
+} = createExperiences({
   config: experienceConfig,
 });

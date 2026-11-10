@@ -4,8 +4,8 @@ import { createRuntime } from '../test/runtime.js';
 describe('Node SDK', () => {
   it('inherits pure flag lookup without retaining changes or tracking exposures', () => {
     const runtime = createRuntime();
-    const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents');
-    const personalize = vi.spyOn(runtime.api.experience, 'upsertProfile');
+    const send = vi.spyOn(runtime.api.analytics, 'sendBatchEvents');
+    const personalize = vi.spyOn(runtime.api.personalization, 'upsertProfile');
     const changes = [
       {
         type: 'Variable',

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server.js';
 import { describe, expect, it } from 'vitest';
-import type { ExperiencesNodeRequest } from '@contentful/experiences-node';
-import { createNextjsAnonymousIdSetCookieHeader, persistNextjsAnonymousId } from './cookies.js';
+import type { RequestRuntime } from '@contentful/experiences-node';
+import { createAnonymousIdSetCookieHeader, persistAnonymousId } from './cookies.js';
 
-const request = (values: Partial<ExperiencesNodeRequest>) => values as ExperiencesNodeRequest;
+const request = (values: Partial<RequestRuntime>) => values as RequestRuntime;
 
 describe('response identity boundary', () => {
   it('retains configurable HttpOnly for standalone server-scoped persistence', () => {
     const facade = request({ canPersistProfile: true, profile: { id: 'server-id' } });
     const options = { cookieOptions: { httpOnly: true } };
-    expect(createNextjsAnonymousIdSetCookieHeader(facade, options)).toContain('; HttpOnly;');
+    expect(createAnonymousIdSetCookieHeader(facade, options)).toContain('; HttpOnly;');
     const response = NextResponse.next();
-    persistNextjsAnonymousId(response, facade, options);
+    persistAnonymousId(response, facade, options);
     expect(response.cookies.get('ctfl-opt-aid')?.httpOnly).toBe(true);
     expect(response.headers.get('set-cookie')).toContain('; HttpOnly;');
   });
@@ -20,7 +20,7 @@ describe('response identity boundary', () => {
     const response = {
       headers: new globalThis.Headers({ 'set-cookie': 'app=value; Path=/', vary: 'RSC' }),
     };
-    persistNextjsAnonymousId(
+    persistAnonymousId(
       response,
       request({ canPersistProfile: true, profile: { id: 'id /+' }, isPreview: false }),
       { cookieOptions: { path: '/app', domain: 'example.com', secure: true, httpOnly: false } }
@@ -39,14 +39,14 @@ describe('response identity boundary', () => {
       isPreview: false,
     });
     expect(
-      createNextjsAnonymousIdSetCookieHeader(facade, {
+      createAnonymousIdSetCookieHeader(facade, {
         cookieOptions: { path: '/app', domain: 'example.com' },
       })
     ).toBe(
       'ctfl-opt-aid=; Max-Age=0; Domain=example.com; Path=/app; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
     );
     expect(
-      createNextjsAnonymousIdSetCookieHeader(facade, { deleteWhenProfileCannotPersist: false })
+      createAnonymousIdSetCookieHeader(facade, { deleteWhenProfileCannotPersist: false })
     ).toBeUndefined();
   });
 
@@ -54,7 +54,7 @@ describe('response identity boundary', () => {
     'preview never writes or expires identity (persistence %s)',
     (canPersistProfile) => {
       expect(
-        createNextjsAnonymousIdSetCookieHeader(
+        createAnonymousIdSetCookieHeader(
           request({ canPersistProfile, isPreview: true, profile: { id: 'id' } })
         )
       ).toBeUndefined();
@@ -63,10 +63,10 @@ describe('response identity boundary', () => {
 
   it('does not create missing identity and rejects cookie attribute injection', () => {
     expect(
-      createNextjsAnonymousIdSetCookieHeader(request({ canPersistProfile: true, isPreview: false }))
+      createAnonymousIdSetCookieHeader(request({ canPersistProfile: true, isPreview: false }))
     ).toBeUndefined();
     expect(() =>
-      createNextjsAnonymousIdSetCookieHeader(
+      createAnonymousIdSetCookieHeader(
         request({ canPersistProfile: true, profile: { id: 'id' } }),
         { cookieOptions: { path: '/; injected=x' } }
       )
@@ -85,7 +85,7 @@ it('uses the response-time profile rather than an earlier identity snapshot', ()
   });
   id = 'final-evaluated';
   const response = { headers: new globalThis.Headers() };
-  persistNextjsAnonymousId(response, facade);
+  persistAnonymousId(response, facade);
   expect(response.headers.get('set-cookie')).toContain('ctfl-opt-aid=final-evaluated');
 });
 
@@ -93,7 +93,7 @@ it('keeps SDK identity in the actual NextResponse jar across application cookie 
   const response = NextResponse.next();
   response.cookies.set('before', 'one');
   response.headers.set('vary', 'RSC');
-  persistNextjsAnonymousId(
+  persistAnonymousId(
     response,
     request({ isPreview: false, canPersistProfile: true, profile: { id: 'issued /+' } })
   );
@@ -125,7 +125,7 @@ it('replaces middleware identity with scoped expiry in the actual NextResponse j
     'set-cookie',
     'ctfl-opt-aid=raw-old-identity; domain=.EXAMPLE.COM; path=/app'
   );
-  persistNextjsAnonymousId(
+  persistAnonymousId(
     response,
     request({ isPreview: false, canPersistProfile: false, profile: { id: 'volatile' } }),
     { cookieOptions }
@@ -170,12 +170,12 @@ it.each([false, true])(
     for (const value of rawHeaders) response.headers.append('set-cookie', value);
     const facade = request({ canPersistProfile: true, profile: { id: 'id' } });
     const options = { cookieOptions: { maxAge: 1.9, sameSite: true } };
-    persistNextjsAnonymousId(response, facade, options);
+    persistAnonymousId(response, facade, options);
     expect(response.cookies.get('ctfl-opt-aid')).toMatchObject({ maxAge: 1, sameSite: 'strict' });
     expect(
       response.headers.getSetCookie().filter((value) => !value.startsWith('ctfl-opt-aid='))
     ).toEqual([...initial, ...rawHeaders]);
-    expect(createNextjsAnonymousIdSetCookieHeader(facade, options)).toBe(
+    expect(createAnonymousIdSetCookieHeader(facade, options)).toBe(
       'ctfl-opt-aid=id; Max-Age=1; Path=/; SameSite=Strict'
     );
     expect(options.cookieOptions).toEqual({ maxAge: 1.9, sameSite: true });

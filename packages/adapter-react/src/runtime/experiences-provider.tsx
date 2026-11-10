@@ -15,25 +15,22 @@ import {
   createWebSnapshotRuntime,
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
-  type ExperiencesWebConfig,
+  type Config,
   type CurrentPageOptions,
 } from '@contentful/experiences-web';
 import {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
 } from '@contentful/experiences-runtime';
-import { ExperiencesContext, type ExperiencesContextValue } from './experiences-context.js';
+import { RuntimeContext, type RuntimeContextValue } from './context.js';
 import {
-  createExperiencesRootSdkBinding,
-  disposeExperiencesRootSdkBinding,
-  type ExperiencesRootSdkBinding,
+  createRootSdkBinding,
+  disposeRootSdkBinding,
+  type RootSdkBinding,
   type OnStatesReady,
-} from './experiences-root-sdk-binding.js';
-import {
-  ExperiencesPageSequence,
-  type BeforeInitialPageOptions,
-} from './experiences-page-sequence.js';
-import { sameValue } from '../experience/experience-source-controller.js';
+} from './root-sdk-binding.js';
+import { PageSequence, type BeforeInitialPageOptions } from './page-sequence.js';
+import { sameValue } from '../experience/source-controller.js';
 
 interface PresentationOptions {
   readonly snapshot?: ExperiencesSnapshot;
@@ -53,15 +50,15 @@ interface PresentationOptions {
 export type ExperiencesProviderProps = PropsWithChildren<
   PresentationOptions & { readonly sdk: ContentfulExperiences }
 >;
-export type ExperiencesRootProps = PropsWithChildren<ExperiencesWebConfig & PresentationOptions>;
+export type ExperiencesRootProps = PropsWithChildren<Config & PresentationOptions>;
 
 type ActivationProps = ExperiencesProviderProps | ExperiencesRootProps;
 type Target = {
   readonly props: ActivationProps;
-  readonly snapshot: ExperiencesContextValue['sdk'];
-  readonly initial: ExperiencesContextValue;
+  readonly snapshot: RuntimeContextValue['sdk'];
+  readonly initial: RuntimeContextValue;
 };
-type ProviderState = ExperiencesContextValue & { readonly target: Target };
+type ProviderState = RuntimeContextValue & { readonly target: Target };
 
 const useCommitEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 const toError = (error: unknown): Error =>
@@ -108,10 +105,10 @@ function ActivationProvider(props: ActivationProps) {
   assertHandoff(props.handoff, target.props);
   const [state, setState] = useState<ProviderState>(() => ({ ...target.initial, target }));
   const [localeFailure, setLocaleFailure] = useState<{
-    sdk: ExperiencesContextValue['sdk'];
+    sdk: RuntimeContextValue['sdk'];
     error: Error;
   }>();
-  const activeRef = useRef<ExperiencesRootSdkBinding | undefined>(undefined);
+  const activeRef = useRef<RootSdkBinding | undefined>(undefined);
   const { target: stateTarget, ...presentation } = state;
   const context = stateTarget === target ? presentation : target.initial;
   const latestProps = useRef(props);
@@ -154,11 +151,11 @@ function ActivationProvider(props: ActivationProps) {
   }
 
   useCommitEffect(() => {
-    let binding: ExperiencesRootSdkBinding | undefined;
+    let binding: RootSdkBinding | undefined;
     try {
       const initial = target.props;
       if ('sdk' in initial) {
-        binding = createExperiencesRootSdkBinding({
+        binding = createRootSdkBinding({
           sdk: initial.sdk,
           onStatesReady: initial.onStatesReady,
         });
@@ -176,7 +173,7 @@ function ActivationProvider(props: ActivationProps) {
           pageMode: _pageMode,
           ...config
         } = initial;
-        binding = createExperiencesRootSdkBinding({ config, onStatesReady });
+        binding = createRootSdkBinding({ config, onStatesReady });
       }
       activeRef.current = binding;
       publishLive(binding.sdk, initial.handoff === undefined);
@@ -191,7 +188,7 @@ function ActivationProvider(props: ActivationProps) {
     }
     return () => {
       activeRef.current = undefined;
-      disposeExperiencesRootSdkBinding(binding);
+      disposeRootSdkBinding(binding);
     };
   }, [target]);
 
@@ -246,10 +243,10 @@ function ActivationProvider(props: ActivationProps) {
   }, [target, locale]);
 
   const error = localeFailure?.sdk === context.sdk ? localeFailure.error : context.error;
-  const value = useMemo<ExperiencesContextValue>(() => ({ ...context, error }), [context, error]);
+  const value = useMemo<RuntimeContextValue>(() => ({ ...context, error }), [context, error]);
   return (
-    <ExperiencesContext.Provider value={value}>
-      <ExperiencesPageSequence
+    <RuntimeContext.Provider value={value}>
+      <PageSequence
         routeKey={routeKey}
         handoff={handoff}
         buildPagePayload={buildPagePayload}
@@ -259,8 +256,8 @@ function ActivationProvider(props: ActivationProps) {
         onReset={resetRequests}
       >
         {props.children}
-      </ExperiencesPageSequence>
-    </ExperiencesContext.Provider>
+      </PageSequence>
+    </RuntimeContext.Provider>
   );
 }
 

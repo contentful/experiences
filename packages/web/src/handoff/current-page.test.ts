@@ -8,21 +8,21 @@ import {
   withEventConsent,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient } from '@contentful/optimization-api-client';
+import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences } from '../contentful-experiences.js';
 import { deferred } from '../test/dom.js';
 import { clearIdentityCookies, seedConsent } from '../test/fixtures/consent.js';
 import { completeProfile as profileFixture } from '../test/fixtures/profile.js';
-import { createWebHarness } from '../test/web-harness.js';
+import { createSdkHarness } from '../test/sdk-harness.js';
 
 describe('handoff', () => {
   function createRuntime(profile?: EventProfile) {
     return harness.create(profile === undefined ? {} : { defaults: { profile } });
   }
 
-  const harness = createWebHarness({ locale: 'en-US' }, ContentfulExperiences);
+  const harness = createSdkHarness({ locale: 'en-US' }, ContentfulExperiences);
 
   function handoff(
     runtime: ContentfulExperiences,
@@ -58,7 +58,7 @@ describe('handoff', () => {
 
   describe('Web handoff and current-page lifecycle', () => {
     it('does not admit a scoped fallback page after its caller leaves during interception', async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime();
       runtime.consent({ events: false });
       const started = deferred<void>(),
@@ -84,7 +84,7 @@ describe('handoff', () => {
 
     it('records accepted replay even when publication removes its last caller', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
       const runtime = createRuntime();
       const input = handoff(runtime, '/accepted');
@@ -111,7 +111,7 @@ describe('handoff', () => {
 
     it('keeps shared pending consumption alive for another current caller', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
       const runtime = createRuntime();
       const started = deferred<void>(),
@@ -153,7 +153,7 @@ describe('handoff', () => {
 
     it('does not readmit a supplied aggregate during publication or cancel newer supplied intent', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
       const runtime = createRuntime();
       const first = handoff(runtime),
@@ -178,7 +178,7 @@ describe('handoff', () => {
     });
 
     it("does not create current-route page intent from another route's supplied replay", async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime();
       await expect(
         runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/previous'), { routeKey: '/current' })
@@ -187,7 +187,7 @@ describe('handoff', () => {
     });
 
     it('lets publication-time consent withdrawal purge supplied replay before transport', async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime();
       const subscription = runtime.states.eventStream.subscribe((event) => {
         if (event) runtime.consent({ events: false });
@@ -200,7 +200,7 @@ describe('handoff', () => {
     it('joins duplicate and serialized invocations by final page message ID before HTTP completes', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime();
       const input = handoff(runtime);
@@ -229,7 +229,7 @@ describe('handoff', () => {
     it('hydrates internally and does not reseed the response profile on repeated complete consumption', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime();
       const input = handoff(runtime, '/first', {
@@ -255,7 +255,7 @@ describe('handoff', () => {
     it('captures the replay target before evaluated state hydration changes the profile', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime();
       const input = handoff(runtime, '/first', {
@@ -278,7 +278,7 @@ describe('handoff', () => {
 
     it('skips mismatched replay and state, and treats search changes as distinct routes', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('browser-profile') } as never);
       const runtime = createRuntime(profileFixture('browser-profile'));
       const input = handoff(runtime, '/first?view=one', {
@@ -303,7 +303,7 @@ describe('handoff', () => {
 
     it('uses explicit page intent for a handoff without replay and marks later routes noninitial', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('browser-profile') } as never);
       const runtime = createRuntime(profileFixture('browser-profile'));
       const initialFlags: boolean[] = [];
@@ -339,7 +339,7 @@ describe('handoff', () => {
 
     it('allows new handoffs and later visits while deduplicating the accepted current route', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('browser-profile') } as never);
       const runtime = createRuntime(profileFixture('browser-profile'));
       const first = handoff(runtime, '/first');
@@ -365,7 +365,7 @@ describe('handoff', () => {
       async (online) => {
         const firstDelivery = deferred<{ profile: EventProfile }>();
         const upsert = vi
-          .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
           .mockReturnValueOnce(firstDelivery.promise as never)
           .mockResolvedValue({ profile: profileFixture('committed-profile') } as never);
         const browser = createRuntime();
@@ -416,7 +416,7 @@ describe('handoff', () => {
         firstDelivery.resolve({ profile: profileFixture('committed-profile') });
         window.dispatchEvent(new Event('online'));
         await browser.flush();
-        expect(browser.states.experienceRequestState.current.status).toBe('success');
+        expect(browser.states.personalizationRequestState.current.status).toBe('success');
         const repeated = await browser.hydrateAndTrackCurrentPage(nextHandoff, {
           routeKey: '/next',
           buildPayload,
@@ -437,7 +437,7 @@ describe('handoff', () => {
       async (method) => {
         const response = deferred<{ profile: EventProfile }>();
         const send = vi
-          .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
           .mockReturnValue(response.promise as never);
         const runtime = createRuntime(profileFixture('browser-profile'));
         window.dispatchEvent(new Event('offline'));
@@ -476,7 +476,7 @@ describe('handoff', () => {
     it('falls back once with retained identity for an out-of-order prepared batch', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime();
       const events = [
@@ -529,7 +529,7 @@ describe('handoff', () => {
 
     it('returns ordinary route deduplication refusal after rejected page-bearing replay', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('browser-profile') } as never);
       const runtime = createRuntime();
       await runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
@@ -550,7 +550,7 @@ describe('handoff', () => {
     });
 
     it('rejects invalid envelopes before internal hydration or fallback', async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime();
       const input = handoff(runtime, '/first', {
         state: { profile: profileFixture('evaluated-profile') },
@@ -573,7 +573,7 @@ describe('handoff', () => {
 
     it('hydrates applicable state before rejected replay falls back with the default page payload', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('evaluated-profile') } as never);
       const runtime = createRuntime();
       const input = handoff(runtime, '/first', {
@@ -597,7 +597,7 @@ describe('handoff', () => {
 
     it('does not hydrate mismatched state even when prepared events are invalid', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
       const runtime = createRuntime();
       await runtime.hydrateAndTrackCurrentPage(
@@ -616,7 +616,7 @@ describe('handoff', () => {
       async (type) => {
         const response = deferred<{ profile: EventProfile }>();
         const send = vi
-          .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
           .mockReturnValueOnce(response.promise as never)
           .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
         const runtime = createRuntime();
@@ -649,7 +649,7 @@ describe('handoff', () => {
         expect(input).toEqual(before);
         response.resolve({ profile: profileFixture('server-profile') });
         await vi.waitFor(() =>
-          expect(runtime.states.experienceRequestState.current.status).toBe('success')
+          expect(runtime.states.personalizationRequestState.current.status).toBe('success')
         );
 
         await expect(
@@ -663,7 +663,7 @@ describe('handoff', () => {
     it.each(['identify', 'track'] as const)(
       'refuses a matching %s-only replay without fallback even with explicit page payload',
       async (type) => {
-        const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+        const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
         const admission = vi
           .spyOn(PersonalizationDelivery.prototype, 'sendPrepared')
           .mockReturnValue({ accepted: false });
@@ -690,7 +690,7 @@ describe('handoff', () => {
       'hydrates an %s replay without inventing a page, but permits explicit page intent',
       async (replay) => {
         const send = vi
-          .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
           .mockResolvedValue({ profile: profileFixture('evaluated-profile') } as never);
         const runtime = createRuntime();
         const input = handoff(runtime, '/first', {
@@ -702,7 +702,7 @@ describe('handoff', () => {
           runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' })
         ).resolves.toEqual({ accepted: false });
         expect(runtime.states.profile.current).toEqual(profileFixture('evaluated-profile'));
-        expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
+        expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
         expect(send).not.toHaveBeenCalled();
         const buildPayload = vi.fn(() => ({ properties: { title: 'explicit' } }));
         await expect(
@@ -721,7 +721,7 @@ describe('handoff', () => {
       'prevents stale fallback when %s occurs after rejected admission',
       async (action) => {
         const send = vi
-          .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
           .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
         const runtime = createRuntime();
         const buildPayload = vi.fn(() => ({}));
@@ -757,7 +757,7 @@ describe('handoff', () => {
     it('keeps accepted replay and its retry after HTTP failure without a fallback page', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValueOnce(response.promise as never)
         .mockResolvedValue({ profile: profileFixture('server-profile') } as never);
       const runtime = createRuntime();
@@ -768,7 +768,7 @@ describe('handoff', () => {
       ).resolves.toEqual({ accepted: true });
       response.reject(new Error('HTTP failure'));
       await vi.waitFor(() =>
-        expect(runtime.states.experienceRequestState.current.status).toBe('failed')
+        expect(runtime.states.personalizationRequestState.current.status).toBe('failed')
       );
       await expect(
         runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
@@ -778,7 +778,7 @@ describe('handoff', () => {
       window.dispatchEvent(new Event('offline'));
       window.dispatchEvent(new Event('online'));
       await vi.waitFor(() =>
-        expect(runtime.states.experienceRequestState.current.status).toBe('success')
+        expect(runtime.states.personalizationRequestState.current.status).toBe('success')
       );
       expect(send).toHaveBeenCalledTimes(2);
       expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
@@ -810,7 +810,7 @@ describe('handoff', () => {
 
     it('does not admit a superseded pending replay', async () => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('new-profile') } as never);
       const runtime = createRuntime();
       const old = runtime.hydrateAndTrackCurrentPage(
@@ -839,7 +839,7 @@ describe('handoff', () => {
     it('retains published continuity when ordinary navigation cancels pending replay', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime();
       const old = runtime.hydrateAndTrackCurrentPage(
@@ -860,7 +860,7 @@ describe('handoff', () => {
     it('follows supersession while a fetch waits for initialization, without waiting for replay HTTP', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const fetch = vi
         .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -893,7 +893,7 @@ describe('handoff', () => {
     it.each(['reset', 'destroy'] as const)(
       'does not admit a pending prepared replay after %s',
       async (action) => {
-        const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+        const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
         const runtime = createRuntime();
         const pending = runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/first'), {
           routeKey: '/first',
@@ -909,7 +909,7 @@ describe('handoff', () => {
     it('destroy invalidates published continuation and a fetch waiting on initialization', async () => {
       const response = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const fetch = vi
         .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -953,7 +953,7 @@ describe('handoff', () => {
     it('allows a fresh current-page attempt after reset invalidates an in-flight one', async () => {
       const oldResponse = deferred<{ profile: EventProfile }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValueOnce(oldResponse.promise as never)
         .mockResolvedValue({ profile: profileFixture('new-profile') } as never);
       const runtime = createRuntime();
@@ -996,7 +996,7 @@ describe('handoff', () => {
         .mockReturnValueOnce(first.promise as never)
         .mockReturnValueOnce(second.promise as never);
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: profileFixture('api-profile') } as never);
       const runtime = createRuntime();
       const input = handoff(runtime, '/first');
@@ -1039,7 +1039,7 @@ describe('handoff', () => {
         .mockReturnValueOnce(staleResponse.promise as never)
         .mockResolvedValueOnce({ nodes: [] } as never);
       const eventResponse = deferred<{ profile: EventProfile }>();
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
+      vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockReturnValue(
         eventResponse.promise as never
       );
       const runtime = createRuntime();
@@ -1064,7 +1064,7 @@ describe('handoff', () => {
     });
 
     it('does not overwrite browser identity with profileless public or static state', async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime(profileFixture('browser-profile'));
       runtime.interceptors.state.add(() => ({ profile: profileFixture('interceptor-profile') }));
       for (const cache of [
@@ -1079,7 +1079,7 @@ describe('handoff', () => {
             )
           ).resolves.toEqual({ accepted: false });
           expect(runtime.states.profile.current).toEqual(profileFixture('browser-profile'));
-          expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
+          expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
         }
       }
       expect(send).not.toHaveBeenCalled();
@@ -1101,7 +1101,7 @@ describe('handoff', () => {
     });
 
     it('rejects invalid scope and cache before state mutation or transport', async () => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime(profileFixture('browser-profile'));
       const input = handoff(runtime, '/first', {
         state: { profile: profileFixture('server-profile') },
@@ -1122,7 +1122,7 @@ describe('handoff', () => {
 
     it('does not mutate a caller-owned render plan when replay delivery finishes', async () => {
       const response = deferred<{ profile: EventProfile }>();
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
+      vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockReturnValue(
         response.promise as never
       );
       const runtime = createRuntime();
@@ -1151,18 +1151,18 @@ describe('handoff', () => {
 });
 
 describe('prepared-consent', () => {
-  type ExperienceEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
+  type PersonalizationEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
 
-  const { create: createRuntime, destroy: destroyRuntimes } = createWebHarness(
+  const { create: createRuntime, destroy: destroyRuntimes } = createSdkHarness(
     { locale: 'en-US' },
     ContentfulExperiences
   );
 
   /** A batch built the way a Node server builds it, stamped with the server's consent. */
-  const serverBatch = (serverConsent: boolean, withTrack = true): ExperienceEvents =>
+  const serverBatch = (serverConsent: boolean, withTrack = true): PersonalizationEvents =>
     preparedEvents(serverEventBuilder(serverConsent), serverConsent, withTrack);
 
-  function handoffWith(events: ExperienceEvents, routeKey = '/first'): ExperiencesHandoff {
+  function handoffWith(events: PersonalizationEvents, routeKey = '/first'): ExperiencesHandoff {
     return {
       spaceId: 'space',
       environmentId: 'environment',
@@ -1176,7 +1176,7 @@ describe('prepared-consent', () => {
     events.map((event) => event.context.gdpr?.isConsentGiven);
 
   beforeEach(() => {
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
       profile: profileFixture('delivered'),
     } as never);
   });
@@ -1194,7 +1194,7 @@ describe('prepared-consent', () => {
         'keeps blocked nonpage replay dropped after grant and newer intent=%s',
         async (newerIntent) => {
           const runtime = createRuntime();
-          const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+          const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
           const events = serverBatch(true).filter((event) => event.type === 'track');
           const blocked = handoffWith(events);
           const route = { routeKey: '/first' };
@@ -1216,7 +1216,7 @@ describe('prepared-consent', () => {
 
       it('retains the normal page exception through explicit denial and grant after a blocked mixed replay', async () => {
         const runtime = createRuntime({ allowedEventTypes: [] });
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         const events = serverBatch(true);
         const blocked = handoffWith(events);
         await expect(
@@ -1235,7 +1235,7 @@ describe('prepared-consent', () => {
 
       it('admits a page-only batch by default, since page is allow-listed', async () => {
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         const [page] = serverBatch(true, false);
 
         const result = await runtime.hydrateAndTrackCurrentPage(handoffWith([page!]), {
@@ -1252,7 +1252,7 @@ describe('prepared-consent', () => {
       it('refuses the whole batch when one event is not admitted, and reports each', async () => {
         const onEventBlocked = vi.fn();
         const runtime = createRuntime({ onEventBlocked });
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         const events = serverBatch(true);
 
         const result = await runtime.hydrateAndTrackCurrentPage(handoffWith(events), {
@@ -1288,7 +1288,7 @@ describe('prepared-consent', () => {
           'page',
           'page',
         ]);
-        expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+        expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
       });
     });
 
@@ -1298,7 +1298,7 @@ describe('prepared-consent', () => {
         async (browserConsent) => {
           seedConsent({ events: browserConsent });
           const runtime = createRuntime();
-          const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+          const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
           await runtime.hydrateAndTrackCurrentPage(
             handoffWith(serverBatch(!browserConsent, browserConsent)),
             { routeKey: '/first' }
@@ -1317,13 +1317,13 @@ describe('prepared-consent', () => {
         window.dispatchEvent(new Event('offline'));
         await runtime.track({ event: 'queued-1' });
         await runtime.track({ event: 'queued-2' });
-        expect(runtime.states.experienceRequestState.current.status).toBe('idle');
+        expect(runtime.states.personalizationRequestState.current.status).toBe('idle');
       }
 
       it('drops queued events when event consent is withdrawn, so they are never sent', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         await queueOffline(runtime);
 
         runtime.consent({ events: false });
@@ -1339,7 +1339,7 @@ describe('prepared-consent', () => {
       it('still sends queued events when consent is granted or only persistence changes', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         await queueOffline(runtime);
 
         runtime.consent({ persistence: false });
@@ -1356,7 +1356,7 @@ describe('prepared-consent', () => {
       it('blocks new events after withdrawal, so nothing is queued again', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         window.dispatchEvent(new Event('offline'));
         runtime.consent({ events: false });
 
@@ -1373,13 +1373,13 @@ describe('prepared-consent', () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime({ defaults: { profile: profileFixture('live-profile') } });
         const response = deferred<{ profile: EventProfile }>();
-        vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+        vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
           response.promise as never
         );
 
         const pending = runtime.track({ event: 'in-flight' });
         await vi.waitFor(() =>
-          expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled()
+          expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
         );
         runtime.consent({ events: false });
         response.resolve({ profile: profileFixture('late-profile') });
@@ -1403,12 +1403,12 @@ describe('prepared-consent', () => {
         window.dispatchEvent(new Event('offline'));
         await runtime.track({ event: 'queued' });
         const response = deferred<{ profile: EventProfile }>();
-        vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+        vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
           response.promise as never
         );
         window.dispatchEvent(new Event('online'));
         await vi.waitFor(() =>
-          expect(runtime.states.experienceRequestState.current.status).toBe('pending')
+          expect(runtime.states.personalizationRequestState.current.status).toBe('pending')
         );
 
         runtime.consent({ events: false });
@@ -1417,7 +1417,7 @@ describe('prepared-consent', () => {
         await Promise.resolve();
 
         expect(runtime.states.profile.current).toEqual(profileFixture('live-profile'));
-        expect(runtime.states.experienceRequestState.current.status).not.toBe('success');
+        expect(runtime.states.personalizationRequestState.current.status).not.toBe('success');
       });
 
       it('still publishes responses for events sent after consent is granted again', async () => {
@@ -1425,7 +1425,7 @@ describe('prepared-consent', () => {
         const runtime = createRuntime({ defaults: { profile: profileFixture('live-profile') } });
         runtime.consent({ events: false });
         runtime.consent({ events: true });
-        vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockResolvedValue({
+        vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockResolvedValue({
           profile: profileFixture('fresh-profile'),
         } as never);
 
@@ -1439,7 +1439,7 @@ describe('prepared-consent', () => {
       it('drops an admitted aggregate on withdrawal and permits fresh page intent for the same route', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
         const handoff = handoffWith(serverBatch(true, false));
 
         // Admitted while offline, so the page sits in the queue and is not sent.
@@ -1470,7 +1470,7 @@ describe('prepared-consent', () => {
       it('lets trackCurrentPage send the route again after withdrawal discarded its page', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
         window.dispatchEvent(new Event('offline'));
         await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
@@ -1492,7 +1492,7 @@ describe('prepared-consent', () => {
       it('forgets a route that was already sent, so it can be sent again after withdrawal and a new grant', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
         await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
           routeKey: '/first',
@@ -1510,7 +1510,7 @@ describe('prepared-consent', () => {
       it('keeps an accepted route accepted when consent is only granted or persistence changes', async () => {
         seedConsent({ events: true, persistence: true });
         const runtime = createRuntime();
-        const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+        const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
         await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
           routeKey: '/first',

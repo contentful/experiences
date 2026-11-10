@@ -2,124 +2,119 @@ import {
   ExperienceFetchError,
   NotFoundError,
   type ConsentInput,
-  type ExperiencesNodeConfig,
-  type ExperiencesNodeRequest,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
-  type RuntimeLivePreviewOptions,
+  type Config as NodeConfig,
+  type RequestRuntime,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
+  type LivePreviewOptions as SessionPreviewOptions,
 } from '@contentful/experiences-node';
-import type { Config } from '@contentful/experiences-react/server';
+import type { Config as RegistryConfig } from '@contentful/experiences-react/server';
 import type { ExperiencesRootProps } from '@contentful/experiences-react/client';
-import type { NextjsBrowserConfig } from '../presentation/browser-config.js';
-import type { NextjsCookieConfig } from './cookies.js';
-import type { NextjsCookieReader, NextjsRequestLike } from './request-context.js';
-import type { NextjsHydrationMode, NextjsRequestResult } from '../presentation/request-result.js';
-import type { NextjsLivePreviewConfig } from '../presentation/live-preview.js';
-import { serializeNextjsJsonForHtml, serializeNextjsPlan } from '../cache/serialization.js';
+import type { BrowserConfig } from '../presentation/browser-config.js';
+import type { CookieConfig } from './cookies.js';
+import type { CookieReader, RequestLike } from './context.js';
+import type { HydrationMode, RequestResult } from '../presentation/request-result.js';
+import type { LivePreviewConfig } from '../presentation/live-preview.js';
+import { serializeJsonForHtml, serializePlan } from '../cache/serialization.js';
 
-export type {
-  NextjsLivePreviewConfig,
-  NextjsLivePreviewOptions,
-} from '../presentation/live-preview.js';
+export type { LivePreviewConfig, LivePreviewOptions } from '../presentation/live-preview.js';
 
-export interface NextjsServerRequestContext {
-  readonly request: NextjsRequestLike;
-  readonly cookies: NextjsCookieReader;
+export interface ServerRequestContext {
+  readonly request: RequestLike;
+  readonly cookies: CookieReader;
   readonly headers: globalThis.Headers;
   readonly requestUrl: string;
   readonly routeKey: string;
 }
 
-export type NextjsServerValue<T> = T | ((context: NextjsServerRequestContext) => T | Promise<T>);
+export type ServerValue<T> = T | ((context: ServerRequestContext) => T | Promise<T>);
 
-export interface NextjsServerRequestResult extends NextjsRequestResult {
+export interface ServerRequestResult extends RequestResult {
   readonly experienceId: string;
-  readonly hydration: NextjsHydrationMode;
+  readonly hydration: HydrationMode;
   readonly error?: unknown;
 }
 
-export interface NextjsServerRequestPolicy {
-  readonly experience: NextjsServerValue<RuntimeFetchExperienceOptions>;
-  readonly hydration?: NextjsServerValue<NextjsHydrationMode>;
-  readonly resolveOptions?: NextjsServerValue<Omit<RuntimeFetchResolveOptions, 'config'>>;
+export interface ServerRequestPolicy {
+  readonly experience: ServerValue<FetchExperienceOptions>;
+  readonly hydration?: ServerValue<HydrationMode>;
+  readonly resolveOptions?: ServerValue<Omit<FetchResolveOptions, 'config'>>;
   readonly metadataKeys?: readonly string[];
-  readonly initialEvents?: NextjsServerValue<
-    NonNullable<RuntimeFetchExperienceOptions['personalization']>['events']
+  readonly initialEvents?: ServerValue<
+    NonNullable<FetchExperienceOptions['personalization']>['events']
   >;
-  readonly pagePayload?: NextjsServerValue<NonNullable<NextjsRequestResult['initialPagePayload']>>;
+  readonly pagePayload?: ServerValue<NonNullable<RequestResult['initialPagePayload']>>;
   /** Application-owned composition on the same facade, before projection and cleanup. */
   readonly composeRequest?: (
-    request: ExperiencesNodeRequest,
-    primary: NextjsServerRequestResult,
-    context: NextjsServerRequestContext
+    request: RequestRuntime,
+    primary: ServerRequestResult,
+    context: ServerRequestContext
   ) => void | Promise<void>;
 }
 
-export interface NextjsServerExperiencesConfig extends ExperiencesNodeConfig {
-  readonly config: Config;
-  readonly browser?: NextjsBrowserConfig;
+export interface ServerConfig extends NodeConfig {
+  readonly config: RegistryConfig;
+  readonly browser?: BrowserConfig;
   readonly consent?: {
-    readonly server?: NextjsServerValue<ConsentInput>;
+    readonly server?: ServerValue<ConsentInput>;
     readonly clientDefaults?: Pick<
       NonNullable<ExperiencesRootProps['defaults']>,
       'consent' | 'persistenceConsent'
     >;
   };
-  readonly cookie?: NextjsCookieConfig;
+  readonly cookie?: CookieConfig;
   readonly livePreview?:
-    | NextjsLivePreviewConfig
+    | LivePreviewConfig
     | ((
-        context: NextjsServerRequestContext
-      ) => RuntimeLivePreviewOptions | undefined | Promise<RuntimeLivePreviewOptions | undefined>);
-  readonly request?: NextjsServerRequestPolicy;
+        context: ServerRequestContext
+      ) => SessionPreviewOptions | undefined | Promise<SessionPreviewOptions | undefined>);
+  readonly request?: ServerRequestPolicy;
 }
 
-export type NextjsServerRequestOverrides = Partial<NextjsServerRequestPolicy> & {
+export type ServerRequestOverrides = Partial<ServerRequestPolicy> & {
   readonly consent?: ConsentInput;
   readonly locale?: string;
   readonly isPreview?: boolean;
 };
 
-export async function resolveNextjsServerValue<T>(
-  value: NextjsServerValue<T>,
-  context: NextjsServerRequestContext
+export async function resolveServerValue<T>(
+  value: ServerValue<T>,
+  context: ServerRequestContext
 ): Promise<T> {
   return typeof value === 'function'
-    ? await (value as (context: NextjsServerRequestContext) => T | Promise<T>)(context)
+    ? await (value as (context: ServerRequestContext) => T | Promise<T>)(context)
     : value;
 }
 
 /** Only expected Delivery failures are content results; preparation and control flow propagate. */
-export function isNextjsContentError(error: unknown): boolean {
+export function isContentError(error: unknown): boolean {
   return error instanceof ExperienceFetchError || error instanceof NotFoundError;
 }
 
 /** The explicit browser config is the only credential source for built-in client roots. */
-export function nextjsBrowserRootConfig(
-  options: NextjsServerExperiencesConfig
-): NextjsBrowserConfig {
+export function browserRootConfig(options: ServerConfig): BrowserConfig {
   if (!options.browser)
     throw new TypeError('The default request root requires browser configuration.');
-  return JSON.parse(serializeNextjsJsonForHtml(options.browser)) as NextjsBrowserConfig;
+  return JSON.parse(serializeJsonForHtml(options.browser)) as BrowserConfig;
 }
 
 /** Project the whole result for a browser root, without server-only content or raw errors. */
-export function serializeNextjsRequestResult(
-  result: NextjsServerRequestResult,
+export function serializeRequestResult(
+  result: ServerRequestResult,
   options: { readonly metadataKeys?: readonly string[] } = {}
-): NextjsRequestResult {
+): RequestResult {
   return JSON.parse(
-    serializeNextjsJsonForHtml({
+    serializeJsonForHtml({
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: result.experience,
       ...(result.hydration === 'preserve-server' && result.plan
-        ? { plan: serializeNextjsPlan(result.plan, options) }
+        ? { plan: serializePlan(result.plan, options) }
         : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
       ...(result.livePreview === undefined ? {} : { livePreview: result.livePreview }),
     })
-  ) as NextjsRequestResult;
+  ) as RequestResult;
 }

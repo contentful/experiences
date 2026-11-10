@@ -1,9 +1,9 @@
 export { ContentfulExperiences } from './sdk/contentful-experiences.js';
 export type {
-  BrowserEventContextProviders,
-  CoreConfigDefaults,
+  EventContextProviders,
+  ConfigDefaults,
   CurrentPageOptions,
   ExperiencesTrackingApi,
-  ExperiencesWebConfig,
+  Config,
   HydrateAndTrackCurrentPageOptions,
 } from './sdk/types.js';

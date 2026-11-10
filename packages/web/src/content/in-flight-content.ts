@@ -1,4 +1,4 @@
-import type { RuntimeFetchResolveOptions } from '@contentful/experiences-runtime';
+import type { FetchResolveOptions } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { cloneDeepWith } from 'es-toolkit';
 
@@ -18,7 +18,7 @@ function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
 /** One SDK-owned map shares only current in-flight content work, never completed resources. */
 export class InFlightContent {
   readonly #pendingContent = new Map<
-    RuntimeFetchResolveOptions['config'],
+    FetchResolveOptions['config'],
     Map<string, Promise<PortableRenderPlan>>
   >();
   clear(): void {
@@ -27,7 +27,7 @@ export class InFlightContent {
 
   share(
     key: string | undefined,
-    resolve: RuntimeFetchResolveOptions,
+    resolve: FetchResolveOptions,
     load: () => Promise<PortableRenderPlan>
   ): Promise<PortableRenderPlan> {
     if (key === undefined) return load();

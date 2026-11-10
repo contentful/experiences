@@ -18,12 +18,12 @@ The package is ESM and preserves per-file client boundaries. The root entry has 
 | `/client`              | Public React client renderer, render-context and design hooks, supplied-payload `useExperiencePlan`, and shared rendering helpers and types. Marked `'use client'`.                                    |
 | `/custom-renderer`     | `resolveNodeProps`, `NodeSnapshot`, `ResolvedNode`, `ExperienceNode`, `ExperienceNodeProps`, and `createExperienceNode`.                                                                               |
 | `/tracking-attributes` | `getTrackingAttributes`, `TrackingAttributes`, `TRACKING_SCOPES_ATTRIBUTE`, and `TRACKING_CLICKABLE_ATTRIBUTE`.                                                                                        |
-| `/request-handler`     | `createNextjsExperiencesContextHandler` and its option/resolver types for context-only Node middleware.                                                                                                |
-| `/app-router/server`   | `bindNextjsAppRouterServerExperiences`, request-aware server components and explicit/static rendering.                                                                                                 |
-| `/app-router/client`   | `bindNextjsAppRouterClientExperiences`, `NextjsAppRouterRequestRoot`, `NextjsAppRouterRequestAnalyticsRoot`, managed/injected content and server children.                                             |
-| `/pages-router/server` | `bindNextjsPagesRouterServerExperiences` and its native request/response helper.                                                                                                                       |
-| `/pages-router`        | `bindNextjsPagesRouterExperiences`, bound `ExperiencesRoot`, `ExperiencesAnalyticsRoot` and `Experience`.                                                                                              |
-| `/cache-middleware`    | Edge-compatible `createNextjsPublicPermutationCacheMiddleware`; no Node SDK or event work.                                                                                                             |
+| `/request-handler`     | `createExperiencesContextHandler` and its option/resolver types for context-only Node middleware.                                                                                                      |
+| `/app-router/server`   | `bindAppRouterServerExperiences`, request-aware server components and explicit/static rendering.                                                                                                       |
+| `/app-router/client`   | `bindAppRouterClientExperiences`, `AppRouterRequestRoot`, `AppRouterRequestAnalyticsRoot`, managed/injected content and server children.                                                               |
+| `/pages-router/server` | `bindPagesRouterServerExperiences` and its native request/response helper.                                                                                                                             |
+| `/pages-router`        | `bindPagesRouterExperiences`, bound `ExperiencesRoot`, `ExperiencesAnalyticsRoot` and `Experience`.                                                                                                    |
+| `/cache-middleware`    | Edge-compatible `createPublicPermutationCacheMiddleware`; no Node SDK or event work.                                                                                                                   |
 | `/package.json`        | Package metadata.                                                                                                                                                                                      |
 
 ## Automatic single-Experience setup
@@ -46,29 +46,29 @@ the built-in browser root and needs no custom Root:
 // lib/experience-client.tsx
 'use client';
 
-import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
+import { bindAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
 import { browserRegistry } from './browser-registry';
 
-const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
+const binding = bindAppRouterClientExperiences({ config: browserRegistry });
 export const { Experience } = binding.request;
 ```
 
 ```tsx
 // lib/experience-server.tsx
 import 'server-only';
-import { bindNextjsAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
-import { createNextjsPrivateFetch } from '@contentful/experiences-nextjs/server';
+import { bindAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
+import { createPrivateFetch } from '@contentful/experiences-nextjs/server';
 import { serverRegistry } from './server-registry';
 import * as client from './experience-client';
 
-const binding = bindNextjsAppRouterServerExperiences(
+const binding = bindAppRouterServerExperiences(
   {
     spaceId: process.env.CONTENTFUL_SPACE_ID!,
     environmentId: 'master',
     locale: 'en-US',
     delivery: {
       accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN!,
-      fetch: createNextjsPrivateFetch(),
+      fetch: createPrivateFetch(),
     },
     config: serverRegistry,
     browser: {
@@ -90,9 +90,9 @@ export const { ExperiencesRoot, Experience } = binding.request;
 
 ```ts
 // middleware.ts — Node middleware, context forwarding only.
-import { createNextjsExperiencesContextHandler } from '@contentful/experiences-nextjs/request-handler';
+import { createExperiencesContextHandler } from '@contentful/experiences-nextjs/request-handler';
 
-export const middleware = createNextjsExperiencesContextHandler();
+export const middleware = createExperiencesContextHandler();
 export const config = { runtime: 'nodejs', matcher: ['/'] };
 ```
 
@@ -119,7 +119,7 @@ request-aware route. Only this opt-in server family reads framework headers/cook
 
 ### Pages Router
 
-Bind the same server policy once with `bindNextjsPagesRouterServerExperiences`
+Bind the same server policy once with `bindPagesRouterServerExperiences`
 from `/pages-router/server`; use an explicit trusted `origin` for host-independent
 page URLs. Bind the browser registry and flat browser SDK options in a client
 configuration module, then export the named components once. Import
@@ -128,18 +128,18 @@ configuration and imports inside the GSSP server dependency path.
 
 ```tsx
 // lib/pages-experience-server.tsx — consumed only by getServerSideProps.
-import { bindNextjsPagesRouterServerExperiences } from '@contentful/experiences-nextjs/pages-router/server';
-import { createNextjsPrivateFetch } from '@contentful/experiences-nextjs/server';
+import { bindPagesRouterServerExperiences } from '@contentful/experiences-nextjs/pages-router/server';
+import { createPrivateFetch } from '@contentful/experiences-nextjs/server';
 import { serverRegistry } from './server-registry';
 
-export const pagesExperiences = bindNextjsPagesRouterServerExperiences({
+export const pagesExperiences = bindPagesRouterServerExperiences({
   spaceId: process.env.CONTENTFUL_SPACE_ID!,
   environmentId: 'master',
   locale: 'en-US',
   origin: process.env.APP_ORIGIN!,
   delivery: {
     accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN!,
-    fetch: createNextjsPrivateFetch(),
+    fetch: createPrivateFetch(),
   },
   config: serverRegistry,
   consent: { server: false }, // Supply the application's request consent policy.
@@ -151,7 +151,7 @@ export const pagesExperiences = bindNextjsPagesRouterServerExperiences({
 // lib/pages-experience-client.tsx
 'use client';
 
-import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
+import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
 export const {
@@ -160,7 +160,7 @@ export const {
   Experience,
   ExperienceRenderer,
   useManagedExperience,
-} = bindNextjsPagesRouterExperiences({
+} = bindPagesRouterExperiences({
   config: browserRegistry,
   spaceId: process.env.NEXT_PUBLIC_CONTENTFUL_SPACE_ID!,
   environmentId: 'master',
@@ -175,18 +175,18 @@ export const {
 ```tsx
 // pages/index.tsx
 import type { GetServerSideProps } from 'next';
-import type { NextjsRequestResult } from '@contentful/experiences-nextjs/pages-router/server';
+import type { RequestResult } from '@contentful/experiences-nextjs/pages-router/server';
 import { pagesExperiences } from '../lib/pages-experience-server';
 import { Experience } from '../lib/pages-experience-client';
 
-export const getServerSideProps: GetServerSideProps<{ result: NextjsRequestResult }> = async (
+export const getServerSideProps: GetServerSideProps<{ result: RequestResult }> = async (
   context
 ) => {
   const result = await pagesExperiences.request.loadExperience(context);
   return { props: { result } };
 };
 
-export default function Page({ result }: { result: NextjsRequestResult }) {
+export default function Page({ result }: { result: RequestResult }) {
   return <Experience result={result} />;
 }
 ```
@@ -214,7 +214,7 @@ has no `request` family. Its `Experience` accepts either the complete server
 `result` or existing managed props for explicit browser flows. Native
 redirects/errors belong before the server request helper.
 The helper persists the final permitted identity on `context.res` and destroys
-its facade. It returns a JSON-safe `NextjsRequestResult` ready for props; no manual
+its facade. It returns a JSON-safe `RequestResult` ready for props; no manual
 projection is needed. Raw plan/error data is available inside `composeRequest`
 only, while raw server errors, unapproved metadata and server-only plans stay on
 the server.
@@ -259,11 +259,11 @@ For App Router, export the client request root as well as the presentation:
 ```tsx
 // lib/experience-client.tsx
 'use client';
-import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
+import { bindAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
 import { browserRegistry } from './browser-registry';
 import { livePreview } from './live-preview';
 
-const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview });
+const binding = bindAppRouterClientExperiences({ config: browserRegistry, livePreview });
 export const { ExperiencesRoot, Experience } = binding.request;
 ```
 
@@ -277,7 +277,7 @@ into that root. Keep the ordinary page JSX and context-forwarding middleware abo
 
 For Pages, add the same `livePreview` and private Preview token to the server
 binder; add `livePreview` and the separately designated browser Preview token to
-`bindNextjsPagesRouterExperiences`. GSSP, `_app` and `<Experience result={result} />`
+`bindPagesRouterExperiences`. GSSP, `_app` and `<Experience result={result} />`
 stay as shown above. Both server families carry only loader-free configuration
 in the existing result; browser roots retain their client loader and derive the
 primary ID and nonempty trimmed `preview_session_id` from the descriptor and route.
@@ -290,7 +290,7 @@ and use existing `replaceLivePreview` for session changes. Mode entry/exit repla
 the owned SDK below the request-history guard. No consumer preview wrapper, hook
 or key is needed. Errors appear in `states.preview`; analytics roots observe
 revisions for server refresh without browser resolution. This controls Contentful
-Live Preview content and event suppression, independently of XPAPI preflight.
+Live Preview content and event suppression, independently of Personalization API preflight.
 Explicit preview options and application resolvers remain available; injected SDK lifetime stays
 application-owned and does not accept managed configuration.
 
@@ -324,32 +324,32 @@ Normal entries and declarations do not require the optional Live Preview package
 
 ## Explicit request binding
 
-`configureNextjsServerExperiences(config: ExperiencesNodeConfig)` returns the actual Node SDK with stable configuration. It does not force private fetch options, read request state, submit events, or load content. `bindNextjsExperiencesRequest(sdk, options)` calls `forRequest()` once and returns the actual `ExperiencesNodeRequest` directly, with its normal fetch, resolve, destination, event and `destroy()` methods.
+`configureServerExperiences(config: NodeConfig)` returns the actual Node SDK with stable configuration. It does not force private fetch options, read request state, submit events, or load content. `bindExperiencesRequest(sdk, options)` calls `forRequest()` once and returns the actual `RequestRuntime` directly, with its normal fetch, resolve, destination, event and `destroy()` methods.
 
 ```ts
 import {
-  configureNextjsServerExperiences,
-  bindNextjsExperiencesRequest,
-  createNextjsPrivateFetch,
-  applyNextjsPrivateResponseCache,
-  persistNextjsAnonymousId,
+  configureServerExperiences,
+  bindExperiencesRequest,
+  createPrivateFetch,
+  applyPrivateResponseCache,
+  persistAnonymousId,
 } from '@contentful/experiences-nextjs/server';
 
-const sdk = configureNextjsServerExperiences({
+const sdk = configureServerExperiences({
   spaceId: process.env.CONTENTFUL_SPACE_ID!,
   environmentId: 'master',
   delivery: {
     accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN!,
-    fetch: createNextjsPrivateFetch(),
+    fetch: createPrivateFetch(),
   },
 });
 
 // The host supplies these values from its supported request boundary.
-const request = bindNextjsExperiencesRequest(sdk, {
+const request = bindExperiencesRequest(sdk, {
   consent: visitorConsent,
   request: incomingRequest,
   locale: requestLocale,
-  experienceOptions: { ip: hostTrustedIp },
+  personalizationOptions: { ip: hostTrustedIp },
 });
 try {
   const plan = await request.fetchExperience(
@@ -357,8 +357,8 @@ try {
     { config: experienceConfig }
   );
   // At a writable response boundary, after evaluation and before sending headers:
-  applyNextjsPrivateResponseCache(response);
-  persistNextjsAnonymousId(response, request);
+  applyPrivateResponseCache(response);
+  persistAnonymousId(response, request);
   // Render plan independently of event delivery or profile finalization.
 } finally {
   request.destroy();
@@ -367,37 +367,37 @@ try {
 
 `consent` is required and independent of any cookie. Cookie identity is read only when persistence consent is explicitly granted (`true` or `{ persistence: true }`). An explicitly supplied `profile` takes precedence and can remain volatile without persistence consent. An explicit `cookies` reader takes precedence over effective `headers`, then request cookies/header. Empty supplied cookies or headers are authoritative and cannot restore an identity removed by the host. Preview (`isPreview: true` or `livePreview`) excludes every visitor profile input and never reads identity cookies. The preview configuration passes unchanged to Node; optional Preview remains lazy and SDK-owned.
 
-All Node request context options are accepted, including `resolveOptions`, `experienceOptions`, `insightsOptions` and `livePreview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `experienceOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
+All Node request context options are accepted, including `resolveOptions`, `personalizationOptions`, `analyticsOptions` and `livePreview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `personalizationOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
 
-`createNextjsPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createNextjsRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createNextjsRequestContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
+`createPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createRequestContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
 
 ## Response cookies and private caching
 
-`applyNextjsPrivateResponseCache(response)` applies `Cache-Control: private, no-store`; `persistNextjsAnonymousId(response, request, options?)` appends identity `Set-Cookie` using the request's current profile. Binding has no response persistence closure and accepts no `cookieOptions` or `deleteWhenProfileCannotPersist`; `anonymousIdCookieName` on binding controls identity lookup only. Supply response cookie options to the standalone helper or context middleware. For `NextResponse`, it uses the cookie jar so later application `cookies.set()` calls retain SDK identity and withdrawal also updates middleware cookie forwarding. Plain responses use the header fallback. It preserves other cookies, `Vary` and other headers. Call it only where headers are writable: a Route Handler, Server Action response or middleware response, never during Server Component rendering. A cookie or provisional XDA ID is not proof of committed profile state.
+`applyPrivateResponseCache(response)` applies `Cache-Control: private, no-store`; `persistAnonymousId(response, request, options?)` appends identity `Set-Cookie` using the request's current profile. Binding has no response persistence closure and accepts no `cookieOptions` or `deleteWhenProfileCannotPersist`; `anonymousIdCookieName` on binding controls identity lookup only. Supply response cookie options to the standalone helper or context middleware. For `NextResponse`, it uses the cookie jar so later application `cookies.set()` calls retain SDK identity and withdrawal also updates middleware cookie forwarding. Plain responses use the header fallback. It preserves other cookies, `Vary` and other headers. Call it only where headers are writable: a Route Handler, Server Action response or middleware response, never during Server Component rendering. A cookie or provisional XDA ID is not proof of committed profile state.
 
 Next's response cookie jar is keyed by name. The helper restores raw `Set-Cookie` headers at other domain/path scopes, including expiration headers, but later application jar writes can discard those raw headers again. Finish jar writes before appending raw multi-scope headers and calling this helper.
 
-The standalone `createNextjsAnonymousIdSetCookieHeader(request, options?)` and `persistNextjsAnonymousId(response, request, options?)` expose the cookie decision without changing cache headers. Options are `anonymousIdCookieName`, `cookieOptions` (`path`, `domain`, `sameSite`, `secure`, `httpOnly`, `expires`, `maxAge`) and `deleteWhenProfileCannotPersist`. The latter defaults to `true`, following Optimization; set it to `false` when the host does not own withdrawal deletion at this boundary. Deletion uses the same configured path/domain. Defaults are `ctfl-opt-aid`, path `/`, and `SameSite=Lax`. Standalone cookie helpers retain configurable `httpOnly` for server-scoped identity. Preview never writes or expires identity. No profile means no new cookie.
+The standalone `createAnonymousIdSetCookieHeader(request, options?)` and `persistAnonymousId(response, request, options?)` expose the cookie decision without changing cache headers. Options are `anonymousIdCookieName`, `cookieOptions` (`path`, `domain`, `sameSite`, `secure`, `httpOnly`, `expires`, `maxAge`) and `deleteWhenProfileCannotPersist`. The latter defaults to `true`, following Optimization; set it to `false` when the host does not own withdrawal deletion at this boundary. Deletion uses the same configured path/domain. Defaults are `ctfl-opt-aid`, path `/`, and `SameSite=Lax`. Standalone cookie helpers retain configurable `httpOnly` for server-scoped identity. Preview never writes or expires identity. No profile means no new cookie.
 
-`createNextjsPrivateFetch(customFetch?)` preserves the custom fetch implementation, input, authorization, method, body, headers and abort signal while overriding cache with `no-store`. It removes positive or indefinite (`false`) Next `revalidate` conflicts and preserves other Next options. Install it only in host-assembled private `delivery.fetch` and, when needed, direct CPA `preview.fetch` configuration. `applyNextjsPrivateResponseCache(response)` sets private/no-store headers without replacing `Vary`. The Preview Session helper has no custom-fetch injection; run session work outside cached functions on a dynamic no-store route.
+`createPrivateFetch(customFetch?)` preserves the custom fetch implementation, input, authorization, method, body, headers and abort signal while overriding cache with `no-store`. It removes positive or indefinite (`false`) Next `revalidate` conflicts and preserves other Next options. Install it only in host-assembled private `delivery.fetch` and, when needed, direct CPA `preview.fetch` configuration. `applyPrivateResponseCache(response)` sets private/no-store headers without replacing `Vary`. The Preview Session helper has no custom-fetch injection; run session work outside cached functions on a dynamic no-store route.
 
 ## Browser serialization
 
-`serializeNextjsPlan(plan, { metadataKeys? })` returns a detached browser plan. It sets `diagnostics: []`, omits `deliveryDiagnostics` and personalization, and defaults `metadata` to `{}`. Explicit `metadataKeys` allow only selected metadata fields. Nodes, slots, attribution and source maps remain intact. Known absent SDK structural optional fields are projected explicitly; customer content/design/resolved records and approved metadata remain strict JSON data. Server diagnostics remain available on the original plan.
+`serializePlan(plan, { metadataKeys? })` returns a detached browser plan. It sets `diagnostics: []`, omits `deliveryDiagnostics` and personalization, and defaults `metadata` to `{}`. Explicit `metadataKeys` allow only selected metadata fields. Nodes, slots, attribution and source maps remain intact. Known absent SDK structural optional fields are projected explicitly; customer content/design/resolved records and approved metadata remain strict JSON data. Server diagnostics remain available on the original plan.
 
-`serializeNextjsHandoff(handoff, { spaceId, environmentId })` delegates scope, cache and envelope validation to Node's canonical parser. Use the actual Node producer's complete result even when it contains an error and no plan. The serializer retains profile ID, evaluated message IDs, event order/bodies, route key and replay locale; complete profile state is preserved for the request-scoped browser handoff. It explicitly omits absent SDK context optionals emitted by builders, including nested page context fields, page-event properties, campaign and location optionals, while preserving all defined fields and raw query arrays. Customer event properties and traits remain strict JSON data. It creates no new wire DTO or events and is not an untrusted replay admission API; producer and browser owners retain their batch/schema/count/lifetime checks. Handoff bodies are browser-visible: do not include secrets, cache, log or persist them.
+`serializeHandoff(handoff, { spaceId, environmentId })` delegates scope, cache and envelope validation to Node's canonical parser. Use the actual Node producer's complete result even when it contains an error and no plan. The serializer retains profile ID, evaluated message IDs, event order/bodies, route key and replay locale; complete profile state is preserved for the request-scoped browser handoff. It explicitly omits absent SDK context optionals emitted by builders, including nested page context fields, page-event properties, campaign and location optionals, while preserving all defined fields and raw query arrays. Customer event properties and traits remain strict JSON data. It creates no new wire DTO or events and is not an untrusted replay admission API; producer and browser owners retain their batch/schema/count/lifetime checks. Handoff bodies are browser-visible: do not include secrets, cache, log or persist them.
 
-All transferred application data must be JSON-safe. Functions, symbols, bigint, cycles, non-finite numbers, unsupported class instances and arbitrary `undefined` fields throw path-specific `TypeError`s. `serializeNextjsJsonForHtml(value)` performs strict validation and escapes `<`, U+2028 and U+2029 for a JSON script body. Ordinary React markup uses normal React escaping.
+All transferred application data must be JSON-safe. Functions, symbols, bigint, cycles, non-finite numbers, unsupported class instances and arbitrary `undefined` fields throw path-specific `TypeError`s. `serializeJsonForHtml(value)` performs strict validation and escapes `<`, U+2028 and U+2029 for a JSON script body. Ordinary React markup uses normal React escaping.
 
 ## Explicit public and static use
 
-Stable configuration remains usable for static/ISR/public rendering without request reads or a private fetch wrapper. Call `assertNextjsPublicRequestPolicy({ cache, context?, fetchOptions? })` with the exact context and fetch options that the host will use. Policy must be explicit: `{ scope: 'static' }` or `{ scope: 'public-permutation', key }`. Public permutation keys must be nonempty and application-complete: include content identity/revision, space/environment, locale, parameters and every selection dimension. The validator cannot prove key completeness; the application owns it and actual cache configuration.
+Stable configuration remains usable for static/ISR/public rendering without request reads or a private fetch wrapper. Call `assertPublicRequestPolicy({ cache, context?, fetchOptions? })` with the exact context and fetch options that the host will use. Policy must be explicit: `{ scope: 'static' }` or `{ scope: 'public-permutation', key }`. Public permutation keys must be nonempty and application-complete: include content identity/revision, space/environment, locale, parameters and every selection dimension. The validator cannot prove key completeness; the application owns it and actual cache configuration.
 
 Public/static requests exclude profile/identity, personalization events, replay and preview. The validator rejects private request inputs; canonical handoff validation rejects any identity/state/replay in public/static handoffs. Do not bind an incoming visitor request or apply private response caching/cookie persistence on the public/static path. Use explicit `sdk.forRequest({ consent: false, locale })` or the existing free fetch function after validating policy. A supplied plan and cache metadata do not themselves configure Next's Data Cache or response caching. There is no additional SDK cache framework.
 
 ## Context-only middleware and request reuse
 
-Import `createNextjsExperiencesContextHandler` from `/request-handler`. With no options it sanitizes and forwards context only. With `{ sdk, consent, ...requestOptions }`, `consent` may be a value or resolver receiving `{ request, headers, cookies }`. Optional `livePreview: NextjsLivePreviewResolver` receives `{ request }` and returns a Node `RuntimeLivePreviewOptions` or `undefined`, synchronously or asynchronously; both resolvers run before binding. The existing static `isPreview` option remains available. Explicit `bindNextjsExperiencesRequest` accepts the preview configuration unchanged; the handler accepts the application resolver. Resolver failure aborts binding and cookie work.
+Import `createExperiencesContextHandler` from `/request-handler`. With no options it sanitizes and forwards context only. With `{ sdk, consent, ...requestOptions }`, `consent` may be a value or resolver receiving `{ request, headers, cookies }`. Optional `livePreview: LivePreviewResolver` receives `{ request }` and returns a Node `LivePreviewOptions` or `undefined`, synchronously or asynchronously; both resolvers run before binding. The existing static `isPreview` option remains available. Explicit `bindExperiencesRequest` accepts the preview configuration unchanged; the handler accepts the application resolver. Resolver failure aborts binding and cookie work.
 
 The handler follows Optimization's pinned Next request-header override mechanics. It honors effective overrides and removed cookies, strips incoming `x-ctfl-exp-*` headers, and sets `x-ctfl-exp-request-url` from the actual normalized request URL. It preserves existing rewrites, response headers/cookies and terminal redirect/error/body responses. Terminal responses skip resolvers and binding. Handler options separately accept the standalone cookie persistence options. At persistence, middleware forces `cookieOptions.httpOnly: false` for shared browser identity, including withdrawal, even when the input sets it to `true`. Configured context binding applies private response caching, persists only the identity already available and destroys its direct local request in `finally`; middleware does not fetch content, submit page/identify events, prepare replay or make commits a prerequisite. The `/request-handler` entry uses Node; it is not an Edge binder. Only trust forwarded URL context from a boundary that runs this sanitization.
 
@@ -412,18 +412,15 @@ The App Router request family owns routine memoization. Explicit hosts may still
 
 ```ts
 import { cache } from 'react';
-import {
-  bindNextjsExperiencesRequest,
-  createNextjsRouteKey,
-} from '@contentful/experiences-nextjs/server';
+import { bindExperiencesRequest, createRouteKey } from '@contentful/experiences-nextjs/server';
 
 const loadExperience = cache(async () => {
-  const request = bindNextjsExperiencesRequest(sdk, explicitRequestOptions);
+  const request = bindExperiencesRequest(sdk, explicitRequestOptions);
   try {
     return await request.fetchExperienceForHandoff(
       actualDescriptor,
       { config: experienceConfig },
-      { routeKey: createNextjsRouteKey(explicitRequestUrl) }
+      { routeKey: createRouteKey(explicitRequestUrl) }
     );
   } finally {
     request.destroy();
@@ -438,7 +435,7 @@ This load owns its direct request through completion and returns the unchanged N
 ## Router bindings
 
 Use `/app-router/server` and `/app-router/client` for the separate
-`bindNextjsAppRouterServerExperiences` and `bindNextjsAppRouterClientExperiences`
+`bindAppRouterServerExperiences` and `bindAppRouterClientExperiences`
 families. Bind the server Node configuration and render registry once; configure
 the browser registry and callbacks in a client module. `consent.server` resolves
 independent request consent, while `consent.clientDefaults` configures Web defaults.
@@ -451,7 +448,7 @@ handlers and DOM refs cannot. See [React root bindings](../adapter-react/README.
 
 The server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
-Request roots and presentations receive one JSON-safe `result: NextjsRequestResult`:
+Request roots and presentations receive one JSON-safe `result: RequestResult`:
 `requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
 `contentError` string, `initialPagePayload` and optional loader-free `livePreview` configuration. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
@@ -459,13 +456,13 @@ retains server-local `experienceId`, `hydration` and raw `error`; request roots
 exclude those fields and server-only plans.
 Only the App opt-in path reads `headers()`/`cookies()`; configure the sanitized request
 handler first. `request.experience`, `initialEvents`, `pagePayload`, `resolveOptions` and
-`hydration` can be request-context resolvers. `NextjsHydrationMode` is
-`preserve-server` (default) or `server-only`. `NextjsServerRequestPolicy` binds one
+`hydration` can be request-context resolvers. `HydrationMode` is
+`preserve-server` (default) or `server-only`. `ServerRequestPolicy` binds one
 primary request; App and Pages configuration share the server policy contract. Ordinary SSR uses Node fetch, actual hybrid
 documents use the Node transfer producer, and hybrid RSC navigation loads through
 Web. Prefetch starts no visitor work. The resolved `request.pagePayload` is returned
 as `initialPagePayload` and supplied to both request roots for browser initial
-intent. High-level `cookie: NextjsCookieConfig` matches Web's shared identity
+intent. High-level `cookie: CookieConfig` matches Web's shared identity
 attributes (`path`, `domain`, `sameSite`, `secure`, and `expires` in days); the
 request/response adapter converts expiry to response cookie options. It uses the
 shared `ctfl-opt-aid` identity name. Low-level standalone helpers retain their
@@ -507,11 +504,11 @@ browser content fetch, resolution or renderer. Supplied aggregate admission rema
 independent of display; there is no before-page no-op or compensating XDA commit.
 
 For Pages, `/pages-router/server` exposes
-`bindNextjsPagesRouterServerExperiences(config).request.loadExperience(ctx, overrides?)`.
+`bindPagesRouterServerExperiences(config).request.loadExperience(ctx, overrides?)`.
 Call it from native `getServerSideProps` after application redirect/error decisions.
 Bind `config`, `request.experience`, `request.resolveOptions`, `request.hydration`,
 `consent.server`, `consent.clientDefaults` and `cookie` once; per-call
-`NextjsPagesRouterRequestOptions` provides explicit overrides and optional `origin`.
+`PagesRouterRequestOptions` provides explicit overrides and optional `origin`.
 An explicit trusted origin avoids dependence on incoming Host/forwarded headers.
 The helper maps the native request to one facade, evaluates one primary result,
 persists the final permitted identity at writable `ctx.res`, then destroys its facade.
@@ -520,16 +517,16 @@ and normalized server context before projection/final cookie persistence/cleanup
 Its additional fetches, identity effects and result storage remain application-owned.
 Exceptions propagate and cleanup still runs.
 
-Pages `request.loadExperience` returns the JSON-safe `NextjsRequestResult` directly,
+Pages `request.loadExperience` returns the JSON-safe `RequestResult` directly,
 including `initialPagePayload` and explicit no-page intent. Raw primary plan/error
 data is available to its `composeRequest` callback only. `preserve-server` projects
 the plan; `server-only` omits it and invents no handoff. Unapproved metadata, raw
 errors and server fields remain server-local; common GSSP consumers need no
 manual serializer call.
 
-App `request.loadExperience` retains the raw `NextjsServerRequestResult` for
+App `request.loadExperience` retains the raw `ServerRequestResult` for
 server composition. Its bound request roots/presentations project automatically;
-explicit hosts can use `serializeNextjsRequestResult(result, { metadataKeys? })`
+explicit hosts can use `serializeRequestResult(result, { metadataKeys? })`
 when assembling their own browser boundary. Preparation, configuration, callback
 and unexpected errors propagate; expected Delivery failures can coexist with a
 usable plan/handoff and a browser-safe `contentError`.
@@ -538,7 +535,7 @@ validation; native `revalidate`, redirects and errors remain application-owned.
 
 Destructure and export `ExperiencesRoot`, `ExperiencesAnalyticsRoot`, `Experience`,
 `ExperienceRenderer` and `useManagedExperience` from
-`bindNextjsPagesRouterExperiences({ config: browserRegistry, ...browserOptions })`
+`bindPagesRouterExperiences({ config: browserRegistry, ...browserOptions })`
 in a client configuration module. Use plain `<ExperiencesRoot>` once in `_app`
 with the primary `result`; use `ExperiencesAnalyticsRoot` for opaque server-only
 content. The binding accepts flat browser SDK options, `consent.clientDefaults`
@@ -549,7 +546,7 @@ Pages has no client `request` family or standalone request-root exports.
 Comparisons remain explicit event-free application loops, and repeated
 presentations reuse plans.
 
-Both routers use `createNextjsRouteKey`: hash-only and Pages shallow changes do not
+Both routers use `createRouteKey`: hash-only and Pages shallow changes do not
 own a page, while committed path/query changes and back/forward do. Canceled
 transitions create no new intent. Startup data is not readopted after leaving its
 initial route; existing React/SDK reset handles the current visitor. Remove old
@@ -561,9 +558,9 @@ credentials are separately designated; server implementation loaders are never s
 
 ## Public cache conveniences
 
-`createExperiencesCacheKey` covers explicit space/environment, Experience ID/revision, locale, parameters and approved `selectionDimensions`. `createPublicPermutationCacheMetadata` adds `permutationKey`, optional `cacheVersion` and detached optional `tags`. The application owns dimension completeness and must exclude raw profile, identity and replay.
+`createCacheKey` covers explicit space/environment, Experience ID/revision, locale, parameters and approved `selectionDimensions`. `createPublicPermutationCacheMetadata` adds `permutationKey`, optional `cacheVersion` and detached optional `tags`. The application owns dimension completeness and must exclude raw profile, identity and replay.
 
-`createNextjsPublicPermutationCacheMiddleware({ resolveCache, rewrite?, cacheKeySearchParam? })` performs bounded routing only. Its default query name is `ctfl-exp-cache-key`. It preserves terminal responses, existing response headers/cookies and authoritative request-header removals, sanitizing SDK-owned request headers before rewriting. It imports no Node runtime and runs in Edge middleware. It neither initializes a visitor nor implements a cache.
+`createPublicPermutationCacheMiddleware({ resolveCache, rewrite?, cacheKeySearchParam? })` performs bounded routing only. Its default query name is `ctfl-exp-cache-key`. It preserves terminal responses, existing response headers/cookies and authoritative request-header removals, sanitizing SDK-owned request headers before rewriting. It imports no Node runtime and runs in Edge middleware. It neither initializes a visitor nor implements a cache.
 
 Canonical handoff parsing retains valid public-permutation tags. Next boundaries additionally validate at most 128 nonempty tags, each at most 256 characters, without commas or line breaks. Pass `cache.tags` explicitly to supported Next fetch `next.tags` or framework invalidation APIs; the SDK does not install an invalidation service. Private content never enters this path.
 

@@ -4,12 +4,12 @@ import { browserSdk } from '../test/browser-sdk.js';
 import { profile } from '../test/fixtures/profile.js';
 
 import { act } from 'react';
-import { testRoot } from '../test/react-root.js';
+import { testRoot } from '../test/dom-root.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ContentfulExperiences } from '@contentful/experiences-web';
 import { useExperiences } from '@contentful/experiences-react/client';
-import { bindNextjsPagesRouterExperiences } from './client.js';
-import type { NextjsRequestResult } from '../presentation/request-result.js';
+import { bindPagesRouterExperiences } from './client.js';
+import type { RequestResult } from '../presentation/request-result.js';
 
 const router = vi.hoisted(() => ({
   isReady: true,
@@ -22,7 +22,7 @@ const firstId = '3fLAdFb3BYAuImRhcW8k4t';
 const destinationId = '7u2eP09B4BIBToH8UwSHck';
 const destination = '/pages/page-two';
 const plan = createPlan();
-const startup: NextjsRequestResult = {
+const startup: RequestResult = {
   requestId: 'startup-request',
   routeKey: '/pages',
   experience: { experienceId: firstId },
@@ -36,7 +36,7 @@ const startup: NextjsRequestResult = {
     },
   },
 };
-const navigation: NextjsRequestResult = {
+const navigation: RequestResult = {
   requestId: 'destination-request',
   routeKey: destination,
   experience: {
@@ -57,10 +57,10 @@ describe('Pages managed request sequence', () => {
 
   it('adopts the destination descriptor and page intent before completion without fetching twice', async () => {
     const { sdk, fetchExperience } = browserSdk({ consent: true, plan });
-    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+    const { ExperiencesRoot, Experience } = bindPagesRouterExperiences({
       config: { components: {} },
     });
-    const tree = (experiences: NextjsRequestResult) => (
+    const tree = (experiences: RequestResult) => (
       <ExperiencesRoot
         delivery={{ accessToken: 'browser-token' }}
         spaceId="space"
@@ -112,7 +112,7 @@ describe('Pages managed request sequence', () => {
 
   it('ignores hash, shallow and canceled transitions while committing a changed query', async () => {
     const { sdk, fetchExperience } = browserSdk({ consent: true, plan });
-    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+    const { ExperiencesRoot, Experience } = bindPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>
@@ -158,7 +158,7 @@ describe('Pages managed request sequence', () => {
   });
   it('runs the bound analytics root without browser content loading', async () => {
     const { sdk, fetchExperience } = browserSdk({ consent: true, plan });
-    const { ExperiencesAnalyticsRoot } = bindNextjsPagesRouterExperiences({
+    const { ExperiencesAnalyticsRoot } = bindPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>
@@ -190,7 +190,7 @@ describe('Pages managed request sequence', () => {
       current = useExperiences() as ContentfulExperiences;
       return null;
     }
-    const { ExperiencesRoot } = bindNextjsPagesRouterExperiences({
+    const { ExperiencesRoot } = bindPagesRouterExperiences({
       config: { components: {} },
       spaceId: 'space',
       environmentId: 'master',

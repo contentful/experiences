@@ -60,12 +60,9 @@ Bind the browser registry once. The root constructs Web after commit; each manag
 view fetches and binds preview updates after commit too.
 
 ```tsx
-import {
-  createReactExperiences,
-  type PortableRenderPlan,
-} from '@contentful/experiences-react/client';
+import { createExperiences, type PortableRenderPlan } from '@contentful/experiences-react/client';
 
-const { ExperiencesRoot, Experience, useManagedExperience } = createReactExperiences({
+const { ExperiencesRoot, Experience, useManagedExperience } = createExperiences({
   config: browserRegistry,
 });
 
@@ -293,13 +290,13 @@ Bind the registry once, then mount a managed root around supplied-plan rendering
 
 ```tsx
 import {
-  createReactExperiences,
+  createExperiences,
   useConsentState,
   useExperiencesActions,
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } = createReactExperiences({
+const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } = createExperiences({
   config: experienceConfig,
 });
 
@@ -334,7 +331,7 @@ available on an application-owned concrete Web instance.
 
 `useExperiences()` returns the current `WebExperiencesRuntime` for SDK actions and
 tracking. It is distinct from singular `useExperience()`, the render context.
-`useExperiencesContext()` returns `{ sdk, error, isLive, isContentReady }`. Managed
+`useRuntimeContext()` returns `{ sdk, error, isLive, isContentReady }`. Managed
 SSR and initial hydration use a cached inert snapshot; setup failure retains that
 snapshot and supplied content with `error`. The context is a discriminated union:
 checking `context.isLive` narrows `context.sdk` to concrete `ContentfulExperiences`
@@ -370,7 +367,7 @@ An explicit `buildPagePayload` takes precedence, including when it returns
 `undefined`; neither form creates page intent when both are absent and `pageMode`
 is omitted. Explicit `personalization.events` remains complete caller intent.
 Ordinary XDA noncommit is
-tolerated without a compensating XPAPI call or accepted-route mark. Explicit replay
+tolerated without a compensating Personalization API call or accepted-route mark. Explicit replay
 and page/fallback operations
 retain Web's route admission and consent-change behavior.
 Handoff cache safety and receiving scope are asserted before SSR children render;
@@ -403,8 +400,8 @@ Without snapshot/handoff it is immediately available; replacement rebinds
 subscriptions and manual refs. The provider never destroys an injected SDK.
 Independent React roots can share one explicit `/host` binding and each use an
 injected provider. Activate the host outside React render with
-`createExperiencesRootSdkBinding({ config, onStatesReady })`, then unmount its
-React roots before `disposeExperiencesRootSdkBinding(binding)` during deliberate
+`createRootSdkBinding({ config, onStatesReady })`, then unmount its
+React roots before `disposeRootSdkBinding(binding)` during deliberate
 host replacement or teardown within a live document.
 `{ sdk }` creates a borrowed binding whose disposal leaves SDK destruction to the
 application. During document exit, keep the owner and attributed roots alive for
@@ -412,7 +409,7 @@ Web's interaction completion and final hide flush; browser teardown releases tha
 document. Persisted BFCache `pagehide` retains ownership for resumption.
 
 The state hooks are `useProfileState`, `useLocaleState`, `useConsentState`,
-`usePersistenceConsentState`, `useExperienceRequestState`, `useEventStreamState`,
+`usePersistenceConsentState`, `usePersonalizationRequestState`, `useEventStreamState`,
 `useBlockedEventStreamState`, and `usePreviewState`. They preserve SDK value types,
 including `undefined` and `false`, and cache observable emissions for React.
 Event state reads the last attempt; it is not a new attempt notification. For an
@@ -442,7 +439,7 @@ is insufficient.
 
 Bind the registry once at module scope with `bindReactRouterExperiences({ config })`
 or `bindTanStackRouterExperiences({ config })`. Each returns the
-`createReactExperiences` result with router-aware `ExperiencesRoot` and
+`createExperiences` result with router-aware `ExperiencesRoot` and
 `ExperiencesProvider`, plus bound `Experience`, `useManagedExperience` and
 `ExperienceRenderer`. Mount one stable wrapper inside the respective router,
 above the primary managed `Experience`. Keep it mounted across navigation rather
@@ -718,13 +715,13 @@ Disable automatic views while explicitly registering manual views:
 ```tsx
 import { useCallback } from 'react';
 import {
-  createReactExperiences,
+  createExperiences,
   useExperiences,
   type OnExperienceNodeRoot,
   type PortableRenderPlan,
 } from '@contentful/experiences-react/client';
 
-const { ExperienceRenderer } = createReactExperiences({ config: registry });
+const { ExperienceRenderer } = createExperiences({ config: registry });
 
 function ManualContent({ plan }: { plan: PortableRenderPlan }) {
   const sdk = useExperiences();

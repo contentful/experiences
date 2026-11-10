@@ -1,29 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  mockCreateRuntimeOptimizationClient,
-  mockCreateRuntimeDeliveryClient,
+  mockCreateOptimizationClient,
+  mockCreateDeliveryClient,
   mockFetchExperience,
   mockFetchExperiencePayload,
   mockResolveExperience,
 } = vi.hoisted(() => {
   const mockOptimizationClient = {
-    experience: { upsertProfile: vi.fn() },
-    insights: { sendBatchEvents: vi.fn() },
+    personalization: { upsertProfile: vi.fn() },
+    analytics: { sendBatchEvents: vi.fn() },
   };
   return {
-    mockCreateRuntimeOptimizationClient: vi.fn(function MockOptimizationClient() {
+    mockCreateOptimizationClient: vi.fn(function MockOptimizationClient() {
       return mockOptimizationClient;
     }),
-    mockCreateRuntimeDeliveryClient: vi.fn((source) => ({ source })),
+    mockCreateDeliveryClient: vi.fn((source) => ({ source })),
     mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [] }),
     mockFetchExperiencePayload: vi.fn().mockResolvedValue({ nodes: [] }),
     mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
   };
 });
 
-vi.mock('./create-runtime-delivery-client.js', () => ({
-  createRuntimeDeliveryClient: mockCreateRuntimeDeliveryClient,
+vi.mock('./create-delivery-client.js', () => ({
+  createDeliveryClient: mockCreateDeliveryClient,
 }));
 vi.mock('@contentful/experiences-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@contentful/experiences-client')>()),
@@ -32,7 +32,7 @@ vi.mock('@contentful/experiences-client', async (importOriginal) => ({
 }));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
 vi.mock('./create-optimization-client.js', () => ({
-  createRuntimeOptimizationClient: mockCreateRuntimeOptimizationClient,
+  createOptimizationClient: mockCreateOptimizationClient,
 }));
 
 import { ContentfulExperiences } from './contentful-experiences.js';
@@ -88,8 +88,8 @@ describe('ContentfulExperiences', () => {
       delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
-    const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents');
-    const personalize = vi.spyOn(runtime.api.experience, 'upsertProfile');
+    const send = vi.spyOn(runtime.api.analytics, 'sendBatchEvents');
+    const personalize = vi.spyOn(runtime.api.personalization, 'upsertProfile');
     const changes = [
       {
         type: 'Variable',
@@ -170,7 +170,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('constructs Optimization transport from the runtime Contentful identifiers', () => {
-    mockCreateRuntimeOptimizationClient.mockClear();
+    mockCreateOptimizationClient.mockClear();
 
     createRuntime({
       environmentId: 'staging',
@@ -183,7 +183,7 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
 
-    expect(mockCreateRuntimeOptimizationClient).toHaveBeenCalledWith({
+    expect(mockCreateOptimizationClient).toHaveBeenCalledWith({
       spaceId: 'space',
       environmentId: 'staging',
       locale: undefined,
@@ -195,7 +195,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     const runtime = createRuntime({
       locale: 'en-US',
@@ -203,14 +203,14 @@ describe('ContentfulExperiences', () => {
       resolveDefaults: { metadata: { site: 'main', shared: 'default' }, debug: true },
       eventBuilder: { channel: 'server' },
     });
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledTimes(2);
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenCalledTimes(2);
+    expect(mockCreateDeliveryClient).toHaveBeenNthCalledWith(
       1,
       { accessToken: 'delivery' },
       undefined,
       userAgentHeaders
     );
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenNthCalledWith(
       2,
       { accessToken: 'preview' },
       'https://preview.xdn.contentful.com',
@@ -293,7 +293,7 @@ describe('ContentfulExperiences', () => {
 
   it('forwards personalization on destination node and path fetches', async () => {
     const delivery = { id: 'delivery' } as never;
-    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery);
+    mockCreateDeliveryClient.mockReturnValueOnce(delivery);
     const runtime = createRuntime();
     const personalization = { profileId: 'profile-1' };
 
@@ -319,10 +319,10 @@ describe('ContentfulExperiences', () => {
   });
 
   it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
-    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
+    mockCreateDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
     const runtime = createRuntime({
       preview: { accessToken: 'preview' },
       eventBuilder: { channel: 'server' },
@@ -358,14 +358,14 @@ describe('ContentfulExperiences', () => {
   it.each([undefined, 'https://preview-host.example'])(
     'preserves generated preview environment and explicit host (%s)',
     (host) => {
-      mockCreateRuntimeDeliveryClient.mockClear();
+      mockCreateDeliveryClient.mockClear();
       const preview = {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
         ...(host === undefined ? {} : { host }),
       };
       createRuntime({ preview });
-      expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+      expect(mockCreateDeliveryClient).toHaveBeenCalledWith(
         preview,
         'https://preview.xdn.contentful.com',
         userAgentHeaders
@@ -374,7 +374,7 @@ describe('ContentfulExperiences', () => {
   );
 
   it('reports the leaf SDK and application in the user-agent header', () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     createRuntime({
       eventBuilder: {
@@ -384,7 +384,7 @@ describe('ContentfulExperiences', () => {
       },
     });
 
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(expect.anything(), undefined, {
+    expect(mockCreateDeliveryClient).toHaveBeenCalledWith(expect.anything(), undefined, {
       'X-Contentful-User-Agent': expect.stringMatching(
         /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
       ),

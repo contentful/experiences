@@ -1,28 +1,31 @@
 // @vitest-environment jsdom
 
 import {
-  type BuiltRuntimeFetchExperienceOptions,
+  type BuiltFetchExperienceOptions,
   ContentfulExperiences as RuntimeExperiences,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
   withEventConsent,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
 import { ContentfulExperiences as NodeExperiences } from '../../../../node/src/contentful-experiences.js';
 import { ContentfulExperiences as WebExperiences } from '../../contentful-experiences.js';
-import { clearIdentityCookies, seedConsent } from '../../test/fixtures/consent.js';
-import { completeProfile } from '../../test/fixtures/profile.js';
+import { clearIdentityCookies, seedConsent } from '../fixtures/consent.js';
+import { completeProfile } from '../fixtures/profile.js';
 
 const active = new Set<NodeExperiences | WebExperiences>();
 const payloadRuntime = RuntimeExperiences.prototype as unknown as {
   fetchExperiencePayload(
-    options: BuiltRuntimeFetchExperienceOptions,
-    resolve: RuntimeFetchResolveOptions
+    options: BuiltFetchExperienceOptions,
+    resolve: FetchResolveOptions
   ): Promise<ExperiencePayload>;
 };
 const resolveOptions = { config: { components: {} } };
@@ -30,7 +33,7 @@ const resolveOptions = { config: { components: {} } };
 function evaluate(
   request: ReturnType<NodeExperiences['forRequest']>,
   routeKey: string,
-  events: NonNullable<RuntimeFetchExperienceOptions['personalization']>['events']
+  events: NonNullable<FetchExperienceOptions['personalization']>['events']
 ) {
   return request.fetchExperienceForHandoff(
     { experienceId: 'experience', personalization: { events } },
@@ -94,7 +97,7 @@ afterEach(() => {
 describe('paired XDA evaluation and Web delivery', () => {
   it('consumes the complete XDA handoff without rerunning finalized event hooks', async () => {
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: completeProfile('evaluated-profile') } as never);
     const server = node();
     const serverHook = vi.fn((event) =>
@@ -128,7 +131,7 @@ describe('paired XDA evaluation and Web delivery', () => {
 
   it('preserves request locale across JSON replay despite differing event and browser locales', async () => {
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: completeProfile('profile') } as never);
     const server = new NodeExperiences({
       spaceId: 'space',
@@ -167,7 +170,7 @@ describe('paired XDA evaluation and Web delivery', () => {
     vi.useFakeTimers();
     const firstDelivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(firstDelivery.promise as never);
     // Event consent is denied, but the prepared types are allow-listed, so the batch is
     // prepared and its events keep the denied flag through the replay.
@@ -206,7 +209,7 @@ describe('paired XDA evaluation and Web delivery', () => {
       routeKey: '/products?sort=popular',
     });
     await expect(admission).resolves.toEqual({ accepted: true });
-    expect(browser.states.experienceRequestState.current.status).toBe('pending');
+    expect(browser.states.personalizationRequestState.current.status).toBe('pending');
     expect(upsert).toHaveBeenCalledTimes(1);
     const [firstBody, firstOptions] = upsert.mock.calls[0]!;
     // The same events in the same order, except that the consent flag is the browser's
@@ -229,14 +232,14 @@ describe('paired XDA evaluation and Web delivery', () => {
   it('carries a preview-issued continuation ID across JSON for a new visitor', async () => {
     const delivery = deferred<{ profile: EventProfile }>();
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(delivery.promise as never);
     vi.mocked(payloadRuntime.fetchExperiencePayload).mockResolvedValueOnce({
       nodes: [],
       extensions: { personalization: { profile: completeProfile('issued-profile') } },
     });
     const analytics = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
     const server = node();
     const request = server.forRequest({ consent: true });
@@ -274,7 +277,7 @@ describe('paired XDA evaluation and Web delivery', () => {
 
   it('retains replay after XDA failure and uses an ordinary page on a different route', async () => {
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: completeProfile('committed-profile') } as never);
     const failure = new Error('XDA unavailable');
     vi.mocked(payloadRuntime.fetchExperiencePayload).mockRejectedValueOnce(failure);

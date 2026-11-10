@@ -1,12 +1,12 @@
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import type {
-  BuiltRuntimeFetchExperienceOptions,
-  RuntimeFetchResolveOptions,
+  BuiltFetchExperienceOptions,
+  FetchResolveOptions,
 } from '@contentful/experiences-runtime';
 import { payloadFixture, payloadScope } from './fixtures/payload.js';
 import { afterEach, vi } from 'vitest';
-import { ContentfulExperiences, type ExperiencesNodeConfig } from '../contentful-experiences.js';
-import type { ExperiencesNodeRequestContext } from '../request/types.js';
+import { ContentfulExperiences, type Config } from '../contentful-experiences.js';
+import type { RequestContext } from '../request/types.js';
 import { profileFixture } from './fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
@@ -14,7 +14,7 @@ export function trackRuntime<T extends ContentfulExperiences>(runtime: T): T {
   runtimes.add(runtime);
   return runtime;
 }
-export function createRuntime(overrides: Partial<ExperiencesNodeConfig> = {}) {
+export function createRuntime(overrides: Partial<Config> = {}) {
   return trackRuntime(
     new ContentfulExperiences({
       spaceId: 'space',
@@ -26,9 +26,9 @@ export function createRuntime(overrides: Partial<ExperiencesNodeConfig> = {}) {
 }
 export function spyOnEventApi(sdk: ContentfulExperiences, responseProfileId: string) {
   const upsert = vi
-    .spyOn(sdk.api.experience, 'upsertProfile')
+    .spyOn(sdk.api.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: profileFixture(responseProfileId) } as never);
-  const analytics = vi.spyOn(sdk.api.insights, 'sendBatchEvents').mockResolvedValue(true);
+  const analytics = vi.spyOn(sdk.api.analytics, 'sendBatchEvents').mockResolvedValue(true);
   return { upsert, analytics };
 }
 afterEach(() => {
@@ -40,16 +40,16 @@ afterEach(() => {
 // Expose the actual Runtime payload boundary for a no-network spy.
 class TestRuntime extends ContentfulExperiences {
   override fetchExperiencePayload(
-    options: BuiltRuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: BuiltFetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<ExperiencePayload> {
     return super.fetchExperiencePayload(options, resolveOptions);
   }
 }
 
 export function setupPayloadRuntime(
-  config: Pick<ExperiencesNodeConfig, 'locale' | 'allowedEventTypes' | 'onEventBlocked'>,
-  requestContext: ExperiencesNodeRequestContext
+  config: Pick<Config, 'locale' | 'allowedEventTypes' | 'onEventBlocked'>,
+  requestContext: RequestContext
 ) {
   const sdk = trackRuntime(
     new TestRuntime({
@@ -60,7 +60,7 @@ export function setupPayloadRuntime(
   );
   const fetch = vi.spyOn(sdk, 'fetchExperiencePayload').mockResolvedValue(payloadFixture());
   const commit = vi
-    .spyOn(sdk.api.experience, 'upsertProfile')
+    .spyOn(sdk.api.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: profileFixture('committed-profile') } as never);
   const request = sdk.forRequest(requestContext);
   const options = {

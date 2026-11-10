@@ -4,12 +4,12 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   createWebSnapshotRuntime,
   type ContentfulExperiences,
-  type CoreStates,
+  type States,
   type Observable,
   type PreviewState,
   type PreviewUpdate,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
 } from '@contentful/experiences-web';
 
 export function deferred<T>() {
@@ -59,7 +59,7 @@ export function sourceSdk() {
   const preview = observable<PreviewState | undefined>(undefined);
   const consent = observable<boolean | undefined>(true);
   const locale = observable<string | undefined>('en-US');
-  const profile = observable<CoreStates['profile']['current']>(undefined);
+  const profile = observable<States['profile']['current']>(undefined);
   const snapshot = createWebSnapshotRuntime();
   const bindings: {
     listener: (update: PreviewUpdate) => void;
@@ -67,10 +67,7 @@ export function sourceSdk() {
   }[] = [];
   const fetchExperience = vi
     .fn<
-      (
-        request: RuntimeFetchExperienceOptions,
-        resolve: RuntimeFetchResolveOptions
-      ) => Promise<PortableRenderPlan>
+      (request: FetchExperienceOptions, resolve: FetchResolveOptions) => Promise<PortableRenderPlan>
     >()
     .mockResolvedValue(plan());
   const subscribeToPreview = vi.fn<ContentfulExperiences['subscribeToPreview']>(

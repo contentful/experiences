@@ -1,5 +1,5 @@
 import type { GetServerSideProps } from 'next';
-import type { NextjsRequestResult } from '@contentful/experiences-nextjs/pages-router/server';
+import type { RequestResult } from '@contentful/experiences-nextjs/pages-router/server';
 import type { BrowserEnvironment } from '../../reference';
 import { getServer } from '../../config';
 import { singlePagesExperiences } from '../../single-experience-server';
@@ -9,7 +9,7 @@ import { SingleExperiencePage } from '../../components/SingleExperiencePage';
 export interface SingleExperienceProps {
   singleExperience: true;
   environment: BrowserEnvironment;
-  experiences: NextjsRequestResult;
+  experiences: RequestResult;
 }
 
 export const getServerSideProps: GetServerSideProps<SingleExperienceProps> = async (context) => ({

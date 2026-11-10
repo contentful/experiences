@@ -3,9 +3,9 @@
 import { act, StrictMode, Suspense, startTransition, type ReactNode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { CoreStates, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
-import { ExperiencesContext } from './experiences-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import type { States, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
+import { RuntimeContext } from './context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { profileFixture } from '../test/fixtures/profile.js';
 import * as hooks from './use-experiences-state.js';
 
@@ -64,17 +64,17 @@ function observable<T>(initial: T) {
 }
 
 // Only the observable boundary is exercised; no real SDK or transport is created.
-function runtime(states: Partial<CoreStates>): WebExperiencesRuntime {
+function runtime(states: Partial<States>): WebExperiencesRuntime {
   return { states } as WebExperiencesRuntime;
 }
 
 describe('Experiences state hooks', () => {
-  let rendered: ReactTestRoot;
+  let rendered: DomTestRoot;
   let container: HTMLDivElement;
 
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    rendered = createReactTestRoot();
+    rendered = createDomTestRoot();
     container = rendered.container;
   });
 
@@ -86,28 +86,28 @@ describe('Experiences state hooks', () => {
   function render(sdk: WebExperiencesRuntime, children: ReactNode) {
     act(() =>
       rendered.render(
-        <ExperiencesContext.Provider value={context(sdk)}>{children}</ExperiencesContext.Provider>
+        <RuntimeContext.Provider value={context(sdk)}>{children}</RuntimeContext.Provider>
       )
     );
   }
 
-  it('retains exact CoreStates value types', () => {
-    expectTypeOf(hooks.useProfileState).returns.toEqualTypeOf<CoreStates['profile']['current']>();
-    expectTypeOf(hooks.useLocaleState).returns.toEqualTypeOf<CoreStates['locale']['current']>();
-    expectTypeOf(hooks.useConsentState).returns.toEqualTypeOf<CoreStates['consent']['current']>();
+  it('retains exact States value types', () => {
+    expectTypeOf(hooks.useProfileState).returns.toEqualTypeOf<States['profile']['current']>();
+    expectTypeOf(hooks.useLocaleState).returns.toEqualTypeOf<States['locale']['current']>();
+    expectTypeOf(hooks.useConsentState).returns.toEqualTypeOf<States['consent']['current']>();
     expectTypeOf(hooks.usePersistenceConsentState).returns.toEqualTypeOf<
-      CoreStates['persistenceConsent']['current']
+      States['persistenceConsent']['current']
     >();
-    expectTypeOf(hooks.useExperienceRequestState).returns.toEqualTypeOf<
-      CoreStates['experienceRequestState']['current']
+    expectTypeOf(hooks.usePersonalizationRequestState).returns.toEqualTypeOf<
+      States['personalizationRequestState']['current']
     >();
     expectTypeOf(hooks.useEventStreamState).returns.toEqualTypeOf<
-      CoreStates['eventStream']['current']
+      States['eventStream']['current']
     >();
     expectTypeOf(hooks.useBlockedEventStreamState).returns.toEqualTypeOf<
-      CoreStates['blockedEventStream']['current']
+      States['blockedEventStream']['current']
     >();
-    expectTypeOf(hooks.usePreviewState).returns.toEqualTypeOf<CoreStates['preview']['current']>();
+    expectTypeOf(hooks.usePreviewState).returns.toEqualTypeOf<States['preview']['current']>();
   });
 
   it('supports absent observables without a provider and detaches replaced subscriptions', () => {
@@ -142,20 +142,20 @@ describe('Experiences state hooks', () => {
     ['locale', hooks.useLocaleState],
     ['consent', hooks.useConsentState],
     ['persistenceConsent', hooks.usePersistenceConsentState],
-    ['experienceRequestState', hooks.useExperienceRequestState],
+    ['personalizationRequestState', hooks.usePersonalizationRequestState],
     ['eventStream', hooks.useEventStreamState],
     ['blockedEventStream', hooks.useBlockedEventStreamState],
     ['preview', hooks.usePreviewState],
   ] as const;
 
   it.each(cases)('observes only %s and disposes its subscription', (key, useState) => {
-    const initial = key === 'experienceRequestState' ? { status: 'idle' } : undefined;
+    const initial = key === 'personalizationRequestState' ? { status: 'idle' } : undefined;
     const next = {
       profile: profileFixture('visitor'),
       locale: 'de-DE',
       consent: false,
       persistenceConsent: false,
-      experienceRequestState: { status: 'success' },
+      personalizationRequestState: { status: 'success' },
       eventStream: { type: 'track', event: 'purchase' },
       blockedEventStream: { reason: 'consent', method: 'track', args: [] },
       preview: { data: undefined, error: undefined, status: 'static', revision: 1 },
@@ -178,7 +178,7 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches cloned current values across renders and uses immediate/latest emissions', () => {
-    const state = observable<CoreStates['profile']['current']>(profileFixture('before-commit'));
+    const state = observable<States['profile']['current']>(profileFixture('before-commit'));
     const sdk = runtime({ profile: state.store });
     const captures: unknown[] = [];
     function Probe() {
@@ -299,11 +299,11 @@ describe('Experiences state hooks', () => {
     await act(async () => {
       startTransition(() =>
         rendered.render(
-          <ExperiencesContext.Provider value={context(runtime({ locale: replacement.store }))}>
+          <RuntimeContext.Provider value={context(runtime({ locale: replacement.store }))}>
             <Suspense fallback="pending">
               <Probe suspend />
             </Suspense>
-          </ExperiencesContext.Provider>
+          </RuntimeContext.Provider>
         )
       );
     });
@@ -331,9 +331,9 @@ describe('Experiences state hooks', () => {
     act(() =>
       rendered.render(
         <StrictMode>
-          <ExperiencesContext.Provider value={context(runtime({ locale: state.store }))}>
+          <RuntimeContext.Provider value={context(runtime({ locale: state.store }))}>
             <Probe />
-          </ExperiencesContext.Provider>
+          </RuntimeContext.Provider>
         </StrictMode>
       )
     );
@@ -345,15 +345,15 @@ describe('Experiences state hooks', () => {
   });
 
   it('caches server snapshots and hydrates cloned objects without loops or mismatches', async () => {
-    const state = observable<CoreStates['profile']['current']>(profileFixture('server'));
+    const state = observable<States['profile']['current']>(profileFixture('server'));
     const sdk = runtime({ profile: state.store });
     function Probe() {
       return <output>{hooks.useProfileState()?.id}</output>;
     }
     const tree = (
-      <ExperiencesContext.Provider value={context(sdk)}>
+      <RuntimeContext.Provider value={context(sdk)}>
         <Probe />
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
     container.innerHTML = renderToString(tree);
     expect(state.read).toHaveBeenCalledTimes(1);

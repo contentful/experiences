@@ -7,13 +7,13 @@ import { hydrateOptimizationData } from '../bridge-support.js';
 import { ContentfulExperiences } from '../contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
 import type { LifecycleInterceptors } from '../state/interceptors.js';
-import type { CoreStates } from '../state/states.js';
+import type { States } from '../state/states.js';
 import { clearIdentityCookies, seedConsent } from '../test/fixtures/consent.js';
 import { completeProfile } from '../test/fixtures/profile.js';
-import { createWebHarness } from '../test/web-harness.js';
+import { createSdkHarness } from '../test/sdk-harness.js';
 
 describe('browser owner wiring', () => {
-  const { create: createRuntime, destroy: destroyRuntimes } = createWebHarness(
+  const { create: createRuntime, destroy: destroyRuntimes } = createSdkHarness(
     { locale: 'en-US' },
     ContentfulExperiences
   );
@@ -40,7 +40,7 @@ describe('browser owner wiring', () => {
           state: new InterceptorManager(),
         };
       }
-      const local = createWebHarness({ locale: 'en-US' }, Specialized);
+      const local = createSdkHarness({ locale: 'en-US' }, Specialized);
       try {
         const sdk = local.create();
         const event = vi.fn((event) => event);
@@ -69,15 +69,15 @@ describe('browser owner wiring', () => {
     it('subscribes through the subclass preview observable', () => {
       const subscribe = vi.fn(() => ({ unsubscribe() {} }));
       class SpecializedStates extends ContentfulExperiences {
-        override readonly states: CoreStates = {
+        override readonly states: States = {
           ...this.baseStates(),
           preview: { current: undefined, subscribe, subscribeOnce: () => ({ unsubscribe() {} }) },
         };
-        private baseStates(): CoreStates {
+        private baseStates(): States {
           return this.states;
         }
       }
-      const local = createWebHarness({ locale: 'en-US' }, SpecializedStates);
+      const local = createSdkHarness({ locale: 'en-US' }, SpecializedStates);
       try {
         const sdk = local.create();
         const subscription = sdk.subscribeToPreview(
@@ -93,7 +93,7 @@ describe('browser owner wiring', () => {
     });
 
     it.each([undefined, 'de-DE'])('preserves omitted or explicit harness locale %s', (locale) => {
-      const local = createWebHarness({}, ContentfulExperiences);
+      const local = createSdkHarness({}, ContentfulExperiences);
       try {
         const sdk = local.create(locale === undefined ? {} : { locale });
         expect(sdk.locale).toBe(locale);
@@ -110,7 +110,7 @@ describe('browser owner wiring', () => {
           return preview;
         }
       }
-      const local = createWebHarness({}, CustomPolicy);
+      const local = createSdkHarness({}, CustomPolicy);
       const receivers: unknown[] = [];
       try {
         const sdk = local.create({

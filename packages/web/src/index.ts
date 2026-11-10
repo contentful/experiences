@@ -1,11 +1,11 @@
-export { getPageProperties, getUserAgent } from './browser/browser-event-context.js';
+export { getPageProperties, getUserAgent } from './browser/event-context.js';
 export { getPreviewSessionBinding } from './preview-session-binding.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
-  BrowserEventContextProviders,
+  EventContextProviders,
   CurrentPageOptions,
-  CoreConfigDefaults,
-  ExperiencesWebConfig,
+  ConfigDefaults,
+  Config,
   ExperiencesTrackingApi,
   HydrateAndTrackCurrentPageOptions,
 } from './contentful-experiences.js';
@@ -48,29 +48,29 @@ export type {
   EventProfile,
   OptimizationEventStreamEvent,
   ExperiencesHandoff,
-  ExperienceRequestState,
-  ExperienceRequestFailureReason,
+  PersonalizationRequestState,
+  PersonalizationRequestFailureReason,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  RuntimeEventMethods,
-  RuntimeOptimizationConfig,
-  RuntimeDeliveryClientOptions,
-  RuntimeFetchByDestinationNodeOptions,
-  RuntimeFetchByDestinationPathOptions,
-  RuntimeFetchExperienceOptions,
-  RuntimePersonalizationOptions as PersonalizationOptions,
-  RuntimeFetchResolveOptions,
-  RuntimeResolveDefaults,
-  RuntimeResolveOptions,
-  RuntimeLivePreviewOptions,
+  DirectEventMethods,
+  OptimizationConfig,
+  DeliveryClientOptions,
+  FetchByDestinationNodeOptions,
+  FetchByDestinationPathOptions,
+  FetchExperienceOptions,
+  PersonalizationOptions,
+  FetchResolveOptions,
+  ResolveDefaults,
+  ResolveOptions,
+  LivePreviewOptions,
   PreviewSessionBinding,
-  RuntimeLivePreviewBinding,
-  RuntimeLivePreviewModule,
-  RuntimePreviewClient,
-  RuntimePreviewStatus,
+  LivePreviewBinding,
+  LivePreviewModule,
+  PreviewClient,
+  PreviewStatus,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
@@ -82,7 +82,7 @@ export type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 
-export type { CoreStates, PreviewState, PreviewUpdate } from './state/states.js';
+export type { States, PreviewState, PreviewUpdate } from './state/states.js';
 export {
   batch,
   effect,
@@ -105,8 +105,8 @@ export {
   type MaybePromise,
 } from '@contentful/experiences-runtime';
 export {
-  mergeExperienceState,
-  type ExperienceState,
+  mergePersonalizationState,
+  type PersonalizationState,
   type LifecycleInterceptors,
 } from './state/interceptors.js';
 export {

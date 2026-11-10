@@ -205,9 +205,9 @@ Preview credentials on the root in a client module:
 ```tsx
 'use client';
 
-import { createReactExperiences, usePreviewState } from '@contentful/experiences-react/client';
+import { createExperiences, usePreviewState } from '@contentful/experiences-react/client';
 
-const { ExperiencesRoot, Experience } = createReactExperiences({ config: browserRegistry });
+const { ExperiencesRoot, Experience } = createExperiences({ config: browserRegistry });
 
 function PreviewStatus() {
   const preview = usePreviewState();
@@ -288,7 +288,7 @@ profile in LocalStorage, and offers `reset()` for logout or a new visitor
 session.
 
 Web exposes current values and subscriptions through `states`, including
-`profile`, `locale`, `consent`, `persistenceConsent`, `experienceRequestState`,
+`profile`, `locale`, `consent`, `persistenceConsent`, `personalizationRequestState`,
 `eventStream`, and `blockedEventStream`. Read `states.profile.current` or subscribe
 to changes with `states.profile.subscribe(...)`; dispose the returned handle
 with `unsubscribe()` during application cleanup. See the [Web state and
@@ -332,7 +332,7 @@ navigation/actions use Web `fetchExperience`. Both accept existing type-tagged
 builder arguments or raw built XDA events, and the SDK builds admitted arguments
 once. Normal fetch requires no handoff or direct identify/page prerequisite.
 
-XDA always invokes XPAPI with `preflight: true` and commits neither events nor
+XDA always invokes Personalization API with `preflight: true` and commits neither events nor
 profile changes. SSR/CSR XDA events remain uncommitted: this tolerated service bug
 awaits upstream force-commit support. There is no current force flag or SDK
 workaround. Direct event APIs remain callable but are not compensation.
@@ -403,9 +403,9 @@ Client preserves the supported event shape, including `context.gdpr` and
 `context.gdpr.isConsentGiven`, overwriting any caller-supplied flag, before running
 interceptors. Hooks may explicitly transform valid metadata; final validation and current-consent
 admission still apply, with caller input unchanged. Reusing an event in another
-fetch is another preflight evaluation, not an XPAPI commit. See
+fetch is another preflight evaluation, not an Personalization API commit. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Actual XPAPI commits and retries retain their delivery ambiguity.
+Actual Personalization API commits and retries retain their delivery ambiguity.
 
 On reset, invalidate stale application render work and remove or replace old
 attributed content synchronously in the same transition, before awaiting the new
@@ -419,7 +419,7 @@ Safe serialization and preflight limitations are described below.
 
 For an actual hybrid transfer, evaluate events through the Node XDA producer
 shown above. Optionally consume the returned full aggregate through the browser owner.
-XDA supplies the content evaluation, while XPAPI commits the finalized events.
+XDA supplies the content evaluation, while Personalization API commits the finalized events.
 
 The application supplies a route key made from the visible pathname and search
 string. It must begin with `/`. A handoff with profile, changes, continuation identity,
@@ -509,9 +509,9 @@ exactly-once delivery. Web queues Analytics calls separately in memory; there is
 Personalization/Analytics replay journal or global ordinary-event barrier.
 The hybrid reference packages its built events through the Node data producer and
 consumes replay through this browser API. Live Preview remains independent;
-event-bearing XDA always forces XPAPI preflight and new IDs remain provisional. Independent profile-only reads with an already-concrete
+event-bearing XDA always forces Personalization API preflight and new IDs remain provisional. Independent profile-only reads with an already-concrete
 profile remain viable. Neither handoff recipe promises exactly-once delivery for
-actual XPAPI commits. See
+actual Personalization API commits. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
@@ -530,7 +530,7 @@ Web automatically adopts XDA changes from by-ID, destination, and preview fetche
 through the same state-interceptor path as direct Personalization responses.
 Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
 retain them unless profile identity changes. Treating XDA changes as a complete
-snapshot follows XPAPI/Optimization behavior and remains an assumption pending
+snapshot follows Personalization API/Optimization behavior and remains an assumption pending
 live-backend verification. To read a particular plan explicitly, use the pure
 helper re-exported by every framework adapter:
 

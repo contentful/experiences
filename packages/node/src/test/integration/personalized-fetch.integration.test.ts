@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   OptimizationEventStreamEvent,
-  RuntimeFetchExperienceOptions,
+  FetchExperienceOptions,
 } from '@contentful/experiences-runtime';
 import { setupPayloadRuntime as setup } from '../runtime.js';
 
@@ -9,12 +9,12 @@ const resolver = { config: { components: {} } };
 
 // Exercise request preparation through Runtime's payload and resolution boundaries.
 describe('Node ordinary XDA fetch', () => {
-  it('passes request event intent through Runtime resolution without committing through XPAPI', async () => {
+  it('passes request event intent through Runtime resolution without committing through Personalization API', async () => {
     const { sdk, fetch, commit } = setup({ locale: 'en-US' }, { consent: true });
     const request = sdk.forRequest({ consent: true, profile: { id: 'incoming' } });
     const raw = sdk.eventBuilder.buildTrack({ event: 'raw' });
     const events = [{ type: 'identify', userId: 'user' }, raw] satisfies NonNullable<
-      RuntimeFetchExperienceOptions['personalization']
+      FetchExperienceOptions['personalization']
     >['events'];
     const original = globalThis.structuredClone(events);
     const hook = vi.fn((event: OptimizationEventStreamEvent) => event);

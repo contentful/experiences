@@ -1,53 +1,46 @@
 export * from '@contentful/experiences-react/server';
 
 export {
-  configureNextjsServerExperiences,
-  bindNextjsExperiencesRequest,
-  type BindNextjsExperiencesRequestOptions,
+  configureServerExperiences,
+  bindExperiencesRequest,
+  type BindExperiencesRequestOptions,
 } from './request/server-request.js';
 export {
-  createNextjsPageContext,
-  createNextjsRequestContext,
-  createNextjsRouteKey,
+  createPageContext,
+  createRequestContext,
+  createRouteKey,
   NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
-  type CreateNextjsPageContextOptions,
-  type CreateNextjsRequestContextOptions,
-  type NextjsPageContextInput,
-  type NextjsSearchParams,
-  type NextjsCookieReader,
-  type NextjsRequestLike,
-} from './request/request-context.js';
+  type CreatePageContextOptions,
+  type CreateRequestContextOptions,
+  type PageContextInput,
+  type SearchParams,
+  type CookieReader,
+  type RequestLike,
+} from './request/context.js';
 export {
-  createNextjsAnonymousIdSetCookieHeader,
-  persistNextjsAnonymousId,
-  type NextjsAnonymousIdCookieOptions,
-  type PersistNextjsAnonymousIdOptions,
-  type NextjsResponseLike,
+  createAnonymousIdSetCookieHeader,
+  persistAnonymousId,
+  type AnonymousIdCookieOptions,
+  type PersistAnonymousIdOptions,
+  type ResponseLike,
 } from './request/cookies.js';
 export {
-  createNextjsPrivateFetch,
-  applyNextjsPrivateResponseCache,
-  assertNextjsPublicRequestPolicy,
+  createPrivateFetch,
+  applyPrivateResponseCache,
+  assertPublicRequestPolicy,
 } from './cache/policy.js';
+export { serializePlan, serializeHandoff, serializeJsonForHtml } from './cache/serialization.js';
 export {
-  serializeNextjsPlan,
-  serializeNextjsHandoff,
-  serializeNextjsJsonForHtml,
-} from './cache/serialization.js';
-export {
-  createExperiencesCacheKey,
+  createCacheKey,
   createPublicPermutationCacheMetadata,
-  type NextjsExperiencesCacheKeyInput,
-} from './cache/cache-key.js';
+  type CacheKeyInput,
+} from './cache/key.js';
 export type {
-  ExperiencesNodeConfig,
-  ExperiencesNodeRequest,
-  ExperiencesNodeRequestContext,
+  Config as NodeConfig,
+  RequestRuntime,
+  RequestContext,
   ConsentInput,
 } from '@contentful/experiences-node';
 
-export type {
-  NextjsLivePreviewConfig,
-  NextjsLivePreviewOptions,
-} from './presentation/live-preview.js';
+export type { LivePreviewConfig, LivePreviewOptions } from './presentation/live-preview.js';

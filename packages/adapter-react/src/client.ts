@@ -22,21 +22,21 @@ export type {
   UseExperiencePlanResult,
 } from './hooks/use-experience-plan.js';
 
-export { createReactExperiences } from './experience/create-react-experiences.js';
+export { createExperiences } from './experience/create-experiences.js';
 export type {
-  CreateReactExperiencesOptions,
+  CreateExperiencesOptions,
   BoundExperienceRendererProps,
   BoundManagedExperienceProps,
   BoundManagedExperienceOptions,
-} from './experience/create-react-experiences.js';
+} from './experience/create-experiences.js';
 export { ExperiencesRoot, ExperiencesProvider } from './runtime/experiences-provider.js';
 export type {
   ExperiencesRootProps,
   ExperiencesProviderProps,
 } from './runtime/experiences-provider.js';
-export { useExperiences, useExperiencesContext } from './runtime/experiences-context.js';
-export type { ExperiencesContextValue } from './runtime/experiences-context.js';
-export type { OnStatesReady } from './runtime/experiences-root-sdk-binding.js';
+export { useExperiences, useRuntimeContext } from './runtime/context.js';
+export type { RuntimeContextValue } from './runtime/context.js';
+export type { OnStatesReady } from './runtime/root-sdk-binding.js';
 export { Experience } from './experience/experience.js';
 export type { ManagedExperienceProps, SuppliedExperienceProps } from './experience/experience.js';
 export { useManagedExperience } from './experience/use-managed-experience.js';
@@ -45,14 +45,14 @@ export type {
   ManagedExperienceResult,
   ExperienceNotifications,
 } from './experience/use-managed-experience.js';
-export type { BeforeInitialPageOptions } from './runtime/experiences-page-sequence.js';
+export type { BeforeInitialPageOptions } from './runtime/page-sequence.js';
 export {
   useExperiencesState,
   useProfileState,
   useLocaleState,
   useConsentState,
   usePersistenceConsentState,
-  useExperienceRequestState,
+  usePersonalizationRequestState,
   useEventStreamState,
   useBlockedEventStreamState,
   usePreviewState,

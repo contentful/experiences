@@ -1,6 +1,6 @@
-import type { NextjsServerExperiencesConfig } from '../../request/server-config.js';
+import type { ServerConfig } from '../../request/server-config.js';
 
-export function serverConfig(accessToken = 'test'): NextjsServerExperiencesConfig {
+export function serverConfig(accessToken = 'test'): ServerConfig {
   return {
     spaceId: 'space',
     environmentId: 'master',

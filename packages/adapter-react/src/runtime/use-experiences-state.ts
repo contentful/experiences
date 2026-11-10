@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useSyncExternalStore } from 'react';
-import type { CoreStates, Observable } from '@contentful/experiences-web';
-import { useExperiences } from './experiences-context.js';
+import type { States, Observable } from '@contentful/experiences-web';
+import { useExperiences } from './context.js';
 
 export function useObservableState<T>(observable: Observable<T> | undefined): T | undefined {
   // Keep each store's cache separate: an abandoned replacement render must not
@@ -34,43 +34,43 @@ export function useObservableState<T>(observable: Observable<T> | undefined): T 
 }
 
 /** Observe SDK state without changing runtime policy or provider readiness. */
-export function useExperiencesState<K extends Exclude<keyof CoreStates, 'flag'>>(
+export function useExperiencesState<K extends Exclude<keyof States, 'flag'>>(
   key: K
-): CoreStates[K]['current'] {
+): States[K]['current'] {
   const sdk = useExperiences();
-  return useObservableState<CoreStates[K]['current']>(sdk.states[key]);
+  return useObservableState<States[K]['current']>(sdk.states[key]);
 }
 
-export function useProfileState(): CoreStates['profile']['current'] {
+export function useProfileState(): States['profile']['current'] {
   return useExperiencesState('profile');
 }
 
-export function useLocaleState(): CoreStates['locale']['current'] {
+export function useLocaleState(): States['locale']['current'] {
   return useExperiencesState('locale');
 }
 
-export function useConsentState(): CoreStates['consent']['current'] {
+export function useConsentState(): States['consent']['current'] {
   return useExperiencesState('consent');
 }
 
-export function usePersistenceConsentState(): CoreStates['persistenceConsent']['current'] {
+export function usePersistenceConsentState(): States['persistenceConsent']['current'] {
   return useExperiencesState('persistenceConsent');
 }
 
-export function useExperienceRequestState(): CoreStates['experienceRequestState']['current'] {
-  return useExperiencesState('experienceRequestState');
+export function usePersonalizationRequestState(): States['personalizationRequestState']['current'] {
+  return useExperiencesState('personalizationRequestState');
 }
 
 /** Read the last attempt as state; this does not publish a new event attempt. */
-export function useEventStreamState(): CoreStates['eventStream']['current'] {
+export function useEventStreamState(): States['eventStream']['current'] {
   return useExperiencesState('eventStream');
 }
 
-export function useBlockedEventStreamState(): CoreStates['blockedEventStream']['current'] {
+export function useBlockedEventStreamState(): States['blockedEventStream']['current'] {
   return useExperiencesState('blockedEventStream');
 }
 
 /** Undefined can mean disabled or initializing; preview does not gate readiness. */
-export function usePreviewState(): CoreStates['preview']['current'] {
+export function usePreviewState(): States['preview']['current'] {
   return useExperiencesState('preview');
 }

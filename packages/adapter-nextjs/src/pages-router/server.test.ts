@@ -2,13 +2,13 @@ import { plan as createPlan } from '../test/fixtures/plan.js';
 import type { GetServerSidePropsContext } from 'next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
-  ExperiencesNodeRequest,
-  RuntimeFetchExperienceOptions,
-  RuntimeFetchResolveOptions,
+  RequestRuntime,
+  FetchExperienceOptions,
+  FetchResolveOptions,
 } from '@contentful/experiences-node';
 import * as server from '../request/server-request.js';
-import { bindNextjsPagesRouterServerExperiences } from './server.js';
-import type { NextjsLivePreviewConfig } from '../presentation/live-preview.js';
+import { bindPagesRouterServerExperiences } from './server.js';
+import type { LivePreviewConfig } from '../presentation/live-preview.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 const plan = createPlan({ server: new Error('server metadata') });
@@ -42,7 +42,7 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     canPersistProfile: true,
     profile: { id: 'final' },
     fetchExperience: vi.fn(
-      async (_options: RuntimeFetchExperienceOptions, _resolve: RuntimeFetchResolveOptions) => plan
+      async (_options: FetchExperienceOptions, _resolve: FetchResolveOptions) => plan
     ),
     fetchExperienceForHandoff: vi.fn(async () => ({
       plan,
@@ -50,12 +50,12 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     })),
     destroy: vi.fn(),
   };
-  vi.spyOn(server, 'configureNextjsServerExperiences').mockReturnValue(
-    scope as ReturnType<typeof server.configureNextjsServerExperiences>
+  vi.spyOn(server, 'configureServerExperiences').mockReturnValue(
+    scope as ReturnType<typeof server.configureServerExperiences>
   );
   const bind = vi
-    .spyOn(server, 'bindNextjsExperiencesRequest')
-    .mockReturnValue(request as unknown as ExperiencesNodeRequest);
+    .spyOn(server, 'bindExperiencesRequest')
+    .mockReturnValue(request as unknown as RequestRuntime);
   const descriptor = {
     experienceId: 'home',
     personalization: { events: [{ type: 'page' as const }] },
@@ -67,7 +67,7 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     experience: descriptor,
     resolveOptions: { metadata: { host: true }, debug: false },
   };
-  const factory = bindNextjsPagesRouterServerExperiences({
+  const factory = bindPagesRouterServerExperiences({
     ...scope,
     delivery: { accessToken: 'test' },
     config: { components: {} },
@@ -84,9 +84,9 @@ describe('Pages native server response helper', () => {
     const { context, request, bind } = setup({ 'x-nextjs-data': '1' });
     context.resolvedUrl = '/page?preview_session_id=session';
     request.isPreview = true;
-    const implementation = {} as Awaited<ReturnType<NextjsLivePreviewConfig['loadImplementation']>>;
+    const implementation = {} as Awaited<ReturnType<LivePreviewConfig['loadImplementation']>>;
     const loadImplementation = vi.fn(() => implementation);
-    const factory = bindNextjsPagesRouterServerExperiences({
+    const factory = bindPagesRouterServerExperiences({
       ...scope,
       delivery: { accessToken: 'test' },
       config: { components: {} },
@@ -200,7 +200,7 @@ describe('Pages native server response helper', () => {
   it('uses the configured locale and resolves server consent with the native context', async () => {
     const { context, bind } = setup();
     const consent = vi.fn(() => ({ events: true, persistence: true }));
-    const factory = bindNextjsPagesRouterServerExperiences({
+    const factory = bindPagesRouterServerExperiences({
       ...scope,
       delivery: { accessToken: 'server-secret' },
       config: { components: {} },

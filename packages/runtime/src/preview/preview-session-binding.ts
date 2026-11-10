@@ -1,7 +1,7 @@
-import type { RuntimeLivePreviewOptions } from './live-preview.js';
+import type { LivePreviewOptions } from './live-preview.js';
 
 export type PreviewSessionBinding = Pick<
-  RuntimeLivePreviewOptions,
+  LivePreviewOptions,
   'experienceId' | 'sessionId' | 'sessionHost' | 'resourceResolution'
 >;
 

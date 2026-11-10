@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { ContentfulExperiences, type ExperiencePayload } from '@contentful/experiences-node';
-import { createNextjsPageContext } from '../../request/request-context.js';
-import { serializeNextjsHandoff } from '../../cache/serialization.js';
+import { createPageContext } from '../../request/context.js';
+import { serializeHandoff } from '../../cache/serialization.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 
@@ -13,7 +13,7 @@ it('serializes the actual Node producer replay after content failure with absent
     }
   }
   const sdk = new FailedContentRuntime({ ...scope, delivery: { accessToken: 'test' } });
-  const pageContext = createNextjsPageContext({
+  const pageContext = createPageContext({
     path: '/page',
     url: 'https://example.com/page?q=first&q=last',
   });
@@ -38,7 +38,7 @@ it('serializes the actual Node producer replay after content failure with absent
       { routeKey: '/page?q=first&q=last' }
     );
     const original = globalThis.structuredClone(result.handoff);
-    const output = serializeNextjsHandoff(result.handoff, scope);
+    const output = serializeHandoff(result.handoff, scope);
     expect(output.profileId).toBe('incoming');
     expect(output).toEqual(JSON.parse(JSON.stringify(result.handoff)));
     expect(result.handoff).toEqual(original);

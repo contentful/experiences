@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useLayoutEffect, useState, type MouseEvent } from 'react';
-import type { RuntimeFetchExperienceOptions } from '@contentful/experiences-web';
+import type { FetchExperienceOptions } from '@contentful/experiences-web';
 
 export interface PageIntent {
   url: URL;
   cycle: number;
-  personalization?: RuntimeFetchExperienceOptions['personalization'];
+  personalization?: FetchExperienceOptions['personalization'];
 }
 export type OnIntent = (
   url: URL,

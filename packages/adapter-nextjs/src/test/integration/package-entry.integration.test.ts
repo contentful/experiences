@@ -209,18 +209,18 @@ describe('published declarations', () => {
       const filename = path.join(packageRoot, 'src', 'published-surface.tsx');
       const source = `
       import * as root from '${packageName}';
-      import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
-      import { bindNextjsAppRouterClientExperiences, type NextjsRequestResult } from '${packageName}/app-router/client';
-      import { bindNextjsPagesRouterServerExperiences } from '${packageName}/pages-router/server';
-      import { bindNextjsPagesRouterExperiences } from '${packageName}/pages-router';
-      import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
-      import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
+      import { bindAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
+      import { bindAppRouterClientExperiences, type RequestResult } from '${packageName}/app-router/client';
+      import { bindPagesRouterServerExperiences } from '${packageName}/pages-router/server';
+      import { bindPagesRouterExperiences } from '${packageName}/pages-router';
+      import { createPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
+      import { createExperiencesContextHandler, type LivePreviewResolver, type ExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
-        configureNextjsServerExperiences, bindNextjsExperiencesRequest,
-        createNextjsRouteKey, serializeNextjsPlan, serializeNextjsHandoff,
-        createNextjsPrivateFetch, assertNextjsPublicRequestPolicy,
-        applyNextjsPrivateResponseCache, persistNextjsAnonymousId,
-        type ExperiencesNodeRequest, type BindNextjsExperiencesRequestOptions,
+        configureServerExperiences, bindExperiencesRequest,
+        createRouteKey, serializePlan, serializeHandoff,
+        createPrivateFetch, assertPublicRequestPolicy,
+        applyPrivateResponseCache, persistAnonymousId,
+        type RequestRuntime, type BindExperiencesRequestOptions,
         ServerExperienceRenderer, defineComponent, fetchExperience, EventBuilder,
         type Config, type PortableRenderPlan, type ServerExperienceRendererProps
       } from '${packageName}/server';
@@ -236,51 +236,51 @@ describe('published declarations', () => {
       import { ServerExperienceRenderer as sharedServer } from '@contentful/experiences-react/server';
       import { ExperienceRenderer as sharedClient } from '@contentful/experiences-react/client';
 
-      const sdk = configureNextjsServerExperiences({
+      const sdk = configureServerExperiences({
         spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server-token' }
       });
-      const request = bindNextjsExperiencesRequest(sdk, { consent: false, locale: 'en-US' });
-      const actualRequest: ExperiencesNodeRequest = request;
+      const request = bindExperiencesRequest(sdk, { consent: false, locale: 'en-US' });
+      const actualRequest: RequestRuntime = request;
       const response = { headers: new Headers() };
-      applyNextjsPrivateResponseCache(response);
-      persistNextjsAnonymousId(response, request, { cookieOptions: { httpOnly: true } });
+      applyPrivateResponseCache(response);
+      persistAnonymousId(response, request, { cookieOptions: { httpOnly: true } });
       request.destroy();
       // @ts-expect-error The unpublished binding wrapper has been removed.
-      import { type NextjsExperiencesRequestBinding } from '${packageName}/server';
+      import { type ExperiencesRequestBinding } from '${packageName}/server';
       // @ts-expect-error The direct Node request has no response persistence closure.
       request.persist(response);
-      const unsupportedBindOptions: BindNextjsExperiencesRequestOptions = {
+      const unsupportedBindOptions: BindExperiencesRequestOptions = {
         consent: false,
         // @ts-expect-error Cookie response options belong to standalone persistence or middleware.
         cookieOptions: { httpOnly: true }
       };
-      const unsupportedWithdrawalOptions: BindNextjsExperiencesRequestOptions = {
+      const unsupportedWithdrawalOptions: BindExperiencesRequestOptions = {
         consent: false,
         // @ts-expect-error Withdrawal policy belongs to response persistence.
         deleteWhenProfileCannotPersist: false
       };
       void [unsupportedBindOptions, unsupportedWithdrawalOptions];
       // @ts-expect-error Consent is required independently of request cookies.
-      bindNextjsExperiencesRequest(sdk, { locale: 'en-US' });
+      bindExperiencesRequest(sdk, { locale: 'en-US' });
       declare const initializer: NonNullable<Parameters<typeof sdk.forRequest>[0]>['livePreview'];
-      const livePreview: NextjsLivePreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
-      const handlerOptions: NextjsExperiencesContextHandlerOptions = { sdk, consent: false, livePreview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
-      const contextHandler = createNextjsExperiencesContextHandler(handlerOptions);
-      const explicitRequest = bindNextjsExperiencesRequest(sdk, { consent: false, livePreview: initializer });
+      const livePreview: LivePreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
+      const handlerOptions: ExperiencesContextHandlerOptions = { sdk, consent: false, livePreview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
+      const contextHandler = createExperiencesContextHandler(handlerOptions);
+      const explicitRequest = bindExperiencesRequest(sdk, { consent: false, livePreview: initializer });
       // @ts-expect-error Handler livePreview resolves an initializer, not a preview-policy record.
-      const unsupportedPolicy: NextjsLivePreviewResolver = () => ({ isPreview: true });
+      const unsupportedPolicy: LivePreviewResolver = () => ({ isPreview: true });
       // @ts-expect-error The handler does not accept an initializer directly as its resolver.
-      const unsupportedInitializer: NextjsLivePreviewResolver = initializer!;
-      const unsupportedHandlerOptions: NextjsExperiencesContextHandlerOptions = {
+      const unsupportedInitializer: LivePreviewResolver = initializer!;
+      const unsupportedHandlerOptions: ExperiencesContextHandlerOptions = {
         sdk, consent: false,
         // @ts-expect-error There is one application-owned livePreview resolver.
         previewResolver: livePreview
       };
       explicitRequest.destroy();
       void [unsupportedPolicy, unsupportedInitializer, unsupportedHandlerOptions];
-      assertNextjsPublicRequestPolicy({ cache: { scope: 'static' }, context: { consent: false } });
-      void [actualRequest, contextHandler, createNextjsRouteKey, serializeNextjsPlan,
-        serializeNextjsHandoff, createNextjsPrivateFetch];
+      assertPublicRequestPolicy({ cache: { scope: 'static' }, context: { consent: false } });
+      void [actualRequest, contextHandler, createRouteKey, serializePlan,
+        serializeHandoff, createPrivateFetch];
       const server: typeof sharedServer = ServerExperienceRenderer;
       const client: typeof sharedClient = ExperienceRenderer;
       const config: Config = { components: {} };
@@ -313,32 +313,32 @@ describe('published declarations', () => {
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: {
         experience: { experienceId: 'home' },
         composeRequest: async (request, primary, context) => {
-          const facade: ExperiencesNodeRequest = request;
+          const facade: RequestRuntime = request;
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       } });
-      declare const previewModule: import('@contentful/experiences-runtime').RuntimeLivePreviewModule;
-      const livePreviewConfig: import('${packageName}/app-router/client').NextjsLivePreviewConfig = {
+      declare const previewModule: import('@contentful/experiences-runtime').LivePreviewModule;
+      const livePreviewConfig: import('${packageName}/app-router/client').LivePreviewConfig = {
         enabled: true, loadImplementation: async () => previewModule,
       };
-      const appClient = bindNextjsAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
+      const appClient = bindAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
         livePreview: livePreviewConfig, request: { experience: { experienceId: 'home' } } });
-      const pagesServer = bindNextjsPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: { experience: { experienceId: 'home' } } });
+      const pagesServer = bindPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: { experience: { experienceId: 'home' } } });
       declare const pagesOptions: Parameters<typeof pagesServer.request.loadExperience>[1];
       const composedPagesOptions: typeof pagesOptions = {
         ...pagesOptions,
         composeRequest: async (request, primary, context) => {
-          const facade: ExperiencesNodeRequest = request;
+          const facade: RequestRuntime = request;
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       };
-      const pagesClient = bindNextjsPagesRouterExperiences({
+      const pagesClient = bindPagesRouterExperiences({
         config, spaceId: 'space', environmentId: 'master',
         delivery: { accessToken: 'browser' }, livePreview: livePreviewConfig,
         consent: { clientDefaults: { consent: false, persistenceConsent: false } }
       });
-      declare const result: NextjsRequestResult;
+      declare const result: RequestResult;
       {
         const { ExperiencesRoot, Experience } = appClient.request;
         const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
@@ -368,7 +368,7 @@ describe('published declarations', () => {
       // @ts-expect-error Request server roots cannot receive browser callbacks.
       ExperiencesRoot({ beforeInitialPage: () => {} });
       const tree = <ExperiencesRoot><Experience {...requestProps} /></ExperiencesRoot>;
-      const cacheMiddleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => undefined });
+      const cacheMiddleware = createPublicPermutationCacheMiddleware({ resolveCache: () => undefined });
       void [appServer, appClient, pagesServer, pagesClient, cacheMiddleware, requestProps, composedPagesOptions, tree];
       const serverProps: ServerExperienceRendererProps = { experience: null, config };
       const clientProps: ExperienceRendererProps = { experience: null, config };
@@ -386,7 +386,7 @@ describe('published declarations', () => {
       // @ts-expect-error Standalone preview hooks are not part of normal entries.
       import { useLivePreview } from '${packageName}/client';
       // @ts-expect-error Request-aware components require their opt-in router entry.
-      import { bindNextjsAppRouterServerExperiences } from '${packageName}/server';
+      import { bindAppRouterServerExperiences } from '${packageName}/server';
     `;
       const options: ts.CompilerOptions = {
         rootDir: packageRoot,

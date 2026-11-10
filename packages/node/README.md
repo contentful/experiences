@@ -177,7 +177,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with XPAPI GET 404. Supplying a profile or events switches the XDA call to POST. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with Personalization API GET 404. Supplying a profile or events switches the XDA call to POST. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -205,7 +205,7 @@ The request builder sets `context.gdpr.isConsentGiven` from this facade's event
 consent (`true` only when granted), without changing the shared builder or another
 request's metadata.
 
-The public `ExperiencesNodeEventBuilder` type exposes only those construction
+The public `RequestEventBuilder` type exposes only those construction
 methods. Building does not submit events, apply consent admission, invoke event
 interceptors, or update profiles. Those operations happen on submission. The shared
 `experiences.eventBuilder` remains available for unbound construction. Submitting
@@ -242,7 +242,7 @@ fetch/resolve shapes. Node exports `FetchExperienceForHandoffResult` with full
 content fetch/resolve failure; invalid route, hook/schema failure or stale ownership
 does not promise usable replay. The producer captures raw final Client events,
 including query arrays, unchanged without a server replay-compatibility check before
-XDA. Normal SDK builder XPAPI validation and Client XDA validation suffice; manually
+XDA. Normal SDK builder Personalization API validation and Client XDA validation suffice; manually
 built/raw transmission remains the consumer's compatibility risk. Receiving replay
 validation may refuse events while available content remains usable. The existing
 wire type unions raw Client and normal SDK events; no new DTO or SDK safety layer
@@ -372,7 +372,7 @@ it is not exact replay. The actual server Node producer retains finalized XDA ev
 for evaluation and commit without repeated hooks; browser admission still applies
 current consent and its permitted metadata restamping.
 Retries and browser prepared replay do not rerun event hooks; the admitted batch
-retains IDs and timestamps under existing XPAPI schema/transport rules. Internal state application invokes no event hooks. Hooks transform events; direct methods keep their Personalization
+retains IDs and timestamps under existing Personalization API schema/transport rules. Internal state application invokes no event hooks. Hooks transform events; direct methods keep their Personalization
 or Analytics transport and do not accumulate events awaiting an XDA fetch.
 
 The original consent gate runs before hooks. For XDA events, the SDK immutably
@@ -495,18 +495,18 @@ try {
 
 ### Request-scoped submission options
 
-`forRequest()` also accepts `experienceOptions` and `insightsOptions`, shared by every call made
+`forRequest()` also accepts `personalizationOptions` and `analyticsOptions`, shared by every call made
 through that request and never across requests. They are copied when the facade is created.
 
-- `experienceOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
+- `personalizationOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
   the request-handoff preview, which still adds `preflight: true`. Pass the visitor's `ip` from a
   trusted source such as your proxy, because the API otherwise analyses the server's IP.
-- `experienceOptions.locale` is a Personalization transport option, as in Optimization: it sets the
-  locale the Experience API uses to translate profile location fields, and the handoff's replay
+- `personalizationOptions.locale` is a Personalization transport option, as in Optimization: it sets the
+  locale the Personalization API uses to translate profile location fields, and the handoff's replay
   locale. It does not change the content locale. `request.locale` and content fetches use
   `forRequest({ locale })` or the constructor locale only. When both are set, `forRequest({ locale })`
   also wins as the transport locale.
-- `insightsOptions: { beacon }` is forwarded with each Analytics call.
+- `analyticsOptions: { beacon }` is forwarded with each Analytics call.
 
 Do not store a request facade beyond the request that created it. Each `forRequest()` call returns a separate object with its own locale and resolve options; concurrent requests do not share those values.
 

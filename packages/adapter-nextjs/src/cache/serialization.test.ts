@@ -2,11 +2,7 @@ import { profile as createProfile } from '../test/fixtures/profile.js';
 import { describe, expect, it } from 'vitest';
 import { EventBuilder } from '@contentful/experiences-react/server';
 import { type ExperiencesHandoff, type PortableRenderPlan } from '@contentful/experiences-node';
-import {
-  serializeNextjsHandoff,
-  serializeNextjsJsonForHtml,
-  serializeNextjsPlan,
-} from './serialization.js';
+import { serializeHandoff, serializeJsonForHtml, serializePlan } from './serialization.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 const builder = new EventBuilder({ channel: 'server', library: { name: 'test', version: '1' } });
@@ -64,7 +60,7 @@ function plan(): PortableRenderPlan {
 describe('browser plan projection', () => {
   it('preserves render data and attribution while excluding diagnostic/identity/default metadata', () => {
     const input = plan();
-    const output = serializeNextjsPlan(input);
+    const output = serializePlan(input);
     expect(output).toEqual({
       nodes: [
         {
@@ -82,7 +78,7 @@ describe('browser plan projection', () => {
         },
       },
     });
-    expect(serializeNextjsPlan(input, { metadataKeys: ['approved'] }).metadata).toEqual({
+    expect(serializePlan(input, { metadataKeys: ['approved'] }).metadata).toEqual({
       approved: { public: true },
     });
     expect(input.diagnostics).toHaveLength(1);
@@ -95,7 +91,7 @@ describe('browser plan projection', () => {
     (value) => {
       const input = plan();
       input.nodes[0]!.props.resolved = { invalid: value };
-      expect(() => serializeNextjsPlan(input)).toThrow('$.nodes[0].props.resolved.invalid');
+      expect(() => serializePlan(input)).toThrow('$.nodes[0].props.resolved.invalid');
     }
   );
 
@@ -104,19 +100,19 @@ describe('browser plan projection', () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
     input.nodes[0]!.props.content = cyclic;
-    expect(() => serializeNextjsPlan(input)).toThrow('cycle at $.nodes[0].props.content.self');
+    expect(() => serializePlan(input)).toThrow('cycle at $.nodes[0].props.content.self');
     const recursive = plan();
     recursive.nodes[0]!.slots.loop = recursive.nodes;
-    expect(() => serializeNextjsPlan(recursive)).toThrow('cycle at $.nodes[0].slots.loop');
+    expect(() => serializePlan(recursive)).toThrow('cycle at $.nodes[0].slots.loop');
     input.nodes[0]!.props.content = {
       get secret() {
         throw new Error('must not execute');
       },
     };
-    expect(() => serializeNextjsPlan(input)).toThrow('accessor');
+    expect(() => serializePlan(input)).toThrow('accessor');
     input.nodes[0]!.props.content = { [Symbol('private')]: 'value' };
-    expect(() => serializeNextjsPlan(input)).toThrow('symbol key');
-    expect(() => serializeNextjsPlan(plan(), { metadataKeys: ['private'] })).toThrow(
+    expect(() => serializePlan(input)).toThrow('symbol key');
+    expect(() => serializePlan(plan(), { metadataKeys: ['private'] })).toThrow(
       '$.metadata.private'
     );
   });
@@ -140,7 +136,7 @@ describe('browser plan projection', () => {
       dataAssemblies: [],
       nodes: {},
     };
-    const output = serializeNextjsPlan(input);
+    const output = serializePlan(input);
     expect(output.sourceMap).toEqual(input.sourceMap);
     expect(output.nodes[0]!.slots['name.with/slash']).toHaveLength(1);
     const projected = output.attribution!.scopes.root!;
@@ -159,18 +155,18 @@ describe('canonical handoff serialization', () => {
       state: { profile: profile() },
       replay: { routeKey: '/page?q=x&q=y', events, locale: 'de-DE' },
     };
-    const output = serializeNextjsHandoff(input, scope);
+    const output = serializeHandoff(input, scope);
     expect(output.state).toEqual(JSON.parse(JSON.stringify(input.state)));
     expect(output.profileId).toBe('continuation');
     expect(output.replay).toEqual(JSON.parse(JSON.stringify(input.replay)));
     expect(input.state?.profile?.traits).toEqual({ plan: 'pro' });
-    expect(JSON.parse(serializeNextjsJsonForHtml(output))).toEqual(output);
+    expect(JSON.parse(serializeJsonForHtml(output))).toEqual(output);
   });
 
   it('supports profileless output and forwards the scope to the canonical validator', () => {
     const input: ExperiencesHandoff = { ...scope, cache: { scope: 'private-request' } };
-    expect(serializeNextjsHandoff(input, scope)).toEqual(input);
-    expect(() => serializeNextjsHandoff(input, { ...scope, environmentId: 'other' })).toThrow(
+    expect(serializeHandoff(input, scope)).toEqual(input);
+    expect(() => serializeHandoff(input, { ...scope, environmentId: 'other' })).toThrow(
       'space or environment'
     );
   });
@@ -178,7 +174,7 @@ describe('canonical handoff serialization', () => {
 
 it('escapes HTML script terminators and JS line separators without changing JSON values', () => {
   const input = { text: '</script><script>\u2028\u2029' };
-  const encoded = serializeNextjsJsonForHtml(input);
+  const encoded = serializeJsonForHtml(input);
   expect(encoded).toBe('{"text":"\\u003c/script>\\u003cscript>\\u2028\\u2029"}');
   expect(JSON.parse(encoded)).toEqual(input);
 });
@@ -200,18 +196,16 @@ it('preserves defined context fields and raw query arrays while keeping customer
       context: { ...event.context, page, campaign: { medium: 'email', term: undefined } },
     } as never,
   ]);
-  const output = serializeNextjsHandoff(input, scope);
+  const output = serializeHandoff(input, scope);
   expect(output.replay?.events[0]?.context.page).toEqual(page);
   expect(output.replay?.events[0]?.context.campaign).toEqual({ medium: 'email' });
   expect(output.replay?.events[0]).toMatchObject({ traits: { medium: 'customer' } });
   const rawEvent = input.replay!.events[0]!;
   Object.assign(rawEvent, { traits: { medium: undefined } });
-  expect(() => serializeNextjsHandoff(input, scope)).toThrow('$.replay.events[0].traits.medium');
+  expect(() => serializeHandoff(input, scope)).toThrow('$.replay.events[0].traits.medium');
   Object.assign(rawEvent, { traits: {} });
   Object.assign(rawEvent.context.page!, { custom: undefined });
-  expect(() => serializeNextjsHandoff(input, scope)).toThrow(
-    '$.replay.events[0].context.page.custom'
-  );
+  expect(() => serializeHandoff(input, scope)).toThrow('$.replay.events[0].context.page.custom');
 });
 
 it('preserves defined page optionals and keeps page extensions, Track properties and Identify traits strict', () => {
@@ -233,23 +227,21 @@ it('preserves defined page optionals and keeps page extensions, Track properties
   });
   const input = handoff([page]);
   const original = globalThis.structuredClone(input);
-  const output = serializeNextjsHandoff(input, scope);
+  const output = serializeHandoff(input, scope);
   expect(output.replay?.events[0]?.context.page).toEqual(page.context.page);
   expect(output.replay?.events[0]).toMatchObject({ properties: page.properties });
   expect(input).toEqual(original);
   Object.assign(page.properties, { extension: undefined });
-  expect(() => serializeNextjsHandoff(input, scope)).toThrow(
-    '$.replay.events[0].properties.extension'
-  );
+  expect(() => serializeHandoff(input, scope)).toThrow('$.replay.events[0].properties.extension');
 
   const track = builder.buildTrack({ event: 'custom' });
   Object.assign(track.properties, { title: undefined, category: undefined });
-  expect(() => serializeNextjsHandoff(handoff([track]), scope)).toThrow(
+  expect(() => serializeHandoff(handoff([track]), scope)).toThrow(
     '$.replay.events[0].properties.title'
   );
   const identify = builder.buildIdentify({ userId: 'user' });
   Object.assign(identify.traits, { title: undefined, category: undefined });
-  expect(() => serializeNextjsHandoff(handoff([identify]), scope)).toThrow(
+  expect(() => serializeHandoff(handoff([identify]), scope)).toThrow(
     '$.replay.events[0].traits.title'
   );
 });

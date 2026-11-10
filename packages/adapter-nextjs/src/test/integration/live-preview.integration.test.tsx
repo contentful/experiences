@@ -1,12 +1,12 @@
 /** @vitest-environment jsdom */
 import { act, Suspense } from 'react';
-import { testRoot } from '../react-root.js';
+import { testRoot } from '../dom-root.js';
 import { useExperiences } from '@contentful/experiences-react/client';
 import type { ContentfulExperiences } from '@contentful/experiences-web';
-import type { RuntimeLivePreviewModule } from '@contentful/experiences-runtime';
+import type { LivePreviewModule } from '@contentful/experiences-runtime';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { useNextjsInitialData } from '../../presentation/router-lifetime.js';
-import { bindNextjsAppRouterClientExperiences } from '../../app-router/client.js';
+import { useInitialData } from '../../presentation/router-lifetime.js';
+import { bindAppRouterClientExperiences } from '../../app-router/client.js';
 
 const route = vi.hoisted(() => ({ search: '' }));
 vi.mock('next/navigation.js', () => ({
@@ -35,9 +35,9 @@ it('forwards current preview bindings while preserving Next request history acro
       subscribeStatus: () => () => {},
     })),
     sendPreviewStatus: vi.fn(),
-  } satisfies RuntimeLivePreviewModule;
+  } satisfies LivePreviewModule;
   const livePreview = { enabled: true, loadImplementation: async () => module };
-  const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+  const { ExperiencesRoot } = bindAppRouterClientExperiences({
     config: { components: {} },
     spaceId: 'space',
     environmentId: 'master',
@@ -51,7 +51,7 @@ it('forwards current preview bindings while preserving Next request history acro
   let canAdoptOriginal!: boolean;
   function Probe() {
     sdk = useExperiences() as ContentfulExperiences;
-    canAdoptOriginal = useNextjsInitialData('original');
+    canAdoptOriginal = useInitialData('original');
     return null;
   }
   let resume!: () => void;

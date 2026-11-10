@@ -1,4 +1,4 @@
-import type { ExperienceState } from '../state/interceptors.js';
+import type { PersonalizationState } from '../state/interceptors.js';
 
 export const CORE_BRIDGE_CAPABILITIES_SYMBOL = Symbol.for(
   'ctfl.experiences.internal.bridgeSupport'
@@ -6,7 +6,7 @@ export const CORE_BRIDGE_CAPABILITIES_SYMBOL = Symbol.for(
 
 /** State hydration capabilities exposed by compatible SDK instances. */
 export interface CoreBridgeCapabilities {
-  readonly hydrateOptimizationData: (data: ExperienceState) => Promise<void>;
+  readonly hydrateOptimizationData: (data: PersonalizationState) => Promise<void>;
 }
 
 export interface CoreBridgeHost {

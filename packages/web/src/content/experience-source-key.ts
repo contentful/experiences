@@ -1,17 +1,14 @@
-import type {
-  RuntimeFetchExperienceOptions,
-  RuntimeFetchResolveOptions,
-} from '@contentful/experiences-runtime';
+import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-runtime';
 
 export interface ExperienceSourceContext {
-  request: RuntimeFetchExperienceOptions;
+  request: FetchExperienceOptions;
   revision: readonly unknown[];
 }
 
 /** Optimization's normalized query-key approach, extended to structured XDA parameters. */
 export function getExperienceSourceKey(
   { request, revision }: ExperienceSourceContext,
-  resolve: RuntimeFetchResolveOptions,
+  resolve: FetchResolveOptions,
   sourceRevision: number,
   operation: string
 ): string | undefined {

@@ -1,24 +1,24 @@
-import type { InsightsApiClientRequestOptions } from '@contentful/optimization-api-client';
+import type { InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import type {
-  BatchInsightsEventArray,
+  BatchInsightsEventArray as AnalyticsEventBatches,
   InsightsEvent as AnalyticsEvent,
   Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
-  InsightsEvent as InsightsEventSchema,
+  InsightsEvent as AnalyticsEventSchema,
   parseWithFriendlyError as parseOptimizationSchema,
 } from '@contentful/optimization-api-client/api-schemas';
 import type { EventInterceptors } from '../events/event-interceptors.js';
-import { QueueFlushRuntime, type ResolvedQueueFlushPolicy } from './queue/index.js';
-import type { RuntimeOptimizationApiClient } from '../events/runtime-event-methods.js';
+import { FlushRuntime, type ResolvedQueueFlushPolicy } from './queue/index.js';
+import type { EventApi } from '../events/methods.js';
 
 const deliveryLogger = createScopedLogger('Experiences:AnalyticsDelivery');
 
-/** Optimization's InsightsQueue size limit: reaching it flushes immediately. */
+/** Optimization's Analytics queue size limit: reaching it flushes immediately. */
 export const MAX_QUEUED_ANALYTICS_EVENTS = 25;
 
-type AnalyticsApi = RuntimeOptimizationApiClient['insights'];
+type AnalyticsApi = EventApi['analytics'];
 type QueuedProfileEvents = { profile: EventProfile; events: AnalyticsEvent[] };
 
 interface AnalyticsDeliveryOptions {
@@ -39,12 +39,12 @@ interface AnalyticsDeliveryOptions {
   readonly flushPolicy: ResolvedQueueFlushPolicy;
 }
 
-export interface AnalyticsFlushOptions extends InsightsApiClientRequestOptions {
+export interface AnalyticsFlushOptions extends AnalyticsApiClientRequestOptions {
   force?: boolean;
 }
 
 /**
- * In-memory Analytics event queue adapted from Optimization's InsightsQueue.
+ * In-memory Analytics event queue adapted from Optimization's Analytics queue.
  *
  * Events are grouped per profile and flushed when the queue reaches its size limit, on a
  * periodic timer while events remain queued, and when the owner calls `flush()` (coming
@@ -58,7 +58,7 @@ export class AnalyticsDelivery {
   readonly #getOnline: AnalyticsDeliveryOptions['getOnline'];
   readonly #maxEvents: number;
   readonly #flushIntervalMs: number;
-  readonly #flushRuntime: QueueFlushRuntime;
+  readonly #flushRuntime: FlushRuntime;
   readonly #queued = new Map<string, QueuedProfileEvents>();
   readonly #getResetToken: () => object | undefined;
   #activeFlush: Promise<void> | undefined;
@@ -74,7 +74,7 @@ export class AnalyticsDelivery {
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
     const policy = options.flushPolicy;
     this.#flushIntervalMs = policy.flushIntervalMs;
-    this.#flushRuntime = new QueueFlushRuntime({
+    this.#flushRuntime = new FlushRuntime({
       policy,
       onRetry: () => {
         void this.flush();
@@ -95,7 +95,7 @@ export class AnalyticsDelivery {
 
   /**
    * Queue one event. Reaching the size limit awaits the triggered flush, as Optimization's
-   * InsightsQueue does. Like Optimization, the call resolves with no result: a failed
+   * the reference Analytics queue does. Like Optimization, the call resolves with no result: a failed
    * flush keeps its events for retry and is not reported through the return value.
    * A post-interception consent refusal returns an internal false admission signal.
    */
@@ -104,7 +104,7 @@ export class AnalyticsDelivery {
     if (token === undefined) return;
     const intercepted = await this.#eventInterceptors.run(event);
     if (token !== this.#getResetToken()) return;
-    const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
+    const validEvent = parseOptimizationSchema(AnalyticsEventSchema, intercepted);
     if (this.#admitEvent?.(validEvent) === false) return false;
     if (token !== this.#getResetToken()) return;
     this.#publishEvent(validEvent);
@@ -163,7 +163,7 @@ export class AnalyticsDelivery {
   }
 
   async #flushAttempt(
-    batches: BatchInsightsEventArray,
+    batches: AnalyticsEventBatches,
     beacon: AnalyticsFlushOptions['beacon'],
     token: object | undefined
   ): Promise<void> {
@@ -191,7 +191,7 @@ export class AnalyticsDelivery {
 
   /**
    * Drop queued events and reset retry state, as Optimization's
-   * InsightsQueue.clearQueuedEvents(). The owner invalidates in-flight work by replacing
+   * the reference Analytics queue clearQueuedEvents(). The owner invalidates in-flight work by replacing
    * its reset token; a request on the wire cannot be recalled but can no longer apply.
    */
   clearQueuedEvents(): void {
@@ -207,8 +207,8 @@ export class AnalyticsDelivery {
   }
 
   async #trySend(
-    batches: BatchInsightsEventArray,
-    options: InsightsApiClientRequestOptions | undefined
+    batches: AnalyticsEventBatches,
+    options: AnalyticsApiClientRequestOptions | undefined
   ): Promise<boolean> {
     try {
       return options === undefined
@@ -220,7 +220,7 @@ export class AnalyticsDelivery {
     }
   }
 
-  #removeSentEvents(batches: BatchInsightsEventArray): void {
+  #removeSentEvents(batches: AnalyticsEventBatches): void {
     for (const { profile, events } of batches) {
       const queued = this.#queued.get(profile.id);
       if (queued === undefined) continue;
@@ -229,8 +229,8 @@ export class AnalyticsDelivery {
     }
   }
 
-  #createBatches(): BatchInsightsEventArray {
-    const batches: BatchInsightsEventArray = [];
+  #createBatches(): AnalyticsEventBatches {
+    const batches: AnalyticsEventBatches = [];
     this.#queued.forEach(({ profile, events }) => {
       batches.push({ profile, events: [...events] });
     });

@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
-  assertRuntimePreviewRequest,
-  createRuntimePreviewClient,
-  fetchRuntimePreviewSession,
-  mergeRuntimePreviewResolveOptions,
-  type RuntimeLivePreviewConfig,
-  type RuntimeLivePreviewModule,
+  assertPreviewRequest,
+  createPreviewClient,
+  fetchPreviewSession,
+  mergePreviewResolveOptions,
+  type LivePreviewConfig,
+  type LivePreviewModule,
 } from './live-preview.js';
 
 const resolve = { config: { components: {} } };
-const config: RuntimeLivePreviewConfig = {
+const config: LivePreviewConfig = {
   spaceId: 'space',
   environmentId: 'master',
   preview: { accessToken: 'preview-token' },
@@ -25,11 +25,9 @@ function fixture() {
     subscribeStatus: vi.fn(() => vi.fn()),
   };
   const implementation = {
-    fetchPreviewSession: vi
-      .fn<RuntimeLivePreviewModule['fetchPreviewSession']>()
-      .mockResolvedValue(plan),
+    fetchPreviewSession: vi.fn<LivePreviewModule['fetchPreviewSession']>().mockResolvedValue(plan),
     createLivePreviewClient: vi
-      .fn<RuntimeLivePreviewModule['createLivePreviewClient']>()
+      .fn<LivePreviewModule['createLivePreviewClient']>()
       .mockReturnValue(client),
     sendPreviewStatus: vi.fn(),
   };
@@ -50,12 +48,12 @@ describe('Runtime Live Preview wrapper', () => {
       ...config,
       preview: { accessToken: async () => 'token', host: 'https://preview.test' },
     };
-    const preparedResolve = mergeRuntimePreviewResolveOptions(scoped, {
+    const preparedResolve = mergePreviewResolveOptions(scoped, {
       ...resolve,
       debug: false,
       metadata: { shared: 'operation' },
     });
-    await expect(fetchRuntimePreviewSession(binding, scoped, preparedResolve)).resolves.toBe(plan);
+    await expect(fetchPreviewSession(binding, scoped, preparedResolve)).resolves.toBe(plan);
     expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
       {
         spaceId: 'space',
@@ -71,7 +69,7 @@ describe('Runtime Live Preview wrapper', () => {
 
   it('maps subscription credentials and session configuration into the public client', async () => {
     const { binding, implementation, client } = fixture();
-    await expect(createRuntimePreviewClient(binding, config)).resolves.toBe(client);
+    await expect(createPreviewClient(binding, config)).resolves.toBe(client);
     expect(implementation.createLivePreviewClient).toHaveBeenCalledWith({
       spaceId: 'space',
       environmentId: 'master',
@@ -86,10 +84,10 @@ describe('Runtime Live Preview wrapper', () => {
   it('requires a preview token before transport', async () => {
     const { binding, implementation } = fixture();
     await expect(
-      fetchRuntimePreviewSession(
+      fetchPreviewSession(
         binding,
         { ...config, preview: undefined },
-        mergeRuntimePreviewResolveOptions(config, resolve)
+        mergePreviewResolveOptions(config, resolve)
       )
     ).rejects.toThrow(/accessToken/);
     expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
@@ -102,7 +100,7 @@ describe('Runtime Live Preview wrapper', () => {
       throw new Error('HTTP endpoint unavailable');
     });
     const scoped = { ...config, preview: { accessToken, host } };
-    await expect(createRuntimePreviewClient(binding, scoped)).resolves.toBe(client);
+    await expect(createPreviewClient(binding, scoped)).resolves.toBe(client);
     expect(host).not.toHaveBeenCalled();
     expect(accessToken).toHaveBeenCalledOnce();
     expect(implementation.createLivePreviewClient).toHaveBeenCalledWith(
@@ -111,11 +109,7 @@ describe('Runtime Live Preview wrapper', () => {
 
     host.mockResolvedValueOnce('https://preview.test');
     await expect(
-      fetchRuntimePreviewSession(
-        binding,
-        scoped,
-        mergeRuntimePreviewResolveOptions(scoped, resolve)
-      )
+      fetchPreviewSession(binding, scoped, mergePreviewResolveOptions(scoped, resolve))
     ).resolves.toBe(plan);
     expect(host).toHaveBeenCalledOnce();
     expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
@@ -127,9 +121,9 @@ describe('Runtime Live Preview wrapper', () => {
 
   it('rejects explicit session-owned request options', () => {
     for (const override of [{ locale: 'en-US' }, { parameters: {} }, { extensions: {} }]) {
-      expect(() =>
-        assertRuntimePreviewRequest({ experienceId: 'experience', ...override })
-      ).toThrow(/server-owned/);
+      expect(() => assertPreviewRequest({ experienceId: 'experience', ...override })).toThrow(
+        /server-owned/
+      );
     }
   });
 });

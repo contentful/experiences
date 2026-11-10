@@ -1,12 +1,12 @@
 import {
   type AllowedEventType,
   type BlockedEvent,
-  type ContentfulExperiencesConfig,
+  type Config as BaseConfig,
   type EventBuilderConfig,
   type PageViewBuilderArgs,
   type QueuePolicy,
-  type RuntimeEventMethods,
-  type RuntimeLivePreviewOptions,
+  type DirectEventMethods,
+  type LivePreviewOptions,
 } from '@contentful/experiences-runtime';
 import { type StatefulDefaults } from '../state/stateful-defaults.js';
 
@@ -17,27 +17,24 @@ import {
 } from '../tracking/interaction-tracking.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
-export type BrowserEventContextProviders = Pick<
-  EventBuilderConfig,
-  'getPageProperties' | 'getUserAgent'
->;
+export type EventContextProviders = Pick<EventBuilderConfig, 'getPageProperties' | 'getUserAgent'>;
 
 /** Initial values for the stateful Web runtime. */
-export type CoreConfigDefaults = StatefulDefaults;
+export type ConfigDefaults = StatefulDefaults;
 
 /**
  * Long-lived, browser-oriented SDK configuration.
  */
-export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
+export type Config = Omit<BaseConfig, 'eventBuilder' | 'locale'> & {
   /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
   isPreview?: boolean;
   /** Preview Session configuration with lazy implementation loading; establishes preview policy immediately. */
-  livePreview?: RuntimeLivePreviewOptions;
+  livePreview?: LivePreviewOptions;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
   app?: EventBuilderConfig['app'];
-  browserContext?: BrowserEventContextProviders;
+  browserContext?: EventContextProviders;
   /** Event types emitted while event consent is not granted. Defaults to identify and page. */
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Blocked events are never replayed. */
@@ -53,7 +50,7 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
    * Consent applied at startup. Configured values take precedence over a stored
    * decision, and `consent` is also the default for `persistenceConsent`.
    */
-  defaults?: CoreConfigDefaults;
+  defaults?: ConfigDefaults;
   /**
    * How the identity cookie is written and deleted: domain, path, SameSite, Secure and
    * expiry (365 days by default). It is the cookie a server reads to recognise the
@@ -81,8 +78,8 @@ export interface HydrateAndTrackCurrentPageOptions extends Omit<
   readonly isCurrent?: () => boolean;
 }
 
-export type WebEventMethods = Pick<
-  RuntimeEventMethods,
+export type EventMethods = Pick<
+  DirectEventMethods,
   'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 

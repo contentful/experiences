@@ -5,7 +5,7 @@ import {
   ExperiencesProvider,
   type ExperiencesRootProps,
   usePreviewState,
-  useExperiencesContext,
+  useRuntimeContext,
 } from '@contentful/experiences-react/client';
 import {
   createContext,
@@ -17,18 +17,14 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { BoundNextjsExperiencesRootProps, NextjsRequestResult } from './request-result.js';
+import type { BoundRootProps, RequestResult } from './request-result.js';
 
-import {
-  resolveNextjsLivePreview,
-  nextjsLivePreviewSessionId,
-  mergeNextjsLivePreview,
-} from './live-preview.js';
+import { resolveLivePreview, livePreviewSessionId, mergeLivePreview } from './live-preview.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
 
 /** One stable root excludes only restored original bootstrap inputs after departure. */
-export function NextjsInitialDataBoundary({
+export function InitialDataBoundary({
   routeKey,
   requestId,
   children,
@@ -52,13 +48,13 @@ export function NextjsInitialDataBoundary({
   );
 }
 
-export function useNextjsInitialData(requestId: string | undefined) {
+export function useInitialData(requestId: string | undefined) {
   return useContext(InitialDataContext)(requestId);
 }
 
 /** Request presentation adopts the whole descriptor and its matching startup outcome. */
-export function useNextjsRequestOptions(result: NextjsRequestResult) {
-  const canAdopt = useNextjsInitialData(result.requestId);
+export function useRequestOptions(result: RequestResult) {
+  const canAdopt = useInitialData(result.requestId);
   const initialError = useMemo(
     () => (result.contentError === undefined ? undefined : new Error(result.contentError)),
     [result.contentError]
@@ -83,22 +79,22 @@ export function useServerPreviewRefresh(experienceId: string | undefined, refres
 }
 
 /** Preview adds session synchronization to the existing React SDK owner. */
-export function NextjsBrowserRoot({
+export function BrowserRoot({
   livePreview,
   experienceId,
   sdk,
   previewUrl,
   children,
   ...props
-}: BoundNextjsExperiencesRootProps & { previewUrl?: string }) {
+}: BoundRootProps & { previewUrl?: string }) {
   const config = livePreview && 'enabled' in livePreview ? livePreview : undefined;
   if (config && sdk)
     throw new TypeError('Managed Live Preview requires an SDK-owned Next.js root.');
   const url = previewUrl ?? props.routeKey ?? '/';
-  const sessionId = config && nextjsLivePreviewSessionId(config, url);
+  const sessionId = config && livePreviewSessionId(config, url);
   const direct = livePreview && !('enabled' in livePreview) ? livePreview : undefined;
   const options = useMemo(
-    () => (config ? resolveNextjsLivePreview(config, url, experienceId) : direct),
+    () => (config ? resolveLivePreview(config, url, experienceId) : direct),
     [
       sessionId,
       experienceId,
@@ -157,7 +153,7 @@ function PreviewSession({
 }: {
   options: NonNullable<ExperiencesRootProps['livePreview']>;
 }) {
-  const context = useExperiencesContext();
+  const context = useRuntimeContext();
   const applied = useRef(options);
   useEffect(() => {
     if (!context.isLive || applied.current === options) return;
@@ -169,7 +165,7 @@ function PreviewSession({
 }
 
 /** Shared whole-result adoption and page builder precedence for both router families. */
-export function NextjsRequestPresentation({
+export function RequestPresentation({
   result,
   Root,
   routeKey,
@@ -178,16 +174,16 @@ export function NextjsRequestPresentation({
   ready = true,
   previewUrl,
   ...props
-}: BoundNextjsExperiencesRootProps & {
-  result?: NextjsRequestResult;
+}: BoundRootProps & {
+  result?: RequestResult;
   previewUrl?: string;
-  Root: typeof NextjsBrowserRoot;
+  Root: typeof BrowserRoot;
   routeKey: string;
   configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
   buildRoutePayload: NonNullable<ExperiencesRootProps['buildPagePayload']>;
   ready?: boolean;
 }) {
-  const canAdopt = useNextjsInitialData(result?.requestId);
+  const canAdopt = useInitialData(result?.requestId);
   const matchingResult = canAdopt && result?.routeKey === routeKey ? result : undefined;
   const initialPagePayload =
     matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);
@@ -209,7 +205,7 @@ export function NextjsRequestPresentation({
       routeKey={routeKey}
       previewUrl={previewUrl}
       experienceId={props.experienceId ?? result?.experience.experienceId}
-      livePreview={mergeNextjsLivePreview(props.livePreview, result?.livePreview)}
+      livePreview={mergeLivePreview(props.livePreview, result?.livePreview)}
       handoff={
         result
           ? canAdopt && (ready || typeof window === 'undefined')

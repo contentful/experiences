@@ -9,7 +9,7 @@ import {
   type EventProfile,
 } from '@contentful/experiences-runtime';
 import { staticObservable } from '../signals/Observable.js';
-import type { CoreStates } from '../state/states.js';
+import type { States } from '../state/states.js';
 import type { ExperiencesRuntime } from '../runtime.js';
 
 /**
@@ -45,7 +45,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
   private readonly allowedEventTypes: readonly AllowedEventType[];
 
   /** Static observable state derived from the snapshot. */
-  readonly states: CoreStates;
+  readonly states: States;
 
   constructor(snapshot: ExperiencesSnapshot = {}) {
     this.snapshot = snapshot;
@@ -59,7 +59,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
       persistenceConsent: staticObservable(snapshot.persistenceConsent ?? snapshot.consent),
       eventStream: staticObservable(undefined),
       locale: staticObservable(snapshot.locale),
-      experienceRequestState: staticObservable({ status: 'success' }),
+      personalizationRequestState: staticObservable({ status: 'success' }),
       profile: staticObservable(snapshot.data?.profile),
     };
   }

@@ -1,20 +1,20 @@
 import {
   ChangeArray,
   EventProfileSchema,
-  type BuiltRuntimeFetchExperienceOptions,
+  type BuiltFetchExperienceOptions,
   type EventProfile,
   type ExperiencesHandoff,
   type FetchExperienceForHandoffResult,
   type OptimizationEventStreamEvent,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import type { ContentfulExperiences } from '../sdk/contentful-experiences.js';
-import type { RequestPersonalization } from './personalization.js';
-import type { ExperiencesNodeRequest } from './types.js';
-type HandoffIdentity = Pick<ExperiencesNodeRequest, 'locale' | 'isPreview'> & {
-  getProfile(): ExperiencesNodeRequest['profile'];
+import type { PersonalizationPreparation } from './personalization.js';
+import type { RequestRuntime } from './types.js';
+type HandoffIdentity = Pick<RequestRuntime, 'locale' | 'isPreview'> & {
+  getProfile(): RequestRuntime['profile'];
   getRevision(): number;
   assertActive(): void;
   setProfile(profile: EventProfile): void;
@@ -23,13 +23,13 @@ type HandoffIdentity = Pick<ExperiencesNodeRequest, 'locale' | 'isPreview'> & {
 export async function fetchHandoff(
   runtime: ContentfulExperiences,
   identity: HandoffIdentity,
-  personalizationOwner: RequestPersonalization,
+  personalizationOwner: PersonalizationPreparation,
   fetchPayload: (
-    options: BuiltRuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: BuiltFetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ) => Promise<ExperiencePayload>,
-  options: RuntimeFetchExperienceOptions,
-  resolve: RuntimeFetchResolveOptions,
+  options: FetchExperienceOptions,
+  resolve: FetchResolveOptions,
   routeKey: string,
   handoff: ExperiencesHandoff
 ): Promise<FetchExperienceForHandoffResult> {

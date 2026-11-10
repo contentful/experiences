@@ -2,8 +2,8 @@ import 'server-only';
 
 import { cache, createElement } from 'react';
 import {
-  bindNextjsAppRouterServerExperiences,
-  serializeNextjsRequestResult,
+  bindAppRouterServerExperiences,
+  serializeRequestResult,
 } from '@contentful/experiences-nextjs/app-router/server';
 import { getServer } from './config';
 import { routeIds } from './reference';
@@ -22,7 +22,7 @@ export { contentSeeds } from './server-reference';
 export const loadServerPage = cache(async () => {
   const { browser, nodeConfig } = getServer();
   let comparisons: ServerContent[] = [];
-  const binding = bindNextjsAppRouterServerExperiences(
+  const binding = bindAppRouterServerExperiences(
     {
       ...nodeConfig,
       config: experienceConfig,
@@ -72,7 +72,7 @@ export const loadServerPage = cache(async () => {
   const result = await binding.request.loadExperience();
   return {
     result,
-    browserResult: serializeNextjsRequestResult(result),
+    browserResult: serializeRequestResult(result),
     ExperiencesRoot: binding.request.ExperiencesRoot,
     comparisons,
     serverOnly: result.hydration === 'server-only',

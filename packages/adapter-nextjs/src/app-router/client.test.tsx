@@ -3,7 +3,7 @@ import { plan as createPlan } from '../test/fixtures/plan.js';
 import { browserSdk } from '../test/browser-sdk.js';
 import { act } from 'react';
 import { useExperiences } from '@contentful/experiences-react/client';
-import { testRoot } from '../test/react-root.js';
+import { testRoot } from '../test/dom-root.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
@@ -11,17 +11,17 @@ import {
   type PreviewState,
 } from '@contentful/experiences-web';
 import {
-  bindNextjsAppRouterClientExperiences,
-  NextjsAppRouterRequestRoot,
-  NextjsAppRouterRequestAnalyticsRoot,
-  useNextAppAutoPageInputs,
+  bindAppRouterClientExperiences,
+  AppRouterRequestRoot,
+  AppRouterRequestAnalyticsRoot,
+  useAppAutoPageInputs,
 } from './client.js';
 import {
-  NextjsRequestPresentation,
-  NextjsBrowserRoot,
-  useNextjsRequestOptions,
+  RequestPresentation,
+  BrowserRoot,
+  useRequestOptions,
 } from '../presentation/router-lifetime.js';
-import type { NextjsRequestResult } from '../presentation/request-result.js';
+import type { RequestResult } from '../presentation/request-result.js';
 
 const navigation = vi.hoisted(() => ({
   pathname: '/page',
@@ -32,8 +32,8 @@ vi.mock('../presentation/router-lifetime.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../presentation/router-lifetime.js')>();
   return {
     ...actual,
-    NextjsRequestPresentation: vi.fn(actual.NextjsRequestPresentation),
-    NextjsBrowserRoot: vi.fn(actual.NextjsBrowserRoot),
+    RequestPresentation: vi.fn(actual.RequestPresentation),
+    BrowserRoot: vi.fn(actual.BrowserRoot),
   };
 });
 vi.mock('next/navigation.js', () => ({
@@ -44,9 +44,9 @@ vi.mock('next/navigation.js', () => ({
 
 describe('App committed route inputs', () => {
   const view = testRoot();
-  let inputs: ReturnType<typeof useNextAppAutoPageInputs>;
+  let inputs: ReturnType<typeof useAppAutoPageInputs>;
   function Probe() {
-    inputs = useNextAppAutoPageInputs();
+    inputs = useAppAutoPageInputs();
     return null;
   }
   beforeEach(() => {
@@ -86,19 +86,19 @@ describe('App committed route inputs', () => {
   it('rejects restored original request inputs while accepting a fresh ID with identical plan bytes', async () => {
     const plan = createPlan({ label: 'server' });
     const { sdk, hydrateAndTrackCurrentPage } = browserSdk({ consent: true, plan });
-    const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+    const { ExperiencesRoot } = bindAppRouterClientExperiences({
       config: { components: {} },
     }).request;
-    let options!: ReturnType<typeof useNextjsRequestOptions>;
-    function RequestProbe({ result }: { result: NextjsRequestResult }) {
-      options = useNextjsRequestOptions(result);
+    let options!: ReturnType<typeof useRequestOptions>;
+    function RequestProbe({ result }: { result: RequestResult }) {
+      options = useRequestOptions(result);
       return null;
     }
     const render = async (pathname: string, requestId: string) => {
       navigation.pathname = pathname;
       navigation.search = '';
       window.history.replaceState(null, '', pathname);
-      const result: NextjsRequestResult = {
+      const result: RequestResult = {
         routeKey: pathname,
         requestId,
         experience: { experienceId: 'primary', parameters: { variant: 'retained' } },
@@ -139,7 +139,7 @@ describe('App committed route inputs', () => {
       current = useExperiences();
       return null;
     }
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const { Experience } = bound.request;
     const result = {
       requestId: 'default',
@@ -149,7 +149,7 @@ describe('App committed route inputs', () => {
     };
     await act(async () =>
       view.root.render(
-        <NextjsAppRouterRequestRoot
+        <AppRouterRequestRoot
           spaceId="space"
           environmentId="master"
           locale="en-US"
@@ -162,7 +162,7 @@ describe('App committed route inputs', () => {
           <Experience result={result}>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
           </Experience>
-        </NextjsAppRouterRequestRoot>
+        </AppRouterRequestRoot>
       )
     );
     const sdk = current! as ContentfulExperiences;
@@ -182,7 +182,7 @@ describe('App committed route inputs', () => {
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));
     const override = vi.fn(() => ({ properties: { path: '/override' } }));
     const beforeInitialPage = { run: vi.fn() };
-    const bound = bindNextjsAppRouterClientExperiences({
+    const bound = bindAppRouterClientExperiences({
       config: { components: {} },
       buildPagePayload: configured,
       beforeInitialPage,
@@ -196,7 +196,7 @@ describe('App committed route inputs', () => {
         />
       )
     );
-    const presentation = vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0];
+    const presentation = vi.mocked(RequestPresentation).mock.calls.at(-1)![0];
     expect(presentation.Root({}).props).toMatchObject({ beforeInitialPage });
     expect(presentation).toMatchObject({
       routeKey: '/page?q=hello+world',
@@ -236,7 +236,7 @@ describe('App committed route inputs', () => {
     } as unknown as ContentfulExperiences;
     await act(async () =>
       view.root.render(
-        <NextjsAppRouterRequestAnalyticsRoot
+        <AppRouterRequestAnalyticsRoot
           browser={{ delivery: { host: 'https://trusted-proxy.example' } }}
           spaceId="space"
           environmentId="master"
@@ -249,7 +249,7 @@ describe('App committed route inputs', () => {
           }}
         >
           <p>Server content</p>
-        </NextjsAppRouterRequestAnalyticsRoot>
+        </AppRouterRequestAnalyticsRoot>
       )
     );
     const publish = async (experienceId: string, revision: number) =>
@@ -270,7 +270,7 @@ describe('App committed route inputs', () => {
   it('forwards ordinary explicit root configuration without creating a request presentation', async () => {
     const sdk = createWebSnapshotRuntime() as ContentfulExperiences;
     const defaults = { consent: false, persistenceConsent: false };
-    const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+    const { ExperiencesRoot } = bindAppRouterClientExperiences({
       config: { components: {} },
       delivery: { host: 'https://trusted-proxy.example' },
       locale: 'en-US',
@@ -284,8 +284,8 @@ describe('App committed route inputs', () => {
         </ExperiencesRoot>
       )
     );
-    expect(NextjsRequestPresentation).not.toHaveBeenCalled();
-    expect(vi.mocked(NextjsBrowserRoot).mock.calls.at(-1)![0]).toMatchObject({
+    expect(RequestPresentation).not.toHaveBeenCalled();
+    expect(vi.mocked(BrowserRoot).mock.calls.at(-1)![0]).toMatchObject({
       sdk,
       locale: 'fr-FR',
       defaults,
@@ -296,7 +296,7 @@ describe('App committed route inputs', () => {
 
   it('preserves a bound static page payload on an explicit managed root', async () => {
     const initialPagePayload = { properties: { title: 'Configured page' } };
-    const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+    const { ExperiencesRoot } = bindAppRouterClientExperiences({
       config: { components: {} },
       spaceId: 'space',
       environmentId: 'master',
@@ -305,7 +305,7 @@ describe('App committed route inputs', () => {
       livePreview: { enabled: false, loadImplementation: vi.fn() },
     });
     await act(async () => view.root.render(<ExperiencesRoot />));
-    expect(vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(
+    expect(vi.mocked(RequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(
       initialPagePayload
     );
   });
