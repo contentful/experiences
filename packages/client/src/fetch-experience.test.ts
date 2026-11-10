@@ -125,10 +125,12 @@ const personalization = {
     {
       type: 'page',
       channel: 'server',
-      context: { library: { name: 'test', version: '1.0.0' } },
+      context: { library: { name: 'test', version: '1.0.0' }, campaign: {} },
       messageId: 'page-message-1',
       timestamp: '2026-10-09T00:00:00.000Z',
-      properties: { path: '/', query: {}, referrer: '', search: '', url: '/' },
+      originalTimestamp: '2026-10-09T00:00:00.000Z',
+      sentAt: '2026-10-09T00:00:00.000Z',
+      properties: { path: '/', query: {}, referrer: '', search: '', url: '/', title: 'Home' },
     },
   ],
 } satisfies PersonalizationOptions;
@@ -859,15 +861,18 @@ describe('fetchExperience — destination personalization', () => {
   const pageEvent = {
     type: 'page',
     channel: 'server',
-    context: { library: { name: 'test', version: '1.0.0' } },
+    context: { library: { name: 'test', version: '1.0.0' }, campaign: {} },
     messageId: 'page-message-1',
     timestamp: '2026-10-09T00:00:00.000Z',
+    originalTimestamp: '2026-10-09T00:00:00.000Z',
+    sentAt: '2026-10-09T00:00:00.000Z',
     properties: {
       path: '/',
       query: { utm: ['a', 'b'], q: 'x y' },
       referrer: '',
       search: '',
       url: '/',
+      title: 'Home',
     },
   } as const satisfies NonNullable<PersonalizationOptions['events']>[number];
   const destinationPersonalization: PersonalizationOptions = {
