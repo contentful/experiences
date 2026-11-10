@@ -22,7 +22,7 @@ describe('explicit Next request context', () => {
     ).toEqual({
       path: '/page',
       search: '?a=first&a=last&_rsc=transport',
-      query: { a: 'last', _rsc: 'transport' },
+      query: { a: ['first', 'last'], _rsc: 'transport' },
       referrer: '',
       url: 'https://example.com/page?a=first&a=last&_rsc=transport',
     });
@@ -33,12 +33,14 @@ describe('explicit Next request context', () => {
       path: '/supplied',
       origin: 'https://ignored.test',
       url: 'https://example.com/chosen?__proto__=safe&x=1&x=2&q=hello%20world&_rsc=transport#hash',
-      searchParams: new globalThis.URLSearchParams('__proto__=safe&x=1&x=2&q=hello%20world'),
+      searchParams: new globalThis.URLSearchParams(
+        '__proto__=safe&__proto__=also-safe&x=1&x=2&q=hello%20world'
+      ),
     });
     expect(result).toEqual({
       path: '/supplied',
-      search: '?__proto__=safe&x=1&x=2&q=hello+world',
-      query: JSON.parse('{"__proto__":"safe","x":"2","q":"hello world"}'),
+      search: '?__proto__=safe&__proto__=also-safe&x=1&x=2&q=hello+world',
+      query: JSON.parse('{"__proto__":["safe","also-safe"],"x":["1","2"],"q":"hello world"}'),
       referrer: '',
       url: 'https://example.com/chosen?__proto__=safe&x=1&x=2&q=hello%20world&_rsc=transport#hash',
     });
@@ -80,7 +82,7 @@ describe('explicit Next request context', () => {
         page: {
           path: '/base/en/page',
           search: '?q=hello%20world&a=first&_rsc=x&a=last',
-          query: { q: 'hello world', a: 'last', _rsc: 'x' },
+          query: { q: 'hello world', a: ['first', 'last'], _rsc: 'x' },
           referrer: 'https://referrer.test',
           url: 'https://example.com/base/en/page?q=hello%20world&a=first&_rsc=x&a=last#hash',
         },
@@ -109,31 +111,65 @@ describe('explicit Next request context', () => {
     });
   });
 
-  it('layers explicit context over derived context without trusting proxy IP headers', () => {
-    const result = createNextjsRequestContext({
-      request: {
-        url: 'https://example.com/request?a=1',
-        headers: new globalThis.Headers({ 'user-agent': 'old', referer: 'old' }),
-      },
-      headers: new globalThis.Headers({
-        'user-agent': 'effective',
-        'x-forwarded-for': 'untrusted',
-      }),
-      eventContext: {
-        locale: 'fr',
+  it.each(['request', 'event'] as const)(
+    'inherits omitted page fields from %s context while honoring explicit overrides',
+    (source) => {
+      const options = {
+        request: {
+          url: 'https://example.com/request?a=1',
+          headers: new globalThis.Headers({ 'user-agent': 'old', referer: 'old' }),
+        },
+        headers: new globalThis.Headers({
+          'user-agent': 'effective',
+          referer: 'https://referrer.test',
+          'x-forwarded-for': 'untrusted',
+        }),
+        eventContext: {
+          locale: 'fr',
+          userAgent: 'explicit',
+          ...(source === 'event'
+            ? {
+                page: createNextjsPageContext({
+                  path: '/event',
+                  origin: 'https://event.test',
+                  referrer: 'https://event-referrer.test',
+                }),
+              }
+            : {}),
+        },
+        locale: 'de',
+        page: { path: '/explicit', searchParams: { q: 'x', utm_source: 'email' } },
+      };
+      const result = createNextjsRequestContext(options);
+      expect(result).toMatchObject({
+        locale: 'de',
         userAgent: 'explicit',
-        page: createNextjsPageContext({ path: '/event' }),
-      },
-      locale: 'de',
-      page: { path: '/explicit', searchParams: { q: 'x' } },
-    });
-    expect(result).toMatchObject({
-      locale: 'de',
-      userAgent: 'explicit',
-      page: { path: '/explicit', query: { q: 'x' } },
-    });
-    expect(result).not.toHaveProperty('ip');
-  });
+        page: {
+          path: '/explicit',
+          search: '?q=x&utm_source=email',
+          query: { q: 'x', utm_source: 'email' },
+          referrer: source === 'event' ? 'https://event-referrer.test' : 'https://referrer.test',
+          url: `${source === 'event' ? 'https://event.test' : 'https://example.com'}/explicit?q=x&utm_source=email`,
+        },
+      });
+      expect(result).not.toHaveProperty('ip');
+      expect(
+        createNextjsRequestContext({
+          ...options,
+          page: { ...options.page, origin: 'https://override.test', referrer: '' },
+        }).page
+      ).toMatchObject({
+        url: 'https://override.test/explicit?q=x&utm_source=email',
+        referrer: '',
+      });
+      expect(
+        createNextjsRequestContext({
+          ...options,
+          page: { ...options.page, origin: 'https://ignored.test', url: 'http://[invalid' },
+        }).page?.url
+      ).toBe('http://[invalid');
+    }
+  );
 
   it('derives forwarded URL only from explicit supplied headers', () => {
     expect(

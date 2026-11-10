@@ -115,11 +115,24 @@ it('replaces middleware identity with scoped expiry in the actual NextResponse j
   const cookieOptions = { path: '/app', domain: 'example.com' };
   response.cookies.set('ctfl-opt-aid', 'old-identity', cookieOptions);
   response.cookies.set('other', 'preserved');
+  const otherScopes = [
+    'ctfl-opt-aid=root-identity; Domain=example.com; Path=/',
+    'ctfl-opt-aid=other-domain; Domain=other.example.com; Path=/app',
+    'ctfl-opt-aid=; Path=/app; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+  ];
+  for (const value of otherScopes) response.headers.append('set-cookie', value);
+  response.headers.append(
+    'set-cookie',
+    'ctfl-opt-aid=raw-old-identity; domain=.EXAMPLE.COM; path=/app'
+  );
   persistNextjsAnonymousId(
     response,
     request({ isPreview: false, canPersistProfile: false, profile: { id: 'volatile' } }),
     { cookieOptions }
   );
+  expect(response.headers.getSetCookie()).toEqual(expect.arrayContaining(otherScopes));
+  expect(response.headers.get('set-cookie')).not.toContain('old-identity');
+  // Next's name-keyed jar cannot retain raw alternate scopes across later jar writes.
   response.cookies.set('later', 'preserved-too');
   expect(response.cookies.get('ctfl-opt-aid')).toMatchObject({
     value: '',
@@ -140,19 +153,31 @@ it('replaces middleware identity with scoped expiry in the actual NextResponse j
   expect(response.headers.get('x-middleware-set-cookie')).not.toContain('old-identity');
 });
 
-it('normalizes cookie options once while preserving cookies appended outside the Next jar', () => {
-  const response = NextResponse.next();
-  response.cookies.set('app', 'jar');
-  response.headers.append('set-cookie', 'raw=header; Path=/');
-  const facade = request({ canPersistProfile: true, profile: { id: 'id' } });
-  const options = { cookieOptions: { maxAge: 1.9, sameSite: true } };
-  persistNextjsAnonymousId(response, facade, options);
-  expect(response.cookies.get('ctfl-opt-aid')).toMatchObject({ maxAge: 1, sameSite: 'strict' });
-  expect(response.headers.getSetCookie()).toEqual(
-    expect.arrayContaining(['app=jar; Path=/', 'raw=header; Path=/'])
-  );
-  expect(createNextjsAnonymousIdSetCookieHeader(facade, options)).toBe(
-    'ctfl-opt-aid=id; Max-Age=1; Path=/; SameSite=Strict'
-  );
-  expect(options.cookieOptions).toEqual({ maxAge: 1.9, sameSite: true });
-});
+it.each([false, true])(
+  'normalizes options and preserves raw cookie order (duplicate scope: %s)',
+  (duplicateScope) => {
+    const initial = duplicateScope ? ['app=old; Path=/', 'app=new; Path=/'] : ['app=jar; Path=/'];
+    const headers = new globalThis.Headers();
+    for (const value of initial) headers.append('set-cookie', value);
+    const response = NextResponse.next({ headers });
+    const rawHeaders = [
+      'raw=header; Path=/',
+      ...(!duplicateScope ? ['app=raw-update; Path=/'] : []),
+      'app=scoped; Path=/account',
+      'app=domain; Domain=example.com; Path=/',
+      'app=; Domain=example.com; Path=/account; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    ];
+    for (const value of rawHeaders) response.headers.append('set-cookie', value);
+    const facade = request({ canPersistProfile: true, profile: { id: 'id' } });
+    const options = { cookieOptions: { maxAge: 1.9, sameSite: true } };
+    persistNextjsAnonymousId(response, facade, options);
+    expect(response.cookies.get('ctfl-opt-aid')).toMatchObject({ maxAge: 1, sameSite: 'strict' });
+    expect(
+      response.headers.getSetCookie().filter((value) => !value.startsWith('ctfl-opt-aid='))
+    ).toEqual([...initial, ...rawHeaders]);
+    expect(createNextjsAnonymousIdSetCookieHeader(facade, options)).toBe(
+      'ctfl-opt-aid=id; Max-Age=1; Path=/; SameSite=Strict'
+    );
+    expect(options.cookieOptions).toEqual({ maxAge: 1.9, sameSite: true });
+  }
+);
