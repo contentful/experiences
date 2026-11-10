@@ -28,12 +28,24 @@ export type ClientOptions =
   | { client: ContentfulViewDeliveryClient };
 
 /**
+ * Identity the generated delivery client now binds at construction time
+ * (`@contentful/experience-delivery` 1.0.0-dev.13 — spaceId/environmentId
+ * moved from per-call arguments to client options). Destination calls have
+ * no environment, so `environmentId` is omitted for them.
+ */
+export type DeliveryClientIdentity = {
+  spaceId: string;
+  environmentId?: string;
+};
+
+/**
  * Resolve a `ClientOptions` union into a real delivery client. Shared by
  * `fetchExperience` and `fetchDestinationSitemap` — both accept the same
  * inline-creds-or-pre-made-client shape.
  */
 export function resolveDeliveryClient(
   clientOptions: ClientOptions,
+  identity: DeliveryClientIdentity,
   log: ReturnType<typeof createDebugLogger>,
   callerName: string
 ): ContentfulViewDeliveryClient {
@@ -50,6 +62,8 @@ export function resolveDeliveryClient(
   const client = createClient({
     accessToken: preview ? (previewToken as string) : accessToken,
     host: resolvedHost,
+    spaceId: identity.spaceId,
+    environmentId: identity.environmentId ?? '',
   });
   log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
   return client;

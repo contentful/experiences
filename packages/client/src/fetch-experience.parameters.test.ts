@@ -153,7 +153,11 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
     fetch
       .mockResolvedValueOnce(new globalThis.Response(JSON.stringify(payload('first six'))))
       .mockResolvedValueOnce(new globalThis.Response(JSON.stringify(payload('next twelve'))));
-    const client = new ContentfulViewDeliveryClient({ token: async () => 'supplier-token' });
+    const client = new ContentfulViewDeliveryClient({
+      token: async () => 'supplier-token',
+      spaceId: identity.spaceId,
+      environmentId: identity.environmentId,
+    });
     const first = await fetchExperience({ ...identity, parameters }, { client }, resolveOptions);
     const second = await fetchExperience(
       {

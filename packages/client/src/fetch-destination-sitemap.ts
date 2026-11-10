@@ -51,13 +51,13 @@ export async function fetchDestinationSitemap(
     assertDestinationPreviewSupported(clientOptions.preview, { spaceId, destinationId });
   }
 
-  const client = resolveDeliveryClient(clientOptions, log, 'fetchDestinationSitemap');
+  const client = resolveDeliveryClient(clientOptions, { spaceId }, log, 'fetchDestinationSitemap');
 
   const { limit, pageNext, pagePrev } = paginationOptions;
 
   let response: ContentfulViewDelivery.DestinationSitemap;
   try {
-    response = await client.destination.sitemap(spaceId, destinationId, {
+    response = await client.destination.sitemap(destinationId, {
       limit,
       pageNext,
       pagePrev,

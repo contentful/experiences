@@ -19,23 +19,29 @@ describe('createClient', () => {
     const client = createClient({
       accessToken: 'token-123',
       host: 'https://preview.xdn.contentful.com',
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
       headers: userAgentHeaders,
       token: 'token-123',
       baseUrl: 'https://preview.xdn.contentful.com',
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
     expect(client).toBe(vi.mocked(ContentfulViewDeliveryClient).mock.results[0]?.value);
   });
 
   it('omits baseUrl when host is not provided', () => {
-    createClient({ accessToken: 'token-123' });
+    createClient({ accessToken: 'token-123', spaceId: 'space-1', environmentId: 'master' });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
       headers: userAgentHeaders,
       token: 'token-123',
       baseUrl: undefined,
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
   });
 
@@ -46,6 +52,8 @@ describe('createClient', () => {
       headers: { 'x-custom': 'value' },
       timeoutInSeconds: 30,
       maxRetries: 5,
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
 
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
@@ -54,6 +62,8 @@ describe('createClient', () => {
       headers: { ...userAgentHeaders, 'x-custom': 'value' },
       timeoutInSeconds: 30,
       maxRetries: 5,
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
   });
 
@@ -61,6 +71,8 @@ describe('createClient', () => {
     createClient({
       accessToken: 'token-123',
       headers: { 'X-Contentful-User-Agent': 'custom' },
+      spaceId: 'space-1',
+      environmentId: 'master',
     });
 
     expect(vi.mocked(ContentfulViewDeliveryClient).mock.calls[0]?.[0].headers).toEqual({

@@ -147,7 +147,16 @@ export async function fetchExperience(
     });
   }
 
-  const client = resolveDeliveryClient(clientOptions, log, 'fetchExperience');
+  const client = resolveDeliveryClient(
+    clientOptions,
+    {
+      spaceId: experienceOptions.spaceId,
+      environmentId:
+        'environmentId' in experienceOptions ? experienceOptions.environmentId : undefined,
+    },
+    log,
+    'fetchExperience'
+  );
 
   if ('nodeId' in experienceOptions) {
     const { spaceId, destinationId, nodeId, personalization } = experienceOptions;
@@ -157,8 +166,8 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: nodeId },
       () =>
         extensions === undefined
-          ? client.destination.resolveByNodeId(spaceId, destinationId, nodeId)
-          : client.destination.resolveByNodeIdWithOverrides(spaceId, destinationId, nodeId, {
+          ? client.destination.resolveByNodeId(destinationId, nodeId)
+          : client.destination.resolveByNodeIdWithOverrides(destinationId, nodeId, {
               extensions,
             }),
       log,
@@ -173,8 +182,8 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: path },
       () =>
         extensions === undefined
-          ? client.destination.resolveByPath(spaceId, destinationId, { path })
-          : client.destination.resolveByPathWithOverrides(spaceId, destinationId, {
+          ? client.destination.resolveByPath(destinationId, { path })
+          : client.destination.resolveByPathWithOverrides(destinationId, {
               path,
               extensions,
             }),
@@ -235,18 +244,11 @@ async function fetchByExperienceId(
         extensions: requestExtensions,
         ...(parameters === undefined ? {} : { parameters }),
       };
-      return await client.experience.getWithOverrides(
-        spaceId,
-        environmentId,
-        experienceId,
-        request
-      );
+      return await client.experience.getWithOverrides(experienceId, request);
     }
 
     if (Object.keys(queryParams).length > 0) {
       return await client.experience.get(
-        spaceId,
-        environmentId,
         experienceId,
         { locale },
         {
@@ -254,7 +256,7 @@ async function fetchByExperienceId(
         }
       );
     }
-    return await client.experience.get(spaceId, environmentId, experienceId, { locale });
+    return await client.experience.get(experienceId, { locale });
   } catch (err) {
     // Preserve expected 404 control flow for framework routers. Other failures
     // are wrapped with stable SDK context instead of exposing transport-specific

@@ -174,23 +174,31 @@ describe('fetchExperience', () => {
         resolveOptions
       );
 
-      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: 'en-US' });
+      expect(mockGet).toHaveBeenCalledWith('exp-1', { locale: 'en-US' });
     });
   });
 
   describe('pre-created client', () => {
     it('uses provided client directly without constructing a new one', async () => {
-      const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
+      const client = new ContentfulViewDeliveryClient({
+        token: 'token-123',
+        spaceId: 'space-1',
+        environmentId: 'master',
+      });
       vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
       await fetchExperience(experienceOptions, { client }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-      expect(mockGet).toHaveBeenCalledWith('space-1', 'master', 'exp-1', { locale: undefined });
+      expect(mockGet).toHaveBeenCalledWith('exp-1', { locale: undefined });
     });
 
     it('ignores the preview flag when a pre-made client is provided', async () => {
-      const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
+      const client = new ContentfulViewDeliveryClient({
+        token: 'token-123',
+        spaceId: 'space-1',
+        environmentId: 'master',
+      });
       vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
       await fetchExperience(experienceOptions, { client, preview: true }, resolveOptions);
@@ -422,7 +430,7 @@ describe('fetchExperience — source map', () => {
     );
 
     expect(mockGet).not.toHaveBeenCalled();
-    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: 'en-US',
       extensions: { sourceMap: {} },
     });
@@ -539,7 +547,7 @@ describe('fetchExperience — personalization', () => {
     );
 
     expect(mockGet).not.toHaveBeenCalled();
-    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: 'en-US',
       extensions: { personalization: expected },
     });
@@ -552,7 +560,7 @@ describe('fetchExperience — personalization', () => {
       resolveOptions
     );
 
-    expect(mockGetWithOverrides).toHaveBeenCalledWith('space-1', 'master', 'exp-1', {
+    expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: undefined,
       extensions: {
         personalization,
@@ -579,7 +587,7 @@ describe('fetchExperience — destinationId + nodeId', () => {
   it('calls client.destination.resolveByNodeId with spaceId, destinationId, nodeId', async () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -674,12 +682,16 @@ describe('fetchExperience — destinationId + nodeId', () => {
   });
 
   it('does not guard preview + destination-shaped options when a pre-made client is provided', async () => {
-    const client = new ContentfulViewDeliveryClient({ token: 'preview-token' });
+    const client = new ContentfulViewDeliveryClient({
+      token: 'preview-token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
     vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
     await fetchExperience(destinationOptions, { client, preview: true }, resolveOptions);
 
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {
@@ -721,7 +733,7 @@ describe('fetchExperience — destinationId + path', () => {
   it('calls client.destination.resolveByPath with spaceId, destinationId, { path }', async () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
-    expect(mockResolveByPath).toHaveBeenCalledWith('space-1', 'dest-1', { path: '/products' });
+    expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -875,7 +887,7 @@ describe('fetchExperience — destination personalization', () => {
   it('keeps the cacheable GET for node id when personalization is not set', async () => {
     await fetchExperience(nodeOptions, { accessToken: 'token-123' }, resolveOptions);
 
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1');
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
     expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
@@ -887,7 +899,7 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(mockResolveByNodeId).not.toHaveBeenCalled();
-    expect(mockResolveByNodeIdWithOverrides).toHaveBeenCalledWith('space-1', 'dest-1', 'node-1', {
+    expect(mockResolveByNodeIdWithOverrides).toHaveBeenCalledWith('dest-1', 'node-1', {
       extensions: expectedExtensions,
     });
   });
@@ -895,7 +907,7 @@ describe('fetchExperience — destination personalization', () => {
   it('sends only path when personalization is not set on a path fetch', async () => {
     await fetchExperience(pathOptions, { accessToken: 'token-123' }, resolveOptions);
 
-    expect(mockResolveByPath).toHaveBeenCalledWith('space-1', 'dest-1', { path: '/products' });
+    expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
     expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 
@@ -907,7 +919,7 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
       path: '/products',
       extensions: expectedExtensions,
     });
@@ -921,7 +933,7 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
       path: '/products',
       extensions: { personalization: { profileId: 'profile-1' } },
     });
