@@ -126,27 +126,19 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     );
   }
 
-  function ExperiencesAnalyticsRoot({
-    experienceId,
-    ...props
-  }: BoundNextjsExperiencesRootProps & { readonly experienceId?: string }) {
+  function ExperiencesAnalyticsRoot(props: BoundNextjsExperiencesRootProps) {
     return (
       <ExperiencesRoot {...props} pageMode="analytics">
-        <ServerPreviewRefresh experienceId={experienceId} />
+        <ServerPreviewRefresh />
         {props.children}
       </ExperiencesRoot>
     );
   }
 
-  function RequestExperiencesAnalyticsRoot({
-    experienceId,
-    ...props
-  }: BoundNextjsRequestRootProps & { readonly experienceId?: string }) {
+  function RequestExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
     return (
       <RequestExperiencesRoot {...props} pageMode="analytics">
-        <ServerPreviewRefresh
-          experienceId={experienceId ?? props.result?.experience.experienceId}
-        />
+        <ServerPreviewRefresh />
         {props.children}
       </RequestExperiencesRoot>
     );
@@ -196,9 +188,7 @@ export function NextjsAppRouterRequestRoot({ browser, ...props }: NextjsDefaultR
 export function NextjsAppRouterRequestAnalyticsRoot(props: NextjsDefaultRequestRootProps) {
   return (
     <NextjsAppRouterRequestRoot {...props} pageMode="analytics">
-      <ServerPreviewRefresh
-        experienceId={props.experienceId ?? props.result?.experience.experienceId}
-      />
+      <ServerPreviewRefresh />
       {props.children}
     </NextjsAppRouterRequestRoot>
   );

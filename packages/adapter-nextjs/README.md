@@ -397,8 +397,8 @@ renderer callbacks, custom roots, function-valued options
 and preview configuration in a client module for advanced setup.
 
 `ExperiencesAnalyticsRoot` accepts opaque server children. It calls the existing
-SDK page operation for browser-owned initial intent and observes only the matching
-Experience's preview revision. Content updates use a server round-trip, with no
+SDK page operation for browser-owned initial intent and observes the SDK's active
+Preview revision. Content updates use a server round-trip, with no
 browser content fetch, resolution or renderer. Supplied aggregate admission remains
 independent of display; there is no before-page no-op or compensating XDA commit.
 

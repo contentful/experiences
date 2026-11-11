@@ -215,7 +215,7 @@ describe('published declarations', () => {
       const source = `
       import * as root from '${packageName}';
       import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
-      import { bindNextjsAppRouterClientExperiences, type NextjsRequestResult } from '${packageName}/app-router/client';
+      import { bindNextjsAppRouterClientExperiences, NextjsAppRouterRequestRoot, NextjsAppRouterRequestAnalyticsRoot, type NextjsRequestResult } from '${packageName}/app-router/client';
       import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
       import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
@@ -320,9 +320,23 @@ describe('published declarations', () => {
         }
       } });
       const appClient = bindNextjsAppRouterClientExperiences({ config });
+      // @ts-expect-error Content identity belongs to Experience, not the shared root.
+      appClient.ExperiencesRoot({ experienceId: 'home' });
+      // @ts-expect-error Analytics observes the SDK Preview target without a root content ID.
+      appClient.ExperiencesAnalyticsRoot({ experienceId: 'home' });
+      const standaloneRoot = { spaceId: 'space', environmentId: 'master', browser: { delivery: { host: 'https://example.com/api/delivery' } } };
+      NextjsAppRouterRequestRoot(standaloneRoot);
+      // @ts-expect-error Standalone request roots do not select content by ID.
+      NextjsAppRouterRequestRoot({ ...standaloneRoot, experienceId: 'home' });
+      // @ts-expect-error Standalone analytics roots observe the SDK, not a supplied content ID.
+      NextjsAppRouterRequestAnalyticsRoot({ ...standaloneRoot, experienceId: 'home' });
       declare const result: NextjsRequestResult;
       {
         const { ExperiencesRoot, Experience } = appClient.request;
+        // @ts-expect-error Request roots infer content identity from their result.
+        ExperiencesRoot({ experienceId: 'home' });
+        // @ts-expect-error Request analytics roots do not select an Experience.
+        appClient.request.ExperiencesAnalyticsRoot({ experienceId: 'home' });
         const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
         void tree;
         // @ts-expect-error Descriptor overlays cannot change the supplied request result.

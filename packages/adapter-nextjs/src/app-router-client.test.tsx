@@ -386,19 +386,29 @@ describe('App committed route inputs', () => {
         sdk={sdk}
         handoff={{ spaceId: 'space', environmentId: 'master', cache: { scope: 'private-request' } }}
       >
-        <Experience key={navigation.pathname} experienceId="primary" initialPlan={plan} />
+        {['primary', 'secondary'].map((experienceId) => (
+          <Experience
+            key={navigation.pathname + experienceId}
+            experienceId={experienceId}
+            initialPlan={{ ...plan, metadata: { label: experienceId } }}
+          >
+            {(state) => <output>{String(state.data?.metadata.label)}</output>}
+          </Experience>
+        ))}
       </ExperiencesRoot>
     );
     await act(async () => root.render(tree()));
+    expect(container.textContent).toBe('primarysecondary');
     navigation.pathname = '/destination';
     navigation.search = '';
     window.history.replaceState(null, '', '/destination');
     await act(async () => root.render(tree()));
+    expect(container.textContent).toBe('primarysecondary');
     expect(fetchExperience).not.toHaveBeenCalled();
     expect(hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
   });
 
-  it('refreshes the current server presentation when the retained request result names an older Experience', async () => {
+  it('refreshes the current SDK Preview target without a root Experience ID', async () => {
     let current: PreviewState | undefined;
     const listeners = new Set<(value: PreviewState | undefined) => void>();
     const snapshot = createWebSnapshotRuntime();
@@ -433,7 +443,6 @@ describe('App committed route inputs', () => {
           spaceId="space"
           environmentId="master"
           sdk={sdk}
-          experienceId="primary"
           result={{
             requestId: 'preview',
             routeKey: '/page?q=hello+world',
@@ -449,9 +458,6 @@ describe('App committed route inputs', () => {
         current = { experienceId, revision, data: undefined, error: undefined, status: undefined };
         for (const listener of listeners) listener(current);
       });
-    await publish('initial', 10);
-    await publish('initial', 11);
-    expect(navigation.router.refresh).not.toHaveBeenCalled();
     await publish('primary', 1);
     expect(navigation.router.refresh).not.toHaveBeenCalled();
     await publish('primary', 2);

@@ -56,5 +56,4 @@ export type NextjsDefaultRequestRootProps = Omit<
       'consent' | 'persistenceConsent'
     >;
     readonly cookie?: Config['cookie'];
-    readonly experienceId?: string;
   };

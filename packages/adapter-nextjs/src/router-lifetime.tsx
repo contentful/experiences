@@ -70,7 +70,10 @@ export function useNextjsRequestOptions(result: NextjsRequestResult) {
 /** SSR content is refreshed only when its own Preview Session revision changes. */
 export function useServerPreviewRefresh(experienceId: string | undefined, refresh: () => void) {
   const preview = usePreviewState();
-  const current = preview?.experienceId === experienceId ? preview?.revision : undefined;
+  const current =
+    experienceId === undefined || preview?.experienceId === experienceId
+      ? preview?.revision
+      : undefined;
   const previous = useRef(current);
   useEffect(() => {
     const before = previous.current;
