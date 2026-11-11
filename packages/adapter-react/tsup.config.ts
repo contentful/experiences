@@ -1,15 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: [
-    'src/**/*.ts',
-    'src/**/*.tsx',
-    '!src/**/*.test.ts',
-    '!src/**/*.test.tsx',
-    '!src/test/**',
-    // Retained legacy hooks are tested but excluded from published adapter output.
-    '!src/preview/legacy/**/*.ts',
-  ],
+  entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/**/*.test.ts', '!src/**/*.test.tsx', '!src/test/**'],
   format: ['esm'],
   dts: true,
   clean: true,

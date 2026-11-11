@@ -196,10 +196,11 @@ No journal-specific 64 KiB cap or version field applies to the aggregate or
 
 ## XDA preflight and profile finalization
 
-**Current correction: implementation and checks pending.** Phase 6 is not accepted
-or complete; Phase 7 remains gated. Earlier remedy checks and review are historical
+**Current correction: complete and explicitly accepted on 2026-11-02.** Current
+checks and acceptance review are recorded in the implementation plan.
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
 evidence for a superseded design, not validation of this revision. Phases 1–5
-remain accepted. Root must record actual implementation and validation results.
+remain accepted. Current implementation and validation results are recorded there.
 
 XDA always invokes the Personalization API (XPAPI) with `preflight: true`.
 It evaluates events and profile changes without committing events or profile
@@ -230,6 +231,16 @@ SSR/CSR XDA-carried events remain uncommitted. This is a tolerated service bug
 awaiting upstream force-commit support; there is no current force flag or SDK
 workaround. Do not introduce Node aggregate commitment, a Web handoff producer,
 standalone XPAPI preparation, or a new API family to compensate.
+
+**Observed Insights limitation (accepted for this workstream on 2026-11-02):**
+The installed API client's `PartialProfile`/Insights batch schema accepts `{ id }`,
+but the current Insights service returns HTTP 400 / `ERR_INVALID_DATA` when
+`stableId`, `random`, `audiences`, `traits`, `location` and `session` are absent.
+An XDA-adopted ID alone therefore permits SDK attempt admission without establishing
+successful Analytics delivery. Complete XPAPI profiles produced observed HTTP 200
+responses. This is a tolerated service limitation; the SDK does not fabricate those
+fields or synthesize an initial commit. It does not establish whether profile
+existence is validated, or that future XDA commitment alone will fix the shape mismatch.
 
 The Node producer is retained only for an actual server-to-browser transfer.
 Its third argument is `{ readonly routeKey: string }` only, never an existing
@@ -269,9 +280,10 @@ consent, route and lifetime guards. This is Optimization's normal implicit page
 path, with no dedicated API, scheduler, controller, state class or mode detector.
 Current React optional consumption subscribes to `sdk.states.consent` within its
 existing effect and reinvokes that complete operation with one stable `isCurrent`
-lifetime guard. This basic consent/lifecycle behavior must complete in Phase 6;
-managed React loading/navigation remains gated Phase 7 work. Queue-capacity
-refusal remains retry-eligible for unadmitted work. Accepted replay never triggers
+lifetime guard. This basic consent/lifecycle behavior is complete in accepted Phase 6;
+managed React loading/navigation, API refinements and source cleanup are complete and explicitly accepted as Phase 7 on 2026-11-02. Queue-capacity
+refusal remains retry-eligible while the complete operation is unaccepted; accepted eligible
+page fallback completes initialization without resubmitting the original refused batch. Accepted replay never triggers
 fallback or application resubmission because delivery fails. Admission does not
 prove delivery.
 

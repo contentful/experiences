@@ -16,7 +16,6 @@
     "**/*.spec.tsx",
     "vitest.config.ts",
     "vitest.setup.ts",
-    "tsup.config.ts",
-    "src/preview/legacy/**/*.ts"
+    "tsup.config.ts"
   ]
 }
