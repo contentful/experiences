@@ -1,7 +1,7 @@
 import {
   ChangeArray,
   parseWithFriendlyError as parseOptimizationSchema,
-  type ExperienceEvent,
+  type ExperienceEvent as PersonalizationEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import * as z from 'zod/mini';
 import {
@@ -31,7 +31,7 @@ export interface ExperiencesHandoff {
     /** Application route identity: pathname plus search, beginning with `/`. */
     readonly routeKey: string;
     /** Personalization events prepared once, ending in one page. */
-    readonly events: readonly ExperienceEvent[];
+    readonly events: readonly PersonalizationEvent[];
     /** Captured content/request locale for Personalization, independent of event context. */
     readonly locale?: string;
   };

@@ -5,7 +5,7 @@ import { createRuntimeOptimizationClient } from './create-optimization-client.js
 
 vi.mock('@contentful/optimization-api-client', () => ({
   ApiClient: vi.fn().mockImplementation((options) => ({
-    options,
+    config: options,
     experience: { upsertProfile: vi.fn() },
     insights: { sendBatchEvents: vi.fn() },
   })),
@@ -34,6 +34,11 @@ describe('createRuntimeOptimizationClient', () => {
       },
       insights: { baseUrl: 'https://analytics.example' },
     });
-    expect(client).toBe(vi.mocked(OptimizationApiClient).mock.results[0]?.value);
+    const externalApi = vi.mocked(OptimizationApiClient).mock.results[0]?.value;
+    expect(client).toEqual({
+      config: externalApi.config,
+      personalization: externalApi.experience,
+      analytics: externalApi.insights,
+    });
   });
 });

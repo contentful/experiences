@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
 import { buildPreparedEvents } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred, setDocumentVisibility } from './test-fixtures/dom.js';
 import { completeProfile } from './test-fixtures/profile.js';
@@ -21,7 +24,7 @@ class TestContentfulExperiences extends ContentfulExperiences {
 
 const runtimes = new Set<TestContentfulExperiences>();
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
+function createRuntime(overrides: Partial<Config> = {}) {
   const runtime = new TestContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -29,7 +32,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
     delivery: { accessToken: 'delivery-token' },
     defaults: { profile: completeProfile('visitor') },
     ...overrides,
-  } as ExperiencesWebConfig);
+  } as Config);
   runtimes.add(runtime);
   return runtime;
 }
@@ -63,10 +66,10 @@ describe('Web queue parity with Optimization', () => {
   describe('page hide', () => {
     it('gives a Personalization batch waiting for retry a final forced attempt', async () => {
       const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockRejectedValueOnce(new Error('offline'))
         .mockResolvedValue({ profile: { id: 'visitor' } } as never);
-      vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
       const runtime = createRuntime();
 
       window.dispatchEvent(new Event('offline'));
@@ -92,10 +95,10 @@ describe('Web queue parity with Optimization', () => {
       const analyticsPending = deferred<boolean>();
       const personalizationPending = deferred<{ profile: { id: string } }>();
       const analytics = vi
-        .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+        .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
         .mockReturnValue(analyticsPending.promise);
       const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockRejectedValueOnce(new Error('offline'))
         .mockReturnValueOnce(personalizationPending.promise as never);
       const runtime = createRuntime();
@@ -144,7 +147,7 @@ describe('Web queue parity with Optimization', () => {
     };
 
     it('admits up to the configured capacity and rejects beyond it', async () => {
-      vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+      vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
         profile: { id: 'visitor' },
       } as never);
       const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 3 } });
@@ -188,7 +191,7 @@ describe('Web queue parity with Optimization', () => {
   describe('teardown through the public SDK, as Optimization', () => {
     it('sends a queued offline page on destroy under the current profile, not an older one', async () => {
       const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValueOnce({ profile: { id: 'profile-A' } } as never)
         .mockResolvedValueOnce({ profile: { id: 'profile-B' } } as never)
         .mockResolvedValue({ profile: { id: 'profile-B' } } as never);

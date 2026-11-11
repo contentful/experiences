@@ -1,4 +1,4 @@
-import type { ExperienceState } from './interceptors.js';
+import type { PersonalizationState } from './interceptors.js';
 import {
   CORE_BRIDGE_CAPABILITIES_SYMBOL,
   getCoreBridgeCapabilities,
@@ -21,7 +21,7 @@ function getRequiredBridge(sdk: unknown): CoreBridgeCapabilities {
 /** Hydrate already-fetched profile state through the live runtime's state interceptors. */
 export async function hydrateOptimizationData(
   sdk: unknown,
-  data: ExperienceState | undefined
+  data: PersonalizationState | undefined
 ): Promise<void> {
   if (!data) return;
   await getRequiredBridge(sdk).hydrateOptimizationData(data);

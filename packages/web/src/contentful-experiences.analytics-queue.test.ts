@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InsightsApiClient } from '@contentful/optimization-api-client';
+import { InsightsApiClient as AnalyticsApiClient } from '@contentful/optimization-api-client';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { setDocumentVisibility } from './test-fixtures/dom.js';
 import { completeProfile } from './test-fixtures/profile.js';
@@ -11,7 +11,7 @@ import { getTrackingAttributes } from './tracking-attributes.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
+function createRuntime(overrides: Partial<Config> = {}): ContentfulExperiences {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -19,7 +19,7 @@ function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): Contentfu
     delivery: { accessToken: 'delivery-token' },
     defaults: { profile: completeProfile('visitor') },
     ...overrides,
-  } as ExperiencesWebConfig);
+  } as Config);
   runtimes.add(runtime);
   return runtime;
 }
@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe('Web Analytics queue', () => {
   it('holds events while offline and flushes when the browser comes back online', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
 
     window.dispatchEvent(new Event('offline'));
@@ -59,7 +59,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('flushes with the Beacon API when the page is hidden', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
     await click(runtime);
 
@@ -71,7 +71,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('flushes on pagehide, once per hide cycle', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
     await click(runtime);
 
@@ -84,7 +84,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('drops queued Analytics events when event consent is withdrawn', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
     await click(runtime);
 
@@ -97,7 +97,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('drops queued Analytics events on reset', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const runtime = createRuntime();
     await click(runtime);
 
@@ -108,7 +108,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('makes a last attempt at queued events on destroy and stops listening', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     const removed = vi.spyOn(document, 'removeEventListener');
     const runtime = createRuntime();
     await click(runtime);
@@ -125,7 +125,7 @@ describe('Web Analytics queue', () => {
   });
 
   it('ends an in-progress hover before the hide flush, so its event is in the beacon', async () => {
-    const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+    const send = vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
     createRuntime();
     const hero = document.createElement('div');
     for (const [name, value] of Object.entries(
@@ -168,7 +168,7 @@ describe('Web Analytics queue', () => {
   it('applies queuePolicy.flush: interval, backoff, and failure callbacks', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const send = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true);
     const onFlushFailure = vi.fn(() => {
@@ -202,7 +202,9 @@ describe('Web Analytics queue', () => {
     };
 
     it('resolves { accepted: true } for an admitted view and queues it', async () => {
-      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const send = vi
+        .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
+        .mockResolvedValue(true);
       const runtime = createRuntime();
 
       await expect(runtime.trackView(view)).resolves.toEqual({ accepted: true });
@@ -212,7 +214,9 @@ describe('Web Analytics queue', () => {
     });
 
     it('resolves { accepted: false } for a consent-blocked view', async () => {
-      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const send = vi
+        .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
+        .mockResolvedValue(true);
       const runtime = createRuntime();
       runtime.consent({ events: false });
 
@@ -222,7 +226,9 @@ describe('Web Analytics queue', () => {
     });
 
     it('resolves { accepted: false } after destroy, as Optimization does', async () => {
-      const send = vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+      const send = vi
+        .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
+        .mockResolvedValue(true);
       const runtime = createRuntime();
       runtime.destroy();
 

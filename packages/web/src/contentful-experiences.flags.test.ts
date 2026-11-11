@@ -5,9 +5,9 @@ import {
   type VariableChange,
   type OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient } from '@contentful/optimization-api-client';
+import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { hydrateOptimizationData } from './bridge-support.js';
 import { signalFns } from './signals/signals.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
@@ -22,7 +22,7 @@ function changes(
 ): ChangeArray {
   return [{ type: 'Variable', key: 'banner', value, meta: { experienceId, variantIndex } }];
 }
-function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
+function createRuntime(config: Partial<Config> = {}) {
   const sdk = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -258,7 +258,7 @@ describe('Web Custom Flags', () => {
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
     const snapshots: unknown[] = [];
     const subscription = sdk.states.profile.subscribe(() =>
-      snapshots.push([sdk.getFlag('banner'), sdk.states.experienceRequestState.current.status])
+      snapshots.push([sdk.getFlag('banner'), sdk.states.personalizationRequestState.current.status])
     );
     await hydrateOptimizationData(sdk, { profile: { id: 'next' }, changes: changes(false) });
     expect(snapshots.at(-1)).toEqual([false, 'success']);
@@ -333,7 +333,7 @@ describe('Web Custom Flags', () => {
   it('applies direct Personalization response changes along with profile state', async () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
       profile: { id: 'visitor' },
       changes: changes(false),
     } as never);
@@ -504,7 +504,7 @@ describe('Web Custom Flags', () => {
       );
       expect(sdk.states.profile.current?.id).toBe('visitor');
       expect(sdk.getFlag('banner')).toBe(true);
-      expect(sdk.states.experienceRequestState.current).toEqual({ status: 'success' });
+      expect(sdk.states.personalizationRequestState.current).toEqual({ status: 'success' });
     }
   );
 });

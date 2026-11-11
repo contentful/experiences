@@ -32,22 +32,25 @@ export { resolveFlagChange } from './resolve-flag-change.js';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
-  ContentfulExperiencesConfig,
+  Config,
   ExperienceRuntime,
-  RuntimeFetchExperienceOptions,
-  RuntimeFetchByDestinationNodeOptions,
-  RuntimeFetchByDestinationPathOptions,
-  RuntimeEventBuilderConfig,
-  RuntimeFetchResolveOptions,
-  RuntimeResolveDefaults,
-  RuntimeResolveOptions,
+  FetchExperienceOptions,
+  FetchByDestinationNodeOptions,
+  FetchByDestinationPathOptions,
+  EventBuilderOptions,
+  FetchResolveOptions,
+  ResolveDefaults,
+  ResolveOptions,
 } from './contentful-experiences.js';
-export type { RuntimeDeliveryClientOptions } from './create-runtime-delivery-client.js';
-export type { RuntimeOptimizationConfig } from './create-optimization-client.js';
+export type { DeliveryClientOptions } from './create-runtime-delivery-client.js';
+export type { ApiClient, OptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
 export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
-export type { ExperienceRequestOptions, InsightsRequestOptions } from './runtime-event-methods.js';
+export type {
+  PersonalizationRequestOptions,
+  AnalyticsRequestOptions,
+} from './runtime-event-methods.js';
 export type { EventEmissionResult } from './event-emission-result.js';
 export { AnalyticsDelivery } from './analytics-delivery.js';
 export type {
@@ -60,8 +63,8 @@ export { resolveQueuePolicy } from './lib/queue/index.js';
 export type { AnalyticsFlushOptions } from './analytics-delivery.js';
 export { PersonalizationDelivery } from './personalization-delivery.js';
 export type {
-  ExperienceRequestState,
-  ExperienceRequestFailureReason,
+  PersonalizationRequestState,
+  PersonalizationRequestFailureReason,
 } from './experience-request-state.js';
 export { validatePersonalizationEvent } from './event-interceptors.js';
 export type { EventInterceptors, OptimizationEventStreamEvent } from './event-interceptors.js';
@@ -72,8 +75,8 @@ export {
   type MaybePromise,
 } from './lib/interceptor/InterceptorManager.js';
 export type {
-  ExperienceEvent,
-  InsightsEvent,
+  ExperienceEvent as PersonalizationEvent,
+  InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 export {
   buildPreparedEvents,
@@ -103,7 +106,7 @@ export type {
   AnalyticsEventMethod,
   PersonalizationEventMethod,
   RuntimeEventBindings,
-  RuntimeDirectEventBindings,
+  DirectEventBindings,
   RuntimeEventDispatch,
   RuntimeEventMethods,
 } from './runtime-event-methods.js';

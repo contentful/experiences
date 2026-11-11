@@ -225,7 +225,7 @@ profile in LocalStorage, and offers `reset()` for logout or a new visitor
 session.
 
 Web exposes current values and subscriptions through `states`, including
-`profile`, `locale`, `consent`, `persistenceConsent`, `experienceRequestState`,
+`profile`, `locale`, `consent`, `persistenceConsent`, `personalizationRequestState`,
 `eventStream`, and `blockedEventStream`. Read `states.profile.current` or subscribe
 to changes with `states.profile.subscribe(...)`; dispose the returned handle
 with `unsubscribe()` during application cleanup. See the [Web state and

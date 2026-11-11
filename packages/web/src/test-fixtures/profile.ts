@@ -1,7 +1,7 @@
 import type { Profile } from '@contentful/optimization-api-client/api-schemas';
 
 /**
- * A complete Experience API profile, as the Experience API returns it. Insights requires a
+ * A complete Personalization API profile, as the Personalization API returns it. Analytics requires a
  * complete profile, so tests that expect an Analytics event to be sent use this rather
  * than an id-only `{ id }`.
  */

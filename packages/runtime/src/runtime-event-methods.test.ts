@@ -1,4 +1,4 @@
-import type { InsightsApiClientRequestOptions } from '@contentful/optimization-api-client';
+import type { InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import type { Profile } from '@contentful/optimization-api-client/api-schemas';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,10 +11,10 @@ import {
   EventProfileSchema,
   type EventOptimizationData,
   type EventProfile,
-  type ExperienceRequestOptions,
+  type PersonalizationRequestOptions,
   type RuntimeEventDispatch,
   type RuntimeEventBindings,
-  type RuntimeOptimizationApiClient,
+  type EventApi,
 } from './runtime-event-methods.js';
 
 const interaction = {
@@ -24,7 +24,7 @@ const interaction = {
   variantId: 'variant-1',
 };
 
-/** A complete Experience API profile, which Insights requires. */
+/** A complete Personalization API profile, which Analytics requires. */
 function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
   return {
     id,
@@ -65,16 +65,16 @@ function createFixture(
     sendResult?: boolean;
     dispatch?: RuntimeEventDispatch;
     requireProfile?: boolean;
-    insightsOptions?: InsightsApiClientRequestOptions;
-    experienceOptions?: ExperienceRequestOptions;
+    analyticsOptions?: AnalyticsApiClientRequestOptions;
+    personalizationOptions?: PersonalizationRequestOptions;
   } = {}
 ) {
   let profile = options.profile;
   const upsertProfile = vi.fn().mockResolvedValue(optimizationData('profile-from-api'));
   const sendBatchEvents = vi.fn().mockResolvedValue(options.sendResult ?? true);
-  const api: RuntimeOptimizationApiClient = {
-    experience: { upsertProfile },
-    insights: { sendBatchEvents },
+  const api: EventApi = {
+    personalization: { upsertProfile },
+    analytics: { sendBatchEvents },
   };
   const eventBuilder = new EventBuilder({
     channel: 'server',
@@ -91,8 +91,8 @@ function createFixture(
     getConsent: () => options.consent,
     allowedEventTypes: options.allowedEventTypes,
     requireProfile: options.requireProfile,
-    getInsightsOptions: () => options.insightsOptions,
-    getExperienceOptions: () => options.experienceOptions,
+    getAnalyticsOptions: () => options.analyticsOptions,
+    getPersonalizationOptions: () => options.personalizationOptions,
   };
   const methods =
     options.dispatch === undefined
@@ -416,7 +416,7 @@ describe('RuntimeEventMethods', () => {
       expect(upsertProfile.mock.calls[0]?.[0].profileId).toBe('profile-1');
     });
 
-    it('drops a stateful Analytics event with an id-only profile, since Insights needs a complete one', async () => {
+    it('drops a stateful Analytics event with an id-only profile, since Analytics needs a complete one', async () => {
       const { methods, sendBatchEvents } = createFixture({
         consent: { events: true },
         profile: idOnly,
@@ -453,12 +453,12 @@ describe('RuntimeEventMethods', () => {
     });
   });
 
-  it('forwards request-scoped Insights options with a direct Analytics send', async () => {
+  it('forwards request-scoped Analytics options with a direct Analytics send', async () => {
     const beacon = vi.fn(() => true);
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
       profile: completeProfile('profile-1'),
-      insightsOptions: { beacon },
+      analyticsOptions: { beacon },
     });
 
     await methods.trackClick(interaction);

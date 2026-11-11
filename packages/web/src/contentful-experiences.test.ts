@@ -8,21 +8,21 @@ import {
 import { serializePersonalization } from '@contentful/experiences-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
+function createRuntime(overrides: Partial<Config> = {}): ContentfulExperiences {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
-  } as ExperiencesWebConfig);
+  } as Config);
   runtimes.add(runtime);
   return runtime;
 }
@@ -33,9 +33,9 @@ function mockOptimization(
 ) {
   return {
     upsertProfile: vi
-      .spyOn(runtime.api.experience, 'upsertProfile')
+      .spyOn(runtime.api.personalization, 'upsertProfile')
       .mockResolvedValue({ profile } as never),
-    sendBatchEvents: vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true),
+    sendBatchEvents: vi.spyOn(runtime.api.analytics, 'sendBatchEvents').mockResolvedValue(true),
   };
 }
 
@@ -142,7 +142,7 @@ describe('Web ContentfulExperiences', () => {
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
-    const setApiLocale = vi.spyOn(runtime.api.experience, 'setLocale');
+    const setApiLocale = vi.spyOn(runtime.api.personalization, 'setLocale');
 
     runtime.setLocale('de-DE');
     expect(setApiLocale).toHaveBeenCalledExactlyOnceWith('de-DE');

@@ -2,7 +2,7 @@ import type {
   BlockedEvent,
   Json,
   EventProfile,
-  ExperienceRequestState,
+  PersonalizationRequestState,
   OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
 import type { Observable } from './signals/index.js';
@@ -12,7 +12,7 @@ import type { Observable } from './signals/index.js';
  *
  * @public
  */
-export interface CoreStates {
+export interface States {
   /** Key-scoped Custom Flag value. Reads and subscriptions track exposure. */
   flag: (name: string) => Observable<Json | undefined>;
   /** Current consent value (if any). */
@@ -23,10 +23,10 @@ export interface CoreStates {
   blockedEventStream: Observable<BlockedEvent | undefined>;
   /** Stream of the most recent event emitted. */
   eventStream: Observable<OptimizationEventStreamEvent | undefined>;
-  /** Live view of the SDK Experience API/event locale. */
+  /** Live view of the SDK Personalization API/event locale. */
   locale: Observable<string | undefined>;
   /** Live view of the current profile. */
   profile: Observable<EventProfile | undefined>;
-  /** Outcome of the most recent Experience API request. */
-  experienceRequestState: Observable<ExperienceRequestState>;
+  /** Outcome of the most recent Personalization API request. */
+  personalizationRequestState: Observable<PersonalizationRequestState>;
 }

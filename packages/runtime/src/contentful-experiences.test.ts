@@ -75,8 +75,8 @@ describe('ContentfulExperiences', () => {
       delivery: { accessToken: 'delivery' },
       eventBuilder: { channel: 'server' },
     });
-    const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents');
-    const personalize = vi.spyOn(runtime.api.experience, 'upsertProfile');
+    const send = vi.spyOn(runtime.api.analytics, 'sendBatchEvents');
+    const personalize = vi.spyOn(runtime.api.personalization, 'upsertProfile');
     const changes = [
       {
         type: 'Variable',

@@ -9,11 +9,14 @@ import {
   type EventProfile,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { effect } from '@preact/signals-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { hydrateOptimizationData } from './bridge-support.js';
 import type { Subscription } from './signals/Observable.js';
 import * as signals from './signals/signals.js';
@@ -25,7 +28,7 @@ const runtimes = new Set<ContentfulExperiences>();
 const subscriptions: Subscription[] = [];
 const effects: (() => void)[] = [];
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}) {
+function createRuntime(overrides: Partial<Config> = {}) {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -60,10 +63,10 @@ beforeEach(() => {
   seedConsent({ events: true, persistence: true });
   vi.useFakeTimers();
   setDocumentVisibility('visible');
-  vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+  vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
     profile: { id: 'visitor' },
   } as never);
-  vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+  vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
 
 afterEach(async () => {
@@ -104,8 +107,8 @@ describe('Web public state subscriptions', () => {
       expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe('denied');
       expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe('denied');
       expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+      expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
     });
 
     describe.each(['events', 'both'] as const)('%s consent', (axes) => {
@@ -135,7 +138,7 @@ describe('Web public state subscriptions', () => {
           else throw error;
         });
         const observable =
-          state === 'consent' ? runtime.states.consent : runtime.states.experienceRequestState;
+          state === 'consent' ? runtime.states.consent : runtime.states.personalizationRequestState;
         const subscription = observable.subscribe(subscriber);
         subscriptions.push(subscription);
 
@@ -162,8 +165,8 @@ describe('Web public state subscriptions', () => {
         runtime.destroy();
         await vi.advanceTimersByTimeAsync(0);
 
-        expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-        expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+        expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+        expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
       });
     });
   });
@@ -183,7 +186,7 @@ describe('Web public state subscriptions', () => {
     await runtime.track({ event: 'original' });
 
     expect(runtime.states.eventStream.current).toMatchObject({ type: 'track', event: 'rewritten' });
-    expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalledWith(
+    expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         events: [expect.objectContaining({ type: 'track', event: 'rewritten' })],
       }),
@@ -193,7 +196,7 @@ describe('Web public state subscriptions', () => {
       id: 'visitor',
       traits: { intercepted: true },
     });
-    expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
+    expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
     await runtime.page();
     expect(profiles).toHaveBeenCalledTimes(2);
     await hydrateOptimizationData(runtime, { profile: { id: 'hydrated' } });
@@ -220,7 +223,7 @@ describe('Web public state subscriptions', () => {
     await pending;
 
     expect(runtime.states.profile.current).toBeUndefined();
-    expect(runtime.states.experienceRequestState.current).toEqual({ status: 'idle' });
+    expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'idle' });
     expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   });
 
@@ -237,7 +240,7 @@ describe('Web public state subscriptions', () => {
     expect(runtime.hasConsent('unrecognized')).toBe(true);
     await runtime.page();
 
-    const requests = vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls;
+    const requests = vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls;
     expect(requests.map(([request]) => request.profileId)).toEqual(['external-1', 'external-2']);
     expect(getAnonymousId).toHaveBeenCalled();
   });
@@ -245,7 +248,7 @@ describe('Web public state subscriptions', () => {
   it('publishes the response profile and request success atomically', async () => {
     const runtime = createRuntime();
     const response = deferred<{ profile: EventProfile }>();
-    vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+    vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
       response.promise as never
     );
     const snapshots: { profile: string | undefined; status: string }[] = [];
@@ -253,15 +256,17 @@ describe('Web public state subscriptions', () => {
       effect(() => {
         snapshots.push({
           profile: signals.profile.value?.id,
-          status: signals.experienceRequestState.value.status,
+          status: signals.personalizationRequestState.value.status,
         });
       })
     );
     const events = vi.fn();
     subscriptions.push(runtime.states.eventStream.subscribe(events));
     const pending = runtime.page();
-    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
-    expect(runtime.states.experienceRequestState.current).toEqual({ status: 'pending' });
+    await vi.waitFor(() =>
+      expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
+    );
+    expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'pending' });
     expect(events.mock.calls.slice(1).map(([event]) => event.type)).toEqual(['page']);
     response.resolve({ profile: { id: 'updated' } });
     await pending;
@@ -283,7 +288,7 @@ describe('Web public state subscriptions', () => {
     const error = new Error('diagnostic subscriber failed');
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const upsert = vi
-      .mocked(ExperienceApiClient.prototype.upsertProfile)
+      .mocked(PersonalizationApiClient.prototype.upsertProfile)
       .mockRejectedValueOnce(new Error('temporary'))
       .mockResolvedValue({ profile: { id: 'visitor' } } as never);
     const runtime = createRuntime();
@@ -312,7 +317,7 @@ describe('Web public state subscriptions', () => {
       'page',
     ]);
     expect(upsert).not.toHaveBeenCalled();
-    expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+    expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
     window.dispatchEvent(new Event('online'));
     await vi.advanceTimersByTimeAsync(500);
     expect(upsert).toHaveBeenCalledTimes(3);
@@ -331,7 +336,7 @@ describe('Web public state subscriptions', () => {
       'accepted',
       'queue-full',
     ]);
-    expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+    expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
   });
 
   it('publishes blocked metadata even when the configured callback throws', async () => {
@@ -356,7 +361,7 @@ describe('Web public state subscriptions', () => {
       expect.objectContaining({ reason: 'consent', method: 'track' })
     );
     expect(runtime.states.eventStream.current).toBeUndefined();
-    expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+    expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
   });
 
   it('does not emit refused prepared events, including the otherwise allowed page', async () => {
@@ -367,7 +372,7 @@ describe('Web public state subscriptions', () => {
       runtime.hydrateAndTrackCurrentPage(preparedHandoff(), { routeKey: '/prepared' })
     ).resolves.toEqual({ accepted: false });
     expect(events.mock.calls).toEqual([[undefined]]);
-    expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+    expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
   });
 
   it('resets profile, request and streams atomically while retaining locale and consent', async () => {
@@ -383,7 +388,7 @@ describe('Web public state subscriptions', () => {
           profile: signals.profile.value,
           event: signals.event.value,
           blocked: signals.blockedEvent.value,
-          request: signals.experienceRequestState.value,
+          request: signals.personalizationRequestState.value,
         });
       })
     );
@@ -403,12 +408,14 @@ describe('Web public state subscriptions', () => {
 
   it('disposes old persistence effects and discards late requests when recreated', async () => {
     const response = deferred<{ profile: EventProfile }>();
-    vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+    vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
       response.promise as never
     );
     const old = createRuntime();
     const pending = old.page();
-    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
+    );
     old.destroy();
     const replacementProfile = { id: 'visitor', traits: { generation: 'replacement' } };
     const replacement = createRuntime({ defaults: { profile: replacementProfile } });
@@ -419,7 +426,7 @@ describe('Web public state subscriptions', () => {
     response.resolve({ profile: { id: 'late-old-response' } });
     await pending;
     expect(replacement.states.profile.current).toEqual(replacementProfile);
-    expect(replacement.states.experienceRequestState.current).toEqual({ status: 'idle' });
+    expect(replacement.states.personalizationRequestState.current).toEqual({ status: 'idle' });
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(replacementProfile);
   });
 
@@ -562,14 +569,14 @@ describe('Web public state subscriptions', () => {
         expect(runtime.states.consent.current).toBe(false);
         runtime.consent({ events: true });
       }
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+      expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
 
       window.dispatchEvent(new Event('online'));
       await runtime.flush();
       await vi.advanceTimersByTimeAsync(30_000);
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+      expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
     }
   );
 });

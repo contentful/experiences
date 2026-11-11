@@ -8,7 +8,7 @@ import {
   PROFILE_CACHE_KEY,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient } from '@contentful/optimization-api-client';
+import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
@@ -35,7 +35,7 @@ function createRuntime(
 }
 
 function respondWith(profileId: string) {
-  vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockResolvedValue({
+  vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockResolvedValue({
     profile: { id: profileId },
   } as never);
 }
@@ -52,7 +52,7 @@ function handoff(overrides: Partial<ExperiencesHandoff> = {}): ExperiencesHandof
 beforeEach(() => {
   // A fresh spy per test, so a test reads only the requests it made itself.
   vi.restoreAllMocks();
-  vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+  vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
     profile: { id: 'api-profile' },
   } as never);
   window.localStorage.clear();
@@ -216,9 +216,9 @@ describe('adopting an identity the browser already holds', () => {
     await runtime.page();
 
     // The first request carries the identity the server wrote.
-    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
-      'server-id'
-    );
+    expect(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+    ).toBe('server-id');
     // The response's profile is then the authoritative identity, as in the Optimization SDK.
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('api-profile');
   });
@@ -230,7 +230,7 @@ describe('adopting an identity the browser already holds', () => {
     await runtime.page();
 
     expect(
-      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
     ).toBeUndefined();
     expect(window.localStorage.getItem(ANONYMOUS_ID_KEY)).toBeNull();
   });
@@ -245,9 +245,9 @@ describe('adopting an identity the browser already holds', () => {
     expect(getCookie(ANONYMOUS_ID_COOKIE)).toBe('server-id');
     await runtime.page();
 
-    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
-      'server-id'
-    );
+    expect(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+    ).toBe('server-id');
   });
 
   it('writes an identity already held in memory when persistence is granted later', () => {
@@ -460,7 +460,7 @@ describe('withdrawing persistence consent', () => {
   it('does not recreate the identity from a response that completes afterwards', async () => {
     seedConsent({ events: true, persistence: true });
     let finish!: (value: unknown) => void;
-    vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+    vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
       }) as never
@@ -468,7 +468,9 @@ describe('withdrawing persistence consent', () => {
     const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
-    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
+    );
     runtime.consent({ persistence: false });
     finish({ profile: { id: 'late-profile' } });
     await pending;
@@ -480,7 +482,7 @@ describe('withdrawing persistence consent', () => {
   it('does not recreate the identity from a response that completes after event withdrawal', async () => {
     seedConsent({ events: true, persistence: true });
     let finish!: (value: unknown) => void;
-    vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+    vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
       }) as never
@@ -488,7 +490,9 @@ describe('withdrawing persistence consent', () => {
     const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
-    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
+    );
     runtime.consent({ events: false });
     finish({ profile: { id: 'late-profile' } });
     await pending;
@@ -539,9 +543,9 @@ describe('handoff identity', () => {
       routeKey: '/first',
     });
 
-    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
-      'server-profile'
-    );
+    expect(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+    ).toBe('server-profile');
   });
 
   it('does not write a handoff identity without persistence consent', async () => {
@@ -589,7 +593,7 @@ describe('handoff identity', () => {
 
       expect(getCookie(ANONYMOUS_ID_COOKIE)).not.toBeUndefined();
       expect(
-        vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+        vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
       ).toBe('visitor-1');
     }
   );
@@ -603,9 +607,9 @@ describe('handoff identity', () => {
     });
 
     // The held identity is what the request is sent under, not the handoff's.
-    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
-      'visitor-1'
-    );
+    expect(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+    ).toBe('visitor-1');
   });
 });
 
@@ -637,9 +641,9 @@ describe('the effective identity when only the stored id is held', () => {
       routeKey: '/first',
     });
 
-    expect(vi.mocked(ExperienceApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId).toBe(
-      'visitor-1'
-    );
+    expect(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mock.calls[0]![0].profileId
+    ).toBe('visitor-1');
   });
 
   it('is sent with the first fetch', async () => {
@@ -739,7 +743,7 @@ describe('reset and destroy', () => {
   it('does not recreate the identity from a response that completes after reset()', async () => {
     seedConsent({ events: true, persistence: true });
     let finish!: (value: unknown) => void;
-    vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+    vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
       }) as never
@@ -747,7 +751,9 @@ describe('reset and destroy', () => {
     const runtime = createRuntime({ defaults: { profile: { id: 'visitor-1' } } });
 
     const pending = runtime.track({ event: 'in-flight' });
-    await vi.waitFor(() => expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
+    );
     runtime.reset();
     finish({ profile: { id: 'late-profile' } });
     await pending;

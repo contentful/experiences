@@ -18,7 +18,7 @@ The application does not independently call `identify()` or fetch an Experience
 twice in the same app request.
 A fixed identify user ID is acceptable; it is distinct from the API-issued profile ID.
 
-Profiles come only from Experience API/XDA responses. The SDK carries the profile
+Profiles come only from Personalization API/XDA responses. The SDK carries the profile
 between fetches on the request facade. The app does not accept a profile-ID input,
 persist profiles, or add cookies or sessions. Requests assume `consent: true`, like
 the Optimization reference; this is not a consent-management implementation.

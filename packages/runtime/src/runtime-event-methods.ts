@@ -1,12 +1,12 @@
 import type {
   ExperienceApiClient as PersonalizationApiClient,
-  ExperienceApiClientRequestOptions,
+  ExperienceApiClientRequestOptions as PersonalizationApiClientRequestOptions,
   InsightsApiClient as AnalyticsApiClient,
-  InsightsApiClientRequestOptions,
+  InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions,
 } from '@contentful/optimization-api-client';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
-  InsightsEvent as InsightsEventSchema,
+  InsightsEvent as AnalyticsEventSchema,
   Profile,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
@@ -41,19 +41,19 @@ import type {
 
 const eventLogger = createScopedLogger('Experiences:Events');
 
-/** Request-scoped Insights API options a runtime may forward with direct sends. */
-export type InsightsRequestOptions = Pick<InsightsApiClientRequestOptions, 'beacon'>;
+/** Request-scoped Analytics API options a runtime may forward with direct sends. */
+export type AnalyticsRequestOptions = Pick<AnalyticsApiClientRequestOptions, 'beacon'>;
 
-/** Request-scoped Experience API options a runtime may forward with direct sends. */
-export type ExperienceRequestOptions = Pick<
-  ExperienceApiClientRequestOptions,
+/** Request-scoped Personalization API options a runtime may forward with direct sends. */
+export type PersonalizationRequestOptions = Pick<
+  PersonalizationApiClientRequestOptions,
   'ip' | 'locale' | 'plainText'
 >;
 
 /**
- * Runtime schema for profiles retained by public runtime leaves: a complete Experience API
+ * Runtime schema for profiles retained by public runtime leaves: a complete Personalization API
  * profile, or only its id when the runtime learned the id without the profile (for example
- * from a Delivery response). Personalization needs only the id; Insights needs a complete
+ * from a Delivery response). Personalization needs only the id; Analytics needs a complete
  * profile.
  */
 export const EventProfileSchema = z.union([
@@ -67,9 +67,9 @@ export type PersonalizationEventMethod = 'identify' | 'page' | 'track';
 export type AnalyticsEventMethod = 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView';
 
 /** The Optimization API surface used by the shared runtime. */
-export interface RuntimeOptimizationApiClient {
-  readonly experience: Pick<PersonalizationApiClient, 'upsertProfile'>;
-  readonly insights: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
+export interface EventApi {
+  readonly personalization: Pick<PersonalizationApiClient, 'upsertProfile'>;
+  readonly analytics: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
 }
 
 /** Internal strategy used by a runtime to commit or stage built events. */
@@ -101,17 +101,14 @@ export interface RuntimeEventBindings {
    * Optimization's stateful queue.
    */
   requireProfile?: boolean;
-  /** Insights API options forwarded with each direct Analytics send, such as `beacon`. */
-  getInsightsOptions?: () => InsightsRequestOptions | undefined;
-  /** Experience API options forwarded with each direct Personalization send. */
-  getExperienceOptions?: () => ExperienceRequestOptions | undefined;
+  /** Analytics API options forwarded with each direct Analytics send, such as `beacon`. */
+  getAnalyticsOptions?: () => AnalyticsRequestOptions | undefined;
+  /** Personalization API options forwarded with each direct Personalization send. */
+  getPersonalizationOptions?: () => PersonalizationRequestOptions | undefined;
 }
 
 /** Owner bindings for the default transport, which publishes returned profiles. */
-export interface RuntimeDirectEventBindings extends Omit<
-  RuntimeEventBindings,
-  'reportBlockedEvent'
-> {
+export interface DirectEventBindings extends Omit<RuntimeEventBindings, 'reportBlockedEvent'> {
   /** Configured diagnostic callback; its errors must not interrupt event delivery. */
   onEventBlocked?: (event: BlockedEvent) => void;
   setProfile: (profile: EventProfile) => void;
@@ -284,7 +281,7 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
     event: AnalyticsEvent
   ): Promise<EventEmissionResult> {
     if (!this.admit(method, [args])) return { accepted: false };
-    // Insights requires a complete profile, as in Optimization; an id-only profile counts as missing.
+    // Analytics requires a complete profile, as in Optimization; an id-only profile counts as missing.
     const profile = completeProfile(this.profile);
     if (profile === undefined) {
       // Stateless requests are bound to a profile, so a missing one is a caller error.
@@ -304,8 +301,8 @@ function completeProfile(profile: EventProfile | undefined): Profile | undefined
 }
 
 function createDirectEventDispatch(
-  api: RuntimeOptimizationApiClient,
-  bindings: RuntimeDirectEventBindings
+  api: EventApi,
+  bindings: DirectEventBindings
 ): RuntimeEventDispatch {
   return {
     personalization: async (event, profile) => {
@@ -315,8 +312,8 @@ function createDirectEventDispatch(
         event = validatePersonalizationEvent(await interceptors.run(event));
         if (!admitInterceptedEvent(event, bindings)) return { accepted: false };
       }
-      const data = await sendPersonalizationEvents(api.experience, [event], profile?.id, {
-        ...bindings.getExperienceOptions?.(),
+      const data = await sendPersonalizationEvents(api.personalization, [event], profile?.id, {
+        ...bindings.getPersonalizationOptions?.(),
         locale: bindings.getLocale?.(),
       });
       if (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision) {
@@ -327,14 +324,14 @@ function createDirectEventDispatch(
     analytics: async (event, profile) => {
       const interceptors = bindings.eventInterceptors;
       if (interceptors !== undefined && interceptors.count?.() !== 0) {
-        event = parseOptimizationSchema(InsightsEventSchema, await interceptors.run(event));
+        event = parseOptimizationSchema(AnalyticsEventSchema, await interceptors.run(event));
         if (!admitInterceptedEvent(event, bindings)) return false;
       }
       const batches = [{ profile, events: [event] }];
-      const options = bindings.getInsightsOptions?.();
+      const options = bindings.getAnalyticsOptions?.();
       // As in Optimization's stateless request, the options argument is omitted when unset.
-      if (options === undefined) await api.insights.sendBatchEvents(batches);
-      else await api.insights.sendBatchEvents(batches, options);
+      if (options === undefined) await api.analytics.sendBatchEvents(batches);
+      else await api.analytics.sendBatchEvents(batches, options);
       return undefined;
     },
   };
@@ -342,7 +339,7 @@ function createDirectEventDispatch(
 
 function admitInterceptedEvent(
   event: PersonalizationEvent | AnalyticsEvent,
-  bindings: RuntimeDirectEventBindings
+  bindings: DirectEventBindings
 ): boolean {
   if (
     bindings.getConsent === undefined ||
@@ -362,10 +359,10 @@ function admitInterceptedEvent(
 }
 
 export function createRuntimeEventMethods(
-  api: RuntimeOptimizationApiClient,
+  api: EventApi,
   eventBuilder: EventBuilder,
   ...args:
-    | [bindings: RuntimeDirectEventBindings]
+    | [bindings: DirectEventBindings]
     | [bindings: RuntimeEventBindings, dispatch: RuntimeEventDispatch]
 ): RuntimeEventMethods {
   if (args.length === 2) return new BoundRuntimeEventMethods(eventBuilder, args[0], args[1]);

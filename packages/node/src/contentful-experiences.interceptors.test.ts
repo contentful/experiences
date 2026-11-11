@@ -1,9 +1,9 @@
 import type { EventProfile as Profile } from '@contentful/experiences-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ContentfulExperiences, type ExperiencesNodeConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import type { OptimizationEventStreamEvent } from './index.js';
 
-/** A complete Experience API profile, which Insights requires. */
+/** A complete Personalization API profile, which Analytics requires. */
 function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
   return {
     id,
@@ -25,7 +25,7 @@ function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile 
 
 const instances: ContentfulExperiences[] = [];
 const resolver = { config: { components: {} } };
-function setup(policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
+function setup(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
   const sdk = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'env',
@@ -34,9 +34,9 @@ function setup(policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEven
   });
   instances.push(sdk);
   const upsert = vi
-    .spyOn(sdk.api.experience, 'upsertProfile')
+    .spyOn(sdk.api.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: completeProfile('response') } as never);
-  const analytics = vi.spyOn(sdk.api.insights, 'sendBatchEvents').mockResolvedValue(true);
+  const analytics = vi.spyOn(sdk.api.analytics, 'sendBatchEvents').mockResolvedValue(true);
   return { sdk, upsert, analytics };
 }
 function deferred() {

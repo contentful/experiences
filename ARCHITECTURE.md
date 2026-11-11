@@ -107,7 +107,7 @@ utilities from their public entry points.
 taking the dependency. The public adapter/free-function surface still supports
 `fetchExperience(..., { client })`, `createClient`, and a raw delivery client.
 Those are deliberately separate from Node/Web runtime construction: a runtime
-takes `RuntimeDeliveryClientOptions` and constructs its own delivery clients.
+takes `DeliveryClientOptions` and constructs its own delivery clients.
 The rationale is in AGENTS.md; the structural point is that this keeps `core` at
 zero dependencies, which is the invariant every future adapter inherits.
 
@@ -123,7 +123,7 @@ Runtime. `runtime` depends on Client's public boundary and owns the complete
 `EventBuilder`, Optimization transport, event methods, handoff contracts, and
 the lower-layer shared `ContentfulExperiences` base. Runtime, not Client,
 declares the Optimization API client, `es-toolkit`, and `zod` dependencies.
-Runtime constructors accept `RuntimeDeliveryClientOptions` configuration, then
+Runtime constructors accept `DeliveryClientOptions` configuration, then
 construct and retain their own Delivery, optional Preview, and Optimization
 clients; a caller cannot inject a pre-built delivery client. `accessToken` can
 be the generated client's token supplier. It may be omitted only with an

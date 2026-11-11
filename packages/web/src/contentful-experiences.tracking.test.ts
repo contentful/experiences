@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
 import { EventBuilder } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import {
   advance,
@@ -33,13 +36,13 @@ async function removeRendered(): Promise<void> {
   if (vi.isFakeTimers()) await advance(0);
 }
 
-function createRuntime(overrides: Partial<ExperiencesWebConfig> = {}): ContentfulExperiences {
+function createRuntime(overrides: Partial<Config> = {}): ContentfulExperiences {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
     delivery: { accessToken: 'delivery-token' },
     ...overrides,
-  } as ExperiencesWebConfig);
+  } as Config);
   runtimes.add(runtime);
   return runtime;
 }
@@ -58,7 +61,7 @@ async function render(nodeId: string, tag = 'div'): Promise<HTMLElement> {
 
 /** Spies on the Analytics transport so tests see what would actually be sent. */
 function spyOnTransport(runtime: ContentfulExperiences) {
-  const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true);
+  const send = vi.spyOn(runtime.api.analytics, 'sendBatchEvents').mockResolvedValue(true);
   transportOwners.set(send, runtime);
   return send;
 }
@@ -225,7 +228,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
   it('drops active measurements on reset and resumes fresh visitor measurements', async () => {
     const io = installIOPolyfill();
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
       profile: completeProfile('new-visitor'),
     } as never);
     const runtime = createRuntime({ defaults: { profile: completeProfile('old-visitor') } });
@@ -307,13 +310,13 @@ describe('ContentfulExperiences interaction tracking', () => {
       library: { name: 'test', version: '1' },
     });
     let finishReplay!: (value: unknown) => void;
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValueOnce(
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockReturnValueOnce(
       new Promise((resolve) => {
         finishReplay = resolve;
       }) as never
     );
     const sendBatchEvents = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
     const runtime = createRuntime();
     await expect(
@@ -334,7 +337,7 @@ describe('ContentfulExperiences interaction tracking', () => {
 
     runtime.tracking.disable('views');
     click(hero);
-    // Insights rejects an id-only profile, so the click under the continuation ID is
+    // Analytics rejects an id-only profile, so the click under the continuation ID is
     // admitted but not sent.
     await vi.waitFor(() => expect(trackClick).toHaveBeenCalledOnce());
     await expect(trackClick.mock.results[0]!.value).resolves.toEqual({ accepted: true });

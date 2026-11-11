@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 
 import { ContentfulExperiences as RuntimeContentfulExperiences } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred } from './test-fixtures/dom.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 const resolveOptions = { config: { components: {} } };
 
-function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
+function createRuntime(config: Partial<Config> = {}) {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -53,10 +56,10 @@ const byPath: [string, 'fetchByDestinationPath', DestinationFetch, object] = [
 
 beforeEach(() => {
   seedConsent({ events: false, persistence: false });
-  vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+  vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
     profile: { id: 'visitor' },
   } as never);
-  vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+  vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
 
 afterEach(() => {
