@@ -486,13 +486,12 @@ Personalization/Analytics replay journal or global ordinary-event barrier.
 No adapter or example currently wires this flow, and Live Preview remains
 independent.
 
-The current XDA client has no noncommitting preflight option. A separate
-Personalization preflight does **not** make an XDA fetch render content with
-those uncommitted mutations. An ordinary event-bearing XDA fetch still uses its
-current POST contract and may commit the events; independently using both
-operations can duplicate them. This SDK adds no interim suppression or fake
-XDA content preview. Typed XDA preflight and a content-and-handoff operation
-will be integrated after upstream support is available, before public release.
+The generated dev.13 XDA client accepts `personalization.preflight`, which Client
+validates and forwards. Generated request support alone does not establish backend
+commit behavior. A separate Personalization preflight does **not** make an XDA
+fetch render content with those uncommitted mutations. Independently using both
+operations for the same events can duplicate them. This SDK adds no interim
+suppression or combined XDA content-and-handoff operation.
 
 ---
 

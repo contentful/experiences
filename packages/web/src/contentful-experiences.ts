@@ -25,6 +25,7 @@ import {
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
+  type FetchPersonalizationOptions,
   type FetchResolveOptions,
   hasEventConsent,
   hasEventTypeConsent,
@@ -37,7 +38,6 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   serializePersonalization,
   type DestinationRedirectResult,
-  type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import { computed, signal, untracked } from '@preact/signals-core';
 import { isEqual } from 'es-toolkit/predicate';
@@ -576,7 +576,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    * the request was in flight.
    */
   async #fetchPersonalized<
-    TOptions extends { personalization?: PersonalizationOptions },
+    TOptions extends { personalization?: FetchPersonalizationOptions },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(
     options: TOptions,
@@ -893,7 +893,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    * Drops caller-built XDA events that consent does not admit. The profile id
    * still travels, since it is not an event.
    */
-  #gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+  #gatePersonalizationEvents<T extends { personalization?: FetchPersonalizationOptions }>(
     options: T
   ): T {
     if (this.isPreview) {

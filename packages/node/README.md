@@ -124,7 +124,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer removes unsupported event fields (`context.gdpr`, `context.screen` and `context.page.title`), including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer validates the dev.13 event contract after interception, preserving supported GDPR, screen and page-title metadata without mutating the original built events. Recursive XDA property/trait values exclude `null`; direct Optimization sends retain their own contract. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -158,14 +158,14 @@ for the page-first, sequential-fetch flow.
 
 Current XDA behavior limits this integration: profile-only requests can return
 baseline content despite audience membership; initial identify requests without
-a profile can return a personalization timeout; and unmodified EventBuilder
-consent context is rejected. The Node reference establishes its profile with a
-direct page event, includes identify with each personalized fetch, and relies on
+a profile can return a personalization timeout. The Node reference establishes
+its profile with a direct page event, includes identify with each personalized fetch, and relies on
 Client's generated-schema serialization. See the reference's
 [workaround removal criteria](../../implementations/node-sdk/README.md#current-xda-limitations-and-workaround-removal)
 before removing these accommodations after upstream fixes.
 
-The current XDA client has no noncommitting preflight option for that POST.
+The generated dev.13 client accepts `personalization.preflight`; this field is
+validated and forwarded without adding a combined XDA content-and-handoff operation.
 `prepareRequestHandoff()` previews events through the separate Personalization
 API; it does not make a later XDA fetch render those uncommitted changes. An
 application that independently sends the same events through both operations
@@ -285,7 +285,7 @@ not a consent refusal. A valid transformed event blocked by consent is reported
 through `onEventBlocked` with its transformed method/type and the existing blocked
 return contract. In XDA calls, those blocked events are removed while preserving
 order and the profile/content fetch; hook or schema errors reject before transport.
-Client remains responsible for XDA serialization and removing unsupported fields.
+Client remains responsible for XDA contract validation and serialization.
 This final-type check closes the original-type-only consent bypass in the Optimization reference at `70dfa7f`.
 
 The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,

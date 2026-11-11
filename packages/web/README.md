@@ -183,8 +183,9 @@ providers. Caller-built `personalization.events` must already contain the intend
 context; submitting an event does not merge missing page/user-agent/locale values
 into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
 
-The current XDA event-bearing POST has no noncommitting preflight option and
-may commit supplied events. A Node-prepared Personalization handoff does not
+The generated dev.13 client accepts `personalization.preflight`, which Client
+validates and forwards. Generated request support alone does not establish backend
+commit behavior. A Node-prepared Personalization handoff does not
 make a separate XDA fetch render its uncommitted mutations. Applications that
 independently use both paths for the same events may duplicate them; the SDK
 adds no interim suppression.
@@ -339,9 +340,10 @@ final-type gate corrects the original-type-only bypass in the Optimization refer
 XDA runs event chains concurrently with `Promise.all`, preserving the input array
 order; each event's handler chain remains sequential. Valid consent-blocked events
 are omitted without cancelling the profile/content fetch. Hook/schema failures
-reject before transport. Client owns the final XDA serialization, including removal
-of unsupported fields. Reusing a built event in another explicit fetch runs the
-chain again. Prepared server events are evaluated sequentially on Node; browser
+reject before transport. Client owns final XDA validation and serialization,
+preserving supported GDPR, screen and page-title metadata. Recursive XDA
+property/trait values exclude `null`; direct Optimization sends retain their own
+contract. Reusing a built event in another explicit fetch runs the chain again. Prepared server events are evaluated sequentially on Node; browser
 replay and transport retries preserve those bodies, IDs, and timestamps without
 rerunning event hooks. Browser replay still applies its current consent gate and
 metadata. State-only handoff production and hydration invoke no event hooks.
@@ -560,7 +562,7 @@ The same gate applies to events that are already built:
   decision that admitted it.
 - Events passed in `fetchExperience({ personalization: { events } })` are filtered
   before the request, and the `profileId` still travels. They are not re-stamped,
-  because XDA's embedded event schema has no consent field.
+  and their caller-owned GDPR metadata is preserved by the dev.13 contract.
 
 Wire types map to methods (`exo_node_view` to `trackView`, `exo_node_click` to
 `trackClick`, `exo_node_hover` to `trackHover`, `component` to `trackFlagView`).
