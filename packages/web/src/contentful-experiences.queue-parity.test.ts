@@ -2,7 +2,10 @@
 
 import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { withEventConsent } from '@contentful/experiences-runtime';
-import { ExperienceApiClient as PersonalizationApiClient, InsightsApiClient as AnalyticsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type Config } from './contentful-experiences.js';
