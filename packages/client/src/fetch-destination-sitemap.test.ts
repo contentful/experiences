@@ -69,7 +69,7 @@ describe('fetchDestinationSitemap', () => {
   it('calls client.destination.sitemap with spaceId and destinationId', async () => {
     await fetchDestinationSitemap(destinationOptions, { accessToken: 'token-123' });
 
-    expect(mockSitemap).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
       limit: undefined,
       pageNext: undefined,
       pagePrev: undefined,
@@ -86,7 +86,7 @@ describe('fetchDestinationSitemap', () => {
       }
     );
 
-    expect(mockSitemap).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
       limit: 50,
       pageNext: 'cursor-a',
       pagePrev: undefined,
@@ -107,13 +107,17 @@ describe('fetchDestinationSitemap', () => {
   });
 
   it('uses the provided client directly without constructing a new one', async () => {
-    const client = new ContentfulViewDeliveryClient({ token: 'token-123' });
+    const client = new ContentfulViewDeliveryClient({
+      token: 'token-123',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
     vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
     await fetchDestinationSitemap(destinationOptions, { client });
 
     expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-    expect(mockSitemap).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
       limit: undefined,
       pageNext: undefined,
       pagePrev: undefined,
@@ -136,12 +140,16 @@ describe('fetchDestinationSitemap', () => {
   });
 
   it('does not guard preview when a pre-made client is provided', async () => {
-    const client = new ContentfulViewDeliveryClient({ token: 'preview-token' });
+    const client = new ContentfulViewDeliveryClient({
+      token: 'preview-token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
     vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
     await fetchDestinationSitemap(destinationOptions, { client, preview: true });
 
-    expect(mockSitemap).toHaveBeenCalledWith('space-1', 'dest-1', {
+    expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
       limit: undefined,
       pageNext: undefined,
       pagePrev: undefined,

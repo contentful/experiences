@@ -11,6 +11,7 @@ import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-e
 import { hydrateOptimizationData } from './bridge-support.js';
 import { signalFns } from './signals/signals.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
+import { completeProfile } from './test-fixtures/profile.js';
 
 const runtimes = new Set<ContentfulExperiences>();
 const key = '__ctfl_opt_changes__';
@@ -27,7 +28,7 @@ function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
     environmentId: 'environment',
     delivery: { accessToken: 'token' },
     autoTrackEntryInteraction: { views: false, clicks: false, hovers: false },
-    defaults: { profile: { id: 'visitor' }, changes: changes(), consent: true },
+    defaults: { profile: completeProfile('visitor'), changes: changes(), consent: true },
     ...config,
   });
   runtimes.add(sdk);
@@ -186,7 +187,7 @@ describe('Web Custom Flags', () => {
     'uses existing consent/allowlist admission (flag allowed: %s)',
     async (allow) => {
       const sdk = createRuntime({
-        defaults: { profile: { id: 'visitor' }, changes: changes(), consent: false },
+        defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
         allowedEventTypes: allow ? ['flag'] : [],
       });
       const event = vi.fn();
@@ -412,7 +413,10 @@ describe('Web Custom Flags', () => {
       await settle();
       expect(sdk.states.profile.current).toBeUndefined();
       const current = action === 'reset then destroy' ? createRuntime() : sdk;
-      await hydrateOptimizationData(current, { profile: { id: 'visitor' }, changes: changes() });
+      await hydrateOptimizationData(current, {
+        profile: completeProfile('visitor'),
+        changes: changes(),
+      });
       current.consent({ events: true });
       current.getFlag('banner');
       await settle();
@@ -462,7 +466,7 @@ describe('Web Custom Flags', () => {
 
   it('retries active flag exposure after repeated denial invalidates pending allowlisted work', async () => {
     const sdk = createRuntime({
-      defaults: { profile: { id: 'visitor' }, changes: changes(), consent: false },
+      defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
       allowedEventTypes: ['flag'],
     });
     const pending = deferred<void>();

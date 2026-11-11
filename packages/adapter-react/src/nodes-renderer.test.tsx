@@ -21,7 +21,6 @@ import { ClientExperienceRenderer } from './client-renderer';
 import type { Config } from './types';
 import { fetchExperience, type ExperienceParameters } from './index';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- required global for react's act() outside a test-library wrapper
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
@@ -83,8 +82,6 @@ describe('runtime parameter refetch → renderer', () => {
   it('replaces content for the same Experience and node after parameters change', async () => {
     const get = vi.fn(
       async (
-        _space: string,
-        _environment: string,
         _id: string,
         _request: unknown,
         options: { queryParams?: Record<string, unknown> } = {}

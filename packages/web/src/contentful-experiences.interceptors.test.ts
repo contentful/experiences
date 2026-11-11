@@ -50,11 +50,14 @@ describe('Web event interception consent', () => {
   it('applies final Personalization consent before Web publication', async () => {
     const onEventBlocked = vi.fn();
     const runtime = createRuntime({ onEventBlocked });
-    const hook = vi.fn((event: OptimizationEventStreamEvent) => ({
-      ...event,
-      type: 'track' as const,
-      event: 'rewritten',
-    }));
+    const hook = vi.fn(
+      (event: OptimizationEventStreamEvent) =>
+        ({
+          ...event,
+          type: 'track' as const,
+          event: 'rewritten',
+        }) as OptimizationEventStreamEvent
+    );
     runtime.interceptors.event.add(hook);
 
     await expect(runtime.page()).resolves.toEqual({ accepted: false });
@@ -90,7 +93,7 @@ describe('Web event interception consent', () => {
     runtime.interceptors.event.add(async (event) => {
       started.resolve();
       await gate.promise;
-      return { ...event, type: 'track', event: 'now-admitted' };
+      return { ...event, type: 'track', event: 'now-admitted' } as OptimizationEventStreamEvent;
     });
     const pending = runtime.page();
     await started.promise;
@@ -116,7 +119,7 @@ describe('Web event interception consent', () => {
     const second = runtime.eventBuilder.buildPageView();
     runtime.interceptors.event.add((event) =>
       event.messageId === first.messageId
-        ? { ...event, type: 'track', event: 'blocked' }
+        ? ({ ...event, type: 'track', event: 'blocked' } as OptimizationEventStreamEvent)
         : ({ ...event, timestamp: 123 } as never)
     );
     const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
@@ -138,7 +141,9 @@ describe('Web event interception consent', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
-    runtime.interceptors.event.add((event) => ({ ...event, type: 'track', event: 'rewritten' }));
+    runtime.interceptors.event.add(
+      (event) => ({ ...event, type: 'track', event: 'rewritten' }) as OptimizationEventStreamEvent
+    );
     await runtime.fetchExperience(
       { experienceId: 'exp', personalization: { profileId: 'caller-profile', events: [page] } },
       resolveOptions
@@ -245,7 +250,7 @@ describe('Web event interception consent', () => {
     const gate = deferred<void>();
     runtime.interceptors.event.add(async (event) => {
       await gate.promise;
-      return { ...event, type: 'track', event: 'changed' };
+      return { ...event, type: 'track', event: 'changed' } as OptimizationEventStreamEvent;
     });
     const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
     const pending = runtime.fetchExperience(

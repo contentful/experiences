@@ -1190,9 +1190,11 @@ const plan = await fetchExperience(
   { config: experienceConfig, metadata: { slug }, debug: true }
 );
 
-// Pre-created client, useful when you manage the client lifecycle yourself
+// Pre-created client, useful when you manage the client lifecycle yourself.
+// The generated client binds spaceId/environmentId at construction, so a
+// pre-made client can only serve the by-id/environment it was built with.
 import { createClient } from '@contentful/experiences-react';
-const client = createClient({ accessToken: process.env.CDA_TOKEN! });
+const client = createClient({ accessToken: process.env.CDA_TOKEN!, spaceId, environmentId });
 const plan = await fetchExperience(
   { spaceId, environmentId, experienceId },
   { client },
@@ -1387,8 +1389,8 @@ import {
   toExperiencePayload,
 } from '@contentful/experiences-react';
 
-const client = createClient({ accessToken: process.env.CDA_TOKEN! });
-const response = await client.experience.get(spaceId, environmentId, slug, { locale: 'en-US' });
+const client = createClient({ accessToken: process.env.CDA_TOKEN!, spaceId, environmentId });
+const response = await client.experience.get(slug, { locale: 'en-US' });
 
 const plan = await resolveExperience(toExperiencePayload(response), experienceConfig, {
   sourceMap: readSourceMap(response),
@@ -1401,7 +1403,7 @@ Both are type-level only — no validation, no copying, no runtime cost. `readSo
 
 Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape. It maps `accessToken` to `token` and `host` to `baseUrl`, and passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
 
-`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It does not participate in the per-request `preview` toggle.
+`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, space, and environment, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It does not participate in the per-request `preview` toggle. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
 
 > **If you need runtime-dynamic swaps between delivery and preview use `fetchExperience`'s inline-credentials path**. Pass `{ accessToken, previewToken, preview }` directly instead of pre-building a client and passing `{ client }`. The `preview` boolean is a per-call selector; a pre-built client is bound to whichever token it was constructed with and can't swap.
 
@@ -1410,6 +1412,8 @@ import { createClient } from '@contentful/experiences-react';
 
 const client = createClient({
   accessToken: process.env.CDA_TOKEN!,
+  spaceId,
+  environmentId,
   host: 'https://preview-staging.example.com', // optional custom base URL
   // headers, timeoutInSeconds, maxRetries, fetch, logging, etc. all pass through
 });
@@ -1432,9 +1436,13 @@ That means driving the raw client and resolving the payload yourself needs no he
 ```ts
 import { ContentfulViewDeliveryClient, resolveExperience } from '@contentful/experiences-react';
 
-const client = new ContentfulViewDeliveryClient({ token: process.env.CDA_TOKEN! });
+const client = new ContentfulViewDeliveryClient({
+  token: process.env.CDA_TOKEN!,
+  spaceId,
+  environmentId,
+});
 
-const payload = await client.experience.get(spaceId, environmentId, experienceId, { locale });
+const payload = await client.experience.get(experienceId, { locale });
 
 const plan = await resolveExperience(payload, experienceConfig);
 ```
@@ -1443,8 +1451,6 @@ To send a different alpha-feature set, pass it in the **per-request** `headers` 
 
 ```ts
 await client.experience.get(
-  spaceId,
-  environmentId,
   experienceId,
   { locale },
   { headers: { 'x-contentful-enable-alpha-feature': 'some-other-set' } }

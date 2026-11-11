@@ -18,9 +18,43 @@ export type { ClientOptions };
 type DeliveryExperienceRequestExtensions =
   ContentfulViewDelivery.GetWithOverridesExperienceRequest.Extensions;
 
-export type PersonalizationOptions = NonNullable<
-  DeliveryExperienceRequestExtensions['personalization']
->;
+/**
+ * Arbitrary JSON value. Local stand-in for the generated SDK's unnamed,
+ * recursive "any JSON value" leaf types — the migration guide for this SDK
+ * version calls those auto-named types unstable and recommends against
+ * depending on them by name. Used below to re-widen `properties`/`traits`
+ * back to permitting `null`, since the EventBuilder's own event payloads
+ * (`@contentful/optimization-api-client`'s `JSONType`) allow it while the
+ * generated schema for these fields no longer does.
+ */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+type PersonalizationEvent =
+  | ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensionsPersonalizationEventsItem.Page
+  | (Omit<
+      ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensionsPersonalizationEventsItem.Track,
+      'properties'
+    > & {
+      properties: Record<string, JsonValue>;
+    })
+  | (Omit<
+      ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensionsPersonalizationEventsItem.Identify,
+      'traits'
+    > & {
+      traits: Record<string, JsonValue>;
+    })
+  | (Omit<
+      ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensionsPersonalizationEventsItem.Screen,
+      'properties'
+    > & {
+      properties?: Record<string, JsonValue>;
+    })
+  | ContentfulViewDelivery.GetWithOverridesExperienceRequestExtensionsPersonalizationEventsItem.Component;
+
+export type PersonalizationOptions = Omit<
+  NonNullable<DeliveryExperienceRequestExtensions['personalization']>,
+  'events'
+> & { events?: PersonalizationEvent[] };
 
 export type ExperienceRequestExtensions = Omit<
   DeliveryExperienceRequestExtensions,
@@ -147,7 +181,16 @@ export async function fetchExperience(
     });
   }
 
-  const client = resolveDeliveryClient(clientOptions, log, 'fetchExperience');
+  const client = resolveDeliveryClient(
+    clientOptions,
+    {
+      spaceId: experienceOptions.spaceId,
+      environmentId:
+        'environmentId' in experienceOptions ? experienceOptions.environmentId : undefined,
+    },
+    log,
+    'fetchExperience'
+  );
 
   if ('nodeId' in experienceOptions) {
     const { spaceId, destinationId, nodeId, personalization } = experienceOptions;
@@ -157,8 +200,8 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: nodeId },
       () =>
         extensions === undefined
-          ? client.destination.resolveByNodeId(spaceId, destinationId, nodeId)
-          : client.destination.resolveByNodeIdWithOverrides(spaceId, destinationId, nodeId, {
+          ? client.destination.resolveByNodeId(destinationId, nodeId)
+          : client.destination.resolveByNodeIdWithOverrides(destinationId, nodeId, {
               extensions,
             }),
       log,
@@ -173,8 +216,8 @@ export async function fetchExperience(
       { spaceId, destinationId, locator: path },
       () =>
         extensions === undefined
-          ? client.destination.resolveByPath(spaceId, destinationId, { path })
-          : client.destination.resolveByPathWithOverrides(spaceId, destinationId, {
+          ? client.destination.resolveByPath(destinationId, { path })
+          : client.destination.resolveByPathWithOverrides(destinationId, {
               path,
               extensions,
             }),
@@ -212,7 +255,12 @@ async function fetchByExperienceId(
     options;
   const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
   if (personalization !== undefined) {
-    requestExtensions.personalization = serializePersonalization(personalization);
+    // serializePersonalization only validates the envelope (see its own docs) — it never
+    // tightens `properties`/`traits` to the generated schema's stricter, null-free leaf
+    // type, so the assignment back to the generated request shape is a conscious cast.
+    requestExtensions.personalization = serializePersonalization(
+      personalization
+    ) as DeliveryExperienceRequestExtensions['personalization'];
   }
 
   try {
@@ -235,18 +283,11 @@ async function fetchByExperienceId(
         extensions: requestExtensions,
         ...(parameters === undefined ? {} : { parameters }),
       };
-      return await client.experience.getWithOverrides(
-        spaceId,
-        environmentId,
-        experienceId,
-        request
-      );
+      return await client.experience.getWithOverrides(experienceId, request);
     }
 
     if (Object.keys(queryParams).length > 0) {
       return await client.experience.get(
-        spaceId,
-        environmentId,
         experienceId,
         { locale },
         {
@@ -254,7 +295,7 @@ async function fetchByExperienceId(
         }
       );
     }
-    return await client.experience.get(spaceId, environmentId, experienceId, { locale });
+    return await client.experience.get(experienceId, { locale });
   } catch (err) {
     // Preserve expected 404 control flow for framework routers. Other failures
     // are wrapped with stable SDK context instead of exposing transport-specific
@@ -334,7 +375,12 @@ function destinationExtensions(
   personalization: PersonalizationOptions | undefined
 ): ContentfulViewDelivery.DestinationExperiencesExtensions | undefined {
   if (personalization === undefined) return undefined;
-  return { personalization: serializePersonalization(personalization) };
+  // Same conscious cast as fetchByExperienceId — see the comment there.
+  return {
+    personalization: serializePersonalization(
+      personalization
+    ) as ContentfulViewDelivery.DestinationExperiencesExtensions['personalization'],
+  };
 }
 
 function hasRequestExtensions(

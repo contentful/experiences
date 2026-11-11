@@ -2,8 +2,15 @@ import { ContentfulViewDeliveryClient } from '@contentful/experiences-client';
 
 type RuntimeDeliveryClientBaseOptions = Omit<
   ContentfulViewDeliveryClient.Options,
-  'token' | 'baseUrl'
+  'token' | 'baseUrl' | 'spaceId' | 'environmentId'
 >;
+
+/** Identity the runtime already owns (`ContentfulExperiencesConfig.spaceId`/`environmentId`),
+ * threaded in separately so callers don't repeat it in `delivery`/`preview` config. */
+export type RuntimeDeliveryClientIdentity = {
+  spaceId: string;
+  environmentId: string;
+};
 
 /** Configuration for a Delivery or Preview client owned by a runtime. */
 export type RuntimeDeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
@@ -27,6 +34,7 @@ export type RuntimeDeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
  */
 export function createRuntimeDeliveryClient(
   options: RuntimeDeliveryClientOptions,
+  identity: RuntimeDeliveryClientIdentity,
   defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
   defaultHeaders?: Record<string, string>
 ): ContentfulViewDeliveryClient {
@@ -44,8 +52,8 @@ export function createRuntimeDeliveryClient(
   const baseUrl = host ?? (rest.environment === undefined ? defaultHost : undefined);
   const clientOptions =
     accessToken === undefined
-      ? { ...rest, auth: rest.auth ?? false, baseUrl }
-      : { ...rest, token: accessToken, baseUrl };
+      ? { ...rest, ...identity, auth: rest.auth ?? false, baseUrl }
+      : { ...rest, ...identity, token: accessToken, baseUrl };
 
   return new ContentfulViewDeliveryClient(
     clientOptions as unknown as ContentfulViewDeliveryClient.Options

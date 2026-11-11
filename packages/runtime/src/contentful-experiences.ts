@@ -144,15 +144,17 @@ export class ContentfulExperiences<
     this.#locale = config.locale;
     const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
     const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
+    const identity = { spaceId: config.spaceId, environmentId: config.environmentId };
     this.#deliveryClient = createRuntimeDeliveryClient(
       config.delivery,
+      identity,
       undefined,
       userAgentHeaders
     );
     this.#previewClient =
       config.preview === undefined
         ? undefined
-        : createRuntimeDeliveryClient(config.preview, PREVIEW_HOST, userAgentHeaders);
+        : createRuntimeDeliveryClient(config.preview, identity, PREVIEW_HOST, userAgentHeaders);
     this.api = createRuntimeOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
