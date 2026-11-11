@@ -32,6 +32,38 @@ cookie helper leaves an existing identity untouched because the handoff has no p
 Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
 and standalone free fetches remain outside this policy.
 
+For session snapshots, install the optional Live Preview package and configure
+`preview.accessToken` on the SDK. When preview is enabled, bind the request once:
+
+```ts
+const request = sdk.forRequest({
+  livePreview: {
+    experienceId,
+    sessionId,
+    loadImplementation: () => import('@contentful/experiences-live-preview'),
+  },
+});
+try {
+  const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
+  renderPlan(plan);
+} finally {
+  request.destroy();
+}
+```
+
+The session configuration sets preview policy immediately; its implementation loads
+lazily once per request, only for the bound Experience ID. Unrelated IDs do not await
+the loader, even if it fails or remains pending.
+`isPreview: false` conflicts with it. Matching IDs load session plans with Runtime →
+request → operation metadata/debug precedence; other IDs and destinations retain their
+sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
+`request.destroy()` invalidates unfinished content results and prevents late profile
+writes without affecting sibling requests. Event calls disposed before transport return
+`{ accepted: false }`; successful transports retain acceptance and Personalization response
+data after disposal. See Runtime's
+[shared limitations](../runtime/README.md#shared-limitations) for session-owned options,
+credentials, cancellation, and packaging.
+
 ## Create an SDK instance, then bind every request
 
 Create a process-long `ContentfulExperiences` instance from stable configuration. Call `forRequest()` at the boundary of every incoming request. The returned facade carries request-local fetch and resolve settings.
@@ -124,7 +156,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's returned `plan.personalization.profileId` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer removes unsupported event fields (`context.gdpr`, `context.screen` and `context.page.title`), including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. Supplying a profile or events switches the XDA call to POST. The Client layer removes unsupported event fields (`context.gdpr`, `context.screen` and `context.page.title`), including Optimization-only consent context, before sending the request; the original built events are unchanged. To request a source map in the same call, add `extensions: { sourceMap: {} }`. XDA fetches are separate from noncommitting handoff preparation.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -217,8 +249,10 @@ await experienceRequest.trackClick({
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView` send Analytics events and return
 `EventEmissionResult`: `{ accepted: true }` when admitted and `{ accepted: false }` when consent
 blocks them. Acceptance does not report transport success. A blocked call is reported to
-`onEventBlocked`. All four require a current profile,
-because a stateless request is bound to one; otherwise they throw `EventProfileRequiredError`. Event locale precedence is the
+`onEventBlocked`. All four require a complete current profile; otherwise they throw
+`EventProfileRequiredError`. `forRequest({ profile: { id } })` remains valid for
+Personalization and content-request continuity. An ID-only request must receive a
+complete XDA or Personalization profile before sending Analytics. Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as
 fallback. An event's explicit locale changes its body only; it does not change content evaluation
@@ -310,13 +344,14 @@ const handoff = createRequestHandoffFromData({
 ```
 
 The input requires explicit `spaceId` and `environmentId`, optional
-`data: { profile?: EventProfile; changes?: ChangeArray }`, and an optional private-request cache value.
-An ID-only profile is valid. It returns a validated `ExperiencesHandoff` with
-`state.profile` and/or `state.changes` when supplied, and no top-level `profileId` or replay.
-Missing both omits `state` entirely, including after JSON serialization;
-hydration without a profile preserves the browser profile. Changes are validated
-with the API's `ChangeArray` schema; flag-only state, including `[]`, is private.
-An explicit non-private cache
+`data: { profile?: EventProfile | Pick<EventProfile, 'id'>; changes?: ChangeArray }`,
+and an optional private-request cache value. A complete profile produces
+`state.profile`; ID-only input produces top-level continuation `profileId`, without
+profile state. Supplied changes produce `state.changes`. Neither form includes
+replay. Missing both profile and changes omits `state` entirely, including after
+JSON serialization; an absent profile omits both profile fields and preserves the
+browser profile on hydration. Changes are validated with the API's `ChangeArray`
+schema; flag-only state, including `[]`, is private. An explicit non-private cache
 scope throws `TypeError`; Runtime's scope/profile validation errors propagate.
 
 This function packages data only: it emits no events, invokes no event hooks,
@@ -413,7 +448,7 @@ if ('redirect' in result) {
 }
 ```
 
-Destination node and path requests accept `personalization` (a profile id and caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the profile id XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug.
+Destination node and path requests accept `personalization` (a profile id and caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the complete profile XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug.
 
 The runtime owns its Delivery and Preview clients. Configure each with an
 `accessToken`, or configure a tokenless trusted proxy by supplying an explicit

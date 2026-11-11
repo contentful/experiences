@@ -9,7 +9,9 @@ import {
 import {
   EventProfileRequiredError,
   parseExperiencesHandoff,
+  type RuntimeLivePreviewModule,
 } from '@contentful/experiences-runtime';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 /** A complete Personalization API profile, which Analytics requires. */
@@ -45,7 +47,7 @@ afterEach(() => {
   runtimes.clear();
 });
 
-function createRuntime() {
+function createRuntime(overrides: Partial<Config> = {}) {
   return trackRuntime(
     new ContentfulExperiences({
       spaceId: 'space',
@@ -54,6 +56,7 @@ function createRuntime() {
       delivery: { accessToken: 'delivery-token' },
       resolveDefaults: { debug: true, metadata: { source: 'constructor', shared: 'constructor' } },
       app: { name: 'site', version: '1.0.0' },
+      ...overrides,
     })
   );
 }
@@ -79,7 +82,7 @@ function createEventRuntime(policy: Pick<Config, 'allowedEventTypes' | 'onEventB
   );
   const upsertProfile = vi
     .spyOn(runtime.api.personalization, 'upsertProfile')
-    .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
+    .mockResolvedValue({ profile: completeProfile('updated-profile') } as never);
   const sendBatchEvents = vi
     .spyOn(runtime.api.analytics, 'sendBatchEvents')
     .mockResolvedValue(true);
@@ -104,6 +107,146 @@ describe('Node ContentfulExperiences', () => {
     expect(runtime.getFlag('flag')).toBeUndefined();
     expect(send).not.toHaveBeenCalled();
     expect(personalize).not.toHaveBeenCalled();
+  });
+
+  describe('request-owned Live Preview', () => {
+    function previewFixture() {
+      const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
+      const plan: PortableRenderPlan = {
+        nodes: [],
+        metadata: {},
+        debug: false,
+        diagnostics: [],
+        personalization: { profile: completeProfile('preview-profile') },
+      };
+      const implementation: RuntimeLivePreviewModule = {
+        fetchPreviewSession: vi.fn().mockResolvedValue(plan),
+        createLivePreviewClient: vi.fn(),
+        sendPreviewStatus: vi.fn(),
+      };
+      const loadImplementation = vi.fn(async () => implementation);
+      const livePreview = {
+        experienceId: 'bound',
+        sessionId: 'session',
+        loadImplementation,
+      };
+      const ordinary = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue(plan);
+      return { runtime, plan, implementation, livePreview, loadImplementation, ordinary };
+    }
+
+    it('establishes preview policy before initializing the source', async () => {
+      const f = previewFixture();
+      const upsert = vi.spyOn(f.runtime.api.personalization, 'upsertProfile');
+      const request = f.runtime.forRequest({ livePreview: f.livePreview, consent: true });
+      expect(request.isPreview).toBe(true);
+      await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
+      expect((await request.prepareRequestHandoff({ routeKey: '/' })).skipped).toBe('preview');
+      expect(f.loadImplementation).not.toHaveBeenCalled();
+      expect(upsert).not.toHaveBeenCalled();
+      expect(() => f.runtime.forRequest({ livePreview: f.livePreview, isPreview: false })).toThrow(
+        /isPreview: false/
+      );
+    });
+
+    it('adopts the matching snapshot with request and operation resolve defaults', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({
+        livePreview: f.livePreview,
+        profile: { id: 'visitor' },
+        resolveOptions: { metadata: { request: true, shared: 'request' } },
+      });
+      await expect(
+        request.fetchExperience(
+          { experienceId: 'bound' },
+          {
+            config: resolverConfig,
+            metadata: { shared: 'operation' },
+            debug: false,
+          }
+        )
+      ).resolves.toBe(f.plan);
+      expect(vi.mocked(f.implementation.fetchPreviewSession).mock.calls[0]?.[2]).toEqual({
+        config: resolverConfig,
+        debug: false,
+        metadata: { source: 'constructor', request: true, shared: 'operation' },
+      });
+      expect(request.profile).toEqual({ id: 'visitor' });
+      expect(f.ordinary).not.toHaveBeenCalled();
+      expect(f.implementation.createLivePreviewClient).not.toHaveBeenCalled();
+      await request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig });
+      expect(f.loadImplementation).toHaveBeenCalledOnce();
+    });
+
+    it('keeps unrelated IDs on the ordinary source', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
+      await expect(
+        request.fetchExperience(
+          { experienceId: 'other', preview: true },
+          {
+            config: resolverConfig,
+          }
+        )
+      ).resolves.toBe(f.plan);
+      expect(f.ordinary).toHaveBeenCalledWith(
+        { experienceId: 'other', preview: true, personalization: undefined, locale: 'en-US' },
+        { config: resolverConfig, metadata: {}, debug: undefined }
+      );
+      expect(f.implementation.fetchPreviewSession).not.toHaveBeenCalled();
+      expect(f.loadImplementation).not.toHaveBeenCalled();
+    });
+
+    it('isolates unrelated fetches from pending and failed preview initialization', async () => {
+      const f = previewFixture();
+      let reject!: (error: Error) => void;
+      f.loadImplementation.mockReturnValue(
+        new Promise((_, fail) => {
+          reject = fail;
+        })
+      );
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
+      const bound = expect(
+        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
+      ).rejects.toThrow('module unavailable');
+      await expect(
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
+      ).resolves.toBe(f.plan);
+      reject(new Error('module unavailable'));
+      await bound;
+      await expect(
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
+      ).resolves.toBe(f.plan);
+      await expect(
+        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
+      ).rejects.toThrow('module unavailable');
+      expect(f.loadImplementation).toHaveBeenCalledOnce();
+      expect(f.ordinary).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects a pending snapshot when its request is disposed', async () => {
+      const f = previewFixture();
+      let complete!: (plan: PortableRenderPlan) => void;
+      const started = new Promise<void>((resolve) => {
+        vi.mocked(f.implementation.fetchPreviewSession).mockImplementation(() => {
+          resolve();
+          return new Promise((resolvePlan) => {
+            complete = resolvePlan;
+          });
+        });
+      });
+      const request = f.runtime.forRequest({ livePreview: f.livePreview });
+      const pending = request.fetchExperience(
+        { experienceId: 'bound' },
+        { config: resolverConfig }
+      );
+      await started;
+      request.destroy();
+      request.destroy();
+      complete(f.plan);
+      await expect(pending).rejects.toThrow(/destroyed/);
+      await expect(request.page()).resolves.toEqual({ accepted: false });
+      expect(f.runtime.forRequest().isPreview).toBe(false);
+    });
   });
 
   it('forwards changed parameters through request facades independently of event consent', async () => {
@@ -138,6 +281,23 @@ describe('Node ContentfulExperiences', () => {
     first.destroy();
     first.destroy();
     expect(second.forRequest({ locale: 'it-IT' }).locale).toBe('it-IT');
+  });
+
+  it('keeps event disposal local to a request without adding shared SDK shutdown', async () => {
+    const { runtime, upsertProfile } = createEventRuntime();
+    const disposed = runtime.forRequest();
+    const sibling = runtime.forRequest();
+    disposed.destroy();
+    disposed.destroy();
+    await expect(disposed.page()).resolves.toEqual({ accepted: false });
+    expect(upsertProfile).not.toHaveBeenCalled();
+
+    runtime.destroy();
+    await expect(sibling.page()).resolves.toMatchObject({ accepted: true });
+    await expect(runtime.forRequest().page()).resolves.toMatchObject({ accepted: true });
+    expect(upsertProfile).toHaveBeenCalledTimes(2);
+    expect(disposed.profile).toBeUndefined();
+    expect(sibling.profile).toEqual(completeProfile('updated-profile'));
   });
 
   it('binds event construction to each request without changing the shared builder', () => {
@@ -400,14 +560,14 @@ describe('Node ContentfulExperiences', () => {
     const { runtime, upsertProfile } = createEventRuntime();
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
 
-    const data = { profile: { id: 'updated-profile' } };
+    const data = { profile: completeProfile('updated-profile') };
     expect(await request.identify({ userId: 'user-1' })).toEqual({ accepted: true, data });
 
     expect(upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ profileId: 'initial-profile' }),
       { locale: 'en-US' }
     );
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
     expect(upsertProfile.mock.calls[0]?.[1]).toEqual({ locale: 'en-US' });
   });
 
@@ -535,8 +695,8 @@ describe('Node ContentfulExperiences', () => {
         gdpr: { isConsentGiven: false },
       });
     }
-    expect(result.data).toEqual({ profile: { id: 'updated-profile' } });
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(result.data).toEqual({ profile: completeProfile('updated-profile') });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
     expect(result.handoff).toMatchObject({
       spaceId: 'space',
       environmentId: 'environment',
@@ -728,15 +888,15 @@ describe('Node ContentfulExperiences', () => {
     });
     expect(germanResult.handoff.replay?.events[0]?.context.userAgent).toBe('german-agent');
     expect(frenchResult.handoff.replay?.events[0]?.context.userAgent).toBe('french-agent');
-    expect(german.profile).toEqual({ id: 'updated-profile' });
-    expect(french.profile).toEqual({ id: 'updated-profile' });
+    expect(german.profile).toEqual(completeProfile('updated-profile'));
+    expect(french.profile).toEqual(completeProfile('updated-profile'));
   });
 
   it('defaults XDA fetch identity from its request, adopts returned identity, and respects overrides', async () => {
     const runtime = createRuntime();
     const fetchExperience = vi.spyOn(runtime, 'fetchExperience').mockResolvedValueOnce({
       nodes: [],
-      personalization: { profileId: 'xda-profile' },
+      personalization: { profile: completeProfile('xda-profile') },
     } as never);
     fetchExperience.mockResolvedValue({ nodes: [] } as never);
     const request = runtime.forRequest({ profile: { id: 'initial-profile' } });
@@ -745,7 +905,7 @@ describe('Node ContentfulExperiences', () => {
     expect(fetchExperience.mock.calls[0]?.[0]).toMatchObject({
       personalization: { profileId: 'initial-profile' },
     });
-    expect(request.profile).toEqual({ id: 'xda-profile' });
+    expect(request.profile).toEqual(completeProfile('xda-profile'));
 
     await request.fetchExperience(
       {
@@ -757,7 +917,7 @@ describe('Node ContentfulExperiences', () => {
     expect(fetchExperience.mock.calls[1]?.[0]).toMatchObject({
       personalization: { profileId: 'explicit-profile', events: [] },
     });
-    expect(request.profile).toEqual({ id: 'xda-profile' });
+    expect(request.profile).toEqual(completeProfile('xda-profile'));
   });
 
   it('does not let a stale XDA response replace a newer request profile', async () => {
@@ -775,10 +935,13 @@ describe('Node ContentfulExperiences', () => {
       personalization: { profileId: 'initial-profile' },
     });
     await request.identify({ userId: 'new-user' });
-    resolveFetch({ nodes: [], personalization: { profileId: 'stale-profile' } } as never);
+    resolveFetch({
+      nodes: [],
+      personalization: { profile: completeProfile('stale-profile') },
+    } as never);
     await pending;
 
-    expect(request.profile).toEqual({ id: 'updated-profile' });
+    expect(request.profile).toEqual(completeProfile('updated-profile'));
   });
 
   describe('consent', () => {

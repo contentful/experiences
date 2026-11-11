@@ -8,7 +8,7 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 
 ## Session preview
 
-Set `isPreview: true` to suppress events or `isPreview: false` to select delivery.
+Set `isPreview: true` to suppress events or `isPreview: false` to select ordinary event policy.
 When omitted, the SDK detects a nonempty, trimmed `preview_session_id` in the initial
 browser URL. The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
 All event methods return `{ accepted: false, reason: 'preview' }` and report through
@@ -24,6 +24,63 @@ before entering/leaving Session preview in a SPA. CPA configuration, `preview: t
 do not select this policy. Static preview without a Session ID is not detected automatically;
 applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
 fetches remain outside it.
+
+### Shared source and optional live preview
+
+Web owns one Preview Session source/connection through `states.preview`, which
+is `undefined` while initialization is pending or integration is disabled.
+`fetchExperience` loads initial/refresh snapshots for the bound Experience ID;
+other IDs keep their ordinary source. The SDK shares equivalent in-flight
+fetching/resolution while each consumer receives an independent mutable plan;
+the view keeps its existing presentation state.
+
+`subscribeToPreview(experienceId, resolveOptions, listener)` returns a
+`Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
+fetching. Resolved plans retain all resolver diagnostics without discarding usable
+content. Its optional `data` and `error` may appear together: a new plan can carry
+an existing source error. Connection status comes from `states.preview`.
+
+```ts
+const sdk = new ContentfulExperiences({
+  ...browserConfig,
+  preview: { accessToken: previewToken },
+  livePreview: sessionId
+    ? {
+        experienceId,
+        sessionId,
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      }
+    : undefined,
+});
+if (initialPlan) renderPlan(initialPlan);
+else renderPlan(await sdk.fetchExperience({ experienceId }, { config: registry }));
+const subscription = sdk.subscribeToPreview(
+  experienceId,
+  { config: registry },
+  ({ data, error }) => {
+    if (data) renderPlan(data);
+    showError(error);
+  }
+);
+// On teardown:
+subscription.unsubscribe();
+sdk.destroy();
+```
+
+The session configuration establishes preview policy before events/tracking.
+Unrelated IDs do not await the implementation loader, even if it fails or remains
+pending. Explicit consent/reset commands retain their behavior. `replaceLivePreview(options)`
+switches sessions within fixed preview mode and invalidates obsolete work.
+Bindings detach their listeners; source lifetime belongs to the SDK. Failed
+updates leave usable presentation content intact.
+
+SSR-only adapters observe matching `states.preview` content revisions for server
+refresh, without browser resolution. Status-only changes do not advance revision;
+keep the connection stable across refreshes and preserve server content.
+
+Install preview only where enabled. Browser UMD users need a separately bundled
+ESM asset; the references demonstrate enabled builds and production exclusion.
+See [Runtime limits](../runtime/README.md#optional-runtime-live-preview).
 
 ## Install
 
@@ -114,7 +171,7 @@ client; configure its Personalization and Analytics endpoints through `optimizat
 Treat custom endpoints as sensitive-data destinations and use only trusted HTTPS
 origins outside explicit local development.
 
-Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The Web SDK neither integrates nor owns that transport.
+Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The optional SDK wrapper coordinates those public APIs through the shared source described above; the package retains transport/protocol ownership.
 
 ## Delivery diagnostics
 
@@ -181,7 +238,7 @@ const plan = await experiences.fetchExperience(
 Events built by the Web runtime use the `web` channel and its browser context
 providers. Caller-built `personalization.events` must already contain the intended
 context; submitting an event does not merge missing page/user-agent/locale values
-into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile id, it is available as `plan.personalization?.profileId` and becomes the persisted profile identity for subsequent calls.
+into it. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy.
 
 The current XDA event-bearing POST has no noncommitting preflight option and
 may commit supplied events. A Node-prepared Personalization handoff does not
@@ -252,16 +309,17 @@ validation used by the constructor and setter.
 `experiences.states` exposes the browser SDK's observable state. Each observable
 has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 
-| State                         | Value                                                                                                                                                |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`                     | Current profile, or `undefined`.                                                                                                                     |
-| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                |
-| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
-| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
-| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
-| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`. |
-| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                |
-| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                |
+| State                         | Value                                                                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                     | Current profile, or `undefined`.                                                                                                                                       |
+| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                                  |
+| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                                      |
+| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                            |
+| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                                      |
+| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.                   |
+| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                                  |
+| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                                  |
+| `preview`                     | Shared `PreviewState` or `undefined`: optional `experienceId`/`sessionId`, raw `ExperiencePayload` data, error, `live`/`static`/undefined status and content revision. |
 
 `subscribe` immediately invokes its callback with the current value, including
 `undefined`, then observes changes. `subscribeOnce` waits for the first
@@ -284,8 +342,9 @@ consentSubscription.unsubscribe();
 ```
 
 Object snapshots are deep-cloned by default, so changing a snapshot does not
-update SDK state. `eventStream` uses the emitted event reference instead; treat
-its values as immutable. For ordinary calls, `eventStream` publishes validated,
+update SDK state. `eventStream` uses the emitted event reference instead;
+`preview` also exposes raw payload references as read-only. Treat both
+as immutable. For ordinary calls, `eventStream` publishes validated,
 consent-allowed events before transport or queue admission, so an event may appear
 even if queue capacity later refuses it. Each prepared event appears once only
 when the whole batch is admitted; a refused prepared batch publishes none of its
@@ -316,9 +375,9 @@ For extensions, the package also exports `signals`, `signalFns`, `batch`,
 Flag changes remain SDK-owned and are absent from the public `signals` aggregate;
 use `getFlag` or `states.flag(name)` to read them and bridge or handoff hydration
 to supply evaluated state through interceptors and lifecycle guards.
-The supported state names follow Optimization's shared browser-state contract;
-Experiences has no selected-optimization, optimization-eligibility, or
-preview state in `states`.
+Preview types are `PreviewState` and `PreviewUpdate`. Other state names follow
+Optimization's shared browser-state contract; Experiences has no
+selected-optimization or optimization-eligibility state.
 
 ### Interceptors
 
@@ -351,8 +410,8 @@ transport boundaries.
 Runtime owns the shared manager and the `OptimizationEventStreamEvent` union;
 Web's root imports remain compatible, and Node exposes the same manager/type
 names with one event registry per SDK instance. Web retains its separate state
-registry. The `./runtime` entry and snapshot runtimes remain unchanged and expose
-no interceptor registry.
+registry. The `./runtime` entry and snapshot runtimes expose no interceptor registry;
+`states.preview` is inert and undefined there.
 
 State interceptors receive incoming `{ profile, changes }` state from Personalization
 and private hydration; XDA contributes profile state only. A sparse result that
@@ -403,8 +462,9 @@ The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile through `defaults.profile` when creating the runtime, or identify
 a profile before sending Analytics events. `ConfigDefaults` describes the
-`defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
-the runtime, while XDA responses can supply its id. The current profile is
+`defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`.
+Personalization event responses and XDA plans supply complete profiles to the
+runtime. The current profile is
 persisted and restored from LocalStorage once persistence consent is granted.
 `getAnonymousId` is an optional configuration callback whose returned id takes
 precedence over the active profile id. The default provider reads the stored
@@ -451,9 +511,9 @@ the server's captured transport locale, including an absent locale, independentl
 of the browser's current locale. Redact page and
 user-agent data with the providers above before triggering events.
 Ordinary online Personalization calls send directly and may overlap queued
-prepared work. Offline ordinary calls are accepted into an in-memory queue until
-capacity, then refused without evicting accepted work. A prepared batch is
-admitted whole or refused at capacity. Capacity is `queuePolicy.offlineMaxEvents`
+prepared work. When an ordinary-only offline queue is full, the oldest event is
+evicted and the new event is admitted, matching Optimization. Queues containing
+prepared replay refuse overflow; prepared batches are admitted whole or refused. Capacity is `queuePolicy.offlineMaxEvents`
 (default 100; a non-positive or non-finite value falls back to the default, and a
 fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
 completion. Read `states.personalizationRequestState.current` for the latest
@@ -463,9 +523,10 @@ their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
 are queued in memory rather than sent one by one. Every Analytics method resolves
-`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a profile
-or an adopted continuation ID, such as a new visitor's call made while the first profile request is
-still pending, the call warns and is dropped, as in Optimization, and does not throw. The queue flushes when it holds 25 events, every 30 seconds while
+`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a complete profile, such as a
+new visitor's call made while the first profile request is still pending, the call
+warns and is dropped, as in Optimization, and does not throw. A cookie or handoff
+continuation ID is sufficient for Personalization requests but not Analytics. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
 or unloaded (`visibilitychange`, `pagehide`, `beforeunload`). On hide, active views and
 hovers end first, then both queues get a final forced attempt: Analytics uses
@@ -577,7 +638,7 @@ one. Everything here is gated on **persistence consent**; nothing is written wit
 - **What it holds.** A complete profile's id, else an identity adopted from a handoff, else
   the id already stored. The fallback means a visitor keeps their continuity while the
   profile is absent, and a static or public handoff, which carries no profile, cannot erase
-  it. It follows profile responses, XDA profile ids and handoff state.
+  it. It follows Personalization and XDA profile responses and handoff state.
 - **At startup, and when persistence is granted later,** the SDK adopts an identity the
   browser already holds, such as one a server wrote, and migrates a legacy `ntaid` cookie.
   That id is what the next request is sent under. A cookie for a different visitor than the
@@ -773,8 +834,9 @@ roots, and one root can belong to several scopes.
   innermost Fragment occurrence of the nearest tracked element. Add `data-ctfl-clickable="true"`
   (`TRACKING_CLICKABLE_ATTRIBUTE`) to count other content.
 - Events go through `trackView`, `trackHover`, and `trackClick`, so they need a
-  current profile identity at event emission, which can come from persisted
-  browser state, a cookie adopted at construction, or handoff state. They do not
+  complete profile at event emission, which can come from persisted browser state,
+  an XDA/Personalization response, or full handoff state. Cookie identity alone is
+  sufficient for Personalization continuity, but not Analytics. They do not
   wait for handoff hydration or prepared Personalization HTTP delivery. A rejected
   call is logged as a warning and does not stop tracking.
 - Withdrawing event consent discards active view/hover measurements and delayed
@@ -919,9 +981,10 @@ const runtime = createSnapshotRuntime({
 
 Its `states` observables are static: profile, locale, and consent come from
 the snapshot, persistence consent falls back to event consent, request state is
-`{ status: 'success' }`, and both event streams are `undefined`. `data.changes`
-supplies static `states.flag(name)` and pure `getFlag(name, changes?)` reads without exposure. `hasConsent()`
-uses the snapshot's consent and optional `allowedEventTypes`. Event methods and
+`{ status: 'success' }`, and both event streams and `preview` are inert `undefined`
+observables. `data.changes` supplies static `states.flag(name)` and pure
+`getFlag(name, changes?)` reads without exposure. `hasConsent()` uses the
+snapshot's consent and optional `allowedEventTypes`. Event methods and
 state-changing commands warn and do no work; methods returning an admission
 result resolve `{ accepted: false }`. `destroy()` needs no cleanup. Fetching and
 resolution remain outside this interface. `createSnapshotRuntime` and the types

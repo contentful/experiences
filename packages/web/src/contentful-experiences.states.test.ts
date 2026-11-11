@@ -64,7 +64,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   setDocumentVisibility('visible');
   vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
-    profile: { id: 'visitor' },
+    profile: completeProfile('visitor'),
   } as never);
   vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
@@ -120,7 +120,7 @@ describe('Web public state subscriptions', () => {
       ] as const)('purges both queues before a %s subscriber can %s', async (state, action) => {
         const runtime = createRuntime({
           defaults: {
-            profile: { id: 'visitor' },
+            profile: completeProfile('visitor'),
             consent: true,
             persistenceConsent: axes === 'both',
           },
@@ -192,18 +192,16 @@ describe('Web public state subscriptions', () => {
       }),
       expect.anything()
     );
-    expect(runtime.states.profile.current).toEqual({
-      id: 'visitor',
-      traits: { intercepted: true },
-    });
+    expect(runtime.states.profile.current).toEqual(
+      completeProfile('visitor', { traits: { intercepted: true } })
+    );
     expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
     await runtime.page();
     expect(profiles).toHaveBeenCalledTimes(2);
-    await hydrateOptimizationData(runtime, { profile: { id: 'hydrated' } });
-    expect(runtime.states.profile.current).toEqual({
-      id: 'hydrated',
-      traits: { intercepted: true },
-    });
+    await hydrateOptimizationData(runtime, { profile: completeProfile('hydrated') });
+    expect(runtime.states.profile.current).toEqual(
+      completeProfile('hydrated', { traits: { intercepted: true } })
+    );
     expect(profiles).toHaveBeenCalledTimes(3);
   });
 
@@ -268,7 +266,7 @@ describe('Web public state subscriptions', () => {
     );
     expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'pending' });
     expect(events.mock.calls.slice(1).map(([event]) => event.type)).toEqual(['page']);
-    response.resolve({ profile: { id: 'updated' } });
+    response.resolve({ profile: completeProfile('updated') });
     await pending;
     expect(snapshots).toEqual([
       { profile: 'visitor', status: 'idle' },
@@ -276,7 +274,7 @@ describe('Web public state subscriptions', () => {
       { profile: 'updated', status: 'success' },
     ]);
     runtime.reset();
-    await hydrateOptimizationData(runtime, { profile: { id: 'hydrated' } });
+    await hydrateOptimizationData(runtime, { profile: completeProfile('hydrated') });
     expect(snapshots.slice(-2)).toEqual([
       { profile: undefined, status: 'idle' },
       { profile: 'hydrated', status: 'success' },
@@ -290,7 +288,7 @@ describe('Web public state subscriptions', () => {
     const upsert = vi
       .mocked(PersonalizationApiClient.prototype.upsertProfile)
       .mockRejectedValueOnce(new Error('temporary'))
-      .mockResolvedValue({ profile: { id: 'visitor' } } as never);
+      .mockResolvedValue({ profile: completeProfile('visitor') } as never);
     const runtime = createRuntime();
     const events = vi.fn();
     subscriptions.push(runtime.states.eventStream.subscribe(events));
@@ -325,13 +323,13 @@ describe('Web public state subscriptions', () => {
     expect(warn).toHaveBeenCalledWith('Event stream subscriber failed', error);
   });
 
-  it('streams valid ordinary events before queue capacity admission, as in Optimization', async () => {
+  it('streams valid ordinary events at the queue limit', async () => {
     const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 1 } });
     const events = vi.fn();
     subscriptions.push(runtime.states.eventStream.subscribe(events));
     window.dispatchEvent(new Event('offline'));
     await expect(runtime.track({ event: 'accepted' })).resolves.toEqual({ accepted: true });
-    await expect(runtime.track({ event: 'queue-full' })).resolves.toEqual({ accepted: false });
+    await expect(runtime.track({ event: 'queue-full' })).resolves.toEqual({ accepted: true });
     expect(events.mock.calls.slice(1).map(([event]) => event.event)).toEqual([
       'accepted',
       'queue-full',
@@ -417,13 +415,15 @@ describe('Web public state subscriptions', () => {
       expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
     );
     old.destroy();
-    const replacementProfile = { id: 'visitor', traits: { generation: 'replacement' } };
+    const replacementProfile = completeProfile('visitor', {
+      traits: { generation: 'replacement' },
+    });
     const replacement = createRuntime({ defaults: { profile: replacementProfile } });
     const stored = vi.spyOn(window.Storage.prototype, 'setItem');
     replacement.consent(false);
     replacement.consent(true);
     expect(stored.mock.calls.filter(([key]) => key === CONSENT_CACHE_KEY)).toHaveLength(2);
-    response.resolve({ profile: { id: 'late-old-response' } });
+    response.resolve({ profile: completeProfile('late-old-response') });
     await pending;
     expect(replacement.states.profile.current).toEqual(replacementProfile);
     expect(replacement.states.personalizationRequestState.current).toEqual({ status: 'idle' });

@@ -56,7 +56,7 @@ function optimizationData(profileId: string): EventOptimizationData {
 
 function createFixture(
   options: {
-    profile?: EventProfile;
+    profile?: ReturnType<RuntimeEventBindings['getProfile']>;
     eventInterceptors?: EventInterceptors;
     consent?: ConsentState;
     allowedEventTypes?: readonly AllowedEventType[];
@@ -67,6 +67,7 @@ function createFixture(
     requireProfile?: boolean;
     analyticsOptions?: AnalyticsApiClientRequestOptions;
     personalizationOptions?: PersonalizationRequestOptions;
+    isActive?: () => boolean;
   } = {}
 ) {
   let profile = options.profile;
@@ -101,6 +102,7 @@ function createFixture(
           setProfile,
           eventInterceptors: options.eventInterceptors,
           getProfileRevision: () => revision,
+          isActive: options.isActive,
           onEventBlocked: options.onEventBlocked,
         })
       : createRuntimeEventMethods(
@@ -122,6 +124,54 @@ function createFixture(
 }
 
 describe('RuntimeEventMethods', () => {
+  it('drops a direct request disposed during its async hook before transport', async () => {
+    let active = true;
+    const run = vi.fn<EventInterceptors['run']>(async (event) => {
+      active = false;
+      return event;
+    });
+    const f = createFixture({
+      consent: { events: true },
+      profile: completeProfile('visitor'),
+      isActive: () => active,
+      eventInterceptors: { run },
+    });
+    await expect(f.methods.page()).resolves.toEqual({ accepted: false });
+    active = true;
+    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: false });
+    expect(f.upsertProfile).not.toHaveBeenCalled();
+    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+  });
+
+  it('preserves successful Personalization acceptance without publishing after request disposal', async () => {
+    let active = true;
+    const f = createFixture({ isActive: () => active });
+    f.upsertProfile.mockImplementationOnce(async () => {
+      active = false;
+      return optimizationData('late');
+    });
+    await expect(f.methods.page()).resolves.toEqual({
+      accepted: true,
+      data: optimizationData('late'),
+    });
+    expect(f.setProfile).not.toHaveBeenCalled();
+  });
+
+  it('preserves successful Analytics acceptance after request disposal', async () => {
+    let active = true;
+    const f = createFixture({
+      consent: { events: true },
+      profile: completeProfile('visitor'),
+      isActive: () => active,
+    });
+    f.sendBatchEvents.mockImplementationOnce(async () => {
+      active = false;
+      return true;
+    });
+    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: true });
+    expect(f.sendBatchEvents).toHaveBeenCalledTimes(1);
+  });
+
   describe('direct event interception', () => {
     const builder = new EventBuilder({
       channel: 'server',
@@ -393,16 +443,17 @@ describe('RuntimeEventMethods', () => {
   describe('id-only profiles', () => {
     const idOnly = { id: 'profile-1' };
 
-    it('accepts both a complete profile and an id-only profile as an event profile', () => {
+    it('requires complete profile state while accepting id-only request profiles', () => {
       expect(EventProfileSchema.safeParse(completeProfile('profile-1')).success).toBe(true);
-      expect(EventProfileSchema.safeParse(idOnly).success).toBe(true);
+      expect(EventProfileSchema.safeParse(idOnly).success).toBe(false);
+      expect(createFixture({ profile: idOnly }).methods.profile).toEqual(idOnly);
       expect(EventProfileSchema.safeParse({}).success).toBe(false);
     });
 
     it('keeps the extra fields of an incomplete profile instead of narrowing it to its id', () => {
       const stored = { id: 'profile-1', traits: { plan: 'pro' }, audiences: ['a'] };
 
-      expect(EventProfileSchema.parse(stored)).toEqual(stored);
+      expect(createFixture({ profile: stored }).methods.profile).toEqual(stored);
     });
 
     it('keeps sending Personalization events with an id-only profile', async () => {

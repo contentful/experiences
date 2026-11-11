@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
+import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import { EventBuilder, type ExperiencesHandoff } from '@contentful/experiences-runtime';
 import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,7 +56,7 @@ const flags = (events: readonly { context: { gdpr?: { isConsentGiven?: boolean }
 
 beforeEach(() => {
   vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
-    profile: { id: 'delivered' },
+    profile: profileFixture('delivered'),
   } as never);
 });
 
@@ -216,8 +218,8 @@ describe('Web prepared handoff and consent', () => {
   describe('responses that complete after consent is withdrawn', () => {
     it('does not publish or persist a profile from an online event that was in flight', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
-      const response = deferred<{ profile: { id: string } }>();
+      const runtime = createRuntime({ defaults: { profile: profileFixture('live-profile') } });
+      const response = deferred<{ profile: EventProfile }>();
       vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
         response.promise as never
       );
@@ -227,14 +229,14 @@ describe('Web prepared handoff and consent', () => {
         expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
       );
       runtime.consent({ events: false });
-      response.resolve({ profile: { id: 'late-profile' } });
+      response.resolve({ profile: profileFixture('late-profile') });
       await pending;
 
       // The request was already sent, but its response must not replace the live profile
       // or reach storage while persistence is still granted.
-      expect(runtime.states.profile.current).toEqual({ id: 'live-profile' });
+      expect(runtime.states.profile.current).toEqual(profileFixture('live-profile'));
       expect(window.localStorage.getItem('__ctfl_opt_profile__')).toBe(
-        JSON.stringify({ id: 'live-profile' })
+        JSON.stringify(profileFixture('live-profile'))
       );
       expect({
         events: runtime.states.consent.current,
@@ -244,10 +246,10 @@ describe('Web prepared handoff and consent', () => {
 
     it('does not publish delivery state or profile from a queued flush that was in flight', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
+      const runtime = createRuntime({ defaults: { profile: profileFixture('live-profile') } });
       window.dispatchEvent(new Event('offline'));
       await runtime.track({ event: 'queued' });
-      const response = deferred<{ profile: { id: string } }>();
+      const response = deferred<{ profile: EventProfile }>();
       vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
         response.promise as never
       );
@@ -257,26 +259,26 @@ describe('Web prepared handoff and consent', () => {
       );
 
       runtime.consent({ events: false });
-      response.resolve({ profile: { id: 'late-profile' } });
+      response.resolve({ profile: profileFixture('late-profile') });
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(runtime.states.profile.current).toEqual({ id: 'live-profile' });
+      expect(runtime.states.profile.current).toEqual(profileFixture('live-profile'));
       expect(runtime.states.personalizationRequestState.current.status).not.toBe('success');
     });
 
     it('still publishes responses for events sent after consent is granted again', async () => {
       seedConsent({ events: true, persistence: true });
-      const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
+      const runtime = createRuntime({ defaults: { profile: profileFixture('live-profile') } });
       runtime.consent({ events: false });
       runtime.consent({ events: true });
       vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockResolvedValue({
-        profile: { id: 'fresh-profile' },
+        profile: profileFixture('fresh-profile'),
       } as never);
 
       await runtime.track({ event: 'after-regrant' });
 
-      expect(runtime.states.profile.current).toEqual({ id: 'fresh-profile' });
+      expect(runtime.states.profile.current).toEqual(profileFixture('fresh-profile'));
     });
   });
 
