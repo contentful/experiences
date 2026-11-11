@@ -153,7 +153,7 @@ export default async function Page() {
 ### Pages Router
 
 Bind the same server policy once with `bindNextjsPagesRouterServerExperiences`
-from `/pages-router/server`; use an explicit trusted `origin` for host-independent
+from `/pages-router/server`; supply an explicit trusted `origin` for host-independent
 page URLs. Bind the browser registry and flat browser SDK options in a client
 configuration module, then export the named components once. Import
 `ExperiencesRoot` into `_app` and `Experience` into the page. Keep private server
@@ -498,8 +498,19 @@ For Pages, `/pages-router/server` exposes
 Call it from native `getServerSideProps` after application redirect/error decisions.
 Bind `config`, `request.experience`, `request.resolveOptions`,
 `consent.server`, `consent.clientDefaults` and `cookie` once; per-call
-`NextjsPagesRouterRequestOptions` provides explicit overrides and optional `origin`.
-An explicit trusted origin avoids dependence on incoming Host/forwarded headers.
+`NextjsPagesRouterRequestOptions` provides explicit overrides. A trusted `origin`
+is required on the binding or every `loadExperience` call. It must be an HTTP(S)
+origin without credentials, path, query or hash; Host and forwarding headers never
+select it. Existing integrations relying on header inference must add `origin`.
+The visible path/query comes from `ctx.req.url`, with Next data URLs normalized to
+page paths and hashes/`_rsc` removed. Rewrites retain the original visible URL,
+rather than GSSP's resolved destination URL, so server results match browser
+`asPath`. Next's native base-path/locale handling remains in effect.
+For application-owned masked navigation, pass an explicit visible path/query as
+`loadExperience(ctx, { routeKey: '/page?mode=server-only' })`; the original native
+request and `ctx.resolvedUrl` remain available to application code for action or
+destination routing. The override controls request/page context and result/handoff
+identity together.
 The helper maps the native request to one facade, evaluates one primary result,
 persists the final permitted identity at writable `ctx.res`, then destroys its facade.
 `request.composeRequest(request, primary, context)` receives the raw primary result

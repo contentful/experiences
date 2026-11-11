@@ -337,7 +337,7 @@ describe('published declarations', () => {
       NextjsAppRouterRequestRoot({ ...standaloneRoot, experienceId: 'home' });
       // @ts-expect-error Standalone analytics roots observe the SDK, not a supplied content ID.
       NextjsAppRouterRequestAnalyticsRoot({ ...standaloneRoot, experienceId: 'home' });
-      const pagesServer = bindNextjsPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: { experience: { experienceId: 'home' } } });
+      const pagesServer = bindNextjsPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, origin: 'https://example.com', request: { experience: { experienceId: 'home' } } });
       declare const pagesOptions: Parameters<typeof pagesServer.request.loadExperience>[1];
       const composedPagesOptions: typeof pagesOptions = {
         ...pagesOptions,

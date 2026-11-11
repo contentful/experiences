@@ -32,26 +32,53 @@ export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
 
 export interface NextjsPagesRouterServerExperiencesConfig extends NextjsServerExperiencesConfig {
-  /** Explicit origin, otherwise derived from the native request headers. */
+  /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */
   readonly origin?: string;
 }
 
 export type NextjsPagesRouterRequestOptions = NextjsServerRequestOverrides & {
+  /** Overrides the bound trusted origin; never inferred from request headers. */
   readonly origin?: string;
+  /** Visible path/query for application-owned masked URLs; defaults to the native request URL. */
+  readonly routeKey?: string;
   readonly cookie?: NextjsCookieConfig;
 };
 
-function pagesRequest(context: GetServerSidePropsContext, origin?: string) {
+function pagesRequest(context: GetServerSidePropsContext, origin?: string, routeKey?: string) {
+  let url: URL;
+  try {
+    url = new URL(origin ?? '');
+    if (!['http:', 'https:'].includes(url.protocol) || url.href !== `${url.origin}/`)
+      throw new TypeError();
+  } catch {
+    throw new TypeError(
+      'A Pages request requires an explicit HTTP(S) origin without credentials, path, query or hash.'
+    );
+  }
+  if (routeKey !== undefined && (!routeKey.startsWith('/') || routeKey.startsWith('//')))
+    throw new TypeError('A Pages routeKey must be an absolute path and query.');
   const headers = new globalThis.Headers();
   for (const [name, value] of Object.entries(context.req.headers)) {
     for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value])
       headers.append(name, item);
   }
-  const host = headers.get('x-forwarded-host')?.split(',')[0]?.trim() ?? headers.get('host');
-  const proto = headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ?? 'http';
-  if (!origin && !host) throw new TypeError('A Pages request requires an origin or Host header.');
-  const url = new URL(origin ?? `${proto}://${host}`);
-  const visible = new URL(context.resolvedUrl || context.req.url || '/', url);
+  // resolvedUrl names the rewrite destination. Request identity must match asPath.
+  const path = routeKey ?? context.req.url ?? context.resolvedUrl ?? '/';
+  const visible = new URL(path.startsWith('/') ? `${url.origin}${path}` : path, url);
+  if (routeKey === undefined) {
+    const dataPath = visible.pathname.match(/^\/_next\/data\/[^/]+(\/.*)\.json$/);
+    const pagePath = dataPath?.[1];
+    if (pagePath !== undefined) {
+      // Invert Next's /index asset-path escaping before removing a data URL's locale.
+      const pathname =
+        pagePath === '/index' ? '/' : pagePath.startsWith('/index/') ? pagePath.slice(6) : pagePath;
+      const locale = pathname.split('/')[1];
+      visible.pathname =
+        locale && context.locales?.includes(locale)
+          ? pathname.slice(locale.length + 1) || '/'
+          : pathname;
+    }
+  }
   url.pathname = visible.pathname;
   url.search = visible.search;
   const cookieHeader = context.req.headers.cookie;
@@ -70,9 +97,13 @@ function pagesRequest(context: GetServerSidePropsContext, origin?: string) {
   };
 }
 
-export function bindNextjsPagesRouterServerExperiences(
-  options: NextjsPagesRouterServerExperiencesConfig
-) {
+type PagesRequestArguments<Config> = Config extends { readonly origin: string }
+  ? [overrides?: NextjsPagesRouterRequestOptions]
+  : [overrides: NextjsPagesRouterRequestOptions & { readonly origin: string }];
+
+export function bindNextjsPagesRouterServerExperiences<
+  Config extends NextjsPagesRouterServerExperiencesConfig,
+>(options: Config) {
   const {
     config: _config,
     consent,
@@ -89,7 +120,7 @@ export function bindNextjsPagesRouterServerExperiences(
     nativeContext: GetServerSidePropsContext,
     overrides: NextjsPagesRouterRequestOptions = {}
   ): Promise<NextjsRequestResult> {
-    const incoming = pagesRequest(nativeContext, overrides.origin ?? origin);
+    const incoming = pagesRequest(nativeContext, overrides.origin ?? origin, overrides.routeKey);
     const context: NextjsServerRequestContext = {
       request: incoming,
       headers: incoming.headers,
@@ -136,5 +167,9 @@ export function bindNextjsPagesRouterServerExperiences(
     }
   }
 
-  return { request: { loadExperience } };
+  const loadWithOrigin: (
+    context: GetServerSidePropsContext,
+    ...args: PagesRequestArguments<Config>
+  ) => Promise<NextjsRequestResult> = loadExperience;
+  return { request: { loadExperience: loadWithOrigin } };
 }

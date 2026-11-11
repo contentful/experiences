@@ -1,5 +1,7 @@
 import type { States } from '@contentful/experiences-web';
 
+const MAX_RETAINED_ROWS = 100;
+
 // Optional presentation diagnostics, adapted from Optimization's
 // AnalyticsEventDisplay at 59add9d6ebff503b9033a59a2eee0149d4b4e925 (MIT).
 // Count notifications, not successful deliveries; group only real interval IDs.
@@ -87,8 +89,10 @@ export function createAttemptLog() {
             ? -1
             : snapshot.rows.findIndex((row) => row.intervalKey === next.intervalKey);
         const rows = [...snapshot.rows];
-        if (index < 0) rows.unshift(next);
-        else {
+        if (index < 0) {
+          rows.unshift(next);
+          if (rows.length > MAX_RETAINED_ROWS) rows.pop();
+        } else {
           const previous = rows[index];
           rows[index] = {
             ...next,

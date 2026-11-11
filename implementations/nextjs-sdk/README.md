@@ -221,7 +221,10 @@ later comparisons do not change its replay ID, route, locale or contents. Server
 plans stay server-local; Pages serializes rendered HTML, and App passes opaque server
 children. Both SSR-only update flows retain server rendering. Sidebar counts
 only actual browser attempts and real interval IDs, not server events or confirmed
-delivery. Reset removes attributed DOM synchronously before `resetUser`, removes
+delivery. The sidebar retains at most 100 recent rows while its total attempt count
+continues for the browser owner's lifetime. Retained interval updates preserve the
+row's original ID, timestamp and position; an evicted interval returns as a new row.
+Reset removes attributed DOM synchronously before `resetUser`, removes
 URL identify intent, and retains the same browser root. View keys clear nonpage
 action intent on route changes; Utilities reads initial URL intent, successful server
 Identify intent and the SDK profile. Each `NextjsRequestResult` carries its
@@ -357,7 +360,7 @@ migration remains Phase 14.
 After setup, run the focused reference regressions from the repository root:
 
 ```sh
-node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts
+node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts implementations/nextjs-sdk/src/components/attempt-log.test.ts
 ```
 
 The comparison tests use the installed Node SDK without network requests or `.env`

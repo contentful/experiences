@@ -135,7 +135,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
     consent: { server: ({ cookies }) => readConsent(cookies) },
     livePreview: () => livePreview,
     cookie: { secure: url.protocol === 'https:' },
-  }).request.loadExperience({ ...context, resolvedUrl: `${url.pathname}${url.search}` });
+  }).request.loadExperience(context, { routeKey: createNextjsRouteKey(url) });
   const props: PagesReferenceProps = { environment: browser, serverOnly, analytics, experiences };
   if (serverOnly) {
     const opaque = { ...experiences };

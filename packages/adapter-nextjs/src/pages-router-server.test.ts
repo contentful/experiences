@@ -27,7 +27,8 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
       url: '/_next/data/build/page.json?q=hello%20world',
       headers: {
         host: 'example.com',
-        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'attacker.test',
+        'x-forwarded-proto': 'http',
         cookie: 'ctfl-opt-aid=incoming',
         ...extraHeaders,
       },
@@ -38,7 +39,7 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
       setHeader: (name: string, value: string | number | readonly string[]) =>
         headers.set(name, value),
     },
-    resolvedUrl: '/page?q=hello%20world&_rsc=transport',
+    resolvedUrl: '/internal?q=hello%20world&rewriteOnly=internal',
     locale: 'de-DE',
   } as unknown as GetServerSidePropsContext;
   const request = {
@@ -83,6 +84,30 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('Pages native server response helper', () => {
+  it.each([undefined, 'ftp://example.com', 'https://example.com/path'])(
+    'rejects a missing or invalid origin before binding (%s)',
+    async (origin) => {
+      const { factory, context, bind } = setup();
+      // @ts-expect-error Also exercise missing-origin validation for untyped callers.
+      await expect(factory.request.loadExperience(context, { origin })).rejects.toThrow(
+        'explicit HTTP(S) origin'
+      );
+      expect(bind).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['/_next/data/build/index.json', '/'],
+    ['/_next/data/build/index/index/foo.json', '/index/foo'],
+    ['/_next/data/build/de-DE/index.json', '/index'],
+    ['/de-DE/foo', '/de-DE/foo'],
+  ])('normalizes %s to the visible route %s', async (url, routeKey) => {
+    const { factory, context, options } = setup();
+    context.req.url = url;
+    context.locales = ['en-US', 'de-DE'];
+    expect((await factory.request.loadExperience(context, options)).routeKey).toBe(routeKey);
+  });
+
   it('composes the raw primary on the same facade before final identity persistence', async () => {
     const { factory, context, headers, request, options, descriptor } = setup();
     const compose = vi.fn(async (facade, primary, receivedContext) => {
@@ -184,6 +209,7 @@ describe('Pages native server response helper', () => {
       ...scope,
       delivery: { accessToken: 'server-secret' },
       config: { components: {} },
+      origin: 'https://example.com',
       locale: 'fr-FR',
       consent: { server: consent },
       request: { experience: { experienceId: 'bound' } },
