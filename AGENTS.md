@@ -36,6 +36,7 @@ experiences/
 │   ├── web/                  # @contentful/experiences-web (customer-facing Web SDK)
 │   ├── live-preview/         # @contentful/experiences-live-preview (customer-facing, optional)
 │   ├── adapter-react/        # @contentful/experiences-react (customer-facing)
+│   ├── adapter-nextjs/       # @contentful/experiences-nextjs (customer-facing)
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 │   └── adapter-angular/      # @contentful/experiences-angular (customer-facing)
 ├── examples/                # Customer-facing example apps
@@ -52,7 +53,7 @@ experiences/
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   ├── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
 │   ├── react-sdk/           # React/Vite runtime reference, managed through Nx
-│   └── nextjs-sdk/          # Next.js server reference, managed through Nx
+│   └── nextjs-sdk/          # Next.js App + server reference, managed through Nx
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
@@ -84,6 +85,7 @@ and the app README for the package boundary, local `.env`, and lifecycle command
 | `packages/web`             | `@contentful/experiences-web`          | **Customer-facing.** Web SDK with browser-owned locale/context state, shared transport capabilities, and direct event operations. |
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                          |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                   |
+| `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App request families, built-in roots and React rendering via explicit subpaths.                              |
 | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
 | `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Insights handlers and explicit Contentful maintenance tools.               |
@@ -158,7 +160,30 @@ Snapshot runtimes expose inert undefined preview state; other states are unchang
 
 React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
-Next integration will reuse the same framework-neutral SDK owners. Registry/shared ownership, shared page
+Next integration reuses the same framework-neutral SDK owners. Its normal workflow
+automatically fetches, resolves and manages one primary Experience. The App
+request family exposes `request.loadExperience`; server `request.Experience` always
+uses `ServerExperienceRenderer`. There is no hydration or navigation policy flag.
+Bind `config` and `resolveOptions` once. Server roots/renderers share a memoized result.
+Follow the canonical [rendering compositions](./packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and [server preparation contract](./packages/adapter-nextjs/README.md#router-bindings)
+for document/RSC evaluation, page events, replay, prefetch and preview ownership.
+`consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
+browser defaults and response identity policy distinct. `request.pagePayload`
+travels as `result.initialPagePayload`. The complete request result travels
+without descriptor/seed/payload overlays; preserve its `requestId` history guard.
+Built-in browser roots inherit scope and locale, but need explicit browser
+credentials or a trusted authenticated proxy. Existing Runtime Delivery
+configuration remains required even for analytics-only browser use. Advanced
+callbacks/preview setup stay in a client module. `composeRequest` is an explicit
+application escape hatch after every actual server primary fetch, including RSC,
+before cleanup; diagnostic multiple-fetch
+ordering, identity and results stay application-owned. Add no declarative
+multi-prefetch/results, reconciliation, resource cache, controller or barrier.
+Optional React Router/TanStack integration remains deferred. The current
+`examples/nextjs` has not migrated to managed APIs; its retired hooks are not
+current guidance.
+Registry/shared ownership, shared page
 initialization, request memoization, applicable handoff envelopes and attribution
 remain required. Managed React content/root sequencing belongs to phase 7, Next
 utilities to phase 9 and router request families to phase 10; no complete-plan
@@ -299,12 +324,14 @@ recorded in the implementation plan.
 
 ## Parity with the Optimization SDK
 
-Optimization (`contentful/optimization`) is the behavioral reference for submission APIs, queue admission, completion semantics, lifecycle handling, retry and backoff, and configuration. Treat parity as a maintainability requirement: port a fix by following the corresponding Optimization contract, not by adding an alternative result type, fallback or configuration convention. Read the reference at a pinned commit, not a stale local checkout.
+Optimization (`contentful/optimization`) is the behavioral reference for submission APIs, queue admission, completion semantics, lifecycle handling, retry and backoff, and configuration. Treat parity as a maintainability requirement: port a fix by following the corresponding Optimization contract, not by adding an alternative result type, fallback or configuration convention. Fetch the named reference branch before comparison and read its current remote-tracking source, not a stale local checkout.
 
 The active parity baseline is Optimization PR #549,
-`restore/runtime-preview-after-release`, at committed source
-`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`.
-Use this baseline rather than main or the historical `59add9d` pin.
+`restore/runtime-preview-after-release`. In the Optimization checkout, run
+`git fetch origin restore/runtime-preview-after-release` and read
+`git show origin/restore/runtime-preview-after-release:<path>`.
+Record the fetched commit when reporting evidence; use this current branch source
+rather than main or an older frozen commit.
 Web state and subscription mechanics follow that baseline. Web owns module signals backed by
 `@preact/signals-core` (`^1.13.0`) and `es-toolkit` (`^1.46.0`), and reactive
 persistence, consent, and connectivity effects. Its readonly `states: States`
@@ -785,7 +812,7 @@ Next regenerates it on every `next build`. It's in `.gitignore`. If you see lint
 
 ### Nx cache + tsup builds
 
-`build.yaml` saves `packages/*/dist` to a job-scoped cache; `check.yaml` and `release.yaml` restore it. **The cache key is `build-cache-${run_id}-${run_attempt}`** — meaning each CI run is its own cache. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Don't change the cache path unless you also update both restore steps.
+`build.yaml` saves `packages/*/dist` to a run-scoped cache; `check.yaml`, `release.yaml` and `prerelease.yaml` restore it. **The cache key is `build-cache-${run_id}`** — retries of the same run reuse its completed build, including when only a failed downstream job reruns. Across runs, Nx's local content-hash cache (`.nx/`) handles incremental work. Keep the cache path and key consistent across the save and all restore steps.
 
 ### Publishing
 

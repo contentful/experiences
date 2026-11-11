@@ -30,6 +30,7 @@ export function ExperiencesPageSequence({
   routeKey,
   buildPagePayload,
   beforeInitialPage,
+  pageMode,
   handoff,
   resetRevision,
   onReset,
@@ -37,6 +38,7 @@ export function ExperiencesPageSequence({
   routeKey: string;
   buildPagePayload?: CurrentPageOptions['buildPayload'];
   beforeInitialPage?: BeforeInitialPageOptions;
+  pageMode?: 'analytics';
   handoff?: ExperiencesHandoff;
   resetRevision: object;
   onReset: () => void;
@@ -213,19 +215,23 @@ export function ExperiencesPageSequence({
       previous = consent;
       if (
         granted &&
-        (requestContext.pageIntent ||
+        (pageMode === 'analytics' ||
+          requestContext.pageIntent ||
           (latest.current.beforeInitialPage && latest.current.buildPagePayload))
       )
         emitPage();
     });
-    if (latest.current.beforeInitialPage && latest.current.buildPagePayload) {
+    if (
+      pageMode === 'analytics' ||
+      (latest.current.beforeInitialPage && latest.current.buildPagePayload)
+    ) {
       emitPage();
     }
     return () => {
       disposed = true;
       subscription.unsubscribe();
     };
-  }, [isLive, sdk, routeKey, handoff, requestContext, owner]);
+  }, [isLive, sdk, routeKey, handoff, requestContext, owner, pageMode]);
 
   return (
     <ExperienceRequestContext.Provider value={requestContext}>

@@ -23,7 +23,7 @@ const optionals = {
   profile: ['jurisdiction'],
   session: ['id'],
   profilePage: ['title'],
-  cache: ['key'],
+  cache: ['key', 'tags'],
   replay: ['locale'],
   context: ['app', 'gdpr', 'locale', 'location', 'page', 'screen', 'userAgent'],
   page: ['title', 'hash', 'width', 'height'],
