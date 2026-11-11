@@ -2,10 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from 'react';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import type {
-  FetchExperienceOptions,
-  FetchResolveOptions,
-} from '@contentful/experiences-web';
+import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-web';
 import { ExperiencesContext } from '../runtime/experiences-context.js';
 import { useExperienceRequestContext } from '../runtime/experience-request-context.js';
 import { useObservableState } from '../runtime/use-experiences-state.js';
@@ -25,8 +22,7 @@ export interface ExperienceNotifications {
   readonly onExperienceError?: (error: Error, result: ManagedExperienceResult) => void;
 }
 
-export interface ManagedExperienceOptions
-  extends FetchExperienceOptions, ExperienceNotifications {
+export interface ManagedExperienceOptions extends FetchExperienceOptions, ExperienceNotifications {
   readonly config: Config;
   readonly initialPlan?: PortableRenderPlan;
   /** Terminal error for this descriptor; binds preview without a startup refetch. */

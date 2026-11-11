@@ -10,10 +10,7 @@ import type {
   ExperiencesHandoff,
   WebExperiencesRuntime,
 } from '@contentful/experiences-web';
-import type {
-  FetchExperienceOptions,
-  FetchResolveOptions,
-} from '@contentful/experiences-runtime';
+import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { useExperiencesContext } from './experiences-context.js';
 import { ExperienceRequestContext } from './experience-request-context.js';

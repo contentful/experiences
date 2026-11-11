@@ -82,10 +82,7 @@ export function sourceSdk() {
   }[] = [];
   const fetchExperience = vi
     .fn<
-      (
-        request: FetchExperienceOptions,
-        resolve: FetchResolveOptions
-      ) => Promise<PortableRenderPlan>
+      (request: FetchExperienceOptions, resolve: FetchResolveOptions) => Promise<PortableRenderPlan>
     >()
     .mockResolvedValue(plan());
   const subscribeToPreview = vi.fn<ContentfulExperiences['subscribeToPreview']>(
