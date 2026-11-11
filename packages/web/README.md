@@ -310,8 +310,10 @@ Independent profile-only reads with a concrete profile can still run concurrentl
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
 [documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
-Event-bearing XDA forces XPAPI preflight and does not commit events or
-profile changes. Local adoption and storage do not finalize the returned ID.
+The SDK validates and forwards optional `personalization.preflight` without
+selecting a default. Earlier service checks observed noncommitting evaluation;
+backend defaults and override behavior have not been reverified with dev.13.
+Local adoption and storage do not prove that the returned ID is finalized.
 Successful submission commits against the selected live target, which may differ
 from the XDA continuation ID; admission and generic SDK success are not
 proof of commit. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization).

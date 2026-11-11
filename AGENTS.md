@@ -279,9 +279,11 @@ By-ID fetch options can also carry first-class personalization with a profile id
 and existing type-tagged builder arguments or raw built events; Runtime/Node/Web
 consent-gate inputs and build only arguments once. Client accepts raw built events
 only and maps them to XDA's extension body, and Node
-proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. Event-bearing XDA always invokes XPAPI
-with `preflight: true`, with no override; it commits neither events nor profile
-creation/mutation. Newly returned IDs are provisional, and profile-only XDA uses
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`; the
+SDK validates and forwards it without selecting a default. Earlier service checks
+observed noncommitting XPAPI preflight; default and override behavior have not
+been reverified with dev.13. Treat newly returned IDs as provisional until
+profile finalization is verified. Profile-only XDA uses
 XPAPI GET internally even when SDK-to-XDA uses POST. Node/Web auto-adopt returned
 IDs locally; adoption does not finalize them. See the canonical
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
@@ -309,8 +311,9 @@ the Node `fetchExperienceForHandoff` producer with `{ routeKey }` as its third
 argument, returning full handoff plus optional plan/error. Web/React optionally
 consume explicitly supplied server handoffs, independently of display.
 
-SSR/CSR XDA events remain uncommitted as a tolerated service bug awaiting upstream
-force-commit support. Add no SDK workaround or current force flag.
+Earlier service checks observed uncommitted SSR/CSR XDA events. Generated
+`personalization.preflight` support does not establish backend commitment; verify
+the deployed contract before changing integration policy. Add no SDK workaround.
 Same-ID Retry is ordinary event-free fetch without builders, event hooks or replay;
 accepted incoming replay delivery retry remains queue-owned. Later reference
 comparison IDs also use ordinary event-free fetch, without an SDK multi-Experience
@@ -318,11 +321,11 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 Replay is exercised by Node only as the backend of an actual hybrid transfer;
 ordinary Node SSR integrations use normal fetch without producing or consuming
-replay. After the upstream fix, ordinary SSR/CSR events are expected to commit
-through XDA, while hybrid server evaluation retains preflight and browser
-commitment. Any flag or automatic selection follows the actual upstream API and
-supported integration patterns; no override currently exists. The SDK will not
-release until all tracked XDA issues affecting the supported integrations are
+replay. The intended ordinary SSR/CSR flow commits through XDA, while hybrid
+server evaluation retains preflight and browser commitment. The generated
+`personalization.preflight` option is forwarded; this adaptation adds no default
+or automatic mode selection. Integration policy follows verified upstream behavior.
+The SDK will not release until all tracked XDA issues affecting the supported integrations are
 resolved and the corrected service behavior is verified.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime.
@@ -493,10 +496,11 @@ Retained differences:
 - The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through XPAPI.
   Experiences retains `fetchExperienceForHandoff` because XDA must evaluate the
   consumer-supplied batch and select content; XPAPI remains actual commit transport.
-- SSR/CSR XDA-carried events remain uncommitted pending upstream force-commit
-  support. The content source requires XDA evaluation; the SDK adds no commit
-  workaround or current force flag. Only actual hybrid server-supplied browser
-  replay commits. This difference does not establish full commit parity.
+- Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
+  generated `personalization.preflight` option is now forwarded, but deployed
+  commitment behavior must be verified. The content source requires XDA evaluation;
+  the SDK adds no commit workaround. Hybrid server-supplied browser replay remains
+  an explicit commit path. This difference does not establish full commit parity.
 - The pin retains only current Web initialization identity. Experiences retains
   accepted replay identity across newer initialization: serialized A after B is
   refused without state/event republication or recommit for page/nonpage batches.
