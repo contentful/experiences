@@ -26,6 +26,7 @@ import {
 } from './live-preview.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
+const RequestResultContext = createContext<{ result?: NextjsRequestResult } | undefined>(undefined);
 
 /** One stable root excludes only restored original bootstrap inputs after departure. */
 export function NextjsInitialDataBoundary({
@@ -56,16 +57,18 @@ export function useNextjsInitialData(requestId: string | undefined) {
   return useContext(InitialDataContext)(requestId);
 }
 
-/** Request presentation adopts the whole descriptor and its matching startup outcome. */
-export function useNextjsRequestOptions(result: NextjsRequestResult) {
-  const canAdopt = useNextjsInitialData(result.requestId);
-  const initialError = useMemo(
-    () => (result.contentError === undefined ? undefined : new Error(result.contentError)),
-    [result.contentError]
-  );
+/** Explicit results override inheritance; history guards apply only to startup seeds. */
+export function useNextjsRequestOptions(supplied?: NextjsRequestResult) {
+  const inherited = useContext(RequestResultContext);
+  if (supplied === undefined && inherited === undefined)
+    throw new Error('request.Experience requires a result prop or a request ExperiencesRoot.');
+  const result = supplied ?? inherited?.result;
+  const canAdopt = useNextjsInitialData(result?.requestId);
+  const error = result?.contentError;
+  const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
   return {
-    ...result.experience,
-    initialPlan: canAdopt ? result.plan : undefined,
+    result,
+    initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
   };
 }
@@ -207,28 +210,30 @@ export function NextjsRequestPresentation({
     [ready, builder, initialPagePayload, buildRoutePayload]
   );
   return (
-    <Root
-      {...props}
-      {...(waiting ? { beforeInitialPage: undefined } : {})}
-      routeKey={routeKey}
-      previewUrl={previewUrl}
-      livePreview={
-        livePreview && 'enabled' in livePreview && result
-          ? { ...livePreview, experienceId: result.experience.experienceId }
-          : livePreview
-      }
-      handoff={
-        result
-          ? ready || typeof window === 'undefined'
-            ? matchingResult?.handoff
-            : undefined
-          : props.handoff
-      }
-      handoffKey={result ? matchingResult?.requestId : props.handoffKey}
-      // Returning undefined from a builder still permits Web's empty page fallback.
-      buildPagePayload={waiting || pageFree ? undefined : buildPagePayload}
-      initialPagePayload={undefined}
-      pageMode={waiting || pageFree ? undefined : props.pageMode}
-    />
+    <RequestResultContext.Provider value={{ result }}>
+      <Root
+        {...props}
+        {...(waiting ? { beforeInitialPage: undefined } : {})}
+        routeKey={routeKey}
+        previewUrl={previewUrl}
+        livePreview={
+          livePreview && 'enabled' in livePreview && result
+            ? { ...livePreview, experienceId: result.experience.experienceId }
+            : livePreview
+        }
+        handoff={
+          result
+            ? ready || typeof window === 'undefined'
+              ? matchingResult?.handoff
+              : undefined
+            : props.handoff
+        }
+        handoffKey={result ? matchingResult?.requestId : props.handoffKey}
+        // Returning undefined from a builder still permits Web's empty page fallback.
+        buildPagePayload={waiting || pageFree ? undefined : buildPagePayload}
+        initialPagePayload={undefined}
+        pageMode={waiting || pageFree ? undefined : props.pageMode}
+      />
+    </RequestResultContext.Provider>
   );
 }

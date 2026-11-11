@@ -296,17 +296,21 @@ describe('App Router request family', () => {
     expect(doubles.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the built-in root with explicit browser transport and shares the primary with rendering', async () => {
+  it.each([false, true])('shares the primary (injected=%s)', async (injected) => {
+    const ClientExperience = () => null;
     const browser = { delivery: { host: 'https://example.com/api/delivery' } };
     const cookie = { expires: 7, path: '/scope' };
-    const binding = bindNextjsAppRouterServerExperiences({
-      ...config,
-      browser,
-      cookie,
-      consent: { ...config.consent, clientDefaults: { consent: false } },
-    });
-    const root = await binding.request.ExperiencesRoot({});
-    const presentation = await binding.request.Experience({});
+    const binding = bindNextjsAppRouterServerExperiences(
+      {
+        ...config,
+        browser,
+        cookie,
+        consent: { ...config.consent, clientDefaults: { consent: false } },
+      },
+      { request: injected ? { Experience: ClientExperience } : {} }
+    );
+    const root = await binding.request.ExperiencesRoot({ children: 'Content' });
+    const presentation = await binding.request.Experience({ as: 'section' });
     const analytics = await binding.request.ExperiencesAnalyticsRoot({});
     expect(root.type).toBe(NextjsAppRouterRequestRoot);
     expect(analytics.type).toBe(NextjsAppRouterRequestAnalyticsRoot);
@@ -318,14 +322,21 @@ describe('App Router request family', () => {
       defaults: { consent: false },
     });
     expect(root.props).not.toHaveProperty('delivery');
-    expect(root.props.result?.plan).toEqual(presentation?.props.experience);
+    expect(presentation?.type).toBe(injected ? ClientExperience : ServerExperienceRenderer);
+    expect(presentation?.props.as).toBe('section');
+    if (injected) expect(presentation?.props.result).toEqual(root.props.result);
+    else expect(presentation?.props.experience).toEqual(root.props.result?.plan);
     expect(analytics.props.result).not.toHaveProperty('plan');
-    expect(root.props.children).toMatchObject({
-      props: {
-        children: [{ type: ServerPreviewRefresh, props: { experienceId: 'home' } }, undefined],
-      },
-    });
+    if (injected) expect(root.props.children).toBe('Content');
+    else
+      expect(root.props.children).toMatchObject({
+        props: {
+          children: [{ type: ServerPreviewRefresh, props: { experienceId: 'home' } }, 'Content'],
+        },
+      });
     expect(doubles.transfer).toHaveBeenCalledTimes(1);
+    expect(doubles.destroy).toHaveBeenCalledTimes(1);
+    expect((await binding.request.loadExperience()).plan).toBe(plan);
   });
 
   it('allows each root override independently and requires browser config only for a built-in root', async () => {
@@ -384,11 +395,22 @@ describe('App Router request family', () => {
   it('preserves producer-returned content errors and their usable handoff', async () => {
     const error = new Error('resolver failed');
     doubles.transfer.mockResolvedValue({ error, handoff });
-    const binding = bindNextjsAppRouterServerExperiences(config);
+    const ClientExperience = () => null;
+    const binding = bindNextjsAppRouterServerExperiences(config, {
+      request: { Experience: ClientExperience },
+    });
     const result = await binding.request.loadExperience();
     expect(result.error).toBe(error);
     expect(result.handoff).toEqual(handoff);
     expect(result.contentError).toBe('Experience content unavailable.');
+    const presentation = await binding.request.Experience({});
+    expect(presentation?.type).toBe(ClientExperience);
+    expect(presentation?.props.result).toMatchObject({
+      requestId: result.requestId,
+      handoff,
+      contentError: result.contentError,
+    });
+    expect(presentation?.props.result).not.toHaveProperty('error');
   });
 
   it.each([

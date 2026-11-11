@@ -90,14 +90,14 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
     );
   }
 
-  function RequestExperience({ result, ...props }: NextjsRequestExperienceProps) {
+  function RequestExperience({ result: supplied, ...props }: NextjsRequestExperienceProps) {
     const owner = useContext(PagesRequestRouteContext);
     const router = useRouter();
     const routeKey = owner?.routeKey ?? createNextjsRouteKey(router.asPath);
     const ready = owner?.ready ?? router.isReady;
-    const initial = useNextjsRequestOptions(result);
-    return ready && result.routeKey === routeKey ? (
-      <react.Experience {...props} {...initial} />
+    const { result, ...initial } = useNextjsRequestOptions(supplied);
+    return ready && result?.routeKey === routeKey ? (
+      <react.Experience {...props} {...result.experience} {...initial} />
     ) : (
       <react.Experience {...props} experience={undefined} />
     );

@@ -99,14 +99,17 @@ There are three compositions, selected by the components you render:
 
 1. **Server evaluation and rendering:** use the server binding's
    `request.ExperiencesRoot` and `request.Experience` as above. The bound
-   `Experience` always uses `ServerExperienceRenderer`. Use
+   `Experience` uses `ServerExperienceRenderer` unless a client presentation is
+   explicitly injected as described below. Use
    `request.ExperiencesAnalyticsRoot` for opaque server children with browser
    analytics; it retains the handoff while omitting the plan from browser props.
    Content and preview updates use server round-trips. Analytics-only browser
    owners still require Delivery configuration under the Runtime constructor contract.
-2. **Server evaluation and browser-managed presentation:** call the server's
-   `request.loadExperience()`, then pass the same complete result to a client
-   binding's `request.ExperiencesRoot` and `request.Experience`. The supplied plan
+2. **Server evaluation and browser-managed presentation:** inject the client
+   request components into the server binding for automatic loading, serialization
+   and result forwarding. Alternatively, call `request.loadExperience()` and pass
+   the complete serialized result to the client request root. Its `Experience`
+   inherits that result, or accepts an explicit `result` prop. The supplied plan
    survives activation without a startup Web fetch. Update the root and presentation
    result together on navigation; no duplicate browser fetch is needed.
 3. **Web evaluation and presentation:** render a client binding's
@@ -133,6 +136,33 @@ const binding = bindNextjsAppRouterClientExperiences({
 });
 export const { ExperiencesRoot, Experience } = binding.request;
 ```
+
+For automatic forwarding, pass these client components to the server binder.
+`serverOptions` contains the same server configuration shown above:
+
+```tsx
+// lib/experience-server.tsx — optional browser-managed presentation.
+import 'server-only';
+import { bindNextjsAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
+import { serverOptions } from './server-config';
+import { ExperiencesRoot as ClientRoot, Experience as ClientExperience } from './experience-client';
+
+export const binding = bindNextjsAppRouterServerExperiences(serverOptions, {
+  request: { ExperiencesRoot: ClientRoot, Experience: ClientExperience },
+});
+export const { ExperiencesRoot, Experience } = binding.request;
+```
+
+The page can now render `<ExperiencesRoot><Experience /></ExperiencesRoot>` using
+these server exports. Both components share one server evaluation. The injected
+`Experience` receives the complete projected result, including content failures;
+the ordinary server-rendered path remains available by omitting the injection.
+Configure renderer callbacks and DOM handlers in the client module; props passed
+through the server convenience component, including metadata, must be serializable.
+Navigation continues to use fresh server results; this option does not transfer
+loading or navigation to Web.
+
+For manual composition, the raw loader and explicit projection remain available:
 
 ```tsx
 // app/page.tsx — alternative to the default server-rendered composition above.
@@ -214,8 +244,8 @@ export const getServerSideProps: GetServerSideProps<{ result: NextjsRequestResul
   return { props: { result } };
 };
 
-export default function Page({ result }: { result: NextjsRequestResult }) {
-  return <Experience result={result} />;
+export default function Page() {
+  return <Experience />;
 }
 ```
 
@@ -235,7 +265,11 @@ export default function App({ Component, pageProps }: AppProps) {
 
 App hosts project raw results with `serializeNextjsRequestResult`; Pages GSSP
 returns JSON-safe results directly. Pass each complete result, including its
-`requestId`, to the client request root and presentation without overlays.
+`requestId`, to the client request root. Its request `Experience` inherits the
+nearest root's result; an explicit `result={result}` takes precedence for manual
+composition. An empty request root keeps inherited presentation inactive until
+a result arrives. Omitting both the root and an explicit result throws a
+configuration error. Preserve complete results without overlays.
 Private configuration, raw errors and unapproved metadata remain server-local.
 
 App server roots share render-local memoization. Place roots that need fresh
@@ -301,13 +335,14 @@ Add `livePreview` and `preview: { accessToken: process.env.CONTENTFUL_PREVIEW_TO
 to the existing App server configuration. Set an explicitly browser-visible
 `browser.preview` token separately; the Preview Session helper requires
 one even when Delivery uses a trusted proxy. Use the server load/serialization and
-client request components shown in the browser-managed composition above; server
+client request components shown in the browser-managed composition above, or
+inject them for automatic forwarding. Without injection, server
 `request.Experience` retains `ServerExperienceRenderer`. Keep context-forwarding
 middleware on the request-aware routes.
 
 For Pages, add the same `livePreview` and private Preview token to the server
 binder; add `livePreview` and the separately designated browser Preview token to
-`bindNextjsPagesRouterExperiences`. GSSP, `_app` and `<Experience result={result} />`
+`bindNextjsPagesRouterExperiences`. GSSP, `_app` and `<Experience />`
 stay as shown above. Both server families carry only loader-free configuration
 in the existing result; browser roots retain their client loader and derive the
 primary ID and nonempty trimmed `preview_session_id` from the descriptor and route.
@@ -530,18 +565,21 @@ The explicit server `Experience` accepts a supplied plan or a public/static
 `experienceId` with explicit cache policy; it reads no framework context. Existing
 explicit Node host helpers remain available for custom request boundaries.
 Server functions and credentials stay outside client props.
-The server request `Experience` uses `ServerExperienceRenderer`; its renderer cannot
-be replaced by injecting a client `Experience` into the server binding. Root overrides
-remain available. Browser renderer callbacks, DOM event handlers and custom container
-components belong in the client binding. Both server `Experience` components support
-server renderer callbacks. Custom root overrides own their preview refresh observer;
+The server request `Experience` defaults to `ServerExperienceRenderer`. The optional
+second argument's `request.Experience` selects browser-managed presentation and
+automatically forwards the serialized result. Root overrides remain available.
+Browser renderer callbacks, DOM event handlers and custom container components
+belong in the client binding. Server-rendered `Experience` components retain server
+renderer callbacks; the injected request path excludes them. Custom root overrides own their preview refresh observer;
 use the client binding's `request.ExperiencesAnalyticsRoot` when that root wraps
-server-rendered content. Built-in server roots install their own matching observer.
+server-rendered content. Built-in server roots install their own matching observer
+for server rendering and omit it when a client presentation is injected. Analytics
+roots retain their server refresh behavior.
 
 Both client bindings expose ordinary `ExperiencesRoot`, `ExperiencesAnalyticsRoot`
 and managed `Experience` for Web-owned flows, plus `ExperienceRenderer` and
 `useManagedExperience`. Their separate `request` family exposes roots and an
-`Experience` accepting the complete server `result`; top-level `Experience` has
+`Experience` accepting or inheriting the complete server `result`; top-level `Experience` has
 no result overload. Supplied plans bind preview without a startup fetch.
 Configure callbacks, function-valued options and preview in a client module.
 While a supplied result is missing or mismatches the committed route, request

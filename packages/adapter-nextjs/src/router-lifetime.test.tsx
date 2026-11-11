@@ -1,7 +1,7 @@
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { NextjsRequestPresentation } from './router-lifetime.js';
+import { NextjsRequestPresentation, useNextjsRequestOptions } from './router-lifetime.js';
 import type { BoundNextjsExperiencesRootProps, NextjsRequestResult } from './request-result.js';
 
 const initialPagePayload = { properties: { path: '/server' } };
@@ -27,6 +27,30 @@ const result: NextjsRequestResult = {
 };
 
 describe('Next request presentation inputs', () => {
+  it('inherits the whole result, gives explicit results precedence and requires a root otherwise', () => {
+    const explicit = { ...result, requestId: 'explicit' };
+    const observed: (NextjsRequestResult | undefined)[] = [];
+    function Probe() {
+      observed.push(useNextjsRequestOptions().result, useNextjsRequestOptions(explicit).result);
+      return null;
+    }
+    renderToStaticMarkup(
+      <NextjsRequestPresentation
+        result={result}
+        routeKey="/page"
+        Root={({ children }) => <>{children}</>}
+        buildRoutePayload={() => undefined}
+      >
+        <Probe />
+      </NextjsRequestPresentation>
+    );
+    expect(observed[0]).toBe(result);
+    expect(observed[1]).toBe(explicit);
+    expect(() => renderToStaticMarkup(<Probe />)).toThrow(
+      'requires a result prop or a request ExperiencesRoot'
+    );
+  });
+
   it.each([
     'override',
     'configured',

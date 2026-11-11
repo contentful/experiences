@@ -145,11 +145,11 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     );
   }
 
-  function RequestExperience({ result, ...props }: NextjsRequestExperienceProps) {
+  function RequestExperience({ result: supplied, ...props }: NextjsRequestExperienceProps) {
     const { routeKey } = useNextAppAutoPageInputs();
-    const initial = useNextjsRequestOptions(result);
-    return result.routeKey === routeKey ? (
-      <Experience {...props} {...initial} />
+    const { result, ...initial } = useNextjsRequestOptions(supplied);
+    return result?.routeKey === routeKey ? (
+      <Experience {...props} {...result.experience} {...initial} />
     ) : (
       <Experience {...props} experience={undefined} />
     );

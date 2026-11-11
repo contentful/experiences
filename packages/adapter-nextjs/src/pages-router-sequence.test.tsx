@@ -141,7 +141,7 @@ describe('Pages managed request sequence', () => {
         sdk={sdk}
         result={experiences}
       >
-        <Experience key={experiences.routeKey} result={experiences}>
+        <Experience key={experiences.routeKey}>
           {(result) => <output>{result.status}</output>}
         </Experience>
       </ExperiencesRoot>
@@ -251,19 +251,24 @@ describe('Pages managed request sequence', () => {
     const { sdk, fetchExperience } = sdkFixture();
     const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
     router.isReady = false;
+    let result: NextjsRequestResult | undefined;
     const tree = () => (
       <NextjsPagesRouterRequestRoot
         spaceId="space"
         environmentId="master"
         browser={{ delivery: { accessToken: 'browser-token' } }}
         sdk={sdk}
-        result={startup}
+        result={result}
       >
-        <bound.request.Experience result={startup}>
+        <bound.request.Experience>
           {(value) => <output>{value.status}</output>}
         </bound.request.Experience>
       </NextjsPagesRouterRequestRoot>
     );
+    await act(async () => root.render(tree()));
+    expect(container.textContent).not.toBe('success');
+    expect(fetchExperience).not.toHaveBeenCalled();
+    result = startup;
     await act(async () => root.render(tree()));
     expect(container.textContent).not.toBe('success');
     expect(fetchExperience).not.toHaveBeenCalled();

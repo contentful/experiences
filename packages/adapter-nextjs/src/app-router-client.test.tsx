@@ -222,7 +222,7 @@ describe('App committed route inputs', () => {
       return (
         <ExperiencesRoot sdk={sdk} result={result}>
           <Actions />
-          <Experience key={routeKey} result={result}>
+          <Experience key={routeKey}>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
           </Experience>
         </ExperiencesRoot>
