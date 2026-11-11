@@ -145,19 +145,26 @@ tracking, embedded fetch personalization and handoff preparation/replay before e
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
 Static preview without a Session ID requires explicit opt-in; raw `sdk.api` and free fetches remain outside it.
 
-Web owns one Preview Session source/connection and publishes the normal SDK
-signal `states.preview: Observable<PreviewState | undefined>`. It is undefined
-during initialization or when disabled; otherwise it carries optional
-Experience/session IDs, raw `ExperiencePayload` data, error, `live`/`static`/undefined
-status and content revision. `fetchExperience` loads initial/refresh snapshots for
-matching bound IDs. `subscribeToPreview(experienceId, FetchResolveOptions,
+Each SDK Preview context has one active session and one Web connection. The
+single `preview` configuration combines transport credentials, session settings
+and optional `createClient` factory from the Preview package; Web defaults the session from the standard
+`preview_session_id` query parameter, with an optional `preview.sessionId` override.
+Renderers and fetches use normal Experience IDs.
+The package returns one current Experience payload, not a multi-Experience source.
+Node/Web route snapshots and updates by the reported `payload.sys.id`; only
+matching requested/subscribed IDs receive session content, and missing IDs are
+never guessed or broadcast. Other IDs retain their ordinary source.
+`states.preview` exposes shared raw session state.
+`subscribeToPreview(experienceId, FetchResolveOptions,
 listener): Subscription` emits `PreviewUpdate` with optional plan/error, which can
 coexist; status comes from `states.preview`. The binding never fetches snapshots
 or owns per-view state. Web shares in-flight fetching/resolution and owns
 mode/event/profile/lifetime policy; views retain presentation state. Do not add
-SDK per-resource state. `replaceLivePreview` switches sessions. SSR-only adapters
+SDK per-view state. View subscriptions detach independently; SDK destruction
+closes the one context connection. Changing session replaces the context; React
+and Next handle their owned SDK replacement without a consumer key. SSR-only adapters
 observe matching content revisions for server refresh without browser resolution.
-Snapshot runtimes expose inert undefined preview state; other states are unchanged.
+Snapshot runtimes expose inert undefined Preview state; other states are unchanged.
 
 React managed integration uses Optimization's source/presentation controllers
 with the thin binding.
@@ -182,13 +189,13 @@ Built-in browser roots inherit scope and locale, but need explicit browser
 credentials or a trusted authenticated proxy. Existing Runtime Delivery
 configuration remains required even for analytics-only browser use. Advanced
 callbacks/preview setup stay in a client module. Next's managed Live Preview
-configuration is `livePreview: { enabled, loadImplementation }` in server and
-client bindings. Request results carry loader-free configuration; roots infer the primary Experience
+configuration is one `preview` object in server and
+client bindings. Request results carry factory-free configuration; roots infer the primary Experience
 and URL session from existing descriptor/route data;
-owned SDKs switch sessions with `replaceLivePreview` and are recreated on preview
+owned SDKs are recreated on session changes and preview
 mode entry/exit below the stable request-history boundary. Consumers need no
 preview-specific wrapper, hook or key. Explicit browser credentials remain
-separate from server credentials; optional-package imports stay lazy. The
+separate from server credentials; optional-package imports may stay lazy. The
 initializer/resolver path remains available; injected SDK lifetime stays caller-owned. `composeRequest` is an explicit
 application escape hatch after every actual server primary fetch, including RSC and Pages data,
 before cleanup; diagnostic multiple-fetch

@@ -154,16 +154,20 @@ package is installed from its unchanged artifact. Preview activates only when
 URL. The SDK uses the resolved primary Experience ID for its managed session.
 This diagnostic application can select its primary descriptor from local settings
 or `preview_experience_id`; the SDK does not interpret that override itself.
+The URL session belongs to the SDK execution context. Ordinary client actions and
+diagnostic comparisons use the same fetch and renderer arguments as Delivery;
+session updates reach only presentations matching the raw payload's Experience ID.
 `LIVE_PREVIEW_SESSION_ID` is retained in local `.env` only for convenient copying;
 application/build code never reads it. Both preview fields are blank in
 `.env.example`. Missing/empty session parameters and a falsy flag keep the request
 ordinary, even with a nonempty session parameter in the URL. The bound request
 receives an explicit `isPreview: false` in those cases, retaining ordinary event
 handling. The browser owner and sidebar use the same explicit policy, subject to normal
-consent and identity requirements. Active preview supplies a lazy implementation loader that imports the
-public Preview package. Node owns policy and snapshot loading through ordinary
+consent and identity requirements. Active browser preview supplies the public Preview package’s synchronous
+`createLivePreviewClient` factory through `preview.createClient`. Node owns policy and snapshot loading through ordinary
 `fetchExperience`. Matching session requests omit ordinary locale/source-map fetch
-options. Session transport uses the installed helper without a custom fetch wrapper.
+options. Session snapshots use the configured Preview transport; the optional
+package supplies only the browser live-update client.
 Both content routes are dynamic and use `force-no-store`; ordinary Delivery uses
 `createNextjsPrivateFetch`. There is no preview broker or application preview client.
 
@@ -265,8 +269,8 @@ identity reconciliation, resource cache or controller. The Home/Page Two flow
 below continues to use its existing explicit loader.
 
 Next's bindings own Contentful Live Preview Session selection and lifetime through
-`livePreview: { enabled, loadImplementation }`. The server supplies deployment configuration in the result; the client binds
-the lazy optional-package loader. The SDK infers
+`preview: { enabled, createClient, ...transport }`. The server supplies deployment configuration in the result; the client binds
+the optional package’s client factory. The SDK infers
 the primary Experience ID, reads the committed URL session, supplies inactive
 `isPreview: false`, switches sessions in place and replaces its owned SDK on mode
 entry/exit. Consumers need no preview-specific hook, wrapper or React key.
@@ -281,7 +285,7 @@ The normal one-Experience examples bind server policy in
 Pages loads the JSON-safe result in GSSP. `SingleExperience.tsx` exports both
 client request families' components. `_app` retains the Pages request root.
 Allowlisted runtime configuration stays separate from private server credentials.
-Preview configuration travels in the result; client bindings retain lazy loaders
+Preview configuration travels in the result; client bindings retain the optional package’s client factory
 bound at module scope.
 
 `src/config.ts` owns lazy server configuration and its explicit browser projection.
@@ -303,9 +307,9 @@ The shared shell reads the current browser route separately from the whole serve
 result passed as `result={serverResult}` to the SDK request root. Initial content,
 `initialPagePayload` (from `request.pagePayload`) and optional handoff retain the
 request that produced them; no descriptor/seed/payload overlays are added.
-The request AnalyticsRoot receives the current route's primary Experience ID for
-matching server preview revisions, falling back to the result's descriptor ID
-when omitted. That presentation input does not replace the supplied result.
+The request AnalyticsRoot observes the primary Preview selection from its complete
+result and request context. Session selection travels with the Experience descriptor;
+the shared root has no separate content-identity prop.
 
 `src/pages-server.tsx` uses ordinary `getServerSideProps` with
 `bindNextjsPagesRouterServerExperiences(...).request.loadExperience`. The app supplies

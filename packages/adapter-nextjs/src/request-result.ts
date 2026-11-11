@@ -11,7 +11,7 @@ import type {
   Config,
 } from '@contentful/experiences-web';
 
-import type { NextjsLivePreviewOptions } from './live-preview.js';
+import type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
@@ -25,13 +25,13 @@ export interface NextjsRequestResult {
   readonly handoff?: ExperiencesHandoff;
   readonly initialPagePayload?: ExperiencesRootProps['initialPagePayload'];
   /** Configuration only; the browser derives session and identity from its route and descriptor. */
-  readonly livePreview?: Omit<NextjsLivePreviewOptions, 'loadImplementation' | 'experienceId'>;
+  readonly preview?: NextjsPreviewContext;
 }
 
 export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
   Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
-    readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewOptions;
+    readonly preview?: NextjsPreviewConfig;
   };
 
 export type BoundNextjsRequestRootProps = Omit<
@@ -47,7 +47,7 @@ export type NextjsRequestExperienceProps = Omit<
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */
 export type NextjsDefaultRequestRootProps = Omit<
   BoundNextjsRequestRootProps,
-  RuntimeIdentity | 'defaults' | 'isPreview' | 'livePreview'
+  RuntimeIdentity | 'defaults' | 'isPreview' | 'preview'
 > &
   Pick<ExperiencesRootProps, 'spaceId' | 'environmentId' | 'locale'> & {
     readonly browser: NextjsBrowserConfig;

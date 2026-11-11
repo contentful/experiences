@@ -69,7 +69,6 @@ function configureServer() {
     environmentId: config.environmentId,
     locale: config.locale,
     delivery: { ...config.delivery, fetch: createNextjsPrivateFetch() },
-    // The frozen Preview Session helper owns its fetch transport.
     preview: config.preview,
   };
   const browser: BrowserEnvironment = {

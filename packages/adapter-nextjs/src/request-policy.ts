@@ -47,16 +47,19 @@ export async function resolveNextjsRequestPolicy(
         ? { personalization: { events: [] } }
         : {}),
     },
-    ...(options.livePreview && typeof options.livePreview !== 'function'
+    ...(options.preview
       ? {
-          livePreview: {
-            enabled: options.livePreview.enabled,
-            ...(options.livePreview.sessionHost === undefined
+          preview: {
+            ...(options.preview.enabled === undefined ? {} : { enabled: options.preview.enabled }),
+            ...(options.preview.sessionId === undefined
               ? {}
-              : { sessionHost: options.livePreview.sessionHost }),
-            ...(options.livePreview.resourceResolution === undefined
+              : { sessionId: options.preview.sessionId }),
+            ...(options.preview.sessionHost === undefined
               ? {}
-              : { resourceResolution: options.livePreview.resourceResolution }),
+              : { sessionHost: options.preview.sessionHost }),
+            ...(options.preview.resourceResolution === undefined
+              ? {}
+              : { resourceResolution: options.preview.resourceResolution }),
           },
         }
       : {}),

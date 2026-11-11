@@ -42,4 +42,4 @@ export {
 } from './cache-key.js';
 export type { RequestRuntime, RequestContext, ConsentInput } from '@contentful/experiences-node';
 
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';

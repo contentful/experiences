@@ -154,7 +154,7 @@ describe('published package entry points', () => {
         import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
           from '@contentful/experiences-react/host';
         import { ContentfulExperiences, type Config, type WebExperiencesRuntime,
-          type States, type RuntimeLivePreviewOptions }
+          type States, type RuntimePreviewConfig }
           from '@contentful/experiences-react/web-sdk';
         import { bindReactRouterExperiences,
           type ReactRouterAutoPageContext, type AutoPageEmissionContext }
@@ -166,7 +166,7 @@ describe('published package entry points', () => {
         const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer, Experience, useManagedExperience } =
           createReactExperiences({ config: { components: {} } });
         declare const config: Config;
-        declare const livePreview: RuntimeLivePreviewOptions;
+        declare const preview: RuntimePreviewConfig;
         declare const plan: PortableRenderPlan;
         declare const sdk: ContentfulExperiences;
         declare const initialError: Error;
@@ -199,7 +199,7 @@ describe('published package entry points', () => {
               const message: string = error.message; void [value, message]; }}
             errorFallback={(result) => result.error?.message} loadingFallback={(result) => result.status} />;
         }
-        const owned = <ExperiencesRoot {...config} livePreview={livePreview} routeKey="/"
+        const owned = <ExperiencesRoot {...config} preview={preview} routeKey="/"
           buildPagePayload={() => ({ properties: { title: 'Home' } })}><ManualContent /></ExperiencesRoot>;
         const supplied = <ExperienceRenderer experience={plan} />;
         const authoritative = <Experience experience={plan} errorFallback="Unavailable" />;

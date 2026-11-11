@@ -143,10 +143,11 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       },
     },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    livePreview: {
-      ...browser.livePreview,
+    preview: {
+      ...nodeConfig.preview,
+      sessionHost: browser.livePreview?.sessionHost,
+      resourceResolution: browser.livePreview?.resourceResolution,
       enabled: Boolean(browser.livePreview),
-      loadImplementation: () => import('@contentful/experiences-live-preview'),
     },
     cookie: { secure: url.protocol === 'https:' },
   }).request.loadExperience(context, { routeKey: createNextjsRouteKey(url) });

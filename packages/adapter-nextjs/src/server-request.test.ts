@@ -102,20 +102,14 @@ describe('one explicit Node facade', () => {
     const forRequest = vi.spyOn(sdk, 'forRequest');
     expect(() => bindNextjsExperiencesRequest(sdk, { consent: undefined! })).toThrow('consent');
     expect(forRequest).not.toHaveBeenCalled();
-    const livePreview = {
-      experienceId: 'home',
-      sessionId: 'session',
-      loadImplementation: async () => {
-        throw new Error('initializer must stay lazy');
-      },
-    };
-    const request = bindNextjsExperiencesRequest(sdk, { consent: true, livePreview });
+    const preview = { sessionId: 'session' };
+    const request = bindNextjsExperiencesRequest(sdk, { consent: true, preview });
     expect(request.isPreview).toBe(true);
     const response = { headers: new globalThis.Headers() };
     applyNextjsPrivateResponseCache(response);
     persistNextjsAnonymousId(response, request);
     expect(response.headers.has('set-cookie')).toBe(false);
-    expect(forRequest.mock.calls[0]![0]?.livePreview).toBe(livePreview);
+    expect(forRequest.mock.calls[0]![0]?.preview).toBe(preview);
     request.destroy();
   });
 });
@@ -135,13 +129,7 @@ it('does not read cookie identity without persistence consent or during preview'
     { consent: true, isPreview: true },
     {
       consent: true,
-      livePreview: {
-        experienceId: 'home',
-        sessionId: 'session',
-        loadImplementation: async () => {
-          throw new Error();
-        },
-      },
+      preview: { sessionId: 'session' },
     },
   ]) {
     for (const profile of [undefined, { id: 'app-approved' }]) {

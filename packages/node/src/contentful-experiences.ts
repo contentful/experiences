@@ -8,9 +8,7 @@ import {
   ChangeArray,
   buildFetchPersonalization,
   assertRuntimePreviewRequest,
-  fetchRuntimePreviewSession,
   mergeRuntimePreviewResolveOptions,
-  initializeRuntimeLivePreview,
   InterceptorManager,
   withEventConsent,
   type OptimizationEventStreamEvent,
@@ -43,8 +41,7 @@ import {
   type FetchResolveOptions,
   type ResolveDefaults,
   type ResolveOptions,
-  type RuntimeLivePreviewOptions,
-  type RuntimeLivePreviewBinding,
+  type RuntimePreviewSessionOptions,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-runtime';
@@ -74,8 +71,8 @@ type ConsentPolicy = Pick<Config, 'allowedEventTypes' | 'onEventBlocked'>;
 export type RequestContext = {
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
-  /** Binds one Experience to a Preview Session with lazy implementation loading. */
-  livePreview?: RuntimeLivePreviewOptions;
+  /** The active editor session for this request; credentials belong to SDK configuration. */
+  preview?: RuntimePreviewSessionOptions;
   locale?: string;
   resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
   /** An ID for request continuity or a complete profile snapshot for Analytics. */
@@ -181,7 +178,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       context,
       (bindings) => this.createEventMethods(bindings),
       this.#consentPolicy,
-      (options, resolveOptions) => this.fetchExperiencePayload(options, resolveOptions)
+      (options, resolveOptions) => this.fetchExperiencePayload(options, resolveOptions),
+      (session) => this.fetchPreviewSessionPayload(session)
     );
   }
 }
@@ -193,8 +191,8 @@ class RequestBoundExperiences implements RequestRuntime {
   #profile: RequestContext['profile'];
   #profileRevision = 0;
   #destroyed = false;
-  readonly #previewOptions: RuntimeLivePreviewOptions | undefined;
-  #previewInitialization: Promise<RuntimeLivePreviewBinding> | undefined;
+  readonly #previewOptions: RuntimePreviewSessionOptions | undefined;
+  #previewSnapshot: Promise<ExperiencePayload> | undefined;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
   /** Copied at construction so a caller mutating the originals cannot leak into this request. */
@@ -218,13 +216,24 @@ class RequestBoundExperiences implements RequestRuntime {
     private readonly fetchPayload: (
       options: BuiltRuntimeFetchExperienceOptions,
       resolveOptions: FetchResolveOptions
+    ) => Promise<ExperiencePayload>,
+    private readonly fetchSessionPayload: (
+      session: RuntimePreviewSessionOptions
     ) => Promise<ExperiencePayload>
   ) {
-    if (context.livePreview !== undefined && context.isPreview === false) {
-      throw new TypeError('livePreview cannot be combined with isPreview: false');
+    const sessionId = context.preview?.sessionId ?? runtime.config.preview?.sessionId;
+    this.#previewOptions = sessionId
+      ? {
+          sessionId,
+          sessionHost: context.preview?.sessionHost ?? runtime.config.preview?.sessionHost,
+          resourceResolution:
+            context.preview?.resourceResolution ?? runtime.config.preview?.resourceResolution,
+        }
+      : undefined;
+    if (this.#previewOptions !== undefined && context.isPreview === false) {
+      throw new TypeError('Preview Session cannot be combined with isPreview: false');
     }
-    this.#previewOptions = context.livePreview && { ...context.livePreview };
-    this.#isPreview = context.livePreview !== undefined || context.isPreview === true;
+    this.#isPreview = this.#previewOptions !== undefined || context.isPreview === true;
     const { personalizationOptions, analyticsOptions } = context;
     this.#personalizationOptions =
       personalizationOptions === undefined
@@ -301,7 +310,7 @@ class RequestBoundExperiences implements RequestRuntime {
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
-    this.#previewInitialization = undefined;
+    this.#previewSnapshot = undefined;
   }
 
   private isActive(): boolean {
@@ -364,9 +373,8 @@ class RequestBoundExperiences implements RequestRuntime {
       cache: { scope: 'private-request' },
     };
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
-    if (this.#previewOptions !== undefined) {
-      const plan = await this.fetchPreview(options, resolve);
-      if (plan !== undefined) return { handoff, plan };
+    if (this.isPreview) {
+      return { handoff, plan: await this.fetchExperience(options, resolveOptions) };
     }
     const profileRevision = this.#profileRevision;
     let expectedProfileId = this.#profile?.id;
@@ -438,17 +446,17 @@ class RequestBoundExperiences implements RequestRuntime {
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | undefined> {
-    if (this.#previewOptions?.experienceId !== options.experienceId) return undefined;
-    // The matching request shares the approved lazy initialization.
-    const binding = await (this.#previewInitialization ??= initializeRuntimeLivePreview(
+    if (this.#previewOptions === undefined) return undefined;
+    const payload = await (this.#previewSnapshot ??= this.fetchSessionPayload(
       this.#previewOptions
     ));
     this.assertActive();
+    if (payload.sys?.id !== options.experienceId) return undefined;
     assertRuntimePreviewRequest(options);
     this.gatePersonalizationEvents(options);
     this.assertActive();
     const resolve = mergeRuntimePreviewResolveOptions(this.runtime.config, resolveOptions);
-    const plan = await fetchRuntimePreviewSession(binding, this.runtime.config, resolve);
+    const plan = await this.runtime.resolveExperience(payload, resolve);
     // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
     this.assertActive();
     return plan;

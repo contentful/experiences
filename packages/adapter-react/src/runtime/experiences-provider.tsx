@@ -21,6 +21,7 @@ import {
 import {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
+  resolvePreviewSessionId,
 } from '@contentful/experiences-runtime';
 import { ExperiencesContext, type ExperiencesContextValue } from './experiences-context.js';
 import {
@@ -281,5 +282,17 @@ export function ExperiencesProvider(props: ExperiencesProviderProps) {
 }
 
 export function ExperiencesRoot(props: ExperiencesRootProps) {
-  return <ActivationProvider {...props} />;
+  const sessionId = resolvePreviewSessionId(
+    props.preview?.sessionId,
+    new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
+  );
+  return (
+    <ActivationProvider
+      key={sessionId}
+      {...props}
+      preview={
+        props.preview && { ...props.preview, sessionId: sessionId ?? props.preview.sessionId }
+      }
+    />
+  );
 }

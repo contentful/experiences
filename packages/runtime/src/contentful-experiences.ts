@@ -18,6 +18,11 @@ import type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
+import {
+  fetchRuntimePreviewSessionPayload,
+  type RuntimePreviewConfig,
+  type RuntimePreviewSessionOptions,
+} from './live-preview.js';
 import type {
   EventBuilderConfig,
   IdentifyBuilderArgs,
@@ -171,7 +176,7 @@ export type Config = {
   /** Configuration for the runtime-owned Content Delivery API client. */
   delivery: DeliveryClientOptions;
   /** Optional configuration for the runtime-owned Content Preview API client. */
-  preview?: DeliveryClientOptions;
+  preview?: RuntimePreviewConfig;
   /** Overrides for the runtime-owned Personalization and Analytics event transport. */
   optimization?: OptimizationConfig;
   resolveDefaults?: ResolveDefaults;
@@ -205,10 +210,21 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
       undefined,
       userAgentHeaders
     );
-    this.#previewClient =
-      config.preview === undefined
-        ? undefined
-        : createRuntimeDeliveryClient(config.preview, identity, PREVIEW_HOST, userAgentHeaders);
+    if (config.preview !== undefined) {
+      const {
+        sessionId: _sessionId,
+        sessionHost: _sessionHost,
+        resourceResolution: _resourceResolution,
+        createClient: _createClient,
+        ...transport
+      } = config.preview;
+      this.#previewClient = createRuntimeDeliveryClient(
+        transport,
+        identity,
+        PREVIEW_HOST,
+        userAgentHeaders
+      );
+    }
     this.api = createRuntimeOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
@@ -276,6 +292,23 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     const { config } = resolveOptions;
     const merged = this.#mergeFetchResolveOptions(resolveOptions);
     return payload.then((value) => resolveCoreExperience(value, config, merged));
+  }
+
+  /** Fetch the current session payload through the runtime-owned Preview transport. */
+  protected fetchPreviewSessionPayload(
+    session: RuntimePreviewSessionOptions
+  ): Promise<ExperiencePayload> {
+    if (this.#previewClient === undefined) {
+      throw new Error('Preview Session requires preview client configuration');
+    }
+    return fetchRuntimePreviewSessionPayload(
+      {
+        spaceId: this.spaceId,
+        environmentId: this.environmentId,
+        ...session,
+      },
+      this.#previewClient
+    );
   }
 
   /** Fetch a payload for a leaf operation that must retain identity before resolution. */

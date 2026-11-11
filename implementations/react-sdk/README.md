@@ -197,7 +197,7 @@ the installed package's public exports and Runtime's supported preview configura
 - `src/ConsentControls.tsx`: independent consent controls, Identify/custom visitor intent, Reset, Retry and preview diagnostics. Visitor actions are disabled while the initial content request is pending; there is no application action queue.
 - `src/attempt-log.ts`, `src/TrackingLog.tsx`: retained attempt subscription, measured interval grouping and sidebar age timer.
 - `src/content-loader.ts`: the event-free comparison hook/loop and its effect cleanup, without a supported multi-Experience guarantee.
-- `src/preview.ts`: optional public module import and URL/environment session binding.
+- `src/preview.ts`: build-gated public client factory and URL/environment session binding.
 - `src/Content.tsx`: plain card/template components, generated field types, narrow binding checks, Rich Text and the named slot.
 - `src/experience-config.tsx`: SDK registrations and Fragment clickability; presentation components remain separate.
 - `src/ExperiencePresentation.tsx`: current content, diagnostics, error/empty display, managed comparison seeds and one context-based manual-view registration callback.

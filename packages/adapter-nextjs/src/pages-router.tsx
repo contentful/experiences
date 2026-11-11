@@ -17,7 +17,7 @@ import {
   useServerPreviewRefresh,
   useNextjsRequestOptions,
 } from './router-lifetime.js';
-import { mergeNextjsLivePreview, nextjsLivePreviewSessionId } from './live-preview.js';
+import { mergeNextjsPreview, resolveNextjsPreviewSession } from './preview.js';
 import type { NextjsClientExperiencesConfig } from './app-router-client.js';
 import type {
   BoundNextjsExperiencesRootProps,
@@ -35,7 +35,7 @@ export type {
 
 export type { NextjsBrowserConfig } from './browser-config.js';
 export type { NextjsDefaultRequestRootProps } from './request-result.js';
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 
 export type NextjsPagesRouterExperiencesConfig = NextjsClientExperiencesConfig;
 
@@ -53,9 +53,9 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
       <NextjsRequestResultBoundary result={props.result}>
         <PagesRouterRequestOwner
           {...props}
-          livePreview={mergeNextjsLivePreview(
-            runtimeConfig.livePreview,
-            props.result?.livePreview ?? props.livePreview
+          preview={mergeNextjsPreview(
+            runtimeConfig.preview,
+            props.result?.preview ?? props.preview
           )}
           Root={BrowserRoot}
           configuredBuilder={runtimeConfig.buildPagePayload}
@@ -73,18 +73,18 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
     return (
       <NextjsBrowserRoot
         {...effective}
-        livePreview={mergeNextjsLivePreview(runtimeConfig.livePreview, props.livePreview)}
+        preview={mergeNextjsPreview(runtimeConfig.preview, props.preview)}
       />
     );
   }
 
   function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
-    const preview = props.livePreview ?? runtimeConfig.livePreview;
-    return preview && 'enabled' in preview && props.routeKey === undefined ? (
+    const preview = props.preview ?? runtimeConfig.preview;
+    return preview && props.routeKey === undefined ? (
       <PagesRouterRequestOwner
         initialPagePayload={runtimeConfig.initialPagePayload}
         {...props}
-        livePreview={mergeNextjsLivePreview(runtimeConfig.livePreview, props.livePreview)}
+        preview={mergeNextjsPreview(runtimeConfig.preview, props.preview)}
         Root={BrowserRoot}
         configuredBuilder={runtimeConfig.buildPagePayload}
       />
@@ -203,10 +203,7 @@ function PagesRouterRequestOwner({
       ? createNextjsRouteKey(router.asPath)
       : route.key;
   const previewUrl = !props.result && router.isReady ? router.asPath : route.previewKey;
-  const previewSession =
-    props.livePreview && 'enabled' in props.livePreview
-      ? nextjsLivePreviewSessionId(props.livePreview, previewUrl)
-      : undefined;
+  const previewSession = resolveNextjsPreviewSession(props.preview, previewUrl)?.sessionId;
   const ready = router.isReady;
   const buildPagePayload = useCallback<
     NonNullable<ExperiencesRootProps['buildPagePayload']>
@@ -245,12 +242,12 @@ function PagesRouterRequestOwner({
   );
 }
 
-function ServerPreviewRefresh({ experienceId }: { experienceId?: string }) {
+function ServerPreviewRefresh() {
   const router = useRouter();
   const refresh = useCallback(() => {
     if (router.isReady) void router.replace(router.asPath);
   }, [router]);
-  useServerPreviewRefresh(experienceId, refresh);
+  useServerPreviewRefresh(refresh);
   return null;
 }
 

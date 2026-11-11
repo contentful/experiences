@@ -82,25 +82,19 @@ app.get('/', async (req, res) => {
     userAgent: req.get('user-agent') ?? 'node-js-server',
   };
   const sessionId = url.searchParams.get('preview_session_id')?.trim();
-  const previewExperienceId =
-    url.searchParams.get('preview_experience_id')?.trim() ||
-    process.env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() ||
-    experienceIds[0];
-  const livePreview =
+  const preview =
     previewEnabled && sessionId
       ? {
-          experienceId: previewExperienceId,
           sessionId,
           resourceResolution: process.env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
-          loadImplementation: () => import('@contentful/experiences-live-preview'),
         }
       : undefined;
   const request = sdk.forRequest({
     consent: true,
     locale,
     eventContext,
-    livePreview,
-    isPreview: Boolean(livePreview),
+    preview,
+    isPreview: Boolean(preview),
   });
   try {
     const identifyRequested = !request.isPreview && Boolean(userId);

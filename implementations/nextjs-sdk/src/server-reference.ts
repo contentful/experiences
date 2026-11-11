@@ -64,15 +64,15 @@ export function createContentRequest(
   profile?: RequestRuntime['profile']
 ) {
   const { sdk, config } = getServer();
-  const livePreview = serverPreview(url);
+  const preview = serverPreview(url);
   return bindNextjsExperiencesRequest(sdk, {
     request: { url: url.toString(), headers },
     cookies,
     profile,
     consent: readConsent(cookies),
     locale: config.locale,
-    livePreview,
-    isPreview: Boolean(livePreview),
+    preview,
+    isPreview: Boolean(preview),
     page: createNextjsPageContext({
       path: url.pathname,
       origin: config.origin,
@@ -106,7 +106,7 @@ export async function loadComparisons(request: RequestRuntime, primary: ServerCo
   const comparisons = sdk.forRequest({
     locale: request.locale,
     isPreview: request.isPreview,
-    livePreview: request.isPreview ? serverPreview(url) : undefined,
+    preview: request.isPreview ? serverPreview(url) : undefined,
   });
   const output: ServerContent[] = [];
   try {
