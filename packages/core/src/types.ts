@@ -352,7 +352,7 @@ export interface PortableRenderPlan {
   attribution?: PlanAttribution;
   /** Present only when XDA returned a nonempty profile id for this Experience. */
   personalization?: {
-    /** Complete profile returned by XDA for subsequent personalized requests and events. */
+    /** Full XDA evaluation snapshot; its identity may remain provisional until replay commits. */
     profile: ExperienceProfile;
     /** XDA changes preserved as returned, including custom flags and their metadata. */
     changes?: unknown[];

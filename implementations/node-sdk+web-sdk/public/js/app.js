@@ -1,5 +1,5 @@
 import { createPreviewInitializer, getPreviewBinding } from '/dist/preview.js';
-import { createRoutes, pageContext } from '/dist/shared.js';
+import { createRoutes } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { cloneTemplate } from './templates.js';
@@ -18,19 +18,14 @@ let environment;
 let previewBinding;
 const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 let generation = 0;
-let pageGeneration = 0;
-let pagePending = false;
-let pageFailed = false;
-// Node owns startup's committed page. This promise is deliberately already settled.
-let pendingPage = Promise.resolve();
 let disposeRouteAction = () => {};
+let handoffSubscription;
 
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   disposed = true;
-  generation += 1;
+  handoffSubscription?.unsubscribe();
   releasePreviewSubscriptions();
-  pageGeneration += 1;
   document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('popstate', onPopState);
   disposeRouteAction();
@@ -62,8 +57,8 @@ async function activate() {
       ...(preview && !previewBinding ? { isPreview: true } : {}),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
-    // Maintainer: optional browser-attempt diagnostics; never synthesize Node's
-    // already-committed events. Observing does not gate SDK tracking.
+    // Maintainer: optional browser-attempt diagnostics, subscribed before replay.
+    // Observing does not gate SDK tracking.
     trackingLog = createTrackingLog(sdk);
     controls = createControlPanel(sdk, {
       onIdentify,
@@ -79,9 +74,8 @@ async function activate() {
     }
     status.textContent = sdk.isPreview
       ? 'Connecting preview; server content retained…'
-      : 'Adopting server profile…';
-    // The server already committed its page and selected content. State-only
-    // hydration neither gates tracking nor replaces HTML and sends no browser page.
+      : 'Browser active. Server-rendered content retained.';
+    // Preview retains SSR presentations and binds updates without a startup fetch.
     if (sdk.isPreview) {
       // Retain the server presentations; attach only for new preview plans.
       // Serialized plans establish content/error state without a startup fetch.
@@ -95,9 +89,7 @@ async function activate() {
           destinations.get(experienceId).push({ section, target });
         }
       }
-      await loadExperiences(destinations, false, undefined, () => !disposed, preview.initialPlans);
-    } else {
-      await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
+      await loadExperiences(destinations, () => !disposed, preview.initialPlans);
     }
     if (disposed) return;
 
@@ -106,8 +98,33 @@ async function activate() {
     wireRouteAction();
     document.addEventListener('click', onDocumentClick);
     window.addEventListener('popstate', onPopState);
-    if (!sdk.isPreview) status.textContent = 'Browser active. Server-rendered content retained.';
+    if (!sdk.isPreview && handoff !== undefined) {
+      const owner = generation;
+      const isCurrent = () => !disposed && generation === owner;
+      // Start one bootstrap replay independently of activation/rendering. Later
+      // navigation never waits for admission or replay delivery; SSR stays visible.
+      handoffSubscription = sdk.states.consent.subscribe(() => {
+        if (!isCurrent()) return;
+        void sdk
+          .hydrateAndTrackCurrentPage(handoff, {
+            routeKey: location.pathname + location.search,
+            isCurrent,
+          })
+          .then((result) => {
+            if (!disposed && generation === owner)
+              status.textContent = result.accepted
+                ? 'Server content retained. Replay admitted; delivery unconfirmed.'
+                : 'Server content retained. Replay not admitted.';
+          })
+          .catch(() => {
+            if (!disposed && generation === owner)
+              status.textContent =
+                'Server content retained. Replay admission failed; delivery unconfirmed.';
+          });
+      });
+    }
   } catch {
+    handoffSubscription?.unsubscribe();
     releasePreviewSubscriptions();
     controls?.dispose();
     trackingLog?.dispose();
@@ -150,12 +167,23 @@ function updateNavigation() {
   controls.refresh();
 }
 
-function onIdentify() {
+async function onIdentify() {
+  if (disposed || sdk.isPreview) return;
   // Reference app: URL identity is intent, not an API profile or authentication.
   const url = new URL(location.href);
   url.searchParams.set('userId', 'charles');
   history.replaceState(null, '', url.pathname + url.search);
-  void renderRoute();
+  controls.refresh();
+  await renderRoute({
+    events: [
+      {
+        type: 'identify',
+        userId: 'charles',
+        traits: { identified: true },
+        locale: sdk.states.locale.current,
+      },
+    ],
+  });
 }
 
 function onReset() {
@@ -238,9 +266,9 @@ function createDestinations(route) {
   return destinations;
 }
 
-// Reference app: content actions invalidate renders independently of page ownership.
-// Identify/Retry join a pending navigation page; they do not add another page.
-async function renderRoute({ sendPage = false, reset = false, focus = false } = {}) {
+// Reference app: fetch route content; generation guards stale work.
+async function renderRoute({ sendPage = false, events, reset = false, focus = false } = {}) {
+  if (disposed) return;
   const nextBinding = getPreviewBinding(environment, location.href);
   const nextIsPreview = Boolean(
     nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
@@ -253,20 +281,20 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
   releasePreviewSubscriptions();
   const isCurrent = () => !disposed && generation === current;
   const route = routes[location.pathname];
-  const page = pageContext(new URL(location.href), document.referrer);
-  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const previousManual = manualElements;
   manualElements = [];
   renderRouteShell(route, focus);
   if (reset) {
     // SDK reset resumes discovery immediately and invalidates its old responses.
-    // Detach from obsolete page work so a previous visitor cannot delay this one.
-    pageGeneration += 1;
-    pendingPage = Promise.resolve();
-    pagePending = false;
-    pageFailed = false;
     sdk.reset();
   }
+  const locale = sdk.states.locale.current;
+  if (!sdk.isPreview && route && sendPage) {
+    events = [{ type: 'page', locale }];
+  }
+  const requestOptions = sdk.isPreview
+    ? undefined
+    : { locale, ...(events ? { personalization: { events } } : {}) };
   await Promise.resolve();
   // Let ordinary DOM removal finalize SDK measurements before clearing overrides.
   // Reset already discarded the old measurements and manual overrides.
@@ -284,11 +312,8 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
         if (!isCurrent()) return;
         previewBinding = nextBinding;
       }
-    } else {
-      await initializeVisitor(sendPage, page, isCurrent);
-      if (!isCurrent()) return;
     }
-    const failed = await loadExperiences(destinations, identifyRequested, page, isCurrent);
+    const failed = await loadExperiences(destinations, isCurrent, undefined, requestOptions);
     if (!isCurrent()) return;
     if (failed && !sdk.isPreview) {
       errorPanel.hidden = false;
@@ -298,10 +323,6 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
       });
     }
     appMain.removeAttribute('aria-busy');
-    if (!sdk.isPreview)
-      status.textContent = failed
-        ? 'Some content could not be loaded.'
-        : 'Browser active. Content updated.';
   } catch {
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
@@ -310,7 +331,7 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
       errorPanel,
       sdk.isPreview
         ? 'Preview content could not be loaded. Check the session and retry.'
-        : 'A visitor profile could not be established. Check your connection and retry.',
+        : 'Experience content could not be loaded. Check your connection and retry.',
       { error: true, retry: true }
     );
     for (const targets of destinations.values())
@@ -319,91 +340,50 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
           target,
           sdk.isPreview
             ? 'Preview content is unavailable. Retry content to try again.'
-            : 'Content is unavailable until visitor initialization succeeds.'
+            : 'Experience content is unavailable. Retry content to try again.'
         )
       );
     status.textContent = sdk.isPreview
       ? 'Preview initialization failed. Retry content to try again.'
-      : 'Visitor initialization failed. Retry content to try again.';
+      : 'Content update failed. Retry content to try again.';
   }
 }
 
-// XDA workaround: the standalone page, pre-fetch profile prerequisite and
-// page-specific recovery jointly compensate for initial identify-bearing XDA timeouts.
-// Reassess them together when the first event-bearing fetch can establish identity
-// and select the expected variant (README); retain route ownership/lifetime checks.
-async function initializeVisitor(sendPage, page, isCurrent) {
-  if (sendPage || (!pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
-    const request = ++pageGeneration;
-    const properties = { url: page.url, title: document.title };
-    pagePending = true;
-    pageFailed = false;
-    pendingPage = pendingPage
-      .catch(() => {})
-      .then(async () => {
-        if (disposed || request !== pageGeneration) return;
-        try {
-          // XDA workaround: page first establishes SDK-owned identity. Never attach
-          // this committed page to XDA or infer success from queued admission alone.
-          const result = await sdk.page({ page, properties });
-          if (disposed || request !== pageGeneration) return;
-          if (!result.accepted || !sdk.states.profile.current?.id)
-            throw new Error('Page did not establish a profile.');
-        } catch (error) {
-          if (!disposed && request === pageGeneration) pageFailed = true;
-          throw error;
-        } finally {
-          if (request === pageGeneration) pagePending = false;
-        }
-      });
-  }
-  await pendingPage;
-  if (isCurrent() && !sdk.states.profile.current?.id)
-    throw new Error('Visitor profile is not available.');
-}
-
-async function loadExperiences(destinations, identifyRequested, page, isCurrent, initialPlans) {
-  const identify =
-    !sdk.isPreview && identifyRequested
-      ? sdk.eventBuilder.buildIdentify({
-          userId: 'charles',
-          traits: { identified: true },
-          page,
-          locale: environment.LOCALE,
-          userAgent: window.navigator.userAgent,
-        })
-      : undefined;
+async function loadExperiences(destinations, isCurrent, initialPlans, requestOptions) {
   const failures = new Set();
   const rendered = new Set();
-  // Repeated identify makes these requests potentially profile-producing; later
-  // fetches can depend on earlier SDK profile updates. Reassess serialization when
-  // repeated identify is removed, retaining only actual dependencies (README).
+  let profileId = sdk.states.profile.current?.id;
+  let personalization = requestOptions?.personalization;
   for (const [experienceId, targets] of destinations) {
-    if (!isCurrent()) return;
+    if (!isCurrent()) return failures.size > 0;
     try {
-      const plan =
-        initialPlans === undefined
-          ? await sdk.fetchExperience(
-              {
-                experienceId,
-                ...(previewBinding?.experienceId === experienceId
-                  ? {}
-                  : { extensions: { sourceMap: {} } }),
-                // XDA workaround: profile-only requests can select baseline. Reuse one
-                // identify for the cycle, but never independently submit it or the page.
-                ...(identify ? { personalization: { events: [identify] } } : {}),
+      let plan;
+      if (initialPlans !== undefined) {
+        plan = initialPlans[experienceId];
+      } else {
+        const options = {
+          experienceId,
+          ...requestOptions,
+          personalization: sdk.isPreview
+            ? undefined
+            : {
+                ...personalization,
+                profileId,
               },
-              resolveOptions
-            )
-          : initialPlans[experienceId];
+        };
+        // Evaluate intent once; comparison IDs and Retry fetch without new events.
+        personalization = undefined;
+        plan = await sdk.fetchExperience(options, resolveOptions);
+      }
+      if (plan) profileId = plan.personalization?.profile.id ?? profileId;
+      if (!isCurrent()) return failures.size > 0;
       if (!plan) throw new Error('Initial preview content is unavailable.');
-      if (!isCurrent()) return;
       if (initialPlans === undefined) renderPresentations(plan, experienceId, targets);
       rendered.add(experienceId);
       if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
         failures.add(experienceId);
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!isCurrent()) return failures.size > 0;
       failures.add(experienceId);
       const message =
         error?.statusCode === 404
@@ -414,6 +394,12 @@ async function loadExperiences(destinations, identifyRequested, page, isCurrent,
     }
   }
   if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
+  if (!sdk.isPreview) {
+    if (isCurrent())
+      status.textContent = failures.size
+        ? 'Some content could not be loaded.'
+        : 'Browser active. Content updated.';
+  }
   return failures.size > 0;
 }
 
@@ -429,23 +415,18 @@ function wireRouteAction() {
   feedback.textContent = '';
   const current = generation;
   const isCurrent = () => !disposed && current === generation;
-  button.disabled = false;
-  const onClick = async () => {
-    button.disabled = true;
-    feedback.textContent = 'Submitting custom action…';
-    try {
-      await pendingPage;
-      if (!isCurrent()) return;
-      const result = await sdk.track({ event: 'reference_custom_action' });
-      if (!isCurrent()) return;
-      feedback.textContent = result.accepted
-        ? 'Custom event admitted; delivery unconfirmed.'
-        : 'Custom event not admitted.';
-    } catch {
-      if (isCurrent()) feedback.textContent = 'Unable to record the custom action.';
-    } finally {
-      if (isCurrent()) button.disabled = false;
-    }
+  button.disabled = sdk.isPreview;
+  const onClick = () => {
+    if (!isCurrent() || sdk.isPreview) return;
+    void renderRoute({
+      events: [
+        {
+          type: 'track',
+          event: 'reference_custom_action',
+          locale: sdk.states.locale.current,
+        },
+      ],
+    });
   };
   button.addEventListener('click', onClick);
   disposeRouteAction = () => button.removeEventListener('click', onClick);

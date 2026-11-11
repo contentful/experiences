@@ -105,43 +105,32 @@ describe('Node event interceptors', () => {
     ]);
   });
 
-  it.each(['xda', 'prepared'] as const)(
-    'captures %s identity and revision before asynchronous interception',
-    async (operation) => {
-      const { sdk, upsert } = setup();
-      const hold = deferred();
-      sdk.interceptors.event.add(async (event) => {
-        if (event.type === 'page') await hold.promise;
-        return event;
-      });
-      const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({
-        nodes: [],
-        personalization: { profile: completeProfile('stale') },
-      } as never);
-      const request = sdk.forRequest({ consent: true, profile: { id: 'initial' } });
-      const pending =
-        operation === 'prepared'
-          ? request.prepareRequestHandoff({ routeKey: '/' })
-          : request.fetchExperience(
-              {
-                experienceId: 'exp',
-                personalization: { events: [sdk.eventBuilder.buildPageView()] },
-              },
-              resolver
-            );
-      await request.identify({ userId: 'new' });
-      upsert.mockResolvedValueOnce({ profile: { id: 'stale' } } as never);
-      hold.resolve();
-      const result = await pending;
-      if (operation === 'xda') {
-        expect(fetch.mock.calls[0]?.[0].personalization?.profileId).toBe('initial');
-      } else {
-        expect(upsert.mock.calls[1]?.[0].profileId).toBe('initial');
-        expect(result).toMatchObject({ handoff: { profileId: 'initial' } });
-      }
-      expect(request.profile?.id).toBe('response');
-    }
-  );
+  it('captures XDA identity and revision before asynchronous interception', async () => {
+    const { sdk, upsert } = setup();
+    const hold = deferred();
+    sdk.interceptors.event.add(async (event) => {
+      if (event.type === 'page') await hold.promise;
+      return event;
+    });
+    const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({
+      nodes: [],
+      personalization: { profile: completeProfile('stale') },
+    } as never);
+    const request = sdk.forRequest({ consent: true, profile: { id: 'initial' } });
+    const pending = request.fetchExperience(
+      {
+        experienceId: 'exp',
+        personalization: { events: [sdk.eventBuilder.buildPageView()] },
+      },
+      resolver
+    );
+    await request.identify({ userId: 'new' });
+    upsert.mockResolvedValueOnce({ profile: completeProfile('stale') } as never);
+    hold.resolve();
+    await pending;
+    expect(fetch.mock.calls[0]?.[0].personalization?.profileId).toBe('initial');
+    expect(request.profile?.id).toBe('response');
+  });
 
   it('passes concurrent XDA hook results to its fetch path', async () => {
     const { sdk, upsert, analytics } = setup();
@@ -150,15 +139,19 @@ describe('Node event interceptors', () => {
     const started: [string, string | undefined][] = [];
     sdk.interceptors.event.add(async (event) => {
       started.push([event.type, event.context.userAgent]);
+      expect(event.context).toMatchObject({ gdpr: { isConsentGiven: true } });
       if (event.type === 'identify') await hold.promise;
       event.context.userAgent = 'hook';
+      Object.assign(event.context, { gdpr: { isConsentGiven: false } });
       return event;
     });
     const request = sdk.forRequest({ consent: true, eventContext: { userAgent: 'request-agent' } });
     const events = [
-      request.eventBuilder.buildIdentify({ userId: 'user' }),
-      request.eventBuilder.buildPageView(),
+      sdk.eventBuilder.buildIdentify({ userId: 'user', userAgent: 'request-agent' }),
+      sdk.eventBuilder.buildPageView({ userAgent: 'request-agent' }),
     ];
+    Object.assign(events[0]!.context.gdpr!, { isConsentGiven: 'yes' });
+    const original = globalThis.structuredClone(events);
     expect(started).toEqual([]);
     expect(upsert).not.toHaveBeenCalled();
     expect(analytics).not.toHaveBeenCalled();
@@ -175,7 +168,10 @@ describe('Node event interceptors', () => {
     await pending;
     const sent = fetch.mock.calls[0]?.[0].personalization?.events;
     expect(sent?.map((event) => event.type)).toEqual(['identify', 'page']);
-    expect(sent?.[0]?.context).toMatchObject({ userAgent: 'hook' });
+    expect(sent?.[0]).toMatchObject({
+      context: { userAgent: 'hook', gdpr: { isConsentGiven: false } },
+    });
+    expect(events).toEqual(original);
   });
 
   it('keeps XDA profile/content fetch while dropping original and transformed blocked events', async () => {
@@ -201,92 +197,39 @@ describe('Node event interceptors', () => {
     expect(onEventBlocked).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects invalid XDA hook output before final consent and transport', async () => {
-    const onEventBlocked = vi.fn();
-    const { sdk } = setup({ onEventBlocked });
-    const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
-    sdk.interceptors.event.add(() => ({ type: 'track' }) as never);
-    await expect(
-      sdk
-        .forRequest()
-        .fetchExperience(
-          { experienceId: 'exp', personalization: { events: [sdk.eventBuilder.buildPageView()] } },
+  it.each(['missing fields', 'gdpr', 'title', 'context'])(
+    'rejects invalid final XDA hook output (%s) before final consent and transport',
+    async (field) => {
+      const onEventBlocked = vi.fn();
+      const { sdk } = setup({ onEventBlocked });
+      const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
+      const page = sdk.eventBuilder.buildPageView();
+      const hook = vi.fn((event: OptimizationEventStreamEvent) => {
+        if (field === 'missing fields') return { type: 'track' } as never;
+        if (field === 'context') return { ...event, context: null } as never;
+        return {
+          ...event,
+          context: {
+            ...event.context,
+            ...(field === 'gdpr'
+              ? { gdpr: { isConsentGiven: 'yes' } }
+              : { page: { ...page.context.page, title: 123 } }),
+          },
+        } as never;
+      });
+      sdk.interceptors.event.add(hook);
+      await expect(
+        sdk.forRequest().fetchExperience(
+          {
+            experienceId: 'exp',
+            personalization: { events: [page] },
+          },
           resolver
         )
-    ).rejects.toThrow();
-    expect(fetch).not.toHaveBeenCalled();
-    expect(onEventBlocked).not.toHaveBeenCalled();
-  });
-});
-
-describe('Node prepared event interception', () => {
-  it('runs prepared hooks sequentially and retains the exact transformed replay after preflight failure', async () => {
-    const { sdk, upsert } = setup();
-    const hold = deferred();
-    const seen: string[] = [];
-    sdk.interceptors.event.add(async (event) => {
-      seen.push(event.type);
-      if (event.type === 'identify') await hold.promise;
-      event.context.userAgent = 'prepared';
-      return event;
-    });
-    upsert.mockRejectedValueOnce(new Error('offline'));
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const pending = sdk.forRequest({ consent: true }).prepareRequestHandoff({
-      routeKey: '/',
-      initialEvents: [
-        { type: 'identify', userId: 'user' },
-        { type: 'track', event: 'prefix' },
-      ],
-    });
-    expect(seen).toEqual(['identify']);
-    hold.resolve();
-    const result = await pending;
-    expect(seen).toEqual(['identify', 'track', 'page']);
-    expect(result.data).toBeUndefined();
-    expect(result.handoff.replay?.events).toEqual(upsert.mock.calls[0]?.[0].events);
-    expect(
-      result.handoff.replay?.events.every((event) => event.context.userAgent === 'prepared')
-    ).toBe(true);
-  });
-
-  it('omits only transformed blocked optional prefixes and still previews the valid final page', async () => {
-    const onEventBlocked = vi.fn();
-    const { sdk, upsert } = setup({ onEventBlocked });
-    sdk.interceptors.event.add((event) =>
-      event.type === 'identify' ? sdk.eventBuilder.buildTrack({ event: 'blocked' }) : event
-    );
-    const result = await sdk.forRequest({ consent: false }).prepareRequestHandoff({
-      routeKey: '/',
-      initialEvents: [{ type: 'identify', userId: 'user' }],
-    });
-    expect(result.handoff.replay?.events.map((event) => event.type)).toEqual(['page']);
-    expect(upsert).toHaveBeenCalledOnce();
-    expect(onEventBlocked).toHaveBeenCalledWith(expect.objectContaining({ method: 'track' }));
-  });
-
-  it.each(['blocked-final', 'invalid-final', 'invalid-prefix', 'throw'])(
-    'uses event-free fallback for %s',
-    async (kind) => {
-      const { sdk, upsert } = setup();
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
-      sdk.interceptors.event.add((event) => {
-        if (kind === 'throw') throw new Error('hook failed');
-        if (kind === 'invalid-prefix' && event.type === 'identify')
-          return sdk.eventBuilder.buildPageView();
-        if (kind === 'invalid-final' && event.type === 'page')
-          return sdk.eventBuilder.buildIdentify({ userId: 'wrong-final' });
-        if (kind === 'blocked-final' && event.type === 'page')
-          return sdk.eventBuilder.buildTrack({ event: 'blocked' });
-        return event;
-      });
-      const result = await sdk.forRequest({ consent: false }).prepareRequestHandoff({
-        routeKey: '/',
-        initialEvents: [{ type: 'identify', userId: 'user' }],
-      });
-      expect(result.handoff.replay).toBeUndefined();
-      expect(result.data).toBeUndefined();
-      expect(upsert).not.toHaveBeenCalled();
+      ).rejects.toThrow();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(onEventBlocked).not.toHaveBeenCalled();
+      expect(hook).toHaveBeenCalledOnce();
     }
   );
 });

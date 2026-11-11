@@ -330,14 +330,14 @@ describe('Web Custom Flags', () => {
   it('hydrates a private flag-only handoff without clearing browser identity', async () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    await sdk.hydrateHandoffState(
+    await sdk.hydrateAndTrackCurrentPage(
       {
         spaceId: 'space',
         environmentId: 'environment',
         cache: { scope: 'private-request' },
         state: { changes: changes(false) },
       },
-      { routeKey: '/' }
+      { routeKey: '/', isCurrent: () => true }
     );
     expect(sdk.getFlag('banner')).toBe(false);
     expect(sdk.states.profile.current?.id).toBe('visitor');
@@ -444,14 +444,14 @@ describe('Web Custom Flags', () => {
     const sdk = createRuntime();
     vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
     sdk.interceptors.state.add(() => ({ profile: completeProfile('invented') }));
-    await sdk.hydrateHandoffState(
+    await sdk.hydrateAndTrackCurrentPage(
       {
         spaceId: 'space',
         environmentId: 'environment',
         cache: { scope: 'private-request' },
         state: { changes: changes(false) },
       },
-      { routeKey: '/' }
+      { routeKey: '/', isCurrent: () => true }
     );
     expect(sdk.states.profile.current?.id).toBe('visitor');
     expect(sdk.getFlag('banner')).toBe(false);
@@ -513,13 +513,13 @@ describe('Web Custom Flags', () => {
         profile: completeProfile('invented'),
         changes: changes(false),
       }));
-      await sdk.hydrateHandoffState(
+      await sdk.hydrateAndTrackCurrentPage(
         {
           spaceId: 'space',
           environmentId: 'environment',
           cache: scope === 'public-permutation' ? { scope, key: 'permutation' } : { scope },
         },
-        { routeKey: '/' }
+        { routeKey: '/', isCurrent: () => true }
       );
       expect(sdk.states.profile.current?.id).toBe('visitor');
       expect(sdk.getFlag('banner')).toBe(true);

@@ -1,5 +1,11 @@
 # Experiences Node + Web SDK reference implementation
 
+Official support is one Experience fetch per page, without code enforcement.
+Reference multi-ID loops exist only to compare rendering scenarios, not as
+supported product usage or a cross-fetch guarantee.
+
+**Current Phase 6 correction:** Implementation and checks are pending; Phase 6 is not accepted or complete and Phase 7 stays gated. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+
 This standalone Express/EJS application consumes locally packed public
 `@contentful/experiences-node` and `@contentful/experiences-web` packages. It has its
 own dependencies and tools and stays outside root npm workspaces.
@@ -7,7 +13,10 @@ own dependencies and tools and stays outside root npm workspaces.
 Home and Page Two render actual Experience
 content as ordinary HTML, including named slots and Rich Text, with JavaScript
 disabled. With JavaScript enabled, one Web SDK adopts the final server profile and
-observes the existing HTML without a startup content fetch or page event. Utilities
+observes the existing HTML without a startup content fetch or DOM replacement.
+It independently admits the server-evaluated page/optional identify replay through
+current browser consent and the SDK queue, without a display or HTTP commit gate.
+Utilities
 shows activation/profile availability and both consent decisions, with paired
 Grant/Revoke, Identify, Reset and Retry content controls. Client navigation and
 back/forward fetch and render through the same Web SDK; Page Two also has a separate
@@ -19,18 +28,31 @@ no API calls and does not establish upstream readiness.
 
 One process-level Node SDK creates a request facade with explicit locale, page
 URL/path/query/referrer, user agent, consent and permitted incoming identity. The
-handler awaits `request.page({ properties: page })` and requires an accepted result
-and SDK-owned profile before fetching content. Only `?userId=charles` requests the
-fixed identify intent with `traits: { identified: true }`. The identify event is
-built once with `request.eventBuilder` so it inherits that request's context, then
-included in each distinct sequential fetch. Identify is not independently sent,
-and the committed page is not attached again.
+handler supplies identify arguments only when `?userId=charles` requests that intent,
+using `traits: { identified: true }`, and explicit page arguments from request context.
+The SDK builds admitted arguments once from `personalization.events`; no direct identify/page precedes rendering.
+Only the actual server-to-browser transfer uses Node
+`fetchExperienceForHandoff(options, resolveOptions, { routeKey })`. The third
+argument is the route descriptor only. It returns a full handoff plus optional
+plan/error, retaining raw final Client events unchanged, including query arrays,
+before content work. Producer event hooks run sequentially, matching Optimization;
+ordinary fetch event chains remain concurrent. Normal SDK builder XPAPI validation
+and Client XDA validation suffice; no server replay-compatibility check precedes XDA.
+Manually built/raw transmission remains consumer-owned compatibility risk. Existing
+receiving replay validation may refuse events while available content remains usable.
+Usable replay survives content failure; no raw reconstruction, repeated hooks or
+complete-plan barrier
+applies. Later comparison IDs and same-ID content Retry use ordinary event-free
+fetch and never use the handoff as content input. Later SDK profile adoption does
+not replace the transferred batch/identity/route/locale. See
+[Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+Current implementation and checks remain pending.
 
 Home fetches all configured IDs and reuses the first plan for its manual
 presentation. Page Two fetches the last ID for its automatic presentation and the
 first for its manual presentation. Matching IDs are fetched once per response.
-Each fetch requests `extensions: { sourceMap: {} }` and uses empty SDK resolver
-registries. The EJS renderer distinguishes coded Component and Experience Template
+Each ordinary server Delivery fetch requests `extensions: { sourceMap: {} }`;
+all fetches use empty SDK resolver registries. The EJS renderer distinguishes coded Component and Experience Template
 registrations, follows actual named slots, and merges `design < content < resolved
 < slots` (no registration defaults are configured). Plain values and attributes
 use EJS escaping; Rich Text uses Contentful's HTML renderer directly. The server
@@ -44,12 +66,16 @@ from SDK construction; manual roots are registered before state hydration. Brows
 activation uses the existing SDK detectors; the application adds no interaction
 observer.
 
-After the last fetch, public Node `createRequestHandoffFromData()` packages final
-`request.profile` into a private-request, state-only handoff. For ordinary requests, the non-executable
-`experience-bootstrap` JSON script contains exactly `{ environment, handoff }`;
-serialization escapes `<` as `\u003c`. It contains no replay, content plans,
-delivery diagnostics, server event journal or private server settings. Responses
-use `Cache-Control: private, no-store`. Do not log, save or cache live handoffs.
+The server uses the handoff returned by `fetchExperienceForHandoff`, with the
+finalized optional-page batch and returned XDA ID as continuation fallback. Browser
+submission remains independent of content render availability; no complete-plan
+barrier or additional preflight is required.
+For ordinary requests, the non-executable `experience-bootstrap` JSON contains
+exactly `{ environment, handoff }`; serialization escapes `<` as `\u003c`. It
+contains no content plans, delivery diagnostics, server event journal or private
+server settings. Replay permits identify/track-only intent with one optional final page; it never
+synthesizes a page. Responses
+use `Cache-Control: private, no-store`; do not log, save or cache live handoffs.
 
 Recognized `plan.deliveryDiagnostics` preserve useful content and produce only a
 generic warning/count. Upstream `fieldPath`/`message` strings may contain private
@@ -106,7 +132,10 @@ profile store or manual profile input.
 
 The HTTP host writes the final request profile ID only when
 `request.canPersistProfile` is true, otherwise it expires the identity cookie,
-including after an upstream failure. The cookie is host-only, `Path=/`,
+including after an upstream failure. The request facade is destroyed and its
+retained readonly state finalizes the cookie once in `finally`, before successful
+rendering uses the request's `res.locals`. Preview writes no identity cookie.
+The cookie is host-only, `Path=/`,
 `SameSite=Lax`, readable by JavaScript, lasts 365 days when granted, and uses
 `Secure` on HTTPS (omitted for local HTTP). Current-request handoff state can
 remain volatile when persistence is denied. The SDK permits identify/page without
@@ -117,7 +146,9 @@ immediately and on subsequent changes. Undefined removes that axis's mirror;
 explicit decisions use host-only, Path=/, SameSite=Lax cookies with a 365-day
 lifetime and Secure on HTTPS. Mirrors inform only the next server request; they
 are never passed back as browser constructor defaults. Combined Grant/Revoke
-controls call `sdk.consent(true/false)`. They neither fetch content nor send pages.
+controls call `sdk.consent(true/false)`. They do not call fetch or page directly;
+the bootstrap consent subscription naturally reinvokes the existing complete SDK
+operation, whose eligible page fallback remains consent-gated.
 SDK identity cookies are host-scoped and may be shared with other local apps on that host;
 ports do not isolate cookies. Browser LocalStorage is origin-scoped and is not
 read by this server.
@@ -138,12 +169,25 @@ without waiting for handoff hydration.
 The control panel subscribes to consent, persistence consent and profile before
 hydration. It mirrors each consent snapshot and shows profile availability without
 printing profile data or claiming confirmed identification. Controls remain disabled
-until activation completes. Independently of tracking, the app awaits
-`hydrateHandoffState()` for the visible pathname plus search. It never calls
-`page()`, `trackCurrentPage()` or `fetchExperience()` during startup and does not
-replace or rerender the server DOM.
-State hydration transfers profile state; it does not select content or provide a
-DOM hydration engine. Analytics needs a complete profile snapshot at event emission,
+until activation completes. Independently of tracking and SSR display, the app
+observes `sdk.states.consent`; the immediate snapshot and later changes reinvoke
+`hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` for the visible pathname
+plus search. One stable guard checks route/visitor generation and document lifetime
+inside SDK state application and admission; coalesced work respects any live caller.
+Cleanup invalidates that caller and unsubscribes without cancelling accepted SDK
+queue delivery. This adds no extra page call, refetch, CSR capture, dedicated retry
+facility or mode detector. It admits
+the exact evaluated replay against current browser consent and queue capacity,
+without a startup content fetch or DOM replacement. Before hydration, capture
+current live profile, then configured anonymous provider, then `handoff.profileId`;
+ordinary requests retain provider-first policy. Browser continuity may supersede
+the XDA ID. Exact finalized event bodies permit current consent restamping, without
+guaranteeing the same commit profile, response or selection under another live
+identity. Whole-batch refusal leaves permitted page eligibility for the existing
+gated fallback; accepted replay cannot fall back or resubmit on delivery failure. Acceptance
+means queue admission, not HTTP delivery; no blocked non-page event automatically
+replays after grant. State hydration supplies profile state, not content selection
+or a DOM hydration engine. Analytics needs a complete profile snapshot at event emission,
 from persisted profile state, an XDA/Personalization response, or full server handoff
 state. A cookie supplies identity for Personalization requests, not an Analytics profile.
 
@@ -162,10 +206,26 @@ suspension retains this document's instance and subscriptions.
 After activation, the app intercepts ordinary same-origin Home/Page Two links and
 handles back/forward through one live Web SDK. Direct links still work through
 Express/EJS without JavaScript. Each client navigation updates the URL, document
-title, active link and main focus, awaits one `sdk.page()` with captured route
-context, requires SDK-owned identity, then fetches the route's distinct IDs
-sequentially. Home uses three IDs and Page Two two with the default configuration;
-manual presentations reuse those plans. Each fetch explicitly requests a source map.
+title, active link and main focus, builds one page with captured route context,
+then evaluates it through ordinary Web fetch. Browser-local navigation creates
+no handoff and does not replay the initial server batch; only a new actual server
+response can supply another handoff. Later comparison IDs use ordinary event-free
+fetch. Content remains independent of incoming replay delivery.
+Home uses three IDs and Page Two two with the default configuration;
+manual presentations reuse those plans. Browser fetches use the public SDK's
+preview-first selection and automatic source-map requests under this app's default
+automatic tracking configuration, including when preview or consent suppresses
+measurements. The Node server keeps explicit source-map requests for ordinary
+Delivery fetches because it has no browser automatic-tracking policy.
+Web retains accepted replay identity across newer initialization within the owner
+lifetime. After A is admitted and B becomes current, a serialized A is refused for
+both page and nonpage batches, without reapplying state, republishing events,
+recommitting or starting page fallback. Calls joining current A share its owned work.
+New visitor/action intent must carry fresh message IDs. Reset/destroy clear owner
+admission history; event-consent withdrawal purges permitted queued work without
+forgetting accepted replay identity or restoring accepted/blocked intent on grant.
+This admission guard provides no durable or exactly-once transport guarantee.
+
 There is no cross-cycle plan cache.
 
 The small DOM renderer follows the EJS registration, named-slot and prop-precedence
@@ -177,22 +237,22 @@ Local rendering errors, thrown service errors, loading and empty plans have dist
 feedback; the SDK's Personalization request-state observable does not stand in for
 content completion.
 
-Identify sets the fixed `?userId=charles` intent using `history.replaceState` and
-starts an explicit content cycle. It joins a navigation page already pending,
-builds one identify with the cycle's page/locale/user agent, and includes that event
-in each distinct XDA fetch. It does not send an independent identify or another page.
-Navigation preserves the intent, and back/forward/reload use the visible URL's value.
-The panel reports intent only, never confirmed traits or authentication.
+Identify sets fixed `?userId=charles` intent using `history.replaceState`, supplies
+identify-only arguments with captured context through ordinary Web fetch. It
+adds no page or local handoff/commit. Initial URL intent evaluates identify with
+the initial page. Navigation/back/forward preserves URL intent without repeating
+initial identify; reload builds initial identify through the server facade. The panel reports
+intent only, never confirmed traits or authentication.
 
-Retry content starts a fresh content cycle. It joins a pending page and ordinarily
-sends no new page; failed visitor initialization or missing SDK identity requires
-an explicit new page before content can proceed. The persistent Retry content
-button also lets a visitor explicitly refetch partial content. Fetching never
-restarts automatically from consent/profile subscriptions or a service response.
+Retry content refetches the same ID through ordinary event-free fetch, without
+builders, event hooks, publication, admission or replay. It never resubmits the
+server batch; accepted incoming replay delivery retry is owned by the queue.
+The persistent Retry button explicitly refetches partial content. Consent/profile subscriptions
+or service responses never restart fetching or blocked non-page replay automatically.
 
 Reset removes identify intent and invalidates old render/page ownership. In the
 same synchronous transition it removes old attributed content, detaches from any
-old pending page chain, then calls `sdk.reset()`. A fresh page/fetch cycle starts
+old pending visitor work, then calls `sdk.reset()`. A fresh page/fetch cycle starts
 for the next visitor. SDK reset resumes discovery immediately, so old content must
 already be detached; the app does not use repeated enables as interval resets.
 New manual roots are registered only after new content is inserted. Normal
@@ -200,8 +260,9 @@ navigation instead allows removal measurements to finalize at the microtask
 boundary before clearing the detached elements' explicit manual registrations.
 
 Render generations prevent stale responses, errors and custom-action feedback from
-replacing a newer route or visitor. Page ownership is separate so Identify/Retry
-can join the correct page. Already submitted SDK requests/events are not undone.
+replacing a newer route or visitor. Visitor work has separate ownership so
+Identify/Retry joins pending operations; reset detaches the previous visitor.
+Already submitted SDK requests/events are not undone.
 The SDK continues to own profile updates, consent, detectors, queues and lifecycle
 isolation; the app adds no alternate profile store, event queue or observer.
 
@@ -209,10 +270,11 @@ isolation; the app adds no alternate profile store, event queue or observer.
 Its SDK imports are type-only. Both adapters use the same compiled JavaScript;
 server EJS and browser DOM operations remain separate.
 
-Page Two's Record custom action calls `sdk.track({ event: 'reference_custom_action' })`
-independently of content. It waits for any pending page, disables the button while
-submitting, and reports admission/refusal/failure without claiming delivery from
-admission alone. The action is never attached to XDA. On final document exit,
+Page Two's CUSTOM TRACK action supplies literal `reference_custom_action`
+track-only arguments through ordinary Web fetch. It is nonpage intent; navigation
+to Page Two still carries a page. The action waits for pending visitor work,
+disables the button while evaluating, and reports evaluation/failure without
+claiming commitment. It creates no local handoff or replay. On final document exit,
 caller-owned route/control listeners and subscriptions are disposed; a BFCache
 suspension retains the document's owner and state.
 
@@ -221,9 +283,9 @@ suspension retains the document's owner and state.
 `public/js/tracking.js` follows the Web reference's sidebar. One
 `sdk.states.eventStream` subscription starts during initial tracking setup, before
 hydration, and persists across client routes. The counter counts every defined
-notification, including repeated identify messages submitted through distinct XDA
-fetches. It records attempts before transport/queue admission; neither a row nor
-its count confirms delivery. Consent-blocked calls are not eventStream attempts.
+notification, including the ordinary explicit identify action. It records attempts
+after whole-batch admission and before transport; neither a row nor its count
+confirms delivery. Consent-blocked calls are not eventStream attempts.
 
 Only view/hover duration updates with their actual interval IDs share a row;
 other notifications receive separate rows. The count can therefore exceed the
@@ -233,10 +295,12 @@ full event, profile, handoff or delivery-diagnostic payloads. The age timer and
 subscription are disposed on failed activation or final document exit and retained
 for BFCache suspension. Reset clears the observable but retains displayed history.
 
-The initial server page and embedded server identify are absent from this browser
-stream. State-only hydration does not replay them; an empty sidebar after startup
-is expected until the browser attempts an event. With consent, SDK measurements
-on the existing server HTML can produce those attempts. Diagnostics render failures
+Admitted initial server-evaluated replay events appear in this browser stream;
+refused batches publish none of their replay events, while a permitted page fallback
+can publish its own attempt. Ordinary event-bearing Web fetch and admitted direct submissions also publish
+attempts; event-free content Retry publishes none. A row/count is not a count of commits. With consent, SDK
+measurements on existing SSR HTML can produce interaction attempts. Diagnostics
+render failures
 show only a generic console message and do not interrupt event submission.
 
 ## What consumers should copy
@@ -244,21 +308,21 @@ show only a generic console message and do not interrupt event submission.
 The comments mark responsibilities: `Consumer integration` is the host/SDK
 boundary, `Reference app` is demo presentation, `Maintainer` is optional local
 inspection, `E2E compatibility` identifies real observable output, and
-`Known limitation` / `XDA workaround` explain current constraints.
+`Known limitation` explains current constraints.
 
-| Responsibility                 | Files to inspect                                                                    | What to adapt                                                                                                                    |
-| ------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Server SDK and state handoff   | `src/app.ts`, `src/cookies.ts`                                                      | Request-local context/consent/identity, page/fetch order, final state-only producer, cookie scope and private HTML-safe response |
-| Browser adoption and lifecycle | `public/js/app.js`, `public/js/control-panel.js`                                    | One Web instance, immediate SSR observation, independent state hydration, effective-consent mirrors and subscription cleanup     |
-| Content and attribution        | `src/index.ejs`, `public/js/experiences.js`, `src/shared.ts`                        | Your registrations, bindings, named slots, renderers and real automatic/manual attribution                                       |
-| Demo UI                        | `src/index.ejs`, `public/js/control-panel.js`, route handlers in `public/js/app.js` | Replace fixed `userId=charles`, routes and buttons with your own visitor experience                                              |
-| Optional diagnostics           | `public/js/tracking.js`, sidebar and `tpl-event-row` in `src/index.ejs`             | Omit the module, its create/dispose calls and markup if attempt inspection is unnecessary                                        |
-| Local repository preparation   | `project.json`, `package.json`, `scripts/build-assets.ts`                           | This reference's tarball/Nx workflow; a consumer normally uses its own package installation and build                            |
+| Responsibility                 | Files to inspect                                                                    | What to adapt                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server SDK and state handoff   | `src/app.ts`, `src/cookies.ts`                                                      | Request-local context/consent/identity, built XDA events and best-effort loop, finalized handoff companion, cookie scope and private HTML-safe response |
+| Browser adoption and lifecycle | `public/js/app.js`, `public/js/control-panel.js`                                    | One Web instance, immediate SSR observation, independent replay admission, effective-consent mirrors and subscription cleanup                           |
+| Content and attribution        | `src/index.ejs`, `public/js/experiences.js`, `src/shared.ts`                        | Your registrations, bindings, named slots, renderers and real automatic/manual attribution                                                              |
+| Demo UI                        | `src/index.ejs`, `public/js/control-panel.js`, route handlers in `public/js/app.js` | Replace fixed `userId=charles`, routes and buttons with your own visitor experience                                                                     |
+| Optional diagnostics           | `public/js/tracking.js`, sidebar and `tpl-event-row` in `src/index.ejs`             | Omit the module, its create/dispose calls and markup if attempt inspection is unnecessary                                                               |
+| Local repository preparation   | `project.json`, `package.json`, `scripts/build-assets.ts`                           | This reference's tarball/Nx workflow; a consumer normally uses its own package installation and build                                                   |
 
 The browser SDK constructor comes from the installed classic UMD. The small shared
 module has type-only SDK imports; Rich Text and pure tracking helpers are a separate
 asset. Do not bundle a second stateful SDK when adapting this renderer. Native
-templates and EJS are presentation choices, not requirements of profile hydration.
+templates and EJS are presentation choices, not requirements of handoff consumption.
 `data-testid` selectors inspect actual UI and have no role in SDK tracking, which
 uses the real attribution attributes or explicit element registration.
 
@@ -268,58 +332,58 @@ not automatically type transformed bindings. This app adds no duplicate content
 schema or generator; its TypeScript check does not check EJS or browser property
 accesses. Adapt content mappings to the configured bindings and inspect live output.
 
-Optimization's pinned hybrid reference previews an initial event batch and lets
-the browser hydrate/replay it. Here XDA lacks noncommitting content preflight, so
-Node commits page before fetching and embeds identify in each distinct fetch;
-Web adopts only final profile state. Do not copy Optimization's replay path into
-this committed-server flow or add suppression/compensating requests.
+Optimization's pinned hybrid reference previews initial events for browser replay.
+Experiences uses `fetchExperienceForHandoff` to evaluate finalized XDA events,
+then consumes the returned full aggregate independently of content availability.
+The operation follows Optimization PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`; it uses XDA content evaluation in
+place of local selected-optimization resolution. Its current multiple-ID loop is application-owned
+best-effort behavior, not an SDK architecture or cross-fetch guarantee. Only actual server transfer intent produces a full aggregate; browser-local
+navigation, Identify and custom track use ordinary Web fetch without a new server handoff. Separate preparation/producers/public hydration are removed. See
+[XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 ## Current live behavior and limits
 
-Both routes displayed baseline content in direct JavaScript-disabled browser
-visits. Identify-bearing requests selected the composed fragment variant and
-reversed the Personalized Composed content order in some responses, while other
-fetches retained baseline content or reported partial delivery. Treat URL intent
-and HTTP 200 as insufficient proof of confirmed traits/audience membership.
-The app retains those results without automatic content retries or compensation.
+XDA always forces XPAPI `preflight: true`: new IDs are provisional and previewed
+changes remain uncommitted. A profile-only XDA request internally uses XPAPI GET,
+returning 404 for an uncommitted ID even if SDK-to-XDA uses POST. Adoption,
+state hydration, LocalStorage,
+cookies, admission, `identityReady`, flush resolution and SDK success do not prove
+commit. Successful submission applies to its selected live target, which can
+differ from the XDA continuation ID; it does not guarantee the evaluated profile
+is finalized or reproduce the evaluated selection/response. Retries still have
+generic commit ambiguity and no exactly-once guarantee.
 
-This follows the existing [XDA workaround/removal guidance](../node-sdk/README.md#current-xda-limitations-and-workaround-removal):
-page establishes identity first, and identify accompanies each distinct fetch
-because profile-only selection can return baseline. XDA still lacks
-noncommitting content preflight. This app uses state-only hydration data for a
-committed server request; it does not exercise prepared replay or introduce a
-suppression mechanism.
+The default Web page provider omits `title`, `hash`, `width` and `height` under the
+[SDK workaround comment](../../packages/web/src/browser-event-context.ts). Custom providers/arguments,
+raw caller-built events and Node/Client metadata remain unchanged. Refresh the
+installed SDK artifacts to use the updated provider.
+Earlier direct visits displayed baseline content; some identify-bearing responses
+selected the composed fragment variant and reversed Personalized Composed content,
+while other responses retained baseline or partial delivery. Those observations
+are not validation of this corrected flow. Inspect actual selected content using
+refreshed installed artifacts; URL intent and HTTP 200 do not prove personalization.
 
-In the browser, `initializeVisitor` owns the standalone page, pre-fetch profile
-prerequisite, and page-specific recovery for missing or failed identity.
-Identify/Retry joins pending page work, and failed initialization requires recovery
-even if an older profile remains. Reassess these accommodations together when the
-first event-bearing XDA fetch can establish identity and select the expected variant;
-preserve route ownership/lifetime checks.
-
-Repeated identify makes server and browser fetches potentially profile-producing;
-later fetches can depend on earlier SDK profile updates. Reassess serialization
-when repeated identify is removed, retaining only actual dependencies. Package the
-server handoff after all profile-producing operations.
-
-Live verification did not encounter empty/missing-Experience, transport/render/
-initialization or startup failures. Client partial-warning handling, HTTPS cookies,
-final-exit subscription/timer disposal and BFCache restoration were reviewed in
-source but not observed live. These are validation limits, not diagnosed defects.
-TypeScript does not check EJS or browser content property accesses/live binding shapes.
+Earlier live verification did not encounter empty/missing-Experience,
+transport/render/initialization or startup failures. Client partial-warning handling,
+HTTPS cookies, final-exit subscription/timer disposal and BFCache restoration were
+reviewed in source, not observed live. TypeScript does not check EJS or browser
+content property accesses/live bindings. Local static checks do not establish new
+service behavior or event counts; root records phase 6 validation.
 
 ## DX assessment
 
-The public SDKs support this committed SSR flow, final-profile adoption, real
+The public SDKs support XDA-evaluated SSR, independent browser replay, real
 attribution, consent and interaction measurement. A consumer supplies the HTTP
 cookie/consent bridge, private HTML-safe serialization, content renderers/bindings,
 and route/action sequencing with lifecycle guards. The file mappings above expose
 these application responsibilities; the sidebar remains optional.
 
 Local package refresh now has one aggregate command, while focused setup remains
-available. The remaining friction is the explicit page-before-fetch and repeated
-embedded identify required by current XDA behavior, the absence of noncommitting
-preflight and DOM hydration, and unknown-valued content through plans. EJS/browser
+available. Remaining limits include provisional IDs and browser continuity
+superseding the evaluated identity during submission, as described in the
+[Runtime contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization),
+no DOM hydration engine, and unknown-valued content through plans. EJS/browser
 property accesses require live inspection because the app typecheck does not cover
 them. Existing service-selection variability and unobserved failure/HTTPS/BFCache
 paths limit the evidence; the reference adds no alternate mechanism to hide them.
@@ -387,7 +451,7 @@ The default Experience IDs are `3fLAdFb3BYAuImRhcW8k4t` (Coded),
 `process.env` or fall back to sibling/mock configuration. `PORT` overrides belong
 in this file. The ordinary explicit public projection contains only `SPACE_ID`,
 `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved `EXPERIENCE_IDS`.
-Only that projection and the final SDK profile handoff are serialized into the
+Only that projection and the finalized handoff are serialized into the
 HTML-safe bootstrap. Never copy management or server-only preview tokens or expose unrelated
 settings. No values are baked into
 browser assets. Optional preview endpoint settings are described above.
@@ -459,8 +523,8 @@ are described above.
 - `src/shared.ts`: SDK-type-only common preparation, compiled once to `dist/shared.js`
   with private declarations; identical JS is copied to `public/dist/shared.js`.
 - `public/js/templates.js`: native template cloning; no client EJS renderer.
-- `public/js/app.js`: state-only startup adoption before automatic/manual observation;
-  later route/page/content orchestration, visitor actions, stale guards, registration
+- `public/js/app.js`: independent startup replay admission with immediate SSR observation;
+  later built-event/XDA/content orchestration, visitor actions, stale guards, registration
   release, failure feedback and document exit cleanup.
 - `public/js/experiences.js`: reference DOM renderer matching EJS bindings/slots,
   real automatic/manual attribution and generic partial-warning counts.

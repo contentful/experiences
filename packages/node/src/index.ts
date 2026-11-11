@@ -1,4 +1,3 @@
-export { createRequestHandoffFromData } from './handoff.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   Config,
@@ -7,8 +6,6 @@ export type {
   PersonalizationRequestOptions,
   AnalyticsRequestOptions,
   RequestContext,
-  PrepareRequestHandoffOptions,
-  PrepareRequestHandoffResult,
 } from './contentful-experiences.js';
 export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-info.js';
 
@@ -27,7 +24,6 @@ export type {
   ExperienceParameterValue,
   ExperienceParameterRecord,
   ExperienceParameterOrder,
-  PersonalizationOptions,
 } from '@contentful/experiences-client';
 export {
   ANONYMOUS_ID_COOKIE,
@@ -53,17 +49,18 @@ export type {
   EventEmissionResult,
   EventProfile,
   ExperiencesHandoff,
+  FetchExperienceForHandoffResult,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  InitialPersonalizationEvent,
   OptimizationConfig,
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
   FetchExperienceOptions,
+  RuntimePersonalizationOptions as PersonalizationOptions,
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
