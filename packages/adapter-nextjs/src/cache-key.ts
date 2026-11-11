@@ -14,29 +14,53 @@ export interface NextjsExperiencesCacheKeyInput {
   readonly selectionDimensions: Readonly<Record<string, string | number | boolean>>;
 }
 
-const ordered = <Value>(values: Readonly<Record<string, Value>>): [string, Value][] =>
-  Object.keys(values)
-    .sort()
-    .map((key) => [key, values[key]!]);
+const scalar = (value: unknown, path: string, allowBoolean = false): unknown => {
+  if (
+    typeof value !== 'string' &&
+    !(typeof value === 'number' && Number.isFinite(value)) &&
+    !(allowBoolean && typeof value === 'boolean')
+  )
+    throw new TypeError(
+      `${path} must be a string or finite number${allowBoolean ? ' or boolean' : ''}.`
+    );
+  return value;
+};
+
+const ordered = (
+  values: unknown,
+  path: string,
+  mapValue: (value: unknown, path: string) => unknown = scalar
+) => {
+  if (
+    values === null ||
+    typeof values !== 'object' ||
+    (Object.getPrototypeOf(values) !== Object.prototype && Object.getPrototypeOf(values) !== null)
+  )
+    throw new TypeError(`${path} must be a plain record.`);
+  return Object.entries(values)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => [key, mapValue(value, `${path}.${key}`)]);
+};
 
 /** The application owns completeness of the approved public XDA dimensions. */
 export function createExperiencesCacheKey(input: NextjsExperiencesCacheKeyInput): string {
   const parameters =
     input.parameters === undefined
       ? undefined
-      : ordered(input.parameters).map(([key, value]) => [
-          key,
-          typeof value === 'object' ? ordered(value) : value,
-        ]);
+      : ordered(input.parameters, 'parameters', (value, path) =>
+          typeof value === 'object' ? ordered(value, path) : scalar(value, path)
+        );
   return encodeURIComponent(
     JSON.stringify([
       input.spaceId,
       input.environmentId,
       input.experienceId,
-      input.contentRevision,
+      scalar(input.contentRevision, 'contentRevision'),
       input.locale,
       parameters,
-      ordered(input.selectionDimensions),
+      ordered(input.selectionDimensions, 'selectionDimensions', (value, path) =>
+        scalar(value, path, true)
+      ),
     ])
   );
 }

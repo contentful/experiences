@@ -2,7 +2,11 @@
 import { act } from 'react';
 import { useExperiences, useExperiencesActions } from '@contentful/experiences-react/client';
 import { createRoot, type Root } from 'react-dom/client';
-import { EventBuilder } from '@contentful/experiences-runtime';
+import {
+  CONSENT_CACHE_KEY,
+  EventBuilder,
+  PERSISTENCE_CONSENT_CACHE_KEY,
+} from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
@@ -101,6 +105,79 @@ describe('App committed route inputs', () => {
       query: { q: 'changed', tag: ['c', 'd'] },
     });
   });
+
+  it.each([
+    {
+      label: 'bound defaults',
+      defaults: false,
+      clientDefaults: undefined,
+      override: undefined,
+      expected: false,
+    },
+    {
+      label: 'bound client consent defaults',
+      defaults: true,
+      clientDefaults: false,
+      override: undefined,
+      expected: false,
+    },
+    {
+      label: 'explicit root acceptance',
+      defaults: false,
+      clientDefaults: false,
+      override: true,
+      expected: true,
+    },
+    {
+      label: 'explicit root denial',
+      defaults: true,
+      clientDefaults: true,
+      override: false,
+      expected: false,
+    },
+    {
+      label: 'persisted acceptance without configured defaults',
+      defaults: undefined,
+      clientDefaults: undefined,
+      override: undefined,
+      expected: true,
+    },
+  ])(
+    'uses $label when constructing the browser owner',
+    async ({ defaults, clientDefaults, override, expected }) => {
+      window.localStorage.setItem(CONSENT_CACHE_KEY, 'accepted');
+      window.localStorage.setItem(PERSISTENCE_CONSENT_CACHE_KEY, 'accepted');
+      const consentDefaults = (value: boolean | undefined) =>
+        value === undefined ? undefined : { consent: value, persistenceConsent: value };
+      const bound = bindNextjsAppRouterClientExperiences({
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { host: 'https://trusted-proxy.example' },
+        isPreview: true,
+        defaults: consentDefaults(defaults),
+        consent: { clientDefaults: consentDefaults(clientDefaults) },
+      });
+      let current: ReturnType<typeof useExperiences>;
+      function ConsentProbe() {
+        current = useExperiences();
+        return null;
+      }
+      await act(async () =>
+        root.render(
+          <bound.ExperiencesRoot defaults={consentDefaults(override)}>
+            <ConsentProbe />
+          </bound.ExperiencesRoot>
+        )
+      );
+      expect(current!.states.consent.current).toBe(expected);
+      expect(current!.states.persistenceConsent.current).toBe(expected);
+      expect(window.localStorage.getItem(CONSENT_CACHE_KEY)).toBe(expected ? 'accepted' : 'denied');
+      expect(window.localStorage.getItem(PERSISTENCE_CONSENT_CACHE_KEY)).toBe(
+        expected ? 'accepted' : 'denied'
+      );
+    }
+  );
 
   it('rejects original request bootstrap after Reset and keyed history restoration but accepts a new ID with identical plan bytes', async () => {
     const startupPlan = { nodes: [], debug: false, diagnostics: [], metadata: { label: 'server' } };
