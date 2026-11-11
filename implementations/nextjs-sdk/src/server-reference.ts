@@ -101,11 +101,7 @@ export async function loadReferenceContent(
 
 // Comparisons have no visitor intent. Keep primary preflight identity on its own
 // request: a newly returned ID may not exist for a later profile-only lookup.
-export async function loadComparisons(
-  request: RequestRuntime,
-  primary: ServerContent,
-  url: URL
-) {
+export async function loadComparisons(request: RequestRuntime, primary: ServerContent, url: URL) {
   const { sdk, browser } = getServer();
   const comparisons = sdk.forRequest({
     locale: request.locale,
