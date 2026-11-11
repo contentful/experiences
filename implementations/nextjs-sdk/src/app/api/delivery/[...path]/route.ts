@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic';
 // Real Delivery passthrough, limited to this app's scope and configured IDs.
 // Browser clients omit bearer auth; only this server supplies the private token.
 async function proxy(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  if (['access_token', 'preview'].some((key) => request.nextUrl.searchParams.has(key)))
+    return new NextResponse('Unsupported Delivery query parameter', { status: 400 });
   const { config } = getServer();
   const path = (await params).path;
   if (request.headers.get('origin') && request.headers.get('origin') !== config.origin)
