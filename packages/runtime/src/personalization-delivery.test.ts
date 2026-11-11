@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
-  ExperienceEvent,
+  ExperienceEvent as PersonalizationEvent,
   OptimizationData,
 } from '@contentful/optimization-api-client/api-schemas';
 import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
-import type { ExperienceRequestState } from './experience-request-state.js';
+import type { PersonalizationRequestState } from './experience-request-state.js';
 import type { EventInterceptors } from './event-interceptors.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
 import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 import { buildPreparedEvents } from './prepared-events.js';
-import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
+import type { EventApi } from './runtime-event-methods.js';
 
 const builder = new EventBuilder({
   channel: 'web',
@@ -37,22 +37,22 @@ function fixture(
     online?: boolean;
     profileId?: string;
     maxEvents?: number;
-    admitEvent?: (event: ExperienceEvent) => boolean;
-    experienceRequestState?: { value: ExperienceRequestState };
+    admitEvent?: (event: PersonalizationEvent) => boolean;
+    personalizationRequestState?: { value: PersonalizationRequestState };
   } = {}
 ) {
   let online = options.online ?? true;
   let profileId = options.profileId;
   let revision = 0;
   const upsertProfile = vi
-    .fn<RuntimeOptimizationApiClient['experience']['upsertProfile']>()
+    .fn<EventApi['personalization']['upsertProfile']>()
     .mockResolvedValue(data('response-id'));
-  const experienceRequestState: { value: ExperienceRequestState } =
-    options.experienceRequestState ?? { value: { status: 'idle' } };
+  const personalizationRequestState: { value: PersonalizationRequestState } =
+    options.personalizationRequestState ?? { value: { status: 'idle' } };
   const applyOptimizationData = vi.fn<
     (data: OptimizationData, isCurrent: () => boolean) => void | Promise<void>
   >(() => {
-    experienceRequestState.value = { status: 'success' };
+    personalizationRequestState.value = { status: 'success' };
   });
   const eventInterceptors = { run: vi.fn<EventInterceptors['run']>(async (event) => event) };
   const publishEvent = vi.fn();
@@ -61,7 +61,7 @@ function fixture(
     eventInterceptors,
     publishEvent,
     admitEvent: options.admitEvent,
-    experienceRequestState,
+    personalizationRequestState,
     getProfileId: () => profileId,
     getProfileRevision: () => revision,
     getOnline: () => online,
@@ -71,7 +71,7 @@ function fixture(
   });
   return {
     delivery,
-    experienceRequestState,
+    personalizationRequestState,
     upsertProfile,
     applyOptimizationData,
     eventInterceptors,
@@ -121,7 +121,7 @@ describe('PersonalizationDelivery', () => {
       f.setOnline(true);
       await f.delivery.flush({ force: true });
       expect(f.upsertProfile).not.toHaveBeenCalled();
-      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+      expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
     }
   );
 
@@ -190,7 +190,7 @@ describe('PersonalizationDelivery', () => {
     const events = prepared();
 
     expect(f.delivery.sendPrepared(events, { locale: 'fr-FR' })).toEqual({ accepted: true });
-    expect(f.experienceRequestState.value.status).toBe('pending');
+    expect(f.personalizationRequestState.value.status).toBe('pending');
     expect(f.eventInterceptors.run).not.toHaveBeenCalled();
     expect(admitEvent).not.toHaveBeenCalled();
     expect(f.upsertProfile).toHaveBeenCalledWith(
@@ -211,40 +211,44 @@ describe('PersonalizationDelivery', () => {
   });
 
   it('does not send a direct event when a pending-state subscriber resets the owner', async () => {
-    let value: ExperienceRequestState = { status: 'idle' };
-    const experienceRequestState = {
+    let value: PersonalizationRequestState = { status: 'idle' };
+    const personalizationRequestState = {
       get value() {
         return value;
       },
-      set value(next: ExperienceRequestState) {
+      set value(next: PersonalizationRequestState) {
         value = next;
         if (next.status === 'pending') f.delivery.reset();
       },
     };
-    const f = fixture({ experienceRequestState });
+    const f = fixture({ personalizationRequestState });
 
     await expect(f.delivery.send(builder.buildPageView())).resolves.toEqual({ accepted: true });
     expect(f.upsertProfile).not.toHaveBeenCalled();
     expect(f.applyOptimizationData).not.toHaveBeenCalled();
-    expect(experienceRequestState.value).toEqual({ status: 'idle' });
+    expect(personalizationRequestState.value).toEqual({ status: 'idle' });
   });
 
   it('joins teardown triggered synchronously by pending publication and drains each batch once', async () => {
-    let value: ExperienceRequestState = { status: 'idle' };
+    let value: PersonalizationRequestState = { status: 'idle' };
     let teardown: Promise<void> | undefined;
     let onPending: (() => void) | undefined;
-    const experienceRequestState = {
+    const personalizationRequestState = {
       get value() {
         return value;
       },
-      set value(next: ExperienceRequestState) {
+      set value(next: PersonalizationRequestState) {
         value = next;
         if (next.status === 'pending') onPending?.();
       },
     };
     const first = deferred<OptimizationData>();
     const second = deferred<OptimizationData>();
-    const old = fixture({ online: false, profileId: 'captured-profile', experienceRequestState });
+    const old = fixture({
+      online: false,
+      profileId: 'captured-profile',
+      personalizationRequestState,
+    });
     old.upsertProfile.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const head = prepared('de-DE');
     const tail = prepared('fr-FR');
@@ -261,13 +265,13 @@ describe('PersonalizationDelivery', () => {
       { profileId: 'captured-profile', events: head },
       { preflight: false, locale: 'de-DE' }
     );
-    expect(experienceRequestState.value).toEqual({ status: 'idle' });
+    expect(personalizationRequestState.value).toEqual({ status: 'idle' });
     const replacementResponse = deferred<OptimizationData>();
-    const replacement = fixture({ experienceRequestState });
+    const replacement = fixture({ personalizationRequestState });
     replacement.upsertProfile.mockReturnValueOnce(replacementResponse.promise);
     const replacementRequest = replacement.delivery.send(builder.buildPageView());
     await Promise.resolve();
-    expect(experienceRequestState.value).toEqual({ status: 'pending' });
+    expect(personalizationRequestState.value).toEqual({ status: 'pending' });
 
     first.resolve(data('head-response'));
     await vi.waitFor(() => expect(old.upsertProfile).toHaveBeenCalledTimes(2));
@@ -280,11 +284,11 @@ describe('PersonalizationDelivery', () => {
     expect(old.upsertProfile).toHaveBeenCalledTimes(2);
     expect(old.delivery.queuedEventCount).toBe(0);
     expect(old.applyOptimizationData).not.toHaveBeenCalled();
-    expect(experienceRequestState.value).toEqual({ status: 'pending' });
+    expect(personalizationRequestState.value).toEqual({ status: 'pending' });
 
     replacementResponse.resolve(data('replacement'));
     await replacementRequest;
-    expect(experienceRequestState.value).toEqual({ status: 'success' });
+    expect(personalizationRequestState.value).toEqual({ status: 'success' });
   });
 
   it('refuses a valid prepared batch exceeding capacity without sending a prefix', () => {
@@ -377,7 +381,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(failure);
     await expect(f.delivery.send(builder.buildPageView())).rejects.toBe(failure);
     expect(f.delivery.queuedEventCount).toBe(0);
-    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
   });
 
   it('classifies an aborted transport as a timeout without queueing the direct event', async () => {
@@ -387,7 +391,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(abort);
 
     await expect(f.delivery.send(builder.buildPageView())).rejects.toBe(abort);
-    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'timeout' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'failed', reason: 'timeout' });
     expect(f.delivery.queuedEventCount).toBe(0);
   });
 
@@ -480,7 +484,7 @@ describe('PersonalizationDelivery', () => {
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: true });
 
     await f.delivery.flush({ force: true });
-    expect(f.experienceRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'failed', reason: 'api-error' });
     expect(f.delivery.queuedEventCount).toBe(2);
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
@@ -527,7 +531,7 @@ describe('PersonalizationDelivery', () => {
     f.upsertProfile.mockRejectedValueOnce(new Error('network'));
     const events = prepared();
     expect(f.delivery.sendPrepared(events)).toEqual({ accepted: true });
-    await vi.waitFor(() => expect(f.experienceRequestState.value.status).toBe('failed'));
+    await vi.waitFor(() => expect(f.personalizationRequestState.value.status).toBe('failed'));
     const firstCall = f.upsertProfile.mock.calls[0];
     f.setProfile('later');
     await vi.advanceTimersByTimeAsync(500);
@@ -565,7 +569,7 @@ describe('PersonalizationDelivery', () => {
       response.resolve(data('stale'));
       await vi.runAllTimersAsync();
       expect(f.applyOptimizationData).not.toHaveBeenCalled();
-      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+      expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
       expect(f.delivery.queuedEventCount).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       if (action === 'flushOnDestroy')
@@ -589,7 +593,7 @@ describe('PersonalizationDelivery', () => {
     pending.resolve(data('late-profile'));
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
     expect(f.applyOptimizationData).not.toHaveBeenCalled();
-    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
   });
 
   it('attempts every queued batch in order on destroy and carries the response profile ID', async () => {
@@ -616,7 +620,7 @@ describe('PersonalizationDelivery', () => {
     ]);
     await vi.waitFor(() => expect(f.delivery.queuedEventCount).toBe(0));
     expect(f.applyOptimizationData).not.toHaveBeenCalled();
-    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
   });
 
   it('continues an active flush on destroy without publishing late responses', async () => {
@@ -652,7 +656,7 @@ describe('PersonalizationDelivery', () => {
     await drain;
     expect(f.upsertProfile).toHaveBeenCalledTimes(1);
     expect(f.applyOptimizationData).not.toHaveBeenCalled();
-    expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+    expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
     expect(f.delivery.sendPrepared(prepared())).toEqual({ accepted: false });
   });
 
@@ -671,7 +675,7 @@ describe('PersonalizationDelivery', () => {
       await vi.runAllTimersAsync();
       expect(f.upsertProfile).toHaveBeenCalledTimes(1);
       expect(f.delivery.queuedEventCount).toBe(0);
-      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+      expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
       expect(vi.getTimerCount()).toBe(0);
       expect(ingest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -798,7 +802,7 @@ describe('PersonalizationDelivery', () => {
       reject(new Error('network'));
 
       await expect(result).resolves.toEqual({ accepted: true });
-      expect(f.experienceRequestState.value).toEqual({ status: 'idle' });
+      expect(f.personalizationRequestState.value).toEqual({ status: 'idle' });
     });
 
     it('resolves { accepted: true } without data when a direct request succeeds after destroy', async () => {
@@ -827,7 +831,7 @@ describe('PersonalizationDelivery', () => {
         data('live'),
         expect.any(Function)
       );
-      expect(f.experienceRequestState.value).toEqual({ status: 'success' });
+      expect(f.personalizationRequestState.value).toEqual({ status: 'success' });
     });
   });
 });

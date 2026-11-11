@@ -11,7 +11,7 @@ import {
   type BlockedEvent,
   type ConsentInput,
   type ConsentState,
-  type ContentfulExperiencesConfig,
+  type Config as BaseConfig,
   type EventBuilderConfig,
   type EventEmissionResult,
   type ExperiencesHandoff,
@@ -22,10 +22,10 @@ import {
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
   type RuntimeEventMethods,
-  type RuntimeFetchByDestinationNodeOptions,
-  type RuntimeFetchByDestinationPathOptions,
-  type RuntimeFetchExperienceOptions,
-  type RuntimeFetchResolveOptions,
+  type FetchByDestinationNodeOptions,
+  type FetchByDestinationPathOptions,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
   hasEventConsent,
   hasEventTypeConsent,
   methodForEventType,
@@ -52,18 +52,18 @@ import {
   consent as consentSignal,
   effect,
   event as eventSignal,
-  experienceRequestState as experienceRequestStateSignal,
+  personalizationRequestState as personalizationRequestStateSignal,
   locale as localeSignal,
   online as onlineSignal,
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
   toObservable,
 } from './signals/index.js';
-import type { CoreStates } from './states.js';
+import type { States } from './states.js';
 import { normalizeExplicitLocale } from './locale.js';
 import {
-  mergeExperienceState,
-  type ExperienceState,
+  mergePersonalizationState,
+  type PersonalizationState,
   type LifecycleInterceptors,
 } from './interceptors.js';
 import { installCoreBridgeCapabilities } from './bridge-support/capabilities.js';
@@ -90,25 +90,22 @@ import LocalStore from './storage/local-store.js';
 import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
-export type BrowserEventContextProviders = Pick<
-  EventBuilderConfig,
-  'getPageProperties' | 'getUserAgent'
->;
+export type EventContextProviders = Pick<EventBuilderConfig, 'getPageProperties' | 'getUserAgent'>;
 
 /** Initial values for the stateful Web runtime. */
-export type CoreConfigDefaults = StatefulDefaults;
+export type ConfigDefaults = StatefulDefaults;
 
 /**
  * Long-lived, browser-oriented SDK configuration.
  */
-export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuilder' | 'locale'> & {
+export type Config = Omit<BaseConfig, 'eventBuilder' | 'locale'> & {
   /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
   isPreview?: boolean;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
   app?: EventBuilderConfig['app'];
-  browserContext?: BrowserEventContextProviders;
+  browserContext?: EventContextProviders;
   /** Event types emitted while event consent is not granted. Defaults to identify and page. */
   allowedEventTypes?: readonly AllowedEventType[];
   /** Called when consent drops an event. Blocked events are never replayed. */
@@ -124,7 +121,7 @@ export type ExperiencesWebConfig = Omit<ContentfulExperiencesConfig, 'eventBuild
    * Consent applied at startup. Configured values take precedence over a stored
    * decision, and `consent` is also the default for `persistenceConsent`.
    */
-  defaults?: CoreConfigDefaults;
+  defaults?: ConfigDefaults;
   /**
    * How the identity cookie is written and deleted: domain, path, SameSite, Secure and
    * expiry (365 days by default). It is the cookie a server reads to recognise the
@@ -190,18 +187,18 @@ type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
 
 /** Browser runtime with mutable application locale and live event context. */
 export class ContentfulExperiences extends RuntimeContentfulExperiences<
-  ExperiencesWebConfig & Pick<ContentfulExperiencesConfig, 'eventBuilder'>
+  Config & Pick<BaseConfig, 'eventBuilder'>
 > {
   readonly #singletonOwner: string;
   readonly #isPreview: boolean;
   #profileRevision = 0;
   readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
-  protected readonly experienceQueue: PersonalizationDelivery;
-  protected readonly insightsQueue: AnalyticsDelivery;
+  protected readonly personalizationQueue: PersonalizationDelivery;
+  protected readonly analyticsQueue: AnalyticsDelivery;
   #cleanupVisibilityListener: (() => void) | undefined;
   protected readonly allowedEventTypes: AllowedEventType[];
-  protected readonly onEventBlocked: ExperiencesWebConfig['onEventBlocked'];
+  protected readonly onEventBlocked: Config['onEventBlocked'];
   readonly #getAnonymousId: () => string | undefined;
   #interactionTracking: InteractionTracking | undefined;
   /** Automatic and per-element interaction controls, matching Optimization. */
@@ -261,14 +258,14 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       : this.#eventMethods.trackFlagView(...args);
 
   /** Observable state shared with application subscriptions and internal effects. */
-  readonly states: CoreStates = {
+  readonly states: States = {
     flag: (name) => this.#flagObservable(name),
     blockedEventStream: toObservable(blockedEventSignal),
     consent: toObservable(consentSignal),
     persistenceConsent: toObservable(persistenceConsentSignal),
     eventStream: toObservable(eventSignal, (event) => event),
     locale: toObservable(localeSignal),
-    experienceRequestState: toObservable(experienceRequestStateSignal),
+    personalizationRequestState: toObservable(personalizationRequestStateSignal),
     profile: toObservable(profileSignal),
   };
 
@@ -278,7 +275,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     state: new InterceptorManager(),
   };
 
-  constructor(config: ExperiencesWebConfig) {
+  constructor(config: Config) {
     const {
       app,
       browserContext,
@@ -340,27 +337,27 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         onlineSignal.value = globalThis.navigator?.onLine !== false;
         eventSignal.value = undefined;
         blockedEventSignal.value = undefined;
-        experienceRequestStateSignal.value = { status: 'idle' };
+        personalizationRequestStateSignal.value = { status: 'idle' };
       });
       this.eventBuilder.getConsent = () => consentSignal.value;
       this.#identity = new IdentityCookie(LocalStore, cookie);
-      this.experienceQueue = delivery = new PersonalizationDelivery({
-        api: this.api.experience,
+      this.personalizationQueue = delivery = new PersonalizationDelivery({
+        api: this.api.personalization,
         getProfileId: () => this.#requestIdentity(),
         getProfileRevision: () => this.#profileRevision,
         getOnline: () => this.online,
         getLocale: () => this.locale,
         flushPolicy: resolvedQueuePolicy.flush,
         maxEvents: resolvedQueuePolicy.offlineMaxEvents,
-        experienceRequestState: experienceRequestStateSignal,
+        personalizationRequestState: personalizationRequestStateSignal,
         eventInterceptors: this.interceptors.event,
         publishEvent: this.#publishEvent,
         admitEvent: (event) => this.#admitEvent(event, true),
         applyOptimizationData: (data, isCurrent) =>
           this.#applyOptimizationDataToSignals(data, isCurrent),
       });
-      this.insightsQueue = analytics = new AnalyticsDelivery({
-        api: this.api.insights,
+      this.analyticsQueue = analytics = new AnalyticsDelivery({
+        api: this.api.analytics,
         getOnline: () => this.online,
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
         flushPolicy: resolvedQueuePolicy.flush,
@@ -380,8 +377,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           reportBlockedEvent: (event) => this.#reportBlockedEvent(event),
         },
         {
-          personalization: (event) => this.experienceQueue.send(event),
-          analytics: (event, currentProfile) => this.insightsQueue.send(event, currentProfile),
+          personalization: (event) => this.personalizationQueue.send(event),
+          analytics: (event, currentProfile) => this.analyticsQueue.send(event, currentProfile),
         }
       );
       installCoreBridgeCapabilities(this, (data) => {
@@ -476,10 +473,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       // A persistence-only change leaves the queues and measurements alone.
       if (next.events === false) {
         this.#resetToken = {};
-        this.experienceQueue.clearQueue();
+        this.personalizationQueue.clearQueue();
         this.#pendingFlagViews.clear();
         this.#acceptedFlagViews.clear();
-        this.insightsQueue.clearQueuedEvents();
+        this.analyticsQueue.clearQueuedEvents();
         this.#profileRevision += 1;
         // A discarded queued page must not leave its route looking admitted, or a later
         // permitted attempt for the same route would be answered from the cache and
@@ -518,9 +515,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     isCurrent: () => boolean = () => true
   ): Promise<void> {
     if (this.isPreview || !isCurrent()) return;
-    await this.insightsQueue.flush(options);
+    await this.analyticsQueue.flush(options);
     if (!isCurrent()) return;
-    await this.experienceQueue.flush({ force: options.force });
+    await this.personalizationQueue.flush({ force: options.force });
   }
 
   /** Changes the default locale used by subsequent events and fetches. */
@@ -528,13 +525,13 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.#destroyed) return undefined;
     const resolvedLocale = normalizeExplicitLocale(locale);
     localeSignal.value = resolvedLocale;
-    this.api.experience.setLocale(resolvedLocale);
+    this.api.personalization.setLocale(resolvedLocale);
     return resolvedLocale;
   }
 
   override fetchExperience(
-    options: RuntimeFetchExperienceOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
     return this.#fetchPersonalized(options, {
       // A preview fetch neither sends nor stores a profile.
@@ -555,8 +552,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   override fetchByDestinationNode(
-    options: RuntimeFetchByDestinationNodeOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationNodeOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.#fetchPersonalized(options, {
       send: (final) => super.fetchByDestinationNode(final, resolveOptions),
@@ -564,8 +561,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   override fetchByDestinationPath(
-    options: RuntimeFetchByDestinationPathOptions,
-    resolveOptions: RuntimeFetchResolveOptions
+    options: FetchByDestinationPathOptions,
+    resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.#fetchPersonalized(options, {
       send: (final) => super.fetchByDestinationPath(final, resolveOptions),
@@ -661,7 +658,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       ) {
         const next = await this.interceptors.state.run(
           { profile: { id: nextProfileId } },
-          mergeExperienceState
+          mergePersonalizationState
         );
         if (
           this.#isCurrent(token) &&
@@ -677,7 +674,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   /** Clear live browser state, or cancel this instance's unfinished drain after destroy. */
   reset(): void {
     if (this.#destroyed) {
-      this.experienceQueue.reset();
+      this.personalizationQueue.reset();
       return;
     }
     batch(() => {
@@ -686,10 +683,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#currentInitialization = undefined;
       this.#currentPage.reset();
       this.#setAdoptedProfileId(undefined);
-      this.experienceQueue.reset();
+      this.personalizationQueue.reset();
       this.#pendingFlagViews.clear();
       this.#acceptedFlagViews.clear();
-      this.insightsQueue.clearQueuedEvents();
+      this.analyticsQueue.clearQueuedEvents();
       this.#profileRevision += 1;
       LocalStore.reset();
       this.#identity.clear();
@@ -697,7 +694,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       changesSignal.value = undefined;
       eventSignal.value = undefined;
       blockedEventSignal.value = undefined;
-      experienceRequestStateSignal.value = { status: 'idle' };
+      personalizationRequestStateSignal.value = { status: 'idle' };
       // Resume only after old work is invalidated and the new visitor token exists.
       this.#interactionTracking?.syncConsent();
     });
@@ -711,21 +708,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     // Analytics request captures the live token, so it is sent, and its late result no
     // longer applies once the token reads `undefined`.
     if (!this.isPreview) {
-      void this.insightsQueue.flush({ force: true }).catch((error: unknown) => {
+      void this.analyticsQueue.flush({ force: true }).catch((error: unknown) => {
         console.warn(
           '[@contentful/experiences] Failed to flush Analytics queue during destroy()',
           error
         );
       });
-      flushPersonalizationOnDestroy(this.experienceQueue);
+      flushPersonalizationOnDestroy(this.personalizationQueue);
     }
     this.#destroyed = true;
     this.#pendingFlagViews.clear();
     this.#acceptedFlagViews.clear();
     this.#activeFlags.clear();
     this.#disposeEffects();
-    this.insightsQueue.clearPeriodicFlushTimer();
-    this.insightsQueue.clearScheduledRetry();
+    this.analyticsQueue.clearPeriodicFlushTimer();
+    this.analyticsQueue.clearScheduledRetry();
     this.#currentInitialization = undefined;
     this.#currentPage.reset();
     try {
@@ -861,7 +858,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     const isCurrent = (): boolean => this.#isCurrent(token);
     const admitted = this.#admitPreparedEvents(events);
     if (admitted === undefined || !isCurrent()) return Promise.resolve({ accepted: false });
-    const result = this.experienceQueue.sendPrepared(admitted, { profileId, locale });
+    const result = this.personalizationQueue.sendPrepared(admitted, { profileId, locale });
     if (result.accepted && isCurrent()) {
       for (const event of admitted) {
         if (!isCurrent()) break;
@@ -1053,7 +1050,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   async #applyOptimizationDataToSignals(
-    data: ExperienceState,
+    data: PersonalizationState,
     isCurrent: () => boolean,
     canApplyProfile: () => boolean = () => true,
     canApplyChanges: () => boolean = () => true
@@ -1061,21 +1058,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.#destroyed) return;
     const profileRevision = this.#profileRevision;
     const token = this.#resetToken;
-    const next = mergeExperienceState(
+    const next = mergePersonalizationState(
       data,
-      await this.interceptors.state.run(data, mergeExperienceState)
+      await this.interceptors.state.run(data, mergePersonalizationState)
     );
     if (!isCurrent() || !this.#isCurrent(token)) return;
     batch(() => {
       if (this.#profileRevision === profileRevision) {
         this.#commitIncomingState(next, canApplyProfile(), canApplyChanges());
       }
-      experienceRequestStateSignal.value = { status: 'success' };
+      personalizationRequestStateSignal.value = { status: 'success' };
     });
   }
 
   #commitIncomingState(
-    next: ExperienceState,
+    next: PersonalizationState,
     canApplyProfile = true,
     canApplyChanges = true
   ): void {
@@ -1161,8 +1158,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     this.#effects.push(
       effect(() => {
         if (!onlineSignal.value) return;
-        this.experienceQueue.clearScheduledRetry();
-        this.insightsQueue.clearScheduledRetry();
+        this.personalizationQueue.clearScheduledRetry();
+        this.analyticsQueue.clearScheduledRetry();
         void this.flushQueues(
           { force: true },
           () => !this.#destroyed && onlineSignal.peek() === true

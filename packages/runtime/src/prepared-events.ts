@@ -1,7 +1,7 @@
 import {
-  ExperienceEventArray,
-  type ExperienceEvent,
-  type InsightsEvent,
+  ExperienceEventArray as PersonalizationEventArray,
+  type ExperienceEvent as PersonalizationEvent,
+  type InsightsEvent as AnalyticsEvent,
 } from '@contentful/optimization-api-client/api-schemas';
 import type EventBuilder from './event-builder.js';
 import type {
@@ -29,7 +29,7 @@ export interface BuildPreparedEventsOptions {
 }
 
 /** Change only GDPR metadata on an already-built event. */
-export function withEventConsent<TEvent extends ExperienceEvent | InsightsEvent>(
+export function withEventConsent<TEvent extends PersonalizationEvent | AnalyticsEvent>(
   event: TEvent,
   isConsentGiven: boolean
 ): TEvent {
@@ -40,8 +40,10 @@ export function withEventConsent<TEvent extends ExperienceEvent | InsightsEvent>
 }
 
 /** Validate one prepared Personalization batch without rebuilding its events. */
-export function validatePreparedEvents(events: readonly unknown[]): readonly ExperienceEvent[] {
-  const validEvents = ExperienceEventArray.parse(events);
+export function validatePreparedEvents(
+  events: readonly unknown[]
+): readonly PersonalizationEvent[] {
+  const validEvents = PersonalizationEventArray.parse(events);
   if (
     validEvents.length > MAX_PREPARED_EVENTS ||
     validEvents.filter(({ type }) => type === 'identify').length > MAX_IDENTIFY_EVENTS ||
@@ -62,8 +64,8 @@ export function buildPreparedEvents({
   page = {},
   eventContext = {},
   eventConsent,
-}: BuildPreparedEventsOptions): readonly ExperienceEvent[] {
-  const events: ExperienceEvent[] = [];
+}: BuildPreparedEventsOptions): readonly PersonalizationEvent[] {
+  const events: PersonalizationEvent[] = [];
   for (const input of initialEvents) {
     const { type, ...args } = input;
     if (type === 'identify') {

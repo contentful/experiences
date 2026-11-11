@@ -4,10 +4,13 @@ import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   type OptimizationEventStreamEvent,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesWebConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
 import { deferred } from './test-fixtures/dom.js';
 import { completeProfile } from './test-fixtures/profile.js';
@@ -18,7 +21,7 @@ const entity = { entityId: 'hero', entityKind: 'Experience' } as const;
 const view = { ...entity, viewId: 'view', viewDurationMs: 1000 };
 const hover = { ...entity, hoverId: 'hover', hoverDurationMs: 1000 };
 
-function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
+function createRuntime(config: Partial<Config> = {}) {
   const runtime = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'environment',
@@ -32,10 +35,10 @@ function createRuntime(config: Partial<ExperiencesWebConfig> = {}) {
 
 beforeEach(() => {
   seedConsent({ events: false, persistence: false });
-  vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+  vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
     profile: { id: 'visitor' },
   } as never);
-  vi.spyOn(InsightsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
+  vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -68,7 +71,7 @@ describe('Web event interception consent', () => {
       args: [expect.objectContaining({ type: 'track', event: 'rewritten' })],
     });
     expect(runtime.states.eventStream.current).toBeUndefined();
-    expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+    expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
   });
 
   it('reports final Analytics refusal through the Web admission callback', async () => {
@@ -83,7 +86,7 @@ describe('Web event interception consent', () => {
     });
     expect(runtime.states.eventStream.current).toBeUndefined();
     await runtime.flush();
-    expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+    expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
   });
 
   it('uses current consent when an async hook transforms an admitted page', async () => {
@@ -104,7 +107,7 @@ describe('Web event interception consent', () => {
       type: 'track',
       event: 'now-admitted',
     });
-    expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalledWith(
+    expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         events: [expect.objectContaining({ type: 'track', event: 'now-admitted' })],
       }),
@@ -239,8 +242,8 @@ describe('Web event interception consent', () => {
       gate.resolve();
       await Promise.all([page, pendingView, xdaRejected]);
       expect(fetch).not.toHaveBeenCalled();
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
-      expect(InsightsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
+      expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(AnalyticsApiClient.prototype.sendBatchEvents).not.toHaveBeenCalled();
       expect(runtime.states.eventStream.current).toBeUndefined();
     }
   );

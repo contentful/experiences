@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
-import { ExperienceApiClient, InsightsApiClient } from '@contentful/optimization-api-client';
+import {
+  ExperienceApiClient as PersonalizationApiClient,
+  InsightsApiClient as AnalyticsApiClient,
+} from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // This source-only import exercises both public runtime leaves without adding a Web package dependency.
@@ -63,7 +66,7 @@ afterEach(() => {
 describe('paired Node preparation and Web delivery', () => {
   it('packages final request state without evaluating server or browser event hooks', async () => {
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'evaluated-profile' } } as never);
     const server = node();
     const serverHook = vi.fn((event) =>
@@ -105,7 +108,7 @@ describe('paired Node preparation and Web delivery', () => {
     'separates event locales from request/content locale ($transportLocale) through replay',
     async ({ configuredLocale, requestLocale, transportLocale }) => {
       const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: { id: 'profile' } } as never);
       const server = new NodeExperiences({
         spaceId: 'space',
@@ -155,7 +158,7 @@ describe('paired Node preparation and Web delivery', () => {
     const firstDelivery = deferred<{ profile: { id: string } }>();
     const secondDelivery = deferred<{ profile: { id: string } }>();
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
       .mockReturnValueOnce(firstDelivery.promise as never)
       .mockReturnValueOnce(secondDelivery.promise as never);
@@ -208,7 +211,7 @@ describe('paired Node preparation and Web delivery', () => {
       routeKey: '/products?sort=popular',
     });
     await expect(admission).resolves.toEqual({ accepted: true });
-    expect(browser.states.experienceRequestState.current.status).toBe('pending');
+    expect(browser.states.personalizationRequestState.current.status).toBe('pending');
     expect(upsert).toHaveBeenCalledTimes(2);
     const [firstBody, firstOptions] = upsert.mock.calls[1]!;
     // The same events in the same order, except that the consent flag is the browser's
@@ -225,7 +228,7 @@ describe('paired Node preparation and Web delivery', () => {
 
     firstDelivery.reject(new Error('response lost after request may have arrived'));
     await vi.waitFor(() =>
-      expect(browser.states.experienceRequestState.current.status).toBe('failed')
+      expect(browser.states.personalizationRequestState.current.status).toBe('failed')
     );
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(1000);
@@ -242,11 +245,11 @@ describe('paired Node preparation and Web delivery', () => {
   it('carries a preview-issued continuation ID across JSON for a new visitor', async () => {
     const delivery = deferred<{ profile: { id: string } }>();
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValueOnce({ profile: { id: 'issued-profile' } } as never)
       .mockReturnValueOnce(delivery.promise as never);
     const analytics = vi
-      .spyOn(InsightsApiClient.prototype, 'sendBatchEvents')
+      .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
       .mockResolvedValue(true);
     const server = node();
     const prepared = await server
@@ -266,8 +269,8 @@ describe('paired Node preparation and Web delivery', () => {
     ).resolves.toEqual({ accepted: true });
     expect(upsert.mock.calls[1]?.[0].profileId).toBe('issued-profile');
     expect(upsert.mock.calls[1]?.[0].events).toEqual(prepared.handoff.replay?.events);
-    // The continuation ID is id-only, which Insights rejects: the click is admitted but
-    // not sent until the Experience API commits a complete profile.
+    // The continuation ID is id-only, which Analytics rejects: the click is admitted but
+    // not sent until the Personalization API commits a complete profile.
     await expect(
       browser.trackClick({ entityId: 'hero', entityKind: 'Experience' })
     ).resolves.toEqual({ accepted: true });
@@ -285,7 +288,7 @@ describe('paired Node preparation and Web delivery', () => {
   it('retains replay after preview failure and uses an ordinary page on a different route', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const upsert = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockRejectedValueOnce(new Error('preview unavailable'))
       .mockResolvedValue({ profile: { id: 'committed-profile' } } as never);
     const server = node();
@@ -325,7 +328,7 @@ describe('paired Node preparation and Web delivery', () => {
     async (online) => {
       const firstDelivery = deferred<{ profile: { id: string } }>();
       const upsert = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
         .mockResolvedValueOnce({ profile: { id: 'preview-profile' } } as never)
         .mockReturnValueOnce(firstDelivery.promise as never)
@@ -387,7 +390,7 @@ describe('paired Node preparation and Web delivery', () => {
       firstDelivery.resolve({ profile: { id: 'committed-profile' } });
       window.dispatchEvent(new Event('online'));
       await browser.flush();
-      expect(browser.states.experienceRequestState.current.status).toBe('success');
+      expect(browser.states.personalizationRequestState.current.status).toBe('success');
       const repeated = await browser.hydrateAndTrackCurrentPage(nextHandoff, {
         routeKey: '/next',
         buildPayload,

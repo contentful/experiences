@@ -7,7 +7,7 @@ import {
   type ExperiencesHandoff,
   withEventConsent,
 } from '@contentful/experiences-runtime';
-import { ExperienceApiClient } from '@contentful/optimization-api-client';
+import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
@@ -78,7 +78,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('joins duplicate and serialized invocations by final page message ID before HTTP completes', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const runtime = createRuntime();
     const input = handoff(runtime);
@@ -106,14 +106,14 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('joins state-only hydration with subsequent delivery without reseeding the response profile', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'api-profile' } } as never);
     const runtime = createRuntime();
     const input = handoff(runtime, '/first', { state: { profile: { id: 'server-state' } } });
 
     await runtime.hydrateHandoffState(input, { routeKey: '/first' });
     expect(runtime.states.profile.current).toEqual({ id: 'server-state' });
-    expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
+    expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
     expect(send).not.toHaveBeenCalled();
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first' })
@@ -130,7 +130,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('captures the replay target before evaluated state hydration changes the profile', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const runtime = createRuntime();
     const input = handoff(runtime, '/first', {
@@ -153,7 +153,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('skips mismatched replay and state, and treats search changes as distinct routes', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime({ id: 'browser-profile' });
     const input = handoff(runtime, '/first?view=one', {
@@ -179,7 +179,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('tracks a state-only handoff as an ordinary page and marks later routes noninitial', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime({ id: 'browser-profile' });
     const initialFlags: boolean[] = [];
@@ -213,7 +213,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('allows new handoffs and later visits while deduplicating the accepted current route', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime({ id: 'browser-profile' });
     const first = handoff(runtime, '/first');
@@ -236,7 +236,7 @@ describe('Web handoff and current-page lifecycle', () => {
     'falls back within ordinary capacity guards with %i queued events',
     async (queuedCount) => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
       const runtime = createRuntime();
       window.dispatchEvent(new Event('offline'));
@@ -260,7 +260,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
       window.dispatchEvent(new Event('online'));
       await vi.waitFor(() =>
-        expect(runtime.states.experienceRequestState.current.status).toBe('success')
+        expect(runtime.states.personalizationRequestState.current.status).toBe('success')
       );
       expect(send).toHaveBeenCalledTimes(1);
       const request = send.mock.calls[0]?.[0];
@@ -290,7 +290,7 @@ describe('Web handoff and current-page lifecycle', () => {
     async (method) => {
       const response = deferred<{ profile: { id: string } }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const runtime = createRuntime({ id: 'browser-profile' });
       window.dispatchEvent(new Event('offline'));
@@ -329,7 +329,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('falls back once with retained identity for an out-of-order prepared batch', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const runtime = createRuntime();
     const events = [
@@ -375,7 +375,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('returns ordinary route deduplication refusal after rejected replay', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'browser-profile' } } as never);
     const runtime = createRuntime();
     await runtime.trackCurrentPage({ routeKey: '/first', buildPayload: () => ({}) });
@@ -393,7 +393,7 @@ describe('Web handoff and current-page lifecycle', () => {
   });
 
   it('keeps state-only hydration strict and rejects invalid envelopes before fallback', async () => {
-    const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+    const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
     const runtime = createRuntime();
     const input = handoff(runtime, '/first', {
       state: { profile: { id: 'evaluated-profile' } },
@@ -417,7 +417,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('hydrates applicable state before rejected replay falls back with the default page payload', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'evaluated-profile' } } as never);
     const runtime = createRuntime();
     const input = handoff(runtime, '/first', {
@@ -438,7 +438,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('does not hydrate mismatched state even when prepared events are invalid', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
     const runtime = createRuntime();
     await runtime.hydrateAndTrackCurrentPage(
@@ -456,7 +456,7 @@ describe('Web handoff and current-page lifecycle', () => {
     'prevents stale fallback when %s occurs after rejected admission',
     async (action) => {
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
       const runtime = createRuntime();
       const buildPayload = vi.fn(() => ({}));
@@ -489,7 +489,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('keeps accepted replay and its retry after HTTP failure without a fallback page', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(response.promise as never)
       .mockResolvedValue({ profile: { id: 'server-profile' } } as never);
     const runtime = createRuntime();
@@ -500,7 +500,7 @@ describe('Web handoff and current-page lifecycle', () => {
     ).resolves.toEqual({ accepted: true });
     response.reject(new Error('HTTP failure'));
     await vi.waitFor(() =>
-      expect(runtime.states.experienceRequestState.current.status).toBe('failed')
+      expect(runtime.states.personalizationRequestState.current.status).toBe('failed')
     );
     await expect(
       runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/first', buildPayload })
@@ -510,7 +510,7 @@ describe('Web handoff and current-page lifecycle', () => {
     window.dispatchEvent(new Event('offline'));
     window.dispatchEvent(new Event('online'));
     await vi.waitFor(() =>
-      expect(runtime.states.experienceRequestState.current.status).toBe('success')
+      expect(runtime.states.personalizationRequestState.current.status).toBe('success')
     );
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0].events).toEqual(input.replay?.events);
@@ -536,7 +536,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('does not admit a superseded pending replay', async () => {
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'new-profile' } } as never);
     const runtime = createRuntime();
     const old = runtime.hydrateAndTrackCurrentPage(
@@ -565,7 +565,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('retains published identity when an ordinary event observes it before supersession', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -611,7 +611,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('retains published continuity when ordinary navigation cancels pending replay', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const runtime = createRuntime();
     const old = runtime.hydrateAndTrackCurrentPage(
@@ -632,7 +632,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('follows supersession while a fetch waits for initialization, without waiting for replay HTTP', async () => {
     const response = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(response.promise as never);
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -665,7 +665,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it.each(['reset', 'destroy'] as const)(
     'does not admit a pending prepared replay after %s',
     async (action) => {
-      const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+      const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
       const runtime = createRuntime();
       const pending = runtime.hydrateAndTrackCurrentPage(handoff(runtime, '/first'), {
         routeKey: '/first',
@@ -683,7 +683,7 @@ describe('Web handoff and current-page lifecycle', () => {
     async (action) => {
       const response = deferred<{ profile: { id: string } }>();
       const send = vi
-        .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+        .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
         .mockReturnValue(response.promise as never);
       const fetch = vi
         .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -745,7 +745,7 @@ describe('Web handoff and current-page lifecycle', () => {
   it('allows a fresh current-page attempt after reset invalidates an in-flight one', async () => {
     const oldResponse = deferred<{ profile: { id: string } }>();
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValueOnce(oldResponse.promise as never)
       .mockResolvedValue({ profile: { id: 'new-profile' } } as never);
     const runtime = createRuntime();
@@ -788,7 +788,7 @@ describe('Web handoff and current-page lifecycle', () => {
       .mockReturnValueOnce(first.promise as never)
       .mockReturnValueOnce(second.promise as never);
     const send = vi
-      .spyOn(ExperienceApiClient.prototype, 'upsertProfile')
+      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockResolvedValue({ profile: { id: 'api-profile' } } as never);
     const runtime = createRuntime();
     const input = handoff(runtime, '/first');
@@ -830,7 +830,7 @@ describe('Web handoff and current-page lifecycle', () => {
       .mockReturnValueOnce(staleResponse.promise as never)
       .mockResolvedValueOnce({ nodes: [] } as never);
     const eventResponse = deferred<{ profile: { id: string } }>();
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockReturnValue(
       eventResponse.promise as never
     );
     const runtime = createRuntime();
@@ -851,7 +851,7 @@ describe('Web handoff and current-page lifecycle', () => {
   });
 
   it('does not overwrite browser identity with profileless public or static state', async () => {
-    const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+    const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
     const runtime = createRuntime({ id: 'browser-profile' });
     runtime.interceptors.state.add(() => ({ profile: { id: 'interceptor-profile' } }));
     for (const cache of [
@@ -864,7 +864,7 @@ describe('Web handoff and current-page lifecycle', () => {
           { routeKey: '/first' }
         );
         expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
-        expect(runtime.states.experienceRequestState.current).toEqual({ status: 'success' });
+        expect(runtime.states.personalizationRequestState.current).toEqual({ status: 'success' });
       }
     }
     expect(send).not.toHaveBeenCalled();
@@ -886,7 +886,7 @@ describe('Web handoff and current-page lifecycle', () => {
   });
 
   it('rejects invalid scope and cache before state mutation or transport', async () => {
-    const send = vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile');
+    const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
     const runtime = createRuntime({ id: 'browser-profile' });
     const input = handoff(runtime, '/first', { state: { profile: { id: 'server-profile' } } });
 
@@ -905,7 +905,7 @@ describe('Web handoff and current-page lifecycle', () => {
 
   it('does not mutate a caller-owned render plan when replay delivery finishes', async () => {
     const response = deferred<{ profile: { id: string } }>();
-    vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockReturnValue(
+    vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockReturnValue(
       response.promise as never
     );
     const runtime = createRuntime();

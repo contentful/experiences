@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ContentfulExperiences,
-  type ExperiencesNodeConfig,
-  type ExperiencesNodeRequestContext,
+  type Config,
+  type RequestContext,
 } from './contentful-experiences.js';
 import {
   EventProfileRequiredError,
@@ -12,7 +12,7 @@ import {
 } from '@contentful/experiences-runtime';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
-/** A complete Experience API profile, which Insights requires. */
+/** A complete Personalization API profile, which Analytics requires. */
 function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
   return {
     id,
@@ -60,16 +60,14 @@ function createRuntime() {
 
 class TestContentfulExperiences extends ContentfulExperiences {
   // Most tests exercise delivery, so grant event consent unless a test says otherwise.
-  override forRequest(context: ExperiencesNodeRequestContext = {}) {
+  override forRequest(context: RequestContext = {}) {
     const hasConsent = context.consent !== undefined || context.eventConsent !== undefined;
     if (hasConsent) return super.forRequest(context);
     return super.forRequest({ ...context, consent: { events: true } });
   }
 }
 
-function createEventRuntime(
-  policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}
-) {
+function createEventRuntime(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
   const runtime = trackRuntime(
     new TestContentfulExperiences({
       ...policy,
@@ -80,9 +78,11 @@ function createEventRuntime(
     })
   );
   const upsertProfile = vi
-    .spyOn(runtime.api.experience, 'upsertProfile')
+    .spyOn(runtime.api.personalization, 'upsertProfile')
     .mockResolvedValue({ profile: { id: 'updated-profile' } } as never);
-  const sendBatchEvents = vi.spyOn(runtime.api.insights, 'sendBatchEvents').mockResolvedValue(true);
+  const sendBatchEvents = vi
+    .spyOn(runtime.api.analytics, 'sendBatchEvents')
+    .mockResolvedValue(true);
 
   return { runtime, sendBatchEvents, upsertProfile };
 }
@@ -90,8 +90,8 @@ function createEventRuntime(
 describe('Node ContentfulExperiences', () => {
   it('inherits pure flag lookup without retaining changes or tracking exposures', () => {
     const runtime = createRuntime();
-    const send = vi.spyOn(runtime.api.insights, 'sendBatchEvents');
-    const personalize = vi.spyOn(runtime.api.experience, 'upsertProfile');
+    const send = vi.spyOn(runtime.api.analytics, 'sendBatchEvents');
+    const personalize = vi.spyOn(runtime.api.personalization, 'upsertProfile');
     const changes = [
       {
         type: 'Variable',
@@ -600,7 +600,7 @@ describe('Node ContentfulExperiences', () => {
 
   it('uses the API-issued identity for a new profile and keeps later ordinary calls direct', async () => {
     const { runtime, sendBatchEvents, upsertProfile } = createEventRuntime();
-    // The Experience API issues a complete profile, which Insights requires.
+    // The Personalization API issues a complete profile, which Analytics requires.
     const issued = completeProfile('updated-profile');
     upsertProfile.mockResolvedValue({ profile: issued } as never);
     const request = runtime.forRequest();
@@ -973,11 +973,11 @@ describe('Node ContentfulExperiences', () => {
   });
 
   describe('request-scoped submission options', () => {
-    it('forwards Experience API ip, plainText and locale on a direct Personalization call', async () => {
+    it('forwards Personalization API ip, plainText and locale on a direct Personalization call', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.7', plainText: true },
+        personalizationOptions: { ip: '203.0.113.7', plainText: true },
       });
 
       await request.page();
@@ -993,11 +993,11 @@ describe('Node ContentfulExperiences', () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const first = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.1' },
+        personalizationOptions: { ip: '203.0.113.1' },
       });
       const second = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.2', plainText: true },
+        personalizationOptions: { ip: '203.0.113.2', plainText: true },
       });
       const third = runtime.forRequest({ consent: true });
 
@@ -1016,10 +1016,10 @@ describe('Node ContentfulExperiences', () => {
 
     it('copies options at construction so later mutation cannot change a request', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
-      const experienceOptions = { ip: '203.0.113.1' };
-      const request = runtime.forRequest({ consent: true, experienceOptions });
+      const personalizationOptions = { ip: '203.0.113.1' };
+      const request = runtime.forRequest({ consent: true, personalizationOptions });
 
-      experienceOptions.ip = '198.51.100.99';
+      personalizationOptions.ip = '198.51.100.99';
       await request.page();
 
       expect(upsertProfile).toHaveBeenCalledWith(
@@ -1028,12 +1028,12 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('lets the request locale take precedence over experienceOptions.locale', async () => {
+    it('lets the request locale take precedence over personalizationOptions.locale', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
         locale: 'de-DE',
-        experienceOptions: { locale: 'fr-FR' },
+        personalizationOptions: { locale: 'fr-FR' },
       });
 
       await request.page();
@@ -1046,14 +1046,14 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('uses experienceOptions.locale for Personalization only, not for content', async () => {
+    it('uses personalizationOptions.locale for Personalization only, not for content', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const fetchExperience = vi
         .spyOn(runtime, 'fetchExperience')
         .mockImplementation(async (options) => ({ locale: options.locale }) as never);
       const request = runtime.forRequest({
         consent: true,
-        experienceOptions: { locale: 'fr-FR' },
+        personalizationOptions: { locale: 'fr-FR' },
       });
 
       // The request (content) locale stays on the runtime default, as in Optimization.
@@ -1069,11 +1069,11 @@ describe('Node ContentfulExperiences', () => {
       );
     });
 
-    it('uses experienceOptions.locale for the handoff preview and replay, not content', async () => {
+    it('uses personalizationOptions.locale for the handoff preview and replay, not content', async () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
-        experienceOptions: { locale: 'fr-FR' },
+        personalizationOptions: { locale: 'fr-FR' },
       });
 
       const result = await request.prepareRequestHandoff({ routeKey: '/landing' });
@@ -1089,7 +1089,7 @@ describe('Node ContentfulExperiences', () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
-        experienceOptions: { ip: '203.0.113.7', plainText: true },
+        personalizationOptions: { ip: '203.0.113.7', plainText: true },
       });
 
       await request.prepareRequestHandoff({ routeKey: '/landing' });
@@ -1103,13 +1103,13 @@ describe('Node ContentfulExperiences', () => {
       });
     });
 
-    it('forwards the Insights beacon to a direct Analytics send', async () => {
+    it('forwards the Analytics beacon to a direct Analytics send', async () => {
       const { runtime, sendBatchEvents } = createEventRuntime();
       const beacon = vi.fn(() => true);
       const request = runtime.forRequest({
         consent: true,
         profile: completeProfile('visitor'),
-        insightsOptions: { beacon },
+        analyticsOptions: { beacon },
       });
 
       await request.trackClick({ entityId: 'entry', entityKind: 'Experience' });

@@ -1,24 +1,24 @@
-import type { InsightsApiClientRequestOptions } from '@contentful/optimization-api-client';
+import type { InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import type {
-  BatchInsightsEventArray,
+  BatchInsightsEventArray as BatchAnalyticsEventArray,
   InsightsEvent as AnalyticsEvent,
   Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
-  InsightsEvent as InsightsEventSchema,
+  InsightsEvent as AnalyticsEventSchema,
   parseWithFriendlyError as parseOptimizationSchema,
 } from '@contentful/optimization-api-client/api-schemas';
 import type { EventInterceptors } from './event-interceptors.js';
 import { QueueFlushRuntime, type ResolvedQueueFlushPolicy } from './lib/queue/index.js';
-import type { RuntimeOptimizationApiClient } from './runtime-event-methods.js';
+import type { EventApi } from './runtime-event-methods.js';
 
 const deliveryLogger = createScopedLogger('Experiences:AnalyticsDelivery');
 
 /** Optimization's InsightsQueue size limit: reaching it flushes immediately. */
 export const MAX_QUEUED_ANALYTICS_EVENTS = 25;
 
-type AnalyticsApi = RuntimeOptimizationApiClient['insights'];
+type AnalyticsApi = EventApi['analytics'];
 type QueuedProfileEvents = { profile: EventProfile; events: AnalyticsEvent[] };
 
 interface AnalyticsDeliveryOptions {
@@ -39,7 +39,7 @@ interface AnalyticsDeliveryOptions {
   readonly flushPolicy: ResolvedQueueFlushPolicy;
 }
 
-export interface AnalyticsFlushOptions extends InsightsApiClientRequestOptions {
+export interface AnalyticsFlushOptions extends AnalyticsApiClientRequestOptions {
   force?: boolean;
 }
 
@@ -104,7 +104,7 @@ export class AnalyticsDelivery {
     if (token === undefined) return;
     const intercepted = await this.#eventInterceptors.run(event);
     if (token !== this.#getResetToken()) return;
-    const validEvent = parseOptimizationSchema(InsightsEventSchema, intercepted);
+    const validEvent = parseOptimizationSchema(AnalyticsEventSchema, intercepted);
     if (this.#admitEvent?.(validEvent) === false) return false;
     if (token !== this.#getResetToken()) return;
     this.#publishEvent(validEvent);
@@ -163,7 +163,7 @@ export class AnalyticsDelivery {
   }
 
   async #flushAttempt(
-    batches: BatchInsightsEventArray,
+    batches: BatchAnalyticsEventArray,
     beacon: AnalyticsFlushOptions['beacon'],
     token: object | undefined
   ): Promise<void> {
@@ -207,8 +207,8 @@ export class AnalyticsDelivery {
   }
 
   async #trySend(
-    batches: BatchInsightsEventArray,
-    options: InsightsApiClientRequestOptions | undefined
+    batches: BatchAnalyticsEventArray,
+    options: AnalyticsApiClientRequestOptions | undefined
   ): Promise<boolean> {
     try {
       return options === undefined
@@ -220,7 +220,7 @@ export class AnalyticsDelivery {
     }
   }
 
-  #removeSentEvents(batches: BatchInsightsEventArray): void {
+  #removeSentEvents(batches: BatchAnalyticsEventArray): void {
     for (const { profile, events } of batches) {
       const queued = this.#queued.get(profile.id);
       if (queued === undefined) continue;
@@ -229,8 +229,8 @@ export class AnalyticsDelivery {
     }
   }
 
-  #createBatches(): BatchInsightsEventArray {
-    const batches: BatchInsightsEventArray = [];
+  #createBatches(): BatchAnalyticsEventArray {
+    const batches: BatchAnalyticsEventArray = [];
     this.#queued.forEach(({ profile, events }) => {
       batches.push({ profile, events: [...events] });
     });

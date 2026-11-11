@@ -5,7 +5,7 @@ type RuntimeDeliveryClientBaseOptions = Omit<
   'token' | 'baseUrl' | 'spaceId' | 'environmentId'
 >;
 
-/** Identity the runtime already owns (`ContentfulExperiencesConfig.spaceId`/`environmentId`),
+/** Identity the runtime already owns (`Config.spaceId`/`environmentId`),
  * threaded in separately so callers don't repeat it in `delivery`/`preview` config. */
 export type RuntimeDeliveryClientIdentity = {
   spaceId: string;
@@ -13,7 +13,7 @@ export type RuntimeDeliveryClientIdentity = {
 };
 
 /** Configuration for a Delivery or Preview client owned by a runtime. */
-export type RuntimeDeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
+export type DeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
   (
     | {
         /** Bearer token or token supplier used for direct Delivery/Preview API access. */
@@ -33,7 +33,7 @@ export type RuntimeDeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
  * `defaultHeaders` sit beneath any caller-configured `headers`.
  */
 export function createRuntimeDeliveryClient(
-  options: RuntimeDeliveryClientOptions,
+  options: DeliveryClientOptions,
   identity: RuntimeDeliveryClientIdentity,
   defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
   defaultHeaders?: Record<string, string>

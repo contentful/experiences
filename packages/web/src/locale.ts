@@ -1,7 +1,7 @@
 const LOCALE_PATTERN = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/i;
 
 /**
- * Normalize a locale value before using it for SDK Experience API requests or events.
+ * Normalize a locale value before using it for SDK Personalization API requests or events.
  *
  * @public
  */

@@ -147,7 +147,7 @@ The merge is shallow: a supplied page replaces the whole request page. An explic
 matching direct event methods. Page-event `properties` remains a separate input;
 pass `properties: pageProperties` when it should describe the request page.
 
-The public `ExperiencesNodeEventBuilder` type exposes only those construction
+The public `RequestEventBuilder` type exposes only those construction
 methods. Building does not submit events, apply consent admission, invoke event
 interceptors, or update profiles. Those operations happen on submission. The shared
 `experiences.eventBuilder` remains available for unbound construction. Submitting
@@ -453,18 +453,18 @@ try {
 
 ### Request-scoped submission options
 
-`forRequest()` also accepts `experienceOptions` and `insightsOptions`, shared by every call made
+`forRequest()` also accepts `personalizationOptions` and `analyticsOptions`, shared by every call made
 through that request and never across requests. They are copied when the facade is created.
 
-- `experienceOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
+- `personalizationOptions: { ip, plainText, locale }` is forwarded with each Personalization call and with
   the request-handoff preview, which still adds `preflight: true`. Pass the visitor's `ip` from a
   trusted source such as your proxy, because the API otherwise analyses the server's IP.
-- `experienceOptions.locale` is a Personalization transport option, as in Optimization: it sets the
-  locale the Experience API uses to translate profile location fields, and the handoff's replay
+- `personalizationOptions.locale` is a Personalization transport option, as in Optimization: it sets the
+  locale the Personalization API uses to translate profile location fields, and the handoff's replay
   locale. It does not change the content locale. `request.locale` and content fetches use
   `forRequest({ locale })` or the constructor locale only. When both are set, `forRequest({ locale })`
   also wins as the transport locale.
-- `insightsOptions: { beacon }` is forwarded with each Analytics call.
+- `analyticsOptions: { beacon }` is forwarded with each Analytics call.
 
 Do not store a request facade beyond the request that created it. Each `forRequest()` call returns a separate object with its own locale and resolve options; concurrent requests do not share those values.
 

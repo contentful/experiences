@@ -1,17 +1,14 @@
 import {
-  ExperienceEvent as ExperienceEventSchema,
+  ExperienceEvent as PersonalizationEventSchema,
   parseWithFriendlyError as parseOptimizationSchema,
-  type ExperienceEvent,
+  type ExperienceEvent as PersonalizationEvent,
   type OptimizationData,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
-import type { ExperienceRequestState } from './experience-request-state.js';
+import type { PersonalizationRequestState } from './experience-request-state.js';
 import type { EventEmissionResult } from './event-emission-result.js';
 import type { EventInterceptors } from './event-interceptors.js';
-import type {
-  ExperienceRequestOptions,
-  RuntimeOptimizationApiClient,
-} from './runtime-event-methods.js';
+import type { PersonalizationRequestOptions, EventApi } from './runtime-event-methods.js';
 import {
   OFFLINE_QUEUE_MAX_EVENTS,
   QueueFlushRuntime,
@@ -20,25 +17,25 @@ import {
 
 const deliveryLogger = createScopedLogger('Experiences:PersonalizationDelivery');
 
-type PersonalizationApi = RuntimeOptimizationApiClient['experience'];
+type PersonalizationApi = EventApi['personalization'];
 type DeliveryRequest = { profileId?: string; locale?: string };
-type QueuedBatch = { events: ExperienceEvent[]; request?: DeliveryRequest };
+type QueuedBatch = { events: PersonalizationEvent[]; request?: DeliveryRequest };
 /** A teardown-authorized delivery with a captured identity. */
 type QueuedDelivery = { token: object | undefined; profileId?: string };
 
 interface PersonalizationDeliveryOptions {
   readonly api: PersonalizationApi;
   /** Owner-provided state slot; the runtime does not require a signals implementation. */
-  readonly experienceRequestState: { value: ExperienceRequestState };
+  readonly personalizationRequestState: { value: PersonalizationRequestState };
   readonly getProfileId: () => string | undefined;
   readonly getProfileRevision: () => number;
   readonly getOnline: () => boolean;
   /** Current content locale for ordinary sends; prepared batches retain their own locale. */
   readonly getLocale?: () => string | undefined;
   readonly eventInterceptors: EventInterceptors;
-  readonly publishEvent: (event: ExperienceEvent) => void;
+  readonly publishEvent: (event: PersonalizationEvent) => void;
   /** Owner consent check after interception/schema validation, before publication. */
-  readonly admitEvent?: (event: ExperienceEvent) => boolean;
+  readonly admitEvent?: (event: PersonalizationEvent) => boolean;
   /** Publish the response and success state together while the request remains live. */
   readonly applyOptimizationData: (
     data: OptimizationData,
@@ -52,17 +49,17 @@ interface PersonalizationDeliveryOptions {
 /** One low-level Personalization transport for direct and queued sends. */
 export function sendPersonalizationEvents(
   api: PersonalizationApi,
-  events: readonly ExperienceEvent[],
+  events: readonly PersonalizationEvent[],
   profileId: string | undefined,
-  options?: ExperienceRequestOptions & { preflight?: boolean }
+  options?: PersonalizationRequestOptions & { preflight?: boolean }
 ): Promise<OptimizationData> {
   return api.upsertProfile({ profileId, events: [...events] }, options);
 }
 
-/** In-memory Experience event queue adapted from Optimization's ExperienceQueue. */
+/** In-memory Personalization event queue adapted from Optimization's ExperienceQueue. */
 export class PersonalizationDelivery {
   readonly #api: PersonalizationApi;
-  readonly #experienceRequestState: PersonalizationDeliveryOptions['experienceRequestState'];
+  readonly #personalizationRequestState: PersonalizationDeliveryOptions['personalizationRequestState'];
   readonly #getProfileId: PersonalizationDeliveryOptions['getProfileId'];
   readonly #getProfileRevision: PersonalizationDeliveryOptions['getProfileRevision'];
   readonly #getOnline: PersonalizationDeliveryOptions['getOnline'];
@@ -82,7 +79,7 @@ export class PersonalizationDelivery {
 
   constructor(options: PersonalizationDeliveryOptions) {
     this.#api = options.api;
-    this.#experienceRequestState = options.experienceRequestState;
+    this.#personalizationRequestState = options.personalizationRequestState;
     this.#getProfileId = options.getProfileId;
     this.#getProfileRevision = options.getProfileRevision;
     this.#getOnline = options.getOnline;
@@ -111,12 +108,12 @@ export class PersonalizationDelivery {
   }
 
   /** Ordinary online events go direct; offline events use the same queued transport. */
-  async send(event: ExperienceEvent): Promise<EventEmissionResult> {
+  async send(event: PersonalizationEvent): Promise<EventEmissionResult> {
     if (!this.#isAcceptingEvents()) return { accepted: false };
     const token = this.#token;
     const intercepted = await this.#eventInterceptors.run(event);
     if (!this.#isLiveRequest(token)) return { accepted: false };
-    const validEvent = parseOptimizationSchema(ExperienceEventSchema, intercepted);
+    const validEvent = parseOptimizationSchema(PersonalizationEventSchema, intercepted);
     if (this.#admitEvent?.(validEvent) === false || !this.#isLiveRequest(token))
       return { accepted: false };
     this.#publishEvent(validEvent);
@@ -138,7 +135,7 @@ export class PersonalizationDelivery {
    * that the queue has room.
    */
   sendPrepared(
-    events: readonly ExperienceEvent[],
+    events: readonly PersonalizationEvent[],
     target: { profileId?: string; locale?: string } = {}
   ): EventEmissionResult {
     if (!this.#isAcceptingEvents()) return { accepted: false };
@@ -201,7 +198,7 @@ export class PersonalizationDelivery {
     this.#destroyToken = this.#token;
     this.#destroyProfileId = this.#getProfileId();
     this.#destroying = true;
-    this.#experienceRequestState.value = { status: 'idle' };
+    this.#personalizationRequestState.value = { status: 'idle' };
     this.clearScheduledRetry();
     await this.flush({ force: true, allowDestroy: true });
   }
@@ -285,7 +282,7 @@ export class PersonalizationDelivery {
     this.#activeFlush = undefined;
     this.#queue.length = 0;
     this.#flushRuntime.reset();
-    if (!this.#destroying) this.#experienceRequestState.value = { status: 'idle' };
+    if (!this.#destroying) this.#personalizationRequestState.value = { status: 'idle' };
   }
 
   reset(): void {
@@ -317,7 +314,7 @@ export class PersonalizationDelivery {
     }
   }
 
-  #enqueueOrdinary(event: ExperienceEvent): void {
+  #enqueueOrdinary(event: PersonalizationEvent): void {
     const last = this.#queue.at(-1);
     if (last !== undefined && last.request === undefined) last.events.push(event);
     else this.#queue.push({ events: [event] });
@@ -330,7 +327,7 @@ export class PersonalizationDelivery {
    * success and late failure are both discarded.
    */
   async #upsert(
-    events: ExperienceEvent[],
+    events: PersonalizationEvent[],
     request: DeliveryRequest | undefined,
     delivery: QueuedDelivery | undefined
   ): Promise<OptimizationData | undefined> {
@@ -340,19 +337,19 @@ export class PersonalizationDelivery {
     const canPublish = (): boolean => isLive() && profileRevision === this.#getProfileRevision();
     const isDestroyDrain = (): boolean => this.#isDestroyDeliveryCurrent(delivery);
     const isAccepted = (): boolean => isLive() || isDestroyDrain();
-    if (isLive()) this.#experienceRequestState.value = { status: 'pending' };
+    if (isLive()) this.#personalizationRequestState.value = { status: 'pending' };
     if (!isAccepted()) return undefined;
     try {
       const data = await this.#requestExperienceData(events, request, delivery?.profileId);
       if (!isAccepted()) return undefined;
       if (request !== undefined) request.profileId ??= data.profile.id;
       if (canPublish()) await this.#applyOptimizationData(data, isLive);
-      else if (isLive()) this.#experienceRequestState.value = { status: 'success' };
+      else if (isLive()) this.#personalizationRequestState.value = { status: 'success' };
       return isAccepted() ? data : undefined;
     } catch (error) {
       if (!isAccepted()) return undefined;
       if (isLive()) {
-        this.#experienceRequestState.value = {
+        this.#personalizationRequestState.value = {
           status: 'failed',
           reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'api-error',
         };
@@ -373,7 +370,7 @@ export class PersonalizationDelivery {
 
   /** Request identity precedence, including the captured teardown continuation. */
   #requestExperienceData(
-    events: ExperienceEvent[],
+    events: PersonalizationEvent[],
     request: DeliveryRequest | undefined,
     continuationProfileId: string | undefined
   ): Promise<OptimizationData> {

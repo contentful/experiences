@@ -7,7 +7,7 @@ Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder
 Web exposes
 its browser state through `states` observables and owns the module signals and
 persistence, consent, and connectivity effects; Node retains its request-local
-profile getter. Runtime supplies the `ExperienceRequestState` transport outcome
+profile getter. Runtime supplies the `PersonalizationRequestState` transport outcome
 type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
@@ -18,8 +18,9 @@ Client remains the lower-level Delivery and free-function boundary. Runtime impo
 
 Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction and handoff preparation require no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID `preview: true` requires a configured Preview client; destination operations remain delivery-only.
 
-The readonly `api` property is the actual Optimization API client (`api.experience`
-and `api.insights`); readonly `config` retains the typed configuration supplied
+The readonly `api` property exposes the full Personalization and Analytics service
+clients as `api.personalization` and `api.analytics`, with their shared `api.config`;
+readonly `config` retains the typed configuration supplied
 by the public leaf. Delivery and Preview clients remain internal to Runtime.
 
 Delivery and Preview options accept a token or token supplier. A tokenless trusted proxy requires an explicit `host` and disables generated bearer authentication. Endpoint precedence is explicit `host`, then the generated client's `environment`, then the Delivery or Preview default. `environmentId` is the Contentful environment identifier used by by-ID requests, not the generated client's endpoint-valued `environment` option.
@@ -61,7 +62,7 @@ narrowing this behavior.
 The base `getFlag(name, changes?)` returns only the resolved value and is pure:
 it retains no changes and emits no exposure. Web adds browser-owned state and
 exposure through the [existing flag-view method](../web/README.md#custom-flags).
-Custom flags add `flag(name)` to `CoreStates` and `getFlag` to Web's presentation
+Custom flags add `flag(name)` to `States` and `getFlag` to Web's presentation
 `ExperiencesRuntime` contract.
 
 ## Shared event interceptors

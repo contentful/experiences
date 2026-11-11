@@ -66,8 +66,8 @@ helper. The build tools require Node.js 22.12 or later.
 
 This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
 
-The inherited readonly `api` is the actual Optimization API client, with
-`api.experience` and `api.insights`; inherited readonly `config` retains the
+The inherited readonly `api` exposes the full Personalization and Analytics service clients
+through `api.personalization` and `api.analytics`, plus their shared `api.config`; inherited readonly `config` retains the
 typed Web configuration. Web keeps its queue references, event allowlist,
 blocked-event callback, and connectivity accessor protected for subclasses.
 
@@ -123,7 +123,7 @@ field-resolution errors. The public `ExperienceDeliveryDiagnostic` type contains
 readonly string `fieldPath` and `message` only; Core copies records in input order
 and omits `originalError` and extra fields. Raw resolve, by-ID, and destination
 fetches share that normalization. The existing local `diagnostics: Error[]`,
-profile adoption, exceptions, and Personalization `experienceRequestState` retain
+profile adoption, exceptions, and Personalization `personalizationRequestState` retain
 their meanings.
 
 This is a partial projection, not a personalization outcome signal. An absent
@@ -252,16 +252,16 @@ validation used by the constructor and setter.
 `experiences.states` exposes the browser SDK's observable state. Each observable
 has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 
-| State                    | Value                                                                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`                | Current profile, or `undefined`.                                                                                                                     |
-| `flag(name)`             | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                |
-| `locale`                 | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
-| `consent`                | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
-| `persistenceConsent`     | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
-| `experienceRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`. |
-| `eventStream`            | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                |
-| `blockedEventStream`     | Most recently blocked event metadata, or `undefined`.                                                                                                |
+| State                         | Value                                                                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                     | Current profile, or `undefined`.                                                                                                                     |
+| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                |
+| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                    |
+| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                          |
+| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                    |
+| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`. |
+| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                |
+| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                |
 
 `subscribe` immediately invokes its callback with the current value, including
 `undefined`, then observes changes. `subscribeOnce` waits for the first
@@ -311,7 +311,7 @@ subscriptions still require the caller's `unsubscribe()` cleanup.
 
 For extensions, the package also exports `signals`, `signalFns`, `batch`,
 `effect`, `toObservable`, and `toDistinctObservable`, plus the types `Observable`,
-`Subscription`, `CoreStates`, `ExperienceRequestState`, `ExperienceRequestFailureReason`,
+`Subscription`, `States`, `PersonalizationRequestState`, `PersonalizationRequestFailureReason`,
 `OptimizationEventStreamEvent`, `Signals`, `SignalFns`, `Signal`, and `SnapshotFn`.
 Flag changes remain SDK-owned and are absent from the public `signals` aggregate;
 use `getFlag` or `states.flag(name)` to read them and bridge or handoff hydration
@@ -358,8 +358,8 @@ State interceptors receive incoming `{ profile, changes }` state from Personaliz
 and private hydration; XDA contributes profile state only. A sparse result that
 omits either field retains its previous value in the chain; an explicit
 `profile: undefined` or `changes: undefined` clears that field. The package exports `InterceptorManager`, `Interceptor`,
-`InterceptorMerge`, `MaybePromise`, `ExperienceState`, `LifecycleInterceptors`, and
-`mergeExperienceState`. Changes supply custom flags; XDA still owns content selection.
+`InterceptorMerge`, `MaybePromise`, `PersonalizationState`, `LifecycleInterceptors`, and
+`mergePersonalizationState`. Changes supply custom flags; XDA still owns content selection.
 
 The `@contentful/experiences-web/bridge-support` entry exports
 `hydrateOptimizationData(sdk, { profile, changes })`, `CoreBridgeCapabilities`,
@@ -402,7 +402,7 @@ const experiences = new ContentfulExperiences({
 The Web runtime provides event methods: `identify`, `page`, `track`,
 `trackView`, `trackClick`, `trackHover`, and `trackFlagView`. Configure an
 initial profile through `defaults.profile` when creating the runtime, or identify
-a profile before sending Analytics events. `CoreConfigDefaults` describes the
+a profile before sending Analytics events. `ConfigDefaults` describes the
 `defaults` object with `profile`, `changes`, `consent`, and `persistenceConsent`. Personalization event responses supply a complete profile to
 the runtime, while XDA responses can supply its id. The current profile is
 persisted and restored from LocalStorage once persistence consent is granted.
@@ -456,7 +456,7 @@ capacity, then refused without evicting accepted work. A prepared batch is
 admitted whole or refused at capacity. Capacity is `queuePolicy.offlineMaxEvents`
 (default 100; a non-positive or non-finite value falls back to the default, and a
 fraction is floored). It is separate from the per-handoff payload limit. Acceptance is not HTTP
-completion. Read `states.experienceRequestState.current` for the latest
+completion. Read `states.personalizationRequestState.current` for the latest
 Personalization request status (`idle`, `pending`, `success`, or `failed`);
 failed queued batches retry with
 their original event bodies. `destroy()` makes one best-effort attempt to drain
@@ -541,7 +541,7 @@ canLoadPersistedContinuity }`; persisted profile and changes may be lazy loaders
 read only when persistence is granted and the respective configured value is absent.
 The constructor uses this lazy path for LocalStorage. The package exports
 `StatefulDefaults`, `PersistedDefaultLoader`, `PersistedDefaultValue`,
-`PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `CoreConfigDefaults`
+`PersistedStatefulDefaults`, and `ResolvedStatefulDefaults`; `ConfigDefaults`
 uses the same supported profile, changes, and consent fields.
 
 Personalization methods (`identify`, `page`, `track`) resolve

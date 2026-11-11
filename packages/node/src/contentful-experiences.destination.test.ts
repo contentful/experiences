@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ContentfulExperiences, type ExperiencesNodeConfig } from './contentful-experiences.js';
+import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 
 const instances: ContentfulExperiences[] = [];
 const resolverConfig = { components: {} };
 
-function setup(policy: Pick<ExperiencesNodeConfig, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
+function setup(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}) {
   const sdk = new ContentfulExperiences({
     spaceId: 'space',
     environmentId: 'env',

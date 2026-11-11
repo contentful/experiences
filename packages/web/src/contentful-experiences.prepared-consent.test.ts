@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
 import { EventBuilder, type ExperiencesHandoff } from '@contentful/experiences-runtime';
-import { ExperienceApiClient } from '@contentful/optimization-api-client';
+import { ExperienceApiClient as PersonalizationApiClient } from '@contentful/optimization-api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences } from './contentful-experiences.js';
 import { seedConsent, clearIdentityCookies } from './test-fixtures/consent.js';
 import { deferred } from './test-fixtures/dom.js';
 
-type ExperienceEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
+type PersonalizationEvents = NonNullable<ExperiencesHandoff['replay']>['events'];
 
 const runtimes = new Set<ContentfulExperiences>();
 
@@ -27,7 +27,7 @@ function createRuntime(
 }
 
 /** A batch built the way a Node server builds it, stamped with the server's consent. */
-function serverBatch(serverConsent: boolean, withTrack = true): ExperienceEvents {
+function serverBatch(serverConsent: boolean, withTrack = true): PersonalizationEvents {
   const builder = new EventBuilder({
     channel: 'server',
     library: { name: 'test', version: '1' },
@@ -39,7 +39,7 @@ function serverBatch(serverConsent: boolean, withTrack = true): ExperienceEvents
   ];
 }
 
-function handoffWith(events: ExperienceEvents, routeKey = '/first'): ExperiencesHandoff {
+function handoffWith(events: PersonalizationEvents, routeKey = '/first'): ExperiencesHandoff {
   return {
     spaceId: 'space',
     environmentId: 'environment',
@@ -53,7 +53,7 @@ const flags = (events: readonly { context: { gdpr?: { isConsentGiven?: boolean }
   events.map((event) => event.context.gdpr?.isConsentGiven);
 
 beforeEach(() => {
-  vi.spyOn(ExperienceApiClient.prototype, 'upsertProfile').mockResolvedValue({
+  vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
     profile: { id: 'delivered' },
   } as never);
 });
@@ -70,7 +70,7 @@ describe('Web prepared handoff and consent', () => {
   describe('the gate', () => {
     it('admits a page-only batch by default, since page is allow-listed', async () => {
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       const [page] = serverBatch(true, false);
 
       const result = await runtime.hydrateAndTrackCurrentPage(handoffWith([page!]), {
@@ -87,7 +87,7 @@ describe('Web prepared handoff and consent', () => {
     it('refuses the whole batch when one event is not admitted, and reports each', async () => {
       const onEventBlocked = vi.fn();
       const runtime = createRuntime({ onEventBlocked });
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       const events = serverBatch(true);
 
       const result = await runtime.hydrateAndTrackCurrentPage(handoffWith(events), {
@@ -123,7 +123,7 @@ describe('Web prepared handoff and consent', () => {
         'page',
         'page',
       ]);
-      expect(ExperienceApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
+      expect(PersonalizationApiClient.prototype.upsertProfile).not.toHaveBeenCalled();
     });
   });
 
@@ -131,7 +131,7 @@ describe('Web prepared handoff and consent', () => {
     it('stamps the browser consent when the server stamped consent but the browser denied it', async () => {
       seedConsent({ events: false });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
       await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
         routeKey: '/first',
@@ -145,7 +145,7 @@ describe('Web prepared handoff and consent', () => {
     it('stamps the browser consent when the server did not stamp consent but the browser granted it', async () => {
       seedConsent({ events: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
       await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(false)), {
         routeKey: '/first',
@@ -162,13 +162,13 @@ describe('Web prepared handoff and consent', () => {
       window.dispatchEvent(new Event('offline'));
       await runtime.track({ event: 'queued-1' });
       await runtime.track({ event: 'queued-2' });
-      expect(runtime.states.experienceRequestState.current.status).toBe('idle');
+      expect(runtime.states.personalizationRequestState.current.status).toBe('idle');
     }
 
     it('drops queued events when event consent is withdrawn, so they are never sent', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       await queueOffline(runtime);
 
       runtime.consent({ events: false });
@@ -184,7 +184,7 @@ describe('Web prepared handoff and consent', () => {
     it('still sends queued events when consent is granted or only persistence changes', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       await queueOffline(runtime);
 
       runtime.consent({ persistence: false });
@@ -201,7 +201,7 @@ describe('Web prepared handoff and consent', () => {
     it('blocks new events after withdrawal, so nothing is queued again', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       window.dispatchEvent(new Event('offline'));
       runtime.consent({ events: false });
 
@@ -218,13 +218,13 @@ describe('Web prepared handoff and consent', () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
       const response = deferred<{ profile: { id: string } }>();
-      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
         response.promise as never
       );
 
       const pending = runtime.track({ event: 'in-flight' });
       await vi.waitFor(() =>
-        expect(ExperienceApiClient.prototype.upsertProfile).toHaveBeenCalled()
+        expect(PersonalizationApiClient.prototype.upsertProfile).toHaveBeenCalled()
       );
       runtime.consent({ events: false });
       response.resolve({ profile: { id: 'late-profile' } });
@@ -248,12 +248,12 @@ describe('Web prepared handoff and consent', () => {
       window.dispatchEvent(new Event('offline'));
       await runtime.track({ event: 'queued' });
       const response = deferred<{ profile: { id: string } }>();
-      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockReturnValue(
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockReturnValue(
         response.promise as never
       );
       window.dispatchEvent(new Event('online'));
       await vi.waitFor(() =>
-        expect(runtime.states.experienceRequestState.current.status).toBe('pending')
+        expect(runtime.states.personalizationRequestState.current.status).toBe('pending')
       );
 
       runtime.consent({ events: false });
@@ -262,7 +262,7 @@ describe('Web prepared handoff and consent', () => {
       await Promise.resolve();
 
       expect(runtime.states.profile.current).toEqual({ id: 'live-profile' });
-      expect(runtime.states.experienceRequestState.current.status).not.toBe('success');
+      expect(runtime.states.personalizationRequestState.current.status).not.toBe('success');
     });
 
     it('still publishes responses for events sent after consent is granted again', async () => {
@@ -270,7 +270,7 @@ describe('Web prepared handoff and consent', () => {
       const runtime = createRuntime({ defaults: { profile: { id: 'live-profile' } } });
       runtime.consent({ events: false });
       runtime.consent({ events: true });
-      vi.mocked(ExperienceApiClient.prototype.upsertProfile).mockResolvedValue({
+      vi.mocked(PersonalizationApiClient.prototype.upsertProfile).mockResolvedValue({
         profile: { id: 'fresh-profile' },
       } as never);
 
@@ -284,7 +284,7 @@ describe('Web prepared handoff and consent', () => {
     it('lets the same route be admitted again after its queued page was discarded', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
       const handoff = handoffWith(serverBatch(true, false));
 
       // Admitted while offline, so the page sits in the queue and is not sent.
@@ -311,7 +311,7 @@ describe('Web prepared handoff and consent', () => {
     it('lets trackCurrentPage send the route again after withdrawal discarded its page', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
       window.dispatchEvent(new Event('offline'));
       await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
@@ -333,7 +333,7 @@ describe('Web prepared handoff and consent', () => {
     it('forgets a route that was already sent, so it can be sent again after withdrawal and a new grant', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
       await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
         routeKey: '/first',
@@ -351,7 +351,7 @@ describe('Web prepared handoff and consent', () => {
     it('keeps an accepted route accepted when consent is only granted or persistence changes', async () => {
       seedConsent({ events: true, persistence: true });
       const runtime = createRuntime();
-      const upsert = vi.mocked(ExperienceApiClient.prototype.upsertProfile);
+      const upsert = vi.mocked(PersonalizationApiClient.prototype.upsertProfile);
 
       await runtime.hydrateAndTrackCurrentPage(handoffWith(serverBatch(true, false)), {
         routeKey: '/first',
