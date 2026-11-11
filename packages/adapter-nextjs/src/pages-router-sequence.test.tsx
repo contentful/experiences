@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { CONSENT_CACHE_KEY, PERSISTENCE_CONSENT_CACHE_KEY } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
@@ -104,8 +105,24 @@ describe('Pages managed request sequence', () => {
       await act(async () => root.unmount());
     } finally {
       container.remove();
+      window.localStorage.clear();
       vi.unstubAllGlobals();
     }
+  });
+
+  it('retains bound consent denial when the root defaults prop is undefined', async () => {
+    const keys = [CONSENT_CACHE_KEY, PERSISTENCE_CONSENT_CACHE_KEY];
+    for (const key of keys) window.localStorage.setItem(key, 'accepted');
+    const { ExperiencesRoot } = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { host: 'https://trusted-proxy.example' },
+      isPreview: true,
+      consent: { clientDefaults: { consent: false, persistenceConsent: false } },
+    });
+    await act(async () => root.render(<ExperiencesRoot defaults={undefined} />));
+    for (const key of keys) expect(window.localStorage.getItem(key)).toBe('denied');
   });
 
   it('adopts the destination result before asPath catches up without browser content fetching', async () => {

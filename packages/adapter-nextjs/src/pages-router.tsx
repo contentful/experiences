@@ -57,8 +57,8 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
   function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
     const effective = {
       ...runtimeConfig,
-      ...(consent?.clientDefaults ? { defaults: consent.clientDefaults } : {}),
       ...props,
+      defaults: props.defaults ?? consent?.clientDefaults ?? runtimeConfig.defaults,
     };
     return <NextjsBrowserRoot {...effective} />;
   }
