@@ -285,9 +285,8 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
         previewBinding = nextBinding;
       }
     } else {
-      await initializeVisitor(sendPage, page);
+      await initializeVisitor(sendPage, page, isCurrent);
       if (!isCurrent()) return;
-      if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
     }
     const failed = await loadExperiences(destinations, identifyRequested, page, isCurrent);
     if (!isCurrent()) return;
@@ -329,7 +328,11 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
   }
 }
 
-function initializeVisitor(sendPage, page) {
+// XDA workaround: the standalone page, pre-fetch profile prerequisite and
+// page-specific recovery jointly compensate for initial identify-bearing XDA timeouts.
+// Reassess them together when the first event-bearing fetch can establish identity
+// and select the expected variant (README); retain route ownership/lifetime checks.
+async function initializeVisitor(sendPage, page, isCurrent) {
   if (sendPage || (!pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
     const request = ++pageGeneration;
     const properties = { url: page.url, title: document.title };
@@ -354,7 +357,9 @@ function initializeVisitor(sendPage, page) {
         }
       });
   }
-  return pendingPage;
+  await pendingPage;
+  if (isCurrent() && !sdk.states.profile.current?.id)
+    throw new Error('Visitor profile is not available.');
 }
 
 async function loadExperiences(destinations, identifyRequested, page, isCurrent, initialPlans) {
@@ -370,6 +375,9 @@ async function loadExperiences(destinations, identifyRequested, page, isCurrent,
       : undefined;
   const failures = new Set();
   const rendered = new Set();
+  // Repeated identify makes these requests potentially profile-producing; later
+  // fetches can depend on earlier SDK profile updates. Reassess serialization when
+  // repeated identify is removed, retaining only actual dependencies (README).
   for (const [experienceId, targets] of destinations) {
     if (!isCurrent()) return;
     try {
