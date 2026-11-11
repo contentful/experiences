@@ -158,15 +158,15 @@ owns render-local request loading. Both import their utilities from
 `@contentful/experiences-nextjs/server`. The frozen public source defines these
 signatures used by this reference:
 
-| Utility           | Signature / result                                                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Stable SDK        | `configureNextjsServerExperiences(config: ExperiencesNodeConfig): ContentfulExperiences`                                         |
-| Request binding   | `bindNextjsExperiencesRequest(sdk: ContentfulExperiences, options: BindNextjsExperiencesRequestOptions): ExperiencesNodeRequest` |
-| Explicit page     | `createNextjsPageContext(options: CreateNextjsPageContextOptions): NonNullable<UniversalEventBuilderArgs['page']>`               |
-| Private transport | `createNextjsPrivateFetch(fetchImplementation?: typeof globalThis.fetch): typeof globalThis.fetch`                               |
+| Utility           | Signature / result                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Stable SDK        | `configureNextjsServerExperiences(config: import('@contentful/experiences-node').Config): ContentfulExperiences`         |
+| Request binding   | `bindNextjsExperiencesRequest(sdk: ContentfulExperiences, options: BindNextjsExperiencesRequestOptions): RequestRuntime` |
+| Explicit page     | `createNextjsPageContext(options: CreateNextjsPageContextOptions): NonNullable<UniversalEventBuilderArgs['page']>`       |
+| Private transport | `createNextjsPrivateFetch(fetchImplementation?: typeof globalThis.fetch): typeof globalThis.fetch`                       |
 
 The stable SDK is the public Node SDK. The binding returns the actual
-`ExperiencesNodeRequest` directly. Binding options require `consent` and accept
+`RequestRuntime` directly. Binding options require `consent` and accept
 explicit `request: NextjsRequestLike`,
 `cookies`, `page`, `locale`, `livePreview`, `isPreview` and the existing Node request
 options. The loader passes a string URL derived from trusted `ORIGIN`, actual Next
@@ -177,7 +177,7 @@ The request facade has the Node request methods directly, including
 `fetchExperience` and `destroy`; there is no binding wrapper or persistence method.
 At a writable response boundary, the handler owns cookie persistence through the
 public `persistNextjsAnonymousId(response, request, options?)` helper, with
-`request` as the bound `ExperiencesNodeRequest`. Its response type is
+`request` as the bound `RequestRuntime`. Its response type is
 `NextjsResponseLike` (`headers: Headers`, with optional Next cookie jar), and its
 optional settings are `PersistNextjsAnonymousIdOptions`. This helper does not
 apply response cache headers; `applyNextjsPrivateResponseCache(response)` takes

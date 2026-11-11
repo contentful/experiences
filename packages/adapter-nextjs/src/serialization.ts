@@ -25,9 +25,9 @@ const optionals = {
   profilePage: ['title'],
   cache: ['key'],
   replay: ['locale'],
-  context: ['app', 'campaign', 'gdpr', 'locale', 'location', 'page', 'screen', 'userAgent'],
+  context: ['app', 'gdpr', 'locale', 'location', 'page', 'screen', 'userAgent'],
   page: ['title', 'hash', 'width', 'height'],
-  pageProperties: ['title', 'hash', 'width', 'height', 'category'],
+  pageProperties: ['hash', 'width', 'height', 'category'],
   campaign: ['name', 'source', 'medium', 'term', 'content'],
   location: [
     'coordinates',

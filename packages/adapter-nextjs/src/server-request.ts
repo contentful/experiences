@@ -2,9 +2,9 @@ import {
   ANONYMOUS_ID_COOKIE,
   ContentfulExperiences,
   type ConsentInput,
-  type ExperiencesNodeConfig,
-  type ExperiencesNodeRequest,
-  type ExperiencesNodeRequestContext,
+  type Config as NodeConfig,
+  type RequestRuntime,
+  type RequestContext,
 } from '@contentful/experiences-node';
 import {
   cookieReaderFromHeader,
@@ -15,23 +15,21 @@ import {
 
 export interface BindNextjsExperiencesRequestOptions
   extends
-    Omit<ExperiencesNodeRequestContext, 'consent' | 'eventContext' | 'locale'>,
+    Omit<RequestContext, 'consent' | 'eventContext' | 'locale'>,
     CreateNextjsRequestContextOptions {
   readonly consent: ConsentInput;
   readonly cookies?: NextjsCookieReader;
   readonly anonymousIdCookieName?: string;
 }
 
-export function configureNextjsServerExperiences(
-  config: ExperiencesNodeConfig
-): ContentfulExperiences {
+export function configureNextjsServerExperiences(config: NodeConfig): ContentfulExperiences {
   return new ContentfulExperiences(config);
 }
 
 export function bindNextjsExperiencesRequest(
   sdk: ContentfulExperiences,
   options: BindNextjsExperiencesRequestOptions
-): ExperiencesNodeRequest {
+): RequestRuntime {
   if (options.consent === undefined) throw new TypeError('Explicit request consent is required');
   const {
     cookies,

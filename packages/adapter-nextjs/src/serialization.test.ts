@@ -232,7 +232,7 @@ it('serializes the actual Node producer replay after content failure with absent
   try {
     const event = request.eventBuilder.buildPageView();
     Object.assign(event.context.page!, { hash: undefined, width: undefined, height: undefined });
-    Object.assign(event.properties, { title: undefined, category: undefined });
+    Object.assign(event.properties, { category: undefined });
     const result = await request.fetchExperienceForHandoff(
       { experienceId: 'home', personalization: { events: [event] } },
       { config: { components: {} } },
@@ -270,10 +270,13 @@ it('preserves defined context fields and raw query arrays while keeping customer
     } as never,
   ]);
   const output = serializeNextjsHandoff(input, scope);
-  expect(output.replay?.events[0]?.context.page).toEqual(page);
+  const outputEvent = output.replay!.events[0]!;
+  if (outputEvent.type !== 'identify') throw new Error('Expected an identify event');
+  expect(outputEvent.context.page).toEqual(page);
   expect(output.replay?.events[0]?.context.campaign).toEqual({ medium: 'email' });
   expect(output.replay?.events[0]).toMatchObject({ traits: { medium: 'customer' } });
   const rawEvent = input.replay!.events[0]!;
+  if (rawEvent.type !== 'identify') throw new Error('Expected an identify event');
   Object.assign(rawEvent, { traits: { medium: undefined } });
   expect(() => serializeNextjsHandoff(input, scope)).toThrow('$.replay.events[0].traits.medium');
   Object.assign(rawEvent, { traits: {} });
@@ -303,7 +306,9 @@ it('preserves defined page optionals and keeps page extensions, Track properties
   const input = handoff([page]);
   const original = globalThis.structuredClone(input);
   const output = serializeNextjsHandoff(input, scope);
-  expect(output.replay?.events[0]?.context.page).toEqual(page.context.page);
+  const outputEvent = output.replay!.events[0]!;
+  if (outputEvent.type !== 'page') throw new Error('Expected a page event');
+  expect(outputEvent.context.page).toEqual(page.context.page);
   expect(output.replay?.events[0]).toMatchObject({ properties: page.properties });
   expect(input).toEqual(original);
   Object.assign(page.properties, { extension: undefined });

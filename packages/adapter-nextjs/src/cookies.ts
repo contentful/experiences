@@ -1,4 +1,4 @@
-import { ANONYMOUS_ID_COOKIE, type ExperiencesNodeRequest } from '@contentful/experiences-node';
+import { ANONYMOUS_ID_COOKIE, type RequestRuntime } from '@contentful/experiences-node';
 
 export interface NextjsAnonymousIdCookieOptions {
   readonly domain?: string;
@@ -25,7 +25,7 @@ export interface NextjsResponseLike {
 }
 
 function resolveAnonymousIdCookie(
-  request: ExperiencesNodeRequest,
+  request: RequestRuntime,
   {
     anonymousIdCookieName = ANONYMOUS_ID_COOKIE,
     cookieOptions,
@@ -61,7 +61,7 @@ function resolveAnonymousIdCookie(
 }
 
 export function createNextjsAnonymousIdSetCookieHeader(
-  request: ExperiencesNodeRequest,
+  request: RequestRuntime,
   options?: PersistNextjsAnonymousIdOptions
 ): string | undefined {
   const cookie = resolveAnonymousIdCookie(request, options);
@@ -112,7 +112,7 @@ function isCookieAtScope(
 /** Append at a writable response boundary using the facade's current identity. */
 export function persistNextjsAnonymousId(
   response: NextjsResponseLike,
-  request: ExperiencesNodeRequest,
+  request: RequestRuntime,
   options?: PersistNextjsAnonymousIdOptions
 ): void {
   const cookie = resolveAnonymousIdCookie(request, options);

@@ -45,7 +45,8 @@ Normal entries and declarations do not require the optional Live Preview package
 
 ## Explicit request binding
 
-`configureNextjsServerExperiences(config: ExperiencesNodeConfig)` returns the actual Node SDK with stable configuration. It does not force private fetch options, read request state, submit events, or load content. `bindNextjsExperiencesRequest(sdk, options)` calls `forRequest()` once and returns the actual `ExperiencesNodeRequest` directly, with its normal fetch, resolve, destination, event and `destroy()` methods.
+`configureNextjsServerExperiences(config)` accepts the Node SDK's `Config` from
+`@contentful/experiences-node` and returns the actual Node SDK with stable configuration. It does not force private fetch options, read request state, submit events, or load content. `bindNextjsExperiencesRequest(sdk, options)` calls `forRequest()` once and returns the actual `RequestRuntime` directly, with its normal fetch, resolve, destination, event and `destroy()` methods.
 
 ```ts
 import {
@@ -70,7 +71,7 @@ const request = bindNextjsExperiencesRequest(sdk, {
   consent: visitorConsent,
   request: incomingRequest,
   locale: requestLocale,
-  experienceOptions: { ip: hostTrustedIp },
+  personalizationOptions: { ip: hostTrustedIp },
 });
 try {
   const plan = await request.fetchExperience(
@@ -88,7 +89,7 @@ try {
 
 `consent` is required and independent of any cookie. Cookie identity is read only when persistence consent is explicitly granted (`true` or `{ persistence: true }`). An explicitly supplied `profile` takes precedence and can remain volatile without persistence consent. An explicit `cookies` reader takes precedence over effective `headers`, then request cookies/header. Empty supplied cookies or headers are authoritative and cannot restore an identity removed by the host. Preview (`isPreview: true` or `livePreview`) excludes every visitor profile input and never reads identity cookies. The preview configuration passes unchanged to Node; optional Preview remains lazy and SDK-owned.
 
-All Node request context options are accepted, including `resolveOptions`, `experienceOptions`, `insightsOptions` and `livePreview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `experienceOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
+All Node request context options are accepted, including `resolveOptions`, `personalizationOptions`, `analyticsOptions` and `livePreview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `personalizationOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
 
 `createNextjsPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createNextjsRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createNextjsRequestContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
 

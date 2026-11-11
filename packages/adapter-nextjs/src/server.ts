@@ -35,9 +35,4 @@ export {
   serializeNextjsHandoff,
   serializeNextjsJsonForHtml,
 } from './serialization.js';
-export type {
-  ExperiencesNodeConfig,
-  ExperiencesNodeRequest,
-  ExperiencesNodeRequestContext,
-  ConsentInput,
-} from '@contentful/experiences-node';
+export type { RequestRuntime, RequestContext, ConsentInput } from '@contentful/experiences-node';

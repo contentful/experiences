@@ -220,7 +220,7 @@ describe('published declarations', () => {
         createNextjsRouteKey, serializeNextjsPlan, serializeNextjsHandoff,
         createNextjsPrivateFetch, assertNextjsPublicRequestPolicy,
         applyNextjsPrivateResponseCache, persistNextjsAnonymousId,
-        type ExperiencesNodeRequest, type BindNextjsExperiencesRequestOptions,
+        type RequestRuntime, type BindNextjsExperiencesRequestOptions,
         ServerExperienceRenderer, defineComponent, fetchExperience, EventBuilder,
         type Config, type PortableRenderPlan, type ServerExperienceRendererProps
       } from '${packageName}/server';
@@ -240,7 +240,7 @@ describe('published declarations', () => {
         spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server-token' }
       });
       const request = bindNextjsExperiencesRequest(sdk, { consent: false, locale: 'en-US' });
-      const actualRequest: ExperiencesNodeRequest = request;
+      const actualRequest: RequestRuntime = request;
       const response = { headers: new Headers() };
       applyNextjsPrivateResponseCache(response);
       persistNextjsAnonymousId(response, request, { cookieOptions: { httpOnly: true } });

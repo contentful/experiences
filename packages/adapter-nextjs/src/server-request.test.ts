@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { ExperiencesNodeRequest } from '@contentful/experiences-node';
+import type { RequestRuntime } from '@contentful/experiences-node';
 import { applyNextjsPrivateResponseCache } from './cache.js';
 import { persistNextjsAnonymousId } from './cookies.js';
 import {
@@ -26,16 +26,16 @@ describe('one explicit Node facade', () => {
         }),
       },
       page: { path: '/page', searchParams: { utm_source: 'email', tag: ['a', 'b'] } },
-      experienceOptions: { ip: 'host-trusted' },
+      personalizationOptions: { ip: 'host-trusted' },
     });
     expect(forRequest).toHaveBeenCalledTimes(1);
-    expectTypeOf(request).toEqualTypeOf<ExperiencesNodeRequest>();
+    expectTypeOf(request).toEqualTypeOf<RequestRuntime>();
     expect(request).not.toHaveProperty('request');
     expect(request).not.toHaveProperty('persist');
     expect(request).toBe(forRequest.mock.results[0]!.value);
     expect(request.profile?.id).toBe('existing');
     expect(forRequest.mock.calls[0]![0]).toMatchObject({
-      experienceOptions: { ip: 'host-trusted' },
+      personalizationOptions: { ip: 'host-trusted' },
       eventContext: { page: { path: '/page' } },
     });
     expect(Object.hasOwn(request, 'fetchExperience')).toBe(false);

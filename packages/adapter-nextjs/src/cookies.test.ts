@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server.js';
 import { describe, expect, it } from 'vitest';
-import type { ExperiencesNodeRequest } from '@contentful/experiences-node';
+import type { RequestRuntime } from '@contentful/experiences-node';
 import { createNextjsAnonymousIdSetCookieHeader, persistNextjsAnonymousId } from './cookies.js';
 
-const request = (values: Partial<ExperiencesNodeRequest>) => values as ExperiencesNodeRequest;
+const request = (values: Partial<RequestRuntime>) => values as RequestRuntime;
 
 describe('response identity boundary', () => {
   it('retains configurable HttpOnly for standalone server-scoped persistence', () => {

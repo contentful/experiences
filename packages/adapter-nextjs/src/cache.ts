@@ -1,8 +1,8 @@
 import {
   assertExperiencesCacheSafety,
   type ExperiencesCacheMetadata,
-  type ExperiencesNodeRequestContext,
-  type RuntimeFetchExperienceOptions,
+  type RequestContext,
+  type FetchExperienceOptions,
 } from '@contentful/experiences-node';
 import type { NextjsResponseLike } from './cookies.js';
 
@@ -39,8 +39,8 @@ export function applyNextjsPrivateResponseCache(response: NextjsResponseLike): v
 /** Validation only; the application owns the complete key and actual public cache. */
 export function assertNextjsPublicRequestPolicy(options: {
   readonly cache: Exclude<ExperiencesCacheMetadata, { scope: 'private-request' }>;
-  readonly context?: ExperiencesNodeRequestContext;
-  readonly fetchOptions?: RuntimeFetchExperienceOptions;
+  readonly context?: RequestContext;
+  readonly fetchOptions?: FetchExperienceOptions;
 }): void {
   const { cache, context, fetchOptions } = options;
   if (cache.scope !== 'static' && cache.scope !== 'public-permutation')
