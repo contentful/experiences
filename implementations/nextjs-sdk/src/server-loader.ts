@@ -81,18 +81,7 @@ export const loadServerPage = cache(async () => {
           requestId: randomUUID(),
           routeKey: createNextjsRouteKey(url),
           experienceId: experience.experienceId,
-          experience: ({ requestUrl }) => {
-            const url = new URL(requestUrl);
-            const preview = Boolean(serverPreview(url));
-            return {
-              experienceId:
-                (preview &&
-                  (url.searchParams.get('preview_experience_id')?.trim() ||
-                    browser.livePreview?.experienceId)) ||
-                routeIds(url.pathname, browser.experienceIds)[0],
-              ...(preview ? {} : { extensions: { sourceMap: {} } }),
-            };
-          },
+          experience,
         }
       : await binding.request.loadExperience();
   const serialized = serializeNextjsRequestResult(result);

@@ -12,10 +12,10 @@ const livePreview = {
   loadImplementation: () => import('@contentful/experiences-live-preview'),
 };
 
-const { ExperiencesRoot: AppExperiencesRoot, Experience: AppRequestExperience } =
-  bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
-export { AppExperiencesRoot };
-export const ClientRequestRoot = AppExperiencesRoot;
+const app = bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
+const { Experience: AppRequestExperience } = app;
+export const AppExperiencesRoot = app.ExperiencesAnalyticsRoot;
+export const ClientRequestRoot = app.ExperiencesRoot;
 export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
   config: browserRegistry,
   livePreview,

@@ -75,6 +75,78 @@ describe('managed Next Live Preview', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(
+    (['app', 'pages'] as const).flatMap((family) =>
+      (['request', 'ordinary', 'request analytics', 'ordinary analytics'] as const).flatMap(
+        (surface) => [true, false].map((enabled) => ({ family, surface, enabled }))
+      )
+    )
+  )(
+    '$family $surface uses its configured preview target without a result (enabled=$enabled)',
+    async ({ family, surface, enabled }) => {
+      const module = implementation();
+      const loadImplementation = vi.fn(async () => module);
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview' },
+        allowedEventTypes: [],
+        defaults: { consent: false, persistenceConsent: false },
+        livePreview: {
+          enabled,
+          experienceId: 'primary',
+          loadImplementation,
+          sessionHost: 'https://preview.example.com',
+          resourceResolution: 'resolved',
+        },
+      };
+      const binding =
+        family === 'app'
+          ? bindNextjsAppRouterClientExperiences(options)
+          : bindNextjsPagesRouterExperiences(options);
+      const owner = surface.startsWith('request') ? binding.request : binding;
+      const BoundRoot = surface.endsWith('analytics')
+        ? owner.ExperiencesAnalyticsRoot
+        : owner.ExperiencesRoot;
+      route.search = '?preview_session_id=a';
+      window.history.replaceState(null, '', route.path + route.search);
+      await act(async () =>
+        root.render(
+          <BoundRoot>
+            <Probe />
+          </BoundRoot>
+        )
+      );
+      expect(sdk.isPreview).toBe(enabled);
+      expect(loadImplementation).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      if (enabled) {
+        expect(sdk.config.livePreview?.experienceId).toBe('primary');
+        expect(module.createLivePreviewClient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sessionId: 'a',
+            sessionHost: 'https://preview.example.com',
+            resourceResolution: 'resolved',
+          })
+        );
+      }
+      const send = vi
+        .spyOn(sdk.api.personalization, 'upsertProfile')
+        .mockResolvedValue({} as never);
+      await act(async () => {
+        sdk.consent({ events: true });
+        await expect(sdk.track({ event: 'explicit-action' })).resolves.toMatchObject({
+          accepted: !enabled,
+        });
+      });
+      const events = send.mock.calls.flatMap(([request]) => request.events ?? []);
+      expect(events.filter((event) => event.type === 'track')).toHaveLength(enabled ? 0 : 1);
+      if (enabled) expect(send).not.toHaveBeenCalled();
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
   it.each(['app', 'pages'] as const)(
     '%s preserves initial content, replaces sessions in place and keeps history guards through mode changes',
     async (family) => {
@@ -88,12 +160,12 @@ describe('managed Next Live Preview', () => {
         preview: { accessToken: 'preview' },
         allowedEventTypes: [],
         defaults: { consent: false, persistenceConsent: false },
-        livePreview: { enabled: true, loadImplementation },
+        livePreview: { enabled: true, experienceId: 'fallback', loadImplementation },
       };
       const bound =
         family === 'app'
           ? bindNextjsAppRouterClientExperiences(options).request
-          : bindNextjsPagesRouterExperiences(options);
+          : bindNextjsPagesRouterExperiences(options).request;
       const pending = deferred<void>();
       let suspended = false;
       function Suspend() {
@@ -109,7 +181,6 @@ describe('managed Next Live Preview', () => {
           routeKey,
           experience: { experienceId: 'primary', personalization: { events: [] } },
           plan: plan(requestId),
-          livePreview: { enabled: Boolean(session) },
         };
         return (
           <Suspense fallback="Waiting">
@@ -126,6 +197,7 @@ describe('managed Next Live Preview', () => {
       await act(async () => root.render(tree('original', 'a')));
       const previewSdk = sdk;
       expect(sdk.isPreview).toBe(true);
+      expect(sdk.config.livePreview?.experienceId).toBe('primary');
       expect(loadImplementation).toHaveBeenCalledOnce();
       expect(module.fetchPreviewSession).not.toHaveBeenCalled();
       expect(container.textContent).toBe('original');

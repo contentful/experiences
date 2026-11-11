@@ -88,7 +88,6 @@ export function useServerPreviewRefresh(experienceId: string | undefined, refres
 /** Preview adds session synchronization to the existing React SDK owner. */
 export function NextjsBrowserRoot({
   livePreview,
-  experienceId,
   sdk,
   previewUrl,
   children,
@@ -101,10 +100,9 @@ export function NextjsBrowserRoot({
   const sessionId = config && nextjsLivePreviewSessionId(config, url);
   const direct = livePreview && !('enabled' in livePreview) ? livePreview : undefined;
   const options = useMemo(
-    () => (config ? resolveNextjsLivePreview(config, url, experienceId) : direct),
+    () => (config ? resolveNextjsLivePreview(config, url) : direct),
     [
       sessionId,
-      experienceId,
       config?.experienceId,
       config?.loadImplementation,
       config?.sessionHost,
@@ -192,6 +190,7 @@ export function NextjsRequestPresentation({
 }) {
   const canAdopt = useNextjsInitialData(result?.requestId);
   const matchingResult = canAdopt && result?.routeKey === routeKey ? result : undefined;
+  const livePreview = mergeNextjsLivePreview(props.livePreview, result?.livePreview);
   const waiting = !ready || (result !== undefined && result.routeKey !== routeKey);
   const initialPagePayload =
     matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);
@@ -213,8 +212,11 @@ export function NextjsRequestPresentation({
       {...(waiting ? { beforeInitialPage: undefined } : {})}
       routeKey={routeKey}
       previewUrl={previewUrl}
-      experienceId={props.experienceId ?? result?.experience.experienceId}
-      livePreview={mergeNextjsLivePreview(props.livePreview, result?.livePreview)}
+      livePreview={
+        livePreview && 'enabled' in livePreview && result
+          ? { ...livePreview, experienceId: result.experience.experienceId }
+          : livePreview
+      }
       handoff={
         result
           ? ready || typeof window === 'undefined'

@@ -138,6 +138,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     return (
       <AppRouterRequestOwner
         {...props}
+        livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
         Root={BrowserRoot}
         configuredBuilder={rootConfig.buildPagePayload}
       />

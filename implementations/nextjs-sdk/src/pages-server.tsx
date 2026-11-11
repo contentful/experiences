@@ -84,7 +84,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       routeIds(url.pathname, config.experienceIds)[0],
     ...(preview ? {} : { extensions: { sourceMap: {} } }),
   };
-  if (!serverOnly && context.req.headers['x-nextjs-data'] === '1' && !livePreview) {
+  if (!serverOnly && context.req.headers['x-nextjs-data'] === '1' && !preview) {
     context.res.setHeader('Cache-Control', 'private, no-store');
     return {
       props: {

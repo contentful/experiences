@@ -19,7 +19,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import type { BrowserEnvironment } from '../reference';
+import { previewBinding, routeIds, type BrowserEnvironment } from '../reference';
 import { browserRegistry } from './browser-registry';
 import { createAttemptLog, type AttemptLog } from './attempt-log';
 import { ConsentMirror } from './ConsentMirror';
@@ -50,7 +50,8 @@ export function AppBrowserRoot({
       ...environment.web,
       config: browserRegistry,
       livePreview: {
-        enabled: true,
+        ...environment.livePreview,
+        enabled: Boolean(environment.livePreview),
         loadImplementation: () => import('@contentful/experiences-live-preview'),
       },
     })
@@ -87,7 +88,8 @@ export function PagesBrowserRoot({
       ...environment.web,
       config: browserRegistry,
       livePreview: {
-        enabled: true,
+        ...environment.livePreview,
+        enabled: Boolean(environment.livePreview),
         loadImplementation: () => import('@contentful/experiences-live-preview'),
       },
     })
@@ -128,11 +130,19 @@ function ReferenceBrowserRoot({
     AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps>;
   }) {
   const url = new URL(currentRouteKey, 'https://nextjs.invalid');
+  const preview = previewBinding(environment, url);
   const [log] = useState(createAttemptLog);
   const serverOnly = url.searchParams.get('mode') === 'server-only';
   const ExperiencesRoot = serverOnly ? AnalyticsRoot : ContentRoot;
   return (
-    <ExperiencesRoot {...props} onStatesReady={log.onStatesReady}>
+    <ExperiencesRoot
+      {...props}
+      livePreview={{
+        enabled: Boolean(environment.livePreview),
+        experienceId: preview?.experienceId ?? routeIds(url.pathname, environment.experienceIds)[0],
+      }}
+      onStatesReady={log.onStatesReady}
+    >
       <ReferenceContext.Provider
         value={{
           environment,

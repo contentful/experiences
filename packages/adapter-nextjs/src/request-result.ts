@@ -32,7 +32,6 @@ export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sd
   Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
     readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewOptions;
-    readonly experienceId?: string;
   };
 
 export type BoundNextjsRequestRootProps = Omit<

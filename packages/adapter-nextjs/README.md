@@ -304,7 +304,8 @@ binder; add `livePreview` and the separately designated browser Preview token to
 stay as shown above. Both server families carry only loader-free configuration
 in the existing result; browser roots retain their client loader and derive the
 primary ID and nonempty trimmed `preview_session_id` from the descriptor and route.
-Explicit browser roots can supply `experienceId` or `livePreview.experienceId`.
+Result-backed roots infer the Preview target from their result. Advanced Web-owned
+Preview can supply `livePreview.experienceId`; shared roots have no content-ID prop.
 Optional `sessionHost` and `resourceResolution` belong to the configuration.
 
 Disabled policy or a missing session selects ordinary mode. Active sessions load
