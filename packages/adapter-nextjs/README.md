@@ -372,6 +372,8 @@ are separately designated; server implementation loaders are never serialized.
 
 `createNextjsPublicPermutationCacheMiddleware({ resolveCache, rewrite?, cacheKeySearchParam? })` performs bounded routing only. Its default query name is `ctfl-exp-cache-key`. It preserves terminal responses, existing response headers/cookies and authoritative request-header removals, sanitizing SDK-owned request headers before rewriting. It imports no Node runtime and runs in Edge middleware. It neither initializes a visitor nor implements a cache.
 
+When rewriting, it regenerates `x-ctfl-exp-request-url` from the actual normalized request URL, excluding `_rsc` and the hash. Chain it with the no-options `createNextjsExperiencesContextHandler()` in either order by passing the first middleware's response to the second. Both orders retain the original request URL rather than the cache rewrite target and discard caller-supplied SDK headers. Keep configured visitor binding off public/static routes, as described above.
+
 Canonical handoff parsing retains valid public-permutation tags. Next boundaries additionally validate at most 128 nonempty tags, each at most 256 characters, without commas or line breaks. Pass `cache.tags` explicitly to supported Next fetch `next.tags` or framework invalidation APIs; the SDK does not install an invalidation service. Private content never enters this path.
 
 ## Development

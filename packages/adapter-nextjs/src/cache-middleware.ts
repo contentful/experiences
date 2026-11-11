@@ -1,6 +1,7 @@
 import type { ExperiencesCacheMetadata, MaybePromise } from '@contentful/experiences-node';
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server.js';
 import { validateNextjsPublicPermutationCacheTags } from './cache-key.js';
+import { NEXTJS_EXPERIENCES_REQUEST_URL_HEADER, normalizedRequestUrl } from './request-context.js';
 import {
   isMiddlewareContinuation,
   createForwardedRequestHeaders,
@@ -84,6 +85,10 @@ export function createNextjsPublicPermutationCacheMiddleware(
     }
 
     const headers = createForwardedRequestHeaders(request.headers, existing);
+    headers.set(
+      NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
+      normalizedRequestUrl(request.url).toString()
+    );
     const response = existing ?? NextResponse.rewrite(rewriteUrl);
     response.headers.set(REWRITE, rewriteUrl.toString());
     applyForwardedRequestHeaders(response, headers);
