@@ -23,7 +23,7 @@ class TestContentfulExperiences extends ContentfulExperiences {
     profileId?: string,
     locale?: string
   ) {
-    return this.sendPreparedExperienceEvents(events, profileId, locale);
+    return this.sendPreparedPersonalizationEvents(events, profileId, locale);
   }
 }
 

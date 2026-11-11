@@ -63,16 +63,16 @@ export interface EventApi {
 }
 
 /** Internal strategy used by a runtime to commit or stage built events. */
-export interface RuntimeEventDispatch {
+export interface EventDispatch {
   personalization(
     event: PersonalizationEvent,
-    profile: ReturnType<RuntimeEventBindings['getProfile']>
+    profile: ReturnType<EventBindings['getProfile']>
   ): Promise<EventEmissionResult>;
   analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
 }
 
 /** Runtime-owned state and context used to bind otherwise stateless event methods. */
-export interface RuntimeEventBindings {
+export interface EventBindings {
   getProfile: () => EventProfile | Pick<EventProfile, 'id'> | undefined;
   /** Fixed preview intent of the owning instance/request. */
   getIsPreview?: () => boolean;
@@ -98,7 +98,7 @@ export interface RuntimeEventBindings {
 }
 
 /** Owner bindings for the default transport, which publishes returned profiles. */
-export interface DirectEventBindings extends Omit<RuntimeEventBindings, 'reportBlockedEvent'> {
+export interface DirectEventBindings extends Omit<EventBindings, 'reportBlockedEvent'> {
   /** Configured diagnostic callback; its errors must not interrupt event delivery. */
   onEventBlocked?: (event: BlockedEvent) => void;
   setProfile: (profile: EventProfile) => void;
@@ -117,8 +117,8 @@ export interface DirectEventBindings extends Omit<RuntimeEventBindings, 'reportB
  * Personalization call blocked by consent resolves `{ accepted: false }`; a
  * blocked Analytics call resolves `{ accepted: false }`.
  */
-export interface RuntimeEventMethods {
-  readonly profile: ReturnType<RuntimeEventBindings['getProfile']>;
+export interface EventMethods {
+  readonly profile: ReturnType<EventBindings['getProfile']>;
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
@@ -141,14 +141,14 @@ export class EventProfileRequiredError extends Error {
   }
 }
 
-class BoundRuntimeEventMethods implements RuntimeEventMethods {
+class BoundEventMethods implements EventMethods {
   constructor(
     private readonly eventBuilder: EventBuilder,
-    private readonly bindings: RuntimeEventBindings,
-    private readonly dispatch: RuntimeEventDispatch
+    private readonly bindings: EventBindings,
+    private readonly dispatch: EventDispatch
   ) {}
 
-  get profile(): ReturnType<RuntimeEventBindings['getProfile']> {
+  get profile(): ReturnType<EventBindings['getProfile']> {
     return this.bindings.getProfile();
   }
 
@@ -306,10 +306,7 @@ export async function deliverPersonalizationEvents(
   return { accepted: true, data };
 }
 
-function createDirectEventDispatch(
-  api: EventApi,
-  bindings: DirectEventBindings
-): RuntimeEventDispatch {
+function createDirectEventDispatch(api: EventApi, bindings: DirectEventBindings): EventDispatch {
   return {
     personalization: async (event, profile) => {
       const profileRevision = bindings.getProfileRevision?.();
@@ -365,16 +362,14 @@ function admitInterceptedEvent(
   return false;
 }
 
-export function createRuntimeEventMethods(
+export function createEventMethods(
   api: EventApi,
   eventBuilder: EventBuilder,
-  ...args:
-    | [bindings: DirectEventBindings]
-    | [bindings: RuntimeEventBindings, dispatch: RuntimeEventDispatch]
-): RuntimeEventMethods {
-  if (args.length === 2) return new BoundRuntimeEventMethods(eventBuilder, args[0], args[1]);
+  ...args: [bindings: DirectEventBindings] | [bindings: EventBindings, dispatch: EventDispatch]
+): EventMethods {
+  if (args.length === 2) return new BoundEventMethods(eventBuilder, args[0], args[1]);
   const { onEventBlocked, ...bindings } = args[0];
-  return new BoundRuntimeEventMethods(
+  return new BoundEventMethods(
     eventBuilder,
     {
       ...bindings,

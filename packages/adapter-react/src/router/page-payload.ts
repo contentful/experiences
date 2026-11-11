@@ -22,15 +22,9 @@ export interface AutoPagePayloadOptions<TRouteContext> {
 }
 
 type RouterOwnedProps = 'routeKey' | 'buildPagePayload' | 'initialPagePayload';
-export type RouterExperiencesRootProps<TRouteContext> = Omit<
-  ExperiencesRootProps,
-  RouterOwnedProps
-> &
+export type RouterRootProps<TRouteContext> = Omit<ExperiencesRootProps, RouterOwnedProps> &
   AutoPagePayloadOptions<TRouteContext>;
-export type RouterExperiencesProviderProps<TRouteContext> = Omit<
-  ExperiencesProviderProps,
-  RouterOwnedProps
-> &
+export type RouterProviderProps<TRouteContext> = Omit<ExperiencesProviderProps, RouterOwnedProps> &
   AutoPagePayloadOptions<TRouteContext>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

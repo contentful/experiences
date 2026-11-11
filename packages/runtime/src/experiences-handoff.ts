@@ -5,8 +5,8 @@ import {
 import * as z from 'zod/mini';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { PersonalizationOptions } from '@contentful/experiences-client';
-import { EventProfileSchema, type EventProfile } from './runtime-event-methods.js';
-import { validatePreparedEvents, type PreparedExperienceEvent } from './prepared-events.js';
+import { EventProfileSchema, type EventProfile } from './event-methods.js';
+import { validatePreparedEvents, type PreparedPersonalizationEvent } from './prepared-events.js';
 
 export type ExperiencesCacheMetadata =
   | { readonly scope: 'private-request'; readonly key?: string }
@@ -32,7 +32,7 @@ export interface ExperiencesHandoff {
     readonly routeKey: string;
     /** Exact finalized XDA-evaluated events, with at most one final page. */
     readonly events: readonly (
-      PreparedExperienceEvent | NonNullable<PersonalizationOptions['events']>[number]
+      PreparedPersonalizationEvent | NonNullable<PersonalizationOptions['events']>[number]
     )[];
     /** Captured content/request locale for Personalization, independent of event context. */
     readonly locale?: string;

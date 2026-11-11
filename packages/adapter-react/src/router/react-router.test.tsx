@@ -6,7 +6,7 @@ import type { Location } from 'react-router-dom';
 import type { ExperiencesHandoff, Config } from '@contentful/experiences-web';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { sourceSdk } from '../test/managed-experience.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { profileFixture } from '../test/profile.js';
 import {
   bindReactRouterExperiences,
@@ -50,7 +50,7 @@ const config = {
 const { ExperiencesRoot, ExperiencesProvider, Experience } = bindReactRouterExperiences({ config });
 
 describe('React Router mapping', () => {
-  let view: ReactTestRoot;
+  let view: DomTestRoot;
   let source: ReturnType<typeof sourceSdk>;
   let location: Location;
   let matches: ReactRouterAutoPageContext['matches'];
@@ -60,7 +60,7 @@ describe('React Router mapping', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/window-only?source=browser#wrong');
-    view = createReactTestRoot();
+    view = createDomTestRoot();
     source = sourceSdk();
     trackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
     hydrateAndTrackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });

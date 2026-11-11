@@ -349,7 +349,7 @@ describe('Web Custom Flags', () => {
 
   it.each([
     ['XDA', false],
-    ['XPAPI', false],
+    ['Personalization API', false],
     ['preview XDA', false],
     ['XDA', true],
     ['preview XDA', true],
@@ -379,7 +379,7 @@ describe('Web Custom Flags', () => {
           { config: { components: {} } }
         );
       const data = { profile, changes: changes('fresh') };
-      const isFetch = source !== 'XPAPI';
+      const isFetch = source !== 'Personalization API';
       const staleData = { profile, changes: [] };
       const finish = () =>
         stale.resolve((isFetch ? { nodes: [], personalization: staleData } : staleData) as never);

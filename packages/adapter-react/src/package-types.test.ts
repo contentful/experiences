@@ -16,7 +16,7 @@ import {
   type ExperienceNotifications,
 } from '@contentful/experiences-react/client';
 import { ContentfulExperiences } from '@contentful/experiences-react/web-sdk';
-import type { RuntimePreviewConfig } from '@contentful/experiences-runtime';
+import type { PreviewConfig } from '@contentful/experiences-runtime';
 
 it('retains supplied-plan renderer and helper types on their explicit entries', () => {
   expectTypeOf<ExperienceRendererProps['experience']>().toEqualTypeOf<
@@ -55,6 +55,6 @@ it('retains the managed result in callbacks and both source modes in bound props
 
 it('exposes the structural preview configuration through direct Web configuration', () => {
   expectTypeOf<ConstructorParameters<typeof ContentfulExperiences>[0]['preview']>().toEqualTypeOf<
-    RuntimePreviewConfig | undefined
+    PreviewConfig | undefined
   >();
 });

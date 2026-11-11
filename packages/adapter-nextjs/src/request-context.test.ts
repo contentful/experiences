@@ -1,20 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createNextjsPageContext,
-  createNextjsRequestContext,
-  createNextjsRouteKey,
+  createPageContext,
+  createRequestContext,
+  createRouteKey,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from './request-context.js';
 
 describe('explicit Next request context', () => {
   it('normalizes encodings, preserves duplicate order, removes transport and hash', () => {
     const url = '/base/en/page?q=hello%20world&a=first&_rsc=transport&a=last#anchor';
-    expect(createNextjsRouteKey(url)).toBe('/base/en/page?q=hello+world&a=first&a=last');
-    expect(createNextjsRouteKey(url)).toBe(
-      createNextjsRouteKey('/base/en/page?q=hello+world&a=first&a=last')
-    );
+    expect(createRouteKey(url)).toBe('/base/en/page?q=hello+world&a=first&a=last');
+    expect(createRouteKey(url)).toBe(createRouteKey('/base/en/page?q=hello+world&a=first&a=last'));
     expect(
-      createNextjsPageContext({
+      createPageContext({
         path: '/page',
         origin: 'https://example.com',
         searchParams: { a: ['first', 'last'], _rsc: 'transport' },
@@ -29,7 +27,7 @@ describe('explicit Next request context', () => {
   });
 
   it('preserves path/search inputs independently of an explicit unnormalized URL', () => {
-    const result = createNextjsPageContext({
+    const result = createPageContext({
       path: '/supplied',
       origin: 'https://ignored.test',
       url: 'https://example.com/chosen?__proto__=safe&x=1&x=2&q=hello%20world&_rsc=transport#hash',
@@ -47,7 +45,7 @@ describe('explicit Next request context', () => {
   });
 
   it('preserves explicit path and URL verbatim even when they cannot be parsed as URLs', () => {
-    expect(createNextjsPageContext({ path: 'route/../page', url: 'http://[invalid' })).toEqual({
+    expect(createPageContext({ path: 'route/../page', url: 'http://[invalid' })).toEqual({
       path: 'route/../page',
       search: '',
       query: {},
@@ -55,7 +53,7 @@ describe('explicit Next request context', () => {
       url: 'http://[invalid',
     });
     expect(
-      createNextjsPageContext({ path: '/page', searchParams: { omitted: undefined, empty: [] } })
+      createPageContext({ path: '/page', searchParams: { omitted: undefined, empty: [] } })
     ).toEqual({
       path: '/page',
       search: '',
@@ -75,7 +73,7 @@ describe('explicit Next request context', () => {
         [NEXTJS_EXPERIENCES_REQUEST_URL_HEADER]: url,
       });
       expect(
-        createNextjsRequestContext({
+        createRequestContext({
           ...(source === 'request' ? { request: { url, headers } } : { headers }),
         })
       ).toEqual({
@@ -93,7 +91,7 @@ describe('explicit Next request context', () => {
 
   it('does not restore request headers removed by explicit empty headers', () => {
     expect(
-      createNextjsRequestContext({
+      createRequestContext({
         request: {
           url: 'https://example.com/request',
           headers: new globalThis.Headers({ referer: 'old', 'user-agent': 'old' }),
@@ -129,7 +127,7 @@ describe('explicit Next request context', () => {
           userAgent: 'explicit',
           ...(source === 'event'
             ? {
-                page: createNextjsPageContext({
+                page: createPageContext({
                   path: '/event',
                   origin: 'https://event.test',
                   referrer: 'https://event-referrer.test',
@@ -140,7 +138,7 @@ describe('explicit Next request context', () => {
         locale: 'de',
         page: { path: '/explicit', searchParams: { q: 'x', utm_source: 'email' } },
       };
-      const result = createNextjsRequestContext(options);
+      const result = createRequestContext(options);
       expect(result).toMatchObject({
         locale: 'de',
         userAgent: 'explicit',
@@ -154,7 +152,7 @@ describe('explicit Next request context', () => {
       });
       expect(result).not.toHaveProperty('ip');
       expect(
-        createNextjsRequestContext({
+        createRequestContext({
           ...options,
           page: { ...options.page, origin: 'https://override.test', referrer: '' },
         }).page
@@ -163,7 +161,7 @@ describe('explicit Next request context', () => {
         referrer: '',
       });
       expect(
-        createNextjsRequestContext({
+        createRequestContext({
           ...options,
           page: { ...options.page, origin: 'https://ignored.test', url: 'http://[invalid' },
         }).page?.url
@@ -173,7 +171,7 @@ describe('explicit Next request context', () => {
 
   it('derives forwarded URL only from explicit supplied headers', () => {
     expect(
-      createNextjsRequestContext({
+      createRequestContext({
         headers: new globalThis.Headers({
           [NEXTJS_EXPERIENCES_REQUEST_URL_HEADER]: 'https://example.com/forwarded?_rsc=x&q=y#z',
         }),
@@ -185,6 +183,6 @@ describe('explicit Next request context', () => {
       url: 'https://example.com/forwarded?_rsc=x&q=y#z',
       referrer: '',
     });
-    expect(createNextjsRequestContext({})).toEqual({});
+    expect(createRequestContext({})).toEqual({});
   });
 });

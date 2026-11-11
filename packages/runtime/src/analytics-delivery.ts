@@ -1,6 +1,6 @@
 import type { InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import type {
-  BatchInsightsEventArray as BatchAnalyticsEventArray,
+  BatchInsightsEventArray as AnalyticsEventBatches,
   InsightsEvent as AnalyticsEvent,
   Profile as EventProfile,
 } from '@contentful/optimization-api-client/api-schemas';
@@ -10,8 +10,8 @@ import {
   parseWithFriendlyError as parseOptimizationSchema,
 } from '@contentful/optimization-api-client/api-schemas';
 import type { EventInterceptors } from './event-interceptors.js';
-import { QueueFlushRuntime, type ResolvedQueueFlushPolicy } from './lib/queue/index.js';
-import type { EventApi } from './runtime-event-methods.js';
+import { FlushRuntime, type ResolvedQueueFlushPolicy } from './lib/queue/index.js';
+import type { EventApi } from './event-methods.js';
 
 const deliveryLogger = createScopedLogger('Experiences:AnalyticsDelivery');
 
@@ -58,7 +58,7 @@ export class AnalyticsDelivery {
   readonly #getOnline: AnalyticsDeliveryOptions['getOnline'];
   readonly #maxEvents: number;
   readonly #flushIntervalMs: number;
-  readonly #flushRuntime: QueueFlushRuntime;
+  readonly #flushRuntime: FlushRuntime;
   readonly #queued = new Map<string, QueuedProfileEvents>();
   readonly #getResetToken: () => object | undefined;
   #activeFlush: Promise<void> | undefined;
@@ -74,7 +74,7 @@ export class AnalyticsDelivery {
     this.#maxEvents = options.maxEvents ?? MAX_QUEUED_ANALYTICS_EVENTS;
     const policy = options.flushPolicy;
     this.#flushIntervalMs = policy.flushIntervalMs;
-    this.#flushRuntime = new QueueFlushRuntime({
+    this.#flushRuntime = new FlushRuntime({
       policy,
       onRetry: () => {
         void this.flush();
@@ -163,7 +163,7 @@ export class AnalyticsDelivery {
   }
 
   async #flushAttempt(
-    batches: BatchAnalyticsEventArray,
+    batches: AnalyticsEventBatches,
     beacon: AnalyticsFlushOptions['beacon'],
     token: object | undefined
   ): Promise<void> {
@@ -207,7 +207,7 @@ export class AnalyticsDelivery {
   }
 
   async #trySend(
-    batches: BatchAnalyticsEventArray,
+    batches: AnalyticsEventBatches,
     options: AnalyticsApiClientRequestOptions | undefined
   ): Promise<boolean> {
     try {
@@ -220,7 +220,7 @@ export class AnalyticsDelivery {
     }
   }
 
-  #removeSentEvents(batches: BatchAnalyticsEventArray): void {
+  #removeSentEvents(batches: AnalyticsEventBatches): void {
     for (const { profile, events } of batches) {
       const queued = this.#queued.get(profile.id);
       if (queued === undefined) continue;
@@ -229,8 +229,8 @@ export class AnalyticsDelivery {
     }
   }
 
-  #createBatches(): BatchAnalyticsEventArray {
-    const batches: BatchAnalyticsEventArray = [];
+  #createBatches(): AnalyticsEventBatches {
+    const batches: AnalyticsEventBatches = [];
     this.#queued.forEach(({ profile, events }) => {
       batches.push({ profile, events: [...events] });
     });

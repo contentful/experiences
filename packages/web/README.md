@@ -300,7 +300,7 @@ const plan = await experiences.fetchExperience(
 `PageViewBuilderArgs` and `TrackBuilderArgs` tagged with `type`. Web consent-gates
 inputs, then builds only arguments once using its `web` channel/browser providers.
 Raw built events retain their supplied context; missing page/user-agent/locale values
-are not merged into them. Direct builder calls remain an advanced option. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy. Adoption and LocalStorage do not finalize a newly previewed ID; a subsequent profile-only fetch can fail with XPAPI GET 404.
+are not merged into them. Direct builder calls remain an advanced option. The runtime stores the current profile in LocalStorage and automatically supplies its id when `profileId` is omitted. An explicit per-call `profileId` wins. When XDA returns a profile, the complete snapshot is available as `plan.personalization?.profile` and is adopted for subsequent requests and Analytics, subject to the existing interceptor and persistence-consent policy. Adoption and LocalStorage do not finalize a newly previewed ID; a subsequent profile-only fetch can fail with Personalization API GET 404.
 
 Explicit initial page and optional identify arguments are built once by the owner and embedded in
 `personalization.events` on XDA fetches. Rendering uses the selected plan without
@@ -393,7 +393,7 @@ persisted only with persistence consent; denying it removes stored changes and
 keeps in-memory values. `reset()` clears changes and exposure history. A changed
 profile identity clears old changes when no replacement changes are supplied.
 
-Treating XDA changes as a complete snapshot follows XPAPI/Optimization behavior;
+Treating XDA changes as a complete snapshot follows Personalization API/Optimization behavior;
 this remains an assumption pending live-backend verification. To read a particular
 plan explicitly, use `experiences.getFlag(name, plan.personalization?.changes ?? [])`;
 use the pure adapter-exported `resolveFlagChange` for metadata preparation without exposure.
@@ -512,7 +512,7 @@ ordinary fetch runs the chain again and is not exact replay. The actual server N
 retains finalized events for XDA evaluation and optional browser commit without repeating hooks.
 The actual Node transfer producer runs event chains sequentially, matching Optimization; browser
 replay and transport retries do not rerun event hooks; the admitted batch retains
-IDs and timestamps under existing XPAPI schema/transport rules. Browser replay still applies its current consent gate and
+IDs and timestamps under existing Personalization API schema/transport rules. Browser replay still applies its current consent gate and
 metadata. State-only handoff production and hydration invoke no event hooks.
 Hooks transform supplied events and preserve Personalization, Analytics, and XDA
 transport boundaries.
@@ -1096,7 +1096,7 @@ insertion, and unsubscribe application subscriptions during cleanup. See the [XD
 
 The actual server Node producer returns one full aggregate; the optional browser consumer owns
 internal state application and replay. SSR display remains independent of
-submission. State application cannot finalize XDA preflight; XPAPI is the commit transport.
+submission. State application cannot finalize XDA preflight; Personalization API is the commit transport.
 
 ## SSR import safety
 

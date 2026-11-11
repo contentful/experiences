@@ -4,7 +4,7 @@ import {
   ContentfulExperiences as Runtime,
   PROFILE_CACHE_KEY,
   ANONYMOUS_ID_COOKIE_LEGACY,
-  type RuntimePreviewClient,
+  type PreviewClient,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { ContentfulExperiences, type Config } from './contentful-experiences.js';
@@ -30,7 +30,7 @@ function preview() {
   let data: ExperiencePayload | undefined;
   let error: Error | undefined;
   const unsubscribe = vi.fn();
-  const client: RuntimePreviewClient = {
+  const client: PreviewClient = {
     getResult: () => ({ data, error }),
     subscribe: (next: () => void) => {
       update = next;

@@ -22,11 +22,11 @@ import {
   type QueuePolicy,
   resolveQueuePolicy,
   parseExperiencesHandoffEnvelope,
-  type RuntimeEventMethods,
+  type EventMethods as RuntimeEventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
-  type RuntimePersonalizationOptions,
+  type PersonalizationOptions,
   buildFetchPersonalization,
   type FetchResolveOptions,
   hasEventConsent,
@@ -35,16 +35,16 @@ import {
   toConsentState,
   validatePreparedEvents,
   withEventConsent,
-  assertRuntimePreviewRequest,
-  mergeRuntimePreviewResolveOptions,
-  type RuntimePreviewSessionOptions,
+  assertPreviewRequest,
+  mergePreviewResolveOptions,
+  type PreviewSessionOptions,
   resolvePreviewSessionId,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   serializePersonalization,
   type DestinationRedirectResult,
-  type PersonalizationOptions,
+  type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import { computed, signal, untracked } from '@preact/signals-core';
 import { cloneDeep, cloneDeepWith } from 'es-toolkit';
@@ -77,7 +77,7 @@ import { installCoreBridgeCapabilities } from './bridge-support/capabilities.js'
 import { resolveStatefulDefaults, type StatefulDefaults } from './stateful-defaults.js';
 
 import { AcceptedCurrentPageTracker } from './accepted-current-page-tracker.js';
-import { getPageProperties, getUserAgent } from './browser-event-context.js';
+import { getPageProperties, getUserAgent } from './event-context.js';
 import {
   createInteractionTracking,
   type InteractionTracking,
@@ -94,8 +94,8 @@ import {
 import { beaconHandler } from './lib/beacon.js';
 import { createVisibilityChangeListener } from './lib/visibility.js';
 import LocalStore from './storage/local-store.js';
-import { acquireWebSingleton, releaseWebSingleton } from './web-singleton.js';
-import { WebPreview } from './web-preview.js';
+import { acquireSingleton, releaseSingleton } from './singleton.js';
+import { PreviewSession } from './preview-session.js';
 import { getExperienceSourceKey } from './experience-source-key.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
@@ -170,7 +170,7 @@ interface HandoffInitialization {
   delivery?: Promise<EventEmissionResult>;
 }
 
-type WebEventMethods = Pick<
+type EventMethods = Pick<
   RuntimeEventMethods,
   'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
@@ -194,7 +194,7 @@ type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
 const unguardedHandoffCaller = () => true;
 
 type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
-  personalization?: PersonalizationOptions;
+  personalization?: BuiltPersonalizationOptions;
 };
 type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: ReturnType<typeof buildFetchPersonalization>;
@@ -220,9 +220,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 > {
   readonly #singletonOwner: string;
   readonly #isPreview: boolean;
-  readonly #previewOptions: RuntimePreviewSessionOptions | undefined;
+  readonly #previewOptions: PreviewSessionOptions | undefined;
   readonly #previewState = signal<PreviewState | undefined>();
-  #preview: WebPreview | undefined;
+  #preview: PreviewSession | undefined;
   #previewSnapshot: Promise<{ payload: ExperiencePayload; revision: number }> | undefined;
   #snapshotRevision = 0;
   readonly #pendingContent = new Map<
@@ -281,19 +281,19 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       console.warn('Event stream subscriber failed', error);
     }
   };
-  readonly identify: WebEventMethods['identify'] = (...args) =>
+  readonly identify: EventMethods['identify'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.identify(...args);
-  readonly page: WebEventMethods['page'] = (...args) =>
+  readonly page: EventMethods['page'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.page(...args);
-  readonly track: WebEventMethods['track'] = (...args) =>
+  readonly track: EventMethods['track'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.track(...args);
-  readonly trackView: WebEventMethods['trackView'] = (...args) =>
+  readonly trackView: EventMethods['trackView'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackView(...args);
-  readonly trackClick: WebEventMethods['trackClick'] = (...args) =>
+  readonly trackClick: EventMethods['trackClick'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackClick(...args);
-  readonly trackHover: WebEventMethods['trackHover'] = (...args) =>
+  readonly trackHover: EventMethods['trackHover'] = (...args) =>
     this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackHover(...args);
-  readonly trackFlagView: WebEventMethods['trackFlagView'] = (...args) =>
+  readonly trackFlagView: EventMethods['trackFlagView'] = (...args) =>
     this.#destroyed
       ? Promise.resolve({ accepted: false })
       : this.#eventMethods.trackFlagView(...args);
@@ -362,7 +362,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     // The lock is taken after the base class has validated its configuration, so a
     // failed construction never holds it. Construction is synchronous, so nothing
     // else can acquire it in between.
-    const singletonOwner = acquireWebSingleton();
+    const singletonOwner = acquireSingleton();
     this.#singletonOwner = singletonOwner;
     const resolvedQueuePolicy = resolveQueuePolicy(queuePolicy);
     let delivery: PersonalizationDelivery | undefined;
@@ -457,7 +457,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         await this.flushQueues({ force: true, beacon: beaconHandler });
       });
       if (this.#previewOptions) {
-        this.#preview = new WebPreview(this.config, this.#previewOptions, this.#previewState);
+        this.#preview = new PreviewSession(this.config, this.#previewOptions, this.#previewState);
         this.#preview.start();
       }
     } catch (error) {
@@ -480,7 +480,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         try {
           super.destroy();
         } finally {
-          releaseWebSingleton(this.#singletonOwner);
+          releaseSingleton(this.#singletonOwner);
         }
       }
       throw error;
@@ -608,7 +608,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     listener: (update: PreviewUpdate) => void
   ): Subscription {
     if (this.#destroyed) return { unsubscribe() {} };
-    const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+    const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
     let active = true;
     let previous: ExperiencePayload | undefined;
     let previousError: Error | undefined;
@@ -714,7 +714,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       prepare: (current) => this.#withTrackingSourceMap(current),
       send: (final) => super.fetchExperience(final, resolveOptions),
       share: (load, final, revision) => {
-        const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+        const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
         const key =
           options.personalization?.events !== undefined
             ? undefined
@@ -755,7 +755,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   async #fetchPersonalized<
-    TOptions extends { personalization?: RuntimePersonalizationOptions },
+    TOptions extends { personalization?: PersonalizationOptions },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(
     options: TOptions,
@@ -844,10 +844,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     assertCurrent();
     if (typeof payload.sys?.id !== 'string' || payload.sys.id !== options.experienceId)
       return undefined;
-    assertRuntimePreviewRequest(options);
+    assertPreviewRequest(options);
     this.#gatePersonalizationEvents(options);
     assertCurrent();
-    const resolve = mergeRuntimePreviewResolveOptions(this.config, resolveOptions);
+    const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
     const key =
       options.personalization?.events !== undefined
         ? undefined
@@ -891,7 +891,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       : options;
   }
 
-  #withRequestIdentity<T extends { personalization?: PersonalizationOptions }>(options: T): T {
+  #withRequestIdentity<T extends { personalization?: BuiltPersonalizationOptions }>(options: T): T {
     const profileId = this.isPreview
       ? undefined
       : (options.personalization?.profileId ?? this.#requestIdentity());
@@ -900,7 +900,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       : { ...options, personalization: { ...options.personalization, profileId } };
   }
 
-  async #prepareContentRequest<T extends { personalization?: RuntimePersonalizationOptions }>(
+  async #prepareContentRequest<T extends { personalization?: PersonalizationOptions }>(
     options: T,
     assertCurrent: () => void
   ): Promise<BuiltFetchOptions<T>> {
@@ -1030,7 +1030,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         try {
           super.destroy();
         } finally {
-          releaseWebSingleton(this.#singletonOwner);
+          releaseSingleton(this.#singletonOwner);
         }
       }
     }
@@ -1100,7 +1100,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
     // Begin the current attempt by checking and publishing identity synchronously.
     // Once visible to other operations, navigation retains this continuation.
-    // This is local identity readiness, not XPAPI commit completion. Current fetches
+    // This is local identity readiness, not Personalization API commit completion. Current fetches
     // do not await replay HTTP; provisional-ID profile-only lookups can therefore fail.
     // See Runtime README's XDA preflight and profile finalization contract.
     const identityReady = Promise.resolve().then(() =>
@@ -1115,7 +1115,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       if (!initialization.isCurrent()) return { accepted: false };
 
       if (!consumed && parsed.replay?.routeKey === routeKey) {
-        const result = await this.sendPreparedExperienceEvents(
+        const result = await this.sendPreparedPersonalizationEvents(
           parsed.replay.events,
           targetId,
           parsed.replay.locale,
@@ -1172,7 +1172,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   /** Queue one already-selected prepared target without waiting for HTTP delivery. */
-  protected sendPreparedExperienceEvents(
+  protected sendPreparedPersonalizationEvents(
     events: readonly unknown[],
     profileId?: string,
     locale?: string,
@@ -1180,7 +1180,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   ): Promise<EventEmissionResult> {
     if (this.#destroyed) return Promise.resolve({ accepted: false });
     if (this.isPreview)
-      return Promise.resolve(this.#skipPreviewEvent('sendPreparedExperienceEvents', [events]));
+      return Promise.resolve(this.#skipPreviewEvent('sendPreparedPersonalizationEvents', [events]));
     const token = this.#resetToken;
     const isCurrent = (): boolean =>
       !this.#destroyed && this.#isCurrent(token) && initialization?.isCurrent() !== false;
@@ -1231,7 +1231,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    * Drops event intent that consent does not admit before building. The profile id
    * still travels, since it is not an event.
    */
-  #gatePersonalizationEvents<T extends { personalization?: RuntimePersonalizationOptions }>(
+  #gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
     options: T
   ): PendingFetchOptions<T> {
     if (this.isPreview) {

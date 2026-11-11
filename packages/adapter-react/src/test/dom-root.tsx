@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { createRoot, hydrateRoot, type HydrationOptions, type Root } from 'react-dom/client';
 
-export interface ReactTestRoot {
+export interface DomTestRoot {
   readonly container: HTMLDivElement;
   render(children: ReactNode): void;
   hydrate(children: ReactNode, options?: HydrationOptions): void;
@@ -9,7 +9,7 @@ export interface ReactTestRoot {
 }
 
 /** DOM/root ownership only; callers control React act and transition boundaries. */
-export function createReactTestRoot(): ReactTestRoot {
+export function createDomTestRoot(): DomTestRoot {
   const container = document.createElement('div');
   document.body.append(container);
   let root: Root | undefined;

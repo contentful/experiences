@@ -1,3 +1,8 @@
+import type {
+  ExperienceEvent as PersonalizationEvent,
+  InsightsEvent as AnalyticsEvent,
+} from '@contentful/optimization-api-client/api-schemas';
+
 export {
   ANONYMOUS_ID_COOKIE,
   ANONYMOUS_ID_COOKIE_LEGACY,
@@ -35,8 +40,8 @@ export type {
   Config,
   ExperienceRuntime,
   FetchExperienceOptions,
-  RuntimePersonalizationOptions,
-  BuiltRuntimeFetchExperienceOptions,
+  PersonalizationOptions,
+  BuiltFetchExperienceOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
   EventBuilderOptions,
@@ -44,32 +49,29 @@ export type {
   ResolveDefaults,
   ResolveOptions,
 } from './contentful-experiences.js';
-export type { DeliveryClientOptions } from './create-runtime-delivery-client.js';
+export type { DeliveryClientOptions } from './create-delivery-client.js';
 export { getPreviewSessionBinding, resolvePreviewSessionId } from './preview-session-binding.js';
 export type { PreviewSessionBinding } from './preview-session-binding.js';
 export {
-  assertRuntimePreviewRequest,
-  createRuntimePreviewClient,
-  mergeRuntimePreviewResolveOptions,
+  assertPreviewRequest,
+  createPreviewClient,
+  mergePreviewResolveOptions,
 } from './live-preview.js';
 export type {
-  RuntimeLivePreviewOwnerConfig,
-  RuntimePreviewConfig,
-  RuntimePreviewSessionOptions,
-  RuntimePreviewClient,
-  RuntimePreviewClientOptions,
-  RuntimePreviewClientFactory,
-  RuntimePreviewSessionIdentity,
-  RuntimePreviewStatus,
+  LivePreviewOwnerConfig,
+  PreviewConfig,
+  PreviewSessionOptions,
+  PreviewClient,
+  PreviewClientOptions,
+  PreviewClientFactory,
+  PreviewSessionIdentity,
+  PreviewStatus,
 } from './live-preview.js';
 export type { ApiClient, OptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
-export { EventProfileRequiredError, EventProfileSchema } from './runtime-event-methods.js';
-export type {
-  PersonalizationRequestOptions,
-  AnalyticsRequestOptions,
-} from './runtime-event-methods.js';
+export { EventProfileRequiredError, EventProfileSchema } from './event-methods.js';
+export type { PersonalizationRequestOptions, AnalyticsRequestOptions } from './event-methods.js';
 export type { EventEmissionResult } from './event-emission-result.js';
 export { AnalyticsDelivery } from './analytics-delivery.js';
 export type {
@@ -84,7 +86,7 @@ export { PersonalizationDelivery } from './personalization-delivery.js';
 export type {
   PersonalizationRequestState,
   PersonalizationRequestFailureReason,
-} from './experience-request-state.js';
+} from './personalization-request-state.js';
 export { validatePersonalizationEvent } from './event-interceptors.js';
 export type { EventInterceptors, OptimizationEventStreamEvent } from './event-interceptors.js';
 export {
@@ -93,12 +95,9 @@ export {
   type InterceptorMerge,
   type MaybePromise,
 } from './lib/interceptor/InterceptorManager.js';
-export type {
-  ExperienceEvent as PersonalizationEvent,
-  InsightsEvent as AnalyticsEvent,
-} from '@contentful/optimization-api-client/api-schemas';
+export type { PersonalizationEvent, AnalyticsEvent };
 export { validatePreparedEvents, withEventConsent } from './prepared-events.js';
-export type { PreparedExperienceEvent } from './prepared-events.js';
+export type { PreparedPersonalizationEvent } from './prepared-events.js';
 export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
@@ -120,8 +119,8 @@ export type {
   EventProfile,
   AnalyticsEventMethod,
   PersonalizationEventMethod,
-  RuntimeEventBindings,
+  EventBindings,
   DirectEventBindings,
-  RuntimeEventDispatch,
-  RuntimeEventMethods,
-} from './runtime-event-methods.js';
+  EventDispatch,
+  EventMethods,
+} from './event-methods.js';

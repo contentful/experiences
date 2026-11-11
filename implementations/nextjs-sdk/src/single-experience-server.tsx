@@ -1,17 +1,17 @@
 // Shared server configuration; Pages GSSP removes this module from the client bundle.
 import {
-  bindNextjsAppRouterServerExperiences,
-  type NextjsAppRouterServerExperiencesConfig,
+  bindAppRouterServerExperiences,
+  type AppRouterServerConfig,
 } from '@contentful/experiences-nextjs/app-router/server';
-import { bindNextjsPagesRouterServerExperiences } from '@contentful/experiences-nextjs/pages-router/server';
-import type { NextjsCookieReader } from '@contentful/experiences-nextjs/server';
+import { bindPagesRouterServerExperiences } from '@contentful/experiences-nextjs/pages-router/server';
+import type { CookieReader } from '@contentful/experiences-nextjs/server';
 import { getServer } from './config';
 import { experienceConfig } from './components/ExperienceContent';
 import { AppExperiencesRoot } from './components/SingleExperience';
 import { readConsent } from './server-reference';
 import { primaryExperience } from './reference';
 
-function configuration(): NextjsAppRouterServerExperiencesConfig {
+function configuration(): AppRouterServerConfig {
   const { nodeConfig, config, browser } = getServer();
   return {
     ...nodeConfig,
@@ -20,7 +20,7 @@ function configuration(): NextjsAppRouterServerExperiencesConfig {
       delivery: browser.web.delivery,
       ...(browser.web.preview ? { preview: browser.web.preview } : {}),
     },
-    consent: { server: ({ cookies }: { cookies: NextjsCookieReader }) => readConsent(cookies) },
+    consent: { server: ({ cookies }: { cookies: CookieReader }) => readConsent(cookies) },
     preview: {
       ...nodeConfig.preview,
       sessionHost: browser.livePreview?.sessionHost,
@@ -35,7 +35,7 @@ function configuration(): NextjsAppRouterServerExperiencesConfig {
 }
 
 export function singleAppExperiences() {
-  return bindNextjsAppRouterServerExperiences(configuration(), {
+  return bindAppRouterServerExperiences(configuration(), {
     request: {
       ExperiencesRoot: AppExperiencesRoot,
     },
@@ -43,7 +43,7 @@ export function singleAppExperiences() {
 }
 
 export function singlePagesExperiences() {
-  return bindNextjsPagesRouterServerExperiences({
+  return bindPagesRouterServerExperiences({
     ...configuration(),
     origin: getServer().config.origin,
   });

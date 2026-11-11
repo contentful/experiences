@@ -3,12 +3,12 @@ import { act, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useExperiences } from '@contentful/experiences-react/client';
 import { ContentfulExperiences, type PortableRenderPlan } from '@contentful/experiences-web';
-import type { RuntimePreviewClientFactory } from '@contentful/experiences-runtime';
+import type { PreviewClientFactory } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bindNextjsAppRouterClientExperiences } from './app-router-client.js';
-import { bindNextjsPagesRouterExperiences } from './pages-router.js';
-import { resolveNextjsPreview } from './preview.js';
-import type { NextjsRequestResult } from './request-result.js';
+import { bindAppRouterClientExperiences } from './app-router-client.js';
+import { bindPagesRouterExperiences } from './pages-router.js';
+import { resolvePreview } from './preview.js';
+import type { RequestResult } from './request-result.js';
 
 const route = vi.hoisted(() => ({
   path: '/home',
@@ -30,7 +30,7 @@ const plan = (label: string): PortableRenderPlan => ({
   metadata: { label },
 });
 function clientFactory() {
-  return vi.fn<RuntimePreviewClientFactory>(() => ({
+  return vi.fn<PreviewClientFactory>(() => ({
     getResult: () => ({ data: undefined, error: undefined }),
     subscribe: () => () => {},
     subscribeStatus: () => () => {},
@@ -99,8 +99,8 @@ describe('managed Next Live Preview', () => {
       };
       const binding =
         family === 'app'
-          ? bindNextjsAppRouterClientExperiences(options)
-          : bindNextjsPagesRouterExperiences(options);
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options);
       const owner = surface.startsWith('request') ? binding.request : binding;
       const BoundRoot = surface.endsWith('analytics')
         ? owner.ExperiencesAnalyticsRoot
@@ -133,12 +133,12 @@ describe('managed Next Live Preview', () => {
       };
       const binding =
         family === 'app'
-          ? bindNextjsAppRouterClientExperiences(options)
-          : bindNextjsPagesRouterExperiences(options);
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options);
       const subscribe = vi
         .spyOn(ContentfulExperiences.prototype, 'subscribeToPreview')
         .mockImplementation(() => ({ unsubscribe: vi.fn() }));
-      const result: NextjsRequestResult = {
+      const result: RequestResult = {
         requestId: 'primary',
         routeKey: '/home',
         experience: { experienceId: 'hero' },
@@ -174,8 +174,8 @@ describe('managed Next Live Preview', () => {
       };
       const bound =
         family === 'app'
-          ? bindNextjsAppRouterClientExperiences(options).request
-          : bindNextjsPagesRouterExperiences(options).request;
+          ? bindAppRouterClientExperiences(options).request
+          : bindPagesRouterExperiences(options).request;
       const pending = deferred<void>();
       let suspended = false;
       function Suspend() {
@@ -189,7 +189,7 @@ describe('managed Next Live Preview', () => {
         route.search = session ? '?preview_session_id=' + session : '';
         const routeKey = route.path + route.search;
         window.history.replaceState(null, '', routeKey);
-        const result: NextjsRequestResult = {
+        const result: RequestResult = {
           requestId,
           routeKey,
           experience: { experienceId: 'primary', personalization: { events: [] } },
@@ -249,7 +249,7 @@ it.each([
   'activates only enabled nonempty URL sessions (%s, %s)',
   async (enabled, search, expected) => {
     const createClient = clientFactory();
-    const previewOptions = resolveNextjsPreview(
+    const previewOptions = resolvePreview(
       { accessToken: 'preview', enabled, createClient },
       '/' + search
     );

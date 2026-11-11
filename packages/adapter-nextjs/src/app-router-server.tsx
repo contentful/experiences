@@ -13,71 +13,58 @@ import {
 import { cookies, headers } from 'next/headers.js';
 import { cache, createElement, type ComponentType } from 'react';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
-import type {
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
-} from './request-result.js';
+import type { BoundRequestRootProps, RequestExperienceProps } from './request-result.js';
+import { bindExperiencesRequest, configureServerExperiences } from './server-request.js';
 import {
-  bindNextjsExperiencesRequest,
-  configureNextjsServerExperiences,
-} from './server-request.js';
-import {
-  createNextjsRouteKey,
+  createRouteKey,
   normalizedRequestUrl,
-  isNextjsSpeculativeRequest,
+  isSpeculativeRequest,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from './request-context.js';
-import { assertNextjsPublicRequestPolicy } from './cache.js';
+import { assertPublicRequestPolicy } from './cache.js';
 import {
-  createNextjsExperiencesContextHandler,
-  type NextjsExperiencesResolverContext,
+  createExperiencesContextHandler,
+  type ExperiencesResolverContext,
 } from './request-handler.js';
-import { toNextjsAnonymousIdCookieOptions } from './cookies.js';
+import { toAnonymousIdCookieOptions } from './cookies.js';
 import {
-  resolveNextjsServerValue,
-  nextjsBrowserRootConfig,
-  serializeNextjsRequestResult,
-  type NextjsServerExperiencesConfig,
-  type NextjsServerRequestContext,
-  type NextjsServerRequestOverrides,
-  type NextjsServerRequestResult,
+  resolveServerValue,
+  browserRootConfig,
+  serializeRequestResult,
+  type ServerConfig,
+  type ServerRequestContext,
+  type ServerRequestOverrides,
+  type ServerRequestResult,
 } from './server-config.js';
-import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
-import {
-  resolveNextjsPreview,
-  resolveNextjsPreviewSession,
-  mergeNextjsPreview,
-} from './preview.js';
-import {
-  NextjsAppRouterRequestRoot,
-  NextjsAppRouterRequestAnalyticsRoot,
-} from './app-router-client.js';
+import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
+import { resolvePreview, resolvePreviewSession, mergePreview } from './preview.js';
+import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 
-export { serializeNextjsRequestResult } from './server-config.js';
-export type { NextjsCookieConfig } from './cookies.js';
-export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
-export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
+export { serializeRequestResult } from './server-config.js';
+export type { CookieConfig } from './cookies.js';
+export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
+export type { PreviewConfig, PreviewContext } from './preview.js';
 
-export type NextjsAppRouterRequestContext = NextjsServerRequestContext;
-export type NextjsAppRouterServerExperiencesConfig = NextjsServerExperiencesConfig;
+export type AppRouterRequestContext = ServerRequestContext;
+export type AppRouterServerConfig = ServerConfig;
 
-export interface NextjsAppRouterServerExperiencesOptions {
+export interface AppRouterServerOptions {
   readonly request?: {
-    readonly Experience?: ComponentType<NextjsRequestExperienceProps>;
-    readonly ExperiencesRoot?: ComponentType<BoundNextjsRequestRootProps>;
-    readonly ExperiencesAnalyticsRoot?: ComponentType<BoundNextjsRequestRootProps>;
+    readonly Experience?: ComponentType<RequestExperienceProps>;
+    readonly ExperiencesRoot?: ComponentType<BoundRequestRootProps>;
+    readonly ExperiencesAnalyticsRoot?: ComponentType<BoundRequestRootProps>;
   };
 }
 
-export type BoundNextjsServerRequestRootProps = Omit<
-  BoundNextjsRequestRootProps,
+export type BoundServerRequestRootProps = Omit<
+  BoundRequestRootProps,
   'sdk' | 'onStatesReady' | 'beforeInitialPage' | 'buildPagePayload' | 'result'
 >;
 
-export type NextjsAppRouterExperienceResult = NextjsServerRequestResult;
+export type AppRouterExperienceResult = ServerRequestResult;
 
 /** Server renderer callbacks stay on the server; DOM handlers belong in client components. */
-export type NextjsServerRequestExperienceProps = Omit<
+export type ServerRequestExperienceProps = Omit<
   ServerExperienceRendererProps,
   'experience' | 'config' | 'as' | 'rootProps'
 > & {
@@ -89,15 +76,12 @@ export type NextjsServerRequestExperienceProps = Omit<
 };
 
 /** Client renderer callbacks must be configured in the injected client module. */
-export type NextjsServerRequestClientExperienceProps = Omit<
-  NextjsServerRequestExperienceProps,
+export type ServerRequestClientExperienceProps = Omit<
+  ServerRequestExperienceProps,
   'renderError' | 'renderUnknown'
 >;
 
-export type NextjsServerExperienceProps = Omit<
-  ServerExperienceRendererProps,
-  'experience' | 'config'
-> &
+export type ServerExperienceProps = Omit<ServerExperienceRendererProps, 'experience' | 'config'> &
   (
     | { readonly experience: PortableRenderPlan }
     | (FetchExperienceOptions & {
@@ -107,32 +91,30 @@ export type NextjsServerExperienceProps = Omit<
       })
   );
 
-export function bindNextjsAppRouterServerExperiences(
-  options: NextjsAppRouterServerExperiencesConfig,
-  client?: NextjsAppRouterServerExperiencesOptions & {
-    readonly request?: NonNullable<NextjsAppRouterServerExperiencesOptions['request']> & {
+export function bindAppRouterServerExperiences(
+  options: AppRouterServerConfig,
+  client?: AppRouterServerOptions & {
+    readonly request?: NonNullable<AppRouterServerOptions['request']> & {
       readonly Experience?: never;
     };
   }
-): ReturnType<typeof createAppRouterServerExperiences<NextjsServerRequestExperienceProps>>;
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestExperienceProps>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.
-export function bindNextjsAppRouterServerExperiences(
-  options: NextjsAppRouterServerExperiencesConfig,
-  client: NextjsAppRouterServerExperiencesOptions
-): ReturnType<typeof createAppRouterServerExperiences<NextjsServerRequestClientExperienceProps>>;
+export function bindAppRouterServerExperiences(
+  options: AppRouterServerConfig,
+  client: AppRouterServerOptions
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestClientExperienceProps>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
-export function bindNextjsAppRouterServerExperiences(
-  options: NextjsAppRouterServerExperiencesConfig,
-  client?: NextjsAppRouterServerExperiencesOptions
+export function bindAppRouterServerExperiences(
+  options: AppRouterServerConfig,
+  client?: AppRouterServerOptions
 ) {
   return createAppRouterServerExperiences(options, client);
 }
 
-function createAppRouterServerExperiences<
-  PresentationProps extends NextjsServerRequestExperienceProps,
->(
-  options: NextjsAppRouterServerExperiencesConfig,
-  client?: NextjsAppRouterServerExperiencesOptions
+function createAppRouterServerExperiences<PresentationProps extends ServerRequestExperienceProps>(
+  options: AppRouterServerConfig,
+  client?: AppRouterServerOptions
 ) {
   const {
     config,
@@ -143,16 +125,14 @@ function createAppRouterServerExperiences<
     preview,
     ...nodeConfig
   } = options;
-  const sdk = configureNextjsServerExperiences({
+  const sdk = configureServerExperiences({
     ...nodeConfig,
-    preview: resolveNextjsPreview(preview, '/'),
+    preview: resolvePreview(preview, '/'),
   });
 
   // One React render-local result supplies both the root and presentation.
   const loadExperience = cache(
-    async (
-      overrides: NextjsServerRequestOverrides = {}
-    ): Promise<NextjsAppRouterExperienceResult> => {
+    async (overrides: ServerRequestOverrides = {}): Promise<AppRouterExperienceResult> => {
       const cookieStore = await cookies();
       const requestHeaders = new globalThis.Headers(await headers());
       const forwarded = requestHeaders.get(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER);
@@ -161,38 +141,38 @@ function createAppRouterServerExperiences<
           'Configure the Experiences request handler before using request components.'
         );
       const requestUrl = normalizedRequestUrl(forwarded).toString();
-      const context: NextjsAppRouterRequestContext = {
+      const context: AppRouterRequestContext = {
         request: { url: requestUrl, headers: requestHeaders, cookies: cookieStore },
         requestUrl,
-        routeKey: createNextjsRouteKey(requestUrl),
+        routeKey: createRouteKey(requestUrl),
         headers: requestHeaders,
         cookies: cookieStore,
       };
-      const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
-      const session = resolveNextjsPreviewSession(preview, context.requestUrl);
-      if (isNextjsSpeculativeRequest(context.headers)) return resolved.result;
-      const request = bindNextjsExperiencesRequest(sdk, {
+      const resolved = await resolveRequestPolicy(options, overrides, context);
+      const session = resolvePreviewSession(preview, context.requestUrl);
+      if (isSpeculativeRequest(context.headers)) return resolved.result;
+      const request = bindExperiencesRequest(sdk, {
         request: context.request,
         cookies: context.cookies,
         consent:
           overrides.consent ??
           (consent?.server === undefined
             ? false
-            : await resolveNextjsServerValue(consent.server, context)),
+            : await resolveServerValue(consent.server, context)),
         locale: overrides.locale ?? nodeConfig.locale,
         preview: session,
         isPreview: overrides.isPreview === true || session !== undefined,
       });
       try {
-        return await loadNextjsPrimaryExperience(request, resolved, context, options);
+        return await loadPrimaryExperience(request, resolved, context, options);
       } finally {
         request.destroy();
       }
     }
   );
 
-  const browserResult = cache((result: NextjsAppRouterExperienceResult) =>
-    serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys })
+  const browserResult = cache((result: AppRouterExperienceResult) =>
+    serializeRequestResult(result, { metadataKeys: options.request?.metadataKeys })
   );
 
   function inheritedRootProps() {
@@ -205,10 +185,10 @@ function createAppRouterServerExperiences<
     };
   }
 
-  function registeredRootProps(props: BoundNextjsRequestRootProps) {
-    const browser = options.browser ? nextjsBrowserRootConfig(options) : undefined;
-    const preview = mergeNextjsPreview(
-      mergeNextjsPreview(browser?.preview, props.preview),
+  function registeredRootProps(props: BoundRequestRootProps) {
+    const browser = options.browser ? browserRootConfig(options) : undefined;
+    const preview = mergePreview(
+      mergePreview(browser?.preview, props.preview),
       props.result?.preview
     );
     return {
@@ -219,12 +199,12 @@ function createAppRouterServerExperiences<
     };
   }
 
-  function ExperiencesRoot(props: BoundNextjsRequestRootProps) {
+  function ExperiencesRoot(props: BoundRequestRootProps) {
     if (client?.request?.ExperiencesRoot)
       return createElement(client.request.ExperiencesRoot, {
         ...registeredRootProps(props),
       });
-    return createElement(NextjsAppRouterRequestRoot, {
+    return createElement(AppRouterRequestRoot, {
       ...props,
       children: client?.request?.Experience ? (
         props.children
@@ -235,27 +215,27 @@ function createAppRouterServerExperiences<
         </>
       ),
       ...inheritedRootProps(),
-      browser: nextjsBrowserRootConfig(options),
+      browser: browserRootConfig(options),
     });
   }
 
-  async function RequestExperiencesRoot(props: BoundNextjsServerRequestRootProps) {
+  async function RequestExperiencesRoot(props: BoundServerRequestRootProps) {
     return ExperiencesRoot({ ...props, result: browserResult(await loadExperience()) });
   }
 
-  function ExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
+  function ExperiencesAnalyticsRoot(props: BoundRequestRootProps) {
     if (client?.request?.ExperiencesAnalyticsRoot)
       return createElement(client.request.ExperiencesAnalyticsRoot, {
         ...registeredRootProps(props),
       });
-    return createElement(NextjsAppRouterRequestAnalyticsRoot, {
+    return createElement(AppRouterRequestAnalyticsRoot, {
       ...props,
       ...inheritedRootProps(),
-      browser: nextjsBrowserRootConfig(options),
+      browser: browserRootConfig(options),
     });
   }
 
-  async function RequestExperiencesAnalyticsRoot(props: BoundNextjsServerRequestRootProps) {
+  async function RequestExperiencesAnalyticsRoot(props: BoundServerRequestRootProps) {
     const { plan: _plan, ...result } = browserResult(await loadExperience());
     return ExperiencesAnalyticsRoot({ ...props, result });
   }
@@ -270,7 +250,7 @@ function createAppRouterServerExperiences<
     ) : null;
   }
 
-  async function Experience(props: NextjsServerExperienceProps) {
+  async function Experience(props: ServerExperienceProps) {
     if (props.experience !== undefined) {
       return <ServerExperienceRenderer {...props} config={config} experience={props.experience} />;
     }
@@ -294,7 +274,7 @@ function createAppRouterServerExperiences<
       preview,
     };
     if (cachePolicy)
-      assertNextjsPublicRequestPolicy({
+      assertPublicRequestPolicy({
         cache: cachePolicy,
         fetchOptions: descriptor,
         context: { isPreview: sdk.config.preview?.sessionId !== undefined },
@@ -308,7 +288,7 @@ function createAppRouterServerExperiences<
     }
   }
 
-  function handlerContext(context: NextjsExperiencesResolverContext): NextjsServerRequestContext {
+  function handlerContext(context: ExperiencesResolverContext): ServerRequestContext {
     const requestUrl = normalizedRequestUrl(
       context.headers.get(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER) ?? context.request.url
     ).toString();
@@ -317,7 +297,7 @@ function createAppRouterServerExperiences<
       headers: context.headers,
       cookies: context.cookies,
       requestUrl,
-      routeKey: createNextjsRouteKey(requestUrl),
+      routeKey: createRouteKey(requestUrl),
     };
   }
 
@@ -331,16 +311,16 @@ function createAppRouterServerExperiences<
       ExperiencesRoot: RequestExperiencesRoot,
       ExperiencesAnalyticsRoot: RequestExperiencesAnalyticsRoot,
     },
-    requestHandler: createNextjsExperiencesContextHandler({
+    requestHandler: createExperiencesContextHandler({
       sdk,
       consent:
         consent?.server === undefined
           ? false
-          : (context) => resolveNextjsServerValue(consent.server!, handlerContext(context)),
+          : (context) => resolveServerValue(consent.server!, handlerContext(context)),
       locale: nodeConfig.locale,
-      cookieOptions: toNextjsAnonymousIdCookieOptions(cookie),
+      cookieOptions: toAnonymousIdCookieOptions(cookie),
       preview: preview
-        ? (context) => resolveNextjsPreviewSession(preview, context.request.url)
+        ? (context) => resolvePreviewSession(preview, context.request.url)
         : undefined,
     }),
   };

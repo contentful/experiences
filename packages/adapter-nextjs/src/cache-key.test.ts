@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createExperiencesCacheKey,
+  createCacheKey,
   createPublicPermutationCacheMetadata,
-  validateNextjsPublicPermutationCacheTags,
-  type NextjsExperiencesCacheKeyInput,
+  validatePublicPermutationCacheTags,
+  type CacheKeyInput,
 } from './cache-key.js';
 
 const input = {
@@ -18,18 +18,18 @@ const input = {
 
 describe('approved public cache metadata', () => {
   it('normalizes parameter/dimension ordering and retains meaningful input changes', () => {
-    const key = createExperiencesCacheKey(input);
+    const key = createCacheKey(input);
     expect(
-      createExperiencesCacheKey({
+      createCacheKey({
         ...input,
         parameters: { empty: {}, filter: { a: 1, b: 2 }, count: -1.5, text: '' },
         selectionDimensions: { count: 1.5, enabled: false, audience: 'public' },
       })
     ).toBe(key);
-    expect(createExperiencesCacheKey({ ...input, locale: 'de-DE' })).not.toBe(key);
-    expect(createExperiencesCacheKey({ ...input, contentRevision: 3 })).not.toBe(key);
-    expect(createExperiencesCacheKey({ ...input, contentRevision: 'revision' })).not.toBe(key);
-    expect(createExperiencesCacheKey({ ...input, parameters: { filter: {} } })).not.toBe(key);
+    expect(createCacheKey({ ...input, locale: 'de-DE' })).not.toBe(key);
+    expect(createCacheKey({ ...input, contentRevision: 3 })).not.toBe(key);
+    expect(createCacheKey({ ...input, contentRevision: 'revision' })).not.toBe(key);
+    expect(createCacheKey({ ...input, parameters: { filter: {} } })).not.toBe(key);
     expect(decodeURIComponent(key)).toBe(
       '["space","master","home",2,"en-US",[["count",-1.5],["empty",[]],["filter",[["a",1],["b",2]]],["text",""]],[["audience","public"],["count",1.5],["enabled",false]]]'
     );
@@ -51,10 +51,10 @@ describe('approved public cache metadata', () => {
     ['contentRevision', true, 'contentRevision'],
   ])('rejects unsupported %s input %j with its location', (field, value, path) => {
     expect(() =>
-      createExperiencesCacheKey({
+      createCacheKey({
         ...input,
         [field]: value,
-      } as unknown as NextjsExperiencesCacheKeyInput)
+      } as unknown as CacheKeyInput)
     ).toThrow(new RegExp(`${path} must be`));
   });
   it('carries detached tags with the application permutation key and version', () => {
@@ -71,6 +71,6 @@ describe('approved public cache metadata', () => {
   });
   it('enforces the Next tag boundary', () => {
     for (const tags of [['bad,tag'], ['bad\nline'], ['a'.repeat(257)], Array(129).fill('tag')])
-      expect(() => validateNextjsPublicPermutationCacheTags(tags)).toThrow();
+      expect(() => validatePublicPermutationCacheTags(tags)).toThrow();
   });
 });

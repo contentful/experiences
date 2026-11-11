@@ -2,7 +2,7 @@ import { profileFixture } from './test/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import type {
-  BuiltRuntimeFetchExperienceOptions,
+  BuiltFetchExperienceOptions,
   OptimizationEventStreamEvent,
   FetchExperienceOptions,
   FetchResolveOptions,
@@ -12,7 +12,7 @@ import { ContentfulExperiences, type Config } from './contentful-experiences.js'
 // Expose the actual Runtime payload boundary for a no-network spy.
 class TestRuntime extends ContentfulExperiences {
   override fetchExperiencePayload(
-    options: BuiltRuntimeFetchExperienceOptions,
+    options: BuiltFetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<ExperiencePayload> {
     return super.fetchExperiencePayload(options, resolveOptions);
@@ -375,7 +375,7 @@ describe('Node browser-handoff producer', () => {
 });
 
 describe('Node ordinary XDA fetch', () => {
-  it('builds native arguments once, preserves raw intent and never commits through XPAPI', async () => {
+  it('builds native arguments once, preserves raw intent and never commits through Personalization API', async () => {
     const { sdk, fetch, commit } = setup();
     const request = sdk.forRequest({ consent: true, profile: { id: 'incoming' } });
     const raw = sdk.eventBuilder.buildTrack({ event: 'raw' });

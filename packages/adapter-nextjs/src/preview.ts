@@ -1,17 +1,17 @@
 import type {
-  RuntimePreviewConfig,
-  RuntimePreviewSessionOptions,
+  PreviewConfig as SessionPreviewConfig,
+  PreviewSessionOptions,
 } from '@contentful/experiences-runtime';
 import { resolvePreviewSessionId } from '@contentful/experiences-runtime';
 
 /** Next-only deployment gate layered over the normal Preview transport/context. */
-export type NextjsPreviewConfig = Partial<RuntimePreviewConfig> & { readonly enabled?: boolean };
-export type NextjsPreviewContext = Pick<
-  NextjsPreviewConfig,
+export type PreviewConfig = Partial<SessionPreviewConfig> & { readonly enabled?: boolean };
+export type PreviewContext = Pick<
+  PreviewConfig,
   'enabled' | 'sessionId' | 'sessionHost' | 'resourceResolution'
 >;
 
-function sessionId(config: NextjsPreviewConfig, url: string): string | undefined {
+function sessionId(config: PreviewConfig, url: string): string | undefined {
   return config.enabled === false
     ? undefined
     : resolvePreviewSessionId(
@@ -20,10 +20,10 @@ function sessionId(config: NextjsPreviewConfig, url: string): string | undefined
       );
 }
 
-export function resolveNextjsPreview(
-  config: NextjsPreviewConfig | undefined,
+export function resolvePreview(
+  config: PreviewConfig | undefined,
   url: string
-): RuntimePreviewConfig | undefined {
+): SessionPreviewConfig | undefined {
   if (!config) return undefined;
   const { enabled: _enabled, ...preview } = config;
   const context = { ...preview, sessionId: config.enabled === false ? '' : sessionId(config, url) };
@@ -36,18 +36,18 @@ export function resolveNextjsPreview(
 }
 
 /** Metadata overrides context only; credentials and factory remain application-owned. */
-export function mergeNextjsPreview(
-  configured: NextjsPreviewConfig | undefined,
-  supplied: NextjsPreviewConfig | undefined
-): NextjsPreviewConfig | undefined {
+export function mergePreview(
+  configured: PreviewConfig | undefined,
+  supplied: PreviewConfig | undefined
+): PreviewConfig | undefined {
   return supplied ? { ...configured, ...supplied } : configured;
 }
 
 /** Request facades receive only session context; their SDK retains credentials and factory. */
-export function resolveNextjsPreviewSession(
-  config: NextjsPreviewConfig | undefined,
+export function resolvePreviewSession(
+  config: PreviewConfig | undefined,
   url: string
-): RuntimePreviewSessionOptions | undefined {
+): PreviewSessionOptions | undefined {
   const selected = config && sessionId(config, url);
   return selected
     ? {

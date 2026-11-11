@@ -4,13 +4,13 @@ import { cache, createElement } from 'react';
 import { randomUUID } from 'node:crypto';
 import { headers } from 'next/headers';
 import {
-  bindNextjsAppRouterServerExperiences,
-  serializeNextjsRequestResult,
-  type NextjsAppRouterExperienceResult,
+  bindAppRouterServerExperiences,
+  serializeRequestResult,
+  type AppRouterExperienceResult,
 } from '@contentful/experiences-nextjs/app-router/server';
-import type { BoundNextjsRequestRootProps } from '@contentful/experiences-nextjs/app-router/client';
+import type { BoundRequestRootProps } from '@contentful/experiences-nextjs/app-router/client';
 import {
-  createNextjsRouteKey,
+  createRouteKey,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from '@contentful/experiences-nextjs/server';
 import { getServer } from './config';
@@ -40,7 +40,7 @@ export const loadServerPage = cache(async () => {
     routeIds(url.pathname, browser.experienceIds)[0]
   );
   let comparisons: ServerContent[] = [];
-  const binding = bindNextjsAppRouterServerExperiences({
+  const binding = bindAppRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
     browser: {
@@ -69,22 +69,22 @@ export const loadServerPage = cache(async () => {
     },
   });
   // The diagnostic hybrid view owns navigation in Web; this choice belongs to the host.
-  const result: NextjsAppRouterExperienceResult =
+  const result: AppRouterExperienceResult =
     incoming.get('rsc') === '1' && !serverOnly && !serverPreview(url)
       ? {
           requestId: randomUUID(),
-          routeKey: createNextjsRouteKey(url),
+          routeKey: createRouteKey(url),
           experienceId: experience.experienceId,
           experience,
         }
       : await binding.request.loadExperience();
-  const serialized = serializeNextjsRequestResult(result);
+  const serialized = serializeRequestResult(result);
   const browserResult = { ...serialized };
   if (serverOnly) delete browserResult.plan;
   return {
     result,
     browserResult,
-    ExperiencesRoot: (props: BoundNextjsRequestRootProps) =>
+    ExperiencesRoot: (props: BoundRequestRootProps) =>
       createElement(AppBrowserRoot, { ...props, result: browserResult, environment: browser }),
     comparisons,
     serverOnly,

@@ -4,101 +4,92 @@
 // at f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). React remains the page owner.
 import { useRouter } from 'next/router.js';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createExperiences, type ExperiencesRootProps } from '@contentful/experiences-react/client';
+import { createPageContext, createRouteKey } from './request-context.js';
 import {
-  createReactExperiences,
-  type ExperiencesRootProps,
-} from '@contentful/experiences-react/client';
-import { createNextjsPageContext, createNextjsRouteKey } from './request-context.js';
-import {
-  NextjsInitialDataBoundary,
-  NextjsRequestResultBoundary,
-  NextjsRequestPresentation,
-  NextjsBrowserRoot,
+  InitialDataBoundary,
+  RequestResultBoundary,
+  RequestPresentation,
+  BrowserRoot,
   useServerPreviewRefresh,
-  useNextjsRequestOptions,
+  useRequestOptions,
 } from './router-lifetime.js';
-import { mergeNextjsPreview, resolveNextjsPreviewSession } from './preview.js';
-import type { NextjsClientExperiencesConfig } from './app-router-client.js';
+import { mergePreview, resolvePreviewSession } from './preview.js';
+import type { ClientConfig } from './app-router-client.js';
 import type {
-  BoundNextjsExperiencesRootProps,
-  NextjsDefaultRequestRootProps,
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
-  NextjsRequestResult,
+  BoundRootProps,
+  DefaultRequestRootProps,
+  BoundRequestRootProps,
+  RequestExperienceProps,
+  RequestResult,
 } from './request-result.js';
 export type {
-  BoundNextjsExperiencesRootProps,
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
-  NextjsRequestResult,
+  BoundRootProps,
+  BoundRequestRootProps,
+  RequestExperienceProps,
+  RequestResult,
 } from './request-result.js';
 
-export type { NextjsBrowserConfig } from './browser-config.js';
-export type { NextjsDefaultRequestRootProps } from './request-result.js';
-export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
+export type { BrowserConfig } from './browser-config.js';
+export type { DefaultRequestRootProps } from './request-result.js';
+export type { PreviewConfig, PreviewContext } from './preview.js';
 
-export type NextjsPagesRouterExperiencesConfig = NextjsClientExperiencesConfig;
+export type PagesRouterConfig = ClientConfig;
 
 const PagesRequestRouteContext = createContext<{ routeKey: string; ready: boolean } | undefined>(
   undefined
 );
 
 /** One stable owner in _app; no separate tracker or navigation event sender. */
-export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperiencesConfig) {
+export function bindPagesRouterExperiences(config: PagesRouterConfig) {
   const { config: registry, consent, ...runtimeConfig } = config;
-  const react = createReactExperiences({ config: registry });
+  const react = createExperiences({ config: registry });
 
-  function RouteOwner(props: BoundNextjsRequestRootProps) {
+  function RouteOwner(props: BoundRequestRootProps) {
     return (
-      <NextjsRequestResultBoundary result={props.result}>
+      <RequestResultBoundary result={props.result}>
         <PagesRouterRequestOwner
           {...props}
-          preview={mergeNextjsPreview(
-            runtimeConfig.preview,
-            props.result?.preview ?? props.preview
-          )}
-          Root={BrowserRoot}
+          preview={mergePreview(runtimeConfig.preview, props.result?.preview ?? props.preview)}
+          Root={BoundBrowserRoot}
           configuredBuilder={runtimeConfig.buildPagePayload}
         />
-      </NextjsRequestResultBoundary>
+      </RequestResultBoundary>
     );
   }
 
-  function BrowserRoot(props: BoundNextjsExperiencesRootProps) {
+  function BoundBrowserRoot(props: BoundRootProps) {
     const effective = {
       ...runtimeConfig,
       ...props,
       defaults: props.defaults ?? consent?.clientDefaults ?? runtimeConfig.defaults,
     };
     return (
-      <NextjsBrowserRoot
-        {...effective}
-        preview={mergeNextjsPreview(runtimeConfig.preview, props.preview)}
-      />
+      <BrowserRoot {...effective} preview={mergePreview(runtimeConfig.preview, props.preview)} />
     );
   }
 
-  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+  function ExperiencesRoot(props: BoundRootProps) {
     const preview = props.preview ?? runtimeConfig.preview;
     return preview && props.routeKey === undefined ? (
       <PagesRouterRequestOwner
         initialPagePayload={runtimeConfig.initialPagePayload}
         {...props}
-        preview={mergeNextjsPreview(runtimeConfig.preview, props.preview)}
-        Root={BrowserRoot}
+        preview={mergePreview(runtimeConfig.preview, props.preview)}
+        Root={BoundBrowserRoot}
         configuredBuilder={runtimeConfig.buildPagePayload}
       />
     ) : (
-      <BrowserRoot {...props} />
+      <BoundBrowserRoot {...props} />
     );
   }
 
-  function RequestExperience({ result: supplied, ...props }: NextjsRequestExperienceProps) {
+  function RequestExperience({ result: supplied, ...props }: RequestExperienceProps) {
     const owner = useContext(PagesRequestRouteContext);
     const router = useRouter();
-    const routeKey = owner?.routeKey ?? createNextjsRouteKey(router.asPath);
+    const routeKey = owner?.routeKey ?? createRouteKey(router.asPath);
     const ready = owner?.ready ?? router.isReady;
-    const { result, ...initial } = useNextjsRequestOptions(supplied);
+    const { result, ...initial } = useRequestOptions(supplied);
     return ready && result?.routeKey === routeKey ? (
       <react.Experience {...props} {...result.experience} {...initial} />
     ) : (
@@ -106,7 +97,7 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
     );
   }
 
-  function ExperiencesAnalyticsRoot(props: BoundNextjsExperiencesRootProps) {
+  function ExperiencesAnalyticsRoot(props: BoundRootProps) {
     return (
       <ExperiencesRoot {...props} pageMode="analytics">
         <ServerPreviewRefresh />
@@ -115,7 +106,7 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
     );
   }
 
-  function RequestExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
+  function RequestExperiencesAnalyticsRoot(props: BoundRequestRootProps) {
     return (
       <RouteOwner {...props} pageMode="analytics">
         <ServerPreviewRefresh />
@@ -142,19 +133,17 @@ function PagesRouterRequestOwner({
   Root,
   configuredBuilder,
   ...props
-}: BoundNextjsExperiencesRootProps & {
-  result?: NextjsRequestResult;
-  Root: typeof NextjsBrowserRoot;
+}: BoundRootProps & {
+  result?: RequestResult;
+  Root: typeof BrowserRoot;
   configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
 }) {
   const router = useRouter();
   const shallowTransition = useRef(false);
   const [route, setRoute] = useState(() => ({
     data: props.result,
-    key: createNextjsRouteKey(
-      router.isReady ? router.asPath : (props.result?.routeKey ?? router.asPath)
-    ),
-    previewKey: createNextjsRouteKey(
+    key: createRouteKey(router.isReady ? router.asPath : (props.result?.routeKey ?? router.asPath)),
+    previewKey: createRouteKey(
       router.isReady ? router.asPath : (props.result?.routeKey ?? router.asPath)
     ),
   }));
@@ -165,16 +154,16 @@ function PagesRouterRequestOwner({
       data: props.result,
       previewKey: shallowTransition.current
         ? route.previewKey
-        : createNextjsRouteKey(props.result?.routeKey ?? router.asPath),
+        : createRouteKey(props.result?.routeKey ?? router.asPath),
       key: shallowTransition.current
         ? route.key
-        : createNextjsRouteKey(props.result?.routeKey ?? router.asPath),
+        : createRouteKey(props.result?.routeKey ?? router.asPath),
     });
   useEffect(() => {
     // Ignore canceled transitions, hashes and shallow UI updates. Only a normal
     // committed route changes the root's ordinary XDA intent.
     const complete = (url: string, { shallow }: { shallow: boolean }) => {
-      const previewKey = createNextjsRouteKey(url);
+      const previewKey = createRouteKey(url);
       setRoute((current) => ({ ...current, key: shallow ? current.key : previewKey, previewKey }));
     };
     const start = (_url: string, { shallow }: { shallow: boolean }) => {
@@ -186,8 +175,8 @@ function PagesRouterRequestOwner({
     if (router.isReady)
       setRoute((current) => ({
         ...current,
-        key: createNextjsRouteKey(router.asPath),
-        previewKey: createNextjsRouteKey(router.asPath),
+        key: createRouteKey(router.asPath),
+        previewKey: createRouteKey(router.asPath),
       }));
     router.events.on('routeChangeStart', start);
     router.events.on('routeChangeComplete', complete);
@@ -200,10 +189,10 @@ function PagesRouterRequestOwner({
   }, [router.events, router.isReady]);
   const committedRoute =
     !props.result && router.isReady && !shallowTransition.current
-      ? createNextjsRouteKey(router.asPath)
+      ? createRouteKey(router.asPath)
       : route.key;
   const previewUrl = !props.result && router.isReady ? router.asPath : route.previewKey;
-  const previewSession = resolveNextjsPreviewSession(props.preview, previewUrl)?.sessionId;
+  const previewSession = resolvePreviewSession(props.preview, previewUrl)?.sessionId;
   const ready = router.isReady;
   const buildPagePayload = useCallback<
     NonNullable<ExperiencesRootProps['buildPagePayload']>
@@ -214,7 +203,7 @@ function PagesRouterRequestOwner({
       typeof window === 'undefined' ? 'https://nextjs.invalid' : window.location.origin
     );
     return {
-      properties: createNextjsPageContext({
+      properties: createPageContext({
         path: url.pathname,
         searchParams: url.searchParams,
         url: typeof window === 'undefined' ? committedRoute : url.toString(),
@@ -224,11 +213,11 @@ function PagesRouterRequestOwner({
   }, [ready, committedRoute]);
   return (
     <PagesRequestRouteContext.Provider value={{ routeKey: committedRoute, ready }}>
-      <NextjsInitialDataBoundary
+      <InitialDataBoundary
         routeKey={`${committedRoute}#preview=${previewSession ?? ''}`}
         requestId={props.result?.requestId}
       >
-        <NextjsRequestPresentation
+        <RequestPresentation
           {...props}
           Root={Root}
           routeKey={committedRoute}
@@ -237,7 +226,7 @@ function PagesRouterRequestOwner({
           configuredBuilder={configuredBuilder}
           buildRoutePayload={buildPagePayload}
         />
-      </NextjsInitialDataBoundary>
+      </InitialDataBoundary>
     </PagesRequestRouteContext.Provider>
   );
 }
@@ -252,19 +241,19 @@ function ServerPreviewRefresh() {
 }
 
 /** Registry-free owner for the normal _app request path. */
-export function NextjsPagesRouterRequestRoot({ browser, ...props }: NextjsDefaultRequestRootProps) {
+export function PagesRouterRequestRoot({ browser, ...props }: DefaultRequestRootProps) {
   return (
-    <NextjsRequestResultBoundary result={props.result}>
-      <PagesRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />
-    </NextjsRequestResultBoundary>
+    <RequestResultBoundary result={props.result}>
+      <PagesRouterRequestOwner {...browser} {...props} Root={BrowserRoot} />
+    </RequestResultBoundary>
   );
 }
 
-export function NextjsPagesRouterRequestAnalyticsRoot(props: NextjsDefaultRequestRootProps) {
+export function PagesRouterRequestAnalyticsRoot(props: DefaultRequestRootProps) {
   return (
-    <NextjsPagesRouterRequestRoot {...props} pageMode="analytics">
+    <PagesRouterRequestRoot {...props} pageMode="analytics">
       <ServerPreviewRefresh />
       {props.children}
-    </NextjsPagesRouterRequestRoot>
+    </PagesRouterRequestRoot>
   );
 }

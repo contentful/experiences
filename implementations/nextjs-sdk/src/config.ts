@@ -2,8 +2,8 @@
 // App consumers use the server-only request loader. Never import from client UI.
 
 import {
-  configureNextjsServerExperiences,
-  createNextjsPrivateFetch,
+  configureServerExperiences,
+  createPrivateFetch,
 } from '@contentful/experiences-nextjs/server';
 import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
@@ -68,7 +68,7 @@ function configureServer() {
     spaceId: config.spaceId,
     environmentId: config.environmentId,
     locale: config.locale,
-    delivery: { ...config.delivery, fetch: createNextjsPrivateFetch() },
+    delivery: { ...config.delivery, fetch: createPrivateFetch() },
     preview: config.preview,
   };
   const browser: BrowserEnvironment = {
@@ -95,7 +95,7 @@ function configureServer() {
     experienceIds,
     ...(config.livePreview ? { livePreview: config.livePreview } : {}),
   };
-  return { config, nodeConfig, browser, sdk: configureNextjsServerExperiences(nodeConfig) };
+  return { config, nodeConfig, browser, sdk: configureServerExperiences(nodeConfig) };
 }
 
 let server: ReturnType<typeof configureServer> | undefined;

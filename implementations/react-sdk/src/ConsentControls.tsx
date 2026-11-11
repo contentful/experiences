@@ -3,7 +3,7 @@
 import {
   useConsentState,
   useExperiencesActions,
-  useExperiencesContext,
+  useRuntimeContext,
   usePersistenceConsentState,
   usePreviewState,
   type ManagedExperienceResult,
@@ -31,7 +31,7 @@ export function ConsentControls({
   const events = useConsentState();
   const persistence = usePersistenceConsentState();
   const { setConsent, resetUser } = useExperiencesActions();
-  const { error, isLive, sdk } = useExperiencesContext();
+  const { error, isLive, sdk } = useRuntimeContext();
   const preview = usePreviewState();
   const isPreview = isLive && sdk.isPreview;
 

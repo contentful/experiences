@@ -14,7 +14,7 @@ import {
   type AnyRoute,
 } from '@tanstack/react-router';
 import { sourceSdk, deferred } from '../test/managed-experience.js';
-import { createReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot } from '../test/dom-root.js';
 import { bindTanStackRouterExperiences } from './tanstack-router.js';
 
 async function flush() {
@@ -36,7 +36,7 @@ afterEach(async () => {
 function navigationView() {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-  const view = createReactTestRoot();
+  const view = createDomTestRoot();
   cleanups.push(view.cleanup);
   const source = sourceSdk();
   const payloads = vi.fn();

@@ -1,14 +1,14 @@
 import {
   serializePersonalization,
   type DestinationRedirectResult,
-  type PersonalizationOptions,
+  type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
   ChangeArray,
   buildFetchPersonalization,
-  assertRuntimePreviewRequest,
-  mergeRuntimePreviewResolveOptions,
+  assertPreviewRequest,
+  mergePreviewResolveOptions,
   InterceptorManager,
   withEventConsent,
   type OptimizationEventStreamEvent,
@@ -18,8 +18,8 @@ import {
   toConsentState,
   type AllowedEventType,
   type BlockedEvent,
-  type BuiltRuntimeFetchExperienceOptions,
-  type RuntimePersonalizationOptions,
+  type BuiltFetchExperienceOptions,
+  type PersonalizationOptions,
   type ConsentInput,
   type ConsentState,
   type Config as BaseConfig,
@@ -34,14 +34,14 @@ import {
   type IdentifyBuilderArgs,
   type PageViewBuilderArgs,
   type DirectEventBindings,
-  type RuntimeEventMethods,
+  type EventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
   type FetchResolveOptions,
   type ResolveDefaults,
   type ResolveOptions,
-  type RuntimePreviewSessionOptions,
+  type PreviewSessionOptions,
   type TrackBuilderArgs,
   type UniversalEventBuilderArgs,
 } from '@contentful/experiences-runtime';
@@ -50,7 +50,7 @@ import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experien
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
-  personalization?: PersonalizationOptions;
+  personalization?: BuiltPersonalizationOptions;
 };
 type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: ReturnType<typeof buildFetchPersonalization>;
@@ -72,7 +72,7 @@ export type RequestContext = {
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
   /** The active editor session for this request; credentials belong to SDK configuration. */
-  preview?: RuntimePreviewSessionOptions;
+  preview?: PreviewSessionOptions;
   locale?: string;
   resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
   /** An ID for request continuity or a complete profile snapshot for Analytics. */
@@ -101,14 +101,14 @@ export type {
   AnalyticsRequestOptions,
 } from '@contentful/experiences-runtime';
 
-type NodePersonalizationMethods = {
+type PersonalizationMethods = {
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
 };
 
-type NodeAnalyticsMethods = Pick<
-  RuntimeEventMethods,
+type AnalyticsMethods = Pick<
+  EventMethods,
   'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
 >;
 
@@ -119,7 +119,7 @@ export type RequestEventBuilder = Pick<
 >;
 
 /** A request-bound facade; many facades may share the one Node SDK instance. */
-export interface RequestRuntime extends NodePersonalizationMethods, NodeAnalyticsMethods {
+export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods {
   /** Invalidates unfinished request work without destroying the shared SDK. */
   destroy(): void;
   readonly isPreview: boolean;
@@ -191,7 +191,7 @@ class RequestBoundExperiences implements RequestRuntime {
   #profile: RequestContext['profile'];
   #profileRevision = 0;
   #destroyed = false;
-  readonly #previewOptions: RuntimePreviewSessionOptions | undefined;
+  readonly #previewOptions: PreviewSessionOptions | undefined;
   #previewSnapshot: Promise<ExperiencePayload> | undefined;
   readonly #consent: ConsentState;
   readonly canPersistProfile: boolean;
@@ -200,25 +200,25 @@ class RequestBoundExperiences implements RequestRuntime {
   readonly #analyticsOptions: AnalyticsRequestOptions | undefined;
   readonly #personalizationLocale: string | undefined;
 
-  readonly identify: NodePersonalizationMethods['identify'];
-  readonly page: NodePersonalizationMethods['page'];
-  readonly track: NodePersonalizationMethods['track'];
-  readonly trackView: NodeAnalyticsMethods['trackView'];
-  readonly trackClick: NodeAnalyticsMethods['trackClick'];
-  readonly trackHover: NodeAnalyticsMethods['trackHover'];
-  readonly trackFlagView: NodeAnalyticsMethods['trackFlagView'];
+  readonly identify: PersonalizationMethods['identify'];
+  readonly page: PersonalizationMethods['page'];
+  readonly track: PersonalizationMethods['track'];
+  readonly trackView: AnalyticsMethods['trackView'];
+  readonly trackClick: AnalyticsMethods['trackClick'];
+  readonly trackHover: AnalyticsMethods['trackHover'];
+  readonly trackFlagView: AnalyticsMethods['trackFlagView'];
 
   constructor(
     private readonly runtime: ContentfulExperiences,
     private readonly context: RequestContext,
-    createEventMethods: (bindings: DirectEventBindings) => RuntimeEventMethods,
+    createEventMethods: (bindings: DirectEventBindings) => EventMethods,
     private readonly consentPolicy: ConsentPolicy,
     private readonly fetchPayload: (
-      options: BuiltRuntimeFetchExperienceOptions,
+      options: BuiltFetchExperienceOptions,
       resolveOptions: FetchResolveOptions
     ) => Promise<ExperiencePayload>,
     private readonly fetchSessionPayload: (
-      session: RuntimePreviewSessionOptions
+      session: PreviewSessionOptions
     ) => Promise<ExperiencePayload>
   ) {
     const sessionId = context.preview?.sessionId ?? runtime.config.preview?.sessionId;
@@ -452,10 +452,10 @@ class RequestBoundExperiences implements RequestRuntime {
     ));
     this.assertActive();
     if (payload.sys?.id !== options.experienceId) return undefined;
-    assertRuntimePreviewRequest(options);
+    assertPreviewRequest(options);
     this.gatePersonalizationEvents(options);
     this.assertActive();
-    const resolve = mergeRuntimePreviewResolveOptions(this.runtime.config, resolveOptions);
+    const resolve = mergePreviewResolveOptions(this.runtime.config, resolveOptions);
     const plan = await this.runtime.resolveExperience(payload, resolve);
     // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
     this.assertActive();
@@ -487,7 +487,7 @@ class RequestBoundExperiences implements RequestRuntime {
   }
 
   private async fetchPersonalized<
-    TOptions extends { personalization?: RuntimePersonalizationOptions; locale?: string },
+    TOptions extends { personalization?: PersonalizationOptions; locale?: string },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(
     options: TOptions,
@@ -521,7 +521,7 @@ class RequestBoundExperiences implements RequestRuntime {
    * profile id still travels, since it is not an event.
    */
   private gatePersonalizationEvents<
-    T extends { personalization?: RuntimePersonalizationOptions; locale?: string },
+    T extends { personalization?: PersonalizationOptions; locale?: string },
   >(options: T): PendingFetchOptions<T> {
     const profileId = options.personalization?.profileId ?? this.#profile?.id;
     options = {

@@ -1,7 +1,7 @@
 import { ApiClient as OptimizationApiClient } from '@contentful/optimization-api-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRuntimeOptimizationClient } from './create-optimization-client.js';
+import { createOptimizationClient } from './create-optimization-client.js';
 
 vi.mock('@contentful/optimization-api-client', () => ({
   ApiClient: vi.fn().mockImplementation((options) => ({
@@ -11,9 +11,9 @@ vi.mock('@contentful/optimization-api-client', () => ({
   })),
 }));
 
-describe('createRuntimeOptimizationClient', () => {
+describe('createOptimizationClient', () => {
   it('maps runtime identity and Optimization overrides to the API client', () => {
-    const client = createRuntimeOptimizationClient({
+    const client = createOptimizationClient({
       spaceId: 'space',
       environmentId: 'staging',
       locale: 'de-DE',

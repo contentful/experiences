@@ -61,7 +61,7 @@ export function sameValue(left: unknown, right: unknown): boolean {
  * View request ownership follows Optimization's OptimizedEntrySourceController at
  * f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). Web owns SDK lifetimes and preview delivery.
  */
-export class ExperienceSourceController {
+export class SourceController {
   private options: ExperienceSourceOptions | undefined;
   private version = 0;
   private active = false;

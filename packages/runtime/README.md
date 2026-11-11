@@ -76,7 +76,7 @@ Custom flags add `flag(name)` to `States` and `getFlag` to Web's presentation
 `ExperiencesRuntime` contract. XDA fetches and direct Personalization responses
 feed the same browser flag-state path; supplied changes replace the snapshot,
 `[]` clears it, and omission retains it unless profile identity changes. This
-complete-snapshot interpretation follows XPAPI/Optimization and remains an
+complete-snapshot interpretation follows Personalization API/Optimization and remains an
 assumption pending live-backend verification. Node carries returned changes in
 private handoffs without retaining global flag state.
 
@@ -89,7 +89,7 @@ parameter; `preview.sessionId` optionally overrides it. Configure optional
 `createClient: createLivePreviewClient` alongside the Preview credentials when
 browser live updates are needed. It accepts the optional package's synchronous
 factory with structural type
-`(options: RuntimePreviewClientOptions) => RuntimePreviewClient`.
+`(options: PreviewClientOptions) => PreviewClient`.
 Factory options contain `spaceId`, `environmentId`, `sessionId`, `previewToken`,
 and optional `sessionHost`, `resourceResolution` and `debug`. The factory returns
 the client itself synchronously. Lazy package imports belong to
@@ -104,7 +104,7 @@ not select by Experience ID. Runtime's owned Preview client therefore reads raw
 snapshots so Node/Web can check `payload.sys.id` before resolving them for a caller.
 Unrelated IDs retain their ordinary source. Web subscriptions use the same identity
 check; payloads without an ID are never broadcast to arbitrary Experiences.
-`createRuntimePreviewClient` evaluates token suppliers and passes the session options
+`createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
 the optional package as a Runtime dependency. Registries and resolve options stay per call.
 
@@ -118,7 +118,7 @@ does not load event schemas or other runtime modules.
 
 ```ts
 export type PreviewSessionBinding = Pick<
-  RuntimePreviewSessionOptions & { experienceId: string },
+  PreviewSessionOptions & { experienceId: string },
   'experienceId' | 'sessionId' | 'sessionHost' | 'resourceResolution'
 >;
 
@@ -166,10 +166,10 @@ decide whether reducing them warrants additional package or protocol support.
 
 | Package surface                                                                | Integration cost                                                                                                                                                                                               | Trade-off for consideration                                                                                             |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| String credentials/endpoints; no injected transport or client reconfiguration  | [Runtime](./src/live-preview.ts) evaluates SDK suppliers before calling a factory; [Web](../web/src/web-preview.ts) replaces the client for session/token changes.                                             | Supplier or transport support could reduce adaptation, with more authentication and lifecycle semantics in the package. |
+| String credentials/endpoints; no injected transport or client reconfiguration  | [Runtime](./src/live-preview.ts) evaluates SDK suppliers before calling a factory; [Web](../web/src/preview-session.ts) replaces the client for session/token changes.                                         | Supplier or transport support could reduce adaptation, with more authentication and lifecycle semantics in the package. |
 | Snapshots return plans; subscriptions and `initialPayload` use raw payloads    | [Web's binding](../web/src/contentful-experiences.ts) resolves streamed payloads separately. Snapshot results cannot directly seed the client's existing payload support.                                      | Optional raw snapshot access could align these paths while retaining convenient resolved snapshots.                     |
 | Snapshot helper has no `AbortSignal`                                           | [Node](../node/src/contentful-experiences.ts) and [Web](../web/src/contentful-experiences.ts) discard obsolete results; HTTP work continues.                                                                   | Cancellation support could stop wasted HTTP work; caller/resolver lifetime checks would still be necessary.             |
-| Separate result/status subscriptions; retained payload with no clear operation | [WebPreview](../web/src/web-preview.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                                    | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.            |
+| Separate result/status subscriptions; retained payload with no clear operation | [PreviewSession](../web/src/preview-session.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                            | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.            |
 | No shared snapshot/stream revision or initial-frame identity                   | Web uses a local payload sequence and cannot skip an equivalent first socket payload reliably.                                                                                                                 | Shared identity could avoid redundant initial work, but may require server/protocol changes as well as package changes. |
 | Unbundled ESM distribution                                                     | The [Web](../../implementations/web-sdk/scripts/build-assets.ts) and [hybrid](../../implementations/node-sdk+web-sdk/scripts/build-assets.ts) references prepare browser assets; CJS hosts use dynamic import. | Additional distribution formats could reduce consumer setup at the cost of more package build/release maintenance.      |
 
@@ -257,12 +257,12 @@ callers own safe serialization and response-size policy.
 
 The generated dev.13 client exposes optional `personalization.preflight`.
 Client and the runtime leaves validate and forward it without selecting a default.
-Earlier service checks observed noncommitting Personalization API (XPAPI)
+Earlier service checks observed noncommitting Personalization API
 preflight; backend defaults and override behavior have not been reverified with
 dev.13. Treat newly returned IDs as provisional until profile finalization is
 verified; local Node/Web adoption, hydration, storage and queue admission do not
 prove commitment. Profile-only XDA uses
-XPAPI GET internally and may return 404 for an uncommitted ID, even when the
+Personalization API GET internally and may return 404 for an uncommitted ID, even when the
 SDK-to-XDA request is POST.
 
 The active content flow is:
@@ -287,7 +287,7 @@ Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
 generated `personalization.preflight` option provides a request contract, not
 evidence that the deployed service commits events or finalizes profiles. Do not
 introduce Node aggregate commitment, a Web handoff producer,
-standalone XPAPI preparation, or a new API family to compensate.
+standalone Personalization API preparation, or a new API family to compensate.
 
 For an actual hybrid server-to-browser transfer, preflight is intentional:
 Node evaluates content and supplies the events for browser commitment. Node's
@@ -313,14 +313,14 @@ finalization through the appropriate SSR/CSR and hybrid paths. The SDK will not
 release until those issues are resolved and that verification passes against the
 actual upstream contract. There is no known fix date.
 
-**Insights profiles:**
-Optimization API client 2.2.3 requires complete profiles for Insights batches,
+**Analytics profiles:**
+Optimization API client 2.2.3 requires complete profiles for Analytics batches,
 including `stableId`, `random`, `audiences`, `traits`, `location` and `session`.
 ID-only request identity remains valid for Personalization and content continuity;
-Analytics requires a full snapshot supplied by the caller or returned by XDA/XPAPI.
+Analytics requires a full snapshot supplied by the caller or returned by XDA/Personalization API.
 Node throws `EventProfileRequiredError` without one; Web warns and drops the event.
 Earlier service checks returned HTTP 400 / `ERR_INVALID_DATA` without those fields,
-while complete XPAPI profiles produced HTTP 200 responses. The SDK does not
+while complete Personalization API profiles produced HTTP 200 responses. The SDK does not
 fabricate those fields or synthesize an initial commit. These observations do not
 establish whether profile existence is validated; a complete snapshot does not
 prove upstream commitment.
@@ -391,7 +391,7 @@ visitor work cannot publish after reset, consent withdrawal, supersession or des
 Optimization PR #549 at `f76f1ff04df1b466c98fc6ce5db6b569f9212438`
 remains the pinned ownership, consent, queues and lifetime reference. XDA content
 evaluation and its current noncommit service behavior require the differences
-above; full commit parity is not established. Actual XPAPI delivery
+above; full commit parity is not established. Actual Personalization API delivery
 retains generic retry ambiguity and no durable/exactly-once guarantee.
 
 The default Web page provider includes `title`, `hash`, `width` and `height`.
@@ -404,7 +404,7 @@ explicit `context.page` input alongside `properties.title` and `context.gdpr`.
 
 The actual Node transfer producer captures raw final Client events unchanged,
 including supported `context.page.query` arrays, and preserves available content.
-Normal SDK-built events already pass XPAPI builder validation and Client XDA
+Normal SDK-built events already pass Personalization API builder validation and Client XDA
 validation; no additional server replay-compatibility validation is required before
 XDA. Manually built/raw transmission remains the consumer's compatibility risk.
 `ExperiencesHandoff.replay.events` uses a union of raw Client and normal SDK event
@@ -412,7 +412,7 @@ types in the existing wire contract, without a new DTO.
 
 The receiving browser retains existing replay schema/order/count, capacity,
 scope/cache/consent and lifetime checks. It may refuse unsupported replay while
-available content remains usable. The pinned XPAPI client's schema/serialization
+available content remains usable. The pinned Personalization API client's schema/serialization
 remains the commit boundary; wider XDA metadata/query arrays do not establish
 exact replay compatibility. Add no SDK safety-validation layer, custom transport
 or dependency upgrade.

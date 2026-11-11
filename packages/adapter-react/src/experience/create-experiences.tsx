@@ -12,7 +12,7 @@ import {
   type ManagedExperienceOptions,
 } from './use-managed-experience.js';
 
-export interface CreateReactExperiencesOptions {
+export interface CreateExperiencesOptions {
   readonly config: Config;
 }
 export type BoundExperienceRendererProps = Omit<ClientExperienceRendererProps, 'config'>;
@@ -21,7 +21,7 @@ export type BoundManagedExperienceProps = WithoutConfig<ManagedExperienceProps>;
 export type BoundManagedExperienceOptions = Omit<ManagedExperienceOptions, 'config'>;
 
 /** Pure registry binding; SDK construction happens only when an owner activates. */
-export function createReactExperiences({ config }: CreateReactExperiencesOptions) {
+export function createExperiences({ config }: CreateExperiencesOptions) {
   function ExperienceRenderer(props: BoundExperienceRendererProps) {
     return <ClientExperienceRenderer {...props} config={config} />;
   }

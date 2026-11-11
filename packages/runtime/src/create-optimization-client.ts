@@ -22,13 +22,13 @@ export type OptimizationConfig = {
   fetchOptions?: OptimizationApiClientConfig['fetchOptions'];
 };
 
-type CreateRuntimeOptimizationClientOptions = OptimizationConfig & {
+type CreateOptimizationClientOptions = OptimizationConfig & {
   spaceId: string;
   environmentId: string;
   locale?: string;
 };
 
-export function createRuntimeOptimizationClient({
+export function createOptimizationClient({
   spaceId,
   environmentId,
   locale,
@@ -36,7 +36,7 @@ export function createRuntimeOptimizationClient({
   analyticsBaseUrl,
   personalizationEnabledFeatures,
   fetchOptions,
-}: CreateRuntimeOptimizationClientOptions): ApiClient {
+}: CreateOptimizationClientOptions): ApiClient {
   const externalApi = new OptimizationApiClient({
     spaceId,
     environment: environmentId,
