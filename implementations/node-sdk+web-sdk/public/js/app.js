@@ -54,7 +54,7 @@ async function activate() {
         ? { accessToken: environment.LIVE_PREVIEW.accessToken, host: environment.LIVE_PREVIEW.host }
         : undefined,
       livePreview: createPreviewInitializer(previewBinding),
-      ...(preview && !previewBinding ? { isPreview: true } : {}),
+      isPreview: Boolean(previewBinding),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
     // Maintainer: optional browser-attempt diagnostics, subscribed before replay.
@@ -270,9 +270,7 @@ function createDestinations(route) {
 async function renderRoute({ sendPage = false, events, reset = false, focus = false } = {}) {
   if (disposed) return;
   const nextBinding = getPreviewBinding(environment, location.href);
-  const nextIsPreview = Boolean(
-    nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
-  );
+  const nextIsPreview = Boolean(nextBinding);
   if (nextIsPreview !== sdk.isPreview) {
     location.reload();
     return;

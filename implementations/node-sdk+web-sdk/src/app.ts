@@ -19,10 +19,7 @@ import process from 'node:process';
 import { URL } from 'node:url';
 import { config, routes } from './config.js';
 import { readVisitor, writeIdentity } from './cookies.js';
-import {
-  getPreviewBinding,
-  getPreviewSessionId,
-} from '../../../scripts/implementation-preview.mjs';
+import { getPreviewBinding } from '../../../scripts/implementation-preview.mjs';
 
 // Consumer integration: stable transports belong to the process; visitor state
 // and request context belong only to the facade created inside each route.
@@ -79,7 +76,6 @@ for (const [path, route] of Object.entries(routes)) {
   app.get(path, async (req, res) => {
     const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
     const page = pageContext(url, req.get('referer') ?? '');
-    const sessionId = getPreviewSessionId(environment, url);
     const candidate = getPreviewBinding(environment, url.href);
     const binding = config.livePreviewEnabled && candidate?.experienceId ? candidate : undefined;
     const livePreview = binding
@@ -90,11 +86,11 @@ for (const [path, route] of Object.entries(routes)) {
       : undefined;
     const request = sdk.forRequest({
       // Preview content has no visitor identity/handoff prerequisite.
-      ...(livePreview || sessionId ? {} : readVisitor(req.cookies)),
+      ...(binding ? {} : readVisitor(req.cookies)),
       locale: environment.LOCALE,
       eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
       livePreview,
-      ...(livePreview ? {} : { isPreview: Boolean(sessionId) }),
+      isPreview: Boolean(binding),
     });
     try {
       const identifyRequested = !request.isPreview && req.query.userId === 'charles';

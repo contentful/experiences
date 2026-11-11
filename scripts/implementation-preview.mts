@@ -3,23 +3,16 @@ interface PreviewEnvironment {
     accessToken: string;
     host?: string;
     experienceId: string;
-    sessionId?: string;
     sessionHost?: string;
     resourceResolution?: string;
   };
-}
-
-export function getPreviewSessionId(environment: PreviewEnvironment, url: URL) {
-  return url.searchParams.has('preview_session_id')
-    ? url.searchParams.get('preview_session_id')?.trim()
-    : environment.LIVE_PREVIEW?.sessionId;
 }
 
 export function getPreviewBinding(environment: PreviewEnvironment, href: string) {
   const preview = environment.LIVE_PREVIEW;
   if (!preview) return undefined;
   const url = new URL(href);
-  const sessionId = getPreviewSessionId(environment, url);
+  const sessionId = url.searchParams.get('preview_session_id')?.trim();
   if (!sessionId) return undefined;
   const experienceId =
     url.searchParams.get('preview_experience_id')?.trim() || preview.experienceId;

@@ -18,7 +18,7 @@ export function App({ environment, log }: { environment: PublicEnvironment; log:
   const binding = getPreviewBinding(environment, url.href);
   const previewKey = JSON.stringify(binding);
   const livePreview = useMemo(() => createPreviewConfiguration(binding), [previewKey]);
-  const isPreview = Boolean(binding || url.searchParams.get('preview_session_id')?.trim());
+  const isPreview = Boolean(binding);
   const ids = useMemo(
     () =>
       url.pathname === '/' ? environment.EXPERIENCE_IDS : environment.EXPERIENCE_IDS.slice(-1),
