@@ -212,15 +212,17 @@ Shared `buildPageView` keeps the required `properties.title` string fallback whi
 respecting provider title omission in `context.page`; explicit `page` context and
 raw caller-built XDA/Node/Client metadata remain caller-owned. Keep this in the
 default provider, without instance wrappers or per-request/post-build sanitizers.
-Client validates personalization with local `zod/mini` schemas preserving the
-dev.10 generated request contract and passthrough behavior, since dev.11 removed
-`./serialization`. It supplements `context.gdpr` and `context.page.title` with
-boolean and optional-string constraints. Preserve XDA's existing context/event
-contracts, including `page.query` values of `string | string[]`; do not impose
-the full Optimization context schema. The old generated contract alone did not
-validate the added fields. Keep Client's `zod` dependency direct; do not add an
-Optimization API client dependency or a Runtime import. Validate final transformed
-output before final consent callbacks/publication, preserving input immutability.
+Client validates personalization with local `zod/mini` schemas matching the
+installed dev.13 generated request types while preserving extra caller-owned
+fields. Required event fields include `context.campaign`, `originalTimestamp`,
+`sentAt`, and page-event `properties.title`. Screen events require `name` and
+`context.screen`; property/trait values follow the generated contract and exclude
+`null`. Optional fields accept omission or `undefined`, without null normalization
+or undefined record omission. Preserve XDA's context/event contracts, including
+`page.query` values of `string | string[]`; do not impose the full Optimization
+context schema. Keep Client's `zod` dependency direct; do not add an Optimization
+API client dependency or a Runtime import. Validate final transformed output
+before final consent callbacks/publication, preserving input immutability.
 Current correction implementation and checks are pending; earlier companion checks/
 review are historical. Ordinary SSR uses Node fetch; CSR and browser-local navigation/
 actions use Web fetch, accepting existing type-tagged arguments or raw built events
@@ -566,20 +568,16 @@ afterward. Destination calls have no environment, so that path threads
 `environmentId: undefined` through (the generated client still requires the
 field; `packages/client` passes an empty string).
 
-The same spec refresh reshaped the Personalization event family to match
-`@contentful/optimization-api-client`'s schemas: `context.campaign`,
-`originalTimestamp`, `sentAt`, and (for page/track events) `properties.title`
-became required, and `properties`/`traits` on Track/Identify/Screen events
-became `Record<string, <auto-named-schema>>` instead of `[key: string]: any`.
-The runtime's `EventBuilder` already produces conformant events. But those
-auto-named schema types disallow `null`, while `EventBuilder`'s own `JSONType`
-(from `@contentful/optimization-api-client`) allows it — so `packages/client`'s
-exported `PersonalizationOptions` type locally re-widens `properties`/`traits`
-to a hand-declared `JsonValue` (permitting `null`), with an explicit cast where
-that widened type meets the generated client's stricter request type. Per the
-dev.13 migration guide, do not import or reference the generated auto-named
-schema types directly — they're an artifact of how the spec-refresh pipeline
-happened to walk the spec and may be renamed/collapsed without notice.
+The same spec refresh requires `context.campaign`, `originalTimestamp`, `sentAt`,
+and page-event `properties.title`. Screen events require `name` and
+`context.screen`. Track properties and identify traits are required records;
+screen properties are optional. Their recursive generated value types exclude
+`null`. Client's `PersonalizationOptions` is the generated request type directly,
+without widening or request casts. Runtime keeps newly built events separate from
+validated XDA events so interception still runs before final validation; values
+allowed by the direct Optimization transport must also satisfy XDA's contract
+when included in an XDA fetch. Derive property/trait types through the named
+request types rather than referencing generated auto-named schema types directly.
 
 ### How does the SDK report its version?
 

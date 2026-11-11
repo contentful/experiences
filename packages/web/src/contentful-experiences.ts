@@ -198,6 +198,9 @@ const unguardedHandoffCaller = () => true;
 type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: PersonalizationOptions;
 };
+type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
+  personalization?: ReturnType<typeof buildFetchPersonalization>;
+};
 
 function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
   return cloneDeepWith(plan, (value) => {
@@ -1197,13 +1200,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    */
   #gatePersonalizationEvents<T extends { personalization?: RuntimePersonalizationOptions }>(
     options: T
-  ): BuiltFetchOptions<T> {
+  ): PendingFetchOptions<T> {
     if (this.isPreview) {
       for (const event of options.personalization?.events ?? []) this.#admitEvent(event, true);
       return { ...options, personalization: undefined };
     }
     const events = options.personalization?.events;
-    if (events === undefined) return options as BuiltFetchOptions<T>;
+    if (events === undefined) {
+      return {
+        ...options,
+        personalization: buildFetchPersonalization(options.personalization, this.eventBuilder),
+      };
+    }
 
     const admitted = events.filter((event) => this.#admitEvent(event));
     const personalization = buildFetchPersonalization(

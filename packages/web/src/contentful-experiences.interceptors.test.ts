@@ -124,7 +124,7 @@ describe('Web event interception consent', () => {
       const second = runtime.eventBuilder.buildPageView();
       const hook = vi.fn((event: OptimizationEventStreamEvent) =>
         event.messageId === first.messageId
-          ? { ...event, type: 'track' as const, event: 'blocked' }
+          ? { ...event, type: 'track' as const, event: 'blocked', properties: {} }
           : ({
               ...event,
               ...(field === 'timestamp'
@@ -225,7 +225,13 @@ describe('Web event interception consent', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     runtime.interceptors.event.add(
-      (event) => ({ ...event, type: 'screen', properties: { name: 'screen' } }) as never
+      (event) =>
+        ({
+          ...event,
+          type: 'screen',
+          name: 'screen',
+          context: { ...event.context, screen: { name: 'screen' } },
+        }) as never
     );
     await runtime.fetchExperience(
       { experienceId: 'exp', personalization: { events: [runtime.eventBuilder.buildPageView()] } },

@@ -38,18 +38,21 @@ are preserved by Client's stateless validation/passthrough. Node/Web separately
 stamp admitted events with owner consent before interception, preserving caller
 input and allowing explicit interceptor transforms. They validate transformed
 events after interception and before final consent callbacks or Web event
-publication; malformed transformed fields
-reject before transport. With `@contentful/experience-delivery@1.0.0-dev.10`, the
-generated serializer preserves these fields through passthrough but does not
-validate them. Client supplements generated validation with checks for only
-`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
-using local primitive constraints in `zod/mini`.
-The generated XDA schema continues to validate existing context fields and event
-types, including `page.query` values of `string | string[]`. Client retains the
-generated passthrough result; the supplemental checks do not replace it or impose
-the full Optimization context contract. Client directly declares `zod` at the
-existing workspace version; it does not depend on the Optimization API client or
-import Runtime.
+publication; malformed transformed fields reject before transport. Client validates
+personalization with local `zod/mini` schemas matching the generated
+`@contentful/experience-delivery@1.0.0-dev.13` request types and preserving extra
+caller-owned fields. Required fields include `context.campaign`,
+`originalTimestamp`, `sentAt`, and page-event `properties.title`. Screen events
+require `name` and `context.screen`; their `properties` are optional. Track
+properties and identify traits are required records using the generated value
+contract, which excludes `null`. Optional fields accept omission or `undefined`,
+without normalizing `null` or dropping undefined record values.
+
+`context.gdpr.isConsentGiven` is boolean, optional `context.page.title` is a
+string, and page query values remain `string | string[]`. Client exposes the
+generated personalization type directly and validates the final event after
+interception. It directly declares `zod` at the existing workspace version;
+it does not depend on the Optimization API client or import Runtime.
 
 Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
 commit events or profile changes. Newly returned IDs are provisional, and
@@ -267,7 +270,7 @@ const client = new ContentfulViewDeliveryClient({
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
 - Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
-- Keep generated XDA validation for existing event/context fields. Supplement only `context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string) with local `zod/mini` constraints; do not add an Optimization API client dependency or import Runtime or `EventBuilder` into Client.
+- Keep local `zod/mini` validation aligned with the installed generated XDA request types, including required event fields and property/trait values. Preserve extra caller-owned fields without weakening the declared contract; do not add an Optimization API client dependency or import Runtime or `EventBuilder` into Client.
 - Name mappings between SDK options and delivery-client options live in `create-delivery-client.ts` — one place to change.
 
 ## License

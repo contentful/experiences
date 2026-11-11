@@ -288,7 +288,7 @@ class BoundRuntimeEventMethods implements RuntimeEventMethods {
 
 /** @internal Deliver a finalized, admitted batch and publish only to its current owner. */
 export async function deliverPersonalizationEvents(
-  api: EventApi['experience'],
+  api: EventApi['personalization'],
   events: readonly PersonalizationEvent[],
   profileId: string | undefined,
   options: (PersonalizationRequestOptions & { preflight?: boolean }) | undefined,

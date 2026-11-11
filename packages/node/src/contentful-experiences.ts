@@ -54,6 +54,9 @@ import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: PersonalizationOptions;
 };
+type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
+  personalization?: ReturnType<typeof buildFetchPersonalization>;
+};
 
 /** Stable SDK configuration; request-sensitive values belong to forRequest(). */
 export type Config = Omit<BaseConfig, 'eventBuilder'> & {
@@ -366,8 +369,9 @@ class RequestBoundExperiences implements RequestRuntime {
     }
     const profileRevision = this.#profileRevision;
     let expectedProfileId = this.#profile?.id;
-    let request = this.gatePersonalizationEvents(options);
-    const personalization = request.personalization;
+    const gated = this.gatePersonalizationEvents(options);
+    const personalization = gated.personalization;
+    let request: BuiltFetchOptions<FetchExperienceOptions>;
     if (this.runtime.interceptors.event.count() > 0 && personalization?.events !== undefined) {
       const events: OptimizationEventStreamEvent[] = [];
       for (const event of personalization.events) {
@@ -375,9 +379,12 @@ class RequestBoundExperiences implements RequestRuntime {
         events.push(await this.runtime.interceptors.event.run(event));
         this.assertActive();
       }
-      request = this.finalizePersonalizationEvents(request, { ...personalization, events });
+      request = this.finalizePersonalizationEvents<FetchExperienceOptions>(gated, {
+        ...personalization,
+        events,
+      });
     } else {
-      request = this.finalizePersonalizationEvents(request);
+      request = this.finalizePersonalizationEvents<FetchExperienceOptions>(gated);
     }
     this.assertActive();
     const profileId = request.personalization?.profileId;
@@ -475,11 +482,11 @@ class RequestBoundExperiences implements RequestRuntime {
   ): Promise<TResult> {
     this.assertActive();
     const profileRevision = this.#profileRevision;
-    let request = this.gatePersonalizationEvents(options);
-    request =
+    const gated = this.gatePersonalizationEvents(options);
+    const request =
       this.runtime.interceptors.event.count() === 0
-        ? this.finalizePersonalizationEvents(request)
-        : await this.interceptPersonalizationEvents(request);
+        ? this.finalizePersonalizationEvents<TOptions>(gated)
+        : await this.interceptPersonalizationEvents<TOptions>(gated);
     this.assertActive();
     const result = await send(request);
     this.assertActive();
@@ -502,7 +509,7 @@ class RequestBoundExperiences implements RequestRuntime {
    */
   private gatePersonalizationEvents<
     T extends { personalization?: RuntimePersonalizationOptions; locale?: string },
-  >(options: T): BuiltFetchOptions<T> {
+  >(options: T): PendingFetchOptions<T> {
     const profileId = options.personalization?.profileId ?? this.#profile?.id;
     options = {
       ...options,
@@ -539,23 +546,24 @@ class RequestBoundExperiences implements RequestRuntime {
     };
   }
 
-  private async interceptPersonalizationEvents<
-    T extends { personalization?: PersonalizationOptions },
-  >(options: T): Promise<T> {
+  private async interceptPersonalizationEvents<T>(
+    options: PendingFetchOptions<T>
+  ): Promise<BuiltFetchOptions<T>> {
     const personalization = options.personalization;
-    if (personalization?.events === undefined) return options;
+    if (personalization?.events === undefined)
+      return this.finalizePersonalizationEvents<T>(options);
     const events = await Promise.all(
       personalization.events.map((event) => this.runtime.interceptors.event.run(event))
     );
     this.assertActive();
-    return this.finalizePersonalizationEvents(options, { ...personalization, events });
+    return this.finalizePersonalizationEvents<T>(options, { ...personalization, events });
   }
 
-  private finalizePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
-    options: T,
+  private finalizePersonalizationEvents<T>(
+    options: PendingFetchOptions<T>,
     personalization: unknown = options.personalization
-  ): T {
-    if (personalization === undefined) return options;
+  ): BuiltFetchOptions<T> {
+    if (personalization === undefined) return { ...options, personalization: undefined };
     const valid = serializePersonalization(personalization);
     return {
       ...options,

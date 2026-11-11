@@ -3,6 +3,7 @@ import {
   createUserAgentHeaders,
   fetchExperience,
   fetchExperiencePayload,
+  serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
@@ -72,7 +73,14 @@ type FetchEventArguments =
   | ({ type: 'identify' } & IdentifyBuilderArgs)
   | ({ type: 'page' } & PageViewBuilderArgs)
   | ({ type: 'track' } & TrackBuilderArgs);
-type BuiltFetchEvent = NonNullable<PersonalizationOptions['events']>[number];
+type BuiltFetchEvent =
+  | NonNullable<PersonalizationOptions['events']>[number]
+  | ReturnType<
+      EventBuilder['buildIdentify'] | EventBuilder['buildPageView'] | EventBuilder['buildTrack']
+    >;
+type BuiltFetchPersonalization = Omit<PersonalizationOptions, 'events'> & {
+  events?: BuiltFetchEvent[];
+};
 
 export type RuntimePersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
   /** Event builder arguments or already-built XDA events; no page is added implicitly. */
@@ -89,10 +97,7 @@ export type FetchExperienceOptions = {
 };
 
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
-export type BuiltRuntimeFetchExperienceOptions = Omit<
-  FetchExperienceOptions,
-  'personalization'
-> & {
+export type BuiltRuntimeFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
   personalization?: PersonalizationOptions;
 };
 
@@ -100,8 +105,9 @@ export type BuiltRuntimeFetchExperienceOptions = Omit<
 export function buildFetchPersonalization(
   input: RuntimePersonalizationOptions | undefined,
   builder: Pick<EventBuilder, 'buildIdentify' | 'buildPageView' | 'buildTrack'>
-): PersonalizationOptions | undefined {
-  if (input?.events === undefined) return input as PersonalizationOptions | undefined;
+): BuiltFetchPersonalization | undefined {
+  if (input === undefined) return undefined;
+  if (input.events === undefined) return { ...input, events: undefined };
   return {
     ...input,
     events: input.events.map((event) => {
@@ -283,6 +289,7 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
       );
     }
     requireResolverConfig(resolveOptions);
+    const personalization = buildFetchPersonalization(options.personalization, this.eventBuilder);
     return fetchExperiencePayload(
       {
         spaceId: this.spaceId,
@@ -290,7 +297,8 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         experienceId: options.experienceId,
         locale: options.locale ?? this.locale,
         parameters: options.parameters,
-        personalization: buildFetchPersonalization(options.personalization, this.eventBuilder),
+        personalization:
+          personalization === undefined ? undefined : serializePersonalization(personalization),
         extensions: options.extensions,
       },
       options.preview

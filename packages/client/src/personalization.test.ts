@@ -12,7 +12,10 @@ const base = {
   channel: 'web',
   messageId: 'message-1',
   timestamp: '2026-11-04T00:00:00.000Z',
+  originalTimestamp: '2026-11-04T00:00:00.000Z',
+  sentAt: '2026-11-04T00:00:00.000Z',
   context: {
+    campaign: {},
     library: { name: 'caller', version: '1' },
     page: { ...page, title: 'Home' },
     gdpr: { isConsentGiven: true },
@@ -22,7 +25,13 @@ const events = [
   { ...base, type: 'page', properties: { ...page, title: 'Home' } },
   { ...base, type: 'track', event: 'Purchased', properties: { amount: 1 } },
   { ...base, type: 'identify', userId: 'user-1', traits: { interests: ['a'] } },
-  { ...base, type: 'screen', properties: { name: 'Home', extra: true } },
+  {
+    ...base,
+    type: 'screen',
+    name: 'Home',
+    context: { ...base.context, screen: { name: 'Home' } },
+    properties: { extra: true },
+  },
   { ...base, type: 'component', componentId: 'component-1', componentType: 'Entry' },
 ];
 
@@ -44,7 +53,7 @@ describe('serializePersonalization', () => {
     { ...events[1], event: undefined },
     { ...events[2], traits: undefined },
     { ...events[2], userId: 1 },
-    { ...events[3], properties: {} },
+    { ...events[3], name: undefined },
     { ...events[4], componentType: 'Unknown' },
     { ...events[4], componentId: undefined },
     { ...events[4], variantIndex: '1' },
@@ -55,20 +64,9 @@ describe('serializePersonalization', () => {
     { ...events[0], context: { ...base.context, location: { coordinates: { latitude: 1 } } } },
     { ...events[0], context: { ...base.context, gdpr: { isConsentGiven: 'yes' } } },
     { ...events[0], context: { ...base.context, page: { ...page, title: 1 } } },
-  ])('rejects invalid generated or supplemental fields %#', (event) => {
+  ])('rejects invalid generated fields %#', (event) => {
     expect(() => serializePersonalization({ events: [event] })).toThrow(
       new TypeError('Invalid Experience personalization options')
     );
-  });
-
-  it('retains generated null normalization and undefined record omission', () => {
-    const output = serializePersonalization({
-      profileId: null,
-      events: [{ ...events[1], sentAt: null, properties: { omitted: undefined, retained: null } }],
-    });
-    expect(output).toEqual({
-      profileId: undefined,
-      events: [{ ...events[1], sentAt: undefined, properties: { retained: null } }],
-    });
   });
 });
