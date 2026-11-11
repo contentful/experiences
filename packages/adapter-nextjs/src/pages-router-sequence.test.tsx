@@ -8,7 +8,7 @@ import {
   type ContentfulExperiences,
   type PortableRenderPlan,
 } from '@contentful/experiences-web';
-import { bindNextjsPagesRouterExperiences } from './pages-router.js';
+import { bindNextjsPagesRouterExperiences, NextjsPagesRouterRequestRoot } from './pages-router.js';
 import type { NextjsRequestResult } from './request-result.js';
 
 const router = vi.hoisted(() => ({
@@ -59,6 +59,8 @@ const startup: NextjsRequestResult = {
 const navigation: NextjsRequestResult = {
   requestId: 'destination-request',
   routeKey: destination,
+  plan,
+  handoff: startup.handoff,
   experience: {
     experienceId: destinationId,
     parameters: { variant: 'page-two' },
@@ -106,9 +108,11 @@ describe('Pages managed request sequence', () => {
     }
   });
 
-  it('adopts the destination descriptor and page intent before completion without fetching twice', async () => {
+  it('adopts the destination result before asPath catches up without browser content fetching', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+    const {
+      request: { ExperiencesRoot, Experience },
+    } = bindNextjsPagesRouterExperiences({
       config: { components: {} },
     });
     const tree = (experiences: NextjsRequestResult) => (
@@ -141,14 +145,8 @@ describe('Pages managed request sequence', () => {
     // New page props have committed while the router and browser still name Home.
     expect(router.asPath).toBe('/pages');
     expect(window.location.pathname).toBe('/pages');
-    expect(fetchExperience).toHaveBeenCalledTimes(1);
-    expect(fetchExperience.mock.calls[0]![0]).toMatchObject({
-      experienceId: destinationId,
-      parameters: { variant: 'page-two' },
-      personalization: {
-        events: [{ type: 'page', properties: { path: destination } }],
-      },
-    });
+    expect(container.textContent).toBe('success');
+    expect(fetchExperience).not.toHaveBeenCalled();
 
     // Completion must preserve the already-settled request context, not merely
     // join an in-flight request that happens to mask a second initial intent.
@@ -158,12 +156,14 @@ describe('Pages managed request sequence', () => {
       complete(destination, { shallow: false });
       root.render(tree(navigation));
     });
-    expect(fetchExperience).toHaveBeenCalledTimes(1);
+    expect(fetchExperience).not.toHaveBeenCalled();
   });
 
-  it('ignores hash, shallow and canceled transitions while committing a changed query', async () => {
+  it('ignores hash, shallow and canceled transitions and waits for matching query props', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+    const {
+      request: { ExperiencesRoot, Experience },
+    } = bindNextjsPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>
@@ -189,27 +189,108 @@ describe('Pages managed request sequence', () => {
       listener('routeChangeError')();
     });
     expect(fetchExperience).not.toHaveBeenCalled();
-    await commit('/pages?q=changed&tag=first&tag=last');
+    const routeKey = '/pages?q=changed&tag=first&tag=last';
+    await commit(routeKey);
+    expect(fetchExperience).not.toHaveBeenCalled();
+    const result = { ...startup, requestId: 'query-request', routeKey };
+    await act(async () =>
+      root.render(
+        <ExperiencesRoot sdk={sdk} result={result}>
+          <Experience result={result}>{(value) => <output>{value.status}</output>}</Experience>
+        </ExperiencesRoot>
+      )
+    );
+    expect(container.textContent).toBe('success');
+    expect(fetchExperience).not.toHaveBeenCalled();
+  });
+
+  it('keeps ordinary managed Web content and repeated query values available', async () => {
+    const { sdk, fetchExperience } = sdkFixture();
+    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+    await act(async () =>
+      root.render(
+        <bound.ExperiencesRoot
+          sdk={sdk}
+          routeKey="/pages?q=changed&tag=first&tag=last"
+          buildPagePayload={() => ({
+            properties: { path: '/pages', query: { q: 'changed', tag: ['first', 'last'] } },
+          })}
+        >
+          <bound.Experience experienceId={firstId} />
+        </bound.ExperiencesRoot>
+      )
+    );
     expect(fetchExperience).toHaveBeenCalledTimes(1);
     expect(fetchExperience.mock.calls[0]![0]).toMatchObject({
+      experienceId: firstId,
       personalization: {
-        events: [
-          {
-            type: 'page',
-            properties: {
-              path: '/pages',
-              search: '?q=changed&tag=first&tag=last',
-              query: { q: 'changed', tag: ['first', 'last'] },
-              url: window.location.href,
-            },
-          },
-        ],
+        events: [{ type: 'page', properties: { query: { tag: ['first', 'last'] } } }],
       },
     });
   });
+
+  it('waits for readiness before adopting request content', async () => {
+    const { sdk, fetchExperience } = sdkFixture();
+    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+    router.isReady = false;
+    const tree = () => (
+      <NextjsPagesRouterRequestRoot
+        spaceId="space"
+        environmentId="master"
+        browser={{ delivery: { accessToken: 'browser-token' } }}
+        sdk={sdk}
+        result={startup}
+      >
+        <bound.request.Experience result={startup}>
+          {(value) => <output>{value.status}</output>}
+        </bound.request.Experience>
+      </NextjsPagesRouterRequestRoot>
+    );
+    await act(async () => root.render(tree()));
+    expect(container.textContent).not.toBe('success');
+    expect(fetchExperience).not.toHaveBeenCalled();
+    router.isReady = true;
+    await act(async () => root.render(tree()));
+    expect(container.textContent).toBe('success');
+    expect(fetchExperience).not.toHaveBeenCalled();
+  });
+
+  it('waits for matching analytics props before emitting a direct page', async () => {
+    const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
+    const beforeInitialPage = { run: vi.fn() };
+    const bound = bindNextjsPagesRouterExperiences({
+      config: { components: {} },
+      beforeInitialPage,
+    });
+    const tree = (result: NextjsRequestResult) => (
+      <bound.request.ExperiencesAnalyticsRoot sdk={sdk} result={result}>
+        <p>Server HTML</p>
+      </bound.request.ExperiencesAnalyticsRoot>
+    );
+    await act(async () => root.render(tree(startup)));
+    const complete = router.events.on.mock.calls.find(
+      ([event]) => event === 'routeChangeComplete'
+    )![1];
+    vi.clearAllMocks();
+    await act(async () => {
+      router.asPath = destination;
+      window.history.replaceState(null, '', destination);
+      complete(destination, { shallow: false });
+      root.render(tree(startup));
+    });
+    expect(sdk.trackCurrentPage).not.toHaveBeenCalled();
+    expect(beforeInitialPage.run).not.toHaveBeenCalled();
+    await act(async () => root.render(tree(navigation)));
+    expect(hydrateAndTrackCurrentPage).toHaveBeenCalledOnce();
+    expect(sdk.trackCurrentPage).not.toHaveBeenCalled();
+    expect(fetchExperience).not.toHaveBeenCalled();
+  });
+
   it('runs the bound analytics root without browser content loading', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const { ExperiencesAnalyticsRoot } = bindNextjsPagesRouterExperiences({
+    const {
+      request: { ExperiencesAnalyticsRoot },
+    } = bindNextjsPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>

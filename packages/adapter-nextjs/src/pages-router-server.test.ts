@@ -66,7 +66,6 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
   };
   const options = {
     origin: 'https://example.com',
-    hydration: 'preserve-server' as const,
     consent: { events: true, persistence: true },
     experience: descriptor,
     resolveOptions: { metadata: { host: true }, debug: false },
@@ -122,52 +121,58 @@ describe('Pages native server response helper', () => {
     expect(request.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it('returns only routing inputs for speculation and hybrid data navigation', async () => {
+  it('returns only routing inputs for marked speculative requests', async () => {
     const { factory, context, bind, options } = setup({ 'next-router-prefetch': '1' });
     expect(await factory.request.loadExperience(context, options)).toEqual({
       requestId: expect.any(String),
       routeKey: '/page?q=hello+world',
       experience: { experienceId: 'home' },
     });
-    context.req.headers = { 'x-nextjs-data': '1' };
-    await factory.request.loadExperience(context, options);
     expect(bind).not.toHaveBeenCalled();
   });
 
-  it('preserves explicit SSR data-request intent without creating another startup handoff', async () => {
+  it('prepares a page and initial events for every native data request', async () => {
     const { factory, context, request, options } = setup({ 'x-nextjs-data': '1' });
-    const experience = {
-      experienceId: 'home',
-      personalization: { events: [{ type: 'track' as const, event: 'Action' }] },
-    };
+    const experience = { experienceId: 'home' };
+    const initialEvents = [{ type: 'track' as const, event: 'Action' }];
+    const pagePayload = { properties: { title: 'Data navigation' } };
     const data = await factory.request.loadExperience(context, {
       ...options,
-      hydration: 'server-only',
       experience,
+      initialEvents,
+      pagePayload,
     });
-    expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(experience, {
-      ...options.resolveOptions,
-      config: { components: {} },
+    expect(request.fetchExperienceForHandoff).toHaveBeenCalledExactlyOnceWith(
+      {
+        ...experience,
+        personalization: { events: [...initialEvents, { type: 'page', ...pagePayload }] },
+      },
+      { ...options.resolveOptions, config: { components: {} } },
+      { routeKey: '/page?q=hello+world' }
+    );
+    expect(request.fetchExperience).not.toHaveBeenCalled();
+    expect(data.plan).toEqual({ ...plan, metadata: {} });
+    expect(data.initialPagePayload).toEqual(pagePayload);
+    expect(data.handoff).toEqual({
+      ...scope,
+      cache: { scope: 'private-request' },
+      profileId: 'evaluated',
     });
-    expect(request.fetchExperienceForHandoff).not.toHaveBeenCalled();
-    expect(data.plan).toBeUndefined();
-    expect(data.experience.personalization).toEqual({ events: [] });
-    expect(data.handoff).toBeUndefined();
     expect(request.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it('uses ordinary SSR/preview snapshots without synthesizing handoffs', async () => {
-    const { factory, context, request, options, headers } = setup();
-    const data = await factory.request.loadExperience(context, {
-      ...options,
-      hydration: 'server-only',
+  it('uses ordinary preview snapshots without synthesizing handoffs', async () => {
+    const { factory, context, request, options, headers, descriptor } = setup({
+      'x-nextjs-data': '1',
     });
-    expect(data.handoff).toBeUndefined();
     request.isPreview = true;
-    headers.set('Set-Cookie', ['application=kept']);
     const preview = await factory.request.loadExperience(context, { ...options, isPreview: true });
     expect(preview.plan).toEqual({ ...plan, metadata: {} });
     expect(preview.handoff).toBeUndefined();
+    expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(descriptor, {
+      ...options.resolveOptions,
+      config: { components: {} },
+    });
     expect(request.fetchExperienceForHandoff).not.toHaveBeenCalled();
     expect(headers.get('Set-Cookie')).toEqual(['application=kept']);
   });
@@ -196,19 +201,19 @@ describe('Pages native server response helper', () => {
     });
   });
 
-  it('keeps native data-request Retry event-free and converts high-level day expiry at the response boundary', async () => {
+  it('preserves explicit page-free intent and converts high-level day expiry at the response boundary', async () => {
     const { factory, context, request, options, headers } = setup({ 'x-nextjs-data': '1' });
     const experience = { experienceId: 'home', personalization: { events: [] } };
     await factory.request.loadExperience(context, {
       ...options,
-      hydration: 'server-only',
       experience,
       cookie: { expires: 2.5, secure: true, sameSite: 'strict', path: '/page' },
     });
-    expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(experience, {
-      ...options.resolveOptions,
-      config: { components: {} },
-    });
+    expect(request.fetchExperienceForHandoff).toHaveBeenCalledExactlyOnceWith(
+      experience,
+      { ...options.resolveOptions, config: { components: {} } },
+      { routeKey: '/page?q=hello+world' }
+    );
     expect(headers.get('Set-Cookie')).toEqual([
       'application=kept',
       'ctfl-opt-aid=final; Max-Age=216000; Path=/page; Secure; SameSite=Strict',

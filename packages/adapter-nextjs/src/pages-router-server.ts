@@ -26,7 +26,7 @@ import {
 } from './server-config.js';
 import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
 
-export type { NextjsRequestResult, NextjsHydrationMode } from './request-result.js';
+export type { NextjsRequestResult } from './request-result.js';
 export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
@@ -99,12 +99,8 @@ export function bindNextjsPagesRouterServerExperiences(
     };
     const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
     nativeContext.res.setHeader('Cache-Control', 'private, no-store');
-    const dataRequest = incoming.headers.get('x-nextjs-data') === '1';
     const preview = await livePreview?.(context);
-    if (
-      isNextjsSpeculativeRequest(incoming.headers) ||
-      (resolved.result.hydration === 'preserve-server' && dataRequest && !preview)
-    )
+    if (isNextjsSpeculativeRequest(incoming.headers))
       return serializeNextjsRequestResult(resolved.result, resolved.policy);
     const request = bindNextjsExperiencesRequest(sdk, {
       request: incoming,
@@ -119,13 +115,7 @@ export function bindNextjsPagesRouterServerExperiences(
       isPreview: overrides.isPreview === true || preview !== undefined,
     });
     try {
-      const result = await loadNextjsPrimaryExperience(
-        request,
-        resolved,
-        context,
-        options,
-        !dataRequest
-      );
+      const result = await loadNextjsPrimaryExperience(request, resolved, context, options);
       // GSSP is a native JSON boundary. Raw content is available to composeRequest only.
       const serialized = serializeNextjsRequestResult(result, resolved.policy);
       const identityCookie = createNextjsAnonymousIdSetCookieHeader(request, {

@@ -12,7 +12,7 @@ const { Experience: AppRequestExperience } = app.request;
 export const ClientRequestRoot = app.request.ExperiencesRoot;
 export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
   config: browserRegistry,
-});
+}).request;
 export const singleExperienceFallbacks = {
   loadingFallback: (
     <p className="placeholder-card" role="status">

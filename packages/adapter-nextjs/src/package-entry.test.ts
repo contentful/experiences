@@ -222,7 +222,7 @@ describe('published declarations', () => {
       import { bindNextjsAppRouterServerExperiences as bindAppServer } from '${packageName}/app-router/server';
       import { bindNextjsAppRouterClientExperiences, NextjsAppRouterRequestRoot, NextjsAppRouterRequestAnalyticsRoot, type NextjsRequestResult } from '${packageName}/app-router/client';
       import { bindNextjsPagesRouterServerExperiences } from '${packageName}/pages-router/server';
-      import { bindNextjsPagesRouterExperiences } from '${packageName}/pages-router';
+      import { bindNextjsPagesRouterExperiences, NextjsPagesRouterRequestRoot, NextjsPagesRouterRequestAnalyticsRoot, type NextjsDefaultRequestRootProps } from '${packageName}/pages-router';
       import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
       import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
@@ -368,14 +368,33 @@ describe('published declarations', () => {
         ExperiencesRoot({ result, handoff: result.handoff });
       }
       {
-        const { ExperiencesRoot, ExperiencesAnalyticsRoot, Experience, ExperienceRenderer: PagesExperienceRenderer, useManagedExperience } = pagesClient;
+        const { ExperiencesRoot, ExperiencesAnalyticsRoot, Experience } = pagesClient.request;
+        // @ts-expect-error Pages request roots do not select content by ID.
+        ExperiencesRoot({ experienceId: 'home' });
+        // @ts-expect-error Pages analytics observes the SDK Preview target.
+        ExperiencesAnalyticsRoot({ experienceId: 'home' });
+        // @ts-expect-error Ordinary Pages roots also leave identity to Experience.
+        pagesClient.ExperiencesRoot({ experienceId: 'home' });
+        // @ts-expect-error Ordinary Pages analytics does not select content.
+        pagesClient.ExperiencesAnalyticsRoot({ experienceId: 'home' });
         const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
         const analytics = <ExperiencesAnalyticsRoot result={result}><p>Server content</p></ExperiencesAnalyticsRoot>;
         void [tree, analytics];
-        Experience({ experienceId: 'home', initialPlan: plan, parameters: { variant: 'home' } });
-        Experience({ experience: plan });
-        PagesExperienceRenderer({ experience: plan });
-        useManagedExperience({ experienceId: 'home' });
+        pagesClient.Experience({ experienceId: 'home', initialPlan: plan, parameters: { variant: 'home' } });
+        pagesClient.Experience({ experience: plan });
+        pagesClient.ExperienceRenderer({ experience: plan });
+        pagesClient.useManagedExperience({ experienceId: 'home' });
+        const defaultRootProps: NextjsDefaultRequestRootProps = {
+          spaceId: 'space', environmentId: 'master', result,
+          browser: { delivery: { accessToken: 'browser' } }
+        };
+        const standalone = <NextjsPagesRouterRequestRoot {...defaultRootProps}><Experience result={result} /></NextjsPagesRouterRequestRoot>;
+        const standaloneAnalytics = <NextjsPagesRouterRequestAnalyticsRoot {...defaultRootProps}><p>Server content</p></NextjsPagesRouterRequestAnalyticsRoot>;
+        void [standalone, standaloneAnalytics];
+        // @ts-expect-error Ordinary Web Experience does not consume a server request result.
+        pagesClient.Experience({ result });
+        // @ts-expect-error Request roots obtain handoff from their result.
+        ExperiencesRoot({ result, handoff: result.handoff });
         // @ts-expect-error Descriptor overlays cannot change the supplied request result.
         Experience({ result, experienceId: 'different' });
         // @ts-expect-error Seeds are part of the complete request result.

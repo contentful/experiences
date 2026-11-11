@@ -47,22 +47,20 @@ This admission guard provides no durable or exactly-once transport guarantee.
 Automatic fetching, resolution and management of one primary Experience is the
 normal React/Next workflow. The Next reference demonstrates it at
 `/single-experience` and `/pages/single-experience`, alongside diagnostic routes.
-App/Pages bind `config` and `resolveOptions` once; server families expose
-`request.loadExperience`. Pages client bindings export top-level `ExperiencesRoot`,
-`ExperiencesAnalyticsRoot`, `Experience`, `ExperienceRenderer` and
-`useManagedExperience`, with no client `request` family. Export those components
-once from a client configuration module and import named components for plain
-`<ExperiencesRoot>` JSX. Bind flat browser SDK options, `consent.clientDefaults`
-and `cookie`; lazy server-derived reference configuration may supply flat runtime
-root props. Pages `Experience` accepts a complete `result` or existing managed
-props. App retains its request components and built-in roots. Server request `Experience` uses
-`ServerExperienceRenderer`. Browser roots inherit scope/locale, not private credentials; supply
+App/Pages server families expose `request.loadExperience`. Both client bindings
+expose ordinary Web components and a separate `request` family for full server
+results. App server `request.Experience` uses `ServerExperienceRenderer`; Pages
+uses native GSSP and client request presentation. Bind `config` and resolve options
+once, with flat browser options, `consent.clientDefaults` and `cookie` in a client
+module. Follow the [canonical setup](../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and [request contract](../packages/adapter-nextjs/README.md#router-bindings).
+Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
 in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pass
 the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
-facade after every actual server primary fetch, including RSC, before cleanup.
+facade after every actual server primary fetch, including RSC and Pages data, before cleanup.
 Do not add multi-prefetch/result lists, identity reconciliation or new
 controllers/cache/barriers. Current Phase 10 DX validation is pending root evidence;
 Phase 11 optional router integrations remain deferred.

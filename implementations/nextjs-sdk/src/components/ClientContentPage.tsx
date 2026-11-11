@@ -93,7 +93,7 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
       )}
     </>
   );
-  return intent.cycle === 0 && primarySeed ? (
+  return intent.cycle === 0 && primarySeed && (primarySeed.plan || primarySeed.contentError) ? (
     <RequestExperience key={intent.cycle} result={primarySeed}>
       {render}
     </RequestExperience>

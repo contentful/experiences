@@ -179,11 +179,10 @@ do {
 
 For a normal Next.js page, bind one primary Experience and let the Next adapter
 fetch, resolve and manage its presentation. App Router and Pages Router server
-families provide `request.loadExperience`. Pages client configuration exports
-plain `ExperiencesRoot` and `Experience` components from the binding; `Experience`
-accepts a server `result` or existing managed props. App retains its request
-presentation and built-in browser roots. The App server binding evaluates and renders content on Node. Client-bound
-components can adopt its result or own Web loading.
+families provide `request.loadExperience`. Both client bindings expose ordinary
+Web components and a separate `request` family for complete server results.
+App server `request.Experience` renders on Node; Pages uses native GSSP and client
+request presentation. Client-bound components can adopt results or own Web loading.
 
 Start with the [one-Experience App/Pages setup](./packages/adapter-nextjs/README.md#automatic-single-experience-setup).
 Server configuration owns private credentials and resolution. Built-in browser

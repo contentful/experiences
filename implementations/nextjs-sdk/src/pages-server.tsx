@@ -8,6 +8,7 @@ import {
   serializeNextjsJsonForHtml,
 } from '@contentful/experiences-nextjs/server';
 import type { GetServerSideProps } from 'next';
+import { randomUUID } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { getServer } from './config';
 import {
@@ -79,13 +80,28 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
     experienceId: routeIds(url.pathname, config.experienceIds)[0],
     ...(livePreview ? {} : { extensions: { sourceMap: {} } }),
   };
+  if (!serverOnly && context.req.headers['x-nextjs-data'] === '1' && !livePreview) {
+    context.res.setHeader('Cache-Control', 'private, no-store');
+    return {
+      props: {
+        environment: browser,
+        serverOnly,
+        analytics,
+        comparisons: [],
+        experiences: {
+          requestId: randomUUID(),
+          routeKey: createNextjsRouteKey(url),
+          experience,
+        },
+      },
+    };
+  }
   let html: string | undefined;
   const experiences = await bindNextjsPagesRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
     origin: config.origin,
     request: {
-      hydration: serverOnly ? 'server-only' : 'preserve-server',
       ...(action
         ? {}
         : {
@@ -122,6 +138,9 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
   }).request.loadExperience({ ...context, resolvedUrl: `${url.pathname}${url.search}` });
   const props: PagesReferenceProps = { environment: browser, serverOnly, analytics, experiences };
   if (serverOnly) {
+    const opaque = { ...experiences };
+    delete opaque.plan;
+    props.experiences = opaque;
     if (html !== undefined) props.html = html;
   } else {
     props.comparisons = contentSeeds(comparisons, experiences);

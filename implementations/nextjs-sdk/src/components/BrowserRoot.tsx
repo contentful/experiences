@@ -20,12 +20,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import {
-  previewBinding,
-  previewConfiguration,
-  routeIds,
-  type BrowserEnvironment,
-} from '../reference';
+import { previewBinding, previewConfiguration, type BrowserEnvironment } from '../reference';
 import { browserRegistry } from './browser-registry';
 import { createAttemptLog, type AttemptLog } from './attempt-log';
 import { ConsentMirror } from './ConsentMirror';
@@ -59,6 +54,7 @@ export function AppBrowserRoot({
   return (
     <ReferenceBrowserRoot
       {...props}
+      result={props.result?.routeKey === routeKey ? props.result : undefined}
       environment={environment}
       currentRouteKey={routeKey}
       ContentRoot={app.request.ExperiencesRoot}
@@ -80,7 +76,7 @@ export function PagesBrowserRoot({
   environment,
   ...props
 }: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
-  const [{ ExperiencesRoot, ExperiencesAnalyticsRoot, Experience }] = useState(() =>
+  const [pages] = useState(() =>
     bindNextjsPagesRouterExperiences({ ...environment.web, config: browserRegistry })
   );
   const router = usePagesRouter();
@@ -90,10 +86,10 @@ export function PagesBrowserRoot({
       {...props}
       environment={environment}
       currentRouteKey={routeKey}
-      ContentRoot={ExperiencesRoot}
-      AnalyticsRoot={ExperiencesAnalyticsRoot}
-      Experience={Experience}
-      RequestExperience={Experience}
+      ContentRoot={pages.request.ExperiencesRoot}
+      AnalyticsRoot={pages.request.ExperiencesAnalyticsRoot}
+      Experience={pages.Experience}
+      RequestExperience={pages.request.Experience}
       navigate={(href, replace, shallow) => {
         void router[replace ? 'replace' : 'push'](href, undefined, {
           shallow: shallow ?? false,
@@ -116,7 +112,7 @@ function ReferenceBrowserRoot({
   Pick<ReferenceContextValue, 'environment' | 'Experience' | 'RequestExperience' | 'navigate'> & {
     currentRouteKey: string;
     ContentRoot: ComponentType<BoundNextjsRequestRootProps>;
-    AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps & { experienceId?: string }>;
+    AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps>;
   }) {
   const url = new URL(currentRouteKey, 'https://nextjs.invalid');
   const binding = previewBinding(environment, url);
@@ -132,7 +128,6 @@ function ReferenceBrowserRoot({
       isPreview={Boolean(binding)}
       livePreview={livePreview}
       onStatesReady={log.onStatesReady}
-      experienceId={routeIds(url.pathname, environment.experienceIds)[0]}
     >
       <ReferenceContext.Provider
         value={{

@@ -161,18 +161,15 @@ Snapshot runtimes expose inert undefined preview state; other states are unchang
 React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
-automatically fetches, resolves and manages one primary Experience. App and Pages
-server request families expose `request.loadExperience`. Pages client bindings
-export top-level `ExperiencesRoot`, `ExperiencesAnalyticsRoot`, `Experience`,
-`ExperienceRenderer` and `useManagedExperience`, with no client `request` family.
-Export components once from a client configuration module and import names for
-plain `<ExperiencesRoot>` JSX; bind flat browser SDK options,
-`consent.clientDefaults` and `cookie`. Pages `Experience` accepts a complete
-`result` or existing managed props. Server request `Experience` uses
-`ServerExperienceRenderer`. Bind `config` and `resolveOptions` once.
+automatically fetches, resolves and manages one primary Experience.
+App/Pages server families expose `request.loadExperience`. Both client bindings
+expose ordinary Web components and a separate `request` family for full server
+results. App server `request.Experience` uses `ServerExperienceRenderer`; Pages
+uses native GSSP and client request presentation. Bind `config` and resolve options
+once, with flat browser options, `consent.clientDefaults` and `cookie` in a client module.
 Follow the canonical [rendering compositions](./packages/adapter-nextjs/README.md#automatic-single-experience-setup)
 and [server preparation contract](./packages/adapter-nextjs/README.md#router-bindings)
-for document/RSC evaluation, page events, replay, prefetch and preview ownership.
+for document/RSC/Pages evaluation, page events, replay, prefetch and preview ownership.
 `consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
 browser defaults and response identity policy distinct. `request.pagePayload`
 travels as `result.initialPagePayload`. The complete request result travels
@@ -181,7 +178,7 @@ Built-in browser roots inherit scope and locale, but need explicit browser
 credentials or a trusted authenticated proxy. Existing Runtime Delivery
 configuration remains required even for analytics-only browser use. Advanced
 callbacks/preview setup stay in a client module. `composeRequest` is an explicit
-application escape hatch after every actual server primary fetch, including RSC,
+application escape hatch after every actual server primary fetch, including RSC and Pages data,
 before cleanup; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.

@@ -37,6 +37,7 @@ describe('Next request presentation inputs', () => {
     'nonpage',
     'empty-no-handoff',
     'departed',
+    'web-route',
   ] as const)('presents %s page intent and preserves the supplied handoff', (source) => {
     const Root = vi.fn((_props: BoundNextjsExperiencesRootProps) => <></>);
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));
@@ -44,7 +45,8 @@ describe('Next request presentation inputs', () => {
     const buildRoutePayload = vi.fn(() => ({ properties: { path: '/route' } }));
     const explicit = ['empty', 'nonpage', 'empty-no-handoff', 'departed'].includes(source);
     const pageFree = explicit && source !== 'departed';
-    const routeKey = source === 'route' || source === 'departed' ? '/destination' : '/page';
+    const waiting = ['route', 'departed', 'not-ready'].includes(source);
+    const routeKey = ['route', 'departed', 'web-route'].includes(source) ? '/destination' : '/page';
     const experience = explicit
       ? {
           ...result.experience,
@@ -56,33 +58,41 @@ describe('Next request presentation inputs', () => {
     renderToStaticMarkup(
       <NextjsRequestPresentation
         Root={Root}
-        result={{
-          ...result,
-          experience,
-          handoff: source === 'empty-no-handoff' ? undefined : result.handoff,
-        }}
+        result={
+          source === 'web-route'
+            ? undefined
+            : {
+                ...result,
+                experience,
+                handoff: source === 'empty-no-handoff' ? undefined : result.handoff,
+              }
+        }
         routeKey={routeKey}
         ready={source !== 'not-ready'}
         configuredBuilder={['override', 'configured'].includes(source) ? configured : undefined}
         buildPagePayload={source === 'override' ? override : undefined}
         buildRoutePayload={buildRoutePayload}
         pageMode="analytics"
+        beforeInitialPage={{ run: vi.fn() }}
       />
     );
     const captured = Root.mock.calls[0]![0];
-    const expected = source === 'departed' ? 'route' : source;
+    const expected = source === 'web-route' ? 'route' : source;
     expect(captured.buildPagePayload?.({ isInitialEmission: true })).toEqual(
-      pageFree || source === 'not-ready' ? undefined : { properties: { path: `/${expected}` } }
+      pageFree || waiting ? undefined : { properties: { path: `/${expected}` } }
     );
-    expect(captured.buildPagePayload === undefined).toBe(pageFree);
+    expect(captured.buildPagePayload === undefined).toBe(pageFree || waiting);
     expect(captured.handoff).toBe(
-      ['empty-no-handoff', 'departed', 'route'].includes(source) ? undefined : result.handoff
+      ['empty-no-handoff', 'departed', 'route', 'web-route'].includes(source)
+        ? undefined
+        : result.handoff
     );
     expect(captured.initialPagePayload).toBeUndefined();
     expect(captured.routeKey).toBe(routeKey);
-    expect(captured.pageMode).toBe(pageFree ? undefined : 'analytics');
+    expect(captured.pageMode).toBe(pageFree || waiting ? undefined : 'analytics');
+    expect(captured.beforeInitialPage === undefined).toBe(waiting);
     expect(configured).toHaveBeenCalledTimes(source === 'configured' ? 1 : 0);
     expect(override).toHaveBeenCalledTimes(source === 'override' ? 1 : 0);
-    expect(buildRoutePayload).toHaveBeenCalledTimes(expected === 'route' ? 1 : 0);
+    expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
 });
