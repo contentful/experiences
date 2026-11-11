@@ -51,9 +51,6 @@ export type NextjsDefaultRequestRootProps = Omit<
 > &
   Pick<ExperiencesRootProps, 'spaceId' | 'environmentId' | 'locale'> & {
     readonly browser: NextjsBrowserConfig;
-    readonly defaults?: Pick<
-      NonNullable<Config['defaults']>,
-      'consent' | 'persistenceConsent'
-    >;
+    readonly defaults?: Pick<NonNullable<Config['defaults']>, 'consent' | 'persistenceConsent'>;
     readonly cookie?: Config['cookie'];
   };

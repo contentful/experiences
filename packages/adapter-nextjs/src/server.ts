@@ -40,8 +40,4 @@ export {
   createPublicPermutationCacheMetadata,
   type NextjsExperiencesCacheKeyInput,
 } from './cache-key.js';
-export type {
-  RequestRuntime,
-  RequestContext,
-  ConsentInput,
-} from '@contentful/experiences-node';
+export type { RequestRuntime, RequestContext, ConsentInput } from '@contentful/experiences-node';
