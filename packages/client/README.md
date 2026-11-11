@@ -72,9 +72,11 @@ const plan = await fetchExperience(
   }
 );
 
-// Pre-created client — useful when you manage the client lifecycle yourself
+// Pre-created client — useful when you manage the client lifecycle yourself.
+// The generated client binds spaceId/environmentId at construction, so a
+// pre-made client can only serve the by-id/environment it was built with.
 import { createClient } from '@contentful/experiences-react';
-const client = createClient({ accessToken: process.env.CDA_TOKEN! });
+const client = createClient({ accessToken: process.env.CDA_TOKEN!, spaceId, environmentId });
 const plan = await fetchExperience(
   { spaceId, environmentId, experienceId },
   { client },
@@ -122,23 +124,27 @@ const experience = await fetchExperience(
 
 Functional constructor over `ContentfulViewDeliveryClient` matching the SDK's option shape. Maps `accessToken → token` and `host → baseUrl`; passes everything else through unchanged. Prefer over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
 
-`createClient` is a one-time setup primitive — it builds a single client bound to a single token and does not participate in the per-request `preview` toggle. If you need runtime-dynamic swaps between delivery and preview, use `fetchExperience`'s inline-credentials path (`{ accessToken, previewToken, preview }`) instead of pre-building a client via `createClient` and passing `{ client }`.
+`createClient` is a one-time setup primitive — it builds a single client bound to a single token, space, and environment, and does not participate in the per-request `preview` toggle. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment. If you need runtime-dynamic swaps between delivery and preview, use `fetchExperience`'s inline-credentials path (`{ accessToken, previewToken, preview }`) instead of pre-building a client via `createClient` and passing `{ client }`.
 
 ```ts
 import { createClient, PREVIEW_HOST } from '@contentful/experiences-react';
 
 // Delivery (default)
-const client = createClient({ accessToken: process.env.CDA_TOKEN! });
+const client = createClient({ accessToken: process.env.CDA_TOKEN!, spaceId, environmentId });
 
 // Preview — use PREVIEW_HOST + a CPA token
 const previewClient = createClient({
   accessToken: process.env.PREVIEW_TOKEN!,
+  spaceId,
+  environmentId,
   host: PREVIEW_HOST,
 });
 
 // Custom base URL (staging, proxy, per-region)
 const customClient = createClient({
   accessToken: process.env.CDA_TOKEN!,
+  spaceId,
+  environmentId,
   host: 'https://preview-staging.example.com',
   // headers, timeoutInSeconds, maxRetries, fetch, logging pass through
 });
@@ -207,6 +213,8 @@ import { ContentfulViewDeliveryClient } from '@contentful/experiences-react';
 
 const client = new ContentfulViewDeliveryClient({
   token: process.env.CDA_TOKEN!,
+  spaceId,
+  environmentId,
   baseUrl: 'https://xdn.contentful.com', // default delivery endpoint
 });
 ```

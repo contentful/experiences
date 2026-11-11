@@ -370,8 +370,9 @@ fetchExperience(experienceOptions, clientOptions, resolveOptions) → <Experienc
 
 The existing free `fetchExperience` and framework-adapter path remains separate
 from runtime construction. Customers who want to manage a delivery client there
-have two paths: `createClient({ accessToken, host? })` (functional constructor,
-our option shape), or `new ContentfulViewDeliveryClient({ token, baseUrl? })`
+have two paths: `createClient({ accessToken, spaceId, environmentId, host? })`
+(functional constructor, our option shape), or
+`new ContentfulViewDeliveryClient({ token, spaceId, environmentId, baseUrl? })`
 (underlying delivery client, its option shape). Either way, pass the resulting
 client as `{ client }` in `clientOptions`. That caller-supplied client branch is
 not accepted by the Node or Web runtime constructors.
@@ -450,6 +451,38 @@ wins over the delivery/preview default. The `{ client }` branch ignores
 The Experience Delivery API gates the entity shapes this SDK reads behind that header — nodes linking `component` (`Contentful:Component`) and `experienceTemplate` (`Contentful:ExperienceTemplate`). A request without the header returns a different shape, which the SDK does not parse. There is no fallback and no normalization layer, so the header is load-bearing rather than optional.
 
 **We no longer send it.** `@contentful/experience-delivery@1.0.0-dev.7` sends it itself, defaulting to `new-exo-entity-types` in both `normalizeClientOptions` and every generated resource method. That covers all three entry points — `fetchExperience`, a `createClient` client, and a raw `ContentfulViewDeliveryClient` a customer constructs — so `packages/client` does not set the alpha header. The one header it does set is `X-Contentful-User-Agent` (see below). Before dev.7 we sent it from two call sites in `alpha-feature.ts`; that module and its exported constants were removed in the dev.7 cleanup.
+
+### Why does `createClient`/`ContentfulViewDeliveryClient` now require `spaceId` and `environmentId`?
+
+`@contentful/experience-delivery@1.0.0-dev.13` moved `spaceId`/`environmentId` from
+per-call arguments on `client.experience.*`/`client.destination.*` (e.g.
+`client.experience.get(spaceId, environmentId, id, opts)`) to required fields on
+the generated client's constructor options (`client.experience.get(id, opts)`).
+`packages/client`'s `resolveDeliveryClient` and `packages/runtime`'s
+`createRuntimeDeliveryClient` both construct the generated client per call now,
+threading an explicit `identity: { spaceId, environmentId }` through from the
+caller's `experienceOptions`/`ContentfulExperiencesConfig` so inline-credential
+clients still get built with the right values. A caller-supplied `{ client }` or
+`new ContentfulViewDeliveryClient({...})` must now also pass `spaceId`/
+`environmentId` at construction — it can only serve that one space/environment
+afterward. Destination calls have no environment, so that path threads
+`environmentId: undefined` through (the generated client still requires the
+field; `packages/client` passes an empty string).
+
+The same spec refresh reshaped the Personalization event family to match
+`@contentful/optimization-api-client`'s schemas: `context.campaign`,
+`originalTimestamp`, `sentAt`, and (for page/track events) `properties.title`
+became required, and `properties`/`traits` on Track/Identify/Screen events
+became `Record<string, <auto-named-schema>>` instead of `[key: string]: any`.
+The runtime's `EventBuilder` already produces conformant events. But those
+auto-named schema types disallow `null`, while `EventBuilder`'s own `JSONType`
+(from `@contentful/optimization-api-client`) allows it — so `packages/client`'s
+exported `PersonalizationOptions` type locally re-widens `properties`/`traits`
+to a hand-declared `JsonValue` (permitting `null`), with an explicit cast where
+that widened type meets the generated client's stricter request type. Per the
+dev.13 migration guide, do not import or reference the generated auto-named
+schema types directly — they're an artifact of how the spec-refresh pipeline
+happened to walk the spec and may be renamed/collapsed without notice.
 
 ### How does the SDK report its version?
 
