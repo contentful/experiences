@@ -1,3 +1,9 @@
+## 0.13.14 (2026-11-11)
+
+### 🚀 Features
+
+- **runtime:** add custom flags to Experiences ([#306](https://github.com/contentful/experiences/pull/306))
+
 ## 0.13.13 (2026-11-06)
 
 This was a version bump only for core to align it with other projects, there were no code changes.

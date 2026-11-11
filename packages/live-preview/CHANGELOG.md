@@ -1,3 +1,14 @@
+## 0.7.16 (2026-11-11)
+
+### 🩹 Fixes
+
+- bump experience-delivery to 1.0.0-dev.13 ([#318](https://github.com/contentful/experiences/pull/318))
+
+### 🧱 Updated Dependencies
+
+- Updated client to 0.10.16
+- Updated core to 0.13.14
+
 ## 0.7.15 (2026-11-06)
 
 ### 🧱 Updated Dependencies

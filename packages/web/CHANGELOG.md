@@ -1,3 +1,20 @@
+## 0.9.10 (2026-11-11)
+
+### 🚀 Features
+
+- **runtime:** add custom flags to Experiences ([#306](https://github.com/contentful/experiences/pull/306))
+
+### 🩹 Fixes
+
+- bump experience-delivery to 1.0.0-dev.13 ([#318](https://github.com/contentful/experiences/pull/318))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.3.10
+- Updated client to 0.10.16
+- Updated core to 0.13.14
+- Updated node to 0.8.10
+
 ## 0.9.9 (2026-11-06)
 
 ### 🩹 Fixes
