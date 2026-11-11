@@ -2,7 +2,7 @@ import {
   ExperienceFetchError,
   NotFoundError,
   type ConsentInput,
-  type Config,
+  type Config as NodeConfig,
   type RequestRuntime,
   type FetchExperienceOptions,
   type FetchResolveOptions,
@@ -47,7 +47,7 @@ export interface NextjsServerRequestPolicy {
   ) => void | Promise<void>;
 }
 
-export interface NextjsServerExperiencesConfig extends Config {
+export interface NextjsServerExperiencesConfig extends NodeConfig {
   readonly config: Config;
   readonly browser?: NextjsBrowserConfig;
   readonly consent?: {
