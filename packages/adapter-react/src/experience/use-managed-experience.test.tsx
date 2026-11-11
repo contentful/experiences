@@ -333,15 +333,17 @@ describe('useManagedExperience', () => {
           {
             type: 'track' as const,
             event: 'initial',
-            properties: { at: new Date(0) },
+            properties: { at: new Date(0).toISOString() },
             channel: 'web' as const,
             messageId: 'initial',
             timestamp: '1970-01-01T00:00:00.000Z',
-            context: { library: { name: 'test', version: '1' } },
+            originalTimestamp: '1970-01-01T00:00:00.000Z',
+            sentAt: '1970-01-01T00:00:00.000Z',
+            context: { campaign: {}, library: { name: 'test', version: '1' } },
           },
         ],
       },
-      resolveOptions: { metadata: { theme: 'light' } },
+      resolveOptions: { metadata: { theme: 'light', at: new Date(0) } },
     };
     await act(async () => root.render(content(source, initial)));
     await act(async () =>
@@ -350,6 +352,7 @@ describe('useManagedExperience', () => {
           ...initial,
           parameters: { segment: 'one' },
           personalization: globalThis.structuredClone(initial.personalization),
+          resolveOptions: globalThis.structuredClone(initial.resolveOptions),
         })
       )
     );
@@ -361,7 +364,8 @@ describe('useManagedExperience', () => {
       ...initial,
       personalization: globalThis.structuredClone(initial.personalization),
     };
-    changedDate.personalization.events[0]!.properties.at = new Date(1);
+    changedDate.resolveOptions = globalThis.structuredClone(initial.resolveOptions);
+    changedDate.resolveOptions.metadata.at = new Date(1);
     await act(async () => root.render(content(source, changedDate)));
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
     await act(async () =>
