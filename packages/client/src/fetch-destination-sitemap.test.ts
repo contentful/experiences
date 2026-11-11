@@ -110,7 +110,7 @@ describe('fetchDestinationSitemap', () => {
     const client = new ContentfulViewDeliveryClient({
       token: 'token-123',
       spaceId: 'space-1',
-      environmentId: '',
+      environmentId: 'master',
     });
     vi.mocked(ContentfulViewDeliveryClient).mockClear();
 
@@ -143,7 +143,7 @@ describe('fetchDestinationSitemap', () => {
     const client = new ContentfulViewDeliveryClient({
       token: 'preview-token',
       spaceId: 'space-1',
-      environmentId: '',
+      environmentId: 'master',
     });
     vi.mocked(ContentfulViewDeliveryClient).mockClear();
 

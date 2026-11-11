@@ -63,7 +63,7 @@ export function resolveDeliveryClient(
     accessToken: preview ? (previewToken as string) : accessToken,
     host: resolvedHost,
     spaceId: identity.spaceId,
-    environmentId: identity.environmentId ?? '',
+    environmentId: identity.environmentId ?? 'master',
   });
   log.log('created delivery client', { preview: Boolean(preview), host: resolvedHost });
   return client;
