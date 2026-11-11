@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // All SDK code comes from installed, packed public packages.
   poweredByHeader: false,
   async headers() {
-    return ['/', '/page-two', '/single-experience'].map((source) => ({
+    return ['/', '/page-two', '/pages', '/pages/page-two'].map((source) => ({
       source,
       headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
     }));

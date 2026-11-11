@@ -1,13 +1,26 @@
 import type { ReactNode } from 'react';
+import { loadServerPage } from '../../server-loader';
 
-export default function ExperiencesLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="app-shell">
-      <nav aria-label="Main navigation">
-        <a href="/">Home</a>
-        <a href="/page-two">Page Two</a>
-      </nav>
-      <div className="app-body">{children}</div>
-    </div>
-  );
+export const dynamic = 'force-dynamic';
+
+export default async function ExperiencesLayout({ children }: { children: ReactNode }) {
+  let content: ReactNode;
+  const { ExperiencesRoot, serverOnly, analytics } = await loadServerPage();
+  if (!serverOnly || analytics) {
+    content = <ExperiencesRoot>{children}</ExperiencesRoot>;
+  } else {
+    content = (
+      <div className="app-shell">
+        <nav className="app-nav" aria-label="Main navigation">
+          <a href="/?mode=server-only&analytics=off">Home</a>
+          <a href="/page-two?mode=server-only&analytics=off">Page Two</a>
+          <a href="/">Hybrid rendering</a>
+        </nav>
+        <div className="app-body">
+          <main className="app-main">{children}</main>
+        </div>
+      </div>
+    );
+  }
+  return content;
 }
