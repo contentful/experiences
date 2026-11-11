@@ -1,17 +1,21 @@
 import { singleAppExperiences } from '../../../single-experience-server';
 import { SingleExperiencePage } from '../../../components/SingleExperiencePage';
+import { ClientRequestRoot, ClientRequestExperience } from '../../../components/SingleExperience';
+import { serializeNextjsRequestResult } from '@contentful/experiences-nextjs/app-router/server';
+import { getServer } from '../../../config';
 
 export const dynamic = 'force-dynamic';
 
-export default function SingleExperience() {
-  const {
-    request: { ExperiencesRoot, Experience },
-  } = singleAppExperiences();
+export default async function SingleExperience() {
+  const result = serializeNextjsRequestResult(
+    await singleAppExperiences().request.loadExperience()
+  );
+  const { browser } = getServer();
   return (
-    <ExperiencesRoot>
+    <ClientRequestRoot {...browser.web} isPreview={false} result={result}>
       <SingleExperiencePage>
-        <Experience />
+        <ClientRequestExperience result={result} />
       </SingleExperiencePage>
-    </ExperiencesRoot>
+    </ClientRequestRoot>
   );
 }

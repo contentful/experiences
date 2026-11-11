@@ -6,16 +6,16 @@ import {
   type Config,
   type ExperiencesRootProps,
 } from '@contentful/experiences-react/client';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation.js';
+import { usePathname, useSearchParams } from 'next/navigation.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createNextjsRouteKey, queryFromSearchParams } from './request-context.js';
 import {
   NextjsInitialDataBoundary,
   NextjsRequestPresentation,
   NextjsBrowserRoot,
-  useServerPreviewRefresh,
   useNextjsRequestOptions,
 } from './router-lifetime.js';
+import { ServerPreviewRefresh } from './server-preview-refresh.js';
 
 import type {
   BoundNextjsExperiencesRootProps,
@@ -31,7 +31,7 @@ export type {
 } from './request-result.js';
 
 export type { NextjsBrowserConfig } from './browser-config.js';
-export type { NextjsDefaultRequestRootProps, NextjsHydrationMode } from './request-result.js';
+export type { NextjsDefaultRequestRootProps } from './request-result.js';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
@@ -117,8 +117,13 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
   }
 
   function RequestExperience({ result, ...props }: NextjsRequestExperienceProps) {
+    const { routeKey } = useNextAppAutoPageInputs();
     const initial = useNextjsRequestOptions(result);
-    return <Experience {...props} {...initial} />;
+    return result.routeKey === routeKey ? (
+      <Experience {...props} {...initial} />
+    ) : (
+      <Experience {...props} experience={undefined} />
+    );
   }
 
   function ExperiencesAnalyticsRoot({
@@ -159,12 +164,6 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
       Experience: RequestExperience,
     },
   };
-}
-
-function ServerPreviewRefresh({ experienceId }: { experienceId: string | undefined }) {
-  const router = useRouter();
-  useServerPreviewRefresh(experienceId, router.refresh);
-  return null;
 }
 
 function AppRouterRequestOwner({

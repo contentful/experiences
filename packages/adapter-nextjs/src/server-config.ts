@@ -13,7 +13,7 @@ import type { ExperiencesRootProps } from '@contentful/experiences-react/client'
 import type { NextjsBrowserConfig } from './browser-config.js';
 import type { NextjsCookieConfig } from './cookies.js';
 import type { NextjsCookieReader, NextjsRequestLike } from './request-context.js';
-import type { NextjsHydrationMode, NextjsRequestResult } from './request-result.js';
+import type { NextjsRequestResult } from './request-result.js';
 import { serializeNextjsJsonForHtml, serializeNextjsPlan } from './serialization.js';
 
 export interface NextjsServerRequestContext {
@@ -28,13 +28,11 @@ export type NextjsServerValue<T> = T | ((context: NextjsServerRequestContext) =>
 
 export interface NextjsServerRequestResult extends NextjsRequestResult {
   readonly experienceId: string;
-  readonly hydration: NextjsHydrationMode;
   readonly error?: unknown;
 }
 
 export interface NextjsServerRequestPolicy {
   readonly experience: NextjsServerValue<FetchExperienceOptions>;
-  readonly hydration?: NextjsServerValue<NextjsHydrationMode>;
   readonly resolveOptions?: NextjsServerValue<Omit<FetchResolveOptions, 'config'>>;
   readonly metadataKeys?: readonly string[];
   readonly initialEvents?: NextjsServerValue<
@@ -95,7 +93,7 @@ export function nextjsBrowserRootConfig(
   return JSON.parse(serializeNextjsJsonForHtml(options.browser)) as NextjsBrowserConfig;
 }
 
-/** Project the whole result for a browser root, without server-only content or raw errors. */
+/** Project the whole result for browser adoption, excluding raw errors and private metadata. */
 export function serializeNextjsRequestResult(
   result: NextjsServerRequestResult,
   options: { readonly metadataKeys?: readonly string[] } = {}
@@ -105,9 +103,7 @@ export function serializeNextjsRequestResult(
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: result.experience,
-      ...(result.hydration === 'preserve-server' && result.plan
-        ? { plan: serializeNextjsPlan(result.plan, options) }
-        : {}),
+      ...(result.plan ? { plan: serializeNextjsPlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),

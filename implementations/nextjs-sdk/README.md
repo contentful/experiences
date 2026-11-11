@@ -21,9 +21,9 @@ fetch failures. Their ordering, identity and result handling remain application-
 comparison behavior, with no SDK multi-Experience guarantee.
 
 `/single-experience` demonstrates the normal automatic App Router integration:
-one primary Experience, a server-bound registry and request policy, an exported
-client renderer and the built-in browser root. It retains server HTML and its
-supplied plan on activation, without a startup browser content refetch. Home and
+one primary Experience, a server-bound registry and request policy, and a complete
+server result passed to a client-bound request root and presentation. The browser
+uses that supplied plan on activation without a startup content refetch. Home and
 Page Two retain their existing server-only flow.
 
 ## Setup and lifecycle
@@ -174,28 +174,28 @@ remains independent of browser replay admission or delivery success.
 ## Automatic App integration
 
 `src/single-experience-server.tsx` binds `config`, `request.experience` and
-`request.hydration: 'preserve-server'` through
-`bindNextjsAppRouterServerExperiences`. The request family owns framework context,
-render-local memoization, primary fetching, resolution and request cleanup.
-`src/components/SingleExperience.tsx` exports the client request renderer with its
-browser registry and selects `Experience` from `binding.request`. The single-Experience
-page calls the lazy `singleAppExperiences()` once and destructures `ExperiencesRoot`
-and `Experience` from its `request` family, then renders `<ExperiencesRoot>` and
-`<Experience>` without manual result plumbing or a custom browser root.
-Context-only Node middleware supplies sanitized request URL context.
+`request.resolveOptions` through `bindNextjsAppRouterServerExperiences`. The request
+family owns framework context, render-local memoization, primary fetching,
+resolution and request cleanup. `src/components/SingleExperience.tsx` exports
+`ClientRequestRoot` and `ClientRequestExperience` from the client binding's request
+family with its browser registry. The page calls the lazy `singleAppExperiences()`
+and awaits `request.loadExperience()`, projects it with
+`serializeNextjsRequestResult`, then passes that same complete browser-safe result
+to both client components. Root and presentation update together on navigation,
+without a duplicate Web fetch. Context-only Node middleware supplies sanitized
+request URL context.
 
-Bind `request.resolveOptions` once when needed. `consent.server`,
-`consent.clientDefaults` and `cookie` keep server consent, browser startup defaults
-and shared identity attributes distinct. `request.pagePayload` travels as
-`result.initialPagePayload`. `request.loadExperience()` exposes the primary result
-for explicit server composition; pass the complete browser-safe result, including
-its `requestId`, without descriptor or payload overlays. Use `server-only` with
-`request.ExperiencesAnalyticsRoot` when content updates must remain server-rendered.
-Browser content loading and resolution are then absent; analytics still needs the
-existing Runtime Delivery configuration.
+`consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
+browser startup defaults and shared identity attributes distinct.
+`request.pagePayload` travels as `result.initialPagePayload`. Pass the complete
+result, including its `requestId`, without descriptor or payload overlays.
+Rendering choices, page preparation/replay, Next prefetch/cache behavior and preview
+follow the [canonical adapter guide](../../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and its [request contract](../../packages/adapter-nextjs/README.md#router-bindings).
 
 `request.composeRequest` is an explicit escape hatch on the same facade for
-application-owned diagnostic composition. It adds no SDK multi-fetch/result list,
+application-owned diagnostic composition after every actual server primary fetch,
+including RSC, before cleanup. It adds no SDK multi-fetch/result list,
 identity reconciliation, resource cache or controller. The Home/Page Two flow
 below continues to use its existing explicit loader.
 

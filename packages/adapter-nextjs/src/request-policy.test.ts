@@ -39,7 +39,7 @@ describe('Next primary request policy', () => {
       const descriptor = { experienceId: 'home', personalization: { events } };
       const resolved = await resolvePolicy(config, { experience: descriptor }, context);
       fetchExperienceForHandoff.mockClear();
-      const result = await loadPrimary(request, resolved, context, config, true);
+      const result = await loadPrimary(request, resolved, context, config);
       expect(fetchExperienceForHandoff).toHaveBeenCalledOnce();
       expect(vi.mocked(request.fetchExperienceForHandoff).mock.calls[0]![0]).toBe(descriptor);
       expect(result.initialPagePayload).toBeUndefined();
@@ -64,18 +64,17 @@ describe('Next primary request policy', () => {
 
   it('resolves policy in one context and appends one automatic page', async () => {
     const experience = vi.fn(() => ({ experienceId: 'bound' }));
-    const hydration = vi.fn(() => 'preserve-server' as const);
     const defaults = vi.fn(() => ({ metadata: { bound: true }, debug: false }));
     const overrides = vi.fn(() => ({ debug: true }));
     const initialEvents = vi.fn(() => [{ type: 'identify' as const, userId: 'visitor' }]);
     const options = {
       ...config,
-      request: { experience, hydration, resolveOptions: defaults, initialEvents },
+      request: { experience, resolveOptions: defaults, initialEvents },
     };
     const resolved = await resolvePolicy(options, { resolveOptions: overrides }, context);
     fetchExperienceForHandoff.mockClear();
-    await loadPrimary(request, resolved, context, options, true);
-    for (const resolver of [experience, hydration, defaults, overrides, initialEvents])
+    await loadPrimary(request, resolved, context, options);
+    for (const resolver of [experience, defaults, overrides, initialEvents])
       expect(resolver).toHaveBeenCalledExactlyOnceWith(context);
     const [descriptor, resolve] = vi.mocked(request.fetchExperienceForHandoff).mock.calls[0]!;
     expect(resolve).toEqual({ config: config.config, metadata: { bound: true }, debug: true });
@@ -98,10 +97,33 @@ describe('Next primary request policy', () => {
       spaceId: 'space',
       experienceId: 'home',
     });
-    const resolved = await resolvePolicy(config, { hydration: 'server-only' }, context);
-    fetchExperience.mockRejectedValueOnce(error);
-    const result = await loadPrimary(request, resolved, context, config, true);
+    const resolved = await resolvePolicy(config, {}, context);
+    fetchExperienceForHandoff.mockRejectedValueOnce(error);
+    const result = await loadPrimary(request, resolved, context, config);
     expect(result).toMatchObject({ error, contentError: 'Experience content unavailable.' });
     expect(result.plan).toBeUndefined();
+  });
+
+  it('keeps preview evaluation event-free and outside the transfer producer', async () => {
+    const initialEvents = vi.fn();
+    const pagePayload = vi.fn();
+    const options = { ...config, request: { ...config.request!, initialEvents, pagePayload } };
+    const resolved = await resolvePolicy(options, {}, context);
+    fetchExperience.mockClear();
+    fetchExperienceForHandoff.mockClear();
+    const result = await loadPrimary(
+      { ...request, isPreview: true } as RequestRuntime,
+      resolved,
+      context,
+      options
+    );
+    expect(fetchExperience).toHaveBeenCalledExactlyOnceWith(config.request!.experience, {
+      config: config.config,
+    });
+    expect(fetchExperienceForHandoff).not.toHaveBeenCalled();
+    expect(initialEvents).not.toHaveBeenCalled();
+    expect(pagePayload).not.toHaveBeenCalled();
+    expect(result.initialPagePayload).toBeUndefined();
+    expect(result.handoff).toBeUndefined();
   });
 });

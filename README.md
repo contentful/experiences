@@ -180,9 +180,8 @@ do {
 For a normal Next.js page, bind one primary Experience and let the Next adapter
 fetch, resolve and manage its presentation. The App Router bindings provide
 `request.loadExperience`, `request.Experience` and built-in browser roots. The
-`preserve-server` hydration mode retains server HTML and the supplied plan without
-a startup browser refetch; `server-only` keeps content updates on a server
-round-trip and can attach browser analytics without browser content rendering.
+server binding evaluates and renders content on Node. Client-bound components can
+adopt its result or own Web loading.
 
 Start with the [one-Experience App setup](./packages/adapter-nextjs/README.md#automatic-single-experience-setup).
 Server configuration owns private credentials and resolution. Built-in browser

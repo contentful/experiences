@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExperienceFetchError } from '@contentful/experiences-node';
+import { ServerExperienceRenderer } from '@contentful/experiences-react/server';
 import {
   NextjsAppRouterRequestRoot,
   NextjsAppRouterRequestAnalyticsRoot,
 } from './app-router-client.js';
 import { bindNextjsAppRouterServerExperiences } from './app-router-server.js';
+import { ServerPreviewRefresh } from './server-preview-refresh.js';
 
 const doubles = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -69,7 +71,7 @@ describe('App Router request family', () => {
     expect(doubles.bind).not.toHaveBeenCalled();
   });
 
-  it('reads opt-in request headers/cookies and supplies the actual transfer plan to the client presentation', async () => {
+  it('shares request evaluation with the server renderer while retaining server metadata', async () => {
     const client = () => null;
     const raw = { ...plan, metadata: { server: new Error('server metadata') } };
     doubles.transfer.mockResolvedValue({ plan: raw, handoff });
@@ -82,14 +84,15 @@ describe('App Router request family', () => {
     });
     const binding = bindNextjsAppRouterServerExperiences(
       { ...config, request: { ...config.request, composeRequest } },
-      { request: { ExperiencesRoot: client, Experience: client } }
+      { request: { ExperiencesRoot: client } }
     );
     const element = await binding.request.Experience({
       as: 'section',
       rootProps: { id: 'content' },
     });
+    expect(element?.type).toBe(ServerExperienceRenderer);
     expect(element?.props).toMatchObject({
-      result: { experience: { experienceId: 'home' }, plan },
+      experience: raw,
       as: 'section',
       rootProps: { id: 'content' },
     });
@@ -151,30 +154,40 @@ describe('App Router request family', () => {
     const binding = bindNextjsAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
     expect(rendered.props).toMatchObject({ renderError, renderUnknown });
+    const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
+    expect(requestRendered?.props).toMatchObject({ renderError, renderUnknown });
   });
 
   it.each([
     new globalThis.Headers({ 'next-router-prefetch': '1' }),
-    new globalThis.Headers({ rsc: '1' }),
-  ])('does no hybrid initialization/content work for speculative/RSC requests', async (headers) => {
+    new globalThis.Headers({ rsc: '1', purpose: 'prefetch' }),
+  ])('does no primary evaluation or composition for speculative requests', async (headers) => {
     const incoming = new globalThis.Headers(headers);
     incoming.set('x-ctfl-exp-request-url', 'https://example.com/?q=a%20b');
     doubles.headers.mockResolvedValue(incoming);
-    const result = await bindNextjsAppRouterServerExperiences(config).request.loadExperience();
+    const composeRequest = vi.fn();
+    const result = await bindNextjsAppRouterServerExperiences({
+      ...config,
+      request: { ...config.request, composeRequest },
+    }).request.loadExperience();
     expect(result.plan).toBeUndefined();
     expect(result.handoff).toBeUndefined();
     expect(doubles.bind).not.toHaveBeenCalled();
+    expect(composeRequest).not.toHaveBeenCalled();
   });
 
-  it('uses ordinary server-only RSC fetch without page intent or a synthesized transfer', async () => {
+  it('evaluates RSC content once with the destination page and supplies its prepared handoff', async () => {
     doubles.headers.mockResolvedValue(
       new globalThis.Headers({ rsc: '1', 'x-ctfl-exp-request-url': 'https://example.com/?q=a%20b' })
     );
     const client = () => null;
+    const composeRequest = vi.fn();
+    const initialEvents = vi.fn();
+    const pagePayload = { properties: { title: 'Server navigation' } };
     const binding = bindNextjsAppRouterServerExperiences(
       {
         ...config,
-        request: { ...config.request, hydration: 'server-only' },
+        request: { ...config.request, composeRequest, initialEvents, pagePayload },
       },
       { request: { ExperiencesRoot: client, ExperiencesAnalyticsRoot: client } }
     );
@@ -184,25 +197,40 @@ describe('App Router request family', () => {
     const analytics = await binding.request.ExperiencesAnalyticsRoot({});
     expect(analytics.props.result).not.toHaveProperty('plan');
     expect(analytics.props.result).not.toHaveProperty('error');
-    expect(result.handoff).toBeUndefined();
-    expect(doubles.transfer).not.toHaveBeenCalled();
-    expect(doubles.fetch.mock.calls[0]![0].personalization?.events).toBeUndefined();
+    expect(result.handoff).toEqual(handoff);
+    expect(result.plan).toBe(plan);
+    expect(result.initialPagePayload).toEqual(pagePayload);
+    expect(doubles.transfer).toHaveBeenCalledExactlyOnceWith(
+      {
+        ...config.request.experience,
+        personalization: { events: [{ type: 'page', ...pagePayload }] },
+      },
+      {
+        config: config.config,
+      },
+      { routeKey: '/?q=a+b' }
+    );
+    expect(doubles.fetch).not.toHaveBeenCalled();
+    expect(initialEvents).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ routeKey: '/?q=a+b' })
+    );
+    expect(composeRequest).toHaveBeenCalledExactlyOnceWith(
+      doubles.bind.mock.results[0]!.value,
+      expect.objectContaining({ plan, handoff, initialPagePayload: pagePayload }),
+      expect.objectContaining({ routeKey: '/?q=a+b' })
+    );
     expect(doubles.destroy).toHaveBeenCalledTimes(1);
   });
 
   it('uses the built-in root with explicit browser transport and shares the primary with rendering', async () => {
-    const client = () => null;
     const browser = { delivery: { host: 'https://example.com/api/delivery' } };
     const cookie = { expires: 7, path: '/scope' };
-    const binding = bindNextjsAppRouterServerExperiences(
-      {
-        ...config,
-        browser,
-        cookie,
-        consent: { ...config.consent, clientDefaults: { consent: false } },
-      },
-      { request: { Experience: client } }
-    );
+    const binding = bindNextjsAppRouterServerExperiences({
+      ...config,
+      browser,
+      cookie,
+      consent: { ...config.consent, clientDefaults: { consent: false } },
+    });
     const root = await binding.request.ExperiencesRoot({});
     const presentation = await binding.request.Experience({});
     const analytics = await binding.request.ExperiencesAnalyticsRoot({});
@@ -216,7 +244,13 @@ describe('App Router request family', () => {
       defaults: { consent: false },
     });
     expect(root.props).not.toHaveProperty('delivery');
-    expect(root.props.result).toEqual(presentation?.props.result);
+    expect(root.props.result?.plan).toEqual(presentation?.props.experience);
+    expect(analytics.props.result).not.toHaveProperty('plan');
+    expect(root.props.children).toMatchObject({
+      props: {
+        children: [{ type: ServerPreviewRefresh, props: { experienceId: 'home' } }, undefined],
+      },
+    });
     expect(doubles.transfer).toHaveBeenCalledTimes(1);
   });
 
@@ -225,7 +259,9 @@ describe('App Router request family', () => {
     const binding = bindNextjsAppRouterServerExperiences(config, {
       request: { ExperiencesAnalyticsRoot: client },
     });
-    expect((await binding.request.ExperiencesAnalyticsRoot({})).type).toBe(client);
+    const root = await binding.request.ExperiencesAnalyticsRoot({ children: 'Server content' });
+    expect(root.type).toBe(client);
+    expect(root.props.children).toBe('Server content');
     await expect(binding.request.ExperiencesRoot({})).rejects.toThrow(
       'requires browser configuration'
     );

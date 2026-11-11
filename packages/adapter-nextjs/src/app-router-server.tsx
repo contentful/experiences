@@ -11,11 +11,9 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-node';
 import { cookies, headers } from 'next/headers.js';
-import { cache, cloneElement, createElement, type ComponentType } from 'react';
-import type {
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
-} from './request-result.js';
+import { cache, createElement, type ComponentType } from 'react';
+import { ServerPreviewRefresh } from './server-preview-refresh.js';
+import type { BoundNextjsRequestRootProps } from './request-result.js';
 import {
   bindNextjsExperiencesRequest,
   configureNextjsServerExperiences,
@@ -50,7 +48,6 @@ import {
 export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
-export type { NextjsHydrationMode } from './request-result.js';
 
 export type NextjsAppRouterRequestContext = NextjsServerRequestContext;
 export type NextjsAppRouterServerExperiencesConfig = NextjsServerExperiencesConfig;
@@ -59,7 +56,6 @@ export interface NextjsAppRouterServerExperiencesOptions {
   readonly request?: {
     readonly ExperiencesRoot?: ComponentType<BoundNextjsRequestRootProps>;
     readonly ExperiencesAnalyticsRoot?: ComponentType<BoundNextjsRequestRootProps>;
-    readonly Experience?: ComponentType<NextjsRequestExperienceProps>;
   };
 }
 
@@ -70,10 +66,10 @@ export type BoundNextjsServerRequestRootProps = Omit<
 
 export type NextjsAppRouterExperienceResult = NextjsServerRequestResult;
 
-/** Ordinary callbacks and custom components belong in the client binding. */
+/** Server renderer callbacks stay on the server; DOM handlers belong in client components. */
 export type NextjsServerRequestExperienceProps = Omit<
   ServerExperienceRendererProps,
-  'experience' | 'config' | 'renderUnknown' | 'renderError' | 'as' | 'rootProps'
+  'experience' | 'config' | 'as' | 'rootProps'
 > & {
   readonly as?: Extract<ServerExperienceRendererProps['as'], string>;
   readonly rootProps?: Omit<
@@ -131,14 +127,8 @@ export function bindNextjsAppRouterServerExperiences(
         cookies: cookieStore,
       };
       const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
-      const rsc = context.headers.get('rsc') === '1';
       const preview = await livePreview?.(context);
-      // Hybrid navigations load in Web; server-only refreshes use a server round-trip.
-      if (
-        isNextjsSpeculativeRequest(context.headers) ||
-        (rsc && resolved.result.hydration !== 'server-only' && !preview)
-      )
-        return resolved.result;
+      if (isNextjsSpeculativeRequest(context.headers)) return resolved.result;
       const request = bindNextjsExperiencesRequest(sdk, {
         request: context.request,
         cookies: context.cookies,
@@ -152,7 +142,7 @@ export function bindNextjsAppRouterServerExperiences(
         isPreview: overrides.isPreview === true || preview !== undefined,
       });
       try {
-        return await loadNextjsPrimaryExperience(request, resolved, context, options, !rsc);
+        return await loadNextjsPrimaryExperience(request, resolved, context, options);
       } finally {
         request.destroy();
       }
@@ -168,6 +158,12 @@ export function bindNextjsAppRouterServerExperiences(
       return createElement(client.request.ExperiencesRoot, props);
     return createElement(NextjsAppRouterRequestRoot, {
       ...props,
+      children: (
+        <>
+          <ServerPreviewRefresh experienceId={props.result?.experience.experienceId} />
+          {props.children}
+        </>
+      ),
       spaceId: options.spaceId,
       environmentId: options.environmentId,
       ...(options.locale !== undefined ? { locale: options.locale } : {}),
@@ -178,8 +174,7 @@ export function bindNextjsAppRouterServerExperiences(
   }
 
   async function RequestExperiencesRoot(props: BoundNextjsServerRequestRootProps) {
-    const root = ExperiencesRoot(props);
-    return cloneElement(root, { result: browserResult(await loadExperience()) });
+    return ExperiencesRoot({ ...props, result: browserResult(await loadExperience()) });
   }
 
   function ExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
@@ -197,22 +192,12 @@ export function bindNextjsAppRouterServerExperiences(
   }
 
   async function RequestExperiencesAnalyticsRoot(props: BoundNextjsServerRequestRootProps) {
-    const root = ExperiencesAnalyticsRoot(props);
-    return cloneElement(root, { result: browserResult(await loadExperience()) });
+    const { plan: _plan, ...result } = browserResult(await loadExperience());
+    return ExperiencesAnalyticsRoot({ ...props, result });
   }
 
   async function RequestExperience(props: NextjsServerRequestExperienceProps) {
     const result = await loadExperience();
-    if (result.hydration === 'preserve-server') {
-      if (!client?.request?.Experience)
-        throw new TypeError(
-          'Supply the client binding request.Experience for hybrid request rendering.'
-        );
-      return createElement(client.request!.Experience, {
-        ...props,
-        result: browserResult(result),
-      });
-    }
     return result.plan ? (
       <ServerExperienceRenderer {...props} config={config} experience={result.plan} />
     ) : null;

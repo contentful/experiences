@@ -162,8 +162,12 @@ React managed integration ports Optimization's source/presentation controllers
 with the thin binding; the obsolete standalone preview hooks have been retired.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
 automatically fetches, resolves and manages one primary Experience. The App
-request family exposes `request.loadExperience`; `hydration` is
-`preserve-server` or `server-only`. Bind `config` and `resolveOptions` once.
+request family exposes `request.loadExperience`; server `request.Experience` always
+uses `ServerExperienceRenderer`. There is no hydration or navigation policy flag.
+Bind `config` and `resolveOptions` once. Server roots/renderers share a memoized result.
+Follow the canonical [rendering compositions](./packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and [server preparation contract](./packages/adapter-nextjs/README.md#router-bindings)
+for document/RSC evaluation, page events, replay, prefetch and preview ownership.
 `consent.server`, `consent.clientDefaults` and `cookie` keep server consent,
 browser defaults and response identity policy distinct. `request.pagePayload`
 travels as `result.initialPagePayload`. The complete request result travels
@@ -172,7 +176,8 @@ Built-in browser roots inherit scope and locale, but need explicit browser
 credentials or a trusted authenticated proxy. Existing Runtime Delivery
 configuration remains required even for analytics-only browser use. Advanced
 callbacks/preview setup stay in a client module. `composeRequest` is an explicit
-application escape hatch on the existing facade; diagnostic multiple-fetch
+application escape hatch after every actual server primary fetch, including RSC,
+before cleanup; diagnostic multiple-fetch
 ordering, identity and results stay application-owned. Add no declarative
 multi-prefetch/results, reconciliation, resource cache, controller or barrier.
 Optional React Router/TanStack integration remains deferred. The current
@@ -319,12 +324,14 @@ recorded in the implementation plan.
 
 ## Parity with the Optimization SDK
 
-Optimization (`contentful/optimization`) is the behavioral reference for submission APIs, queue admission, completion semantics, lifecycle handling, retry and backoff, and configuration. Treat parity as a maintainability requirement: port a fix by following the corresponding Optimization contract, not by adding an alternative result type, fallback or configuration convention. Read the reference at a pinned commit, not a stale local checkout.
+Optimization (`contentful/optimization`) is the behavioral reference for submission APIs, queue admission, completion semantics, lifecycle handling, retry and backoff, and configuration. Treat parity as a maintainability requirement: port a fix by following the corresponding Optimization contract, not by adding an alternative result type, fallback or configuration convention. Fetch the named reference branch before comparison and read its current remote-tracking source, not a stale local checkout.
 
 The active parity baseline is Optimization PR #549,
-`restore/runtime-preview-after-release`, at committed source
-`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`.
-Use this baseline rather than main or the historical `59add9d` pin.
+`restore/runtime-preview-after-release`. In the Optimization checkout, run
+`git fetch origin restore/runtime-preview-after-release` and read
+`git show origin/restore/runtime-preview-after-release:<path>`.
+Record the fetched commit when reporting evidence; use this current branch source
+rather than main or an older frozen commit.
 Web state and subscription mechanics follow that baseline. Web owns module signals backed by
 `@preact/signals-core` (`^1.13.0`) and `es-toolkit` (`^1.46.0`), and reactive
 persistence, consent, and connectivity effects. Its readonly `states: States`

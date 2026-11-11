@@ -11,8 +11,6 @@ import type {
   Config,
 } from '@contentful/experiences-web';
 
-export type NextjsHydrationMode = 'preserve-server' | 'server-only';
-
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 /** Detached request data shared by the router root and content presentation. */

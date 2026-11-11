@@ -22,12 +22,6 @@ export async function resolveNextjsRequestPolicy(
   const policy = { ...options.request, ...overrides };
   if (!policy.experience) throw new TypeError('Request components require request.experience.');
   const descriptor = await resolveNextjsServerValue(policy.experience, context);
-  const hydration =
-    policy.hydration === undefined
-      ? 'preserve-server'
-      : await resolveNextjsServerValue(policy.hydration, context);
-  if (hydration !== 'preserve-server' && hydration !== 'server-only')
-    throw new TypeError('Invalid request hydration.');
   if (
     descriptor.personalization?.events !== undefined &&
     (policy.initialEvents !== undefined || policy.pagePayload !== undefined)
@@ -47,7 +41,6 @@ export async function resolveNextjsRequestPolicy(
     requestId: globalThis.crypto.randomUUID(),
     experienceId: descriptor.experienceId,
     routeKey: context.routeKey,
-    hydration,
     experience: {
       ...experience,
       ...(explicitEvents !== undefined && !explicitEvents.some((event) => event.type === 'page')
@@ -63,13 +56,12 @@ export async function loadNextjsPrimaryExperience(
   request: RequestRuntime,
   resolved: Awaited<ReturnType<typeof resolveNextjsRequestPolicy>>,
   context: NextjsServerRequestContext,
-  options: NextjsServerExperiencesConfig,
-  document: boolean
+  options: NextjsServerExperiencesConfig
 ): Promise<NextjsServerRequestResult> {
   const { policy, descriptor, resolveOptions, result } = resolved;
   let fetchOptions: FetchExperienceOptions = descriptor;
   let initialPagePayload: NextjsServerRequestResult['initialPagePayload'];
-  if (descriptor.personalization?.events === undefined && document && !request.isPreview) {
+  if (descriptor.personalization?.events === undefined && !request.isPreview) {
     const url = new URL(context.requestUrl);
     initialPagePayload =
       policy.pagePayload === undefined
@@ -96,12 +88,11 @@ export async function loadNextjsPrimaryExperience(
   }
   let output: Pick<NextjsServerRequestResult, 'plan' | 'error' | 'handoff'>;
   try {
-    output =
-      result.hydration === 'preserve-server' && document && !request.isPreview
-        ? await request.fetchExperienceForHandoff(fetchOptions, resolveOptions, {
-            routeKey: context.routeKey,
-          })
-        : { plan: await request.fetchExperience(fetchOptions, resolveOptions) };
+    output = !request.isPreview
+      ? await request.fetchExperienceForHandoff(fetchOptions, resolveOptions, {
+          routeKey: context.routeKey,
+        })
+      : { plan: await request.fetchExperience(fetchOptions, resolveOptions) };
   } catch (error) {
     if (!isNextjsContentError(error)) throw error;
     output = { error };

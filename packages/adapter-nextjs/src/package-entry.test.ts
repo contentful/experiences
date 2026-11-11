@@ -293,8 +293,8 @@ describe('published declarations', () => {
         browser: { delivery: { host: 'https://example.com/api/delivery' } },
         cookie: { expires: 7, sameSite: 'lax' },
         consent: { server: false, clientDefaults: { consent: false, persistenceConsent: false } },
-        request: { experience: { experienceId: 'home' }, hydration: 'preserve-server', resolveOptions: { metadata: { server: true }, debug: false } }
-      }, { request: { Experience: () => null } });
+        request: { experience: { experienceId: 'home' }, resolveOptions: { metadata: { server: true }, debug: false } }
+      });
       browserApp.request.loadExperience({ resolveOptions: { debug: true } });
       // @ts-expect-error High-level expiry uses days; Date belongs to explicit low-level cookie helpers.
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, cookie: { expires: new Date() } });
@@ -306,7 +306,6 @@ describe('published declarations', () => {
       const requestProps: Parameters<typeof Experience>[0] = {
         as: 'section', rootProps: { id: 'experience', 'data-host': 'root' }
       };
-      // @ts-expect-error Ordinary renderer callbacks must be configured in the client module.
       Experience({ renderError: () => null });
       // @ts-expect-error DOM event handlers cannot cross the request RSC boundary.
       Experience({ rootProps: { onClick: () => {} } });

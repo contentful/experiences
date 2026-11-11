@@ -13,7 +13,7 @@ export function SingleExperiencePage({ children }: { children: ReactNode }) {
         <header className="page-header">
           <h1>Single Experience</h1>
           <p className="page-header__subtitle">
-            One configured Experience with the built-in App Router root.
+            One server-evaluated Experience with browser-managed presentation.
           </p>
         </header>
         {children}

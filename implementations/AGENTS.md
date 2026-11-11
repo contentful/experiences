@@ -48,15 +48,20 @@ Automatic fetching, resolution and management of one primary Experience is the
 normal React/Next workflow. The Next reference demonstrates it at
 `/single-experience`, alongside the existing Home/Page Two server routes.
 App request families bind `config` and `resolveOptions` once and expose `request.loadExperience`,
-`request.Experience` and built-in roots. Hydration is `preserve-server` or
-`server-only`; server-only updates use server round-trips without browser content
-loading. Browser roots inherit scope/locale, not private credentials; supply
+`request.Experience` and built-in roots. Server request presentation always uses
+`ServerExperienceRenderer`; `/single-experience` instead passes one serialized server
+result to a client request root and presentation. Follow the canonical
+[rendering compositions](../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and [request contract](../packages/adapter-nextjs/README.md#router-bindings) for page
+preparation, replay, prefetch, root lifetime and preview behavior.
+Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
 in client modules. `request.pagePayload` becomes `result.initialPagePayload`; pass
 the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
-facade. Do not add multi-prefetch/result lists, identity reconciliation or new
+facade after every actual server primary fetch, including RSC, before cleanup.
+Do not add multi-prefetch/result lists, identity reconciliation or new
 controllers/cache/barriers. Optional React Router/TanStack integration remains
 deferred.
 

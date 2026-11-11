@@ -37,19 +37,8 @@ result list, identity reconciliation or additional cache/controller/barrier.
 
 Export named components from `binding.request` in the binding modules, then import
 and render those names in pages (`<ExperiencesRoot>` and `<Experience>`). Bind the
-configuration once. Export the client renderer component from a client module. The common setup uses
-the built-in browser root and needs no custom Root:
-
-```tsx
-// lib/experience-client.tsx
-'use client';
-
-import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
-import { browserRegistry } from './browser-registry';
-
-const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
-export const { Experience } = binding.request;
-```
+configuration once. The default server binding renders content on the server and uses
+the built-in browser root:
 
 ```tsx
 // lib/experience-server.tsx
@@ -57,31 +46,26 @@ import 'server-only';
 import { bindNextjsAppRouterServerExperiences } from '@contentful/experiences-nextjs/app-router/server';
 import { createNextjsPrivateFetch } from '@contentful/experiences-nextjs/server';
 import { serverRegistry } from './server-registry';
-import * as client from './experience-client';
 
-const binding = bindNextjsAppRouterServerExperiences(
-  {
-    spaceId: process.env.CONTENTFUL_SPACE_ID!,
-    environmentId: 'master',
-    locale: 'en-US',
-    delivery: {
-      accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN!,
-      fetch: createNextjsPrivateFetch(),
-    },
-    config: serverRegistry,
-    browser: {
-      delivery: { accessToken: process.env.NEXT_PUBLIC_CONTENTFUL_DELIVERY_TOKEN! },
-      isPreview: false,
-    },
-    consent: { server: false }, // Replace with the application's request consent policy.
-    request: {
-      experience: { experienceId: 'home' },
-      hydration: 'preserve-server',
-      resolveOptions: { debug: false },
-    },
+export const binding = bindNextjsAppRouterServerExperiences({
+  spaceId: process.env.CONTENTFUL_SPACE_ID!,
+  environmentId: 'master',
+  locale: 'en-US',
+  delivery: {
+    accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN!,
+    fetch: createNextjsPrivateFetch(),
   },
-  { request: { Experience: client.Experience } }
-);
+  config: serverRegistry,
+  browser: {
+    delivery: { accessToken: process.env.NEXT_PUBLIC_CONTENTFUL_DELIVERY_TOKEN! },
+    isPreview: false,
+  },
+  consent: { server: false }, // Replace with the application's request consent policy.
+  request: {
+    experience: { experienceId: 'home' },
+    resolveOptions: { debug: false },
+  },
+});
 
 export const { ExperiencesRoot, Experience } = binding.request;
 ```
@@ -109,19 +93,73 @@ export default function Page() {
 }
 ```
 
-`request.loadExperience()` is available when the host needs the primary result
-directly. Request-aware roots and presentations share its render-local memoized
-result without application fetch glue. Keep a root in a stable layout when
-preserving a browser owner across routes. Extend the middleware matcher to every
-request-aware route. Only this opt-in server family reads framework headers/cookies.
+There are three compositions, selected by the components you render:
 
-App bindings default to `preserve-server`: initial HTML and supplied plans survive
-browser activation without a startup content refetch. Use `server-only` with
-`request.ExperiencesAnalyticsRoot` for opaque server content and optional browser
-analytics. All content updates then use server round-trips, including preview;
-there is no browser content loading, resolution or rendering. Analytics-only
-browser owners still require Delivery configuration under the existing Runtime
-constructor contract.
+1. **Server evaluation and rendering:** use the server binding's
+   `request.ExperiencesRoot` and `request.Experience` as above. The bound
+   `Experience` always uses `ServerExperienceRenderer`. Use
+   `request.ExperiencesAnalyticsRoot` for opaque server children with browser
+   analytics; it retains the handoff while omitting the plan from browser props.
+   Content and preview updates use server round-trips. Analytics-only browser
+   owners still require Delivery configuration under the Runtime constructor contract.
+2. **Server evaluation and browser-managed presentation:** call the server's
+   `request.loadExperience()`, then pass the same complete result to a client
+   binding's `request.ExperiencesRoot` and `request.Experience`. The supplied plan
+   survives activation without a startup Web fetch. Update the root and presentation
+   result together on navigation; no duplicate browser fetch is needed.
+3. **Web evaluation and presentation:** render a client binding's
+   `request.ExperiencesRoot` without a result and its top-level `Experience` with
+   `experienceId` and fetch options. Web owns loading and navigation. The existing
+   `initialPlan` input can seed the first render; an unseeded client component does
+   not fetch content during server rendering.
+
+For the second composition, export both client-bound request components:
+
+```tsx
+// lib/experience-client.tsx
+'use client';
+
+import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
+import { browserRegistry } from './browser-registry';
+
+const binding = bindNextjsAppRouterClientExperiences({
+  config: browserRegistry,
+  spaceId: process.env.NEXT_PUBLIC_CONTENTFUL_SPACE_ID!,
+  environmentId: 'master',
+  locale: 'en-US',
+  delivery: { accessToken: process.env.NEXT_PUBLIC_CONTENTFUL_DELIVERY_TOKEN! },
+});
+export const { ExperiencesRoot, Experience } = binding.request;
+```
+
+```tsx
+// app/page.tsx — alternative to the default server-rendered composition above.
+import { serializeNextjsRequestResult } from '@contentful/experiences-nextjs/app-router/server';
+import { binding } from '../lib/experience-server';
+import { ExperiencesRoot, Experience } from '../lib/experience-client';
+
+export default async function Page() {
+  const result = serializeNextjsRequestResult(await binding.request.loadExperience());
+  return (
+    <ExperiencesRoot result={result}>
+      <Experience result={result} />
+    </ExperiencesRoot>
+  );
+}
+```
+
+Project the raw server result with `serializeNextjsRequestResult`, then pass that
+complete browser-safe result, including its `requestId`, without descriptor or
+payload overlays. Private server configuration and credentials remain in that
+module; only the serialized result crosses into client props.
+
+Request-aware server roots and presentations share the render-local memoized
+primary result. Place server roots that need fresh handoffs in a rerendering page
+or template: retained layouts do not reevaluate automatically. Next retains
+control of RSC requests, prefetching and caching; there is no navigation flag that
+forces a network request on every transition. Extend the middleware matcher to
+every request-aware route. Only this opt-in server family reads framework
+headers/cookies.
 
 Browser credentials are explicit browser-visible credentials. The designated
 public token above must have appropriate scope and endpoint CORS; otherwise use
@@ -299,23 +337,35 @@ Request roots and presentations receive one JSON-safe `result: NextjsRequestResu
 `requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
 `contentError` string and `initialPagePayload`. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
-retains server-local `experienceId`, `hydration` and raw `error`; request roots
-exclude those fields and server-only plans.
+retains server-local `experienceId` and raw `error`; browser projection excludes
+those fields and sanitizes the optional plan. Analytics roots omit that plan for
+opaque server children while preserving the handoff.
 Only the App opt-in path reads `headers()`/`cookies()`; configure the sanitized request
-handler first. `request.experience`, `initialEvents`, `pagePayload`, `resolveOptions` and
-`hydration` can be request-context resolvers. `NextjsHydrationMode` is
-`preserve-server` (default) or `server-only`. `NextjsServerRequestPolicy` binds one
-primary request. Ordinary SSR uses Node fetch, actual hybrid
-documents use the Node transfer producer, and hybrid RSC navigation loads through
-Web. Prefetch starts no visitor work. The resolved `request.pagePayload` is returned
-as `initialPagePayload` and supplied to both request roots for browser initial
-intent. High-level `cookie: NextjsCookieConfig` matches Web's shared identity
+handler first. `request.experience`, `initialEvents`, `pagePayload` and `resolveOptions`
+can be request-context resolvers. `NextjsServerRequestPolicy` binds one primary request.
+Both document and RSC requests evaluate the primary Experience on Node using the
+transfer producer; preview uses ordinary fetch and suppresses events. Requests marked
+as speculative (`next-router-prefetch`, `purpose` or `sec-purpose`) perform no primary
+fetch or composition. Next.js can also issue full prefetches without those markers;
+these follow the ordinary RSC path. Configure prefetching at the application boundary
+when server evaluation must wait for navigation. Each actual non-preview server
+load, document or RSC, resolves `request.initialEvents` and `request.pagePayload`
+and appends the automatic page event for XDA evaluation and browser replay.
+Explicit `personalization.events` remains authoritative caller intent, including
+`events: []` to suppress automatic page intent. The resolved `request.pagePayload`
+also travels as `initialPagePayload` for browser fallback.
+Each fresh server preparation can emit a page event, including a same-route
+`router.refresh()`. Adopting the same exact result or prepared message IDs replays
+only once; a fresh preparation has fresh event identity. Ordinary Web SDK retry and
+refresh continue to use event-free fetches.
+High-level `cookie: NextjsCookieConfig` matches Web's shared identity
 attributes (`path`, `domain`, `sameSite`, `secure`, and `expires` in days); the
 request/response adapter converts expiry to response cookie options. It uses the
 shared `ctfl-opt-aid` identity name. Low-level standalone helpers retain their
 explicit cookie-name and response options. Optional `request.composeRequest(request, primary, context)`
-receives the same facade and raw primary plan/error/handoff before browser projection
-and cleanup. Diagnostic comparison ordering, identity changes, result handling and per-ID error
+receives the same facade and raw primary plan/error/handoff after every actual
+server primary fetch, including RSC, before browser projection and cleanup. It does
+not run for requests marked speculative. Diagnostic comparison ordering, identity changes, result handling and per-ID error
 isolation remain application-owned. The callback is an escape hatch, not a
 declarative prefetch/result list or SDK multi-Experience mechanism.
 Callback exceptions propagate; cleanup still runs. Server rendering retains raw metadata.
@@ -330,16 +380,20 @@ The explicit server `Experience` accepts a supplied plan or a public/static
 `experienceId` with explicit cache policy; it reads no framework context. Existing
 explicit Node host helpers remain available for custom request boundaries.
 Server functions and credentials stay outside client props.
-The request `Experience` accepts transferable presentation attributes; renderer
-callbacks, DOM event handlers and custom container components belong in the client
-binding. The explicit server `Experience` still supports server renderer callbacks.
+The server request `Experience` uses `ServerExperienceRenderer`; its renderer cannot
+be replaced by injecting a client `Experience` into the server binding. Root overrides
+remain available. Browser renderer callbacks, DOM event handlers and custom container
+components belong in the client binding. Both server `Experience` components support
+server renderer callbacks. Custom root overrides own their preview refresh observer;
+use the client binding's `request.ExperiencesAnalyticsRoot` when that root wraps
+server-rendered content. Built-in server roots install their own matching observer.
 
 The client family retains explicit `ExperiencesRoot`, managed `Experience`,
 supplied `ExperienceRenderer` and `useManagedExperience`. `request.ExperiencesRoot`
 derives committed Next route inputs; `request.Experience` accepts the complete
 JSON-safe `result` from the server family. Managed and injected roots use the existing
-React/SDK owner. Supplied plans bind preview without a startup fetch. The common path exports only the client renderer component and uses the built-in
-request root. Configure renderer callbacks, custom roots, function-valued options
+React/SDK owner. Supplied plans bind preview without a startup fetch. Configure
+renderer callbacks, custom roots, function-valued options
 and preview configuration in a client module for advanced setup.
 
 `ExperiencesAnalyticsRoot` accepts opaque server children. It calls the existing

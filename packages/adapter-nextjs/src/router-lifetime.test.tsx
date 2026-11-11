@@ -75,7 +75,9 @@ describe('Next request presentation inputs', () => {
       pageFree || source === 'not-ready' ? undefined : { properties: { path: `/${expected}` } }
     );
     expect(captured.buildPagePayload === undefined).toBe(pageFree);
-    expect(captured.handoff).toBe(source === 'empty-no-handoff' ? undefined : result.handoff);
+    expect(captured.handoff).toBe(
+      ['empty-no-handoff', 'departed', 'route'].includes(source) ? undefined : result.handoff
+    );
     expect(captured.initialPagePayload).toBeUndefined();
     expect(captured.routeKey).toBe(routeKey);
     expect(captured.pageMode).toBe(pageFree ? undefined : 'analytics');

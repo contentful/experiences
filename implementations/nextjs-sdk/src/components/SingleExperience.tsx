@@ -8,7 +8,9 @@ import { browserRegistry } from './browser-registry';
 
 const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry });
 
-const { Experience } = binding.request;
+const { Experience, ExperiencesRoot } = binding.request;
+
+export const ClientRequestRoot = ExperiencesRoot;
 
 export function ClientRequestExperience(props: NextjsRequestExperienceProps) {
   return (
