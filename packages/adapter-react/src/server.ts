@@ -1,3 +1,3 @@
 export * from './shared.js';
-export { ServerExperienceRenderer } from './server-renderer.js';
-export type { ServerExperienceRendererProps } from './server-renderer.js';
+export { ServerExperienceRenderer } from './rendering/server-renderer.js';
+export type { ServerExperienceRendererProps } from './rendering/server-renderer.js';

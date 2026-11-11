@@ -6,9 +6,8 @@ export default defineConfig({
     'src/**/*.tsx',
     '!src/**/*.test.ts',
     '!src/**/*.test.tsx',
-    // Legacy hook source/tests stay in place until the runtime migration.
-    '!src/use-live-preview.ts',
-    '!src/use-live-preview-experience.ts',
+    // Retained legacy hooks are tested but excluded from published adapter output.
+    '!src/preview/legacy/**/*.ts',
   ],
   format: ['esm'],
   dts: true,

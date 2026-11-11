@@ -16,7 +16,6 @@
     "vitest.config.ts",
     "vitest.setup.ts",
     "tsup.config.ts",
-    "src/use-live-preview.ts",
-    "src/use-live-preview-experience.ts"
+    "src/preview/legacy/**/*.ts"
   ]
 }
