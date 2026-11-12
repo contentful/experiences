@@ -5,6 +5,7 @@ import {
 } from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
+  ChangeArray,
   buildFetchPersonalization,
   assertRuntimePreviewRequest,
   fetchRuntimePreviewSession,
@@ -419,6 +420,10 @@ class RequestBoundExperiences implements RequestRuntime {
           this.setProfile(profile);
           expectedProfileId = profile.id;
         }
+      }
+      const changes = payload.extensions?.personalization?.changes;
+      if (!this.isPreview && changes !== undefined) {
+        handoff = { ...handoff, state: { ...handoff.state, changes: ChangeArray.parse(changes) } };
       }
       const plan = await this.runtime.resolveExperience(payload, resolve);
       assertCurrent();

@@ -1,5 +1,6 @@
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
+  PROFILE_CACHE_KEY,
   type ChangeArray,
   type EventEmissionResult,
   type VariableChange,
@@ -194,12 +195,14 @@ describe('Web Custom Flags', () => {
       const sdk = createRuntime({
         defaults: { profile: completeProfile('visitor'), changes: changes(), consent: false },
         allowedEventTypes: allow ? ['flag'] : [],
+        onEventBlocked: vi.fn(),
       });
       const event = vi.fn();
       const subscription = sdk.states.eventStream.subscribe(event);
       sdk.getFlag('banner');
       await settle();
       expect(event.mock.calls.filter(([value]) => value !== undefined)).toHaveLength(allow ? 1 : 0);
+      expect(sdk.config.onEventBlocked).toHaveBeenCalledTimes(allow ? 0 : 1);
       subscription.unsubscribe();
     }
   );
@@ -291,17 +294,118 @@ describe('Web Custom Flags', () => {
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 
-  it('clears old flags when XDA replaces identity without adopting plan changes', async () => {
-    const sdk = createRuntime();
-    vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
-      personalization: { profile: completeProfile('new-visitor'), changes: changes('plan-only') },
-      nodes: [],
-    } as never);
-    await sdk.fetchExperience({ experienceId: 'experience' }, { config: { components: {} } });
-    expect(sdk.states.profile.current?.id).toBe('new-visitor');
-    expect(sdk.getFlag('banner')).toBeUndefined();
-  });
+  it.each([
+    ['fetchExperience', false],
+    ['fetchByDestinationNode', false],
+    ['fetchByDestinationPath', false],
+    ['fetchExperience', true],
+  ] as const)(
+    'adopts %s flag snapshots outside per-call preview (preview: %s)',
+    async (method, preview) => {
+      const sdk = createRuntime();
+      vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
+      const profile = completeProfile('visitor');
+      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
+        personalization: { profile, changes: changes(false) },
+        nodes: [],
+      } as never);
+      const next = vi.fn();
+      const subscription = sdk.states.flag('banner').subscribe(next);
+      const load = () =>
+        sdk[method](
+          {
+            experienceId: 'experience',
+            destinationId: 'destination',
+            nodeId: 'node',
+            path: '/',
+            ...(preview ? { preview } : {}),
+          },
+          { config: { components: {} } }
+        );
+      await expect(load()).resolves.toMatchObject({
+        personalization: { profile, changes: changes(false) },
+      });
+      await load();
+      expect(next.mock.calls).toEqual(preview ? [[true]] : [[true], [false]]);
+      expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual(changes(preview));
+      vi.spyOn(sdk.api.personalization, 'upsertProfile').mockResolvedValue({
+        profile,
+        changes: changes('XPAPI'),
+      } as never);
+      await sdk.page();
+      expect(sdk.getFlag('banner')).toBe('XPAPI');
+      fetch.mockResolvedValueOnce({ nodes: [], personalization: { profile } } as never);
+      await load();
+      expect(sdk.getFlag('banner')).toBe('XPAPI');
+      fetch.mockResolvedValueOnce({
+        nodes: [],
+        personalization: { profile, changes: [] },
+      } as never);
+      await load();
+      expect(sdk.getFlag('banner')).toBe(preview ? 'XPAPI' : undefined);
+      subscription.unsubscribe();
+    }
+  );
+
+  it.each([
+    ['XDA', false],
+    ['XPAPI', false],
+    ['preview XDA', false],
+    ['XDA', true],
+    ['preview XDA', true],
+  ] as const)(
+    'discards stale %s flags while retaining content (pending interception: %s)',
+    async (source, interception) => {
+      const sdk = createRuntime({ isPreview: source === 'preview XDA' });
+      vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
+      const profile = completeProfile('visitor');
+      const stale = deferred<never>();
+      const gate = deferred<void>();
+      const intercepted = deferred<void>();
+      if (interception) {
+        sdk.interceptors.state.add(async (state) => {
+          if (state.changes?.length === 0) {
+            intercepted.resolve();
+            await gate.promise;
+          }
+          return state;
+        });
+      }
+      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience');
+      const upsert = vi.spyOn(sdk.api.personalization, 'upsertProfile');
+      const load = (version: string) =>
+        sdk.fetchExperience(
+          { experienceId: 'experience', parameters: { version } },
+          { config: { components: {} } }
+        );
+      const data = { profile, changes: changes('fresh') };
+      const isFetch = source !== 'XPAPI';
+      const staleData = { profile, changes: [] };
+      const finish = () =>
+        stale.resolve((isFetch ? { nodes: [], personalization: staleData } : staleData) as never);
+      if (isFetch) fetch.mockReturnValue(stale.promise);
+      else upsert.mockReturnValue(stale.promise);
+      const pending = isFetch ? load('stale') : sdk.page();
+      await vi.waitFor(() => expect(isFetch ? fetch : upsert).toHaveBeenCalledOnce());
+      if (interception) {
+        finish();
+        await intercepted.promise;
+      }
+      if (source === 'XDA') {
+        upsert.mockResolvedValue(data as never);
+        await sdk.page();
+      } else {
+        fetch.mockResolvedValue({ nodes: [], personalization: data } as never);
+        await load('fresh');
+      }
+      if (!interception) finish();
+      gate.resolve();
+      if (isFetch) await expect(pending).resolves.toMatchObject({ personalization: staleData });
+      else await pending;
+      expect(sdk.getFlag('banner')).toBe('fresh');
+      expect(sdk.states.profile.current).toEqual(profile);
+    }
+  );
 
   it.each(['reset', 'withdraw', 'destroy'] as const)(
     'guards changes while a state interceptor awaits across %s',
@@ -354,25 +458,34 @@ describe('Web Custom Flags', () => {
     expect(sdk.getFlag('banner')).toBe(false);
   });
 
-  it('loads/persists changes with independent persistence consent and configured precedence', () => {
-    window.localStorage.setItem(key, JSON.stringify(changes('stored')));
-    const sdk = createRuntime({ defaults: { persistenceConsent: true } });
-    vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
-    expect(sdk.getFlag('banner')).toBe('stored');
-    sdk.consent({ persistence: false });
-    expect(window.localStorage.getItem(key)).toBeNull();
-    expect(sdk.getFlag('banner')).toBe('stored');
-    sdk.destroy();
-    window.localStorage.setItem(key, JSON.stringify(changes('stored')));
-    const next = createRuntime({
-      defaults: { persistenceConsent: false, changes: changes('configured') },
-    });
-    vi.spyOn(next, 'trackFlagView').mockResolvedValue({ accepted: true });
-    expect(next.getFlag('banner')).toBe('configured');
-    expect(window.localStorage.getItem(key)).toBeNull();
-    next.reset();
-    expect(next.getFlag('banner')).toBeUndefined();
-  });
+  it.each([false, true])(
+    'loads persisted continuity only outside preview and honors configured changes (preview: %s)',
+    (isPreview) => {
+      const profile = completeProfile('stored');
+      window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+      window.localStorage.setItem(key, JSON.stringify(changes('stored')));
+      const sdk = createRuntime({ isPreview, defaults: { persistenceConsent: true } });
+      vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
+      expect(sdk.getFlag('banner')).toBe(isPreview ? undefined : 'stored');
+      expect(sdk.states.profile.current).toEqual(isPreview ? undefined : profile);
+      expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(profile);
+      expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual(changes('stored'));
+      sdk.consent({ persistence: false });
+      expect(window.localStorage.getItem(key)).toBeNull();
+      expect(sdk.getFlag('banner')).toBe(isPreview ? undefined : 'stored');
+      sdk.destroy();
+      window.localStorage.setItem(key, JSON.stringify(changes('stored')));
+      const next = createRuntime({
+        isPreview,
+        defaults: { persistenceConsent: false, changes: changes('configured') },
+      });
+      vi.spyOn(next, 'trackFlagView').mockResolvedValue({ accepted: true });
+      expect(next.getFlag('banner')).toBe('configured');
+      expect(window.localStorage.getItem(key)).toBeNull();
+      next.reset();
+      expect(next.getFlag('banner')).toBeUndefined();
+    }
+  );
   it('stops subscribeOnce bookkeeping after the first false value and supports cleanup while missing', async () => {
     const sdk = createRuntime({ defaults: { profile: completeProfile('visitor'), consent: true } });
     const track = vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });

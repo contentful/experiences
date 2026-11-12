@@ -138,7 +138,8 @@ separates repeated presentations; shared keys retain multi-root grouping. `getTr
 adapter and by the `@contentful/experiences-web/tracking-attributes` subpath; no
 adapter stamps attributes for you: renderers spread plan attribution onto each
 Experience container and node attribution onto its outermost elements. Web accepts an explicit
-`isPreview` boolean, falling back to initial nonempty `preview_session_id` detection when omitted.
+`isPreview` boolean, falling back to initial nonempty `preview_session_id` detection
+when omitted and `preview` is configured. URL session IDs alone do not enable preview.
 Node integrations pass `isPreview: true` into `forRequest()`. Fixed read-only `isPreview` gates all events, automatic
 tracking, embedded fetch personalization and handoff preparation/replay before event work.
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
@@ -415,7 +416,8 @@ Web also ports the pinned reference's `InterceptorManager` mechanics through
 wire-event revalidation, publication, and transport or queue admission, including caller-built
 XDA fetch events; prepared server replay preserves evaluated event contents and
 is not rewritten. Incoming Personalization and private hydration profile/changes state
-is intercepted before commit; XDA contributes profile state only. Sparse state results
+is intercepted before commit; XDA contributes profile and changes through the
+same state-interceptor and publication path. Sparse state results
 retain omitted fields; explicit `profile: undefined` or `changes: undefined` clears
 that field. XDA owns content selection.
 
@@ -447,10 +449,19 @@ tokens; this does not repin the broader mechanics above. Runtime owns pure
 `resolveFlagChange` and base/Node `getFlag(name, changes?)`; only Web retains
 changes and automatically attempts exposure. Core emits `plan.personalization`
 only when XDA returns a nonempty profile id; it carries the full `profile` and
-optional raw XDA changes. XDA fetches must not replace global
-flag state: their completeness has not been verified against a live backend.
-Applications read plan changes explicitly or resolve them into existing metadata;
-keep flag state out of renderer context and framework hooks. Handoff changes use
+optional raw XDA changes. Web automatically adopts changes from ordinary by-ID and
+destination fetches, as it does direct Personalization responses. Preview Sessions
+update in-memory flags without restoring persisted visitor profile/flags; per-call
+CPA preview fetches on ordinary instances retain personalization only on the plan. Supplied arrays
+replace the browser snapshot (`[]` clears); omission retains flags unless profile
+identity changes. Treating XDA changes as a complete snapshot follows
+XPAPI/Optimization and remains an assumption pending live-backend verification.
+Changed values notify subscriptions; changed attribution refreshes exposure.
+Guard asynchronous state interception so stale results cannot overwrite later
+state. Node carries returned changes alongside profile in private handoffs without
+retaining global flag state. Applications can still read plan changes explicitly
+or resolve them into existing metadata; keep flag state out of renderer context
+and framework hooks. Handoff changes use
 API `ChangeArray` validation and require private-request scope, including `[]`.
 The changes signal stays internal; the public `Signals` interface and `signals`
 aggregate expose no mutable changes member. Use flag reads/observables and the
@@ -465,14 +476,14 @@ Retained differences:
   Optimization reference's public mutable extension surface. No current supported
   consumer requires that new member; guarded bridge/handoff ingestion and flag
   reads/observables suffice and keep flag state SDK-owned.
-- Automatic flag exposure quietly skips preview, disallowed consent, and missing
-  profiles so reactive value reads do not emit blocked-event reports. Manual
-  `trackFlagView()` retains those reports; active subscriptions still retry when
-  changes, profile, or consent changes, including allowlisted exposure.
+- Automatic flag exposure quietly skips preview and missing profiles. Consent
+  refusals follow Optimization through normal blocked-event reporting. Active
+  subscriptions retry when changes, profile, or consent changes, including
+  allowlisted exposure.
   `getFlag()` and `states.flag(name).current` track flag-value dependencies while
   exposure runs untracked, preventing event interceptors or subscribers from
-  adding unrelated dependencies to the caller's reactive computation. These flag
-  behaviors are local differences from the focused Optimization reference.
+  adding unrelated dependencies to the caller's reactive computation. Untracked
+  exposure is a local difference from the focused Optimization reference.
 - The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through XPAPI.
   Experiences retains `fetchExperienceForHandoff` because XDA must evaluate the
   consumer-supplied batch and select content; XPAPI remains actual commit transport.
