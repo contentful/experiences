@@ -1,7 +1,6 @@
 import {
   serializePersonalization,
   type DestinationRedirectResult,
-  type PersonalizationOptions,
 } from '@contentful/experiences-client';
 import {
   ContentfulExperiences as RuntimeContentfulExperiences,
@@ -36,6 +35,7 @@ import {
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
+  type FetchPersonalizationOptions,
   type FetchResolveOptions,
   type ResolveDefaults,
   type ResolveOptions,
@@ -163,7 +163,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   Config & Pick<BaseConfig, 'eventBuilder'>
 > {
   readonly #consentPolicy: ConsentPolicy;
-  readonly interceptors = { event: new InterceptorManager<OptimizationEventStreamEvent>() };
+  readonly interceptors: {
+    event: InterceptorManager<OptimizationEventStreamEvent>;
+  } = {
+    event: new InterceptorManager<OptimizationEventStreamEvent>(),
+  };
 
   constructor(config: Config) {
     const { app, allowedEventTypes, onEventBlocked } = config;
@@ -426,7 +430,7 @@ class RequestBoundExperiences implements RequestRuntime {
    * sent, and the returned one is kept unless the profile changed in the meantime.
    */
   private async fetchPersonalized<
-    TOptions extends { personalization?: PersonalizationOptions },
+    TOptions extends { personalization?: FetchPersonalizationOptions },
     TResult extends PortableRenderPlan | DestinationRedirectResult,
   >(options: TOptions, send: (options: TOptions) => Promise<TResult>): Promise<TResult> {
     const profileRevision = this.#profileRevision;
@@ -461,7 +465,7 @@ class RequestBoundExperiences implements RequestRuntime {
    * Drops caller-built XDA events that this request's consent does not admit. The
    * profile id still travels, since it is not an event.
    */
-  private gatePersonalizationEvents<T extends { personalization?: PersonalizationOptions }>(
+  private gatePersonalizationEvents<T extends { personalization?: FetchPersonalizationOptions }>(
     options: T
   ): T {
     if (this.isPreview) {
@@ -476,7 +480,7 @@ class RequestBoundExperiences implements RequestRuntime {
   }
 
   private async interceptPersonalizationEvents<
-    T extends { personalization?: PersonalizationOptions },
+    T extends { personalization?: FetchPersonalizationOptions },
   >(options: T): Promise<T> {
     const personalization = options.personalization;
     if (personalization?.events === undefined) return options;

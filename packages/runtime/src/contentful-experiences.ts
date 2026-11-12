@@ -2,6 +2,7 @@ import {
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
   fetchExperience,
+  serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
@@ -17,7 +18,10 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
 import type { EventBuilderConfig } from './event-builder.js';
-import type { Json } from '@contentful/optimization-api-client/api-schemas';
+import type {
+  ExperienceEvent as PersonalizationEvent,
+  Json,
+} from '@contentful/optimization-api-client/api-schemas';
 import { resolveFlagChange } from './resolve-flag-change.js';
 import {
   createRuntimeDeliveryClient,
@@ -62,11 +66,16 @@ export type EventBuilderOptions = Omit<EventBuilderConfig, 'channel' | 'library'
   library?: Partial<EventBuilderConfig['library']>;
 };
 
+/** Caller-built events are validated against XDA after owner interception. */
+export type FetchPersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
+  events?: (NonNullable<PersonalizationOptions['events']>[number] | PersonalizationEvent)[];
+};
+
 export type FetchExperienceOptions = {
   experienceId: string;
   locale?: string;
   parameters?: ExperienceParameters;
-  personalization?: PersonalizationOptions;
+  personalization?: FetchPersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
 };
@@ -74,13 +83,13 @@ export type FetchExperienceOptions = {
 export type FetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
-  personalization?: PersonalizationOptions;
+  personalization?: FetchPersonalizationOptions;
 };
 
 export type FetchByDestinationPathOptions = {
   destinationId: string;
   path: string;
-  personalization?: PersonalizationOptions;
+  personalization?: FetchPersonalizationOptions;
 };
 
 /** Structural contract implemented by the shared runtime. */
@@ -230,7 +239,10 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         experienceId: options.experienceId,
         locale: options.locale ?? this.locale,
         parameters: options.parameters,
-        personalization: options.personalization,
+        personalization:
+          options.personalization === undefined
+            ? undefined
+            : serializePersonalization(options.personalization),
         extensions: options.extensions,
       },
       {
@@ -252,7 +264,10 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         spaceId: this.spaceId,
         destinationId: options.destinationId,
         nodeId: options.nodeId,
-        personalization: options.personalization,
+        personalization:
+          options.personalization === undefined
+            ? undefined
+            : serializePersonalization(options.personalization),
       },
       { client: this.#deliveryClient },
       { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
@@ -269,7 +284,10 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         spaceId: this.spaceId,
         destinationId: options.destinationId,
         path: options.path,
-        personalization: options.personalization,
+        personalization:
+          options.personalization === undefined
+            ? undefined
+            : serializePersonalization(options.personalization),
       },
       { client: this.#deliveryClient },
       { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }

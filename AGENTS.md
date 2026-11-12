@@ -469,20 +469,24 @@ afterward. Destination calls have no environment, so that path threads
 `environmentId: undefined` through (the generated client still requires the
 field; `packages/client` passes an empty string).
 
-The same spec refresh reshaped the Personalization event family to match
-`@contentful/optimization-api-client`'s schemas: `context.campaign`,
-`originalTimestamp`, `sentAt`, and (for page/track events) `properties.title`
-became required, and `properties`/`traits` on Track/Identify/Screen events
-became `Record<string, <auto-named-schema>>` instead of `[key: string]: any`.
-The runtime's `EventBuilder` already produces conformant events. But those
-auto-named schema types disallow `null`, while `EventBuilder`'s own `JSONType`
-(from `@contentful/optimization-api-client`) allows it — so `packages/client`'s
-exported `PersonalizationOptions` type locally re-widens `properties`/`traits`
-to a hand-declared `JsonValue` (permitting `null`), with an explicit cast where
-that widened type meets the generated client's stricter request type. Per the
-dev.13 migration guide, do not import or reference the generated auto-named
-schema types directly — they're an artifact of how the spec-refresh pipeline
-happened to walk the spec and may be renamed/collapsed without notice.
+The same spec refresh requires `context.campaign`, `originalTimestamp`,
+`sentAt`, and page-event `properties.title`. Track `properties` and Identify
+`traits` are required; Screen `properties` remains optional. The generated
+property values exclude `null`. Client intersects the public generated request
+type with Optimization's event types for `PersonalizationOptions` and directly
+uses the Identify, PageView, ScreenView, Track and View schemas from
+`@contentful/optimization-api-client/api-schemas`. Do not reconstruct their
+fields to match XDA's broader input contract. Canonical parsing applies the
+`en-US` locale default, accepts only `mobile`, `server` and `web` channels,
+requires two-character country codes and omits undeclared fields without
+mutating caller input. XDA's supported event union excludes `exo_node_view`;
+a small boundary check also rejects Optimization's null property/trait values.
+Client declares its schema-library dependency directly.
+Runtime/Node/Web accept caller-built events, then validate final XDA output after
+interception; direct Optimization sends retain their own contract. Supported
+GDPR, event-specific screen metadata and optional `context.page.title` are preserved.
+Do not import generated auto-named property types; derive leaves through the
+public request types.
 
 ### How does the SDK report its version?
 

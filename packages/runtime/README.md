@@ -115,12 +115,13 @@ omits `state` when neither profile nor changes is supplied, and performs no even
 Profileless hydration preserves the browser profile; supplied changes replace flag state.
 Neither helper commits a preflight result or copies selected-optimization data into the browser. No journal-specific 64 KiB cap or version field is applied to this envelope or to `PortableRenderPlan`; callers own safe serialization and response-size policy.
 
-The generated XDA request currently has no preflight option. Ordinary by-ID
-Experience fetches still pass profile IDs and events through Client's Delivery
-boundary, using its event-bearing POST when supplied. Runtime exposes no
-XDA-backed noncommitting content-preparation stub or duplicate-event
-workaround. Once XDA and the generated client support preflight, map the real
-request field through Client before adding a content-and-handoff operation.
+The generated dev.13 XDA request exposes `personalization.preflight`, which
+Client validates and forwards. Ordinary by-ID Experience fetches pass profile IDs
+and events through Client's Delivery boundary, using its event-bearing POST when
+supplied. Runtime exposes no XDA-backed content-and-handoff operation or
+duplicate-event workaround. The separate Personalization handoff does not select
+XDA content; generated request support alone does not establish backend commit
+behavior.
 
 ## Personalization delivery
 

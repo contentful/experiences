@@ -125,7 +125,7 @@ const personalization = {
     {
       type: 'page',
       channel: 'server',
-      context: { library: { name: 'test', version: '1.0.0' }, campaign: {} },
+      context: { library: { name: 'test', version: '1.0.0' }, campaign: {}, locale: 'en-US' },
       messageId: 'page-message-1',
       timestamp: '2026-10-09T00:00:00.000Z',
       originalTimestamp: '2026-10-09T00:00:00.000Z',
@@ -519,9 +519,8 @@ describe('fetchExperience — personalization', () => {
     expect(rejection).toBe(notFound);
   });
 
-  it('routes personalization through POST and strips unsupported event context', async () => {
-    // EventBuilder adds context keys that XDA's narrower event schema rejects:
-    // gdpr, screen and page.title. The input carries them; the request must not.
+  it('routes personalization through POST and preserves supported event context', async () => {
+    // Canonical page-event validation retains consent and page metadata, not screen metadata.
     const page = { path: '/', query: {}, referrer: '', search: '', url: '/' };
     const input = {
       ...personalization,
@@ -539,7 +538,11 @@ describe('fetchExperience — personalization', () => {
       ...personalization,
       events: personalization.events.map((event) => ({
         ...event,
-        context: { ...event.context, page },
+        context: {
+          ...event.context,
+          gdpr: { isConsentGiven: true },
+          page: { ...page, title: 'Home' },
+        },
       })),
     };
     await fetchExperience(
@@ -861,7 +864,7 @@ describe('fetchExperience — destination personalization', () => {
   const pageEvent = {
     type: 'page',
     channel: 'server',
-    context: { library: { name: 'test', version: '1.0.0' }, campaign: {} },
+    context: { library: { name: 'test', version: '1.0.0' }, campaign: {}, locale: 'en-US' },
     messageId: 'page-message-1',
     timestamp: '2026-10-09T00:00:00.000Z',
     originalTimestamp: '2026-10-09T00:00:00.000Z',

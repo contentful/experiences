@@ -32,6 +32,18 @@ if ('redirect' in result) return redirect(result.redirect.path);
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
+`PersonalizationOptions` intersects the installed dev.13 generated request type
+with Optimization's event types. Client validates events directly with the
+Identify, PageView, ScreenView, Track and View schemas from
+`@contentful/optimization-api-client/api-schemas`. Their canonical parsing rules
+apply, including the `en-US` locale default and omission of undeclared fields,
+without mutating input. Supported channels are `mobile`, `server` and `web`.
+Events require campaign context and original/sent timestamps; page properties
+require a title, Track properties and Identify traits are required, and country
+codes must contain two characters. XDA does not support Optimization's
+`exo_node_view` event or null property/trait values; Client rejects those before
+transport. Invalid input throws `TypeError` before Delivery is called.
+
 By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
 `{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
 `Experience.parameters` and referenced by `$parameters/<id>`. Delivery validates
