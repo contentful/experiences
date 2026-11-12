@@ -15,7 +15,9 @@ export function getPreviewSessionBinding(
   return {
     experienceId: searchParams.get('preview_experience_id')?.trim() || defaults.experienceId,
     sessionId,
-    sessionHost: defaults.sessionHost,
-    resourceResolution: defaults.resourceResolution,
+    ...(defaults.sessionHost !== undefined ? { sessionHost: defaults.sessionHost } : {}),
+    ...(defaults.resourceResolution !== undefined
+      ? { resourceResolution: defaults.resourceResolution }
+      : {}),
   };
 }

@@ -36,6 +36,18 @@ describe('Preview Session binding', () => {
     );
   });
 
+  it.each([{}, { sessionHost: undefined, resourceResolution: undefined }])(
+    'omits undefined optional fields so merging preserves existing defaults: %j',
+    (optionalDefaults) => {
+      const binding = getPreviewSessionBinding(
+        { experienceId: 'default', ...optionalDefaults },
+        new URLSearchParams('preview_session_id=session')
+      );
+      expect(binding).toStrictEqual({ experienceId: 'default', sessionId: 'session' });
+      expect({ ...defaults, ...binding }).toStrictEqual({ ...defaults, sessionId: 'session' });
+    }
+  );
+
   it('returns independent bindings without mutating inputs or copying unrelated defaults', () => {
     const input = Object.freeze({ ...defaults, accessToken: 'private' });
     const params = new URLSearchParams('preview_session_id=session&unrelated=value');

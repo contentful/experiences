@@ -29,7 +29,9 @@ describe('Web public entry on the server', () => {
         new URLSearchParams('preview_session_id=session')
       )
     ).toMatchObject({ experienceId: 'hero', sessionId: 'session' });
-    expect(() => web.getPreviewSessionBinding({ experienceId: 'hero' })).toThrow(ReferenceError);
+    expect(() => web.getPreviewSessionBinding({ experienceId: 'hero' })).toThrow(
+      'getPreviewSessionBinding requires explicit searchParams outside a browser.'
+    );
   });
 
   it('retains live profile state when browser persistence is unavailable', async () => {

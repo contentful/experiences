@@ -111,7 +111,7 @@ The parser trims the first `preview_session_id` and `preview_experience_id`
 query values. A missing or empty Session ID returns `undefined`; a missing or
 empty Experience override uses `defaults.experienceId`. Supply a valid default
 Experience ID. The result is a fresh binding containing the selected IDs and
-only the optional `sessionHost` and `resourceResolution` from defaults. Other
+only the optional `sessionHost` and `resourceResolution` from defaults when defined. Other
 query parameters are ignored; inputs are neither mutated nor retained.
 
 There is no environment fallback, default Session ID or legacy parsing path.

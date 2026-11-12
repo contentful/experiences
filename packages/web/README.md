@@ -56,7 +56,8 @@ The argument order is `getPreviewSessionBinding(defaults, searchParams?)`.
 The helper and type are also exported from the package root. The isolated
 `/preview-session-binding` entry avoids loading unrelated SDK state and schemas.
 Omitting the second argument constructs `new URLSearchParams(window.location.search)`
-at each invocation and requires a browser context. Imports read no browser globals;
+at each invocation and requires a browser context. Outside a browser, omitting it
+throws an error asking for explicit `searchParams`. Imports read no browser globals;
 explicit parameters override the current location. Defaults contain `experienceId`
 and optional `sessionHost`/`resourceResolution`, with no Session ID or environment
 fallback. Missing or empty Session IDs return `undefined`.
