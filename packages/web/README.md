@@ -310,9 +310,14 @@ Independent profile-only reads with a concrete profile can still run concurrentl
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
 [documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
-The SDK validates and forwards optional `personalization.preflight` without
-selecting a default. Earlier service checks observed noncommitting evaluation;
-backend defaults and override behavior have not been reverified with dev.13.
+Ordinary by-ID and destination fetches default supplied
+`personalization.preflight` to `false`, requesting commitment of events and profile
+changes through XDA. An explicit `true` evaluates without commitment; XDA itself
+defaults an omitted value to `true`. Web needs no SSR/hybrid mode setting, and
+direct event methods remain unchanged. This flag is independent of editor
+`isPreview`, CPA and Preview Sessions. A preview-generated ID can be reused by a
+Personalization API POST carrying events through XDA or a direct call; profile-only
+XDA still uses Personalization API GET and can fail before commitment.
 Local adoption and storage do not prove that the returned ID is finalized.
 Successful submission commits against the selected live target, which may differ
 from the XDA continuation ID; admission and generic SDK success are not
@@ -340,10 +345,10 @@ Retry refetches the same ID through ordinary fetch without events, builders,
 event hooks, publication, admission or replay. Accepted incoming replay delivery
 retry remains queue-owned. Identify and CUSTOM TRACK supply fresh nonpage intent;
 navigation still supplies page intent. Direct event APIs remain callable without
-becoming an initial prerequisite or XDA noncommit workaround.
+becoming an initial prerequisite or compensation.
 
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
-for the tolerated SSR/CSR service bug and incoming replay rules.
+for preflight, live-service verification and incoming replay rules.
 
 ## Custom flags
 
@@ -1096,7 +1101,8 @@ insertion, and unsubscribe application subscriptions during cleanup. See the [XD
 
 The actual server Node producer returns one full aggregate; the optional browser consumer owns
 internal state application and replay. SSR display remains independent of
-submission. State application cannot finalize XDA preflight; Personalization API is the commit transport.
+submission. State application cannot finalize XDA preflight; browser replay fixes
+`preflight: false` on the Personalization API commit transport.
 
 ## SSR import safety
 

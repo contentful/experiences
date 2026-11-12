@@ -130,7 +130,14 @@ const personalization = {
       timestamp: '2026-10-09T00:00:00.000Z',
       originalTimestamp: '2026-10-09T00:00:00.000Z',
       sentAt: '2026-10-09T00:00:00.000Z',
-      properties: { path: '/', query: {}, referrer: '', search: '', url: '/', title: 'Home' },
+      properties: {
+        path: '/',
+        query: { utm: ['a', 'b'], q: 'x y' },
+        referrer: '',
+        search: '',
+        url: '/',
+        title: 'Home',
+      },
     },
   ],
 } satisfies PersonalizationOptions;
@@ -473,25 +480,11 @@ describe('fetchExperience — personalization', () => {
     mockGetWithOverrides.mockResolvedValue(mockPayload);
   });
 
-  it.each([
-    { profileId: 123 },
-    {
-      events: personalization.events.map((event) => ({
-        ...event,
-        context: { ...event.context, gdpr: { isConsentGiven: 'yes' } },
-      })),
-    },
-    {
-      events: personalization.events.map((event) => ({
-        ...event,
-        context: { ...event.context, page: { ...event.properties, title: 123 } },
-      })),
-    },
-  ])('rejects invalid personalization with a TypeError before calling Delivery', async (input) => {
+  it('rejects invalid personalization with a TypeError before calling Delivery', async () => {
     const rejection: unknown = await fetchExperience(
       {
         ...experienceOptions,
-        personalization: input as unknown as PersonalizationOptions,
+        personalization: { profileId: 123 } as unknown as PersonalizationOptions,
       },
       { accessToken: 'token-123' },
       resolveOptions
@@ -533,33 +526,6 @@ describe('fetchExperience — personalization', () => {
     expect(rejection).toBe(notFound);
   });
 
-  it('routes personalization through POST with intact event context and caller input', async () => {
-    const input = {
-      ...personalization,
-      events: personalization.events.map((event) => ({
-        ...event,
-        context: {
-          ...event.context,
-          gdpr: { isConsentGiven: true },
-          page: { ...event.properties, title: 'Experience page' },
-        },
-      })),
-    };
-    const original = globalThis.structuredClone(input);
-    await fetchExperience(
-      { ...experienceOptions, locale: 'en-US', personalization: input },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(mockGet).not.toHaveBeenCalled();
-    expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
-      locale: 'en-US',
-      extensions: { personalization: input },
-    });
-    expect(input).toEqual(original);
-  });
-
   it('forwards personalization and source-map extensions together', async () => {
     await fetchExperience(
       { ...experienceOptions, personalization, extensions: { sourceMap: {} } },
@@ -570,7 +536,7 @@ describe('fetchExperience — personalization', () => {
     expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: undefined,
       extensions: {
-        personalization,
+        personalization: { ...personalization, preflight: false },
         sourceMap: {},
       },
     });
@@ -595,6 +561,7 @@ describe('fetchExperience — destinationId + nodeId', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
+    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -741,6 +708,7 @@ describe('fetchExperience — destinationId + path', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
+    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -862,29 +830,9 @@ describe('fetchExperience — destination personalization', () => {
   const destinationResponse = {
     experiences: [{ path: '/', experience: mockDestinationExperience }],
   };
-  // The Destinations API takes the by-id shape: `query` stays a Record.
-  const pageEvent = {
-    type: 'page',
-    channel: 'server',
-    context: { library: { name: 'test', version: '1.0.0' }, campaign: {} },
-    messageId: 'page-message-1',
-    timestamp: '2026-10-09T00:00:00.000Z',
-    originalTimestamp: '2026-10-09T00:00:00.000Z',
-    sentAt: '2026-10-09T00:00:00.000Z',
-    properties: {
-      path: '/',
-      query: { utm: ['a', 'b'], q: 'x y' },
-      referrer: '',
-      search: '',
-      url: '/',
-      title: 'Home',
-    },
-  } as const satisfies NonNullable<PersonalizationOptions['events']>[number];
-  const destinationPersonalization: PersonalizationOptions = {
-    profileId: 'profile-1',
-    events: [pageEvent],
+  const expectedExtensions = {
+    personalization: { ...personalization, preflight: false },
   };
-  const expectedExtensions = { personalization: destinationPersonalization };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -894,16 +842,9 @@ describe('fetchExperience — destination personalization', () => {
     mockResolveByPathWithOverrides.mockResolvedValue(destinationResponse);
   });
 
-  it('keeps the cacheable GET for node id when personalization is not set', async () => {
-    await fetchExperience(nodeOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
-    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
-  });
-
   it('routes node id to resolveByNodeIdWithOverrides with the personalization extension', async () => {
     await fetchExperience(
-      { ...nodeOptions, personalization: destinationPersonalization },
+      { ...nodeOptions, personalization },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -914,16 +855,9 @@ describe('fetchExperience — destination personalization', () => {
     });
   });
 
-  it('sends only path when personalization is not set on a path fetch', async () => {
-    await fetchExperience(pathOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
-  });
-
   it('passes the personalization extension to resolveByPathWithOverrides', async () => {
     await fetchExperience(
-      { ...pathOptions, personalization: destinationPersonalization },
+      { ...pathOptions, personalization },
       { accessToken: 'token-123' },
       resolveOptions
     );
@@ -932,20 +866,6 @@ describe('fetchExperience — destination personalization', () => {
     expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
       path: '/products',
       extensions: expectedExtensions,
-    });
-  });
-
-  it('forwards a profile id on its own, with no events', async () => {
-    await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
-      path: '/products',
-      extensions: { personalization: { profileId: 'profile-1' } },
     });
   });
 
@@ -974,17 +894,5 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
-  });
-
-  it('still rejects preview for a personalized Destination fetch', async () => {
-    const rejection: unknown = await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123', previewToken: 'preview-1', preview: true },
-      resolveOptions
-    ).catch((error) => error);
-
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 });

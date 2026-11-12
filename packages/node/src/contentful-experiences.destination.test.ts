@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 type Request = ReturnType<ContentfulExperiences['forRequest']>;
-type Personalization = { profileId?: string; events?: unknown[] };
+type Personalization = { profileId?: string; preflight?: boolean; events?: unknown[] };
 
 // Destination fetches share one code path with by-id, so each case runs for both.
 const cases = [
@@ -75,28 +75,23 @@ describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchI
     expect(page.context.gdpr?.isConsentGiven).toBe(false);
   });
 
-  it("sends the request's profile id", async () => {
+  it('applies request identity and preflight defaults while letting explicit values win', async () => {
     const sdk = setup();
     const fetch = spyOnRuntime(sdk);
+    const request = sdk.forRequest({ profile: { id: 'initial' }, preflight: true });
 
-    await fetchIt(sdk.forRequest({ profile: { id: 'initial' }, consent: { events: true } }));
-
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(
-      { ...locator, personalization: { profileId: 'initial' } },
+    await fetchIt(request);
+    expect(fetch).toHaveBeenLastCalledWith(
+      { ...locator, personalization: { profileId: 'initial', preflight: true } },
       expect.anything()
     );
-  });
 
-  it('lets an explicit profile id win over the request profile', async () => {
-    const sdk = setup();
-    const fetch = spyOnRuntime(sdk);
-
-    await fetchIt(sdk.forRequest({ profile: { id: 'initial' } }), { profileId: 'explicit' });
-
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(
-      { ...locator, personalization: { profileId: 'explicit' } },
+    await fetchIt(request, { profileId: 'explicit', preflight: false });
+    expect(fetch).toHaveBeenLastCalledWith(
+      { ...locator, personalization: { profileId: 'explicit', preflight: false } },
       expect.anything()
     );
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the full profile XDA returns on the request', async () => {

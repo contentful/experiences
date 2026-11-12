@@ -214,6 +214,7 @@ describe('paired XDA evaluation and Web delivery', () => {
     const previewBody = vi.mocked(payloadRuntime.fetchExperiencePayload).mock.calls[0]![0]
       .personalization!;
     expect(previewBody.profileId).toBe('known-profile');
+    expect(previewBody.preflight).toBe(true);
     expect(previewBody.events!.map((event) => event.type)).toEqual(['identify', 'track', 'page']);
     expect(new Set(previewBody.events!.map((event) => event.messageId)).size).toBe(3);
     for (const event of previewBody.events!) {

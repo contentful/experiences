@@ -1,4 +1,4 @@
-import type { EventProfile as Profile } from '@contentful/experiences-runtime';
+import { profileFixture as completeProfile } from './test/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,26 +9,6 @@ import {
 import { EventProfileRequiredError } from '@contentful/experiences-runtime';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
-
-/** A complete Personalization API profile, which Analytics requires. */
-function completeProfile(id: string, overrides: Partial<Profile> = {}): Profile {
-  return {
-    id,
-    stableId: id,
-    random: 0.5,
-    audiences: [],
-    traits: {},
-    location: {},
-    session: {
-      isReturningVisitor: false,
-      landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
-      count: 1,
-      activeSessionLength: 0,
-      averageSessionLength: 0,
-    },
-    ...overrides,
-  };
-}
 
 const runtimes = new Set<ContentfulExperiences>();
 const resolverConfig = { components: {} };
@@ -208,13 +188,16 @@ describe('Node ContentfulExperiences', () => {
       { experienceId: 'exp', parameters: { productId: 'other' }, preview: true },
       { config: resolverConfig }
     );
-    await runtime.forRequest().fetchExperience({ experienceId: 'exp' }, { config: resolverConfig });
+    await runtime
+      .forRequest({ preflight: true })
+      .fetchExperience({ experienceId: 'exp' }, { config: resolverConfig });
     expect(fetch.mock.calls.map(([options]) => options.parameters)).toEqual([
       parameters,
       { productId: 'other' },
       undefined,
     ]);
     expect(fetch.mock.calls[1]?.[0]).toMatchObject({ locale: 'de-DE', preview: true });
+    expect(fetch.mock.calls[2]?.[0].personalization).toBeUndefined();
   });
 
   it('allows independent live SDK instances without requiring teardown', () => {
@@ -617,6 +600,46 @@ describe('Node ContentfulExperiences', () => {
     expect(upsertProfile).toHaveBeenCalledWith(expect.anything(), { locale: 'en-US' });
   });
 
+  it.each([
+    { requestDefault: undefined, explicit: undefined, expected: undefined },
+    { requestDefault: true, explicit: undefined, expected: true },
+    { requestDefault: false, explicit: undefined, expected: false },
+    { requestDefault: true, explicit: false, expected: false },
+    { requestDefault: false, explicit: true, expected: true },
+  ])(
+    'uses XDA preflight default $requestDefault with override $explicit',
+    async ({ requestDefault, explicit, expected }) => {
+      const runtime = createRuntime();
+      const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
+      const context = { preflight: requestDefault, profile: { id: 'known' } };
+      const request = runtime.forRequest(context);
+      context.preflight = !requestDefault;
+      const options = { experienceId: 'experience', personalization: { preflight: explicit } };
+      await request.fetchExperience(options, { config: resolverConfig });
+      expect(fetch.mock.calls[0]?.[0].personalization).toEqual({
+        profileId: 'known',
+        preflight: expected,
+      });
+      expect(options.personalization).toEqual({ preflight: explicit });
+    }
+  );
+
+  it('rejects invalid preflight without replacing it with the request default', async () => {
+    const runtime = createRuntime();
+    expect(() => runtime.forRequest({ preflight: null as never })).toThrow(
+      /preflight must be a boolean/
+    );
+    const fetch = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue({ nodes: [] } as never);
+    const request = runtime.forRequest({ preflight: true, profile: { id: 'known' } });
+    await expect(
+      request.fetchExperience(
+        { experienceId: 'experience', personalization: { preflight: null as never } },
+        { config: resolverConfig }
+      )
+    ).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('defaults XDA fetch identity from its request, adopts returned identity, and respects overrides', async () => {
     const runtime = createRuntime();
     const fetchExperience = vi.spyOn(runtime, 'fetchExperience').mockResolvedValueOnce({
@@ -760,6 +783,7 @@ describe('Node ContentfulExperiences', () => {
       const { runtime, upsertProfile } = createEventRuntime();
       const request = runtime.forRequest({
         consent: true,
+        preflight: true,
         personalizationOptions: { ip: '203.0.113.7', plainText: true },
       });
 

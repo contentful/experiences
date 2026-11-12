@@ -47,6 +47,15 @@ describe('serializePersonalization', () => {
     expect(output.events?.[0]?.context).not.toBe(input.events[0]?.context);
   });
 
+  it.each([{ profileId: 123 }, { preflight: null }, { preflight: 'false' }, { preflight: 0 }])(
+    'rejects invalid personalization options %j',
+    (input) => {
+      expect(() => serializePersonalization(input)).toThrow(
+        new TypeError('Invalid Experience personalization options')
+      );
+    }
+  );
+
   it.each([
     { ...events[0], properties: { ...page, query: { tag: [1] } } },
     { ...events[0], properties: { ...page, url: undefined } },

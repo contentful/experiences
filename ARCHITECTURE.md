@@ -172,13 +172,16 @@ a handoff. A batch may omit the page event; pages are never synthesized.
 Web admits an already prepared batch whole, because it is replayed as previewed.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
-XDA invokes Personalization API with `preflight: true` and commits neither events nor profile
-changes. Ordinary SSR/CSR event-bearing fetches remain uncommitted pending
-upstream force-commit support; no override or SDK commit workaround exists.
-Only actual hybrid browser replay commits the supplied batch. Newly returned
-profile IDs remain provisional until an actual Personalization API commit. See
+XDA's `personalization.preflight: true` evaluates without committing events or
+profile changes; `false` commits them. XDA defaults to `true`, while ordinary SDK
+and free fetches explicitly default supplied personalization to `false`, with
+per-call overrides. Node request defaults are XDA-only. Actual hybrid transfer
+preparation fixes `true` and browser replay fixes `false`. Next's `request.mode`
+selects ordinary SSR or hybrid (default); Web needs no mode option. Preview-generated
+profile IDs remain provisional until a Personalization API event POST commits
+them; profile-only XDA uses Personalization API GET, even when SDK-to-XDA uses POST. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
-for the known service limitations and required verification before release.
+for profile finalization limits and required live-service verification before release.
 
 By-ID fetch options can carry first-class personalization with a profile id and
 caller-built events; Client maps it to XDA's extension body, and Node proxies it

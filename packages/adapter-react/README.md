@@ -389,8 +389,8 @@ is omitted. Explicit `personalization.events` remains complete caller intent.
 Payload callbacks and objects may be inline. Their latest committed values are
 read when page intent is needed; replacing them does not restart the current
 handoff operation. Adding or removing payload capability still updates the owner.
-Ordinary XDA noncommit is
-tolerated without a compensating Personalization API call or accepted-route mark. Explicit replay
+Ordinary managed event-bearing XDA fetches request commitment with
+`personalization.preflight: false`; no compensating Personalization API call is added. Explicit replay
 and page/fallback operations
 retain Web's route admission and consent-change behavior.
 Handoff cache safety and receiving scope are asserted before SSR children render;

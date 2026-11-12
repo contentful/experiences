@@ -22,8 +22,9 @@ the real public SDK; consumers provide their own UI, hosting and build tooling.
 Initial load and navigation supply explicit page and optional initial URL identify
 arguments to ordinary `sdk.fetchExperience`; the SDK builds admitted arguments
 once and accepts raw built events. CSR requires no handoff or direct identify/page
-prerequisite. XDA evaluates without committing; this service bug is tolerated
-pending upstream force-commit support, without a current force flag or SDK workaround.
+prerequisite. Ordinary Web fetches default supplied personalization to
+`preflight: false`, committing admitted intent through XDA. Explicit
+`personalization.preflight: true` evaluates without committing.
 Web optionally consumes actual server handoffs in integrations that supply them;
 this CSR reference generates none. Event failures remain separate from content
 errors and do not hide usable plans.
@@ -140,12 +141,12 @@ limit in code. Reference implementations fetch multiple IDs only to compare
 rendering scenarios; their loops are not a supported product pattern and provide
 no multi-Experience or cross-fetch guarantee.
 
-XDA forces Personalization API `preflight: true`, without an override, committing neither events
-nor profile creation/changes. Returned new IDs are provisional; SDK adoption,
-LocalStorage and cookies do not finalize them. This CSR reference uses ordinary Web
-fetch and creates no handoff or compensating commit. XDA noncommit remains a tolerated
-service bug awaiting upstream force-commit support, without a current flag or SDK
-workaround. Optional actual server replay rules remain in Runtime for integrations
+XDA itself defaults to `preflight: true`, evaluating without committing events
+or profile creation/changes. Ordinary Web fetches explicitly default supplied
+personalization to false and commit admitted intent; a per-call explicit true
+keeps new IDs provisional. SDK adoption, LocalStorage and cookies do not
+independently prove finalization. This CSR reference uses ordinary Web fetch and
+creates no handoff or compensating commit. Optional actual server replay rules remain in Runtime for integrations
 that explicitly supply a handoff.
 Standalone direct actions and Personalization preflight remain supported.
 See [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
@@ -304,9 +305,9 @@ direct browser delivery using the SDK's default live endpoints and
 `delivery: { accessToken: window.ENVIRONMENT.CDA_TOKEN }`, with the injected space,
 environment and locale. There is no delivery proxy, alternate endpoint selector,
 or server-side SDK. Browser HTTP CORS preflight is separate from the Experience
-Delivery API's forced Personalization API preflight for event-bearing requests and the supported
-Personalization API preflight. This app evaluates events through ordinary Web XDA fetch; those events remain
-uncommitted pending upstream service support. It has no Node server handoff.
+Delivery API's noncommitting `personalization.preflight: true` option and the supported
+Personalization API preflight. This app uses ordinary Web XDA fetch with the SDK
+default `preflight: false` to commit admitted intent. It has no Node server handoff.
 
 ## Files, assets, and source provenance
 
@@ -361,7 +362,7 @@ is consumed unchanged. No adjacent checkout is needed to build or run this app.
   example; loading/errors belong to the actual rendered content. The manual copy
   demonstrates explicit element registration alongside automatic discovery, using
   the same SDK-owned measurement and consent mechanisms as Optimization.
-- XDA selects variants server-side from embedded built events during preflight.
+- XDA selects variants server-side from embedded built events during evaluation.
   Content refresh is explicit; there is no profile-driven ordinary content refresh, Optimization
   Live Updates or Preview Panel.
   Attribution comes from source maps and is stamped once per rendered plan container,

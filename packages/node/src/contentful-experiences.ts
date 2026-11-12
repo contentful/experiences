@@ -69,6 +69,11 @@ type ConsentPolicy = Pick<Config, 'allowedEventTypes' | 'onEventBlocked'>;
 
 /** Context scoped to one incoming Node request. */
 export type RequestContext = {
+  /**
+   * Default XDA preflight policy for ordinary fetches; defaults to false. Per-call values win.
+   * Does not affect event builders, direct event methods, editor preview, or handoff evaluation.
+   */
+  preflight?: boolean;
   /** Suppresses events for this request. Defaults to false. */
   isPreview?: boolean;
   /** The active editor session for this request; credentials belong to SDK configuration. */
@@ -137,6 +142,7 @@ export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan>;
+  /** Evaluates with preflight: true for later browser commitment; rejects explicit false. */
   fetchExperienceForHandoff(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions,
@@ -186,6 +192,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
 class RequestBoundExperiences implements RequestRuntime {
   readonly #isPreview: boolean;
+  readonly #preflight: boolean | undefined;
   readonly locale: string | undefined;
   readonly eventBuilder: RequestEventBuilder;
   #profile: RequestContext['profile'];
@@ -221,6 +228,9 @@ class RequestBoundExperiences implements RequestRuntime {
       session: PreviewSessionOptions
     ) => Promise<ExperiencePayload>
   ) {
+    if (context.preflight !== undefined && typeof context.preflight !== 'boolean') {
+      throw new TypeError('Request preflight must be a boolean');
+    }
     const sessionId = context.preview?.sessionId ?? runtime.config.preview?.sessionId;
     this.#previewOptions = sessionId
       ? {
@@ -234,6 +244,7 @@ class RequestBoundExperiences implements RequestRuntime {
       throw new TypeError('Preview Session cannot be combined with isPreview: false');
     }
     this.#isPreview = this.#previewOptions !== undefined || context.isPreview === true;
+    this.#preflight = context.preflight;
     const { personalizationOptions, analyticsOptions } = context;
     this.#personalizationOptions =
       personalizationOptions === undefined
@@ -363,6 +374,12 @@ class RequestBoundExperiences implements RequestRuntime {
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult> {
     this.assertActive();
+    if (
+      options.personalization?.preflight !== undefined &&
+      options.personalization.preflight !== true
+    ) {
+      throw new TypeError('Request handoff requires personalization.preflight: true');
+    }
     if (typeof replay?.routeKey !== 'string' || !replay.routeKey.startsWith('/')) {
       throw new TypeError('Request handoff requires a pathname/search route key');
     }
@@ -379,6 +396,9 @@ class RequestBoundExperiences implements RequestRuntime {
     const profileRevision = this.#profileRevision;
     let expectedProfileId = this.#profile?.id;
     const gated = this.gatePersonalizationEvents(options);
+    if (gated.personalization !== undefined) {
+      gated.personalization = { ...gated.personalization, preflight: true };
+    }
     const personalization = gated.personalization;
     let request: BuiltFetchOptions<FetchExperienceOptions>;
     if (this.runtime.interceptors.event.count() > 0 && personalization?.events !== undefined) {
@@ -496,6 +516,15 @@ class RequestBoundExperiences implements RequestRuntime {
     this.assertActive();
     const profileRevision = this.#profileRevision;
     const gated = this.gatePersonalizationEvents(options);
+    if (gated.personalization !== undefined && this.#preflight !== undefined) {
+      gated.personalization = {
+        ...gated.personalization,
+        preflight:
+          gated.personalization.preflight === undefined
+            ? this.#preflight
+            : gated.personalization.preflight,
+      };
+    }
     const request =
       this.runtime.interceptors.event.count() === 0
         ? this.finalizePersonalizationEvents<TOptions>(gated)

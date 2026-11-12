@@ -329,12 +329,19 @@ navigation/actions use Web `fetchExperience`. Both accept existing type-tagged
 builder arguments or raw built XDA events, and the SDK builds admitted arguments
 once. Normal fetch requires no handoff or direct identify/page prerequisite.
 
-The generated Delivery client supports optional `personalization.preflight`,
-which the SDK validates and forwards without selecting a default. Earlier service
-checks observed noncommitting XDA evaluation; backend defaults and override
-behavior have not been reverified with dev.13. Do not infer commitment from a
-selected plan or returned profile ID. Direct event APIs remain callable but are
-not compensation.
+Ordinary SDK and free fetches default supplied `personalization.preflight` to
+`false`, requesting commitment of events and profile changes through XDA.
+An explicit `true` requests evaluation without commitment; XDA itself defaults an
+omitted value to `true`. This applies to by-ID and both destination fetch forms.
+Node's `forRequest({ preflight })` sets an XDA-only request default, overridden by
+the per-call boolean. Direct event APIs remain unchanged. Do not infer commitment
+from a selected plan or returned profile ID; live-service verification remains
+required before release.
+
+Next's server binding selects `request.mode: 'ssr'` for server-owned commitment
+or `'hybrid'` (default) for server preflight and browser replay. SSR results
+preserve private state hydration and suppress duplicate browser initial pages;
+see the [Next request policy](./packages/adapter-nextjs/README.md#router-bindings).
 
 Only an actual server-to-browser transfer uses the Node producer:
 
@@ -358,7 +365,9 @@ const { handoff, plan, error } = await request.fetchExperienceForHandoff(
 // Browser optionally consumes the explicitly supplied handoff independently of display.
 ```
 
-The third argument is `{ readonly routeKey: string }` only. Content failure
+The producer fixes `personalization.preflight: true` and rejects an explicit
+`false`; browser replay fixes `preflight: false`. The third argument is
+`{ readonly routeKey: string }` only. Content failure
 retains usable finalized replay. Hybrid browser replay commits the server-supplied
 batch; Web/React consumption is optional and mode agnostic. Browser-local
 navigation uses ordinary Web fetch absent a new server handoff.
@@ -402,7 +411,8 @@ Client preserves the supported event shape, including `context.gdpr` and
 `context.gdpr.isConsentGiven`, overwriting any caller-supplied flag, before running
 interceptors. Hooks may explicitly transform valid metadata; final validation and current-consent
 admission still apply, with caller input unchanged. Reusing an event in another
-fetch is another preflight evaluation, not an Personalization API commit. See
+ordinary fetch requests another commit unless `preflight: true` is explicit;
+use fresh event IDs for fresh intent. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 Actual Personalization API commits and retries retain their delivery ambiguity.
 
@@ -509,9 +519,12 @@ Personalization/Analytics replay journal or global ordinary-event barrier.
 The hybrid reference packages its built events through the Node data producer and
 consumes replay through this browser API. Live Preview remains independent;
 new XDA IDs remain provisional until backend finalization is verified.
-The generated `personalization.preflight` option is forwarded without a default;
-its deployed behavior requires verification. Independent profile-only reads with
-an already-concrete profile remain viable. Neither handoff recipe promises exactly-once delivery for
+Ordinary supplied personalization defaults to `preflight: false`; hybrid server
+preparation uses `true` and browser replay uses `false`. A preview-generated ID
+can be reused by a Personalization API POST carrying events through XDA or a
+direct call; profile-only XDA uses Personalization API GET and can fail before
+commitment. Deployed behavior still requires verification. Independent profile-only
+reads with an already-concrete profile remain viable. Neither handoff recipe promises exactly-once delivery for
 actual Personalization API commits. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 

@@ -232,7 +232,7 @@ async function fetchByExperienceId(
     options;
   const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
   if (personalization !== undefined) {
-    requestExtensions.personalization = serializePersonalization(personalization);
+    requestExtensions.personalization = requestPersonalization(personalization);
   }
 
   try {
@@ -337,12 +337,20 @@ async function fetchByDestination(
   });
 }
 
+function requestPersonalization(personalization: PersonalizationOptions): PersonalizationOptions {
+  const serialized = serializePersonalization(personalization);
+  return {
+    ...serialized,
+    preflight: serialized.preflight === undefined ? false : serialized.preflight,
+  };
+}
+
 function destinationExtensions(
   personalization: PersonalizationOptions | undefined
 ): ContentfulViewDelivery.DestinationExperiencesExtensions | undefined {
   if (personalization === undefined) return undefined;
   return {
-    personalization: serializePersonalization(personalization),
+    personalization: requestPersonalization(personalization),
   };
 }
 

@@ -243,9 +243,11 @@ DOM/manual registrations before calling the bound SDK reset action, then starts 
 fresh presentation while retaining the root and sidebar. URL/title/active links and
 focus follow direct navigation and back/forward.
 
-Ordinary SSR/CSR XDA events currently remain uncommitted because the service forces
-preflight. That is tolerated absent blocking errors, without synthetic Personalization API
-compensation. A provisional profile ID and content success do not prove commitment.
+Ordinary SDK fetches default supplied personalization to `preflight: false`,
+committing admitted SSR/CSR intent through XDA. Explicit
+`personalization.preflight: true` evaluates without committing; XDA itself defaults
+to true. No synthetic Personalization API compensation is added. A provisional
+profile ID and content success do not independently prove commitment.
 Only actual supplied server transfers use optional explicit replay; this CSR reference
 creates none. Insights acceptance is observed per request, not assumed from an ID.
 

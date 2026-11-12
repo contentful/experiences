@@ -106,6 +106,7 @@ describe('ContentfulExperiences', () => {
     const options = {
       experienceId: 'experience',
       personalization: {
+        preflight: true,
         events: [{ type: 'identify' as const, userId: 'visitor' }],
       },
     };
@@ -114,10 +115,11 @@ describe('ContentfulExperiences', () => {
     expect(events).toMatchObject([{ type: 'identify', userId: 'visitor', channel: 'server' }]);
     expect(events).toHaveLength(1);
     await runtime.fetchExperience(
-      { ...options, personalization: { events } },
+      { ...options, personalization: { preflight: true, events } },
       { config: { components: {} } }
     );
     expect(mockFetchExperiencePayload.mock.calls[1]![0].personalization.events).toEqual(events);
+    expect(mockFetchExperiencePayload.mock.calls[1]![0].personalization.preflight).toBe(true);
     expect(build).toHaveBeenCalledOnce();
     expect(options.personalization.events).toEqual([{ type: 'identify', userId: 'visitor' }]);
   });

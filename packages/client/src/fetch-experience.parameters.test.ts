@@ -70,7 +70,7 @@ function request(fetch: ReturnType<typeof transport>, index = 0) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('runtime parameter transport (real generated Delivery client)', () => {
+describe('fetchExperience transport (real generated Delivery client)', () => {
   it('encodes scalar and Record leaves on GET, keeping system locale separate', async () => {
     const fetch = transport();
     await fetchExperience(
@@ -139,7 +139,33 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       expect(Object.fromEntries(sent.url.searchParams)).toEqual({ locale: 'en-US' });
       expect(sent.body).toEqual({
         parameters: values,
-        extensions: { ...extensions, ...(personalization ? { personalization } : {}) },
+        extensions: {
+          ...extensions,
+          ...(personalization ? { personalization: { ...personalization, preflight: false } } : {}),
+        },
+      });
+      expect(personalization).toEqual(original);
+    }
+  );
+
+  it.each([
+    { preflight: undefined, expected: false },
+    { preflight: true, expected: true },
+    { preflight: false, expected: false },
+  ])(
+    'sends profile-only preflight $preflight as $expected without mutating input',
+    async ({ preflight, expected }) => {
+      const fetch = transport();
+      const personalization = { profileId: 'profile', preflight };
+      const original = { ...personalization };
+      await fetchExperience(
+        { ...identity, personalization },
+        { accessToken: 'delivery-token' },
+        resolveOptions
+      );
+      expect(request(fetch).method).toBe('POST');
+      expect(request(fetch).body).toEqual({
+        extensions: { personalization: { profileId: 'profile', preflight: expected } },
       });
       expect(personalization).toEqual(original);
     }

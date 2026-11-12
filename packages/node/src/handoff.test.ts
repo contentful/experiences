@@ -63,6 +63,28 @@ afterEach(() => {
 });
 
 describe('Node browser-handoff producer', () => {
+  it('rejects committing handoff intent before building, interception or transport', async () => {
+    const { sdk, fetch, commit } = setup();
+    const request = sdk.forRequest({ consent: true });
+    const build = vi.spyOn(sdk.eventBuilder, 'buildPageView');
+    const intercept = vi.fn((event) => event);
+    sdk.interceptors.event.add(intercept);
+    await expect(
+      request.fetchExperienceForHandoff(
+        {
+          experienceId: 'experience',
+          personalization: { preflight: false, events: [{ type: 'page' }] },
+        },
+        resolver,
+        route
+      )
+    ).rejects.toThrow(/preflight: true/);
+    expect(build).not.toHaveBeenCalled();
+    expect(intercept).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
   it.each([
     { changes: [] },
     {
@@ -100,6 +122,7 @@ describe('Node browser-handoff producer', () => {
     const { sdk, fetch, commit } = setup();
     const request = sdk.forRequest({
       consent: true,
+      preflight: false,
       profile: { id: 'incoming' },
       locale: 'de-DE',
       eventContext: { userAgent: 'request-agent' },
@@ -135,6 +158,7 @@ describe('Node browser-handoff producer', () => {
     expect(plan).toBeDefined();
     expect(commit).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![0].personalization?.preflight).toBe(true);
     const evaluated = globalThis.structuredClone(fetch.mock.calls[0]![0].personalization?.events);
     expect(handoff.replay?.events).toEqual(evaluated);
     expect(evaluated).toMatchObject(

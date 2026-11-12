@@ -160,6 +160,7 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
             ? false
             : await resolveServerValue(consent.server, context)),
         locale: overrides.locale ?? nodeConfig.locale,
+        preflight: resolved.mode === 'hybrid',
         preview: session,
         isPreview: overrides.isPreview === true || session !== undefined,
       });
