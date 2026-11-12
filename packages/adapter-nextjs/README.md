@@ -248,6 +248,15 @@ For opaque server content, use the client `request.ExperiencesAnalyticsRoot`
 preserving the handoff. The application owns server rendering and round-trips.
 Analytics-only browser owners still require Delivery configuration.
 
+For manual views, wrap the selected server subtree with `ManualViewTracking` from
+`@contentful/experiences-nextjs/client`. For App RSC, re-export it by name from the
+existing client configuration module, as with the request root components, and
+import that named export in the server component. Its DOM marker survives App RSC and
+Pages HTML serialization. The Web SDK selects attribution and owns registration
+lifecycle; the browser does not take over Experience rendering. Preserve the
+rendered scope/attribution attributes and request a source map. See the
+[React manual-view boundary](../adapter-react/README.md#attributed-rendering-and-dom-roots) for behavior.
+
 Browser credentials are explicit browser-visible credentials. The designated
 public token above must have appropriate scope and endpoint CORS; otherwise use
 `delivery: { host: 'https://your-app.example/api/delivery' }` in the Pages client

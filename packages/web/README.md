@@ -758,7 +758,7 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
   enabled elements. `enableElement(type, element, { data? })` explicitly enables
   an element; `disableElement(type, element)` explicitly disables it.
   `clearElement(type, element)` removes either override.
-- Explicit element overrides take precedence over `data-ctfl-track-views`,
+- Explicit element overrides take precedence over manual-view boundaries and `data-ctfl-track-views`,
   `data-ctfl-track-hovers`, and `data-ctfl-track-clicks` boolean attributes; those
   attributes take precedence over automatic flags. With rendered attribution,
   `true` starts tracking for a permitted element even when automatic tracking is
@@ -792,6 +792,24 @@ rootMargin?: string }`. Repeated enables with unchanged effective options preser
 - `WebExperiencesRuntime` adds these browser-only controls to
   `ExperiencesRuntime`; `createWebSnapshotRuntime()` supplies inert controls for
   SSR. Imports remain safe without browser globals.
+
+An ancestor with `data-ctfl-manual-views="true"` opts attributed roots into manual
+view measurement. React and Next expose the `ManualViewTracking` component for
+this marker; other renderers can emit it on an existing container. The nearest
+marked ancestor's value is trimmed and case-insensitive; only `true` enables the
+policy. It takes precedence over per-element view attributes and global view
+defaults, while explicit `enableElement`/`disableElement` overrides still win.
+Hovers and clicks are unaffected.
+
+Each actual root is an independent view occurrence, using exactly its final
+`data-ctfl-scopes` token from the nearest plan attribution boundary. Invalid or
+missing final attribution leaves that root untracked. The existing DOM observer
+handles subtree/metadata changes and preserves unchanged occurrences. Nested
+markers do not duplicate views. Marker removal restores ordinary policy; consent
+withdrawal and reset discard old intervals, with declared markers eligible for
+fresh measurement after grant/reset. This is an Experiences attribution source
+extension; it reuses the existing detectors, consent, queues and lifecycle rather
+than changing Optimization-compatible imperative controls.
 
 The runtime discovers automatic tracking attributes when constructed, including
 existing server-rendered HTML, and observes later DOM changes. Tracking does not

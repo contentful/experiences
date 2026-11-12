@@ -18,7 +18,12 @@ import {
   loadComparisons,
   type ServerContent,
 } from './server-reference';
-import { routeIds, type BrowserEnvironment, type ContentSeed } from './reference';
+import {
+  primaryExperience,
+  routeIds,
+  type BrowserEnvironment,
+  type ContentSeed,
+} from './reference';
 import { experienceConfig } from './components/ExperienceContent';
 import { ServerPresentations } from './components/ServerPresentations';
 
@@ -76,14 +81,11 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
         : [];
   const preview = Boolean(serverPreview(url));
   let comparisons: ServerContent[] = [];
-  const experience = {
-    experienceId:
-      (preview &&
-        (url.searchParams.get('preview_experience_id')?.trim() ||
-          browser.livePreview?.experienceId)) ||
-      routeIds(url.pathname, config.experienceIds)[0],
-    ...(preview ? {} : { extensions: { sourceMap: {} } }),
-  };
+  const experience = primaryExperience(
+    browser,
+    url,
+    routeIds(url.pathname, config.experienceIds)[0]
+  );
   if (!serverOnly && context.req.headers['x-nextjs-data'] === '1' && !preview) {
     context.res.setHeader('Cache-Control', 'private, no-store');
     return {

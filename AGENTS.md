@@ -250,6 +250,13 @@ works independently of those boundaries. Consent still gates all tracking. Keep
 these controls on the existing detector and consent/lifecycle path; do not add
 application-owned observers.
 
+React/Next's `ManualViewTracking` client component marks opaque server content with
+`data-ctfl-manual-views="true"`. Web's existing discovery path measures each real
+root independently using its exact final scope token; explicit element overrides
+win. This Experiences attribution source reuses the existing parser, observer,
+detectors and consent/reset lifecycle. Do not add application-owned registration
+maps or duplicate DOM observers for this path.
+
 By-ID fetch options accept per-call `parameters`: strings/numbers or one-level
 Records of string/number leaves. Experience.parameters declares IDs and bindings
 use `$parameters/<id>`; there is no dynamic flag. Client flattens GET values into

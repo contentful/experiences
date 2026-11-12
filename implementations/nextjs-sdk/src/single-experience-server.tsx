@@ -8,7 +8,8 @@ import type { NextjsCookieReader } from '@contentful/experiences-nextjs/server';
 import { getServer } from './config';
 import { experienceConfig } from './components/ExperienceContent';
 import { AppExperiencesRoot } from './components/SingleExperience';
-import { readConsent, serverPreview } from './server-reference';
+import { readConsent } from './server-reference';
+import { primaryExperience } from './reference';
 
 function configuration(): NextjsAppRouterServerExperiencesConfig {
   const { nodeConfig, config, browser } = getServer();
@@ -26,18 +27,8 @@ function configuration(): NextjsAppRouterServerExperiencesConfig {
       loadImplementation: () => import('@contentful/experiences-live-preview'),
     },
     request: {
-      experience: ({ requestUrl }) => {
-        const url = new URL(requestUrl);
-        const preview = Boolean(serverPreview(url));
-        return {
-          experienceId:
-            (preview &&
-              (url.searchParams.get('preview_experience_id')?.trim() ||
-                browser.livePreview?.experienceId)) ||
-            config.experienceIds[0],
-          ...(preview ? {} : { extensions: { sourceMap: {} } }),
-        };
-      },
+      experience: ({ requestUrl }) =>
+        primaryExperience(browser, new URL(requestUrl), config.experienceIds[0]),
     },
   };
 }

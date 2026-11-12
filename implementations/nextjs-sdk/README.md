@@ -322,13 +322,14 @@ on both SSR and hydration, preserving its styles and tracking attributes. This
 does not invoke the Experience renderer, fetch or resolve content in the browser.
 The shared server presentations serve App RSC and Pages GSSP; the browser only adopts
 that output. Server-only repeated presentations use the same manual-view section
-as hybrid content, with automatic views, hovers and clicks disabled. With browser
-analytics enabled, `src/components/ManualServerViews.tsx` registers views using real
-serialized attribution through the public SDK tracking API and releases registrations
-when React replaces the subtree or unmounts it. App passes opaque server children,
-including Server Action results; Pages passes opaque server-rendered HTML. The SDK
-owns measurement; this wrapper performs no browser content fetch, rendering or
-resolution. Initial hybrid plans remain independent of replay admission.
+as hybrid content, with automatic views, hovers and clicks disabled.
+`ServerPresentations` wraps only the repeated section in the SDK's
+`ManualViewTracking` boundary. Its DOM marker survives App RSC, Server Action
+replacement subtrees and Pages HTML adoption. With browser analytics enabled, the
+Web SDK selects attribution and maintains one manual view occurrence per real root
+through its existing DOM observer. The reference owns no attribution parser or
+registration reconciliation, and performs no browser content fetch or resolution
+for server-only content. Initial hybrid plans remain independent of replay admission.
 
 The reference uses explicit host helpers only at real host boundaries. The App
 Server Action reads writable cookies/headers, binds the Node request and calls
@@ -386,14 +387,18 @@ migration remains Phase 14.
 After setup, run the focused reference regressions from the repository root:
 
 ```sh
-node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts implementations/nextjs-sdk/src/components/attempt-log.test.ts implementations/nextjs-sdk/src/components/ManualServerViews.test.tsx
+node --experimental-test-module-mocks --import tsx --test implementations/nextjs-sdk/src/server-reference.test.ts implementations/nextjs-sdk/src/reference.test.ts implementations/nextjs-sdk/src/components/pages-content-action.test.ts implementations/nextjs-sdk/src/components/attempt-log.test.ts implementations/nextjs-sdk/src/components/ServerPresentations.test.tsx
 ```
 
 The comparison tests use the installed Node SDK without network requests or `.env`
 and cover primary identity isolation, comparison content, disposal and preview policy.
-The manual-view tests check escaped server-markup adoption, styles/tracking
-attribute preservation, real attribution selection and direct registration-helper cleanup. They do not exercise live Preview
-transport or React effect cleanup during subtree replacement.
+The server-presentation tests check escaped markup adoption, styles/tracking
+attribute preservation and the serialized manual-view boundary around repeated content.
+Web's maintained tests own malformed metadata, stable view occurrences, DOM replacement,
+explicit overrides and consent/reset cleanup; React's boundary tests cover ref
+forwarding, stable DOM and hydration without an SDK context.
+The preview descriptor tests cover deployment/session gating, URL overrides, fallbacks
+and source-map selection. These no-network tests do not exercise live Preview transport.
 
 Run scoped build/lint/typecheck after the installed artifacts are refreshed. Inspect
 Home and Page Two directly for delivered content, slots, Rich Text, errors and

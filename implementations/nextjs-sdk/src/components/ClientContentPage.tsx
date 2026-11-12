@@ -16,7 +16,6 @@ import { browserRegistry } from './browser-registry';
 import { ExperiencePresentation } from './ExperiencePresentation';
 import { Utilities, ServerUtilities, type Personalization } from './Utilities';
 import { pagesContentActionUrls } from './pages-content-action';
-import { ManualServerViews } from './ManualServerViews';
 
 export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) {
   const { environment, routeKey, Experience, RequestExperience } = useReference();
@@ -239,11 +238,7 @@ export function PagesContentPage({
     if (!loaded) throw new Error('The server content request was canceled.');
   }
   if (serverOnly) {
-    const content = analytics ? (
-      <ManualServerViews html={html ?? ''} />
-    ) : (
-      <div>{parse(html ?? '')}</div>
-    );
+    const content = <div>{parse(html ?? '')}</div>;
     return analytics ? (
       <ServerUtilities key={experiences.routeKey} update={update}>
         {content}

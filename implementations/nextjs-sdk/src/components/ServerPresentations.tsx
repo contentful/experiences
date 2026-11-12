@@ -6,7 +6,7 @@ import {
 import { experienceConfig } from './ExperienceContent';
 import { ExperiencePresentation } from './ExperiencePresentation';
 import type { ServerContent } from '../server-reference';
-import { ManualServerViews } from './ManualServerViews';
+import { ManualViewTracking } from './BrowserRoot';
 
 export function ServerPresentations({
   all,
@@ -22,7 +22,7 @@ export function ServerPresentations({
   const displayIds = routeKey.split('?')[0].endsWith('/page-two') ? ids.slice(-1) : ids;
   const contents = all.filter((value) => displayIds.includes(value.experienceId));
   const repeated = all.find((value) => value.experienceId === ids[0]);
-  const content = (
+  return (
     <div>
       {title && (
         <header className="page-header">
@@ -50,25 +50,17 @@ export function ServerPresentations({
               interactions are disabled; the SDK measures explicitly registered views.
             </p>
           </header>
-          <div className="entry-grid entry-grid--experiences">
+          <ManualViewTracking className="entry-grid entry-grid--experiences">
             {repeated && (
               <>
                 <ServerPresentation {...repeated} manual />
                 <ServerPresentation {...repeated} manual repeated />
               </>
             )}
-          </div>
+          </ManualViewTracking>
         </section>
       </div>
     </div>
-  );
-  const url = new URL(routeKey, 'https://nextjs.invalid');
-  // Pages serializes this subtree to static HTML and registers after insertion.
-  // App also uses this boundary for replacement subtrees returned by Actions.
-  return url.pathname.startsWith('/pages') || url.searchParams.get('analytics') === 'off' ? (
-    content
-  ) : (
-    <ManualServerViews>{content}</ManualServerViews>
   );
 }
 

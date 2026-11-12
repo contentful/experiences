@@ -776,6 +776,31 @@ surface owns fetch/subscription work; consumers need no SDK prop threading,
 root maps or per-component fetch/subscription/page orchestration. Ordinary identity
 and content flows require no extra root/ref boilerplate.
 
+For manual views of opaque server-rendered content, wrap only the selected subtree
+with `ManualViewTracking` from `/client` (also available through Next's `/client`):
+
+```tsx
+import { ManualViewTracking } from '@contentful/experiences-react/client';
+
+<ManualViewTracking className="manual-content">{serverRenderedContent}</ManualViewTracking>;
+```
+
+The wrapper forwards ordinary div props and its ref and emits
+`data-ctfl-manual-views="true"`. It needs no SDK context itself; a live Web SDK owns
+discovery and measurement. The marker survives RSC and serialized HTML adoption,
+without a client Experience renderer, attribution parsing or registration effects
+in the application. Rendered roots must retain their normal scope and plan
+attribution attributes, including a requested source map.
+
+Each real root is measured independently using its final rooted scope, matching
+explicit manual registration rather than automatic multi-root grouping. Manual
+boundaries enable views even when `trackViews={false}`; hovers and clicks retain
+their existing policy. Explicit element overrides take precedence. Stable DOM and
+attribution preserve measurements; insertion, replacement and removal use the
+existing Web observer. Consent and preview still gate tracking. Reset discards old
+measurements and rediscovers the marker for the new visitor; removing the marker
+restores ordinary tracking policy. See [Web tracking](../web/README.md#interaction-tracking).
+
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
 
 For hosts that render a plan themselves instead of using `ServerExperienceRenderer`. `resolveNodeProps` returns each node's component and merged props, `ExperienceNode` renders it the way the SDK renderers do, and `createExperienceNode` renders a node's serializable `snapshot` where components can't be passed as props. `ServerExperienceRenderer` and `ClientExperienceRenderer` render every node through the same `resolveNodeProps` + `ExperienceNode`.

@@ -1,5 +1,7 @@
 'use client';
 
+export { ManualViewTracking } from '@contentful/experiences-nextjs/client';
+
 import {
   bindNextjsAppRouterClientExperiences,
   useNextAppAutoPageInputs,
