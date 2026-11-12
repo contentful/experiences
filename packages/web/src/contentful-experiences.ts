@@ -109,7 +109,7 @@ export type ConfigDefaults = StatefulDefaults;
  * Long-lived, browser-oriented SDK configuration.
  */
 export type Config = Omit<BaseConfig, 'eventBuilder' | 'locale'> & {
-  /** Suppresses events for this instance. When omitted, detects preview_session_id in the browser URL. */
+  /** Suppresses events for this instance. Defaults to URL session detection when preview is configured. */
   isPreview?: boolean;
   /** Preview Session configuration with lazy implementation loading; establishes preview policy immediately. */
   livePreview?: RuntimeLivePreviewOptions;
@@ -229,6 +229,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     Map<string, Promise<PortableRenderPlan>>
   >();
   #contentLifetime = 0;
+  #profileRevision = 0;
   #stateRevision = 0;
   readonly #effects: (() => void)[] = [];
   readonly #identity: IdentityCookie;
@@ -347,7 +348,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     this.#isPreview =
       (config.livePreview !== undefined ? true : config.isPreview) ??
-      (typeof window !== 'undefined' &&
+      (config.preview !== undefined &&
+        typeof window !== 'undefined' &&
         Boolean(
           new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim()
         ));
@@ -368,8 +370,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       const { defaults: resolvedDefaults } = resolveStatefulDefaults(defaults, {
         consent: LocalStore.consent,
         persistenceConsent: LocalStore.persistenceConsent,
-        profile: () => LocalStore.profile,
-        changes: () => LocalStore.changes,
+        profile: () => (this.isPreview ? undefined : LocalStore.profile),
+        changes: () => (this.isPreview ? undefined : LocalStore.changes),
       });
       batch(() => {
         consentSignal.value = resolvedDefaults.consent;
@@ -772,6 +774,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       await identityReady;
       assertCurrent();
     }
+    const profileRevision = this.#profileRevision;
     const stateRevision = this.#stateRevision;
     const identityRevision = this.#identityRevision;
     const prepared = await this.#prepareContentRequest(
@@ -790,18 +793,22 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       assertCurrent();
       if (
         !this.isPreview &&
-        (this.#stateRevision !== stateRevision || this.#identityRevision !== identityRevision)
+        (this.#profileRevision !== profileRevision || this.#identityRevision !== identityRevision)
       )
         throw new Error('Experiences fetch identity was superseded');
+      if (request.preview === true && !this.isPreview) return result;
       await this.#adoptFetchedState(
         'personalization' in result ? result.personalization : undefined,
         () => {
           assertCurrent();
-          if (this.#stateRevision !== stateRevision || this.#identityRevision !== identityRevision)
+          if (
+            !this.isPreview &&
+            (this.#profileRevision !== profileRevision ||
+              this.#identityRevision !== identityRevision)
+          )
             throw new Error('Experiences fetch identity was superseded');
-          return true;
-        },
-        !this.isPreview && request.preview !== true
+          return this.#stateRevision === stateRevision;
+        }
       );
       assertCurrent();
       return result;
@@ -1452,6 +1459,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       effect(() => {
         const profile = profileSignal.value;
         const changes = changesSignal.value;
+        if (profile !== previousProfile) this.#profileRevision += 1;
         if (profile !== previousProfile || changes !== previousChanges) {
           previousProfile = profile;
           previousChanges = changes;

@@ -138,7 +138,8 @@ separates repeated presentations; shared keys retain multi-root grouping. `getTr
 adapter and by the `@contentful/experiences-web/tracking-attributes` subpath; no
 adapter stamps attributes for you: renderers spread plan attribution onto each
 Experience container and node attribution onto its outermost elements. Web accepts an explicit
-`isPreview` boolean, falling back to initial nonempty `preview_session_id` detection when omitted.
+`isPreview` boolean, falling back to initial nonempty `preview_session_id` detection
+when omitted and `preview` is configured. URL session IDs alone do not enable preview.
 Node integrations pass `isPreview: true` into `forRequest()`. Fixed read-only `isPreview` gates all events, automatic
 tracking, embedded fetch personalization and handoff preparation/replay before event work.
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
@@ -448,8 +449,10 @@ tokens; this does not repin the broader mechanics above. Runtime owns pure
 `resolveFlagChange` and base/Node `getFlag(name, changes?)`; only Web retains
 changes and automatically attempts exposure. Core emits `plan.personalization`
 only when XDA returns a nonempty profile id; it carries the full `profile` and
-optional raw XDA changes. Web automatically adopts changes from by-ID, destination
-and preview fetches, as it does direct Personalization responses. Supplied arrays
+optional raw XDA changes. Web automatically adopts changes from ordinary by-ID and
+destination fetches, as it does direct Personalization responses. Preview Sessions
+update in-memory flags without restoring persisted visitor profile/flags; per-call
+CPA preview fetches on ordinary instances retain personalization only on the plan. Supplied arrays
 replace the browser snapshot (`[]` clears); omission retains flags unless profile
 identity changes. Treating XDA changes as a complete snapshot follows
 XPAPI/Optimization and remains an assumption pending live-backend verification.

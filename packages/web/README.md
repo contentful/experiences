@@ -10,18 +10,20 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 
 Set `isPreview: true` to suppress events or `isPreview: false` to select ordinary event policy.
 When omitted, the SDK detects a nonempty, trimmed `preview_session_id` in the initial
-browser URL. The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
+browser URL only when `preview` is configured. A Session ID alone does not enable preview.
+The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
 All event methods return `{ accepted: false, reason: 'preview' }` and report through
 `onEventBlocked`/`blockedEventStream`, without building, publishing or queueing events.
 Consent stays unchanged; automatic and explicitly enabled interaction tracking stays inactive.
 
+Preview instances do not restore persisted visitor profiles or flags; explicit defaults remain available.
 Preview fetches omit personalization and do not attach or adopt a profile. Handoff hydration
 and replay are ignored; current-page methods return the same skipped result. Flush,
 reconnect, page hide/Beacon and destroy send no preview events. Rendering and Session updates continue.
 
 Mode stays fixed through reset, consent, URL changes and socket failure. Destroy and recreate
-before entering/leaving Session preview in a SPA. CPA configuration, `preview: true` and `debug`
-do not select this policy. Static preview without a Session ID is not detected automatically;
+before entering/leaving Session preview in a SPA. CPA configuration alone, per-call `preview: true`
+and `debug` do not select this policy. Static preview without a Session ID is not detected automatically;
 applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
 fetches remain outside it.
 
@@ -342,14 +344,18 @@ including when `flag` is allowlisted without event consent.
 Subscriptions use the existing observable contract below; `subscribeOnce` waits
 for a non-nullish value, so `null` does not settle it while `false` does.
 
-Direct Personalization responses, XDA fetches (by ID, destination, and preview),
+Direct Personalization responses, ordinary XDA fetches (by ID and destination),
 and private handoffs supply current changes through the existing state-interceptor
-and publication path, atomically with profile and request success. Supplied
+and publication path, atomically with profile and request success. Preview Sessions
+update only the preview instance's in-memory flags. Per-call CPA preview fetches on
+ordinary instances return plan-local personalization without adopting browser state. Supplied
 changes replace the snapshot: `[]` clears flags; omitted changes retain them
 unless profile identity changes. Changed values notify flag subscriptions; changed
-attribution can refresh exposure without emitting a duplicate value. Stale
-asynchronous state interception cannot overwrite a later state update. Optional
-`defaults.changes` takes precedence over stored changes. Changes are restored and
+attribution can refresh exposure without emitting a duplicate value. A flag-only
+update leaves in-flight content fetches usable while preventing stale response
+state from overwriting newer browser state, including during asynchronous state
+interception. Live profile or identity changes still supersede in-flight content.
+Optional `defaults.changes` takes precedence over stored changes. Changes are restored and
 persisted only with persistence consent; denying it removes stored changes and
 keeps in-memory values. `reset()` clears changes and exposure history. A changed
 profile identity clears old changes when no replacement changes are supplied.

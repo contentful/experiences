@@ -525,8 +525,10 @@ Consent refusals report blocked events; preview suppresses exposure quietly.
 See the [Web flag reference](./packages/web/README.md#custom-flags) for state,
 persistence, subscriptions, and exposure deduplication.
 
-Web automatically adopts XDA changes from by-ID, destination, and preview fetches
+Web automatically adopts XDA changes from ordinary by-ID and destination fetches
 through the same state-interceptor path as direct Personalization responses.
+Preview Session changes remain in the preview instance; per-call CPA preview
+fetches do not replace live visitor flags.
 Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
 retain them unless profile identity changes. Treating XDA changes as a complete
 snapshot follows XPAPI/Optimization behavior and remains an assumption pending
