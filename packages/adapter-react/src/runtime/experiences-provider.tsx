@@ -115,12 +115,24 @@ function ActivationProvider(props: ActivationProps) {
   const { target: stateTarget, ...presentation } = state;
   const context = stateTarget === target ? presentation : target.initial;
   const latestProps = useRef(props);
-  latestProps.current = props;
+  // Retained page callbacks must not observe props from an abandoned render.
+  useCommitEffect(() => {
+    latestProps.current = props;
+  });
+  const pagePayloadEnabled =
+    props.buildPagePayload !== undefined || props.initialPagePayload !== undefined;
+  // Payload values can change without replacing the current handoff operation.
   const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
     () =>
-      props.buildPagePayload ??
-      (props.initialPagePayload === undefined ? undefined : () => props.initialPagePayload),
-    [props.buildPagePayload, props.initialPagePayload]
+      pagePayloadEnabled
+        ? (options) => {
+            const current = latestProps.current;
+            return current.buildPagePayload
+              ? current.buildPagePayload(options)
+              : current.initialPagePayload;
+          }
+        : undefined,
+    [pagePayloadEnabled]
   );
   const routeKey =
     props.routeKey ??
