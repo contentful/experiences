@@ -247,7 +247,6 @@ built/raw transmission remains the consumer's compatibility risk. Receiving repl
 validation may refuse events while available content remains usable. The existing
 wire type unions raw Client and normal SDK events; no new DTO or SDK safety layer
 is introduced. Preview suppresses visitor work.
-Remove the Node aggregate commit path and handoff-as-content reuse branches/helpers.
 
 Retry of the same Experience is ordinary fetch without events:
 
@@ -258,8 +257,7 @@ const plan = await request.fetchExperience({ experienceId }, { config: experienc
 This performs no event building, event hooks or replay. Reference-only later-ID
 comparisons also use ordinary event-free fetch; no cross-fetch guarantee applies.
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
-for the tolerated SSR/CSR noncommit bug, hybrid replay ownership and accepted checks.
-Phase 6 is complete and explicitly accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied.
+for the tolerated SSR/CSR noncommit bug and hybrid replay ownership.
 
 ## Custom flags
 
@@ -385,7 +383,6 @@ return contract. In XDA calls, those blocked events are removed while preserving
 order and the profile/content fetch; hook or schema errors reject before transport.
 Client remains responsible for XDA request validation and serialization, preserving
 the full supported event shape and caller input.
-This final-type check closes the original-type-only consent bypass in the Optimization reference at `70dfa7f`.
 
 The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
 `MaybePromise`, and `OptimizationEventStreamEvent`, using the same names as Web;
@@ -396,15 +393,14 @@ have no global interceptor registry.
 
 Only an actual server-to-browser transfer uses the Node producer described
 [above](#actual-server-to-browser-transfer). Ordinary SSR uses normal fetch and
-does not commit XDA-carried events; no Node aggregate commitment remains. Optional
-explicit browser replay is governed by [Runtime](../runtime/README.md#xda-preflight-and-profile-finalization).
+does not commit XDA-carried events. Optional explicit browser replay is governed
+by [Runtime](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 Only actual server-to-browser transfers retain the Node producer; ordinary SSR
 uses normal fetch and does not commit XDA-carried events. Optional explicit browser
 consumption owns hybrid replay. Necessary state application stays internal to that
-complete operation. Standalone XPAPI preparation, separate supplied-data producers
-and public state-only hydration are removed. Route, transport locale, replay limits,
-scope/cache/consent/lifetime and serialization remain governed by the
+complete operation. Route, transport locale, replay limits, scope/cache/consent/lifetime
+and serialization remain governed by the
 [canonical Runtime contract](../runtime/README.md#xda-preflight-and-profile-finalization).
 Content failure preserves usable server replay; same-ID Retry is ordinary event-free
 fetch and never uses handoff as content input.

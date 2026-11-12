@@ -204,6 +204,4 @@ Identical in shape to the Next.js and SvelteKit examples:
 
 The seeded fixture only ever emits `columns` — declared at [`examples/scripts/fixture/components.ts:50`](../scripts/fixture/components.ts) and set to `'2'` at [`fixture/experience.ts:66`](../scripts/fixture/experience.ts) — and never emits `ratio` at all. So the Next.js `Section` always takes its flex fallback against this content model, while the SvelteKit and Angular ones render the intended two-column grid. Angular deliberately matches SvelteKit here; the Next.js component is stale relative to the fixture, which is worth fixing separately.
 
-Measured against the same space and slug, this example's rendered output is textually identical to `examples/nextjs` and its inline styles are byte-identical to `examples/sveltekit`.
-
 See [`packages/adapter-angular/README.md`](../../packages/adapter-angular/README.md) for the full Angular API surface and the React/Svelte/Angular parity table.

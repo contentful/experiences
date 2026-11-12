@@ -269,8 +269,6 @@ configuration requires the advanced client-module binding described below.
 
 The maintained [Next reference](../../implementations/nextjs-sdk/README.md) shows
 `/single-experience` and `/pages/single-experience` beside its diagnostics.
-Phases 10 and 11 are complete and accepted; reference parity validation is Phase 12; the broader
-`examples/nextjs` migration remains Phase 14.
 
 ## Managed Contentful Live Preview
 
@@ -301,7 +299,7 @@ export const { ExperiencesRoot, Experience } = binding.request;
 
 Add `livePreview` and `preview: { accessToken: process.env.CONTENTFUL_PREVIEW_TOKEN! }`
 to the existing App server configuration. Set an explicitly browser-visible
-`browser.preview` token separately; the frozen Preview Session helper requires
+`browser.preview` token separately; the Preview Session helper requires
 one even when Delivery uses a trusted proxy. Use the server load/serialization and
 client request components shown in the browser-managed composition above; server
 `request.Experience` retains `ServerExperienceRenderer`. Keep context-forwarding

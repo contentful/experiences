@@ -146,13 +146,14 @@ runtime; the shared Runtime and Node SDK have no singleton restriction.
 
 Both leaves expose `identify`, `page`, and `track` through the Personalization
 API and interaction methods through Analytics. Node's ordinary methods send
-directly. Its `prepareRequestHandoff()` builds one identify/track/page batch
-and sends a single Personalization `preflight: true` request without a Node
-event commit. The resulting private handoff contains exact browser-visible
+directly. For an actual server-to-browser transfer, its request facade's
+`fetchExperienceForHandoff()` evaluates the supplied events through XDA and
+returns a private handoff containing exact browser-visible
 event bodies. Web validates scope and cache safety, hydrates state
 imperatively, and admits a matching replay through Runtime's in-memory
 Personalization queue; construction never replays. Repeated current
-initializations join, route mismatches use ordinary current-page tracking,
+initializations join; route mismatches permit ordinary current-page tracking
+only when the caller supplies explicit page intent,
 and later visits remain trackable. Admission can precede HTTP completion and
 retry can duplicate a request whose first result was ambiguous. Ordinary
 online Personalization calls remain direct; offline ordinary Personalization
@@ -161,23 +162,23 @@ in-memory queue, adapted from Optimization's InsightsQueue, flushed at 25
 events, every 30 seconds, on reconnect, and on page hide via the Beacon API; page hide
 also forces a final Personalization attempt, and `queuePolicy.offlineMaxEvents` sets the
 offline Personalization capacity.
-Node sends immediately. There is no durable event persistence or Live Preview
-event integration.
+Node sends immediately. There is no durable event persistence; Session preview
+suppresses runtime events.
 Events are consent-gated: consent is `{ events, persistence }`, undecided means
 not granted, and until event consent is granted only `allowedEventTypes` are
 sent. Web holds consent globally and stores it in LocalStorage; Node scopes it
-to one `forRequest()` facade. Node drops initial inputs it may not send before preparing a handoff and
-prepares nothing without a permitted page; Web admits an already prepared
-batch whole, because it is replayed as previewed. No adapter or example is yet wired to the
-paired handoff.
+to one `forRequest()` facade. Node drops inputs it may not send before preparing
+a handoff. A batch may omit the page event; pages are never synthesized.
+Web admits an already prepared batch whole, because it is replayed as previewed.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
-The current generated XDA client has no noncommitting preflight option for
-content fetching. An ordinary XDA fetch with events may commit them; a separate
-Personalization preflight does not render XDA content under uncommitted
-mutations. Duplicate events from independently using those operations are
-accepted until upstream preflight and its typed client support are integrated.
-This work stream adds no placeholder API or duplicate-event workaround.
+XDA invokes XPAPI with `preflight: true` and commits neither events nor profile
+changes. Ordinary SSR/CSR event-bearing fetches remain uncommitted pending
+upstream force-commit support; no override or SDK commit workaround exists.
+Only actual hybrid browser replay commits the supplied batch. Newly returned
+profile IDs remain provisional until an actual XPAPI commit. See
+[XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
+for the known service limitations and required verification before release.
 
 By-ID fetch options can carry first-class personalization with a profile id and
 caller-built events; Client maps it to XDA's extension body, and Node proxies it

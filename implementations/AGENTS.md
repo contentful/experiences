@@ -26,9 +26,6 @@ or SDK workaround. Content Retry uses ordinary fetch of the same ID without even
 builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
 Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
-acceptance review are recorded in the implementation plan. Earlier remedy
-checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
 
 Browser handoff operations preserve live-profile/provider/handoff identity capture
 before hydration and ordinary provider-first policy under Optimization PR #549 at
@@ -66,9 +63,7 @@ the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
 facade after every actual server primary fetch, including RSC and Pages data, before cleanup.
 Do not add multi-prefetch/result lists, identity reconciliation or new
-controllers/cache/barriers. Phase 10 DX validation and Phase 11 optional router
-integration are complete and explicitly accepted on 2026-11-03; Phase 12 is in
-progress and not accepted; phases 13–14 remain not started.
+controllers/cache/barriers.
 
 Official support is one Experience fetch per page. The SDK does not enforce this
 limit in code. Reference implementations fetch multiple IDs only to compare
@@ -82,23 +77,21 @@ page; navigation builds page intent without repeating initial identify. Page Two
 CUSTOM TRACK action is nonpage, while navigation to Page Two still builds a page.
 
 Follow the [Runtime aggregate contract](../packages/runtime/README.md#shared-handoff-primitives).
-Remove standalone XPAPI preparation, separate supplied-data producers and public
+Do not add standalone XPAPI preparation, separate supplied-data producers or public
 state-only hydration. Hydration/storage/admission do not prove commit; preserve
 XPAPI retry ambiguity and existing browser transport limits.
 See [XDA preflight and profile finalization](../packages/runtime/README.md#xda-preflight-and-profile-finalization)
 and the [Node personalization contract](../packages/node/README.md#personalization).
 
-Phase 6 corrects existing Node/Web/hybrid flows and route/visitor ownership checks.
-Phase 7 owns managed React roots/loaders/page bindings and the React reference;
-adapt Optimization source/presentation ports to XDA-built events without requiring
+Managed React roots/loaders/page bindings adapt Optimization source/presentation
+ports to XDA-built events without requiring
 `beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
-exception in that managed flow. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is complete and explicitly accepted on 2026-11-03; Phase 11 is complete and explicitly accepted on 2026-11-03; Phase 12 is in progress and not accepted; phases 13–14 have not started; the Phase 6 gate is satisfied.
+exception in that managed flow.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.
 Throwaway verification code must not change
-reference use cases or create maintained consumers/apps. Root records validation.
+reference use cases or create maintained consumers/apps.
 
 ## Optional Preview Sessions
 
