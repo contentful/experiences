@@ -1,4 +1,4 @@
-import { createPreviewInitializer, getPreviewBinding } from '/dist/preview.js';
+import { getPreviewSessionBinding, loadPreviewImplementation } from '/dist/preview.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { createTrackingLog } from './tracking.js';
@@ -10,7 +10,7 @@ const env = window.ENVIRONMENT;
 // Consumer integration: keep one SDK for this browser app's lifetime; it owns profile,
 // consent, persistence and delivery. UMD and window.ENVIRONMENT are this app's
 // loading/configuration choices; the delivery token must be safe to expose publicly.
-let previewBinding = getPreviewBinding(env, location.href);
+let previewBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
 const sdk = new window.ContentfulExperiences({
   spaceId: env.SPACE_ID,
   environmentId: env.ENVIRONMENT_ID,
@@ -19,7 +19,9 @@ const sdk = new window.ContentfulExperiences({
   preview: env.LIVE_PREVIEW
     ? { accessToken: env.LIVE_PREVIEW.accessToken, host: env.LIVE_PREVIEW.host }
     : undefined,
-  livePreview: createPreviewInitializer(previewBinding),
+  livePreview: previewBinding
+    ? { ...previewBinding, loadImplementation: loadPreviewImplementation }
+    : undefined,
   isPreview: Boolean(previewBinding),
 });
 const experienceIds = env.EXPERIENCE_IDS;
@@ -113,7 +115,7 @@ async function renderRoute({
   reset = false,
 } = {}) {
   if (disposed) return;
-  const nextBinding = getPreviewBinding(env, location.href);
+  const nextBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
   const nextIsPreview = Boolean(nextBinding);
   if (nextIsPreview !== sdk.isPreview) {
     location.reload();
@@ -167,7 +169,10 @@ async function renderRoute({
   try {
     if (sdk.isPreview) {
       if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
-        await sdk.replaceLivePreview(createPreviewInitializer(nextBinding));
+        await sdk.replaceLivePreview({
+          ...nextBinding,
+          loadImplementation: loadPreviewImplementation,
+        });
         if (!isCurrent()) return;
         previewBinding = nextBinding;
       }

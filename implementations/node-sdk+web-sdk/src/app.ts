@@ -1,6 +1,7 @@
 import { referenceNode, pageContext } from '../dist/shared.js';
 import {
   ContentfulExperiences,
+  getPreviewSessionBinding,
   NotFoundError,
   type PortableRenderPlan,
   type ExperiencesHandoff,
@@ -19,7 +20,6 @@ import process from 'node:process';
 import { URL } from 'node:url';
 import { config, routes } from './config.js';
 import { readVisitor, writeIdentity } from './cookies.js';
-import { getPreviewBinding } from '../../../scripts/implementation-preview.mjs';
 
 // Consumer integration: stable transports belong to the process; visitor state
 // and request context belong only to the facade created inside each route.
@@ -76,8 +76,10 @@ for (const [path, route] of Object.entries(routes)) {
   app.get(path, async (req, res) => {
     const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
     const page = pageContext(url, req.get('referer') ?? '');
-    const candidate = getPreviewBinding(environment, url.href);
-    const binding = config.livePreviewEnabled && candidate?.experienceId ? candidate : undefined;
+    const binding =
+      config.livePreviewEnabled && environment.LIVE_PREVIEW
+        ? getPreviewSessionBinding(environment.LIVE_PREVIEW, url.searchParams)
+        : undefined;
     const livePreview = binding
       ? {
           ...binding,

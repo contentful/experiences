@@ -52,6 +52,7 @@ export default [
         PointerEvent: 'readonly',
         MouseEvent: 'readonly',
         URL: 'readonly',
+        URLSearchParams: 'readonly',
         crypto: 'readonly',
         globalThis: 'readonly',
         setTimeout: 'readonly',
