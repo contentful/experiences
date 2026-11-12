@@ -37,10 +37,12 @@ export function previewSessionSubscribeUrl({
   sessionHost,
   previewToken,
   resourceResolution,
+  sourceMap,
 }: PreviewSessionRouteOptions & {
   sessionHost?: string;
   previewToken: string;
   resourceResolution?: string;
+  sourceMap?: boolean;
 }): string {
   const url = new globalThis.URL(sessionHost ?? PREVIEW_WEBSOCKET_HOST);
   const basePath = url.pathname.replace(/\/+$/, '');
@@ -49,6 +51,8 @@ export function previewSessionSubscribeUrl({
   if (resourceResolution !== undefined) {
     url.searchParams.set('resource_resolution', resourceResolution);
   }
+
+  if (sourceMap) url.searchParams.set('source_map', 'true');
 
   return url.toString();
 }
