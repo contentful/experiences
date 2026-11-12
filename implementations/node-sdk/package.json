@@ -33,7 +33,7 @@
     "@typescript-eslint/eslint-plugin": "8.72.1",
     "@typescript-eslint/parser": "8.72.1",
     "eslint": "10.14.0",
-    "pm2": "7.0.4",
+    "pm2": "7.1.2",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "jiti": "2.6.1",
