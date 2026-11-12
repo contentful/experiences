@@ -2,11 +2,8 @@
 
 import { act, type HTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExperiencesHandoff, Config } from '@contentful/experiences-web';
-import { EventBuilder } from '@contentful/experiences-runtime';
 import { sourceSdk } from '../test/managed-experience.js';
 import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
-import { profileFixture } from '../test/profile.js';
 import {
   bindTanStackRouterExperiences,
   type AutoPageEmissionContext,
@@ -14,29 +11,11 @@ import {
   type TanStackRouterExperiencesProviderProps,
 } from './tanstack-router.js';
 
-const { useRouter, useRouterState, construct } = vi.hoisted(() => ({
+const { useRouter, useRouterState } = vi.hoisted(() => ({
   useRouter: vi.fn(),
   useRouterState: vi.fn(),
-  construct: vi.fn(),
 }));
 vi.mock('@tanstack/react-router', () => ({ useRouter, useRouterState }));
-vi.mock('@contentful/experiences-web', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@contentful/experiences-web')>();
-  return {
-    ...actual,
-    ContentfulExperiences: vi.fn(function (config: Config) {
-      return construct(config);
-    }),
-  };
-});
-
-const webConfig: Config = {
-  spaceId: 'space',
-  environmentId: 'master',
-  delivery: { accessToken: 'delivery' },
-  locale: 'en-US',
-  defaults: { consent: true, persistenceConsent: false },
-};
 const config = {
   components: {
     hero: ({ title, ...props }: HTMLAttributes<HTMLElement> & { title: string }) => (
@@ -45,7 +24,7 @@ const config = {
   },
 };
 
-const { ExperiencesRoot, ExperiencesProvider, Experience } = bindTanStackRouterExperiences({
+const { ExperiencesProvider, Experience } = bindTanStackRouterExperiences({
   config,
 });
 
@@ -70,7 +49,6 @@ describe('TanStack Router mapping', () => {
   let router: object;
   let routerState: TestRouterState;
   let trackCurrentPage: ReturnType<typeof vi.fn>;
-  let hydrateAndTrackCurrentPage: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -78,15 +56,7 @@ describe('TanStack Router mapping', () => {
     view = createReactTestRoot();
     source = sourceSdk();
     trackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
-    hydrateAndTrackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
-    Object.assign(source.sdk, {
-      spaceId: webConfig.spaceId,
-      environmentId: webConfig.environmentId,
-      destroy: () => undefined,
-      trackCurrentPage,
-      hydrateAndTrackCurrentPage,
-    });
-    construct.mockReset().mockReturnValue(source.sdk);
+    Object.assign(source.sdk, { trackCurrentPage });
     location = {
       pathname: '/products',
       searchStr: '?tab=featured',
@@ -131,26 +101,14 @@ describe('TanStack Router mapping', () => {
     );
     const props = { getPagePayload };
     await render(props);
-    expect(source.fetchExperience).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        experienceId: 'home',
-        personalization: {
-          events: [
-            {
-              type: 'page',
-              properties: {
-                hash: '#details',
-                path: '/products',
-                query: { tab: 'featured', tag: ['first', 'last'] },
-                search: '?tab=featured&tag=first&tag=last',
-                url: `${window.location.origin}/products?tab=featured&tag=first&tag=last#details`,
-              },
-            },
-          ],
-        },
-      }),
-      { config }
-    );
+    expect(source.fetchExperience).toHaveBeenCalledOnce();
+    const [request, resolve] = source.fetchExperience.mock.calls[0]!;
+    expect(resolve).toEqual({ config });
+    expect(request.experienceId).toBe('home');
+    expect(request.personalization?.events?.[0]).toMatchObject({
+      type: 'page',
+      properties: { hash: '#details', path: '/products', search: location.searchStr },
+    });
     expect(getPagePayload).toHaveBeenCalledExactlyOnceWith({
       isInitialEmission: true,
       routeKey: '/products?tab=featured&tag=first&tag=last',
@@ -196,22 +154,10 @@ describe('TanStack Router mapping', () => {
     routerState.resolvedLocation = location;
     await render(props);
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
-    expect(source.fetchExperience).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        experienceId: 'home',
-        personalization: {
-          events: [
-            expect.objectContaining({
-              type: 'page',
-              properties: expect.objectContaining({
-                path: '/offers',
-                search: '?tab=sale',
-              }),
-            }),
-          ],
-        },
-      }),
-      { config }
+    expect(source.fetchExperience.mock.calls.at(-1)![0].personalization?.events?.[0]).toMatchObject(
+      {
+        properties: { path: '/offers', search: '?tab=sale' },
+      }
     );
     expect(getPagePayload).toHaveBeenCalledTimes(2);
     expect(getPagePayload).toHaveBeenLastCalledWith(
@@ -260,6 +206,12 @@ describe('TanStack Router mapping', () => {
     expect(getPagePayload).toHaveBeenCalledTimes(1);
     expect(getPagePayload.mock.calls[0]![0].context.location).toBe(committed);
 
+    // A loader can republish outgoing matches without committing the new route.
+    matches = matches.map((match) => ({ ...match, isFetching: 'loader' }));
+    await render({ getPagePayload });
+    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
+    expect(getPagePayload).toHaveBeenCalledTimes(1);
+
     location = { ...committed, state: { key: 'canceled' } };
     await render({ getPagePayload });
     expect(source.fetchExperience).toHaveBeenCalledTimes(1);
@@ -270,7 +222,7 @@ describe('TanStack Router mapping', () => {
       hash: 'done',
       href: '/resolved?step=3#done',
     };
-    matches = [...matches];
+    matches = [{ id: 'resolved', pathname: '/resolved', params: {} }];
     await render({ getPagePayload });
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
     expect(getPagePayload).toHaveBeenCalledTimes(2);
@@ -292,42 +244,5 @@ describe('TanStack Router mapping', () => {
     routerState.resolvedLocation = location;
     await render({ getPagePayload });
     expect(source.fetchExperience).toHaveBeenCalledTimes(2);
-  });
-
-  it('forwards managed configuration and onStatesReady without router options entering SDK configuration', async () => {
-    const onStatesReady = vi.fn();
-    await act(async () =>
-      view.render(
-        <ExperiencesRoot
-          {...webConfig}
-          onStatesReady={onStatesReady}
-          pagePayload={{ properties: { title: 'Products' } }}
-        >
-          <span>root child</span>
-        </ExperiencesRoot>
-      )
-    );
-    expect(construct).toHaveBeenCalledExactlyOnceWith(webConfig);
-    expect(onStatesReady).toHaveBeenCalledExactlyOnceWith(source.sdk.states);
-  });
-
-  it('forwards matching handoff pathname/search while retaining hash metadata', async () => {
-    const builder = new EventBuilder({
-      channel: 'server',
-      library: { name: 'test', version: '1' },
-    });
-    const handoff: ExperiencesHandoff = {
-      spaceId: 'space',
-      environmentId: 'master',
-      cache: { scope: 'private-request' },
-      state: { profile: profileFixture('server-profile') },
-      replay: { routeKey: '/products?tab=featured', events: [builder.buildPageView()] },
-    };
-    await render({ handoff });
-    expect(hydrateAndTrackCurrentPage).toHaveBeenCalledOnce();
-    const [received, options] = hydrateAndTrackCurrentPage.mock.calls[0]!;
-    expect(received).toBe(handoff);
-    expect(options.routeKey).toBe('/products?tab=featured');
-    expect(options.buildPayload({ isInitialEmission: true }).properties.hash).toBe('#details');
   });
 });

@@ -201,8 +201,8 @@ and bound `Experience`, `useManagedExperience` and `ExperienceRenderer`. The ent
 also export matching `*ExperiencesRootProps`, `*ExperiencesProviderProps` and
 `*AutoPageContext` types, plus `AutoPagePayload`, `AutoPageEmissionContext` and
 `AutoPagePayloadOptions`. React Router requires a data router (`useMatches`, optional
-`react-router-dom` peer >=6.4); TanStack's optional `@tanstack/react-router` peer is
-`>=1`. Keep ordinary React imports and declarations independent of both routers.
+`react-router-dom` peer `^6.4.0 || ^7.0.0`); TanStack's optional `@tanstack/react-router` peer is
+`^1.0.0`. Keep ordinary React imports and declarations independent of both routers.
 Mount one stable wrapper inside the router above the primary managed `Experience`.
 Roots reuse existing SDK ownership/cleanup; injected Providers leave SDK destruction
 to the application. Existing owner props are retained except `routeKey`,
@@ -211,8 +211,14 @@ to the application. Existing owner props are retained except `routeKey`,
 nested records: router metadata, static payload, then dynamic payload; later values
 win and undefined layers are skipped. Metadata supplies hash/path/query/search/url.
 Route keys always use pathname plus original search, without query re-encoding;
-hash is metadata only. TanStack pairs the URL with settled rendered matches,
-retaining the previous URL during pending navigation and pending UI. Preserve existing server-handoff matching. No browser handoff
+hash is metadata only. React Router derives basename-aware identity and metadata
+through `useHref`, retaining raw router location/match objects. TanStack adopts
+presented route/search matches, including a successful parent with a pending child;
+location-only and fetching-status updates retain the previous route. Both bindings
+share one internal wrapper factory and lazy payload composition. The existing
+provider reads latest committed payload options without restarting a handoff on
+inline object/callback or hash changes; absent payload capability remains absent.
+Preserve existing server-handoff matching. No browser handoff
 producer, tracker or direct page emitter is added: the existing root sequence owns
 managed XDA page injection, explicit `personalization.events` remains authoritative,
 and Retry stays event-free. See the

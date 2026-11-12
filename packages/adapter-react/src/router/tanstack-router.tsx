@@ -1,20 +1,16 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import {
   useRouter,
   useRouterState,
   type AnyRouter,
   type RouterState,
 } from '@tanstack/react-router';
+import type { CreateReactExperiencesOptions } from '../experience/create-react-experiences.js';
+import { sameValue } from '../experience/experience-source-controller.js';
+import { createRouterBinding } from './create-router-binding.js';
 import {
-  createReactExperiences,
-  type CreateReactExperiencesOptions,
-} from '../experience/create-react-experiences.js';
-import {
-  buildRouterPagePayload,
-  useRouterPageInputs,
-  type AutoPagePayloadOptions,
   type RouterExperiencesRootProps,
   type RouterExperiencesProviderProps,
 } from './page-payload.js';
@@ -44,7 +40,7 @@ export type TanStackRouterExperiencesRootProps =
 export type TanStackRouterExperiencesProviderProps =
   RouterExperiencesProviderProps<TanStackRouterAutoPageContext>;
 
-function usePageOptions(options: AutoPagePayloadOptions<TanStackRouterAutoPageContext>) {
+function useRouteContext(): TanStackRouterAutoPageContext {
   const router = useRouter();
   const snapshot = useRouterState({
     select: (state) => ({
@@ -53,47 +49,41 @@ function usePageOptions(options: AutoPagePayloadOptions<TanStackRouterAutoPageCo
       matches: state.matches,
     }),
   });
-  // Location-only updates are pending; settled matches publish before resolvedLocation.
-  // Move URL and content together, retaining the previous URL during pending UI.
-  const location = useMemo(
-    () =>
-      snapshot.matches.some((match) => match.status === 'pending')
-        ? (snapshot.resolvedLocation ?? snapshot.location)
-        : snapshot.location,
-    [snapshot.matches, snapshot.resolvedLocation]
-  );
+  const [presented, setPresented] = useState(() => ({ router, ...snapshot }));
+  // A location-only publication still belongs to the outgoing content. Adopt the
+  // destination when route matches change, including successful parents with a
+  // pending child. Fetching/status updates alone do not identify a new route.
+  const matchesChanged =
+    snapshot.matches.length !== presented.matches.length ||
+    snapshot.matches.some((match, index) => {
+      const previous = presented.matches[index]!;
+      return match.id !== previous.id || !sameValue(match.search, previous.search);
+    });
+  const changed =
+    router !== presented.router ||
+    matchesChanged ||
+    snapshot.resolvedLocation !== presented.resolvedLocation;
+  const current = changed
+    ? {
+        router,
+        ...snapshot,
+        location:
+          matchesChanged || router !== presented.router
+            ? snapshot.location
+            : (snapshot.resolvedLocation ?? snapshot.location),
+      }
+    : presented;
+  // Render-time state adjustment pairs the new context with its children in the
+  // same render and leaves abandoned renders isolated from the committed owner.
+  if (changed) setPresented(current);
+  const location = current.location;
   const matches = snapshot.matches;
   const { hash, href, pathname, searchStr } = location;
   const routeKey = `${pathname}${searchStr}`;
-  const routerPayload = useMemo(
-    () => buildRouterPagePayload({ hash, pathname, search: searchStr, url: href }),
-    [hash, href, pathname, searchStr]
-  );
-  const context = useMemo(
-    () => ({ hash, location, matches, pathname, routeKey, router, search: searchStr, url: href }),
-    [hash, location, matches, pathname, routeKey, router, searchStr, href]
-  );
-  return useRouterPageInputs(routerPayload, options, context, routeKey);
+  return { hash, location, matches, pathname, routeKey, router, search: searchStr, url: href };
 }
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
 export function bindTanStackRouterExperiences(options: CreateReactExperiencesOptions) {
-  const bound = createReactExperiences(options);
-  function ExperiencesRoot({
-    pagePayload,
-    getPagePayload,
-    ...props
-  }: TanStackRouterExperiencesRootProps) {
-    const inputs = usePageOptions({ pagePayload, getPagePayload });
-    return <bound.ExperiencesRoot {...props} {...inputs} />;
-  }
-  function ExperiencesProvider({
-    pagePayload,
-    getPagePayload,
-    ...props
-  }: TanStackRouterExperiencesProviderProps) {
-    const inputs = usePageOptions({ pagePayload, getPagePayload });
-    return <bound.ExperiencesProvider {...props} {...inputs} />;
-  }
-  return { ...bound, ExperiencesRoot, ExperiencesProvider };
+  return createRouterBinding(options, useRouteContext);
 }

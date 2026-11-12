@@ -376,6 +376,9 @@ for static `PageViewBuilderArgs`; update route-varying values on navigation.
 An explicit `buildPagePayload` takes precedence, including when it returns
 `undefined`; neither form creates page intent when both are absent and `pageMode`
 is omitted. Explicit `personalization.events` remains complete caller intent.
+Payload callbacks and objects may be inline. Their latest committed values are
+read when page intent is needed; replacing them does not restart the current
+handoff operation. Adding or removing payload capability still updates the owner.
 Ordinary XDA noncommit is
 tolerated without a compensating XPAPI call or accepted-route mark. Explicit replay
 and page/fallback operations
@@ -441,8 +444,8 @@ fetch or per-view resolved update binding is introduced by a provider.
 
 ### Optional router integration
 
-Install the peer for the router you use: `npm install react-router-dom` (>=6.4)
-or `npm install @tanstack/react-router` (>=1). Both peers are optional; ordinary
+Install the peer for the router you use: `npm install react-router-dom` (6.4+ in
+major 6, or major 7) or `npm install @tanstack/react-router` (major 1). Both peers are optional; ordinary
 React imports and declarations remain independent of them. React Router requires
 a data router because the integration uses `useMatches`; a plain `BrowserRouter`
 is insufficient.
@@ -511,18 +514,30 @@ payload. Later values win and undefined layers are skipped; overriding one neste
 field preserves its siblings. Router metadata supplies `properties.hash`, `path`,
 `query`, `search` and `url`, even without custom payloads.
 Query keys with one value map to strings; repeated keys map to ordered string arrays.
+Composition runs when the existing sequence requests page intent, using the
+latest committed options. Inline payload objects and callbacks need no memoization.
+The two bindings share their root/provider wrappers and composition; each reads
+only its own router's context.
 
 Each subpath exports its matching `*ExperiencesRootProps`,
 `*ExperiencesProviderProps` and `*AutoPageContext` types, plus `AutoPagePayload`
 (page builder arguments), `AutoPageEmissionContext<TRouteContext>` and
 `AutoPagePayloadOptions<TRouteContext>`. Both router contexts include `location`,
 `matches`, `hash`, `pathname`, `search`, `url` and `routeKey`; `TanStackRouterAutoPageContext` also includes `router`.
+For React Router, context `pathname`, page `properties.path`/`url` and route
+identity include the configured basename; `location` and `matches` remain the
+router's original objects. Payload `properties.url` resolves against the browser
+origin when available and uses the router URL unchanged during server rendering.
+Set `pagePayload.properties.url`
+or return it from `getPagePayload` when the application requires a canonical
+absolute URL on both server and client.
 
 Route keys always concatenate pathname and the router's original search string,
 without query re-encoding, matching the existing server-handoff contract. Hash is
 metadata only and does not create a new page identity. TanStack moves the URL
-with settled rendered matches, retaining the previous URL while navigation or
-pending UI is unresolved. The SDK does not generate
+with the presented route/search matches, including a successful parent whose
+child is pending. Location-only and loading-status updates retain the previous
+route; a child settling does not create another page identity. The SDK does not generate
 browser handoffs. These wrappers feed page intent into the existing managed XDA
 sequence; explicit `personalization.events` remains authoritative and Retry stays
 event-free.

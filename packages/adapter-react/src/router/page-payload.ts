@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
-import type { CurrentPageOptions, PageViewBuilderArgs } from '@contentful/experiences-web';
+import type { PageViewBuilderArgs } from '@contentful/experiences-web';
 import type {
   ExperiencesProviderProps,
   ExperiencesRootProps,
@@ -102,23 +101,4 @@ export function buildRouterPagePayload({
       url: absoluteUrl,
     },
   };
-}
-
-/** Supply intent to the existing sequence; event construction and admission remain SDK-owned. */
-export function useRouterPageInputs<TRouteContext>(
-  routerPayload: AutoPagePayload,
-  { pagePayload, getPagePayload }: AutoPagePayloadOptions<TRouteContext>,
-  context: TRouteContext,
-  routeKey: string
-) {
-  const buildPagePayload = useCallback<CurrentPageOptions['buildPayload']>(
-    ({ isInitialEmission }) =>
-      buildAutoPagePayload(
-        routerPayload,
-        { pagePayload, getPagePayload },
-        { context, routeKey, isInitialEmission }
-      ),
-    [routerPayload, pagePayload, getPagePayload, context, routeKey]
-  );
-  return { routeKey, buildPagePayload };
 }

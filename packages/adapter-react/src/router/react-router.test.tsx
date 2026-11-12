@@ -2,7 +2,7 @@
 
 import { act, type HTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Location, UIMatch } from 'react-router-dom';
+import type { Location } from 'react-router-dom';
 import type { ExperiencesHandoff, Config } from '@contentful/experiences-web';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { sourceSdk } from '../test/managed-experience.js';
@@ -15,12 +15,13 @@ import {
   type ReactRouterExperiencesProviderProps,
 } from './react-router.js';
 
-const { useLocation, useMatches, construct } = vi.hoisted(() => ({
+const { useHref, useLocation, useMatches, construct } = vi.hoisted(() => ({
+  useHref: vi.fn(),
   useLocation: vi.fn(),
   useMatches: vi.fn(),
   construct: vi.fn(),
 }));
-vi.mock('react-router-dom', () => ({ useLocation, useMatches }));
+vi.mock('react-router-dom', () => ({ useHref, useLocation, useMatches }));
 vi.mock('@contentful/experiences-web', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@contentful/experiences-web')>();
   return {
@@ -52,7 +53,7 @@ describe('React Router mapping', () => {
   let view: ReactTestRoot;
   let source: ReturnType<typeof sourceSdk>;
   let location: Location;
-  let matches: UIMatch[];
+  let matches: ReactRouterAutoPageContext['matches'];
   let trackCurrentPage: ReturnType<typeof vi.fn>;
   let hydrateAndTrackCurrentPage: ReturnType<typeof vi.fn>;
 
@@ -83,6 +84,9 @@ describe('React Router mapping', () => {
     ];
     useLocation.mockImplementation(() => location);
     useMatches.mockImplementation(() => matches);
+    useHref.mockImplementation(
+      (value: Location) => `${value.pathname}${value.search}${value.hash}`
+    );
   });
 
   afterEach(async () => {
@@ -195,12 +199,14 @@ describe('React Router mapping', () => {
 
   it('forwards managed configuration and onStatesReady without router options entering SDK configuration', async () => {
     const onStatesReady = vi.fn();
+    const getPagePayload = vi.fn(() => ({ properties: { title: 'Dynamic products' } }));
     await act(async () =>
       view.render(
         <ExperiencesRoot
           {...webConfig}
           onStatesReady={onStatesReady}
           pagePayload={{ properties: { title: 'Products' } }}
+          getPagePayload={getPagePayload}
         >
           <span>root child</span>
         </ExperiencesRoot>
@@ -208,9 +214,13 @@ describe('React Router mapping', () => {
     );
     expect(construct).toHaveBeenCalledExactlyOnceWith(webConfig);
     expect(onStatesReady).toHaveBeenCalledExactlyOnceWith(source.sdk.states);
+    expect(getPagePayload).not.toHaveBeenCalled();
   });
 
-  it('forwards matching handoff pathname/search while retaining hash metadata', async () => {
+  it('keeps basename-aware handoff identity while reading the latest router payload', async () => {
+    useHref.mockImplementation(
+      (value: Location) => `/app${value.pathname}${value.search}${value.hash}`
+    );
     const builder = new EventBuilder({
       channel: 'server',
       library: { name: 'test', version: '1' },
@@ -220,13 +230,34 @@ describe('React Router mapping', () => {
       environmentId: 'master',
       cache: { scope: 'private-request' },
       state: { profile: profileFixture('server-profile') },
-      replay: { routeKey: '/products?tab=featured', events: [builder.buildPageView()] },
+      replay: { routeKey: '/app/products?tab=featured', events: [builder.buildPageView()] },
     };
-    await render({ handoff });
-    expect(hydrateAndTrackCurrentPage).toHaveBeenCalledOnce();
+    const firstPayload = vi.fn(() => ({ properties: { title: 'First' } }));
+    const latestPayload = vi.fn(
+      (_context: AutoPageEmissionContext<ReactRouterAutoPageContext>) => ({
+        properties: { title: 'Latest' },
+      })
+    );
+    await render({ handoff, getPagePayload: firstPayload });
     const [received, options] = hydrateAndTrackCurrentPage.mock.calls[0]!;
     expect(received).toBe(handoff);
-    expect(options.routeKey).toBe('/products?tab=featured');
-    expect(options.buildPayload({ isInitialEmission: true }).properties.hash).toBe('#details');
+    expect(options.routeKey).toBe('/app/products?tab=featured');
+    expect(source.fetchExperience.mock.calls[0]![0].personalization).toBeUndefined();
+
+    location = { ...location, hash: '#latest', state: { visit: 2 } };
+    matches = [...matches];
+    await render({ handoff, getPagePayload: latestPayload });
+    expect(hydrateAndTrackCurrentPage).toHaveBeenCalledOnce();
+    expect(options.buildPayload({ isInitialEmission: true }).properties).toMatchObject({
+      hash: '#latest',
+      title: 'Latest',
+    });
+    expect(firstPayload).not.toHaveBeenCalled();
+    expect(latestPayload).toHaveBeenCalledOnce();
+    expect(latestPayload.mock.calls[0]![0].context).toMatchObject({
+      hash: '#latest',
+      location,
+      matches,
+    });
   });
 });

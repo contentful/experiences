@@ -1,18 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useLocation, useMatches, type Location, type UIMatch } from 'react-router-dom';
-import {
-  createReactExperiences,
-  type CreateReactExperiencesOptions,
-} from '../experience/create-react-experiences.js';
-import {
-  buildRouterPagePayload,
-  useRouterPageInputs,
-  type AutoPagePayloadOptions,
-  type RouterExperiencesRootProps,
-  type RouterExperiencesProviderProps,
-} from './page-payload.js';
+import { useHref, useLocation, useMatches, type Location } from 'react-router-dom';
+import type { CreateReactExperiencesOptions } from '../experience/create-react-experiences.js';
+import { createRouterBinding } from './create-router-binding.js';
+import type { RouterExperiencesRootProps, RouterExperiencesProviderProps } from './page-payload.js';
 
 export type {
   AutoPagePayload,
@@ -23,7 +14,7 @@ export type {
 export interface ReactRouterAutoPageContext {
   readonly hash: string;
   readonly location: Location;
-  readonly matches: readonly UIMatch[];
+  readonly matches: Readonly<ReturnType<typeof useMatches>>;
   readonly pathname: string;
   readonly routeKey: string;
   readonly search: string;
@@ -35,42 +26,24 @@ export type ReactRouterExperiencesRootProps =
 export type ReactRouterExperiencesProviderProps =
   RouterExperiencesProviderProps<ReactRouterAutoPageContext>;
 
-function usePageOptions(options: AutoPagePayloadOptions<ReactRouterAutoPageContext>) {
+function useRouteContext(): ReactRouterAutoPageContext {
   const location = useLocation();
   const matches = useMatches();
-  const { hash, pathname, search } = location;
-  const url = `${pathname}${search}${hash}`;
+  const { hash, search } = location;
+  // Restore the basename without conflating a hash router's routing envelope
+  // with the location's metadata fragment. A document <base> can precede '#/'.
+  const href = useHref({ ...location, hash: '' });
+  const hashIndex = href.indexOf('#');
+  const pathAndSearch = hashIndex < 0 ? href : href.slice(hashIndex + 1);
+  const searchIndex = pathAndSearch.indexOf('?');
+  const pathname = searchIndex < 0 ? pathAndSearch : pathAndSearch.slice(0, searchIndex);
+  const url = `${pathAndSearch}${hash}`;
   // Hash is metadata; the existing XDA page/handoff identity is pathname/search.
   const routeKey = `${pathname}${search}`;
-  const routerPayload = useMemo(
-    () => buildRouterPagePayload({ hash, pathname, search, url }),
-    [hash, pathname, search, url]
-  );
-  const context = useMemo(
-    () => ({ hash, location, matches, pathname, routeKey, search, url }),
-    [hash, location, matches, pathname, routeKey, search, url]
-  );
-  return useRouterPageInputs(routerPayload, options, context, routeKey);
+  return { hash, location, matches, pathname, routeKey, search, url };
 }
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
 export function bindReactRouterExperiences(options: CreateReactExperiencesOptions) {
-  const bound = createReactExperiences(options);
-  function ExperiencesRoot({
-    pagePayload,
-    getPagePayload,
-    ...props
-  }: ReactRouterExperiencesRootProps) {
-    const inputs = usePageOptions({ pagePayload, getPagePayload });
-    return <bound.ExperiencesRoot {...props} {...inputs} />;
-  }
-  function ExperiencesProvider({
-    pagePayload,
-    getPagePayload,
-    ...props
-  }: ReactRouterExperiencesProviderProps) {
-    const inputs = usePageOptions({ pagePayload, getPagePayload });
-    return <bound.ExperiencesProvider {...props} {...inputs} />;
-  }
-  return { ...bound, ExperiencesRoot, ExperiencesProvider };
+  return createRouterBinding(options, useRouteContext);
 }
