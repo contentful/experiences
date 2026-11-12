@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 
 import { ConsentPanel } from '@/components/ConsentPanel';
+import { PreviewExperiencesRoot } from '@/components/LivePreviewExperience';
 
 export const metadata = {
   title: 'Contentful Experiences — Next.js example',
@@ -19,13 +20,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           minHeight: '100vh',
         }}
       >
-        {children}
-        <Suspense fallback={null}>
-          <ConsentPanel
+        <Suspense fallback={children}>
+          <PreviewExperiencesRoot
             spaceId={process.env.SPACE_ID ?? ''}
             environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
             accessToken={process.env.CDA_TOKEN ?? ''}
-          />
+            previewToken={process.env.CPA_TOKEN}
+          >
+            {children}
+            <ConsentPanel />
+          </PreviewExperiencesRoot>
         </Suspense>
       </body>
     </html>

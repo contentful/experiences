@@ -6,8 +6,7 @@ export type CreateClientOptions = {
   accessToken: string;
   /**
    * Base URL for the delivery client. Defaults to `DELIVERY_HOST` when omitted.
-   * Pass `PREVIEW_HOST` for preview mode, or any custom URL (staging, proxy,
-   * per-region). Both constants are exported from this package.
+   * Pass a custom URL for staging, a proxy, or a regional endpoint.
    */
   host?: string;
 } & Omit<ContentfulViewDeliveryClient.Options, 'token' | 'baseUrl'>;

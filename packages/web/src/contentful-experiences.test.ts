@@ -116,7 +116,7 @@ describe('Web ContentfulExperiences', () => {
     }
   );
 
-  it('forwards changed parameters and preview flags without retaining fetch values', async () => {
+  it('forwards changed parameters without retaining fetch values', async () => {
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
@@ -127,7 +127,7 @@ describe('Web ContentfulExperiences', () => {
       { config: { components: {} } }
     );
     await runtime.fetchExperience(
-      { experienceId: 'exp', parameters: { featuredPosts: { limit: 12 } }, preview: true },
+      { experienceId: 'exp', parameters: { featuredPosts: { limit: 12 } } },
       { config: { components: {} } }
     );
     await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
@@ -136,7 +136,6 @@ describe('Web ContentfulExperiences', () => {
       { featuredPosts: { limit: 12 } },
       undefined,
     ]);
-    expect(fetch.mock.calls[1]?.[0].preview).toBe(true);
   });
 
   it('uses live browser context and Web attribution', () => {
@@ -471,10 +470,9 @@ describe('Web ContentfulExperiences', () => {
     expect(() => createRuntime()).not.toThrow();
   });
 
-  it('forwards per-call preview to the runtime', async () => {
+  it('uses ordinary fetching when preview has no URL session', async () => {
     const options: Parameters<ContentfulExperiences['fetchExperience']>[0] = {
       experienceId: 'experience',
-      preview: true,
     };
 
     const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });

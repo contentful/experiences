@@ -166,7 +166,6 @@ export {
   ContentfulViewDelivery,
   ContentfulViewDeliveryClient,
   DELIVERY_HOST,
-  DestinationPreviewNotSupportedError,
   ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,

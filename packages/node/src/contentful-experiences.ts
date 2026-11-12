@@ -74,9 +74,10 @@ export type RequestContext = {
    * Does not affect event builders, direct event methods, editor preview, or handoff evaluation.
    */
   preflight?: boolean;
-  /** Suppresses events for this request. Defaults to false. */
-  isPreview?: boolean;
-  /** The active editor session for this request; credentials belong to SDK configuration. */
+  /**
+   * The active editor session for this request; credentials belong to SDK configuration.
+   * A configured Preview integration and a nonblank Session ID enable preview policy.
+   */
   preview?: PreviewSessionOptions;
   locale?: string;
   resolveOptions?: ResolveDefaults & Pick<ResolveOptions, 'sourceMap'>;
@@ -231,19 +232,17 @@ class RequestBoundExperiences implements RequestRuntime {
     if (context.preflight !== undefined && typeof context.preflight !== 'boolean') {
       throw new TypeError('Request preflight must be a boolean');
     }
-    const sessionId = context.preview?.sessionId ?? runtime.config.preview?.sessionId;
-    this.#previewOptions = sessionId
-      ? {
-          sessionId,
-          sessionHost: context.preview?.sessionHost ?? runtime.config.preview?.sessionHost,
-          resourceResolution:
-            context.preview?.resourceResolution ?? runtime.config.preview?.resourceResolution,
-        }
-      : undefined;
-    if (this.#previewOptions !== undefined && context.isPreview === false) {
-      throw new TypeError('Preview Session cannot be combined with isPreview: false');
-    }
-    this.#isPreview = this.#previewOptions !== undefined || context.isPreview === true;
+    const sessionId = context.preview?.sessionId.trim();
+    this.#previewOptions =
+      runtime.config.preview !== undefined && sessionId
+        ? {
+            sessionId,
+            sessionHost: context.preview?.sessionHost ?? runtime.config.preview?.sessionHost,
+            resourceResolution:
+              context.preview?.resourceResolution ?? runtime.config.preview?.resourceResolution,
+          }
+        : undefined;
+    this.#isPreview = this.#previewOptions !== undefined;
     this.#preflight = context.preflight;
     const { personalizationOptions, analyticsOptions } = context;
     this.#personalizationOptions =
@@ -261,10 +260,10 @@ class RequestBoundExperiences implements RequestRuntime {
     // Personalization transport locale: the request locale wins over the transport option.
     this.#personalizationLocale =
       context.locale ?? this.#personalizationOptions?.locale ?? runtime.locale;
-    this.#profile = context.profile;
+    this.#profile = this.isPreview ? undefined : context.profile;
     const requested = toConsentState(context.consent ?? {});
     this.#consent = { ...requested, events: requested.events ?? context.eventConsent };
-    this.canPersistProfile = this.#consent.persistence === true;
+    this.canPersistProfile = !this.isPreview && this.#consent.persistence === true;
 
     this.eventBuilder = {
       buildIdentify: (args) =>
@@ -640,6 +639,7 @@ class RequestBoundExperiences implements RequestRuntime {
   }
 
   private setProfile(profile: EventProfile): void {
+    if (this.isPreview) return;
     this.#profile = profile;
     this.#profileRevision += 1;
   }

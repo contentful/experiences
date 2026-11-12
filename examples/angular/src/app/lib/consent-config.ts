@@ -9,6 +9,8 @@ export interface ConsentConfig {
   spaceId: string;
   environmentId: string;
   accessToken: string;
+  /** Explicitly browser-visible Preview API token. */
+  previewToken?: string;
 }
 
 export function isConsentConfig(value: unknown): value is ConsentConfig {

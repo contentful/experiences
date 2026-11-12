@@ -7,7 +7,6 @@ import type {
   PortableRenderPlan,
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
-import { assertDestinationPreviewSupported } from './destination-guards.js';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
 import { parameterQuery, type ExperienceParameters } from './experience-parameters.js';
@@ -138,19 +137,6 @@ export async function fetchExperience(
   const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
-  if (!('client' in clientOptions) && 'destinationId' in experienceOptions) {
-    const { spaceId, destinationId } = experienceOptions;
-    const locator =
-      'nodeId' in experienceOptions
-        ? { nodeId: experienceOptions.nodeId }
-        : { path: experienceOptions.path };
-    assertDestinationPreviewSupported(clientOptions.preview, {
-      spaceId,
-      destinationId,
-      ...locator,
-    });
-  }
-
   const client = resolveDeliveryClient(
     clientOptions,
     {
@@ -158,8 +144,7 @@ export async function fetchExperience(
       environmentId:
         'environmentId' in experienceOptions ? experienceOptions.environmentId : undefined,
     },
-    log,
-    'fetchExperience'
+    log
   );
 
   if ('nodeId' in experienceOptions) {

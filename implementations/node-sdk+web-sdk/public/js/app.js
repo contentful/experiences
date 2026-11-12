@@ -43,7 +43,9 @@ async function activate() {
     const { handoff, preview } = bootstrap;
     previewBinding = preview?.binding;
     routes = createRoutes(environment.EXPERIENCE_IDS);
-    const previewImplementation = previewBinding ? await loadPreviewImplementation() : undefined;
+    const previewImplementation = environment.LIVE_PREVIEW
+      ? await loadPreviewImplementation()
+      : undefined;
     if (disposed) return;
     // Consumer integration: one Web runtime discovers existing SSR attribution
     // and later DOM changes. Tracking uses SDK consent and current identity.
@@ -56,17 +58,11 @@ async function activate() {
         ? {
             accessToken: environment.LIVE_PREVIEW.accessToken,
             host: environment.LIVE_PREVIEW.host,
-            ...(previewBinding
-              ? {
-                  sessionId: previewBinding.sessionId,
-                  sessionHost: previewBinding.sessionHost,
-                  resourceResolution: previewBinding.resourceResolution,
-                  createClient: previewImplementation.createLivePreviewClient,
-                }
-              : {}),
+            sessionHost: environment.LIVE_PREVIEW.sessionHost,
+            resourceResolution: environment.LIVE_PREVIEW.resourceResolution,
+            createClient: previewImplementation.createLivePreviewClient,
           }
         : undefined,
-      isPreview: Boolean(previewBinding),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
     // Maintainer: optional browser-attempt diagnostics, subscribed before replay.

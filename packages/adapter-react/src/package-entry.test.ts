@@ -201,6 +201,10 @@ describe('published package entry points', () => {
         }
         const owned = <ExperiencesRoot {...config} preview={preview} routeKey="/"
           buildPagePayload={() => ({ properties: { title: 'Home' } })}><ManualContent /></ExperiencesRoot>;
+        // @ts-expect-error Preview mode is derived from configuration and the browser URL.
+        const explicitMode = <ExperiencesRoot {...config} isPreview />;
+        // @ts-expect-error Preview session selection belongs to the current URL.
+        const explicitSession: PreviewConfig = { accessToken: 'preview', sessionId: 'session' };
         const supplied = <ExperienceRenderer experience={plan} />;
         const authoritative = <Experience experience={plan} errorFallback="Unavailable" />;
         const unbound = <UnboundExperience experience={plan} config={{ components: {} }} />;

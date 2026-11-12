@@ -69,7 +69,7 @@ const payload = {
 };
 
 function node() {
-  const sdk = new NodeExperiences(config);
+  const sdk = new NodeExperiences({ ...config, preview: { accessToken: 'preview-token' } });
   active.add(sdk);
   return sdk;
 }
@@ -97,11 +97,19 @@ function allEvents(runtime: Omit<EventMethods, 'profile'>) {
 }
 
 // Capture serialized requests from real API clients, including the generated Delivery client.
-function http() {
+function http(previewExperienceId = payload.sys.id) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
     return new globalThis.Response(
-      url.includes('insights') ? '' : JSON.stringify(url.includes('/profiles') ? visitor : payload),
+      url.includes('insights')
+        ? ''
+        : JSON.stringify(
+            url.includes('/profiles')
+              ? visitor
+              : url.includes('/preview_sessions/')
+                ? { ...payload, sys: { ...payload.sys, id: previewExperienceId } }
+                : payload
+          ),
       { status: 200 }
     );
   });
@@ -126,7 +134,7 @@ afterEach(() => {
 });
 
 describe('Session preview event isolation', () => {
-  it.each([{ preview: undefined, isPreview: true }, { preview: { accessToken: 'preview-token' } }])(
+  it.each([{ preview: { accessToken: 'preview-token' } }])(
     'skips all browser calls before a profile or connection (%j)',
     async (options) => {
       const fetch = http();
@@ -154,15 +162,15 @@ describe('Session preview event isolation', () => {
   it('isolates concurrent Node delivery and skips preview XDA events and browser replay', async () => {
     const fetch = http();
     const server = node();
-    const context = { isPreview: true, consent: true };
+    const context = { preview: { sessionId: 'session' }, consent: true };
     const preview = server.forRequest(context);
-    context.isPreview = false;
+    context.preview.sessionId = '';
     const delivery = server.forRequest({ consent: true });
     const [results, admitted] = await Promise.all([allEvents(preview), delivery.page()]);
     expect(results).toEqual(Array(7).fill(skipped));
     expect(admitted.accepted).toBe(true);
     expect(preview.isPreview).toBe(true);
-    expect(preview.canPersistProfile).toBe(true);
+    expect(preview.canPersistProfile).toBe(false);
     expect(preview.profile).toBeUndefined();
     expect((await allEvents(delivery)).every((result) => result.accepted)).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(8);
@@ -185,15 +193,13 @@ describe('Session preview event isolation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('omits embedded events/profile on the wire and ignores a returned profile in both runtimes', async () => {
-    const fetch = http();
+  it('omits embedded events/profile on ordinary-source requests and ignores a returned profile in both preview runtimes', async () => {
+    const fetch = http('other-experience');
     const sdk = web({
-      preview: undefined,
-      isPreview: true,
       defaults: { profile: profileFixture('browser') },
     });
     const request = node().forRequest({
-      isPreview: true,
+      preview: { sessionId: 'session' },
       consent: true,
       profile: { id: 'server' },
     });
@@ -212,15 +218,19 @@ describe('Session preview event isolation', () => {
     expect(plans.map((plan) => plan.personalization?.profile)).toEqual(
       Array(2).fill(visitor.data.profile)
     );
-    expect(fetch).toHaveBeenCalledTimes(2);
-    for (const [, options] of fetch.mock.calls) {
+    expect(fetch).toHaveBeenCalledTimes(4);
+    const ordinaryRequests = fetch.mock.calls.filter(
+      ([url]) => !String(url).includes('/preview_sessions/')
+    );
+    expect(ordinaryRequests).toHaveLength(2);
+    for (const [, options] of ordinaryRequests) {
       expect(JSON.parse(String(options?.body))).toEqual({
         parameters: input.parameters,
         extensions: { sourceMap: {} },
       });
     }
     expect(input).toEqual(original);
-    expect(request.profile?.id).toBe('server');
+    expect(request.profile).toBeUndefined();
     expect(sdk.states.profile.current?.id).toBe('browser');
   });
 
@@ -293,24 +303,23 @@ describe('Session preview event isolation', () => {
     expect(web().isPreview).toBe(false);
   });
 
-  it.each([undefined, false])(
-    'keeps Node in delivery without isPreview: true (%j)',
-    (isPreview) => {
-      expect(node().forRequest({ isPreview }).isPreview).toBe(false);
+  it.each([undefined, { sessionId: '' }, { sessionId: '   ' }])(
+    'keeps Node in delivery without a nonempty session (%j)',
+    (preview) => {
+      expect(node().forRequest({ preview }).isPreview).toBe(false);
     }
   );
 
-  it('accepts an explicit true without a URL ID', async () => {
+  it('keeps ordinary policy without a URL ID', async () => {
     const fetch = http();
     window.history.replaceState({}, '', '/');
-    const sdk = web({ isPreview: true });
-    expect(sdk.isPreview).toBe(true);
-    expect(await allEvents(sdk)).toEqual(Array(7).fill(skipped));
-    await sdk.flush();
-    expect(fetch).not.toHaveBeenCalled();
+    const sdk = web();
+    expect(sdk.isPreview).toBe(false);
+    expect((await sdk.page()).accepted).toBe(true);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it.each([{ isPreview: false }, { preview: undefined }])(
+  it.each([{ preview: undefined }])(
     'keeps delivery with a URL Session ID when preview is disabled (%j)',
     async (options) => {
       const fetch = http();

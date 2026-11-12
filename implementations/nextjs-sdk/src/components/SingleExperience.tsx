@@ -8,10 +8,10 @@ import {
 import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
-const preview = {
-  enabled: true,
-  createClient: createLivePreviewClient,
-};
+const preview =
+  process.env.NEXT_PUBLIC_LIVE_PREVIEW_ENABLED === 'true'
+    ? { createClient: createLivePreviewClient }
+    : undefined;
 
 const app = bindAppRouterClientExperiences({ config: browserRegistry, preview }).request;
 const { Experience: AppRequestExperience } = app;

@@ -142,10 +142,11 @@ when `LIVE_PREVIEW_ENABLED=true` and the URL supplies a nonempty
 application/build code never reads it or includes it in browser configuration.
 The two preview fields are blank in `.env.example`. Missing/empty session parameters
 or a falsy flag select ordinary mode, including when a nonempty session parameter
-remains in the URL. The app explicitly passes that policy to the SDK so ordinary
-event handling remains available under normal consent/identity requirements.
-Links preserve URL parameters. Changing session or fixed preview policy
-recreates the document/owner; ordinary navigation retains it. Rebuild and restart
+remains in the URL. The app configures Preview transport and the client factory only when the deployment
+flag is enabled; the SDK reads the browser URL session and determines `isPreview`,
+keeping ordinary event handling available under normal consent/identity requirements.
+Links preserve URL parameters. The managed root replaces its owned SDK when the
+URL session changes or preview mode is entered or left; ordinary navigation retains it. Rebuild and restart
 after changing the deployment flag: Vite replaces `__LIVE_PREVIEW_ENABLED__` at
 build time, excluding the optional preview import/chunk when disabled. Runtime
 configuration alone cannot add an excluded chunk. The session token is required;
@@ -197,7 +198,7 @@ the installed package's public exports and Runtime's supported preview configura
 - `src/ConsentControls.tsx`: independent consent controls, Identify/custom visitor intent, Reset, Retry and preview diagnostics. Visitor actions are disabled while the initial content request is pending; there is no application action queue.
 - `src/attempt-log.ts`, `src/TrackingLog.tsx`: retained attempt subscription, measured interval grouping and sidebar age timer.
 - `src/content-loader.ts`: the event-free comparison hook/loop and its effect cleanup, without a supported multi-Experience guarantee.
-- `src/preview.ts`: build-gated public client factory and URL/environment session binding.
+- `src/preview.ts`: build-gated public client factory and deployment Preview configuration.
 - `src/Content.tsx`: plain card/template components, generated field types, narrow binding checks, Rich Text and the named slot.
 - `src/experience-config.tsx`: SDK registrations and Fragment clickability; presentation components remain separate.
 - `src/ExperiencePresentation.tsx`: current content, diagnostics, error/empty display, managed comparison seeds and one context-based manual-view registration callback.

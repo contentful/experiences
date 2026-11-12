@@ -22,7 +22,7 @@ import {
   type ServerRequestOverrides,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
-import { resolvePreview, resolvePreviewSession } from './preview.js';
+import { resolvePreview } from './preview.js';
 
 export type { RequestResult } from './request-result.js';
 export { serializeRequestResult } from './server-config.js';
@@ -132,7 +132,6 @@ export function bindPagesRouterServerExperiences<Config extends PagesRouterServe
     };
     const resolved = await resolveRequestPolicy(options, overrides, context);
     nativeContext.res.setHeader('Cache-Control', 'private, no-store');
-    const session = resolvePreviewSession(preview, context.requestUrl);
     if (isSpeculativeRequest(incoming.headers))
       return serializeRequestResult(resolved.result, resolved.policy);
     const request = bindExperiencesRequest(sdk, {
@@ -143,8 +142,6 @@ export function bindPagesRouterServerExperiences<Config extends PagesRouterServe
         (consent?.server === undefined ? false : await resolveServerValue(consent.server, context)),
       locale: overrides.locale ?? options.locale ?? nativeContext.locale,
       preflight: resolved.mode === 'hybrid',
-      preview: session,
-      isPreview: overrides.isPreview === true || session !== undefined,
     });
     try {
       const result = await loadPrimaryExperience(request, resolved, context, options);

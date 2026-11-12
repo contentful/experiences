@@ -94,7 +94,6 @@ app.get('/', async (req, res) => {
     locale,
     eventContext,
     preview,
-    isPreview: Boolean(preview),
   });
   try {
     const identifyRequested = !request.isPreview && Boolean(userId);

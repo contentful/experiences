@@ -56,10 +56,6 @@ export async function resolveRequestPolicy(
     ...(options.preview
       ? {
           preview: {
-            ...(options.preview.enabled === undefined ? {} : { enabled: options.preview.enabled }),
-            ...(options.preview.sessionId === undefined
-              ? {}
-              : { sessionId: options.preview.sessionId }),
             ...(options.preview.sessionHost === undefined
               ? {}
               : { sessionHost: options.preview.sessionHost }),

@@ -119,16 +119,10 @@ describe('useManagedExperience', () => {
     expect(fetchExperience).not.toHaveBeenCalled();
   });
 
-  it('requests ordinary source maps even with automatic tracking disabled and in static preview', async () => {
+  it('requests ordinary source maps even with automatic tracking disabled', async () => {
     const source = sourceSdk();
     await act(async () => root.render(content(source, { experienceId: 'home', config })));
     expect(source.fetchExperience.mock.calls[0]?.[0].extensions).toEqual({ sourceMap: {} });
-    const previewSource = sourceSdk();
-    Object.defineProperty(previewSource.sdk, 'isPreview', { value: true });
-    await act(async () => root.render(content(previewSource, { experienceId: 'home', config })));
-    expect(previewSource.fetchExperience.mock.calls.at(-1)?.[0].extensions).toEqual({
-      sourceMap: {},
-    });
   });
 
   it('suppresses automatic defaults for the Preview context while keeping errors scoped to its payload ID', async () => {

@@ -108,8 +108,6 @@ export type ConfigDefaults = StatefulDefaults;
  * Long-lived, browser-oriented SDK configuration.
  */
 export type Config = Omit<BaseConfig, 'eventBuilder' | 'locale'> & {
-  /** Suppresses events for this instance. Defaults to URL session detection when preview is configured. */
-  isPreview?: boolean;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -345,12 +343,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       },
     });
     const sessionId = resolvePreviewSessionId(
-      config.preview?.sessionId,
       new globalThis.URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
     );
-    if (config.preview?.sessionId?.trim() && config.isPreview === false)
-      throw new TypeError('Preview Session cannot be combined with isPreview: false');
-    this.#isPreview = config.isPreview ?? (config.preview !== undefined && Boolean(sessionId));
+    this.#isPreview = config.preview !== undefined && Boolean(sessionId);
     this.#previewOptions =
       this.isPreview && config.preview && sessionId
         ? {
@@ -554,16 +549,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         if (next.persistence === false) {
           LocalStore.clearProfileContinuity();
           this.#identity.clear();
-        } else if (this.isPreview && next.persistence === true) {
-          // Preview startup never mutates continuity. An explicit visitor command still can.
-          this.#reconcileCookie(this.#identity.read());
-          LocalStore.profile = profileSignal.peek();
-          this.#identity.persist(
-            this.#identity.resolve({
-              profileId: profileSignal.peek()?.id,
-              handoffId: this.#adoptedProfileId.peek(),
-            })
-          );
         }
       } finally {
         // Cookie deletion can throw in a restricted document. Queues and old
@@ -711,7 +696,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       if (preview !== undefined) return preview;
     }
     return this.#fetchPersonalized(options, {
-      preview: options.preview === true,
       currentPage,
       prepare: (current) => this.#withTrackingSourceMap(current),
       send: (final) => super.fetchExperience(final, resolveOptions),
@@ -725,7 +709,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
                   request: {
                     ...final,
                     locale: options.locale ?? this.locale,
-                    preview: options.preview ?? false,
                   },
                   revision,
                 },
@@ -766,7 +749,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   >(
     options: TOptions,
     request: {
-      preview?: boolean;
       currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>;
       prepare?: (options: TOptions) => TOptions;
       send: (options: BuiltFetchOptions<TOptions>) => Promise<TResult>;
@@ -830,7 +812,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         (this.#profileRevision !== profileRevision || this.#identityRevision !== identityRevision)
       )
         throw new Error('Experiences fetch identity was superseded');
-      if (request.preview === true && !this.isPreview) return result;
       await this.#adoptFetchedState(
         'personalization' in result ? result.personalization : undefined,
         () => {

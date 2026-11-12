@@ -57,12 +57,12 @@ npm run preview                        # http://localhost:4000/demo/landing
 
 ### Query parameters
 
-| Param                   | Effect                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `?preview=true`         | Fetches from the Preview API using `CPA_TOKEN` (see below)                                 |
-| `?debug=true`           | Turns on the resolver's debug output; reaches components as `injectExperience().debug`     |
-| `?personalization=true` | Sends a page event so XDA can select a matching Optimization Variant (see below)           |
-| `?locale=de-DE`         | Passed to `fetchExperience` **and** into `metadata`, where `card`'s `resolveData` reads it |
+| Param                      | Effect                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `?preview_session_id=<id>` | Loads a Preview Session when `CPA_TOKEN` is configured (see below)                         |
+| `?debug=true`              | Turns on the resolver's debug output; reaches components as `injectExperience().debug`     |
+| `?personalization=true`    | Sends a page event so XDA can select a matching Optimization Variant (see below)           |
+| `?locale=de-DE`            | Passed to `fetchExperience` **and** into `metadata`, where `card`'s `resolveData` reads it |
 
 ### Optional: personalization
 
@@ -108,31 +108,25 @@ Every page shows a **Consent demo** panel (bottom right), rendered by `AppCompon
 
 The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. `server.ts` passes them on every request and `ConsentStore` relays them to the browser through `TransferState`. The delivery token
 reaches the browser, so use a read-only delivery token. The panel only sends events
-and never fetches an Experience.
+and never fetches an Experience. The panel also receives the explicitly browser-visible `CPA_TOKEN` when configured. Its `preview` capability lets the Web SDK derive session preview from the URL and suppress events.
 
 The interaction buttons send a fixed demo entity. The Web SDK starts interaction
 discovery during construction, but this example does not stamp rendered nodes with
 attribution, so views, hovers and clicks on the page are not tracked automatically.
 
-### Optional: preview mode
-
-Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:4200/experiences/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
-
-[`src/server.ts`](./src/server.ts) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request. `?debug=true` turns on the resolver's debug output the same way.
-
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched Experience until a complete update arrives.
+Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes the Preview Session options to `injectLivePreview`, which keeps the server-fetched Experience until a complete update arrives. This example passes the Preview API token to the browser for that subscription; use a token approved for browser exposure or a trusted proxy.
 
-The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
+The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. Blank session IDs are ignored; without a configured preview token the route uses ordinary delivery.
 
 ### Tokens summary
 
-| Token       | API                | Used by                                      | Required?             |
-| ----------- | ------------------ | -------------------------------------------- | --------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)         | Yes, to run bootstrap |
-| `CDA_TOKEN` | Content Delivery   | The example app                              | Yes, to run the app   |
-| `CPA_TOKEN` | Content Preview    | The example app when the Preview API is used | Only for preview mode |
+| Token       | API                | Used by                                 | Required?                 |
+| ----------- | ------------------ | --------------------------------------- | ------------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)    | Yes, to run bootstrap     |
+| `CDA_TOKEN` | Content Delivery   | The example app                         | Yes, to run the app       |
+| `CPA_TOKEN` | Content Preview    | The example app during Preview Sessions | Only for Preview Sessions |
 
 ## File map
 

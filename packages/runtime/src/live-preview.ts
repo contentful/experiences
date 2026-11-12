@@ -31,8 +31,6 @@ export type PreviewSessionOptions = Pick<
   'sessionId' | 'resourceResolution'
 > & { sessionHost?: string };
 export type PreviewConfig = DeliveryClientOptions & {
-  /** Web defaults to preview_session_id in the URL; an explicit blank disables inference. */
-  sessionId?: string;
   sessionHost?: string;
   resourceResolution?: string;
   /** Pass createLivePreviewClient from @contentful/experiences-live-preview. */

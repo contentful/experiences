@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@contentful/experiences-react": "*",
+    "@contentful/experiences-node": "*",
+    "@contentful/experiences-live-preview": "*",
     "@contentful/experiences-web": "*",
     "next": "^15.0.0",
     "react": "^19.0.0",

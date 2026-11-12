@@ -102,7 +102,6 @@ describe('Pages managed request sequence', () => {
       spaceId: 'space',
       environmentId: 'master',
       delivery: { host: 'https://trusted-proxy.example' },
-      isPreview: true,
       consent: { clientDefaults: { consent: false, persistenceConsent: false } },
     });
     await act(async () => root.render(<ExperiencesRoot defaults={undefined} />));
@@ -303,7 +302,7 @@ describe('Pages managed request sequence', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        preview: { enabled: true, createClient: vi.fn() },
+        preview: { accessToken: 'preview', createClient: vi.fn() },
       });
       const content = <bound.request.Experience />;
       expect(() =>
@@ -391,7 +390,6 @@ describe('Pages managed request sequence', () => {
       allowedEventTypes: [],
       preview: {
         accessToken: 'preview',
-        enabled: true,
         createClient() {
           throw new Error('No socket in this test');
         },

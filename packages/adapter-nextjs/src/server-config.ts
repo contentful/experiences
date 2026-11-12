@@ -69,7 +69,6 @@ export interface ServerConfig extends Omit<NodeConfig, 'preview'> {
 export type ServerRequestOverrides = Partial<ServerRequestPolicy> & {
   readonly consent?: ConsentInput;
   readonly locale?: string;
-  readonly isPreview?: boolean;
 };
 
 export async function resolveServerValue<T>(

@@ -195,8 +195,8 @@ manages one primary Experience and consumes its complete result; it adds no
 multiple-fetch controller, result list or identity reconciliation.
 
 Configure browser-safe Preview credentials and the optional package’s `createLivePreviewClient` factory once on the root.
-The session defaults to the standard `preview_session_id` query parameter;
-`preview.sessionId` is an optional override. The managed Experience JSX stays unchanged:
+Preview activates only when this configuration is present and the current URL
+contains a trimmed, nonempty `preview_session_id` query parameter. The managed Experience JSX stays unchanged:
 
 ```tsx
 import { createLivePreviewClient } from '@contentful/experiences-live-preview';
@@ -225,7 +225,7 @@ view resolution/fetch errors remain in each managed result. Session locale and
 parameters remain server-owned; unsupported explicit overrides reject. Initial
 plans and usable content survive Preview failures. Changing the selected session
 replaces the owned SDK context when the root renders again; child props and renderer APIs do not
-select sessions. An explicit `isPreview: true` still supports static Preview policy.
+select sessions. The readonly `sdk.isPreview` reports the derived mode.
 See [Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
 supported options and transport limits.
 
@@ -254,7 +254,6 @@ fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?) /
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID or Destination path doesn't exist
-DestinationPreviewNotSupportedError         // Thrown when preview is requested for a Destination fetch
 ContentfulViewDelivery                      // Full error namespace from the delivery client
 type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOptions,
   ByDestinationNodeIdExperienceOptions, DestinationRedirectResult, DestinationSitemapResult,
@@ -262,7 +261,7 @@ type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOption
   ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
-Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview is not supported on Destinations (it throws `DestinationPreviewNotSupportedError`); use the by-id form for preview.
+Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview Sessions are not supported on Destinations; use the by-id form for session content.
 
 ```ts
 const result = await fetchExperience(
@@ -345,8 +344,8 @@ The factory is pure and safe at module scope. The managed root constructs Web
 after browser commit and destroys it during cleanup, including Strict Mode
 effect replay. Conflicting owners surface the Web singleton error through context.
 Structural configuration is captured for the mounted owner; use a deliberate
-React `key` replacement to change credentials, endpoints or static preview policy.
-Changes to `preview.sessionId` replace the owned context automatically. Locale props use `setLocale`; consent and other mutable commands use
+React `key` replacement to change credentials or endpoints.
+Changes to the URL session replace the owned context automatically. Locale props use `setLocale`; consent and other mutable commands use
 actions. Direct Web callers create a new SDK context when changing sessions.
 
 `useExperiences()` returns the current `WebExperiencesRuntime` for SDK actions and

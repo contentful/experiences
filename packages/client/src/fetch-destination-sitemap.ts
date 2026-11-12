@@ -1,6 +1,5 @@
 import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import { createDebugLogger } from '@contentful/experiences-sdk-core';
-import { assertDestinationPreviewSupported } from './destination-guards.js';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
 
@@ -47,11 +46,7 @@ export async function fetchDestinationSitemap(
   const { spaceId, destinationId } = destinationOptions;
   const log = createDebugLogger(false, 'client');
 
-  if (!('client' in clientOptions)) {
-    assertDestinationPreviewSupported(clientOptions.preview, { spaceId, destinationId });
-  }
-
-  const client = resolveDeliveryClient(clientOptions, { spaceId }, log, 'fetchDestinationSitemap');
+  const client = resolveDeliveryClient(clientOptions, { spaceId }, log);
 
   const { limit, pageNext, pagePrev } = paginationOptions;
 

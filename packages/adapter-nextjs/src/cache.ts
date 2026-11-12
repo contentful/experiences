@@ -50,10 +50,8 @@ export function assertPublicRequestPolicy(options: {
   if (cache.scope === 'public-permutation') validatePublicPermutationCacheTags(cache.tags);
   if (
     context?.profile !== undefined ||
-    context?.isPreview ||
     context?.preview?.sessionId !== undefined ||
-    fetchOptions?.personalization !== undefined ||
-    fetchOptions?.preview
+    fetchOptions?.personalization !== undefined
   ) {
     throw new TypeError(
       'Public/static requests cannot contain identity, personalization events or preview'

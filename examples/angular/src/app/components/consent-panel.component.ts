@@ -156,6 +156,7 @@ export class ConsentPanelComponent {
         spaceId: config.spaceId,
         environmentId: config.environmentId,
         delivery: { accessToken: config.accessToken },
+        preview: config.previewToken?.trim() ? { accessToken: config.previewToken } : undefined,
       });
       this.runtime = instance;
       this.ready.set(true);

@@ -119,14 +119,15 @@ describe('Pages native server response helper', () => {
       delivery: { accessToken: 'test' },
       config: { components: {} },
       origin: 'https://example.com',
-      preview: { accessToken: 'preview', enabled: true, createClient },
+      preview: { accessToken: 'preview', createClient },
       request: { experience: async () => ({ experienceId: 'home' }) },
     });
     const result = await factory.request.loadExperience(context);
-    expect(result.preview).toEqual({ enabled: true });
+    expect(result.preview).toEqual({});
     expect(createClient).not.toHaveBeenCalled();
-    expect(bind.mock.calls.at(-1)![1].preview).toEqual({ sessionId: 'session' });
-    expect(bind.mock.calls.at(-1)![1].isPreview).toBe(true);
+    expect(bind.mock.calls.at(-1)![1].request?.url).toContain('preview_session_id=session');
+    expect(bind.mock.calls.at(-1)![1]).not.toHaveProperty('preview');
+    expect(bind.mock.calls.at(-1)![1]).not.toHaveProperty('isPreview');
     expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(
       { experienceId: 'home' },
       { config: { components: {} } }
@@ -221,7 +222,7 @@ describe('Pages native server response helper', () => {
       'x-nextjs-data': '1',
     });
     request.isPreview = true;
-    const preview = await factory.request.loadExperience(context, { ...options, isPreview: true });
+    const preview = await factory.request.loadExperience(context, options);
     expect(preview.plan).toEqual({ ...plan, metadata: {} });
     expect(preview.handoff).toBeUndefined();
     expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(descriptor, {

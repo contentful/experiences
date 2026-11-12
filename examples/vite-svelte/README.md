@@ -15,11 +15,11 @@ A client-only Vite + Svelte 5 single-page app demonstrating `@contentful/experie
 
 ## Client-only trade-offs
 
-| A server-rendered app gets                      | This app instead                                                                                                |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Tokens stay on the server                       | `VITE_CDA_TOKEN` is inlined into the bundle. Use a read-only delivery token.                                    |
-| HTML arrives with content                       | Nothing renders until the fetch and resolve finish. Crawlers that do not run JavaScript see an empty page.      |
-| Preview mode (`?preview=true`) and live preview | Not included. Both need a Content Preview API token, which must not ship to the browser. Use a server for them. |
+| A server-rendered app gets | This app instead                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Tokens stay on the server  | `VITE_CDA_TOKEN` is inlined into the bundle. Use a read-only delivery token.                                    |
+| HTML arrives with content  | Nothing renders until the fetch and resolve finish. Crawlers that do not run JavaScript see an empty page.      |
+| Preview Sessions           | Not included. A browser integration needs a Preview API token approved for browser exposure or a trusted proxy. |
 
 ## Run it
 

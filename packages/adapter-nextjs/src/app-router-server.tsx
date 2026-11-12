@@ -37,7 +37,7 @@ import {
   type ServerRequestResult,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
-import { resolvePreview, resolvePreviewSession, mergePreview } from './preview.js';
+import { resolvePreview, mergePreview } from './preview.js';
 import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 
 export { serializeRequestResult } from './server-config.js';
@@ -149,7 +149,6 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
         cookies: cookieStore,
       };
       const resolved = await resolveRequestPolicy(options, overrides, context);
-      const session = resolvePreviewSession(preview, context.requestUrl);
       if (isSpeculativeRequest(context.headers)) return resolved.result;
       const request = bindExperiencesRequest(sdk, {
         request: context.request,
@@ -161,8 +160,6 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
             : await resolveServerValue(consent.server, context)),
         locale: overrides.locale ?? nodeConfig.locale,
         preflight: resolved.mode === 'hybrid',
-        preview: session,
-        isPreview: overrides.isPreview === true || session !== undefined,
       });
       try {
         return await loadPrimaryExperience(request, resolved, context, options);
@@ -261,7 +258,6 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       parameters,
       personalization,
       extensions,
-      preview,
       resolveOptions,
       cache: cachePolicy,
       ...presentation
@@ -272,13 +268,11 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       parameters,
       personalization,
       extensions,
-      preview,
     };
     if (cachePolicy)
       assertPublicRequestPolicy({
         cache: cachePolicy,
         fetchOptions: descriptor,
-        context: { isPreview: sdk.config.preview?.sessionId !== undefined },
       });
     const request = sdk.forRequest({ consent: false });
     try {
@@ -320,9 +314,6 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
           : (context) => resolveServerValue(consent.server!, handlerContext(context)),
       locale: nodeConfig.locale,
       cookieOptions: toAnonymousIdCookieOptions(cookie),
-      preview: preview
-        ? (context) => resolvePreviewSession(preview, context.request.url)
-        : undefined,
     }),
   };
 }

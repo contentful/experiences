@@ -6,11 +6,16 @@ import type {
   OptimizationEventStreamEvent,
   FetchExperienceOptions,
   FetchResolveOptions,
+  PreviewSessionOptions,
 } from '@contentful/experiences-runtime';
 import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 
 // Expose the actual Runtime payload boundary for a no-network spy.
 class TestRuntime extends ContentfulExperiences {
+  override fetchPreviewSessionPayload(session: PreviewSessionOptions): Promise<ExperiencePayload> {
+    return super.fetchPreviewSessionPayload(session);
+  }
+
   override fetchExperiencePayload(
     options: BuiltFetchExperienceOptions,
     resolveOptions: FetchResolveOptions
@@ -34,6 +39,7 @@ function setup(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}
     ...scope,
     locale: 'en-US',
     delivery: { accessToken: 'token' },
+    preview: { accessToken: 'preview-token' },
     ...policy,
   });
   runtimes.push(sdk);
@@ -344,17 +350,19 @@ describe('Node browser-handoff producer', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it('suppresses preview personalization and commitment while preserving request identity', async () => {
+  it('isolates preview personalization and commitment from visitor identity', async () => {
     const { sdk, options, fetch, commit } = setup();
+    vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue(payload());
     const request = sdk.forRequest({
-      isPreview: true,
+      preview: { sessionId: 'session' },
       consent: true,
       profile: { id: 'preview-owner' },
     });
     const { handoff } = await request.fetchExperienceForHandoff(options, resolver, route);
     expect(handoff.replay).toBeUndefined();
     expect(handoff.profileId).toBeUndefined();
-    expect(request.profile?.id).toBe('preview-owner');
+    expect(request.profile).toBeUndefined();
+    expect(request.canPersistProfile).toBe(false);
     expect(fetch.mock.calls[0]![0].personalization).toBeUndefined();
     expect(commit).not.toHaveBeenCalled();
   });
@@ -447,10 +455,15 @@ describe('Node ordinary XDA fetch', () => {
     async (isPreview) => {
       const onEventBlocked = vi.fn();
       const { sdk, fetch, commit } = setup({ onEventBlocked });
+      vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue(payload());
       const build = vi.spyOn(sdk.eventBuilder, 'buildTrack');
       const hook = vi.fn((event: OptimizationEventStreamEvent) => event);
       sdk.interceptors.event.add(hook);
-      const request = sdk.forRequest({ isPreview, consent: false, profile: { id: 'incoming' } });
+      const request = sdk.forRequest({
+        preview: isPreview ? { sessionId: 'session' } : undefined,
+        consent: false,
+        profile: { id: 'incoming' },
+      });
       await request.fetchExperience(
         {
           experienceId: 'experience',
@@ -467,7 +480,7 @@ describe('Node ordinary XDA fetch', () => {
       expect(build).not.toHaveBeenCalled();
       expect(hook).not.toHaveBeenCalled();
       expect(commit).not.toHaveBeenCalled();
-      expect(request.profile?.id).toBe(isPreview ? 'incoming' : 'xda-profile');
+      expect(request.profile?.id).toBe(isPreview ? undefined : 'xda-profile');
     }
   );
 

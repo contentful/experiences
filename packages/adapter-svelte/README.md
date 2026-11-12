@@ -31,7 +31,7 @@ fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?); 
 fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions); // Async; fetches and resolves a Preview Session Experience
 ```
 
-Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview is not supported on Destinations (it throws `DestinationPreviewNotSupportedError`); use the by-id form for preview.
+Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Free fetches use ordinary Delivery. Use the Preview Session helpers below for session content; the free fetch API has no per-call preview toggle.
 
 ```ts
 const result = await fetchExperience(
@@ -48,6 +48,14 @@ if ('redirect' in result) {
 const sitemap = await fetchDestinationSitemap({ spaceId, destinationId }, { accessToken });
 const paths = sitemap.items.map((item) => item.path); // follow sitemap.pages.next for more
 ```
+
+These are low-level Preview Session helpers: read a nonempty, trimmed
+`preview_session_id` from the incoming request or browser URL and pass it as
+`sessionId`. Their `previewToken` remains the helper credential API. When using
+a Node/Web runtime owner, configure optional `preview` capability once; the URL
+ID activates session mode, and no configuration or ID leaves ordinary Delivery.
+Bare Node binds the ID through `forRequest({ preview: { sessionId } })`.
+See the [Runtime preview contract](../runtime/README.md#optional-runtime-live-preview).
 
 Use `fetchPreviewSession` for the initial render when the Contentful app
 provides a `preview_session_id`. It fetches the current Preview Session
@@ -164,7 +172,7 @@ isCssProperty, toCssKey, CSS_PROPERTIES
 
 // From client
 fetchExperience, fetchDestinationSitemap, fetchPreviewSession, createClient, ContentfulViewDelivery,
-ContentfulViewDeliveryClient, NotFoundError, DestinationPreviewNotSupportedError, PreviewSessionFetchError,
+ContentfulViewDeliveryClient, NotFoundError, PreviewSessionFetchError,
 LivePreviewConnectionError,
 DELIVERY_HOST, PREVIEW_HOST, PREVIEW_WEBSOCKET_HOST
 

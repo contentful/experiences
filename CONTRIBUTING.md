@@ -205,7 +205,10 @@ All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
 and a nonempty URL `preview_session_id`. The local `.env` session ID is retained
 only for copying into the URL; code never reads it. Missing/empty parameters or
 a disabled flag keep ordinary event handling, including when a session parameter
-remains in the URL. Their `.env.example` preview flag/session fields are blank.
+remains in the URL. Each deployment supplies Preview configuration conditionally;
+Web and Next infer sessions from the browser/request URL, while bare Node passes
+the incoming session in request-local `preview`. Consumers do not set a separate
+preview mode flag. Their `.env.example` preview flag/session fields are blank.
 
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect

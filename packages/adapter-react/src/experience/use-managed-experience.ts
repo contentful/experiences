@@ -102,17 +102,14 @@ export function useExperienceSource(
       parameters: options.parameters,
       personalization: options.personalization,
       extensions: options.extensions,
-      preview: options.preview,
     };
     const liveSdk = context?.isLive ? context.sdk : undefined;
-    const previewRequest =
-      liveSdk?.states.preview.current?.sessionId !== undefined ||
-      liveSdk?.config.preview?.sessionId !== undefined;
+    const previewRequest = liveSdk?.isPreview === true;
     controller.updateOptions({
       seedRequest: request,
       request: {
         ...request,
-        // Explicit session overrides reach SDK validation unchanged.
+        // Session-owned locale and parameters remain server-controlled.
         locale: request.locale ?? (previewRequest ? undefined : locale),
         extensions: previewRequest
           ? request.extensions

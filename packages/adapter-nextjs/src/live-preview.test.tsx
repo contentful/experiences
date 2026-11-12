@@ -7,7 +7,7 @@ import type { PreviewClientFactory } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindAppRouterClientExperiences } from './app-router-client.js';
 import { bindPagesRouterExperiences } from './pages-router.js';
-import { resolvePreview } from './preview.js';
+import { resolvePreview, resolvePreviewSession } from './preview.js';
 import type { RequestResult } from './request-result.js';
 
 const route = vi.hoisted(() => ({
@@ -75,12 +75,12 @@ describe('managed Next Live Preview', () => {
   it.each(
     (['app', 'pages'] as const).flatMap((family) =>
       (['request', 'ordinary', 'request analytics', 'ordinary analytics'] as const).flatMap(
-        (surface) => [true, false].map((enabled) => ({ family, surface, enabled }))
+        (surface) => [true, false].map((configured) => ({ family, surface, configured }))
       )
     )
   )(
-    '$family $surface sets URL owner mode without guessing a source (enabled=$enabled)',
-    async ({ family, surface, enabled }) => {
+    '$family $surface sets URL owner mode without guessing a source (configured=$configured)',
+    async ({ family, surface, configured }) => {
       const createClient = clientFactory();
       const options = {
         config: { components: {} },
@@ -89,13 +89,14 @@ describe('managed Next Live Preview', () => {
         delivery: { accessToken: 'delivery' },
         allowedEventTypes: [],
         defaults: { consent: false, persistenceConsent: false },
-        preview: {
-          accessToken: 'preview',
-          enabled,
-          createClient,
-          sessionHost: 'https://preview.example.com',
-          resourceResolution: 'resolved',
-        },
+        preview: configured
+          ? {
+              accessToken: 'preview',
+              createClient,
+              sessionHost: 'https://preview.example.com',
+              resourceResolution: 'resolved',
+            }
+          : undefined,
       };
       const binding =
         family === 'app'
@@ -114,8 +115,8 @@ describe('managed Next Live Preview', () => {
           </BoundRoot>
         )
       );
-      expect(sdk.isPreview).toBe(enabled);
-      expect(sdk.config.preview?.sessionId).toBe(enabled ? 'a' : '');
+      expect(sdk.isPreview).toBe(configured);
+      expect(sdk.config.preview !== undefined).toBe(configured);
       expect(network).not.toHaveBeenCalled();
     }
   );
@@ -129,8 +130,10 @@ describe('managed Next Live Preview', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        preview: { accessToken: 'preview', sessionId: 'session', createClient },
+        preview: { accessToken: 'preview', createClient },
       };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
       const binding =
         family === 'app'
           ? bindAppRouterClientExperiences(options)
@@ -140,7 +143,7 @@ describe('managed Next Live Preview', () => {
         .mockImplementation(() => ({ unsubscribe: vi.fn() }));
       const result: RequestResult = {
         requestId: 'primary',
-        routeKey: '/home',
+        routeKey: '/home?preview_session_id=session',
         experience: { experienceId: 'hero' },
         plan: plan('hero'),
       };
@@ -153,7 +156,7 @@ describe('managed Next Live Preview', () => {
           </binding.request.ExperiencesRoot>
         )
       );
-      expect(sdk.config.preview?.sessionId).toBe('session');
+      expect(sdk.config.preview?.createClient).toBe(createClient);
       expect(sdk.isPreview).toBe(true);
       expect(subscribe.mock.calls.map(([id]) => id)).toEqual(['hero', 'footer']);
     }
@@ -170,7 +173,7 @@ describe('managed Next Live Preview', () => {
         delivery: { accessToken: 'delivery' },
         allowedEventTypes: [],
         defaults: { consent: false, persistenceConsent: false },
-        preview: { accessToken: 'preview', enabled: true, createClient },
+        preview: { accessToken: 'preview', createClient },
       };
       const bound =
         family === 'app'
@@ -242,20 +245,18 @@ describe('managed Next Live Preview', () => {
 });
 
 it.each([
-  [false, '?preview_session_id=a', ''],
+  [false, '?preview_session_id=a', undefined],
   [true, '', undefined],
   [true, '?preview_session_id=%20', undefined],
   [true, '?preview_session_id=%20a%20&preview_experience_id=other', 'a'],
 ] as const)(
-  'activates only enabled nonempty URL sessions (%s, %s)',
-  async (enabled, search, expected) => {
+  'activates only configured nonempty URL sessions (%s, %s)',
+  async (configured, search, expected) => {
     const createClient = clientFactory();
-    const previewOptions = resolvePreview(
-      { accessToken: 'preview', enabled, createClient },
-      '/' + search
-    );
+    const config = configured ? { accessToken: 'preview', createClient } : undefined;
+    const previewOptions = resolvePreview(config, '/' + search);
     expect(createClient).not.toHaveBeenCalled();
-    expect(previewOptions?.sessionId).toBe(expected);
-    expect(previewOptions?.createClient).toBe(createClient);
+    expect(resolvePreviewSession(config, '/' + search)?.sessionId).toBe(expected);
+    expect(previewOptions?.createClient).toBe(configured ? createClient : undefined);
   }
 );

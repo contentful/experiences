@@ -146,7 +146,6 @@ describe('App committed route inputs', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { host: 'https://trusted-proxy.example' },
-        isPreview: true,
         defaults: consentDefaults(defaults),
         consent: { clientDefaults: consentDefaults(clientDefaults) },
       });
@@ -260,7 +259,7 @@ describe('App committed route inputs', () => {
           spaceId="space"
           environmentId="master"
           locale="en-US"
-          browser={{ delivery: { host: 'https://trusted-proxy.example' }, isPreview: true }}
+          browser={{ delivery: { host: 'https://trusted-proxy.example' } }}
           defaults={{ consent: false, persistenceConsent: false }}
           cookie={{ expires: 7, path: '/page' }}
           result={result}
@@ -465,7 +464,7 @@ describe('App committed route inputs', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        preview: { enabled: true, createClient: vi.fn() },
+        preview: { accessToken: 'preview', createClient: vi.fn() },
       });
       const content = <bound.request.Experience />;
       expect(() =>
@@ -616,7 +615,7 @@ describe('App committed route inputs', () => {
       environmentId: 'master',
       delivery: { accessToken: 'delivery' },
       initialPagePayload,
-      preview: { enabled: false, createClient: vi.fn() },
+      preview: { accessToken: 'preview', createClient: vi.fn() },
     });
     await act(async () => root.render(<ExperiencesRoot />));
     expect(vi.mocked(RequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(

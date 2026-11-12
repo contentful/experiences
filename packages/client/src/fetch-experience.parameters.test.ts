@@ -171,28 +171,6 @@ describe('fetchExperience transport (real generated Delivery client)', () => {
     }
   );
 
-  it.each([parameters, { featuredPosts: {} }])(
-    'sends parameters on preview with the preview token and host: %j',
-    async (values) => {
-      const fetch = transport();
-      await fetchExperience(
-        { ...identity, parameters: values },
-        { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
-        resolveOptions
-      );
-      expect(request(fetch).url.origin).toBe('https://preview.xdn.contentful.com');
-      if ('productId' in values) {
-        expect(request(fetch).method).toBe('GET');
-        expect(request(fetch).url.searchParams.get('parameter.featuredPosts.order')).toBe(
-          '-fields.title'
-        );
-      } else {
-        expect(request(fetch).method).toBe('POST');
-        expect(request(fetch).body.parameters).toEqual(values);
-      }
-    }
-  );
-
   it('preserves dotted IDs on POST so they cannot masquerade as Record leaves', async () => {
     const fetch = transport();
     const values = { 'featuredPosts.limit': 6 };

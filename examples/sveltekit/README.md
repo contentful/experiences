@@ -109,31 +109,25 @@ Every page shows a **Consent demo** panel (bottom right), rendered by `src/route
 
 The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. `src/routes/+layout.server.ts` reads them and returns them to the layout. The delivery token
 reaches the browser, so use a read-only delivery token. The panel only sends events
-and never fetches an Experience.
+and never fetches an Experience. The panel also receives the explicitly browser-visible `CPA_TOKEN` when configured. Its `preview` capability lets the Web SDK derive session preview from the URL and suppress events.
 
 The interaction buttons send a fixed demo entity. The Web SDK starts interaction
 discovery during construction, but this example does not stamp rendered nodes with
 attribution, so views, hovers and clicks on the page are not tracked automatically.
 
-### Optional: preview mode
-
-Add `CPA_TOKEN=...` (Content Preview API token from **Settings → API keys** in your space) to `.env`, then visit `http://localhost:5173/experiences/landing?preview=true`. The route reads from `preview.xdn.contentful.com`, which needs a preview token — a CDA token gets rejected there.
-
-The by-id route ([`src/routes/experiences/[id]/+page.server.ts`](./src/routes/experiences/[id]/+page.server.ts)) wires this through `fetchExperience`'s client options — both `accessToken` and `previewToken` are passed up front, and `preview: previewMode` selects which one to use per request.
-
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
+Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer. This example passes the Preview API token to the browser for that subscription; use a token approved for browser exposure or a trusted proxy.
 
-The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
+The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. Blank session IDs are ignored; without a configured preview token the route uses ordinary delivery.
 
 ### Tokens summary
 
-| Token       | API                | Used by                                      | Required?             |
-| ----------- | ------------------ | -------------------------------------------- | --------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)         | Yes, to run bootstrap |
-| `CDA_TOKEN` | Content Delivery   | The example app                              | Yes, to run the app   |
-| `CPA_TOKEN` | Content Preview    | The example app when the Preview API is used | Only for preview mode |
+| Token       | API                | Used by                                 | Required?                 |
+| ----------- | ------------------ | --------------------------------------- | ------------------------- |
+| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)    | Yes, to run bootstrap     |
+| `CDA_TOKEN` | Content Delivery   | The example app                         | Yes, to run the app       |
+| `CPA_TOKEN` | Content Preview    | The example app during Preview Sessions | Only for Preview Sessions |
 
 ## File map
 
@@ -145,7 +139,7 @@ examples/sveltekit/
 │   │   ├── +layout.svelte    # root layout; shows the demo hub at `/`, plus the consent panel
 │   │   ├── [...path]/+page.server.ts   # primary: Destination path load, redirects, 404
 │   │   ├── [...path]/+page.svelte      # Destination render
-│   │   ├── experiences/[id]/+page.server.ts  # secondary: by Experience id; preview, live preview
+│   │   ├── experiences/[id]/+page.server.ts  # secondary: by Experience id; Preview Sessions
 │   │   └── experiences/[id]/+page.svelte     # by-id render
 │   └── lib/
 │       ├── components/       # design-system components; design arrives as props
