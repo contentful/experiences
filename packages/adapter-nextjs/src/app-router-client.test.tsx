@@ -573,4 +573,19 @@ describe('App committed route inputs', () => {
     expect(container.textContent).toBe('Server content');
     expect(fetchExperience).not.toHaveBeenCalled();
   });
+  it('preserves a bound static page payload on an explicit managed root', async () => {
+    const initialPagePayload = { properties: { title: 'Configured page' } };
+    const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+      config: { components: {} },
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { accessToken: 'delivery' },
+      initialPagePayload,
+      livePreview: { enabled: false, loadImplementation: vi.fn() },
+    });
+    await act(async () => root.render(<ExperiencesRoot />));
+    expect(vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(
+      initialPagePayload
+    );
+  });
 });

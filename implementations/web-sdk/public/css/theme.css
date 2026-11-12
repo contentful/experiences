@@ -309,16 +309,21 @@ main {
 
 .control-panel__fields {
   display: grid;
-  grid-template-columns: 9rem 5rem auto;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
   gap: 0.4rem 1.5rem;
   align-items: center;
   justify-items: start;
-  width: fit-content;
+  width: 100%;
 }
 
-.control-panel__actions {
-  margin-top: 1.25rem;
-  width: fit-content;
+.control-panel__row:not([hidden]) {
+  display: contents;
+}
+
+.control-panel__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .control-panel__row-label {
@@ -328,10 +333,12 @@ main {
 }
 
 .control-panel__row-value {
+  min-width: 0;
   font-size: 0.825rem;
   font-weight: 600;
   color: var(--color-text);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Buttons */
@@ -730,12 +737,12 @@ main {
   }
 
   .control-panel__fields {
-    grid-template-columns: auto auto;
+    grid-template-columns: max-content minmax(0, 1fr);
     gap: 0.5rem 1rem;
     width: 100%;
   }
 
-  .control-panel__fields > :nth-child(3n) {
+  .control-panel__row-actions {
     grid-column: 1 / -1;
     margin-bottom: 0.5rem;
   }

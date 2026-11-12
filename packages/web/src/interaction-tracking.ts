@@ -5,12 +5,15 @@
  * The initial scan and existing MutationObserver also cover SSR and later DOM
  * updates. Views apply to Experiences and Fragments; hovers/clicks to Fragments.
  * Explicit element registrations use the same detectors with private keys.
+ * Manual-view containers select the final scope per root and keep each DOM root
+ * independent, below explicit registrations and above automatic view policy.
  */
 
 import type { ContentfulExperiences } from './contentful-experiences.js';
 import { isTrackedEntity, type TrackingAttribution } from './tracking/attribution.js';
 import {
   readAutomaticKeys,
+  readManualViewKey,
   TRACKING_ATTRIBUTION_ATTRIBUTE,
 } from './tracking/automatic-attribution.js';
 import { TRACKING_SCOPES_ATTRIBUTE } from './tracking-attributes.js';
@@ -29,6 +32,7 @@ import {
 import { INTERACTION_ATTRIBUTES, NOOP_TRACKING } from './tracking/interaction-controls.js';
 
 const SELECTOR = `[${TRACKING_SCOPES_ATTRIBUTE}]`;
+const MANUAL_VIEWS_ATTRIBUTE = 'data-ctfl-manual-views';
 
 /** Optimization-compatible interaction controls. Manual data is Experiences attribution. */
 export type EntryInteraction = keyof EntryInteractionTrackers;
@@ -228,12 +232,26 @@ export function createInteractionTracking(
     if (!entry.running) return;
     const next = new Map<InteractionKey, string>();
     const override = entry.overrides.get(element);
+    const manualViews =
+      !override &&
+      entry.type === 'views' &&
+      element
+        .closest(`[${MANUAL_VIEWS_ATTRIBUTE}]`)
+        ?.getAttribute(MANUAL_VIEWS_ATTRIBUTE)
+        ?.trim()
+        .toLowerCase() === 'true';
     const attr = element.getAttribute(INTERACTION_ATTRIBUTES[entry.type])?.trim().toLowerCase();
     const enabled =
-      override?.enabled ?? (attr === 'true' ? true : attr === 'false' ? false : entry.auto);
+      override?.enabled ??
+      (manualViews || (attr === 'true' ? true : attr === 'false' ? false : entry.auto));
     if (enabled && element.isConnected) {
       const manual = override?.enabled && resolveKeyAttribution(override.key);
-      const keys = manual ? [override.key] : readAutomaticKeys(element);
+      let keys: InteractionKey[];
+      if (manual) keys = [override.key];
+      else if (manualViews) {
+        const selected = readManualViewKey(element);
+        keys = selected ? [selected] : [];
+      } else keys = readAutomaticKeys(element);
       for (const key of keys) {
         const attribution = resolveKeyAttribution(key);
         if (attribution) next.set(key, entityKey(attribution));
@@ -265,7 +283,11 @@ export function createInteractionTracking(
     };
     for (const record of records) {
       if (record.type === 'attributes' && record.target instanceof Element) {
-        if (record.attributeName === TRACKING_ATTRIBUTION_ATTRIBUTE) roots.add(record.target);
+        if (
+          record.attributeName === TRACKING_ATTRIBUTION_ATTRIBUTE ||
+          record.attributeName === MANUAL_VIEWS_ATTRIBUTE
+        )
+          roots.add(record.target);
         else candidates.add(record.target);
       }
       record.addedNodes.forEach(addRoot);
@@ -312,6 +334,7 @@ export function createInteractionTracking(
         attributeFilter: [
           TRACKING_SCOPES_ATTRIBUTE,
           TRACKING_ATTRIBUTION_ATTRIBUTE,
+          MANUAL_VIEWS_ATTRIBUTE,
           ...Object.values(INTERACTION_ATTRIBUTES),
         ],
       });

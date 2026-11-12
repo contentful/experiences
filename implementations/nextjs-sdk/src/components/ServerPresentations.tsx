@@ -1,7 +1,12 @@
-import { ServerExperienceRenderer } from '@contentful/experiences-nextjs/server';
+import {
+  ServerExperienceRenderer,
+  type PortableRenderNode,
+  type PortableRenderPlan,
+} from '@contentful/experiences-nextjs/server';
 import { experienceConfig } from './ExperienceContent';
 import { ExperiencePresentation } from './ExperiencePresentation';
 import type { ServerContent } from '../server-reference';
+import { ManualViewTracking } from './BrowserRoot';
 
 export function ServerPresentations({
   all,
@@ -28,8 +33,8 @@ export function ServerPresentations({
       <div className="sections-grid sections-grid--split">
         <section className="page-section">
           <header className="page-section__header">
-            <h2>Server-rendered Experiences</h2>
-            <p>Content, named slots and Rich Text from the delivered plans.</p>
+            <h2>Experiences with automatic tracking defaults</h2>
+            <p>Server-rendered content with SDK-measured views, hovers and clicks.</p>
           </header>
           <div className="entry-grid entry-grid--experiences">
             {contents.map((content) => (
@@ -37,32 +42,58 @@ export function ServerPresentations({
             ))}
           </div>
         </section>
-        <section className="page-section">
+        <section className="page-section" data-reference-manual-views>
           <header className="page-section__header">
-            <h2>Repeated presentations</h2>
-            <p>The first configured plan is reused in separate attributed containers.</p>
+            <h2>Experiences for manual view registration</h2>
+            <p>
+              The first configured plan is reused twice in distinct containers. Automatic
+              interactions are disabled; the SDK measures explicitly registered views.
+            </p>
           </header>
-          <div className="entry-grid entry-grid--experiences">
+          <ManualViewTracking className="entry-grid entry-grid--experiences">
             {repeated && (
               <>
-                <ServerPresentation {...repeated} />
-                <ServerPresentation {...repeated} repeated />
+                <ServerPresentation {...repeated} manual />
+                <ServerPresentation {...repeated} manual repeated />
               </>
             )}
-          </div>
+          </ManualViewTracking>
         </section>
       </div>
     </div>
   );
 }
 
-function ServerPresentation(props: ServerContent & { repeated?: boolean }) {
+// Match the browser registry's fragment-root click policy without changing the
+// shared server registry or the source plan reused by repeated presentations.
+function presentationPlan(plan: PortableRenderPlan): PortableRenderPlan {
+  function nodeWithClickability(node: PortableRenderNode): PortableRenderNode {
+    return {
+      ...node,
+      props: node.attribution?.roots.some((scope) => scope.entityKind === 'ExperienceFragment')
+        ? {
+            ...node.props,
+            content: { ...node.props.content, 'data-ctfl-clickable': true },
+          }
+        : node.props,
+      slots: Object.fromEntries(
+        Object.entries(node.slots).map(([name, nodes]) => [name, nodes.map(nodeWithClickability)])
+      ),
+    };
+  }
+  return { ...plan, nodes: plan.nodes.map(nodeWithClickability) };
+}
+
+function ServerPresentation(props: ServerContent & { repeated?: boolean; manual?: boolean }) {
   return (
     <ExperiencePresentation {...props}>
       {props.plan && (
         <ServerExperienceRenderer
-          experience={props.plan}
+          experience={presentationPlan(props.plan)}
           config={experienceConfig}
+          trackViews={props.manual ? false : undefined}
+          trackHovers={props.manual ? false : undefined}
+          trackClicks={props.manual ? false : undefined}
           renderUnknown={({ componentId }) => (
             <p role="alert" className="placeholder-card">
               No component registered for {componentId}.
