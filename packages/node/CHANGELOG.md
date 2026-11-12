@@ -1,3 +1,19 @@
+## 0.9.1 (2026-11-12)
+
+### 🩹 Fixes
+
+- ⚠️  **client:** conform personalization to XDA dev.13 ([#323](https://github.com/contentful/experiences/pull/323))
+
+### ⚠️  Breaking Changes
+
+- **client:** conform personalization to XDA dev.13  ([#323](https://github.com/contentful/experiences/pull/323))
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.4.1
+- Updated client to 0.11.0
+- Updated core to 0.13.15
+
 ## 0.9.0 (2026-11-11)
 
 ### 🧱 Updated Dependencies
