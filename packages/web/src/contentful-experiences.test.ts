@@ -48,6 +48,7 @@ afterEach(() => {
   for (const runtime of runtimes) runtime.destroy();
   runtimes.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   window.localStorage.clear();
   clearIdentityCookies();
   window.history.replaceState({}, '', '/');
@@ -141,6 +142,9 @@ describe('Web ContentfulExperiences', () => {
   it('uses live browser context and Web attribution', () => {
     window.history.replaceState({}, '', '/first?utm_source=search&tag=one&tag=two#details');
     document.title = 'First page';
+    const firstViewport = { width: 1200, height: 800 };
+    vi.stubGlobal('innerWidth', firstViewport.width);
+    vi.stubGlobal('innerHeight', firstViewport.height);
     const runtime = createRuntime({ app: { name: 'storefront', version: '1.2.3' } });
     expect(runtime.config.app).toEqual({ name: 'storefront', version: '1.2.3' });
     expect(runtime.config.locale).toBe('en-US');
@@ -148,6 +152,9 @@ describe('Web ContentfulExperiences', () => {
     const first = runtime.eventBuilder.buildTrack({ event: 'first' });
     window.history.replaceState({}, '', '/second?campaign=spring#top');
     document.title = 'Second page';
+    const secondViewport = { width: 800, height: 600 };
+    vi.stubGlobal('innerWidth', secondViewport.width);
+    vi.stubGlobal('innerHeight', secondViewport.height);
     const second = runtime.eventBuilder.buildTrack({ event: 'second' });
 
     expect(runtime.eventBuilder.channel).toBe('web');
@@ -156,12 +163,16 @@ describe('Web ContentfulExperiences', () => {
       library: DEFAULT_EVENT_CONTEXT_LIBRARY,
       userAgent: window.navigator.userAgent,
       page: {
+        ...firstViewport,
+        hash: '#details',
         path: '/first',
         query: { utm_source: 'search', tag: ['one', 'two'] },
         search: '?utm_source=search&tag=one&tag=two',
       },
     });
     expect(second.context.page).toMatchObject({
+      ...secondViewport,
+      hash: '#top',
       path: '/second',
       query: { campaign: 'spring' },
     });
@@ -169,9 +180,20 @@ describe('Web ContentfulExperiences', () => {
     const page = runtime.eventBuilder.buildPageView();
     expect(page.context.page!.title).toBe('Second page');
     expect(page.properties.title).toBe('Second page');
+    expect(page.context.page).toMatchObject({
+      hash: '#top',
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+    expect(page.properties).toMatchObject({
+      hash: '#top',
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
   });
 
   it('allows browser context providers to redact page and user-agent data', () => {
+    document.title = 'Private inbox';
     const runtime = createRuntime({
       browserContext: {
         getPageProperties: () => ({
@@ -187,8 +209,12 @@ describe('Web ContentfulExperiences', () => {
     });
 
     expect(runtime.eventBuilder.buildTrack({ event: 'redaction' }).context).toMatchObject({
-      page: { path: '/redacted', url: 'https://example.test/redacted' },
+      page: { path: '/redacted', title: 'Redacted', url: 'https://example.test/redacted' },
       userAgent: 'redacted-agent',
+    });
+    expect(runtime.eventBuilder.buildPageView()).toMatchObject({
+      context: { page: { title: 'Redacted' } },
+      properties: { title: 'Redacted' },
     });
   });
 

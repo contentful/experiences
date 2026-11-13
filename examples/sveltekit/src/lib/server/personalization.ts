@@ -20,15 +20,20 @@ export function buildPagePersonalization(options: {
   searchParams: SearchParams;
 }) {
   const url = new URL(options.path, options.origin);
-  const query: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(options.searchParams)) {
     if (value === undefined) continue;
-    query[key] = Array.isArray(value) ? (value.at(-1) ?? '') : value;
     for (const item of Array.isArray(value) ? value : [value]) {
       url.searchParams.append(key, item);
     }
   }
+
+  const query = Object.fromEntries(
+    Array.from(new Set(url.searchParams.keys()), (key) => {
+      const values = url.searchParams.getAll(key);
+      return [key, values.length === 1 ? (values[0] ?? '') : values];
+    })
+  );
 
   const page = {
     path: options.path,
