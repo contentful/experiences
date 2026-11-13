@@ -91,6 +91,7 @@ for (const [path, route] of Object.entries(routes)) {
       // Preview content has no visitor identity/handoff prerequisite.
       ...(binding ? {} : readVisitor(req.cookies)),
       locale: environment.LOCALE,
+      preflight: true,
       eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
       preview,
       isPreview: Boolean(binding),

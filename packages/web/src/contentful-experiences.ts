@@ -700,7 +700,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   override async fetchExperience(
     options: FetchExperienceOptions,
-    resolveOptions: FetchResolveOptions
+    resolveOptions: FetchResolveOptions,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan> {
     const { assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
@@ -711,6 +712,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     return this.#fetchPersonalized(options, {
       preview: options.preview === true,
+      currentPage,
       prepare: (current) => this.#withTrackingSourceMap(current),
       send: (final) => super.fetchExperience(final, resolveOptions),
       share: (load, final, revision) => {
@@ -738,18 +740,22 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   override fetchByDestinationNode(
     options: FetchByDestinationNodeOptions,
-    resolveOptions: FetchResolveOptions
+    resolveOptions: FetchResolveOptions,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.#fetchPersonalized(options, {
+      currentPage,
       send: (final) => super.fetchByDestinationNode(final, resolveOptions),
     });
   }
 
   override fetchByDestinationPath(
     options: FetchByDestinationPathOptions,
-    resolveOptions: FetchResolveOptions
+    resolveOptions: FetchResolveOptions,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.#fetchPersonalized(options, {
+      currentPage,
       send: (final) => super.fetchByDestinationPath(final, resolveOptions),
     });
   }
@@ -761,6 +767,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     options: TOptions,
     request: {
       preview?: boolean;
+      currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>;
       prepare?: (options: TOptions) => TOptions;
       send: (options: BuiltFetchOptions<TOptions>) => Promise<TResult>;
       share?: (
@@ -772,25 +779,49 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   ): Promise<TResult> {
     const { generation, assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
-    const identityReady = this.#awaitCurrentHandoffIdentity();
-    if (identityReady !== undefined) {
-      await identityReady;
+    const page = request.currentPage;
+    const assertPageCurrent = () => {
       assertCurrent();
+      if (page?.isCurrent?.() === false) throw new Error('Experiences fetch was superseded');
+    };
+    assertPageCurrent();
+    if (page) this.#requireRouteKey(page.routeKey);
+    const finish =
+      page && !this.isPreview
+        ? this.#currentPage.prepare(page.routeKey, page.isCurrent)
+        : undefined;
+    let profileRevision: number;
+    let stateRevision: number;
+    let identityRevision: number;
+    let prepared: BuiltFetchOptions<TOptions>;
+    try {
+      const identityReady = this.#awaitCurrentHandoffIdentity();
+      if (identityReady !== undefined) {
+        await identityReady;
+        assertPageCurrent();
+      }
+      profileRevision = this.#profileRevision;
+      stateRevision = this.#stateRevision;
+      identityRevision = this.#identityRevision;
+      prepared = await this.#prepareContentRequest(
+        request.prepare?.(options) ?? options,
+        assertPageCurrent
+      );
+      assertPageCurrent();
+      // Local admission of committing intent precedes publication and transport.
+      finish?.(
+        prepared.personalization?.preflight !== true &&
+          prepared.personalization?.events?.some((event) => event.type === 'page') === true
+      );
+    } finally {
+      finish?.(false);
     }
-    const profileRevision = this.#profileRevision;
-    const stateRevision = this.#stateRevision;
-    const identityRevision = this.#identityRevision;
-    const prepared = await this.#prepareContentRequest(
-      request.prepare?.(options) ?? options,
-      assertCurrent
-    );
-    assertCurrent();
     for (const event of prepared.personalization?.events ?? []) {
       this.#publishEvent(event);
-      assertCurrent();
+      assertPageCurrent();
     }
     const final = this.#withRequestIdentity(prepared);
-    assertCurrent();
+    assertPageCurrent();
     const load = async () => {
       const result = await request.send(final);
       assertCurrent();
@@ -1064,7 +1095,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     if (this.isPreview) return this.#skipPreviewEvent('trackCurrentPage', [routeKey]);
     this.#requireRouteKey(routeKey);
     this.#clearHandoffInitialization(routeKey);
+    const token = this.#resetToken;
     return await this.#currentPage.emitIfNeeded(routeKey, () => {
+      if (!this.#isCurrent(token) || isCurrent?.() === false)
+        return Promise.resolve({ accepted: false });
       const payload = buildPayload({ isInitialEmission: !this.#currentPage.hasAccepted() }) ?? {};
       if (isCurrent?.() === false) return Promise.resolve({ accepted: false });
       if (isCurrent === undefined || !this.hasConsent('page')) return this.page(payload);

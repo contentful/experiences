@@ -271,21 +271,36 @@ describe('React runtime ownership and activation', () => {
       await requests.fetchExperience(inject(runtime), { experienceId: 'home' }, resolve, false);
       expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
         { experienceId: 'home', personalization: { events: [{ type: 'page', ...first }] } },
-        resolve
+        resolve,
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
+      const initialScope = runtime.fetchExperience.mock.lastCall![2];
+      expect(initialScope.routeKey).toBe('/initial');
+      expect(initialScope.isCurrent()).toBe(true);
       if (owner === 'owned') expect(construct).toHaveBeenCalledExactlyOnceWith(config);
       render(tree('/next', next));
+      expect(initialScope.isCurrent()).toBe(false);
       await requests.fetchExperience(inject(runtime), { experienceId: 'next' }, resolve, false);
       expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
         { experienceId: 'next', personalization: { events: [{ type: 'page', ...next }] } },
-        resolve
+        resolve,
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
+      const nextScope = runtime.fetchExperience.mock.lastCall![2];
+      expect(nextScope.routeKey).toBe('/next');
+      expect(nextScope.isCurrent()).toBe(true);
       act(() => requests.reset());
+      expect(nextScope.isCurrent()).toBe(false);
       await requests.fetchExperience(inject(runtime), { experienceId: 'next' }, resolve, false);
       expect(runtime.fetchExperience).toHaveBeenLastCalledWith(
         { experienceId: 'next', personalization: { events: [{ type: 'page', ...next }] } },
-        resolve
+        resolve,
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
+      const resetScope = runtime.fetchExperience.mock.lastCall![2];
+      expect(resetScope.isCurrent()).toBe(true);
+      act(() => view.cleanup());
+      expect(resetScope.isCurrent()).toBe(false);
       expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
       expect(first).toEqual({ properties: { route: 'home' } });
     }
@@ -316,7 +331,8 @@ describe('React runtime ownership and activation', () => {
         payload === undefined
           ? { experienceId: 'home' }
           : { experienceId: 'home', personalization: { events: [{ type: 'page', ...payload }] } },
-        resolve
+        resolve,
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
     }
   );

@@ -71,6 +71,7 @@ export function createContentRequest(
     profile,
     consent: readConsent(cookies),
     locale: config.locale,
+    preflight: false,
     preview,
     isPreview: Boolean(preview),
     page: createPageContext({
@@ -96,15 +97,21 @@ export async function loadReferenceContent(
     { config: experienceConfig }
   );
   const primary = { experienceId, plan };
-  return [primary, ...(await loadComparisons(request, primary, url))];
+  return [primary, ...(await loadComparisons(request, primary, url, false))];
 }
 
 // Comparisons have no visitor intent. Keep primary preflight identity on its own
 // request: a newly returned ID may not exist for a later profile-only lookup.
-export async function loadComparisons(request: RequestRuntime, primary: ServerContent, url: URL) {
+export async function loadComparisons(
+  request: RequestRuntime,
+  primary: ServerContent,
+  url: URL,
+  preflight: boolean
+) {
   const { sdk, browser } = getServer();
   const comparisons = sdk.forRequest({
     locale: request.locale,
+    preflight,
     isPreview: request.isPreview,
     preview: request.isPreview ? serverPreview(url) : undefined,
   });

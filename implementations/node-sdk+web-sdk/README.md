@@ -31,7 +31,9 @@ using `traits: { identified: true }`, and explicit page arguments from request c
 The SDK builds admitted arguments once from `personalization.events`; no direct identify/page precedes rendering.
 Only the actual server-to-browser transfer uses Node
 `fetchExperienceForHandoff(options, resolveOptions, { routeKey })`. The third
-argument is the route descriptor only. It returns a full handoff plus optional
+argument is the route descriptor only. The server facade sets `preflight: true`
+for all of its XDA requests; the handoff producer pins true and rejects explicit
+false so server evaluation remains noncommitting before browser replay. It returns a full handoff plus optional
 plan/error, retaining raw final Client events unchanged, including query arrays,
 before content work. Producer event hooks run sequentially, matching Optimization;
 ordinary fetch event chains remain concurrent. Normal SDK builder Personalization API validation
@@ -347,9 +349,12 @@ navigation, Identify and custom track use ordinary Web fetch without a new serve
 
 ## Current live behavior and limits
 
-XDA always forces Personalization API `preflight: true`: new IDs are provisional and previewed
-changes remain uncommitted. A profile-only XDA request internally uses Personalization API GET,
-returning 404 for an uncommitted ID even if SDK-to-XDA uses POST. Adoption,
+XDA defaults to `preflight: true`: new IDs are provisional and previewed changes
+remain uncommitted. This hybrid server explicitly keeps true for every XDA request.
+Ordinary browser-local Web fetches instead default supplied personalization to
+false and commit admitted intent; an explicit per-call true opts into evaluation only. A profile-only XDA request internally uses Personalization API GET,
+returning 404 for an uncommitted ID even if SDK-to-XDA uses POST. This can affect
+later event-free hybrid server reads; no events are synthesized to bypass it. Adoption,
 state hydration, LocalStorage,
 cookies, admission, `identityReady`, flush resolution and SDK success do not prove
 commit. Successful submission applies to its selected live target, which can

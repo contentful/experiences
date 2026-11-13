@@ -28,6 +28,7 @@ function configuration(): AppRouterServerConfig {
       enabled: Boolean(browser.livePreview),
     },
     request: {
+      mode: 'hybrid',
       experience: ({ requestUrl }) =>
         primaryExperience(browser, new URL(requestUrl), config.experienceIds[0]),
     },

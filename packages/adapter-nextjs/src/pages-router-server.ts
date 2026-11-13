@@ -142,6 +142,7 @@ export function bindPagesRouterServerExperiences<Config extends PagesRouterServe
         overrides.consent ??
         (consent?.server === undefined ? false : await resolveServerValue(consent.server, context)),
       locale: overrides.locale ?? options.locale ?? nativeContext.locale,
+      preflight: resolved.mode === 'hybrid',
       preview: session,
       isPreview: overrides.isPreview === true || session !== undefined,
     });

@@ -27,7 +27,10 @@ supported product usage or a cross-fetch guarantee.
   Bind to loopback. Missing routes/assets return 404; never serve the app directory.
 - Server integration is actual EJS SSR and an actual server-to-browser transfer.
   Supply page/optional identify intent once through Node `fetchExperienceForHandoff`
-  with third argument `{ routeKey }` only. Retain the returned full handoff plus
+  with third argument `{ routeKey }` only. Set the server facade's `preflight: true`
+  so its later ordinary XDA reads share the hybrid policy; the handoff producer pins
+  true and rejects explicit false. Provisional profile-only reads can still fail
+  upstream with GET 404; add no synthetic events or workaround. Retain the returned full handoff plus
   optional plan/error for optional browser consumption independently of display.
   Producer hooks run sequentially; ordinary fetch chains remain concurrent. Retain
   raw final Client events/query arrays unchanged, without server replay-compatibility
@@ -67,11 +70,11 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
 - Keep actual server bootstrap separate from browser route rendering. Browser-local
   navigation/actions use ordinary Web fetch absent a new server-supplied handoff.
   Navigation carries page intent without repeating identify; standalone Identify
-  and CUSTOM TRACK are fresh nonpage intent, without local replay or commitment.
+  and CUSTOM TRACK are fresh nonpage intent, without local replay. Ordinary Web XDA
+  fetches default supplied personalization to `preflight: false` and commit admitted intent.
   Same-ID Retry is ordinary event-free fetch without builders/hooks/replay; accepted
-  incoming replay delivery retry remains queue-owned. SSR/CSR noncommit is a tolerated
-  service bug awaiting upstream force-commit support, with no SDK workaround/current
-  flag. See [Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+  incoming replay delivery retry remains queue-owned. Hybrid server evaluation stays
+  noncommitting until admitted browser replay; browser-local fetches commit normally. See [Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 - Retain accepted aggregate replay identity across newer initialization within the
   owner lifetime; serialized A after B is refused for page/nonpage intent without
   state/event republication, recommit or fallback. New visitors/actions need fresh
@@ -83,7 +86,7 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
   only after insertion. Check ownership after awaits and before further fetch/UI work.
 - Preserve EJS/DOM registration, named-slot, prop and real attribution parity. Keep
   client partial content with generic diagnostic counts; never dump the strings.
-  Custom track uses fresh nonpage intent through ordinary Web fetch, without local replay or commitment; evaluation does not promise commit.
+  Custom track uses fresh nonpage intent through ordinary Web fetch, without local replay; successful content alone does not prove commitment.
 - index.ejs owns both SSR markup and native template elements. Reuse its markup
   functions; the client clones native templates and never compiles/renders EJS.
 - Match the Web reference theme, main-pane Utilities and split content layout.

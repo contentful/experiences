@@ -2,8 +2,8 @@
 
 // Adapted from OptimizationRoot/OptimizationPageSequence and useAutoPageEmitter
 // at f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). XDA carries ordinary
-// initialization intent with content; only explicit replay/page operations commit.
-import { useEffect, useMemo, useRef, type PropsWithChildren } from 'react';
+// initialization intent with content; Web owns page admission and deduplication.
+import { useEffect, useLayoutEffect, useMemo, useRef, type PropsWithChildren } from 'react';
 import type {
   ContentfulExperiences,
   CurrentPageOptions,
@@ -63,6 +63,7 @@ export function PageSequence({
     [sdk, resetRevision]
   );
   const matchingHandoff = handoff?.replay?.routeKey === routeKey;
+  const activeRequest = useRef<object | undefined>(undefined);
   const requestContext = useMemo(() => {
     let initialStarted = false;
     let pageIntent = false;
@@ -122,7 +123,12 @@ export function PageSequence({
           owner.initialEmission = false;
           pageIntent = true;
         }
-        const promise = runtime.fetchExperience(options, resolve);
+        const promise = isInitial
+          ? runtime.fetchExperience(options, resolve, {
+              routeKey,
+              isCurrent: () => activeRequest.current === requestContext,
+            })
+          : runtime.fetchExperience(options, resolve);
         if (isInitial) {
           pending = { request, resolve, promise };
           void promise
@@ -135,6 +141,14 @@ export function PageSequence({
       },
     };
   }, [sdk, routeKey, resetRevision, onReset, owner]);
+
+  useLayoutEffect(() => {
+    if (!isLive) return;
+    activeRequest.current = requestContext;
+    return () => {
+      activeRequest.current = undefined;
+    };
+  }, [isLive, requestContext]);
 
   const beforeInitialPageEnabled = beforeInitialPage !== undefined;
   // Optional app callback authority lasts until completion, matching handoff,

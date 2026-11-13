@@ -55,6 +55,7 @@ export const loadServerPage = cache(async () => {
       enabled: Boolean(browser.livePreview),
     },
     request: {
+      mode: serverOnly ? 'ssr' : 'hybrid',
       experience: ({ requestUrl }) => {
         const url = new URL(requestUrl);
         return primaryExperience(browser, url, routeIds(url.pathname, browser.experienceIds)[0]);
@@ -64,7 +65,7 @@ export const loadServerPage = cache(async () => {
           ? [{ type: 'identify', userId: 'charles', traits: { identified: true } }]
           : [],
       composeRequest: async (request, primary, { requestUrl }) => {
-        comparisons = await loadComparisons(request, primary, new URL(requestUrl));
+        comparisons = await loadComparisons(request, primary, new URL(requestUrl), !serverOnly);
       },
     },
   });

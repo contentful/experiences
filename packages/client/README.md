@@ -55,11 +55,15 @@ interception. It directly declares `zod` at the existing workspace version;
 it does not depend on the Optimization API client or import Runtime.
 
 The generated dev.13 request supports optional `personalization.preflight`.
-Client validates and forwards the boolean without selecting a default. Earlier
-service checks observed noncommitting evaluation; backend defaults and override
-behavior have not been reverified for this version. Treat newly returned IDs as
-provisional until finalization is verified. Profile-only XDA uses Personalization API GET
-internally even when SDK-to-XDA uses POST.
+Client validates the boolean and defaults supplied personalization to `false`
+for by-ID and both destination fetch forms; explicit booleans win. It adds no
+personalization when none was supplied. Under the upstream contract, `false`
+commits events and profile changes, while `true` evaluates without commitment;
+XDA itself defaults an omitted value to `true`. A preview-generated ID can be reused
+by a Personalization API POST carrying events through XDA or a direct call.
+Profile-only XDA uses Personalization API GET internally even when SDK-to-XDA
+uses POST, and can fail for an uncommitted ID. Local adoption does not prove
+finalization; live-service verification remains a release requirement.
 See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
 for finalization requirements and the subsequent GET limitation. Node's
 `fetchExperienceForHandoff` producer is retained only for an actual server-to-browser

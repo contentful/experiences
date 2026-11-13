@@ -279,11 +279,14 @@ By-ID fetch options can also carry first-class personalization with a profile id
 and existing type-tagged builder arguments or raw built events; Runtime/Node/Web
 consent-gate inputs and build only arguments once. Client accepts raw built events
 only and maps them to XDA's extension body, and Node
-proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`; the
-SDK validates and forwards it without selecting a default. Earlier service checks
-observed noncommitting Personalization API preflight; default and override behavior have not
-been reverified with dev.13. Treat newly returned IDs as provisional until
-profile finalization is verified. Profile-only XDA uses
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`:
+`true` previews without commitment and `false` commits events/profile changes;
+XDA itself defaults to `true`. Ordinary SDK/free fetches explicitly default
+supplied personalization to `false`, preserving explicit booleans. Node's optional
+`RequestContext.preflight` supplies an XDA-only request default; per-call wins.
+Direct event methods are unchanged. Preview-generated IDs remain provisional
+until commitment and can be reused in Personalization API POSTs carrying events,
+through XDA or direct calls. Profile-only XDA uses
 Personalization API GET internally even when SDK-to-XDA uses POST. Node/Web auto-adopt returned
 IDs locally; adoption does not finalize them. See the canonical
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
@@ -311,9 +314,9 @@ the Node `fetchExperienceForHandoff` producer with `{ routeKey }` as its third
 argument, returning full handoff plus optional plan/error. Web/React optionally
 consume explicitly supplied server handoffs, independently of display.
 
-Earlier service checks observed uncommitted SSR/CSR XDA events. Generated
-`personalization.preflight` support does not establish backend commitment; verify
-the deployed contract before changing integration policy. Add no SDK workaround.
+Ordinary SSR/CSR event-bearing fetches request commitment with `preflight: false`;
+an explicit `true` requests noncommitting evaluation. Verify the deployed contract
+before release; request configuration and local state do not establish commitment.
 Same-ID Retry is ordinary event-free fetch without builders, event hooks or replay;
 accepted incoming replay delivery retry remains queue-owned. Later reference
 comparison IDs also use ordinary event-free fetch, without an SDK multi-Experience
@@ -321,10 +324,15 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 Replay is exercised by Node only as the backend of an actual hybrid transfer;
 ordinary Node SSR integrations use normal fetch without producing or consuming
-replay. The intended ordinary SSR/CSR flow commits through XDA, while hybrid
-server evaluation retains preflight and browser commitment. The generated
-`personalization.preflight` option is forwarded; this adaptation adds no default
-or automatic mode selection. Integration policy follows verified upstream behavior.
+replay. The handoff producer fixes `preflight: true` and rejects explicit per-call
+`false`; browser replay fixes `false`. Next's `request.mode?: ServerValue<'ssr' | 'hybrid'>`
+defaults to hybrid; SSR uses ordinary fetch and preserves private state hydration
+without replay. On actual non-editor-preview SSR attempts, serialized
+`initialPageOwner: 'server'` suppresses browser initial page/fallback for the matching
+request ID and route, including consent-drop or ambiguous error. It denotes ownership,
+not admission or commit, and does not compensate on later consent grant. Hybrid/CSR
+consent retry and fresh browser navigation retain their ordinary behavior. Web needs
+no mode option. Editor `isPreview`, CPA and Preview Sessions remain distinct.
 The SDK will not release until all tracked XDA issues affecting the supported integrations are
 resolved and the corrected service behavior is verified.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
@@ -496,11 +504,11 @@ Retained differences:
 - The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through Personalization API.
   Experiences retains `fetchExperienceForHandoff` because XDA must evaluate the
   consumer-supplied batch and select content; Personalization API remains actual commit transport.
-- Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
-  generated `personalization.preflight` option is now forwarded, but deployed
-  commitment behavior must be verified. The content source requires XDA evaluation;
-  the SDK adds no commit workaround. Hybrid server-supplied browser replay remains
-  an explicit commit path. This difference does not establish full commit parity.
+- Ordinary SSR/CSR supplied personalization explicitly defaults to XDA
+  `preflight: false`, while actual hybrid server preparation fixes `true` and
+  browser replay fixes `false`. The content source requires XDA evaluation;
+  live-service commitment and profile finalization still require verification
+  before release. Local admission and state do not establish commit parity.
 - The pin retains only current Web initialization identity. Experiences retains
   accepted replay identity across newer initialization: serialized A after B is
   refused without state/event republication or recommit for page/nonpage batches.
@@ -892,6 +900,18 @@ These three CAN diverge:
 - npm package name: `@contentful/experiences-react` (in `package.json`)
 
 Renaming the folder needs all three updated. Cross-reference: `project.json#sourceRoot` (`packages/adapter-react/src`), `project.json#targets.*.options.cwd` (`packages/adapter-react`), and `package.json#repository.directory` (`packages/adapter-react`).
+
+---
+
+## Things known to be broken
+
+### Managed page consent retry
+
+Web's current-page tracker owns XDA page admission and deduplication. React supplies
+route identity and liveness; same-route consent retry waits for preparation, not
+HTTP. Only a final admitted committing page claims the route. Blocked pages remain
+eligible, and reset/destroy invalidate pending attempts. Admission is not a service
+commitment receipt.
 
 ---
 

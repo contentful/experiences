@@ -146,7 +146,8 @@ describe('Web event interception consent', () => {
       await expect(
         runtime.fetchExperience(
           { experienceId: 'invalid', personalization: { events: [first, second] } },
-          resolveOptions
+          resolveOptions,
+          { routeKey: '/current' }
         )
       ).rejects.toThrow('Invalid Experience personalization');
       expect(onEventBlocked).not.toHaveBeenCalled();
@@ -163,13 +164,22 @@ describe('Web event interception consent', () => {
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
-    runtime.interceptors.event.add(
-      (event) => ({ ...event, type: 'track', event: 'rewritten' }) as OptimizationEventStreamEvent
-    );
-    await runtime.fetchExperience(
+    const gate = deferred<void>();
+    const directPage = vi.spyOn(runtime, 'page').mockResolvedValue({ accepted: true });
+    runtime.interceptors.event.add(async (event) => {
+      await gate.promise;
+      return { ...event, type: 'track', event: 'rewritten' } as OptimizationEventStreamEvent;
+    });
+    const pending = runtime.fetchExperience(
       { experienceId: 'exp', personalization: { profileId: 'caller-profile', events: [page] } },
-      resolveOptions
+      resolveOptions,
+      { routeKey: '/current' }
     );
+    const retry = runtime.trackCurrentPage({ routeKey: '/current', buildPayload: () => ({}) });
+    expect(directPage).not.toHaveBeenCalled();
+    gate.resolve();
+    await pending;
+    await expect(retry).resolves.toEqual({ accepted: true });
     expect(fetch.mock.calls[0]?.[0].personalization).toEqual({
       profileId: 'caller-profile',
       events: [],
@@ -266,13 +276,16 @@ describe('Web event interception consent', () => {
           experienceId: 'stale',
           personalization: { events: [runtime.eventBuilder.buildPageView()] },
         },
-        resolveOptions
+        resolveOptions,
+        { routeKey: '/current' }
       );
       const xdaRejected = expect(xda).rejects.toThrow(
         action === 'reset' ? 'superseded' : 'destroyed'
       );
       expect(hook).toHaveBeenCalledTimes(3);
+      const retry = runtime.trackCurrentPage({ routeKey: '/current', buildPayload: () => ({}) });
       runtime[action]();
+      await expect(retry).resolves.toEqual({ accepted: false });
       gate.resolve();
       await Promise.all([page, pendingView, xdaRejected]);
       expect(fetch).not.toHaveBeenCalled();
@@ -281,6 +294,35 @@ describe('Web event interception consent', () => {
       expect(runtime.states.eventStream.current).toBeUndefined();
     }
   );
+
+  it('discards a fetch whose route expires during asynchronous event preparation', async () => {
+    const runtime = createRuntime();
+    const gate = deferred<void>();
+    const hook = vi.fn(async (event: OptimizationEventStreamEvent) => {
+      await gate.promise;
+      return event;
+    });
+    runtime.interceptors.event.add(hook);
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    let current = true;
+    const pending = runtime.fetchExperience(
+      {
+        experienceId: 'stale-route',
+        personalization: { events: [runtime.eventBuilder.buildPageView()] },
+      },
+      resolveOptions,
+      { routeKey: '/old', isCurrent: () => current }
+    );
+    const rejected = expect(pending).rejects.toThrow('superseded');
+    expect(hook).toHaveBeenCalledOnce();
+    current = false;
+    gate.resolve();
+    await rejected;
+    expect(runtime.states.eventStream.current).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 
   it('rechecks current consent after an async hook and stops XDA when blocked reporting resets its owner', async () => {
     const runtime = createRuntime({ onEventBlocked: () => runtime.reset() });
