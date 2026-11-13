@@ -96,7 +96,7 @@ cache suspension preserves the instance for resumption.
 
 ## Destinations
 
-The Destination route (`/destination?path=/coded`; absent `path` uses
+The Destination route (`/destination?path=/getting-started`; absent `path` uses
 `DESTINATION_PATH`) resolves one path through ordinary `sdk.fetchByDestinationPath`,
 then the configured node through `sdk.fetchByDestinationNode`. The by-path primary
 carries the route's page and optional initial identify arguments, or the Identify
@@ -124,13 +124,13 @@ reads ordinary Delivery content without visitor events or preview subscriptions.
 - The Web UMD global is the `ContentfulExperiences` class only, so `scripts/rich-text.ts`
   also bundles the installed package's pure `isDestinationRedirect` export.
 
-| Setting                     | Default               | Meaning                                 |
-| --------------------------- | --------------------- | --------------------------------------- |
-| `DESTINATION_ID`            | none                  | Enables the route content when nonblank |
-| `DESTINATION_PATH`          | `/coded`              | Path rendered when `?path=` is absent   |
-| `DESTINATION_NODE_ID`       | `sdk-ci-personalized` | By-node comparison                      |
-| `DESTINATION_REDIRECT_PATH` | `/legacy`             | Redirect example link                   |
-| `DESTINATION_MISSING_PATH`  | `/missing`            | Not-found example link                  |
+| Setting                     | Default            | Meaning                                 |
+| --------------------------- | ------------------ | --------------------------------------- |
+| `DESTINATION_ID`            | none               | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/getting-started` | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `spring-offers`    | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/quick-start`     | Redirect example link                   |
+| `DESTINATION_MISSING_PATH`  | `/retired-page`    | Not-found example link                  |
 
 These values are browser-visible configuration, injected through the explicit
 allowlist. Without `DESTINATION_ID`, the other routes are unchanged and the

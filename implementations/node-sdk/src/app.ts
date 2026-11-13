@@ -45,10 +45,10 @@ if (experienceIds.length === 0)
 // locale, parameters or extensions. Without DESTINATION_ID the route explains the gap.
 const destination = {
   id: process.env.DESTINATION_ID?.trim() || undefined,
-  path: process.env.DESTINATION_PATH?.trim() || '/coded',
-  nodeId: process.env.DESTINATION_NODE_ID?.trim() || 'sdk-ci-personalized',
-  redirectPath: process.env.DESTINATION_REDIRECT_PATH?.trim() || '/legacy',
-  missingPath: process.env.DESTINATION_MISSING_PATH?.trim() || '/missing',
+  path: process.env.DESTINATION_PATH?.trim() || '/getting-started',
+  nodeId: process.env.DESTINATION_NODE_ID?.trim() || 'spring-offers',
+  redirectPath: process.env.DESTINATION_REDIRECT_PATH?.trim() || '/quick-start',
+  missingPath: process.env.DESTINATION_MISSING_PATH?.trim() || '/retired-page',
 };
 // The app route that renders one Destination path; other query intent is retained.
 function destinationHref(path: string, query = new URLSearchParams()): string {

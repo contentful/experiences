@@ -55,7 +55,7 @@ The package pins `contentful-cli@4.0.11`; the lockfile resolves its export/impor
 
 Export enables `--include-drafts`, `--include-archived`, `--include-experience-orchestration`, `--include-exo-variants`, and `--download-assets`. Standard supported collections and active Releases use the exporter's enabled defaults; do not configure query filters or skip flags when a complete supported export is intended. `--include-exo-variants` is passed on the command line: CLI 4.0.11 forwards that flag, but its parser rejects the undeclared camelCase config-file key `includeExoVariants`. Import enables ExO and automatically imports nested variants present in the file.
 
-This covers the tool's supported data, not every CMA resource or a lossless clone. ExO support covers design tokens, components, templates, data assemblies, fragments, experiences, and nested optimization variants. Variant IDs are regenerated on import, and repeated imports can duplicate variants; source-ID references may need attention. Space memberships and webhook credentials are not exported, custom UI extensions need separate setup, and archived/legacy Releases are not covered. Source and destination feature entitlements and permissions must allow the requested resources. Review export warnings and import errors: some unsupported or inaccessible collections can be skipped while other content succeeds. See the [export documentation](https://github.com/contentful/contentful-export/blob/v8.5.1/README.md) and [ExO import details](https://github.com/contentful/contentful-import/blob/v10.5.5/docs/exo-import.md).
+This covers the tool's supported data, not every CMA resource or a lossless clone. ExO support covers design tokens, components, templates, data assemblies, fragments, experiences, and nested optimization variants. Variant IDs are regenerated on import, and repeated imports can duplicate variants; source-ID references may need attention. Space memberships and webhook credentials are not exported, custom UI extensions need separate setup, and archived/quick-start Releases are not covered. Source and destination feature entitlements and permissions must allow the requested resources. Review export warnings and import errors: some unsupported or inaccessible collections can be skipped while other content succeeds. See the [export documentation](https://github.com/contentful/contentful-export/blob/v8.5.1/README.md) and [ExO import details](https://github.com/contentful/contentful-import/blob/v10.5.5/docs/exo-import.md).
 
 Export and import are never prerequisites of install, typecheck, lint, or tests. Do not run import simply to populate local fixtures.
 
@@ -63,17 +63,17 @@ Export and import are never prerequisites of install, typecheck, lint, or tests.
 
 The space export does not include Channels, Destinations or Destination nodes, so `scripts/seedDestination.ts` maintains the Destination the reference implementations use. It reads `managementToken`, `spaceId` and `environmentId` from the same ignored `.contentfulrc.json`, then upserts and publishes, through the Content Management API:
 
-| Resource                                    | Value                                                           |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| Channel (organization-scoped)               | `experiences-sdk-ci-web`, one `Path` node property              |
-| Destination (matched by name)               | `Experiences SDK CI`                                            |
-| Node `sdk-ci-home`, path `/`                | Composed Experience `4WzbgzPQHa9Tr2ffbOU8p7`                    |
-| Node `sdk-ci-coded`, `/coded`               | Coded Experience `3fLAdFb3BYAuImRhcW8k4t`                       |
-| Node `sdk-ci-personalized`, `/personalized` | Personalized Composed Experience `7u2eP09B4BIBToH8UwSHck`       |
-| Node `sdk-ci-legacy`, `/legacy`             | Redirect to `sdk-ci-coded` (`{ redirect: { path: '/coded' } }`) |
-| `/missing`, node `sdk-ci-missing`           | Deliberately absent, for not-found handling                     |
+| Resource                                   | Value                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| Channel (organization-scoped)              | `experiences-sdk-reference-site`, one `Path` node property                   |
+| Destination (matched by name)              | `Experiences SDK Reference Site`                                             |
+| Node `home`, path `/`                      | Composed Experience `4WzbgzPQHa9Tr2ffbOU8p7`                                 |
+| Node `getting-started`, `/getting-started` | Coded Experience `3fLAdFb3BYAuImRhcW8k4t`                                    |
+| Node `spring-offers`, `/spring-offers`     | Personalized Composed Experience `7u2eP09B4BIBToH8UwSHck`                    |
+| Node `quick-start`, `/quick-start`         | Redirect to `getting-started` (`{ redirect: { path: '/getting-started' } }`) |
+| `/retired-page`, node `retired-page`       | Deliberately absent, for not-found handling                                  |
 
-The three Experiences must already exist and be published in the space (they do in the "Experiences SDK CI" space). The Destination id is generated by Contentful, so the script prints it; set it as `DESTINATION_ID` in each reference implementation's local `.env`. The other destination settings default to the paths and node ids above.
+The three Experiences must already exist and be published in the space (they do in the "Experiences SDK CI" space). The Destination id is generated by Contentful, so the script prints it (in the "Experiences SDK CI" space it is `65R36R6DbfAUNvdO0fJplP`); set it as `DESTINATION_ID` in each reference implementation's local `.env`. The other destination settings default to the paths and node ids above.
 
 | Root command                                    | Action                                                                     |
 | ----------------------------------------------- | -------------------------------------------------------------------------- |

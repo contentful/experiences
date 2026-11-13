@@ -310,9 +310,9 @@ only Destination fetch for the page.
 
 `DESTINATION_ID` enables these routes; it is blank in `.env.example`. When unset,
 the routes render a "not configured" state without an SDK request and every other
-route behaves as before. Optional `DESTINATION_PATH` (default `/coded`),
-`DESTINATION_NODE_ID` (default `sdk-ci-personalized`), `DESTINATION_REDIRECT_PATH`
-(default `/legacy`) and `DESTINATION_MISSING_PATH` (default `/missing`) follow the
+route behaves as before. Optional `DESTINATION_PATH` (default `/getting-started`),
+`DESTINATION_NODE_ID` (default `spring-offers`), `DESTINATION_REDIRECT_PATH`
+(default `/quick-start`) and `DESTINATION_MISSING_PATH` (default `/retired-page`) follow the
 `lib/mocks/scripts/seedDestination.ts` fixture and must be absolute paths. The
 browser projection adds only these non-credential `destination` settings for the
 navigation links. The same-app Delivery proxy additionally permits the configured
@@ -323,8 +323,8 @@ Routing outcomes stay with Next. App pages call `applyAppRouterOutcome` on the
 `loadExperience()` result before rendering request components: a redirect calls
 `redirect()` and a missing path/node (`notFound`) calls `notFound()`, the normal 404. Pages GSSP returns `getPagesRouterOutcome(...)` (`{ redirect }` or
 `{ notFound: true }`) before `{ props }`. Both map the redirect's Destination path
-back to this router's route and keep `?mode=server-only`, so `/destination/legacy`
-lands on `/destination/coded`. Redirect results carry no plan, handoff or page owner.
+back to this router's route and keep `?mode=server-only`, so `/destination/quick-start`
+lands on `/destination/getting-started`. Redirect results carry no plan, handoff or page owner.
 Standard links move between Destination routes with client navigation (RSC or
 GSSP data requests run the same server routing); router and mode switches use a
 full document navigation. Later browser results present a not-found or redirect

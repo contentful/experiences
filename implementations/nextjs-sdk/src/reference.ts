@@ -47,10 +47,10 @@ export function destinationSettings(
   if (!id) return undefined;
   return {
     id,
-    path: destinationPath(env.DESTINATION_PATH, '/coded'),
-    nodeId: env.DESTINATION_NODE_ID?.trim() || 'sdk-ci-personalized',
-    redirectPath: destinationPath(env.DESTINATION_REDIRECT_PATH, '/legacy'),
-    missingPath: destinationPath(env.DESTINATION_MISSING_PATH, '/missing'),
+    path: destinationPath(env.DESTINATION_PATH, '/getting-started'),
+    nodeId: env.DESTINATION_NODE_ID?.trim() || 'spring-offers',
+    redirectPath: destinationPath(env.DESTINATION_REDIRECT_PATH, '/quick-start'),
+    missingPath: destinationPath(env.DESTINATION_MISSING_PATH, '/retired-page'),
   };
 }
 

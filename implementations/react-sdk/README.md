@@ -184,9 +184,9 @@ the same registry-bound `useManagedExperience` as Home, one primary per page:
 
 `DESTINATION_ID` enables them. It is blank in `.env.example`; when unset the routes
 show a "not configured" state and Home/Page Two behave exactly as before. Optional
-`DESTINATION_PATH` (default `/coded`, the navigation link), `DESTINATION_NODE_ID`
-(default `sdk-ci-personalized`), `DESTINATION_REDIRECT_PATH` (default `/legacy`) and
-`DESTINATION_MISSING_PATH` (default `/missing`) override the shared
+`DESTINATION_PATH` (default `/getting-started`, the navigation link), `DESTINATION_NODE_ID`
+(default `spring-offers`), `DESTINATION_REDIRECT_PATH` (default `/quick-start`) and
+`DESTINATION_MISSING_PATH` (default `/retired-page`) override the shared
 `lib/mocks/scripts/seedDestination.ts` fixture values. Paths must be absolute. The
 host projects them as `DESTINATION` through the same explicit allowlist; a
 Destination id is not a credential. Destination delivery is space-scoped, so
@@ -195,7 +195,7 @@ Destination id is not a credential. Destination delivery is space-scoped, so
 The SDK never navigates. A redirect node produces `status: 'redirect'` with no
 content; the page's `onExperienceRedirect` maps `redirect.path` back to
 `/destination<path>` and replaces the history entry through the ordinary Navigation
-intent, so `/destination/legacy` lands on `/destination/coded`. A missing path or
+intent, so `/destination/quick-start` lands on `/destination/getting-started`. A missing path or
 node surfaces as `result.error` with name `NotFoundError` and is shown as a
 not-found card; other errors use the ordinary error presentation. Utilities'
 Retry reuses the managed selector without events. Ordinary links move between

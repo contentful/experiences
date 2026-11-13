@@ -86,7 +86,7 @@ Empty plans retain their own empty-content message.
 
 ## Destinations
 
-`GET /destination?path=/coded` (absent `path` uses `DESTINATION_PATH`) is an actual
+`GET /destination?path=/getting-started` (absent `path` uses `DESTINATION_PATH`) is an actual
 server-to-browser transfer for one Destination path, following the by-ID routes:
 
 - The server facade (still `preflight: true`) calls
@@ -123,13 +123,13 @@ resolveOptions, { routeKey: req.originalUrl })` with the request's page and opti
   `isDestinationRedirect` export; `src/shared.ts` holds the SDK-neutral
   `destinationHref`/`destinationPath` route helpers.
 
-| Setting                     | Default               | Meaning                                 |
-| --------------------------- | --------------------- | --------------------------------------- |
-| `DESTINATION_ID`            | none                  | Enables the route content when nonblank |
-| `DESTINATION_PATH`          | `/coded`              | Path rendered when `?path=` is absent   |
-| `DESTINATION_NODE_ID`       | `sdk-ci-personalized` | By-node comparison                      |
-| `DESTINATION_REDIRECT_PATH` | `/legacy`             | Redirect example link                   |
-| `DESTINATION_MISSING_PATH`  | `/missing`            | Not-found example link                  |
+| Setting                     | Default            | Meaning                                 |
+| --------------------------- | ------------------ | --------------------------------------- |
+| `DESTINATION_ID`            | none               | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/getting-started` | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `spring-offers`    | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/quick-start`     | Redirect example link                   |
+| `DESTINATION_MISSING_PATH`  | `/retired-page`    | Not-found example link                  |
 
 These resolved values join the public bootstrap allowlist. Without `DESTINATION_ID`,
 the other routes are unchanged and `/destination` states that it is not configured,

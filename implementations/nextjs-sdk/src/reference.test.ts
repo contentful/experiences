@@ -84,28 +84,28 @@ test('Destination routes stay unconfigured without DESTINATION_ID', () => {
 test('Destination settings use fixture defaults, trimmed overrides and absolute paths', () => {
   assert.deepEqual(destination, {
     id: 'destination',
-    path: '/coded',
-    nodeId: 'sdk-ci-personalized',
-    redirectPath: '/legacy',
-    missingPath: '/missing',
+    path: '/getting-started',
+    nodeId: 'spring-offers',
+    redirectPath: '/quick-start',
+    missingPath: '/retired-page',
   });
   assert.deepEqual(
     destinationSettings({
       DESTINATION_ID: 'd',
-      DESTINATION_PATH: ' /personalized ',
-      DESTINATION_NODE_ID: ' sdk-ci-home ',
+      DESTINATION_PATH: ' /spring-offers ',
+      DESTINATION_NODE_ID: ' home ',
       DESTINATION_REDIRECT_PATH: '/old',
       DESTINATION_MISSING_PATH: '/gone',
     }),
     {
       id: 'd',
-      path: '/personalized',
-      nodeId: 'sdk-ci-home',
+      path: '/spring-offers',
+      nodeId: 'home',
       redirectPath: '/old',
       missingPath: '/gone',
     }
   );
-  for (const path of ['coded', '//coded'])
+  for (const path of ['coded', '//getting-started'])
     assert.throws(() => destinationSettings({ DESTINATION_ID: 'd', DESTINATION_PATH: path }));
 });
 
@@ -115,21 +115,24 @@ test('each router maps its route remainder to a Destination path and back', () =
     ['pages', '/pages/destination'],
   ] as const) {
     assert.equal(destinationPathForRoute(prefix, router), '/');
-    assert.equal(destinationPathForRoute(`${prefix}/coded`, router), '/coded');
+    assert.equal(destinationPathForRoute(`${prefix}/getting-started`, router), '/getting-started');
     assert.equal(destinationPathForRoute(`${prefix}-node`, router), undefined);
     assert.equal(destinationPathForRoute(`${prefix}s`, router), undefined);
-    for (const path of ['/', '/coded', '/a/b'])
+    for (const path of ['/', '/getting-started', '/a/b'])
       assert.equal(destinationPathForRoute(destinationRoute(path, router), router), path);
   }
-  assert.equal(destinationPathForRoute('/destination/coded', 'pages'), undefined);
-  assert.equal(destinationRoute('/coded', 'app', true), '/destination/coded?mode=server-only');
+  assert.equal(destinationPathForRoute('/destination/getting-started', 'pages'), undefined);
+  assert.equal(
+    destinationRoute('/getting-started', 'app', true),
+    '/destination/getting-started?mode=server-only'
+  );
 });
 
 test('one primary selector per request: the route path, otherwise the configured node', () => {
   const url = (path: string) => new URL(path, 'https://reference.invalid');
-  assert.deepEqual(destinationSelector(destination, url('/destination/legacy'), 'app'), {
+  assert.deepEqual(destinationSelector(destination, url('/destination/quick-start'), 'app'), {
     destinationId: 'destination',
-    path: '/legacy',
+    path: '/quick-start',
   });
   assert.deepEqual(destinationSelector(destination, url('/pages/destination'), 'pages'), {
     destinationId: 'destination',
@@ -137,7 +140,7 @@ test('one primary selector per request: the route path, otherwise the configured
   });
   assert.deepEqual(destinationSelector(destination, url('/destination-node'), 'app'), {
     destinationId: 'destination',
-    nodeId: 'sdk-ci-personalized',
+    nodeId: 'spring-offers',
   });
 });
 
@@ -147,12 +150,14 @@ test('mode selection and redirect locations keep the requested rendering mode', 
   assert.equal(referenceRequestMode(url('?mode=server-only')), 'ssr');
   assert.equal(referenceRequestMode(url('?mode=preserve-server')), 'hybrid');
   assert.equal(
-    destinationRedirectLocation('app')('/coded', { routeKey: '/destination/legacy' }),
-    '/destination/coded'
+    destinationRedirectLocation('app')('/getting-started', {
+      routeKey: '/destination/quick-start',
+    }),
+    '/destination/getting-started'
   );
   assert.equal(
     destinationRedirectLocation('pages')('/', {
-      routeKey: '/pages/destination/legacy?mode=server-only',
+      routeKey: '/pages/destination/quick-start?mode=server-only',
     }),
     '/pages/destination?mode=server-only'
   );

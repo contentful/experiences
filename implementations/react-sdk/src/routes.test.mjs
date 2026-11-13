@@ -11,7 +11,7 @@ import {
 test('maps application routes under /destination to absolute Destination paths', () => {
   assert.equal(destinationPathForRoute('/destination'), '/');
   assert.equal(destinationPathForRoute('/destination/'), '/');
-  assert.equal(destinationPathForRoute('/destination/coded'), '/coded');
+  assert.equal(destinationPathForRoute('/destination/getting-started'), '/getting-started');
   assert.equal(destinationPathForRoute('/destination/a/b'), '/a/b');
   for (const pathname of ['/', '/page-two', '/destinations', '/destination-node', '/x/destination'])
     assert.equal(destinationPathForRoute(pathname), undefined, pathname);
@@ -19,13 +19,13 @@ test('maps application routes under /destination to absolute Destination paths',
 
 test('maps Destination paths, including redirect targets, back to application routes', () => {
   assert.equal(destinationRoute('/'), '/destination');
-  assert.equal(destinationRoute('/coded'), '/destination/coded');
-  for (const path of ['/', '/coded', '/legacy', '/a/b'])
+  assert.equal(destinationRoute('/getting-started'), '/destination/getting-started');
+  for (const path of ['/', '/getting-started', '/quick-start', '/a/b'])
     assert.equal(destinationPathForRoute(destinationRoute(path)), path);
 });
 
 test('handles only reference routes in the browser', () => {
-  for (const pathname of ['/', '/page-two', '/destination', '/destination/missing'])
+  for (const pathname of ['/', '/page-two', '/destination', '/destination/retired-page'])
     assert.equal(isAppRoute(pathname), true, pathname);
   assert.equal(isAppRoute(DESTINATION_NODE_ROUTE), true);
   for (const pathname of ['/health', '/assets/app.js', '/destinations', '/page-three'])
@@ -43,28 +43,28 @@ test('leaves Destination routes unconfigured without DESTINATION_ID', () => {
 test('projects the Destination allowlist with fixture defaults and trimmed overrides', () => {
   assert.deepEqual(getPublicEnvironment({ DESTINATION_ID: ' destination ' }).DESTINATION, {
     id: 'destination',
-    path: '/coded',
-    nodeId: 'sdk-ci-personalized',
-    redirectPath: '/legacy',
-    missingPath: '/missing',
+    path: '/getting-started',
+    nodeId: 'spring-offers',
+    redirectPath: '/quick-start',
+    missingPath: '/retired-page',
   });
   assert.deepEqual(
     getPublicEnvironment({
       DESTINATION_ID: 'destination',
-      DESTINATION_PATH: ' /personalized ',
-      DESTINATION_NODE_ID: ' sdk-ci-home ',
+      DESTINATION_PATH: ' /spring-offers ',
+      DESTINATION_NODE_ID: ' home ',
       DESTINATION_REDIRECT_PATH: '/old',
       DESTINATION_MISSING_PATH: '/gone',
     }).DESTINATION,
     {
       id: 'destination',
-      path: '/personalized',
-      nodeId: 'sdk-ci-home',
+      path: '/spring-offers',
+      nodeId: 'home',
       redirectPath: '/old',
       missingPath: '/gone',
     }
   );
-  for (const path of ['coded', '//coded'])
+  for (const path of ['coded', '//getting-started'])
     assert.throws(
       () => getPublicEnvironment({ DESTINATION_ID: 'destination', DESTINATION_PATH: path }),
       /absolute/

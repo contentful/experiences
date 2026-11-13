@@ -23,38 +23,48 @@ type NodeFixture = { id: string; path: string } & (
 /**
  * Reference-implementation fixture. Paths are single segments joined to `/` by the
  * API; the empty path is the Destination home `/`. The Experience ids are the
- * implementations' hard-coded defaults. `/missing` and node `sdk-ci-missing` are
+ * implementations' hard-coded defaults. `/retired-page` and node `retired-page` are
  * intentionally absent so references can exercise not-found handling.
  */
 export const destinationFixture = {
   channel: {
-    id: 'experiences-sdk-ci-web',
-    name: 'Experiences SDK CI Web',
-    description: 'Routing model for the Experiences SDK reference implementations',
+    id: 'experiences-sdk-reference-site',
+    name: 'Experiences SDK Reference Site',
+    description: 'Website routing model for the Experiences SDK reference applications',
     properties: [],
     nodeProperties: [{ name: 'Path', type: 'Path' }],
   },
   destination: {
-    name: 'Experiences SDK CI',
-    description: 'Destination used by the Experiences SDK reference implementations',
+    name: 'Experiences SDK Reference Site',
+    description:
+      'Reference site pages: a home page, a getting-started guide, a personalized spring offers page and a moved quick-start page',
     properties: [],
   },
   nodes: [
-    { id: 'sdk-ci-home', kind: 'experience', path: '', experienceId: '4WzbgzPQHa9Tr2ffbOU8p7' },
+    // Home page: the Composed Experience.
+    { id: 'home', kind: 'experience', path: '', experienceId: '4WzbgzPQHa9Tr2ffbOU8p7' },
+    // Getting-started guide: the Coded Experience.
     {
-      id: 'sdk-ci-coded',
+      id: 'getting-started',
       kind: 'experience',
-      path: 'coded',
+      path: 'getting-started',
       experienceId: '3fLAdFb3BYAuImRhcW8k4t',
     },
+    // Spring offers: the Personalized Composed Experience.
     {
-      id: 'sdk-ci-personalized',
+      id: 'spring-offers',
       kind: 'experience',
-      path: 'personalized',
+      path: 'spring-offers',
       experienceId: '7u2eP09B4BIBToH8UwSHck',
     },
-    // `/legacy` resolves to `{ redirect: { path: '/coded' } }`.
-    { id: 'sdk-ci-legacy', kind: 'redirect', path: 'legacy', redirectToNodeId: 'sdk-ci-coded' },
+    // The old quick-start URL moved: `/quick-start` resolves to
+    // `{ redirect: { path: '/getting-started' } }`.
+    {
+      id: 'quick-start',
+      kind: 'redirect',
+      path: 'quick-start',
+      redirectToNodeId: 'getting-started',
+    },
   ] satisfies NodeFixture[],
 };
 

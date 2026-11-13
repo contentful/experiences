@@ -89,7 +89,7 @@ export function Navigation({
     { path: '/', label: 'Home', testId: 'link-home' },
     { path: '/page-two', label: 'Page Two', testId: 'link-page-two' },
     {
-      path: destinationRoute(destination?.path ?? '/coded'),
+      path: destinationRoute(destination?.path ?? '/getting-started'),
       label: 'Destination path',
       testId: 'link-destination',
     },

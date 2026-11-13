@@ -42,7 +42,7 @@ Optimization's 1000 requests per 30 seconds.
 
 ## Destinations
 
-`GET /destination?path=/coded` resolves one Destination path through the request
+`GET /destination?path=/getting-started` resolves one Destination path through the request
 facade's ordinary `request.fetchByDestinationPath`, then the configured node through
 `request.fetchByDestinationNode`. Absent `path` uses `DESTINATION_PATH`. The by-path
 primary carries this request's page and optional `?userId=charles` identify arguments
@@ -63,13 +63,13 @@ no native preview, so the route configures no Preview Session.
 
 Configure the existing local `.env`:
 
-| Setting                     | Default               | Meaning                                 |
-| --------------------------- | --------------------- | --------------------------------------- |
-| `DESTINATION_ID`            | none                  | Enables the route content when nonblank |
-| `DESTINATION_PATH`          | `/coded`              | Path rendered when `?path=` is absent   |
-| `DESTINATION_NODE_ID`       | `sdk-ci-personalized` | By-node comparison                      |
-| `DESTINATION_REDIRECT_PATH` | `/legacy`             | Utilities redirect example link         |
-| `DESTINATION_MISSING_PATH`  | `/missing`            | Utilities not-found example link        |
+| Setting                     | Default            | Meaning                                 |
+| --------------------------- | ------------------ | --------------------------------------- |
+| `DESTINATION_ID`            | none               | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/getting-started` | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `spring-offers`    | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/quick-start`     | Utilities redirect example link         |
+| `DESTINATION_MISSING_PATH`  | `/retired-page`    | Utilities not-found example link        |
 
 Without `DESTINATION_ID`, startup and `/` are unchanged and `/destination` reports
 that the Destination is not configured. The Destination id is created by the

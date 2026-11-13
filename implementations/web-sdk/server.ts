@@ -50,10 +50,10 @@ const publicEnvironment = {
   LOCALE: env.LOCALE || 'en-US',
   EXPERIENCE_IDS: experienceIds?.length ? [...new Set(experienceIds)] : defaultExperienceIds,
   DESTINATION_ID: destinationId,
-  DESTINATION_PATH: env.DESTINATION_PATH?.trim() || '/coded',
-  DESTINATION_NODE_ID: env.DESTINATION_NODE_ID?.trim() || 'sdk-ci-personalized',
-  DESTINATION_REDIRECT_PATH: env.DESTINATION_REDIRECT_PATH?.trim() || '/legacy',
-  DESTINATION_MISSING_PATH: env.DESTINATION_MISSING_PATH?.trim() || '/missing',
+  DESTINATION_PATH: env.DESTINATION_PATH?.trim() || '/getting-started',
+  DESTINATION_NODE_ID: env.DESTINATION_NODE_ID?.trim() || 'spring-offers',
+  DESTINATION_REDIRECT_PATH: env.DESTINATION_REDIRECT_PATH?.trim() || '/quick-start',
+  DESTINATION_MISSING_PATH: env.DESTINATION_MISSING_PATH?.trim() || '/retired-page',
   ...(previewEnabled
     ? {
         LIVE_PREVIEW: {
