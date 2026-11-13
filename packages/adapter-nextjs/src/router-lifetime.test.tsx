@@ -131,6 +131,29 @@ describe('Next request presentation inputs', () => {
     expect(override).toHaveBeenCalledTimes(source === 'override' ? 1 : 0);
     expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
+  it('makes redirect results terminal without replay or page fallback', () => {
+    const Root = vi.fn((_props: BoundRootProps) => <></>);
+    const builder = vi.fn();
+    renderToStaticMarkup(
+      <RequestPresentation
+        Root={Root}
+        result={{ ...result, redirect: { path: '/target' } }}
+        routeKey="/page"
+        pageMode="analytics"
+        beforeInitialPage={{ run: vi.fn() }}
+        buildPagePayload={builder}
+        buildRoutePayload={builder}
+      />
+    );
+    expect(Root.mock.calls[0]![0]).toMatchObject({
+      handoff: undefined,
+      buildPagePayload: undefined,
+      pageMode: undefined,
+      beforeInitialPage: undefined,
+    });
+    expect(builder).not.toHaveBeenCalled();
+  });
+
   it('suppresses browser initial page work for a matching server-owned result', () => {
     const Root = vi.fn((_props: BoundRootProps) => <></>);
     const buildPagePayload = vi.fn();

@@ -180,7 +180,11 @@ React managed integration uses Optimization's source/presentation controllers
 with the thin binding.
 Next integration reuses the same framework-neutral SDK owners. Its normal workflow
 automatically fetches, resolves and manages one primary Experience.
-App/Pages server families expose `request.loadExperience`. Both client bindings
+App/Pages server families expose `request.loadExperience`. The primary `request.experience` selector accepts
+by-ID, Destination path, or Destination node descriptors; path selection stays
+explicit and excludes the query string. Whole request results can carry `redirect`
+instead of a plan. App convenience components use native redirect; raw loaders
+and Pages GSSP callers map that result before presentation. Both client bindings
 expose ordinary Web components and a separate `request` family for full server
 results. App server `request.Experience` defaults to `ServerExperienceRenderer`;
 optional client `request.Experience` injection forwards its serialized result
@@ -289,7 +293,7 @@ By-ID fetch options can also carry first-class personalization with a profile id
 and existing type-tagged builder arguments or raw built events; Runtime/Node/Web
 consent-gate inputs and build only arguments once. Client accepts raw built events
 only and maps them to XDA's extension body, and Node
-proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`:
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Runtime/Node/Web Destination fetches by path and node id accept the same builder arguments or built personalization events, building only arguments once; Client accepts raw built events only. All three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`:
 `true` previews without commitment and `false` commits events/profile changes;
 XDA itself defaults to `true`. Ordinary SDK/free fetches explicitly default
 supplied personalization to `false`, preserving explicit booleans. Node's optional
@@ -631,11 +635,11 @@ An unregistered id degrades rather than blanking the page: a **component** node 
 `fetchExperience` carries three concerns at once — fetch, resolve, and per-render context — and takes several kinds of inbound input (Experience ids, destination paths and node ids, personalization). A single flat options object would mix all three into one bag of a dozen-plus fields, so the signature is split into three grouped args:
 
 1. `personalizationOptions` — **which** experience. A union discriminated by key presence (`nodeId`, then `path`, otherwise the by-id shape), with one overload per member:
-   - **By destination path** (recommended for apps) — `{ spaceId, destinationId, path, personalization? }`, where `path` is absolute and starts with `/`.
-   - **By destination node id** — `{ spaceId, destinationId, nodeId, personalization? }`.
+   - **By destination path** (recommended for apps) — `{ spaceId, destinationId, path, locale?, personalization? }`, where `path` is absolute and starts with `/`.
+   - **By destination node id** — `{ spaceId, destinationId, nodeId, locale?, personalization? }`.
    - **By Experience id** — `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }`. Returns `PortableRenderPlan`. The secondary route: use it when you already hold an id. Preview Session content uses runtime owners or the low-level session helpers.
 
-   The destination shapes are space-scoped only: no `environmentId`, `locale`, `parameters`, or `extensions` (`personalization` is supported). They return `PortableRenderPlan | DestinationRedirectResult`, because a Destination redirect node resolves to `{ redirect: { path } }` — returned as a value, not thrown. Callers navigate to the new path or re-call `fetchExperience` with it.
+   The destination shapes are space-scoped: master-only delivery with no `environmentId`, `parameters`, or `extensions` (`locale` and `personalization` are supported). They return `PortableRenderPlan | DestinationRedirectResult`, because a Destination redirect node resolves to `{ redirect: { path } }` — returned as a value, not thrown. Callers navigate to the new path or re-call `fetchExperience` with it.
 
 2. `clientOptions` — **how** to fetch. Discriminated union: `{ accessToken, host? }` OR `{ client }`. Kept intentionally as one arg (not split further) so users can move between inline creds and a pre-made client with only that arg changing.
 3. `resolveOptions` — **how** to resolve (`config`, `metadata`, `debug`). Personalization is _not_ here — it rides on `experienceOptions.personalization`, for both the by-id and destination shapes.
@@ -915,6 +919,15 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 ---
 
 ## Things known to be broken
+
+### Upstream Destination source maps and profile finalization
+
+Live verification found Destination source-map requests returned no source map or
+node IDs, while by-ID controls returned both. Destination `preflight: false`
+requests also did not finalize fresh event-bearing profiles, while equivalent
+by-ID controls did. The SDK does not emulate commitment or invent attribution;
+these upstream gaps block complete destination parity. See the canonical
+[Runtime destination limits](./packages/runtime/README.md#destination-selection).
 
 ### Node identity-cookie example used a removed handoff API (fixed)
 

@@ -10,26 +10,34 @@ import { Experience as ManagedExperience, type ManagedExperienceProps } from './
 import {
   useManagedExperience as useUnboundManagedExperience,
   type ManagedExperienceOptions,
+  type ExperienceNotifications,
 } from './use-managed-experience.js';
 
 export interface CreateExperiencesOptions {
   readonly config: Config;
+  readonly onRedirect?: ExperienceNotifications['onRedirect'];
 }
 export type BoundExperienceRendererProps = Omit<ClientExperienceRendererProps, 'config'>;
 type WithoutConfig<Props> = Props extends unknown ? Omit<Props, 'config'> : never;
 export type BoundManagedExperienceProps = WithoutConfig<ManagedExperienceProps>;
-export type BoundManagedExperienceOptions = Omit<ManagedExperienceOptions, 'config'>;
+export type BoundManagedExperienceOptions = WithoutConfig<ManagedExperienceOptions>;
 
 /** Pure registry binding; SDK construction happens only when an owner activates. */
-export function createExperiences({ config }: CreateExperiencesOptions) {
+export function createExperiences({ config, onRedirect }: CreateExperiencesOptions) {
   function ExperienceRenderer(props: BoundExperienceRendererProps) {
     return <ClientExperienceRenderer {...props} config={config} />;
   }
   function Experience(props: BoundManagedExperienceProps) {
-    return <ManagedExperience {...props} config={config} />;
+    return (
+      <ManagedExperience {...props} onRedirect={props.onRedirect ?? onRedirect} config={config} />
+    );
   }
   function useManagedExperience(options: BoundManagedExperienceOptions) {
-    return useUnboundManagedExperience({ ...options, config });
+    return useUnboundManagedExperience({
+      ...options,
+      onRedirect: options.onRedirect ?? onRedirect,
+      config,
+    });
   }
   return {
     ExperiencesRoot,

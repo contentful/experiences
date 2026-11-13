@@ -4,10 +4,10 @@ A Next.js 15 App Router app demonstrating `@contentful/experiences-nextjs` rende
 
 ## What it shows
 
-- **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
+- **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls the Node request facade's `fetchExperience` with `{ destinationId, path, locale }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
 - **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
 - **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` fetches one Experience by id. It is the route for Preview Sessions and runtime parameters, none of which Destinations support.
-- **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-nextjs/server`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
+- **Server-side fetch and resolve** via request-scoped Node `request.fetchExperience` for Destination and by-ID routes. One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
 - **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-nextjs/server`.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then a managed `Experience` receives Preview Session updates in the browser.
 - **Runtime parameters via `?parameter_demo=true`**: a JSON form forwards scalar/Record values to `fetchExperience`; submitting changed values refetches and renders a new plan.
@@ -49,7 +49,7 @@ npm run dev
 
 `DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
 
-Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
+Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The route calls `request.fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
 
 ### Optional: runtime parameters
 
@@ -109,8 +109,9 @@ sent. The example sends Berlin whenever the box is ticked, so every tester sees
 the same result regardless of where they are. A real app would send the
 visitor's actual location.
 
-The example intentionally does not implement durable profile storage or consent
-policy; production applications must own those concerns.
+The server fetch uses request-local consent defaults and does not persist its profile.
+The browser consent demo below uses the shared SDK state; production applications
+must supply their own server consent and response identity policy.
 
 ### Optional: consent
 
@@ -164,19 +165,33 @@ The hub at `/` links to all of these. `fetchExperience` reads the payload from X
 | `http://localhost:3000/experiences/landing`                                 | [`app/experiences/[id]/page.tsx`](./app/experiences/[id]/page.tsx) | By Experience id                                                                 |
 | `http://localhost:3000/experiences/landing?preview_session_id=<session-id>` | same route                                                         | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
 
-The destination route in one glance:
+The destination route uses the same request-scoped runtime as the by-ID route:
 
 ```tsx
-const result = await fetchExperience(
-  { spaceId, destinationId, path }, // path: "/demo/landing"
-  { accessToken: CDA_TOKEN },
-  { config: experienceConfig, metadata: { slug, locale }, debug }
-);
-if ('redirect' in result) redirect(result.redirect.path);
-return <ServerExperienceRenderer experience={result} config={experienceConfig} debug={debug} />;
+const sdk = new ContentfulExperiences({
+  spaceId,
+  environmentId,
+  delivery: { accessToken: CDA_TOKEN },
+});
+const request = sdk.forRequest({ locale });
+try {
+  const result = await request.fetchExperience(
+    { destinationId, path, locale }, // path: "/demo/landing"
+    { config: experienceConfig, metadata: { slug, locale }, debug }
+  );
+  if ('redirect' in result) redirect(result.redirect.path);
+  return <ServerExperienceRenderer experience={result} config={experienceConfig} debug={debug} />;
+} finally {
+  request.destroy();
+}
 ```
 
-Destination delivery is space-scoped (no `environmentId`), and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. The listed paths are prerendered at build time; requests carrying query flags such as `?personalization=true` or `?debug=true` are rendered on demand, because the page reads `searchParams`. Rebuild or use revalidation to refresh the prerendered copies after republishing content.
+Destination delivery is space-scoped and master-only (no per-call `environmentId`); `locale` selects the content locale. It takes no `parameters` or `extensions`, and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. The listed paths are prerendered at build time; requests carrying query flags such as `?personalization=true` or `?debug=true` are rendered on demand, because the page reads `searchParams`. Rebuild or use revalidation to refresh the prerendered copies after republishing content.
+
+These pages retain supplied-plan server rendering and one shared browser owner for
+Preview Sessions and the consent demo. For a complete managed request binding,
+including result adoption and SSR/hybrid page ownership, see the
+[Next adapter guide](../../packages/adapter-nextjs/README.md#automatic-single-experience-setup).
 
 The by-id route uses one ordinary Node request fetch for both sources:
 

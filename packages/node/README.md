@@ -443,7 +443,8 @@ retained on the SDK or request facade.
 
 `fetchExperience({ experienceId }, { config: experienceConfig })` uses Delivery unless
 the request has an active Preview Session whose payload matches the Experience ID.
-The destination endpoints remain delivery-only:
+The same method accepts `{ destinationId, path }` or `{ destinationId, nodeId }`;
+the existing destination methods remain wrappers:
 
 ```ts
 const result = await request.fetchByDestinationPath(
@@ -461,7 +462,22 @@ if ('redirect' in result) {
 }
 ```
 
-Destination node and path requests accept `personalization` (a profile id and caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the complete profile XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug.
+Destination node and path requests accept `locale` and `personalization` (a profile
+id and builder arguments or caller-built events) like by-ID fetches. Consent and
+event interceptors apply, the request's profile id is sent unless explicitly set,
+and the complete profile XDA returns is kept for later calls. Redirects carry no
+profile and are returned without following them. The master-only destination API
+receives no environment identifier and accepts no by-ID parameters/extensions.
+Request-scoped resolve settings still apply. During Preview, event-free destination
+acquisition selects an actual Experience ID; matching session content can replace
+it only when the SDK environment is `master`. A nonmatching ID retains Delivery.
+
+`fetchExperienceForHandoff` supports the same selectors and captures evaluated
+profile/changes before resolution. A terminal destination redirect returns
+`{ handoff, redirect }`; route it before passing the handoff to a browser consumer.
+The SDK preserves explicit evaluated intent without following or compensating for
+a redirect. Destination commitment and source-map service limitations are recorded
+in [Runtime's destination contract](../runtime/README.md#destination-selection).
 
 The runtime owns its Delivery and Preview clients. Configure each with an
 `accessToken`, or configure a tokenless trusted proxy by supplying an explicit

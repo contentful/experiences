@@ -15,6 +15,9 @@ Delivery transport belongs to Client and event construction belongs to Runtime,
 keeping this package usable in any runtime without pulling in a delivery client
 or framework.
 
+The plan's optional `experienceId` retains the actual nonempty `payload.sys.id`;
+a missing ID is never inferred from the requested selector.
+
 ## Delivery diagnostics
 
 `resolveExperience` projects recognized `payload.errors` into the optional

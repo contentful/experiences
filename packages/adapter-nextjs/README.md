@@ -35,6 +35,27 @@ another fetch. Multiple-fetch ordering, identity and results remain
 application-owned diagnostic behavior; there is no declarative multi-prefetch,
 result list, identity reconciliation or additional cache/controller/barrier.
 
+`request.experience` accepts exactly one selector: `{ experienceId }`,
+`{ destinationId, path }`, or `{ destinationId, nodeId }`. Destination paths name
+content lookup paths; route keys retain the browser pathname and query. For example:
+
+```ts
+request: {
+  experience: ({ requestUrl }) => ({
+    destinationId: process.env.CONTENTFUL_DESTINATION_ID!,
+    path: new URL(requestUrl).pathname,
+  }),
+},
+```
+
+The fetched plan carries the actual `experienceId` from the selected payload.
+Destination redirects remain `{ redirect: { path } }` on raw request results.
+App server convenience roots and presentations invoke Next's native redirect
+before rendering or browser adoption. Pages callers return a native GSSP redirect
+before passing props. A terminal redirect does not replay its handoff or emit a
+fallback page on the destination route. Browser managed components and hooks use
+native router navigation by default; an explicit `onRedirect` overrides it.
+
 ### App Router
 
 Export named components from `binding.request` in the binding modules, then import
@@ -239,6 +260,7 @@ export const getServerSideProps: GetServerSideProps<{ result: RequestResult }> =
   context
 ) => {
   const result = await pagesExperiences.request.loadExperience(context);
+  if (result.redirect) return { redirect: { destination: result.redirect.path, permanent: false } };
   return { props: { result } };
 };
 
@@ -543,11 +565,11 @@ selects SSR page ownership. This setting is independent of editor Preview Sessio
 The App server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: RequestResult`:
-`requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
+`requestId`, `routeKey`, event-free `experience`, optional `plan`, `redirect`, `handoff`,
 `contentError` string, `initialPagePayload`, optional `initialPageOwner: 'server'`
 and optional credential/client-free `preview` context metadata. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
-retains server-local `experienceId` and raw `error`; browser projection excludes
+retains the selected server-local `experienceId` when available and raw `error`; browser projection excludes
 those fields and sanitizes the optional plan. Analytics roots omit that plan for
 opaque server children while preserving the handoff.
 Only the App opt-in path reads `headers()`/`cookies()`; configure the sanitized request
@@ -606,7 +628,8 @@ No separate flag or payload overlay is needed. Explicit events are complete
 caller intent; do not combine them with `request.initialEvents` or `request.pagePayload`.
 
 The explicit server `Experience` accepts a supplied plan or a public/static
-`experienceId` with explicit cache policy; it reads no framework context. Existing
+Experience or destination selector with explicit cache policy; it reads no framework context.
+Destination redirects use native Next navigation before rendering. Existing
 explicit Node host helpers remain available for custom request boundaries.
 Server functions and credentials stay outside client props.
 The server request `Experience` defaults to `ServerExperienceRenderer`. The optional
@@ -696,7 +719,7 @@ credentials are separately designated; client instances and factories are never 
 
 ## Public cache conveniences
 
-`createCacheKey` covers explicit space/environment, Experience ID/revision, locale, parameters and approved `selectionDimensions`. `createPublicPermutationCacheMetadata` adds `permutationKey`, optional `cacheVersion` and detached optional `tags`. The application owns dimension completeness and must exclude raw profile, identity and replay.
+`createCacheKey` covers explicit space/environment, exactly one Experience or destination selector, content revision, locale, by-ID parameters and approved `selectionDimensions`. Destination keys distinguish path and node selectors and include the destination ID. Existing by-ID key encoding is preserved. `createPublicPermutationCacheMetadata` adds `permutationKey`, optional `cacheVersion` and detached optional `tags`. The application owns dimension completeness and must exclude raw profile, identity and replay.
 
 `createPublicPermutationCacheMiddleware({ resolveCache, rewrite?, cacheKeySearchParam? })` performs bounded routing only. Its default query name is `ctfl-exp-cache-key`. It preserves terminal responses, existing response headers/cookies and authoritative request-header removals, sanitizing SDK-owned request headers before rewriting. It imports no Node runtime and runs in Edge middleware. It neither initializes a visitor nor implements a cache.
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useHref, useLocation, useMatches, type Location } from 'react-router-dom';
+import { useNavigate, useHref, useLocation, useMatches, type Location } from 'react-router-dom';
 import type { CreateExperiencesOptions } from '../experience/create-experiences.js';
 import { createRouterBinding } from './create-router-binding.js';
 import type { RouterRootProps, RouterProviderProps } from './page-payload.js';
@@ -43,5 +43,10 @@ function useRouteContext(): ReactRouterAutoPageContext {
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
 export function bindReactRouterExperiences(options: CreateExperiencesOptions) {
-  return createRouterBinding(options, useRouteContext);
+  return createRouterBinding(options, useRouteContext, () => {
+    const navigate = useNavigate();
+    return ({ path }) => {
+      void navigate(path, { replace: true });
+    };
+  });
 }

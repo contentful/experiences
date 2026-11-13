@@ -85,8 +85,8 @@ export default async function HomePage({ searchParams }: PageProps) {
         </ul>
         <p style={muted}>
           Options: <code style={code}>?personalization=true</code>,{' '}
-          <code style={code}>?debug=true</code>, <code style={code}>?locale=de-DE</code> (passed
-          through to resolver metadata). Destinations do not support preview.
+          <code style={code}>?debug=true</code>, <code style={code}>?locale=de-DE</code> (content
+          locale and resolver metadata). Destinations do not support preview.
         </p>
 
         <h2>By Experience id</h2>

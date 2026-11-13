@@ -30,7 +30,7 @@ export interface ServerRequestContext {
 export type ServerValue<T> = T | ((context: ServerRequestContext) => T | Promise<T>);
 
 export interface ServerRequestResult extends RequestResult {
-  readonly experienceId: string;
+  readonly experienceId?: string;
   readonly error?: unknown;
 }
 
@@ -103,6 +103,7 @@ export function serializeRequestResult(
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: result.experience,
+      ...(result.redirect ? { redirect: { path: result.redirect.path } } : {}),
       ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),

@@ -1,10 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { describe, it, expect, expectTypeOf, vi, beforeEach } from 'vitest';
 import {
   ContentfulViewDeliveryClient,
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
 import { ExperienceFetchError } from './errors.js';
-import { fetchExperience, type PersonalizationOptions } from './fetch-experience.js';
+import {
+  fetchExperience,
+  fetchExperiencePayload,
+  type PersonalizationOptions,
+  type ExperienceOptions,
+  type DestinationRedirectResult,
+} from './fetch-experience.js';
 
 const {
   mockGet,
@@ -556,10 +563,8 @@ describe('fetchExperience — destinationId + nodeId', () => {
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {
-    // @ts-expect-error — extensions is not a member of ByDestinationNodeIdExperienceOptions,
-    // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
-    // required destinationId/nodeId aren't part of that member either — a real compile error.
     void fetchExperience(
+      // @ts-expect-error — destination selectors do not support extensions.
       { ...destinationOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
@@ -567,9 +572,8 @@ describe('fetchExperience — destinationId + nodeId', () => {
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    // @ts-expect-error — experienceId and destinationId/nodeId belong to different
-    // members of the ExperienceOptions union; no combination of extra keys satisfies both.
     void fetchExperience(
+      // @ts-expect-error — Experience and Destination selectors are exclusive.
       { ...destinationOptions, experienceId: 'exp-1' },
       { accessToken: 'token-123' },
       resolveOptions
@@ -674,10 +678,8 @@ describe('fetchExperience — destinationId + path', () => {
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {
-    // @ts-expect-error — extensions is not a member of ByDestinationPathExperienceOptions,
-    // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
-    // required destinationId/path aren't part of that member either — a real compile error.
     void fetchExperience(
+      // @ts-expect-error — destination selectors do not support extensions.
       { ...destinationOptions, extensions: { sourceMap: {} } },
       { accessToken: 'token-123' },
       resolveOptions
@@ -685,9 +687,8 @@ describe('fetchExperience — destinationId + path', () => {
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    // @ts-expect-error — experienceId and destinationId/path belong to different
-    // members of the ExperienceOptions union; no combination of extra keys satisfies both.
     void fetchExperience(
+      // @ts-expect-error — Experience and Destination selectors are exclusive.
       { ...destinationOptions, experienceId: 'exp-1' },
       { accessToken: 'token-123' },
       resolveOptions
@@ -766,4 +767,38 @@ describe('fetchExperience — destination personalization', () => {
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
   });
+});
+
+describe('fetchExperiencePayload — selector routing', () => {
+  it('returns destination content or redirect without resolution or a second by-ID fetch', async () => {
+    vi.clearAllMocks();
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+    const client = new ContentfulViewDeliveryClient({
+      token: 'token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
+    mockResolveByPath.mockResolvedValueOnce({
+      experiences: [{ path: '/products', experience: mockDestinationExperience }],
+    });
+    const selector = { spaceId: 'space-1', destinationId: 'dest-1', path: '/products' };
+    expect(await fetchExperiencePayload(selector, client)).toBe(mockDestinationExperience);
+    mockResolveByPath.mockResolvedValueOnce({ redirect: { path: '/canonical' } });
+    expect(await fetchExperiencePayload(selector, client)).toEqual({
+      redirect: { path: '/canonical' },
+    });
+    expect(mockResolveByPath).toHaveBeenCalledTimes(2);
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(resolveExperience).not.toHaveBeenCalled();
+  });
+});
+
+it('accepts selector unions while preserving the by-ID return type', () => {
+  const fromSelector = (selector: ExperienceOptions) =>
+    fetchExperience(selector, { accessToken: 'token' }, resolveOptions);
+  const byId = () => fetchExperience(experienceOptions, { accessToken: 'token' }, resolveOptions);
+  expectTypeOf(fromSelector).returns.toEqualTypeOf<
+    Promise<PortableRenderPlan | DestinationRedirectResult>
+  >();
+  expectTypeOf(byId).returns.toEqualTypeOf<Promise<PortableRenderPlan>>();
 });

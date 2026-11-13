@@ -182,7 +182,22 @@ helper. The build tools require Node.js 22.12 or later.
 
 ## Browser transport and preview
 
-This package owns its Delivery and optional Preview Session clients. By-ID fetches use matching session content while preview is active; other Experience IDs and destination operations retain their ordinary Delivery source. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
+This package owns its Delivery and optional Preview Session clients. Configured-space
+`fetchExperience` accepts `{ experienceId }`, `{ destinationId, path }`, or
+`{ destinationId, nodeId }`; only destination selections can return a terminal
+`{ redirect: { path } }`. The existing destination methods remain wrappers. All
+selectors accept `locale` and builder-or-built personalization events through the
+same consent, interceptor, profile/changes and lifecycle handling. Equivalent
+event-free source requests share in-flight work; event-bearing evaluations do not.
+Destinations are master-only and accept no by-ID parameters/extensions.
+
+By-ID fetches use matching session content while Preview is active. Destination
+acquisition is event-free in Preview, and can substitute session content only for
+the actual selected Experience ID in the SDK's `master` environment. Redirects
+remain terminal. Subscribe using `plan.experienceId` only when the selected source
+and Preview scope match. No destination identity map is retained. Destination
+commitment and source-map service limitations are recorded in
+[Runtime's destination contract](../runtime/README.md#destination-selection).
 
 The inherited readonly `api` exposes the full Personalization and Analytics service clients
 through `api.personalization` and `api.analytics`, plus their shared `api.config`; inherited readonly `config` retains the

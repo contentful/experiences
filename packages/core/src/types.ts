@@ -337,6 +337,8 @@ export interface ExperienceDeliveryDiagnostic {
  * is no plan-level template concept — see `PortableRegistration`.
  */
 export interface PortableRenderPlan {
+  /** Actual Experience ID reported by the payload; absent when no nonempty ID was returned. */
+  experienceId?: string;
   nodes: PortableRenderNode[];
   /**
    * The `metadata` the resolve step ran with, so the renderer does not need it

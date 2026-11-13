@@ -107,6 +107,19 @@ describe('React route request and page coordination', () => {
     );
     await act(async () => view.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   }
+  it('stops deferred page fallback and consent retry when its presentation redirects', async () => {
+    const pending = deferred<void>();
+    await render({ beforeInitialPage: { run: () => pending.promise }, pageMode: 'analytics' });
+    requests.abandonPresentation?.();
+    await act(async () => {
+      pending.resolve();
+    });
+    await act(async () => {
+      consent.value = true;
+    });
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
+  });
+
   it('orders analytics-only page intent after the optional callback without loading content', async () => {
     const pending = deferred<void>();
     const beforeInitialPage = { run: vi.fn(() => pending.promise) };

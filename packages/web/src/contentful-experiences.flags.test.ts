@@ -302,22 +302,25 @@ describe('Web Custom Flags', () => {
       const sdk = createRuntime();
       vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
       const profile = completeProfile('visitor');
-      const fetch = vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
-        personalization: { profile, changes: changes(false) },
-        nodes: [],
-      } as never);
+      const fetch = vi
+        .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue({
+          personalization: { profile, changes: changes(false) },
+          nodes: [],
+        } as never);
       const next = vi.fn();
       const subscription = sdk.states.flag('banner').subscribe(next);
-      const load = () =>
-        sdk[method](
-          {
-            experienceId: 'experience',
-            destinationId: 'destination',
-            nodeId: 'node',
-            path: '/',
-          },
-          { config: { components: {} } }
-        );
+      const load = () => {
+        const resolve = { config: { components: {} } };
+        if (method === 'fetchByDestinationNode')
+          return sdk.fetchByDestinationNode(
+            { destinationId: 'destination', nodeId: 'node' },
+            resolve
+          );
+        if (method === 'fetchByDestinationPath')
+          return sdk.fetchByDestinationPath({ destinationId: 'destination', path: '/' }, resolve);
+        return sdk.fetchExperience({ experienceId: 'experience' }, resolve);
+      };
       await expect(load()).resolves.toMatchObject({
         personalization: { profile, changes: changes(false) },
       });

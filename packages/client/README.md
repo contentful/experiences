@@ -10,13 +10,13 @@ Isolates `@contentful/experience-delivery` — the generated Experience Delivery
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
-The primary fetch + resolve entry point. Fetches an Experience payload and resolves it into a `PortableRenderPlan` in one call. There are three ways to say which Experience:
+The primary fetch + resolve entry point. Fetches an Experience payload and resolves it into a `PortableRenderPlan` in one call. Its internal `fetchExperiencePayload` loader shares the same exclusive selector union and returns a payload or redirect before resolution, so runtime consumers do not fetch the selected Experience a second time. There are three ways to say which Experience:
 
 - **By destination path** (recommended for apps): `{ spaceId, destinationId, path }`. The URL path is the Destination path.
 - **By destination node id**: `{ spaceId, destinationId, nodeId }`.
 - **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id.
 
-The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+The destination forms are space-scoped (no `environmentId`, `parameters` or `extensions`) and accept `locale` and `personalization`; supplying personalization sends a POST instead of the cacheable GET. Locale is forwarded as a query value on GET and POST. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
 
 ```ts
 const result = await fetchExperience(
@@ -88,11 +88,11 @@ the renderer's plan; see the [runtime parameters example](../../README.md#runtim
 
 Three positional args group by concern:
 
-| Arg                 | Type                                                                                                                                                                  | Purpose                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                               |
-| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                          | How to fetch — inline Delivery credentials or a pre-made client.                  |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch. |
+| Arg                 | Type                                                                                                                                                                           | Purpose                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, locale?, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                               |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                                   | How to fetch — inline Delivery credentials or a pre-made client.                  |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                                | How to resolve — component registry, per-render `metadata`, and a `debug` switch. |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte

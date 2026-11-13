@@ -1,11 +1,8 @@
+import { ContentfulExperiences } from '@contentful/experiences-node';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 
-import {
-  NotFoundError,
-  ServerExperienceRenderer,
-  fetchExperience,
-} from '@contentful/experiences-nextjs/server';
+import { NotFoundError, ServerExperienceRenderer } from '@contentful/experiences-nextjs/server';
 
 import { experienceConfig } from '@/lib/experience-config';
 import { buildPagePersonalization } from '@/lib/personalization';
@@ -64,11 +61,20 @@ export async function renderDestinationPage(segments: string[], sp: SearchParams
   // route for Preview Sessions.
   let result;
   try {
-    result = await fetchExperience(
-      { spaceId, destinationId, path, personalization },
-      { accessToken },
-      resolveOptions
-    );
+    const sdk = new ContentfulExperiences({
+      spaceId,
+      environmentId: process.env.ENVIRONMENT_ID ?? 'master',
+      delivery: { accessToken },
+    });
+    const request = sdk.forRequest({ locale });
+    try {
+      result = await request.fetchExperience(
+        { destinationId, path, locale, personalization },
+        resolveOptions
+      );
+    } finally {
+      request.destroy();
+    }
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
     throw err;

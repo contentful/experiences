@@ -6,7 +6,7 @@ import {
   type Config,
   type ExperiencesRootProps,
 } from '@contentful/experiences-react/client';
-import { usePathname, useSearchParams } from 'next/navigation.js';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRouteKey, queryFromSearchParams } from './request-context.js';
 import {
@@ -15,6 +15,7 @@ import {
   RequestPresentation,
   BrowserRoot,
   useRequestOptions,
+  useRequestRedirect,
 } from './router-lifetime.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
 
@@ -97,9 +98,25 @@ export function useAppAutoPageInputs() {
 /** Browser credentials/callbacks stay in the module that calls this pure binder. */
 export function bindAppRouterClientExperiences(options: ClientConfig) {
   const { config, consent, ...rootConfig } = options;
-  const { Experience, ExperienceRenderer, useManagedExperience } = createExperiences({
-    config,
-  });
+  const react = createExperiences({ config });
+  const { ExperienceRenderer } = react;
+  function useDestinationRedirect() {
+    const router = useRouter();
+    return useCallback(
+      (target: { path: string }) => {
+        router.replace(target.path);
+      },
+      [router]
+    );
+  }
+  function Experience(props: Parameters<typeof react.Experience>[0]) {
+    const onRedirect = useDestinationRedirect();
+    return <react.Experience {...props} onRedirect={props.onRedirect ?? onRedirect} />;
+  }
+  function useManagedExperience(props: Parameters<typeof react.useManagedExperience>[0]) {
+    const onRedirect = useDestinationRedirect();
+    return react.useManagedExperience({ ...props, onRedirect: props.onRedirect ?? onRedirect });
+  }
 
   function BoundBrowserRoot(props: BoundRootProps) {
     const effective = {
@@ -139,7 +156,10 @@ export function bindAppRouterClientExperiences(options: ClientConfig) {
 
   function RequestExperience({ result: supplied, ...props }: RequestExperienceProps) {
     const { routeKey } = useAppAutoPageInputs();
-    const { result, ...initial } = useRequestOptions(supplied);
+    const { result, initialRedirect, ...initial } = useRequestOptions(supplied);
+    const onRedirect = useDestinationRedirect();
+    useRequestRedirect(result, initialRedirect, result?.routeKey === routeKey, onRedirect);
+    if (initialRedirect) return null;
     return result?.routeKey === routeKey ? (
       <Experience {...props} {...result.experience} {...initial} />
     ) : (

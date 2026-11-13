@@ -26,6 +26,7 @@ import {
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
+  type FetchByIdExperienceOptions,
   type PersonalizationOptions,
   buildFetchPersonalization,
   type FetchResolveOptions,
@@ -191,14 +192,16 @@ function flushPersonalizationOnDestroy(delivery: PersonalizationDelivery): void 
 type ValidatedPreparedEvents = ReturnType<typeof validatePreparedEvents>;
 const unguardedHandoffCaller = () => true;
 
-type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
-  personalization?: BuiltPersonalizationOptions;
-};
+type BuiltFetchOptions<T> = T extends unknown
+  ? Omit<T, 'personalization'> & {
+      personalization?: BuiltPersonalizationOptions;
+    }
+  : never;
 type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: ReturnType<typeof buildFetchPersonalization>;
 };
 
-function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
+function clonePlan<T extends PortableRenderPlan | DestinationRedirectResult>(plan: T): T {
   return cloneDeepWith(plan, (value) => {
     if (!(value instanceof Error)) return undefined;
     // Error causes can contain caller-owned functions and other opaque values.
@@ -225,7 +228,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #snapshotRevision = 0;
   readonly #pendingContent = new Map<
     FetchResolveOptions['config'],
-    Map<string, Promise<PortableRenderPlan>>
+    Map<string, Promise<PortableRenderPlan | DestinationRedirectResult>>
   >();
   #contentLifetime = 0;
   #profileRevision = 0;
@@ -664,16 +667,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return (this.#previewSnapshot = pending);
   }
 
-  #shareContent(
+  #shareContent<T extends PortableRenderPlan | DestinationRedirectResult>(
     key: string | undefined,
     resolve: FetchResolveOptions,
-    load: () => Promise<PortableRenderPlan>
-  ): Promise<PortableRenderPlan> {
+    load: () => Promise<T>
+  ): Promise<T> {
     if (key === undefined) return load();
     let pending = this.#pendingContent.get(resolve.config);
     if (!pending) this.#pendingContent.set(resolve.config, (pending = new Map()));
     const existing = pending.get(key);
-    if (existing) return existing.then(clonePlan);
+    if (existing) return existing.then((value) => clonePlan(value as T));
     const promise = load().finally(() => {
       if (pending.get(key) === promise) pending.delete(key);
       if (!pending.size && this.#pendingContent.get(resolve.config) === pending)
@@ -683,11 +686,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return promise.then(clonePlan);
   }
 
+  override fetchExperience(
+    options: FetchByIdExperienceOptions,
+    resolveOptions: FetchResolveOptions,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
+  ): Promise<PortableRenderPlan>;
+  override fetchExperience(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   override async fetchExperience(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions,
     currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
-  ): Promise<PortableRenderPlan> {
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const { assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
     if (this.#previewOptions) {
@@ -697,8 +710,33 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
     return this.#fetchPersonalized(options, {
       currentPage,
-      prepare: (current) => this.#withTrackingSourceMap(current),
-      send: (final) => super.fetchExperience(final, resolveOptions),
+      prepare: (current) => (this.isPreview ? current : this.#withTrackingSourceMap(current)),
+      send: async (final) => {
+        if (!this.isPreview || final.experienceId !== undefined)
+          return super.fetchExperience(final, resolveOptions);
+        const acquired = await super.fetchExperiencePayload(final, resolveOptions);
+        assertCurrent();
+        if ('redirect' in acquired) return acquired;
+        if (
+          this.environmentId === 'master' &&
+          typeof acquired.sys?.id === 'string' &&
+          acquired.sys.id.length > 0
+        ) {
+          const preview = await this.#fetchPreview(
+            {
+              experienceId: acquired.sys.id,
+              locale: options.locale,
+              extensions: options.extensions,
+              personalization:
+                options.personalization?.events === undefined ? undefined : { events: [] },
+            },
+            resolveOptions,
+            assertCurrent
+          );
+          if (preview !== undefined) return preview;
+        }
+        return super.resolveExperience(acquired, resolveOptions);
+      },
       share: (load, final, revision) => {
         const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
         const key =
@@ -726,10 +764,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.#fetchPersonalized(options, {
-      currentPage,
-      send: (final) => super.fetchByDestinationNode(final, resolveOptions),
-    });
+    return this.fetchExperience(options, resolveOptions, currentPage);
   }
 
   override fetchByDestinationPath(
@@ -737,10 +772,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.#fetchPersonalized(options, {
-      currentPage,
-      send: (final) => super.fetchByDestinationPath(final, resolveOptions),
-    });
+    return this.fetchExperience(options, resolveOptions, currentPage);
   }
 
   async #fetchPersonalized<
@@ -851,7 +883,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     assertCurrent: () => void
   ): Promise<PortableRenderPlan | undefined> {
-    if (!this.#previewOptions) return undefined;
+    if (!this.#previewOptions || options.experienceId === undefined) return undefined;
     const { payload, revision } = await this.#readPreviewSnapshot();
     assertCurrent();
     if (typeof payload.sys?.id !== 'string' || payload.sys.id !== options.experienceId)
@@ -895,7 +927,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   #withTrackingSourceMap(options: FetchExperienceOptions): FetchExperienceOptions {
-    return this.#ensureInteractionTracking()?.hasAutoTracking()
+    return options.experienceId !== undefined &&
+      this.#ensureInteractionTracking()?.hasAutoTracking()
       ? {
           ...options,
           extensions: { ...options.extensions, sourceMap: options.extensions?.sourceMap ?? {} },
@@ -942,7 +975,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       };
     }
     assertCurrent();
-    return { ...gated, personalization: valid };
+    return { ...gated, personalization: valid } as BuiltFetchOptions<T>;
   }
 
   async #adoptFetchedState(

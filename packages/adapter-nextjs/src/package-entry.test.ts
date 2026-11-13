@@ -351,6 +351,13 @@ describe('published declarations', () => {
         request: { experience: { experienceId: 'home' }, resolveOptions: { metadata: { server: true }, debug: false } }
       });
       browserApp.request.loadExperience({ resolveOptions: { debug: true } });
+      browserApp.request.loadExperience({ experience: { destinationId: 'site', path: '/page', locale: 'de-DE' } });
+      browserApp.request.loadExperience({ experience: { destinationId: 'site', nodeId: 'node' } });
+      appServer.Experience({ destinationId: 'site', path: '/page' });
+      // @ts-expect-error Source selectors remain exclusive.
+      browserApp.request.loadExperience({ experience: { experienceId: 'home', destinationId: 'site', path: '/page' } });
+      // @ts-expect-error Destination paths and nodes remain exclusive.
+      appServer.Experience({ destinationId: 'site', nodeId: 'node', path: '/page' });
       // @ts-expect-error High-level expiry uses days; Date belongs to explicit low-level cookie helpers.
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, cookie: { expires: new Date() } });
       // @ts-expect-error Server request state cannot become browser startup defaults.
@@ -476,6 +483,12 @@ describe('published declarations', () => {
         pagesClient.Experience({ experience: plan });
         pagesClient.ExperienceRenderer({ experience: plan });
         pagesClient.useManagedExperience({ experienceId: 'home' });
+        pagesClient.Experience({ destinationId: 'site', path: '/page', onRedirect: ({ path }) => { void path; } });
+        pagesClient.useManagedExperience({ destinationId: 'site', nodeId: 'node', locale: 'de-DE' });
+        appClient.Experience({ destinationId: 'site', path: '/page' });
+        appClient.useManagedExperience({ destinationId: 'site', nodeId: 'node' });
+        // @ts-expect-error Destination descriptor overlays cannot change a supplied request result.
+        Experience({ result, destinationId: 'site', path: '/page' });
         const defaultRootProps: DefaultRequestRootProps = {
           spaceId: 'space', environmentId: 'master', result,
           browser: { delivery: { accessToken: 'browser' } }

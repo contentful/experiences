@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import {
   useExperiences,
   useExperiencesActions,
@@ -30,7 +30,7 @@ import { RequestPresentation } from './router-lifetime.js';
 const navigation = vi.hoisted(() => ({
   pathname: '/page',
   search: 'q=hello%20world',
-  router: { refresh: vi.fn() },
+  router: { refresh: vi.fn(), replace: vi.fn() },
 }));
 vi.mock('./router-lifetime.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./router-lifetime.js')>();
@@ -43,6 +43,22 @@ vi.mock('next/navigation.js', () => ({
 }));
 
 const profile = profileFixture('server-profile');
+
+function sdkFixture() {
+  const fetchExperience = vi.fn<ContentfulExperiences['fetchExperience']>();
+  const hydrateAndTrackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
+  const sdk = {
+    ...createWebSnapshotRuntime({ consent: true }),
+    spaceId: 'space',
+    environmentId: 'master',
+    config: {},
+    fetchExperience,
+    hydrateAndTrackCurrentPage,
+    reset: vi.fn(),
+    subscribeToPreview: () => ({ unsubscribe() {} }),
+  } as unknown as ContentfulExperiences;
+  return { sdk, fetchExperience, hydrateAndTrackCurrentPage };
+}
 
 describe('App committed route inputs', () => {
   let container: HTMLDivElement;
@@ -170,21 +186,106 @@ describe('App committed route inputs', () => {
     }
   );
 
+  it('uses native navigation for the managed destination hook', async () => {
+    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+    const { sdk, fetchExperience } = sdkFixture();
+    fetchExperience.mockResolvedValue({ redirect: { path: '/selected' } });
+    function Destination() {
+      binding.useManagedExperience({ destinationId: 'site', path: '/page' });
+      return null;
+    }
+    await act(async () =>
+      root.render(
+        <binding.ExperiencesRoot sdk={sdk}>
+          <Destination />
+        </binding.ExperiencesRoot>
+      )
+    );
+    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/selected');
+    expect(fetchExperience).toHaveBeenCalledOnce();
+  });
+
+  it('redirects once in StrictMode and refetches after restoring an old redirect result', async () => {
+    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+    const freshPlan = {
+      nodes: [],
+      diagnostics: [],
+      metadata: { label: 'fresh content' },
+      debug: false,
+    };
+    const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
+    fetchExperience.mockResolvedValue(freshPlan);
+    const startup = {
+      requestId: 'redirect-history',
+      routeKey: '/page?q=hello+world',
+      experience: { destinationId: 'site', path: '/page' },
+      redirect: { path: '/target' },
+    };
+    const render = async (path: string, result = startup) => {
+      navigation.pathname = path;
+      navigation.search = 'q=hello+world';
+      window.history.replaceState(null, '', `${path}?q=hello+world`);
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <binding.request.ExperiencesRoot sdk={sdk} result={{ ...result }}>
+              <binding.request.Experience>
+                {(state) => <output>{String(state.data?.metadata.label ?? state.status)}</output>}
+              </binding.request.Experience>
+            </binding.request.ExperiencesRoot>
+          </StrictMode>
+        )
+      );
+    };
+    await render('/page');
+    await render('/page');
+    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/target');
+    expect(fetchExperience).not.toHaveBeenCalled();
+    await render('/other');
+    await render('/page');
+    expect(navigation.router.replace).toHaveBeenCalledTimes(1);
+    expect(fetchExperience).toHaveBeenCalledOnce();
+    expect(fetchExperience.mock.calls[0]?.[0]).toMatchObject({
+      destinationId: 'site',
+      path: '/page',
+    });
+    expect(container.textContent).toBe('fresh content');
+    expect(hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
+    await render('/page', {
+      ...startup,
+      requestId: 'fresh-result',
+      redirect: { path: '/fresh-target' },
+    });
+    expect(navigation.router.replace).toHaveBeenCalledTimes(2);
+    expect(navigation.router.replace).toHaveBeenLastCalledWith('/fresh-target');
+  });
+
+  it('navigates a terminal destination result without resolving or replaying it', async () => {
+    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await act(async () =>
+      root.render(
+        <binding.request.Experience
+          result={{
+            requestId: 'redirect',
+            routeKey: '/page?q=hello+world',
+            experience: { destinationId: 'site', path: '/page' },
+            redirect: { path: '/target' },
+          }}
+        />
+      )
+    );
+    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/target');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.textContent).toBe('');
+  });
+
   it('rejects original request bootstrap after Reset and keyed history restoration but accepts a new ID with identical plan bytes', async () => {
     const startupPlan = { nodes: [], debug: false, diagnostics: [], metadata: { label: 'server' } };
     const fetchedPlan = { ...startupPlan, metadata: { label: 'browser' } };
-    const hydrateAndTrackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
-    const fetchExperience = vi.fn().mockResolvedValue(fetchedPlan);
-    const sdk = {
-      ...createWebSnapshotRuntime({ consent: true }),
-      spaceId: 'space',
-      environmentId: 'master',
-      config: {},
-      hydrateAndTrackCurrentPage,
-      fetchExperience,
-      reset: vi.fn(),
-      subscribeToPreview: () => ({ unsubscribe() {} }),
-    } as unknown as ContentfulExperiences;
+    const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
+    fetchExperience.mockResolvedValue(fetchedPlan);
     let reset!: () => void;
     function Actions() {
       reset = useExperiencesActions().resetUser;

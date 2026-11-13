@@ -34,6 +34,9 @@ export type ByIdExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
+  destinationId?: never;
+  nodeId?: never;
+  path?: never;
   locale?: string;
   /** Values for declared Experience parameters. Refetch with new values to swap content. */
   parameters?: ExperienceParameters;
@@ -50,8 +53,7 @@ export type ByIdExperienceOptions = {
 
 /**
  * Resolve an Experience by the Destination Node instead of `experienceId`.
- * The destinations delivery endpoints are space-scoped only: no `environmentId`,
- * and the generated delivery client sends no `locale`, unlike the by-id path.
+ * The destinations delivery endpoints are space-scoped only: no `environmentId`.
  * Supplying `personalization` switches the request from the cacheable GET to
  * the POST that carries it.
  */
@@ -59,6 +61,11 @@ export type ByDestinationNodeIdExperienceOptions = {
   spaceId: string;
   destinationId: string;
   nodeId: string;
+  experienceId?: never;
+  path?: never;
+  environmentId?: never;
+  parameters?: never;
+  locale?: string;
   /** Profile and events used by XDA to personalize the resolved Experience. */
   personalization?: PersonalizationOptions;
 };
@@ -66,14 +73,18 @@ export type ByDestinationNodeIdExperienceOptions = {
 /**
  * Resolve an Experience by the absolute path wired up to a
  * Destination Node, instead of a node id directly. Same scoping as
- * `ByDestinationNodeIdExperienceOptions` — no `environmentId`, and no `locale`
- * from the generated client.
+ * `ByDestinationNodeIdExperienceOptions` — no `environmentId`.
  */
 export type ByDestinationPathExperienceOptions = {
   spaceId: string;
   destinationId: string;
   /** Absolute path to resolve. Must start with `/`. */
   path: string;
+  experienceId?: never;
+  nodeId?: never;
+  environmentId?: never;
+  parameters?: never;
+  locale?: string;
   /** Profile and events used by XDA to personalize the resolved Experience. */
   personalization?: PersonalizationOptions;
 };
@@ -133,6 +144,12 @@ export async function fetchExperience(
   experienceOptions: ExperienceOptions,
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
+): Promise<PortableRenderPlan | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- see above
+export async function fetchExperience(
+  experienceOptions: ExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
   const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
@@ -147,51 +164,68 @@ export async function fetchExperience(
     log
   );
 
-  if ('nodeId' in experienceOptions) {
-    const { spaceId, destinationId, nodeId, personalization } = experienceOptions;
-    // Serialize before the request so invalid input is a TypeError, as on the by-id path.
+  const payload = await fetchExperiencePayload(experienceOptions, client, debug);
+  if ('redirect' in payload) return payload;
+  return resolveExperience(payload, config, { metadata, debug });
+}
+
+/** @internal Fetch a hydrated payload or redirect before renderer resolution. */
+export async function fetchExperiencePayload(
+  experienceOptions: ByIdExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload>;
+// eslint-disable-next-line no-redeclare -- overload signatures
+export async function fetchExperiencePayload(
+  experienceOptions: ExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- overload signatures
+export async function fetchExperiencePayload(
+  experienceOptions: ExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload | DestinationRedirectResult> {
+  const log = createDebugLogger(debug, 'client');
+  if (experienceOptions.nodeId !== undefined) {
+    const { spaceId, destinationId, nodeId, locale, personalization } = experienceOptions;
     const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: nodeId },
       () =>
         extensions === undefined
-          ? client.destination.resolveByNodeId(destinationId, nodeId)
+          ? locale === undefined
+            ? client.destination.resolveByNodeId(destinationId, nodeId)
+            : client.destination.resolveByNodeId(destinationId, nodeId, { locale })
           : client.destination.resolveByNodeIdWithOverrides(destinationId, nodeId, {
+              ...(locale === undefined ? {} : { locale }),
               extensions,
             }),
-      log,
-      { config, metadata, debug }
+      log
     );
   }
 
-  if ('path' in experienceOptions) {
-    const { spaceId, destinationId, path, personalization } = experienceOptions;
+  if (experienceOptions.path !== undefined) {
+    const { spaceId, destinationId, path, locale, personalization } = experienceOptions;
     const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: path },
       () =>
         extensions === undefined
-          ? client.destination.resolveByPath(destinationId, { path })
+          ? client.destination.resolveByPath(destinationId, {
+              path,
+              ...(locale === undefined ? {} : { locale }),
+            })
           : client.destination.resolveByPathWithOverrides(destinationId, {
               path,
+              ...(locale === undefined ? {} : { locale }),
               extensions,
             }),
-      log,
-      { config, metadata, debug }
+      log
     );
   }
 
-  const payload = await fetchExperiencePayload(experienceOptions, client, debug);
-  return resolveExperience(payload, config, { metadata, debug });
-}
-
-/** @internal Fetch the by-ID payload before renderer resolution. */
-export async function fetchExperiencePayload(
-  experienceOptions: ByIdExperienceOptions,
-  client: ContentfulViewDeliveryClient,
-  debug?: boolean
-): Promise<ExperiencePayload> {
-  const log = createDebugLogger(debug, 'client');
   const { spaceId, environmentId, experienceId, locale, personalization, extensions } =
     experienceOptions;
   log.log('fetching experience', {
@@ -271,16 +305,9 @@ async function fetchByExperienceId(
 async function fetchByDestination(
   identity: { spaceId: string; destinationId: string; locator: string },
   resolve: () => Promise<ContentfulViewDelivery.DestinationExperienceResolutionResponse>,
-  log: ReturnType<typeof createDebugLogger>,
-  resolveOptions: {
-    config: ResolverConfig;
-    metadata: Record<string, unknown> | undefined;
-    debug: boolean | undefined;
-  }
-): Promise<PortableRenderPlan | DestinationRedirectResult> {
+  log: ReturnType<typeof createDebugLogger>
+): Promise<ExperiencePayload | DestinationRedirectResult> {
   const { spaceId, destinationId, locator } = identity;
-  const { config, metadata, debug } = resolveOptions;
-
   log.log('resolving destination experience', { spaceId, destinationId, locator });
 
   let response: ContentfulViewDelivery.DestinationExperienceResolutionResponse;
@@ -316,10 +343,7 @@ async function fetchByDestination(
   const payload = toExperiencePayloadFromDestination(firstExperience.experience);
   log.lazy('received raw payload', () => payload);
 
-  return resolveExperience(payload, config, {
-    metadata,
-    debug,
-  });
+  return payload;
 }
 
 function requestPersonalization(personalization: PersonalizationOptions): PersonalizationOptions {

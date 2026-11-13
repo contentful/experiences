@@ -1,5 +1,6 @@
 import { profileFixture } from './test/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DestinationRedirectResult } from '@contentful/experiences-client';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import type {
   BuiltFetchExperienceOptions,
@@ -19,7 +20,7 @@ class TestRuntime extends ContentfulExperiences {
   override fetchExperiencePayload(
     options: BuiltFetchExperienceOptions,
     resolveOptions: FetchResolveOptions
-  ): Promise<ExperiencePayload> {
+  ): Promise<ExperiencePayload | DestinationRedirectResult> {
     return super.fetchExperiencePayload(options, resolveOptions);
   }
 }
@@ -189,9 +190,14 @@ describe('Node browser-handoff producer', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it.each(['fetch', 'resolve'] as const)(
-    'retains a usable browser replay after %s failure',
-    async (stage) => {
+  it.each([
+    { stage: 'fetch', selector: { experienceId: 'experience' } },
+    { stage: 'resolve', selector: { experienceId: 'experience' } },
+    { stage: 'resolve', selector: { destinationId: 'dest', path: '/page' } },
+    { stage: 'resolve', selector: { destinationId: 'dest', nodeId: 'node' } },
+  ] as const)(
+    'retains a usable browser replay after $stage failure ($selector)',
+    async ({ stage, selector }) => {
       const { sdk, options, fetch, commit } = setup();
       const failure = new Error('content failed');
       if (stage === 'fetch') fetch.mockRejectedValueOnce(failure);
@@ -199,7 +205,7 @@ describe('Node browser-handoff producer', () => {
       const request = sdk.forRequest({ consent: true, profile: { id: 'incoming' } });
       const events = options.personalization.events;
       const { handoff, error, plan } = await request.fetchExperienceForHandoff(
-        options,
+        { ...selector, locale: 'de-DE', personalization: options.personalization },
         resolver,
         route
       );
@@ -210,6 +216,13 @@ describe('Node browser-handoff producer', () => {
       expect(handoff.state).toEqual(
         stage === 'fetch' ? undefined : { profile: profileFixture('xda-profile') }
       );
+      expect(handoff.replay?.locale).toBe('de-DE');
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(fetch.mock.calls[0]?.[0]).toMatchObject({
+        ...selector,
+        locale: 'de-DE',
+        personalization: { preflight: true },
+      });
       expect(commit).not.toHaveBeenCalled();
     }
   );
@@ -574,4 +587,58 @@ describe('Node ordinary XDA fetch', () => {
     expect(request.profile).toBeUndefined();
     expect(commit).not.toHaveBeenCalled();
   });
+});
+
+describe('destination handoff selection', () => {
+  it('returns terminal redirects alongside explicit replay intent without resolution', async () => {
+    const { sdk, request, fetch } = setup();
+    fetch.mockResolvedValueOnce({ redirect: { path: '/target' } });
+    const resolve = vi.spyOn(sdk, 'resolveExperience');
+    const result = await request.fetchExperienceForHandoff(
+      { destinationId: 'dest', path: '/old', personalization: { events: [{ type: 'page' }] } },
+      resolver,
+      route
+    );
+    expect(result.redirect).toEqual({ path: '/target' });
+    expect(result.handoff.replay?.events).toHaveLength(1);
+    expect(result.plan).toBeUndefined();
+    expect(resolve).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['master', 'selected', 'preview'],
+    ['master', 'other', 'delivery'],
+    ['branch', 'selected', 'delivery'],
+  ])(
+    'uses only same-scope, actual-ID preview content (%s, %s)',
+    async (environmentId, previewId, expected) => {
+      const sdk = new TestRuntime({
+        spaceId: 'space',
+        environmentId,
+        delivery: { accessToken: 'token' },
+        preview: { accessToken: 'preview' },
+      });
+      runtimes.push(sdk);
+      const fetch = vi.spyOn(sdk, 'fetchExperiencePayload').mockResolvedValue({
+        sys: { id: 'selected' },
+        nodes: [],
+        errors: [{ message: 'delivery' }],
+      });
+      const preview = vi
+        .spyOn(sdk, 'fetchPreviewSessionPayload')
+        .mockResolvedValue({ sys: { id: previewId }, nodes: [], errors: [{ message: 'preview' }] });
+      const resolve = vi.spyOn(sdk, 'resolveExperience');
+      const request = sdk.forRequest({ preview: { sessionId: 'session' }, consent: true });
+      await request.fetchExperience(
+        { destinationId: 'dest', path: '/', personalization: { events: [{ type: 'page' }] } },
+        resolver
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(fetch.mock.calls[0]?.[0].personalization).toBeUndefined();
+      expect(resolve).toHaveBeenCalledOnce();
+      expect(resolve.mock.calls[0]?.[0]).toMatchObject({ errors: [{ message: expected }] });
+      if (environmentId !== 'master') expect(preview).not.toHaveBeenCalled();
+    }
+  );
 });

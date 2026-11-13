@@ -21,6 +21,7 @@ export interface RequestResult {
   readonly routeKey: string;
   readonly experience: FetchExperienceOptions;
   readonly plan?: PortableRenderPlan;
+  readonly redirect?: { readonly path: string };
   readonly contentError?: string;
   readonly handoff?: ExperiencesHandoff;
   /** The server owns the initial attempt, including consent drops and ambiguous failures. */

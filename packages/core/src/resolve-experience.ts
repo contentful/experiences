@@ -472,6 +472,10 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
+  const experienceId = isPlainPayload ? payload.sys?.id : undefined;
+  if (typeof experienceId === 'string' && experienceId.trim().length > 0) {
+    plan.experienceId = experienceId;
+  }
   const deliveryDiagnostics = normalizeDeliveryDiagnostics(
     isPlainPayload ? payload.errors : undefined
   );

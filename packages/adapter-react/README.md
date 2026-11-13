@@ -92,10 +92,20 @@ function App({
 }
 ```
 
-`useManagedExperience({ experienceId, ...requestOptions })` returns
-`{ status, data, error, refresh, retry }`; status is `idle`, `loading`, `success` or
-`error`. Use the hook or the component's `children(result)` callback for custom
-presentation, including a usable plan alongside an error or refresh indicator.
+The managed component and hook accept exactly one selector: `{ experienceId }`,
+`{ destinationId, path }`, or `{ destinationId, nodeId }`. Every selector accepts
+`locale` and builder-or-built `personalization.events`. Destination selectors
+resolve in master and do not accept by-ID `parameters` or `extensions`. For example:
+
+```tsx
+<Experience destinationId={destinationId} path={pathname} locale="en-US" />
+```
+
+`useManagedExperience({ destinationId, path: pathname, ...requestOptions })` and the
+other selector forms return `{ status, data, error, redirect, refresh, retry }`;
+status is `idle`, `loading`, `success`, `error` or `redirect`. `data` always remains
+a render plan; `redirect`, when present, is `{ path: string }`. Use the hook or the
+component's `children(result)` callback for custom presentation, including a usable plan alongside an error or refresh indicator.
 The unbound component/hook accepts `config`; the factory supplies it once.
 `loadingFallback` and `errorFallback` each accept a `ReactNode` or a function
 receiving the full `ManagedExperienceResult`; `children(result)` receives that
@@ -117,6 +127,7 @@ interface PresentationNotifications {
     result: ManagedExperienceResult & { readonly data: PortableRenderPlan }
   ) => void;
   onExperienceError?: (error: Error, result: ManagedExperienceResult) => void;
+  onRedirect?: (redirect: { path: string }, result: ManagedExperienceResult) => void;
 }
 ```
 
@@ -127,6 +138,18 @@ usable data. Initial and supplied plans can trigger resolution notifications too
 Unchanged presentations, callback replacement and Strict Mode effect replay do not
 repeat a notification. Superseded or unmounted work does not notify.
 
+A redirect clears the previous plan and error, detaches its preview subscription,
+and triggers `onRedirect` without resolution/error notifications. It is terminal
+for that presentation: default rendering shows no loading/error fallback, and
+`refresh()`/`retry()` are inert. Custom `children(result)` still receives the redirect
+result. Pending page fallback and later consent retry for the abandoned presentation
+stop; events already submitted remain submitted.
+
+Generic React leaves navigation to the application. Set a shared callback through
+`createExperiences({ config, onRedirect: ({ path }) => navigate(path) })`, or pass
+`onRedirect` to an individual `Experience` or `useManagedExperience` call. An explicit
+component/hook callback overrides the factory default.
+
 `Experience` has two mutually exclusive input modes. `<Experience experience={plan} />`
 accepts `PortableRenderPlan | null | undefined` and renders supplied content
 without fetching, resolving, binding preview updates or joining managed page
@@ -134,8 +157,8 @@ sequencing. Its `refresh()` and `retry()` are inert. A nullish
 supplied plan has `idle` status and uses the loading fallback. For SDK-owned loading,
 use `<Experience experienceId={id} initialPlan={plan} />`; `initialPlan` is an optional
 seed for that managed descriptor. Do not combine `experience` with `experienceId`,
-`initialPlan`, `initialError` or fetch/resolve options. Both modes retain the
-renderer's tracking props, fallbacks, custom children and notifications.
+`destinationId`, `path`, `nodeId`, `initialPlan`, `initialError` or fetch/resolve
+options. Both modes retain the renderer's tracking props, fallbacks, custom children and notifications.
 
 Reuse an already-owned plan through the supplied mode, without another managed
 request or preview subscription:
@@ -184,7 +207,9 @@ inputs when changing them, as with ordinary immutable React props. Changed descr
 runtime replacement, navigation and reset invalidate obsolete presentation work.
 SDK queues retain ownership of already-admitted replay delivery retry.
 
-Ordinary requests obtain attribution even when automatic tracking is disabled.
+Ordinary by-ID requests obtain attribution even when automatic tracking is disabled.
+Destination commitment and attribution enrichment have verified upstream gaps;
+see [Runtime destination service limits](../runtime/README.md#destination-selection).
 `trackViews`, `trackHovers`, `trackClicks` and `onNodeRoot` work on the same managed
 surface as on `ExperienceRenderer`. Supplied plans retain their existing attribution.
 Official support is one Experience fetch per page; repeated views may reuse its
@@ -216,7 +241,13 @@ const { ExperiencesRoot, Experience } = createExperiences({ config });
 
 The session selects one current Experience. Its raw payload's `sys.id` is the
 authority: matching views receive resolved updates through `subscribeToPreview`,
-while other IDs retain their ordinary by-ID source after a successful snapshot lookup.
+while other IDs retain their ordinary source after a successful snapshot lookup.
+A destination acquires its payload first, then binds updates only to its actual
+`plan.experienceId`, derived from that payload's `sys.id`, when the SDK environment
+is `master`. It never guesses an ID or performs a second by-ID fetch. A seeded
+destination plan without `experienceId` remains usable without a startup fetch
+or a preview subscription; nonmaster SDK environments do not substitute their
+session content into master-only destination results.
 Snapshot acquisition failure remains a fetch/managed error before identity is known.
 Missing payload identity is never broadcast or inferred from child order. Repeated views of the current ID
 keep independent resolution options and presentation state.
@@ -262,7 +293,10 @@ type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOption
   ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
-Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview Sessions are not supported on Destinations; use the by-id form for session content.
+Serve pages from a Destination: the URL path is the Destination path. A redirect
+node comes back as a value, not an error. Free fetch functions use ordinary Delivery.
+Managed runtime owners support destination Preview Sessions through actual-ID
+matching in master; see [Live preview](#live-preview).
 
 ```ts
 const result = await fetchExperience(
@@ -514,7 +548,12 @@ function ExperiencesLayout() {
 
 Here `browserConfig` is the same browser SDK configuration used by
 `ExperiencesRoot`. Child routes render the registry-bound
-`<Experience experienceId={experienceId} />` returned by the same router binding.
+`<Experience experienceId={experienceId} />`, or a destination selector such as
+`<Experience destinationId={destinationId} path={pathname} />`, returned by the same
+router binding. Supply the destination path explicitly as a pathname, without the
+route key's query string. The bound component and hook default to the router's
+native replacement navigation on redirects. A callback passed to the binding
+factory or individual component/hook overrides that default.
 The router roots retain the existing root's construction and cleanup lifecycle.
 To inject an application-owned SDK instead, use the returned `ExperiencesProvider`
 with `sdk={sdk}`; the application retains responsibility for destroying it.

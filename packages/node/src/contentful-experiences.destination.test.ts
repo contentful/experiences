@@ -48,9 +48,9 @@ const cases = [
   },
 ] as const;
 
-describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchIt }) => {
+describe.each(cases)('Node Destination fetch $label', ({ locator, fetchIt }) => {
   const spyOnRuntime = (sdk: ContentfulExperiences, result: object = { nodes: [] }) =>
-    vi.spyOn(sdk, method).mockResolvedValue(result as never);
+    vi.spyOn(sdk, 'fetchExperience').mockResolvedValue(result as never);
 
   it('forwards personalization to the runtime', async () => {
     const sdk = setup();
@@ -144,7 +144,7 @@ describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchI
     });
 
     const sent = fetch.mock.calls[0]?.[0].personalization?.events?.[0];
-    expect(sent?.context.userAgent).toBe('redacted');
+    expect(sent).toMatchObject({ context: { userAgent: 'redacted' } });
   });
 
   it('rejects an interceptor result XDA would not accept, before any request', async () => {

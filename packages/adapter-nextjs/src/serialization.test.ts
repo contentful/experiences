@@ -9,6 +9,7 @@ import {
   type ExperiencesHandoff,
   type PortableRenderPlan,
 } from '@contentful/experiences-node';
+import { serializeRequestResult } from './server-config.js';
 import { serializeHandoff, serializeJsonForHtml, serializePlan } from './serialization.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
@@ -73,6 +74,22 @@ function plan(): PortableRenderPlan {
 }
 
 describe('browser plan projection', () => {
+  it('retains selected payload identity for destination seeds and projects terminal redirects', () => {
+    expect(serializePlan({ ...plan(), experienceId: 'selected' }).experienceId).toBe('selected');
+    const projected = serializeRequestResult({
+      requestId: 'request',
+      routeKey: '/source?q=1',
+      experience: { destinationId: 'site', path: '/source' },
+      redirect: { path: '/target' },
+      error: new Error('private'),
+    });
+    expect(projected).toEqual({
+      requestId: 'request',
+      routeKey: '/source?q=1',
+      experience: { destinationId: 'site', path: '/source' },
+      redirect: { path: '/target' },
+    });
+  });
   it('preserves render data and attribution while excluding diagnostic/identity/default metadata', () => {
     const input = plan();
     const output = serializePlan(input);

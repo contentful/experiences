@@ -299,25 +299,57 @@ describe('ContentfulExperiences', () => {
     });
     const personalization = { profileId: 'profile-1' };
 
-    await runtime.fetchByDestinationNode(
-      { destinationId: 'dest', nodeId: 'node', personalization },
-      { config: { components: {} } }
-    );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
-      { spaceId: 'space', destinationId: 'dest', nodeId: 'node', personalization },
-      { client: delivery },
-      expect.anything()
-    );
+    const options = { destinationId: 'dest', personalization };
+    const resolveOptions = { config: { components: {} } };
+    for (const { selector, fetch } of [
+      {
+        selector: { nodeId: 'node' },
+        fetch: () => runtime.fetchByDestinationNode({ ...options, nodeId: 'node' }, resolveOptions),
+      },
+      {
+        selector: { path: '/page' },
+        fetch: () => runtime.fetchByDestinationPath({ ...options, path: '/page' }, resolveOptions),
+      },
+    ]) {
+      await fetch();
+      expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
+        { spaceId: 'space', ...options, ...selector, locale: undefined },
+        delivery,
+        undefined
+      );
+    }
+  });
 
-    await runtime.fetchByDestinationPath(
-      { destinationId: 'dest', path: '/page', personalization },
-      { config: { components: {} } }
+  it('builds destination event arguments once and returns redirects without resolving', async () => {
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'branch',
+      locale: 'de-DE',
+      delivery: { accessToken: 'token' },
+      eventBuilder: { channel: 'server' },
+    });
+    const build = vi.spyOn(runtime.eventBuilder, 'buildPageView');
+    const before = mockResolveExperience.mock.calls.length;
+    mockFetchExperiencePayload.mockResolvedValueOnce({ redirect: { path: '/target' } });
+    await expect(
+      runtime.fetchExperience(
+        { destinationId: 'dest', path: '/old', personalization: { events: [{ type: 'page' }] } },
+        { config: { components: {} } }
+      )
+    ).resolves.toEqual({ redirect: { path: '/target' } });
+    expect(build).toHaveBeenCalledOnce();
+    expect(mockResolveExperience.mock.calls).toHaveLength(before);
+    expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        destinationId: 'dest',
+        path: '/old',
+        locale: 'de-DE',
+        personalization: { events: [expect.objectContaining({ type: 'page' })] },
+      }),
+      expect.anything(),
+      undefined
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
-      { spaceId: 'space', destinationId: 'dest', path: '/page', personalization },
-      { client: delivery },
-      expect.anything()
-    );
+    expect(mockFetchExperiencePayload.mock.lastCall?.[0]).not.toHaveProperty('environmentId');
   });
 
   it('uses Delivery for ordinary by-ID and destination fetches with Preview configured', async () => {
@@ -336,10 +368,10 @@ describe('ContentfulExperiences', () => {
       { destinationId: 'dest', nodeId: 'node' },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
       expect.objectContaining({ destinationId: 'dest' }),
-      { client: delivery },
-      expect.anything()
+      delivery,
+      undefined
     );
     await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
     expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(

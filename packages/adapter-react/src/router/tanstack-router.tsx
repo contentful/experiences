@@ -81,5 +81,10 @@ function useRouteContext(): TanStackRouterAutoPageContext {
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
 export function bindTanStackRouterExperiences(options: CreateExperiencesOptions) {
-  return createRouterBinding(options, useRouteContext);
+  return createRouterBinding(options, useRouteContext, () => {
+    const router = useRouter();
+    return ({ path }) => {
+      void router.navigate({ to: path, replace: true });
+    };
+  });
 }
