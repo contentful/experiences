@@ -67,11 +67,21 @@ const experiences = new ContentfulExperiences({
   locale: 'en-US',
 });
 
-// per request
-const plan = await experiences
-  .forRequest({ locale })
-  .fetchExperience({ experienceId, preview }, { config: experienceConfig });
+// per request; requestUrl is the incoming request's URL
+const sessionId = requestUrl.searchParams.get('preview_session_id')?.trim();
+const request = experiences.forRequest({
+  locale,
+  preview: sessionId ? { sessionId } : undefined,
+});
+try {
+  const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
+  renderPlan(plan);
+} finally {
+  request.destroy();
+}
 ```
+
+Preview requires both configured capability and a nonempty Session ID. Missing or blank IDs use ordinary Delivery; Preview credentials alone do not activate preview policy.
 
 **Browser only** (SPA): `@contentful/experiences-web` is a singleton. Construct it once in client-side code, call `destroy()` before constructing a replacement (hot reload, teardown), and never construct it on the server. Its tokens are visible to the browser.
 
@@ -194,8 +204,8 @@ Wrap each node in your framework's error boundary, so a component that throws re
 
 ### Optional
 
-- **Tracking attributes**: spread `getTrackingAttributes(node.attribution)` from `@contentful/experiences-web/tracking-attributes` onto a component's outermost element for interaction tracking. Attribution is present only when the fetch requests `extensions: { sourceMap: {} }`.
-- **Live preview**: Preview Session updates are owned by `@contentful/experiences-live-preview` (`createLivePreviewClient`), not by `-node` or `-web`. Treat it as a follow-up once the adapter renders a fetched plan.
+- **Tracking attributes**: use `getTrackingAttributes` from `@contentful/experiences-web/tracking-attributes`: spread `getTrackingAttributes(plan.attribution)` onto each Experience container, and `getTrackingAttributes(node.attribution)` onto each component's outermost elements. Node scope keys resolve through the nearest Experience container; give repeated presentations of the same plan separate containers so their interactions remain independent. Attribution is present only when the fetch requests `extensions: { sourceMap: {} }`.
+- **Live preview**: `@contentful/experiences-live-preview` provides the optional live-update transport (`createLivePreviewClient`); Node/Web own Preview context, policy and lifetime. Node uses request-local snapshots without opening a socket. For browser updates, configure `preview.createClient` with that factory; Web owns one connection per active session and exposes shared status through `states.preview`. Bind each view with `subscribeToPreview(experienceId, { config }, listener)` and apply its plan/error updates to the view's presentation state. Subscriptions do not fetch snapshots; unsubscribe on view teardown, and call `destroy()` on SDK teardown to close the shared connection. Recreate the Web SDK when the session changes. Treat it as a follow-up once the adapter renders a fetched plan; see the [Web Preview guide](../../packages/web/README.md#editor-session-and-optional-live-updates).
 
 ## 5. Handle the server/client split
 
@@ -271,7 +281,7 @@ Read these in this order. Svelte and Angular are the closest models for a non-Re
 | [`packages/adapter-svelte/src/context.ts`](../../packages/adapter-svelte/src/context.ts)                                           | Context keys and accessors                                                                      |
 | [`packages/adapter-svelte/src/ServerExperienceRenderer.svelte`](../../packages/adapter-svelte/src/ServerExperienceRenderer.svelte) | Root render context, diagnostics collection, debug panel                                        |
 | [`packages/adapter-angular/src/node-render-engine.ts`](../../packages/adapter-angular/src/node-render-engine.ts)                   | Slots as nodes plus a renderer, per-node DI scopes, error handling without a boundary component |
-| [`packages/adapter-react/src/resolve-node-props.ts`](../../packages/adapter-react/src/resolve-node-props.ts)                       | The canonical lookup and merge                                                                  |
-| [`packages/adapter-react/src/experience-node.tsx`](../../packages/adapter-react/src/experience-node.tsx)                           | Providers and error boundary around one node                                                    |
+| [`packages/adapter-react/src/nodes/resolve-node-props.ts`](../../packages/adapter-react/src/nodes/resolve-node-props.ts)           | The canonical lookup and merge                                                                  |
+| [`packages/adapter-react/src/nodes/experience-node.tsx`](../../packages/adapter-react/src/nodes/experience-node.tsx)               | Providers and error boundary around one node                                                    |
 
 The first-party examples in [`examples/`](../../examples) register the same components against the same demo Experience. Port one of them to check your adapter renders identically.

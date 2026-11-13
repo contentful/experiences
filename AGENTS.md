@@ -1031,7 +1031,7 @@ The bootstrap script (`examples/scripts/bootstrap-example.ts`) provisions everyt
 3. Update `package.json#name` → `@contentful/experiences-vue` and `project.json#name` → `adapter-vue`
 4. Set `package.json#version` to `"0.0.0"` — nx release needs a valid semver to bootstrap from (see "Bootstrapping a new package for release" below).
 5. Re-export everything from `@contentful/experiences-sdk-core` and `@contentful/experiences-design`
-6. Add adapter-specific renderer + `defineComponent` / `defineExperienceTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `render: (props) => ReactNode`; Svelte uses `component: SvelteComponent`; Angular uses `component: Type<unknown>`. Vue would use `component: Component`, etc.
+6. Add adapter-specific renderer + `defineComponent` / `defineExperienceTemplate` types. The `defineComponent` shape's framework-specific bit is the primitive used to render: React uses `component: ComponentType<Props>`; Svelte uses `component: SvelteComponent`; Angular uses `component: Type<unknown>`. Vue would use `component: Component`, etc.
 7. Teach the example app's bundler to transpile the workspace packages — `transpilePackages` (React/Next), Vite's `ssr.noExternal` allowlist (Svelte). Angular needs nothing here: `@angular/build:application` inlines workspace dependencies on both the browser and server builds.
 
 ### Add a new internal package (e.g. `tokens`)
@@ -1073,8 +1073,12 @@ Same-shape command as step 2 — just done after the fact.
 
 Releases are fully automated by CI on push to `main` (stable) or `dev` (prerelease). Every `feat:` / `fix:` commit that touched a package's directory triggers a version bump for that package on the next merge.
 
-- **Stable** — push to `main` → `release.yaml` runs `npx nx release --yes`. Publishes to npm's `latest` dist-tag; creates git tags and GitHub Releases; commits `chore(release): publish {version} [skip ci]` back to `main`.
-- **Prerelease** — push to `dev` → `prerelease.yaml` runs `npx nx release --specifier prerelease --preid dev --yes`. Publishes to npm's `dev` dist-tag as `X.Y.Z-dev.N`; creates git tags and GitHub Releases marked "pre-release"; commits back to `dev`.
+- **Stable** — push to `main` → `release.yaml` runs `npx tsx scripts/release.ts`. Publishes to npm's `latest` dist-tag; creates git tags and GitHub Releases; commits `chore(release): publish {version} [skip ci]` back to `main`.
+- **Prerelease** — push to `dev` → `prerelease.yaml` runs `npx tsx scripts/release.ts --specifier prerelease --preid dev --tag dev`. Publishes to npm's `dev` dist-tag as `X.Y.Z-dev.N`; creates git tags and GitHub Releases marked "pre-release"; commits back to `dev`.
+
+Both flows write versions, rebuild without the Nx cache, and verify embedded SDK
+versions before committing, tagging, pushing, and publishing. Restored build-job
+artifacts still contain the previous versions. See [release recovery](./CONTRIBUTING.md#recovering-a-failed-release) if a later step fails.
 
 Consumers install with:
 
@@ -1085,16 +1089,17 @@ npm install @contentful/experiences-react@dev       # newest dev prerelease
 
 **`dev` is not meant to be merged into `main`.** The two branches accumulate independent CHANGELOG histories so `main`'s file stays clean of prerelease entries. Features that should ship on both branches should be committed to each independently. Matches the pattern in `contentful/contentful-mcp-server`.
 
-**`releaseTagPatternStrictPreid: true`** in `nx.json` ensures stable `nx release` on `main` skips over any preid-suffixed tag (e.g., `adapter-react@0.5.0-dev.3`) when computing the next version — dev tags cannot poison main's stable release computation.
+**`releaseTag.strictPreid: true`** in `nx.json` ensures stable `nx release` on `main` skips over any preid-suffixed tag (e.g., `adapter-react@0.5.0-dev.3`) when computing the next version — dev tags cannot poison main's stable release computation.
 
 Local dry-run to preview:
 
 ```sh
-npx nx release --dry-run                                            # what a stable release would do
-npx nx release --specifier prerelease --preid dev --dry-run         # what a dev prerelease would do
+npx tsx scripts/release.ts --dry-run                                            # stable flow
+npx tsx scripts/release.ts --specifier prerelease --preid dev --tag dev --dry-run # dev flow
 ```
 
-The first-ever release for a new package needs `--first-release` on its first run so nx doesn't look for a prior tag.
+Before a new package enters the automated release flow, seed its baseline tag
+using the procedure above so Nx can find the prior version.
 
 ---
 

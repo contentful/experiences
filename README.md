@@ -1278,12 +1278,14 @@ plan. Each fetch resolves the returned payload again, including `resolveData`.
 For example, in a client React component with `initialPlan` supplied as a prop:
 
 ```tsx
+'use client';
+
 import { useState } from 'react';
 import {
   ExperienceRenderer,
   fetchExperience,
   type PortableRenderPlan,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-react/client';
 
 function FeaturedPosts({ initialPlan }: { initialPlan: PortableRenderPlan }) {
   const [plan, setPlan] = useState(initialPlan);

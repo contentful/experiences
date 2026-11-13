@@ -133,11 +133,12 @@ cannot be served from the output-only host.
 credential approved and scoped for that use. Do not place management credentials
 or server-only preview tokens in the public allowlist. Configure optional preview with `LIVE_PREVIEW_ENABLED=true` and an explicitly
 browser-approved `BROWSER_PREVIEW_TOKEN`. Optional `BROWSER_PREVIEW_HOST`,
-`LIVE_PREVIEW_EXPERIENCE_ID`, `LIVE_PREVIEW_SESSION_HOST`
+`LIVE_PREVIEW_SESSION_HOST`
 and `LIVE_PREVIEW_RESOURCE_RESOLUTION` map to the supported public SDK preview configuration.
-A blank Experience ID uses the first configured/default ID. Preview activates only
-when `LIVE_PREVIEW_ENABLED=true` and the URL supplies a nonempty
-`preview_session_id`; optional `preview_experience_id` selects another Experience.
+Preview activates only when `LIVE_PREVIEW_ENABLED=true` and the URL supplies a nonempty
+`preview_session_id`. Rendered Experience IDs still come from `EXPERIENCE_IDS` and
+the route, as described below; the URL's `preview_experience_id` does not override
+that selection.
 `LIVE_PREVIEW_SESSION_ID` stays in local `.env` for convenient copying into the URL;
 application/build code never reads it or includes it in browser configuration.
 The two preview fields are blank in `.env.example`. Missing/empty session parameters
