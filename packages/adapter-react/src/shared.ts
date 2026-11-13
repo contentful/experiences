@@ -102,6 +102,7 @@ export {
   createClient,
   fetchExperience,
   fetchDestinationSitemap,
+  isDestinationRedirect,
   readSourceMap,
   toExperiencePayload,
   toExperiencePayloadFromDestination,

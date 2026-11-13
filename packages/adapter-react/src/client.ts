@@ -44,8 +44,14 @@ export type { ManagedExperienceProps, SuppliedExperienceProps } from './experien
 export { useManagedExperience } from './experience/use-managed-experience.js';
 export type {
   ManagedExperienceOptions,
+  ManagedExperienceSourceOptions,
   ManagedExperienceResult,
   ExperienceNotifications,
+  ExperienceRedirect,
+  ExperienceSelector,
+  ExperienceIdSelector,
+  DestinationPathSelector,
+  DestinationNodeSelector,
 } from './experience/use-managed-experience.js';
 export type { BeforeInitialPageOptions } from './runtime/page-sequence.js';
 export {

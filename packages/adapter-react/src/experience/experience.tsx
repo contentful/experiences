@@ -9,24 +9,28 @@ import {
 import {
   useExperienceSource,
   type ExperienceNotifications,
+  type ManagedExperienceKey,
   type ManagedExperienceOptions,
   type ManagedExperienceResult,
 } from './use-managed-experience.js';
 
+type Fallback = ReactNode | ((result: ManagedExperienceResult) => ReactNode);
+
 interface ExperiencePresentationProps
   extends Omit<ClientExperienceRendererProps, 'experience'>, ExperienceNotifications {
-  readonly loadingFallback?: ReactNode | ((result: ManagedExperienceResult) => ReactNode);
-  readonly errorFallback?: ReactNode | ((result: ManagedExperienceResult) => ReactNode);
+  readonly loadingFallback?: Fallback;
+  readonly errorFallback?: Fallback;
+  /**
+   * Presented instead of content for a Destination redirect. Defaults to nothing:
+   * the SDK never navigates, so handle `onExperienceRedirect` or route at the framework boundary.
+   */
+  readonly redirectFallback?: Fallback;
   readonly children?: (result: ManagedExperienceResult) => ReactNode;
 }
 
 export type SuppliedExperienceProps = ExperiencePresentationProps & {
   readonly experience: PortableRenderPlan | null | undefined;
-} & {
-  readonly [
-    Key in keyof Omit<ManagedExperienceOptions, 'config' | keyof ExperienceNotifications>
-  ]?: never;
-};
+} & { readonly [Key in ManagedExperienceKey]?: never };
 
 export type ManagedExperienceProps =
   | SuppliedExperienceProps
@@ -35,10 +39,13 @@ export type ManagedExperienceProps =
 /** Managed and seeded presentation share the supplied-plan renderer and tracking surface. */
 export function Experience(props: ManagedExperienceProps): ReactNode {
   const result = useExperienceSource(props);
-  const { children, loadingFallback, errorFallback } = props;
+  const { children, loadingFallback, errorFallback, redirectFallback } = props;
   if (children) return children(result);
+  const present = (fallback: Fallback | undefined) =>
+    (typeof fallback === 'function' ? fallback(result) : fallback) ?? null;
+  // A redirect is control flow, never content.
+  if (result.redirect) return present(redirectFallback);
   // Usable content survives refresh and preview errors; callbacks can present both explicitly.
   if (result.data) return <ClientExperienceRenderer {...props} experience={result.data} />;
-  const fallback = result.error ? errorFallback : loadingFallback;
-  return (typeof fallback === 'function' ? fallback(result) : fallback) ?? null;
+  return present(result.error ? errorFallback : loadingFallback);
 }
