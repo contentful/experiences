@@ -185,7 +185,8 @@ describe('Pages managed request sequence', () => {
           events: [{ type: 'page', properties: expect.objectContaining({ path: '/pages' }) }],
         },
       }),
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({ isCurrent: expect.any(Function) })
     );
   });
 

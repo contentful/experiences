@@ -557,7 +557,9 @@ can be request-context resolvers. `ServerRequestPolicy` binds one primary reques
 Document, RSC and Pages data requests evaluate the primary Experience on Node using
 ordinary fetch in SSR mode or the transfer producer in hybrid mode. The latter
 fixes `preflight: true` and rejects explicit per-call `false`; ordinary supplied
-personalization defaults to `false`. Editor preview uses ordinary fetch and
+personalization defaults to the request facade's mode-derived value (`false`
+in SSR and `true` in hybrid); explicit `personalization.preflight` overrides
+that default. Editor preview uses ordinary fetch and
 suppresses events. Requests marked
 as speculative (`next-router-prefetch`, `purpose` or `sec-purpose`) perform no primary
 fetch or composition, and their request `Experience` renders nothing even when a
@@ -592,6 +594,10 @@ server primary fetch, including RSC and Pages data, before browser projection an
 not run for requests marked speculative. Diagnostic comparison ordering, identity changes, result handling and per-ID error
 isolation remain application-owned. The callback is an escape hatch, not a
 declarative prefetch/result list or SDK multi-Experience mechanism.
+Additional ordinary fetches through this facade inherit its mode-derived
+`preflight` default, and their events are not automatically included in the
+primary browser replay. Set `personalization.preflight: false` explicitly when
+an additional fetch's consent-admitted events should commit.
 Callback exceptions propagate; cleanup still runs. Server rendering retains raw metadata.
 
 Explicit no-page intent uses the existing `personalization.events: []` input.

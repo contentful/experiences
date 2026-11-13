@@ -776,6 +776,29 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
     expect(page.context.gdpr?.isConsentGiven).toBe(true);
   });
 
+  it.each([undefined, true])(
+    'deduplicates committing fetch pages (preflight=%s)',
+    async (preflight) => {
+      const runtime = createRuntime();
+      vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
+        nodes: [],
+      } as never);
+      const page = vi.spyOn(runtime, 'page').mockResolvedValue({ accepted: true });
+      await runtime.fetchExperience(
+        {
+          experienceId: 'page',
+          personalization: { events: [runtime.eventBuilder.buildPageView()], preflight },
+        },
+        { config: { components: {} } },
+        { routeKey: '/page' }
+      );
+      await expect(
+        runtime.trackCurrentPage({ routeKey: '/page', buildPayload: () => ({}) })
+      ).resolves.toEqual({ accepted: preflight === true });
+      expect(page).toHaveBeenCalledTimes(preflight === true ? 1 : 0);
+    }
+  );
+
   it('forwards every caller-built event once event consent is granted', async () => {
     const runtime = createRuntime();
     const fetch = vi

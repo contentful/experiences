@@ -903,6 +903,18 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ---
 
+## Things known to be broken
+
+### Managed page consent retry
+
+Web's current-page tracker owns XDA page admission and deduplication. React supplies
+route identity and liveness; same-route consent retry waits for preparation, not
+HTTP. Only a final admitted committing page claims the route. Blocked pages remain
+eligible, and reset/destroy invalidate pending attempts. Admission is not a service
+commitment receipt.
+
+---
+
 ## Things known to be deferred / incomplete
 
 ### Design tokens

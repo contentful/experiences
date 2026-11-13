@@ -1065,6 +1065,16 @@ dropped. This adds no dedicated retry facility, mode detector, extra page call,
 content refetch or CSR capture. `trackCurrentPage` remains
 available for explicitly owned ordinary page intent; direct `page()` is not deduplicated.
 
+Managed integrations can pass `{ routeKey, isCurrent? }` as the optional third
+argument to `fetchExperience`, `fetchByDestinationPath` or `fetchByDestinationNode`.
+Web uses its existing current-page tracker to coordinate that fetch's preparation
+with `trackCurrentPage`. Same-route tracking waits for the admission decision,
+not the content response. A final consent-admitted page with `preflight` omitted
+or `false` claims the route before event publication and transport; a filtered
+page or explicit `preflight: true` leaves it eligible. Failed transport does not
+undo admission. The guard describes the route lifetime; SDK reset and destruction
+invalidate pending attempts. Admission does not confirm service commitment.
+
 At the start of a still-current initialization, the SDK selects and publishes
 continuation identity atomically, capturing the target before hydration: current
 live profile, then configured anonymous provider, then `handoff.profileId`. This
