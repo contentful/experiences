@@ -1,6 +1,7 @@
 import { profileFixture } from './test/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
+import * as core from '@contentful/experiences-sdk-core';
 import type {
   BuiltFetchDestinationOptions,
   DestinationRedirectResult,
@@ -33,6 +34,7 @@ function setup() {
     environmentId: 'environment',
     locale: 'en-US',
     delivery: { accessToken: 'token' },
+    preview: { accessToken: 'preview-token' },
   });
   runtimes.push(sdk);
   const fetch = vi.spyOn(sdk, 'fetchDestinationPayload').mockResolvedValue(payload());
@@ -149,6 +151,92 @@ describe('Node Destination handoff producer', () => {
     request.destroy();
     release(payload());
     await expect(pending).rejects.toThrow(/destroyed/);
+  });
+
+  describe.each([
+    { destinationId: 'dest', path: '/products' },
+    { destinationId: 'dest', nodeId: 'products-node' },
+  ])('Preview Session Destination handoff %j', (selector) => {
+    it.each(['delivery', 'resolution'] as const)(
+      'returns %s failures in an identity-free handoff',
+      async (source) => {
+        const { sdk, fetch, commit } = setup();
+        const failure = new TypeError(`${source} content failed`);
+        const resolve = vi.spyOn(core, 'resolveExperience');
+        if (source === 'delivery') fetch.mockRejectedValueOnce(failure);
+        else resolve.mockRejectedValueOnce(failure);
+        const session = vi.spyOn(sdk, 'fetchPreviewSessionPayload' as never);
+        const request = sdk.forRequest({
+          consent: true,
+          preview: { sessionId: 'session' },
+          profile: { id: 'visitor' },
+        });
+
+        await expect(
+          request.fetchDestinationForHandoff(
+            { ...selector, personalization: { events: [{ type: 'page' }] } },
+            resolver,
+            route
+          )
+        ).resolves.toEqual({
+          handoff: {
+            spaceId: 'space',
+            environmentId: 'environment',
+            cache: { scope: 'private-request' },
+          },
+          error: failure,
+        });
+        expect(fetch.mock.lastCall![0].personalization).toBeUndefined();
+        expect(request.profile).toBeUndefined();
+        expect(request.canPersistProfile).toBe(false);
+        expect(session).not.toHaveBeenCalled();
+        expect(commit).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(['delivery', 'resolution'] as const)(
+      'rejects disposal during %s instead of returning a content error',
+      async (source) => {
+        const { sdk, fetch, commit } = setup();
+        const resolve = vi.spyOn(core, 'resolveExperience');
+        let reject!: (error: Error) => void;
+        const hold = new Promise<never>((_, rejectPromise) => (reject = rejectPromise));
+        if (source === 'delivery') fetch.mockReturnValueOnce(hold);
+        else resolve.mockReturnValueOnce(hold);
+        const request = sdk.forRequest({ preview: { sessionId: 'session' } });
+        const pending = request.fetchDestinationForHandoff(selector, resolver, route);
+        await vi.waitFor(() => expect(source === 'delivery' ? fetch : resolve).toHaveBeenCalled());
+        request.destroy();
+        reject(new Error('late content failure'));
+
+        await expect(pending).rejects.toThrow(/destroyed/);
+        expect(request.profile).toBeUndefined();
+        expect(commit).not.toHaveBeenCalled();
+      }
+    );
+
+    it('returns Delivery redirects without replay or visitor identity', async () => {
+      const { sdk, fetch, commit } = setup();
+      fetch.mockResolvedValueOnce({ redirect: { path: '/new' } });
+      const request = sdk.forRequest({ preview: { sessionId: 'session' } });
+
+      await expect(
+        request.fetchDestinationForHandoff(
+          { ...selector, personalization: { events: [{ type: 'page' }] } },
+          resolver,
+          route
+        )
+      ).resolves.toEqual({
+        handoff: {
+          spaceId: 'space',
+          environmentId: 'environment',
+          cache: { scope: 'private-request' },
+        },
+        redirect: { path: '/new' },
+      });
+      expect(fetch.mock.lastCall![0].personalization).toBeUndefined();
+      expect(commit).not.toHaveBeenCalled();
+    });
   });
 
   it('drops personalization under Preview Session policy and keeps Delivery for Destinations', async () => {
