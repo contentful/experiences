@@ -199,7 +199,6 @@ app.get('/destination', async (req, res) => {
   const destinationId = environment.DESTINATION_ID;
   const path = destinationPath(url.searchParams, environment.DESTINATION_PATH);
   let redirect: string | undefined;
-  let notFound = false;
   try {
     let handoff: ExperiencesHandoff | undefined;
     const items: { selector: string; plan?: PortableRenderPlan; message?: string }[] = [];
@@ -235,9 +234,12 @@ app.get('/destination', async (req, res) => {
           contentError = error;
         }
       }
-      // A missing path is a missing route, mapped to the app's ordinary 404.
-      notFound = contentError instanceof NotFoundError;
-      if (redirect === undefined && !notFound) {
+      // A missing path renders with 404, like a missing by-ID Experience: the evaluated
+      // replay survives content failure and the browser still admits it.
+      if (contentError instanceof NotFoundError) {
+        res.status(404);
+        items.push({ selector: 'path', message: 'This Destination path was not found.' });
+      } else if (redirect === undefined) {
         items.push({
           selector: 'path',
           plan,
@@ -288,10 +290,6 @@ app.get('/destination', async (req, res) => {
   }
   if (redirect !== undefined) {
     res.redirect(302, destinationHref(redirect, url.search));
-    return;
-  }
-  if (notFound) {
-    res.status(404).type('text/plain').send('Not found.');
     return;
   }
   res.render('index');

@@ -6,7 +6,10 @@ import {
   type RequestExperienceProps,
 } from '@contentful/experiences-nextjs/app-router/client';
 import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
-import type { ManagedExperienceResult } from '@contentful/experiences-nextjs/client';
+import {
+  isNotFoundError,
+  type ManagedExperienceResult,
+} from '@contentful/experiences-nextjs/client';
 import { browserRegistry } from './browser-registry';
 
 const preview =
@@ -44,7 +47,7 @@ export const destinationFallbacks = {
   loadingFallback: singleExperienceFallbacks.loadingFallback,
   errorFallback: ({ error }: ManagedExperienceResult) => (
     <p className="placeholder-card" role="alert">
-      {error?.name === 'NotFoundError'
+      {isNotFoundError(error)
         ? 'Destination content was not found.'
         : 'Experience content unavailable.'}
     </p>

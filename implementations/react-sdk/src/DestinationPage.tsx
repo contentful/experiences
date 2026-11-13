@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  isNotFoundError,
   useRuntimeContext,
   type DestinationNodeSelector,
   type DestinationPathSelector,
@@ -79,7 +80,7 @@ function DestinationContent({
     onExperienceRedirect,
   });
   const label = path === undefined ? `node ${destination.nodeId}` : path;
-  const notFound = result.error?.name === 'NotFoundError';
+  const notFound = isNotFoundError(result.error);
   return (
     <PageShell
       url={intent.url}
