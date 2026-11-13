@@ -855,6 +855,10 @@ direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
 
+Package tests never use the network. The only live end-to-end checks are the opt-in
+[reference implementation E2E suite](./implementations/e2e/README.md) (`npm run
+implementation:e2e`), which is excluded from every default and CI target.
+
 Vitest. Tests live next to source (`src/foo.test.ts`). The `node` environment is fine for everything (we use `react-dom/server` for renderer tests — no jsdom needed).
 
 ### Build
@@ -1011,6 +1015,10 @@ Not caught: a throw inside the _customer_ component's own internals on a later c
 npm test                                         # all packages
 npx nx run-many -t test --projects=adapter-react # one package
 ```
+
+Live reference checks are opt-in only: `npm run implementation:install`, then
+`npx nx run implementation-e2e:e2e-install` once and `npm run implementation:e2e`
+(see [implementations/e2e](./implementations/e2e/README.md)).
 
 `adapter-svelte` runs **two** Vitest projects, and its `test` target runs both:
 

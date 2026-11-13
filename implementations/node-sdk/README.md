@@ -280,3 +280,11 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 
 - [Node SDK](../../packages/node/README.md)
 - [Local package artifacts](../../CONTRIBUTING.md#local-npm-artifacts)
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=node-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

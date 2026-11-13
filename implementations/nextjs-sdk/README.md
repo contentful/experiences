@@ -468,3 +468,11 @@ repeated attributed containers. Static checks establish artifact/type consumptio
 live content and server behavior require configured services. Production build, direct lint and typecheck validate installed tarball consumption.
 Browser/service inspection and final packed SDK verification are also required.
 The generated declaration is copied unchanged.
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` (plus `BROWSER_CDA_TOKEN`) and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=nextjs-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

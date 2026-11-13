@@ -1,0 +1,27 @@
+{
+  "name": "implementation-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "implementations/e2e",
+  "projectType": "application",
+  "tags": ["scope:e2e"],
+  "targets": {
+    "e2e-install": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "implementations/e2e",
+        "command": "npm install --workspaces=false --package-lock=false --no-audit --no-fund && npm run browsers"
+      }
+    },
+    "e2e-typecheck": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "implementations/e2e", "command": "npm run typecheck" }
+    },
+    "e2e": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "implementations/e2e", "command": "npm run e2e --" }
+    }
+  }
+}

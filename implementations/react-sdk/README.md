@@ -418,3 +418,11 @@ retained supplied content after activation failure, callback registration cleanu
 attempt counts/grouping and final-exit/BFCache behavior with the installed SDK
 artifacts. Keep public imports; no workspace aliases or temporary consumers are
 needed to validate this integration boundary.
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=react-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

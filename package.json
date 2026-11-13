@@ -47,6 +47,7 @@
     "pack:pkgs": "nx run-many -t pack --projects='packages/*'",
     "build:pkgs": "npm run pack:pkgs --",
     "implementation:install": "nx run-many -t setup --projects=tag:scope:implementation",
+    "implementation:e2e": "nx run implementation-e2e:e2e",
     "pm2:list": "pm2 list",
     "pm2:logs": "pm2 logs",
     "pm2:stop:all": "pm2 stop all",

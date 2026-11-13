@@ -97,14 +97,16 @@ resolveOptions, { routeKey: req.originalUrl })` with the request's page and opti
   `request.fetchByDestinationNode`; it is never handoff input.
 - The bootstrap carries the returned handoff and the existing browser activation passes
   it to `hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` unchanged.
-  Usable replay survives non-404 content failure (`502`), as on the by-ID routes.
+  Usable replay survives content failure (`502`, or `404` for a missing path), as on
+  the by-ID routes.
 - **Redirect**: the producer returns `redirect` and a replay-free handoff. The server
   discards that handoff, ships nothing to the browser, and answers `302` to
   `/destination?path=<target>`, retaining other query intent. The target response
   performs its own server evaluation and handoff.
-- **Not found**: a missing path (`NotFoundError` in `result.error`) means the route
-  does not exist, so the server answers the app's ordinary plain `404 Not found.`
-  without rendering or shipping a handoff.
+- **Not found**: a missing path (`NotFoundError` in `result.error`) renders the
+  route with status `404` and a not-found note, exactly like a missing by-ID
+  Experience: the evaluated handoff still ships, so the browser admits its page
+  replay once, and no node comparison is fetched.
 - Browser-local navigation, Identify, Reset and Retry on this route use ordinary Web
   `sdk.fetchByDestinationPath` (carrying page or action intent) and event-free
   `sdk.fetchByDestinationNode`, without a handoff. A browser redirect replaces the URL
@@ -623,3 +625,11 @@ copy `.env.example` locally. A standalone copy must preserve the relative
 `npm install --workspaces=false --package-lock=false --ignore-scripts`, then use
 its local npm commands. Nx/root dependencies are unnecessary for building,
 checking or running an already configured copy.
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=node-sdk+web-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

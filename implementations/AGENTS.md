@@ -99,6 +99,21 @@ exception in that managed flow.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.
+
+## Opt-in live E2E suite
+
+The one exception to the no-E2E rule is [`implementations/e2e`](./e2e/README.md): an
+opt-in Playwright suite that drives the five references against live services and the
+seeded reference Destination (by path, by node, redirect, 404, page-event ownership,
+event-free Retry and by-ID regressions, across Node/Web, hybrid, React and Next.js App/Pages
+in SSR and hybrid). It stays outside npm workspaces, uses only each app's real server and
+the installed tarballs, and adds no mocks, MSW, simulated upstreams or test-only hooks to the
+apps. It is tagged `scope:e2e`, exposes only `e2e-install`, `e2e-typecheck` and `e2e`, and must
+never join default `build`/`test`/`lint`/`typecheck`, `implementation:install` or the CI
+reference check. Specs skip with a message when an app's `.env` lacks `SPACE_ID`,
+`CDA_TOKEN` or `DESTINATION_ID`. Observe outgoing requests to count events; never log bodies
+or credentials. Per-app "no E2E" rules below mean nothing app-local; this suite is the only
+maintained E2E location.
 Throwaway verification code must not change
 reference use cases or create maintained consumers/apps.
 

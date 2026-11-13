@@ -456,3 +456,11 @@ Automatic setup through rendered plan containers is the current standard.
   locations. Install with `npm install --workspaces=false --package-lock=false
 --ignore-scripts` there, then use local npm commands; no root tool is needed to
   build/check/run an already configured copy.
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=web-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.
