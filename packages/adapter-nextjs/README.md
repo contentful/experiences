@@ -266,13 +266,15 @@ export default function App({ Component, pageProps }: AppProps) {
 App hosts project raw results with `serializeNextjsRequestResult`; Pages GSSP
 returns JSON-safe results directly. Pass each complete result, including its
 `requestId`, to the client request root. Its request `Experience` inherits the
-nearest root's result; an explicit `result={result}` takes precedence for manual
+nearest request root's result; an explicit `result={result}` takes precedence for manual
 composition. An empty request root keeps inherited presentation inactive until
 a result arrives. Omitting both the root and an explicit result throws a
-configuration error. Preserve complete results without overlays.
+configuration error, including under an ordinary Web root with Live Preview configured.
+Preserve complete results without overlays.
 Private configuration, raw errors and unapproved metadata remain server-local.
 
-App server roots share render-local memoization. Place roots that need fresh
+App server roots and injected presentations share render-local memoization of both
+the primary evaluation and its sanitized browser result. Place roots that need fresh
 handoffs in a rerendering page or template; retained layouts do not reevaluate.
 Next owns prefetching and caching. Extend the context middleware matcher to all
 App request-aware routes. Pages maps the native GSSP context instead.
@@ -531,7 +533,8 @@ can be request-context resolvers. `NextjsServerRequestPolicy` binds one primary 
 Document, RSC and Pages data requests evaluate the primary Experience on Node using the
 transfer producer; preview uses ordinary fetch and suppresses events. Requests marked
 as speculative (`next-router-prefetch`, `purpose` or `sec-purpose`) perform no primary
-fetch or composition. Next.js can also issue full prefetches without those markers;
+fetch or composition, and their request `Experience` renders nothing even when a
+client presentation is injected. Next.js can also issue full prefetches without those markers;
 these follow the ordinary RSC path. Configure prefetching at the application boundary
 when server evaluation must wait for navigation. Each actual non-preview server
 load, document, RSC or Pages data, resolves `request.initialEvents` and `request.pagePayload`

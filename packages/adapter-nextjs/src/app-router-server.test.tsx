@@ -22,9 +22,19 @@ vi.mock('next/headers.js', () => ({ headers: doubles.headers, cookies: doubles.c
 // React's server dispatcher normally supplies this render-local memoization.
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
-  cache: (load: (...args: unknown[]) => Promise<unknown>) => {
-    let pending: Promise<unknown> | undefined;
-    return (...args: unknown[]) => (pending ??= load(...args));
+  cache: (load: (...args: unknown[]) => unknown) => {
+    const entries: { args: unknown[]; value: unknown }[] = [];
+    return (...args: unknown[]) => {
+      const cached = entries.find(
+        (entry) =>
+          entry.args.length === args.length &&
+          entry.args.every((arg, index) => Object.is(arg, args[index]))
+      );
+      if (cached) return cached.value;
+      const value = load(...args);
+      entries.push({ args, value });
+      return value;
+    };
   },
 }));
 vi.mock('./server-request.js', () => ({
@@ -233,22 +243,34 @@ describe('App Router request family', () => {
   });
 
   it.each([
-    new globalThis.Headers({ 'next-router-prefetch': '1' }),
-    new globalThis.Headers({ rsc: '1', purpose: 'prefetch' }),
-  ])('does no primary evaluation or composition for speculative requests', async (headers) => {
-    const incoming = new globalThis.Headers(headers);
-    incoming.set('x-ctfl-exp-request-url', 'https://example.com/?q=a%20b');
-    doubles.headers.mockResolvedValue(incoming);
-    const composeRequest = vi.fn();
-    const result = await bindNextjsAppRouterServerExperiences({
-      ...config,
-      request: { ...config.request, composeRequest },
-    }).request.loadExperience();
-    expect(result.plan).toBeUndefined();
-    expect(result.handoff).toBeUndefined();
-    expect(doubles.bind).not.toHaveBeenCalled();
-    expect(composeRequest).not.toHaveBeenCalled();
-  });
+    { headers: new globalThis.Headers({ 'next-router-prefetch': '1' }), injected: false },
+    { headers: new globalThis.Headers({ 'next-router-prefetch': '1' }), injected: true },
+    { headers: new globalThis.Headers({ rsc: '1', purpose: 'prefetch' }), injected: false },
+    { headers: new globalThis.Headers({ rsc: '1', purpose: 'prefetch' }), injected: true },
+  ])(
+    'does no primary evaluation or composition for speculative requests ($injected, $headers)',
+    async ({ headers, injected }) => {
+      const incoming = new globalThis.Headers(headers);
+      incoming.set('x-ctfl-exp-request-url', 'https://example.com/?q=a%20b');
+      doubles.headers.mockResolvedValue(incoming);
+      const composeRequest = vi.fn();
+      const ClientExperience = vi.fn(() => null);
+      const binding = bindNextjsAppRouterServerExperiences(
+        {
+          ...config,
+          request: { ...config.request, composeRequest },
+        },
+        { request: injected ? { Experience: ClientExperience } : {} }
+      );
+      const result = await binding.request.loadExperience();
+      expect(await binding.request.Experience({})).toBeNull();
+      expect(ClientExperience).not.toHaveBeenCalled();
+      expect(result.plan).toBeUndefined();
+      expect(result.handoff).toBeUndefined();
+      expect(doubles.bind).not.toHaveBeenCalled();
+      expect(composeRequest).not.toHaveBeenCalled();
+    }
+  );
 
   it('evaluates RSC content once with the destination page and supplies its prepared handoff', async () => {
     doubles.headers.mockResolvedValue(
@@ -324,7 +346,7 @@ describe('App Router request family', () => {
     expect(root.props).not.toHaveProperty('delivery');
     expect(presentation?.type).toBe(injected ? ClientExperience : ServerExperienceRenderer);
     expect(presentation?.props.as).toBe('section');
-    if (injected) expect(presentation?.props.result).toEqual(root.props.result);
+    if (injected) expect(presentation?.props.result).toBe(root.props.result);
     else expect(presentation?.props.experience).toEqual(root.props.result?.plan);
     expect(analytics.props.result).not.toHaveProperty('plan');
     if (injected) expect(root.props.children).toBe('Content');

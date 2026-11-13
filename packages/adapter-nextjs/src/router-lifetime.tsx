@@ -28,6 +28,18 @@ import {
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
 const RequestResultContext = createContext<{ result?: NextjsRequestResult } | undefined>(undefined);
 
+/** Only request roots provide inherited results, including an initially empty result. */
+export function NextjsRequestResultBoundary({
+  result,
+  children,
+}: {
+  result?: NextjsRequestResult;
+  children: ReactNode;
+}) {
+  const value = useMemo(() => ({ result }), [result]);
+  return <RequestResultContext.Provider value={value}>{children}</RequestResultContext.Provider>;
+}
+
 /** One stable root excludes only restored original bootstrap inputs after departure. */
 export function NextjsInitialDataBoundary({
   routeKey,
@@ -210,30 +222,28 @@ export function NextjsRequestPresentation({
     [ready, builder, initialPagePayload, buildRoutePayload]
   );
   return (
-    <RequestResultContext.Provider value={{ result }}>
-      <Root
-        {...props}
-        {...(waiting ? { beforeInitialPage: undefined } : {})}
-        routeKey={routeKey}
-        previewUrl={previewUrl}
-        livePreview={
-          livePreview && 'enabled' in livePreview && result
-            ? { ...livePreview, experienceId: result.experience.experienceId }
-            : livePreview
-        }
-        handoff={
-          result
-            ? ready || typeof window === 'undefined'
-              ? matchingResult?.handoff
-              : undefined
-            : props.handoff
-        }
-        handoffKey={result ? matchingResult?.requestId : props.handoffKey}
-        // Returning undefined from a builder still permits Web's empty page fallback.
-        buildPagePayload={waiting || pageFree ? undefined : buildPagePayload}
-        initialPagePayload={undefined}
-        pageMode={waiting || pageFree ? undefined : props.pageMode}
-      />
-    </RequestResultContext.Provider>
+    <Root
+      {...props}
+      {...(waiting ? { beforeInitialPage: undefined } : {})}
+      routeKey={routeKey}
+      previewUrl={previewUrl}
+      livePreview={
+        livePreview && 'enabled' in livePreview && result
+          ? { ...livePreview, experienceId: result.experience.experienceId }
+          : livePreview
+      }
+      handoff={
+        result
+          ? ready || typeof window === 'undefined'
+            ? matchingResult?.handoff
+            : undefined
+          : props.handoff
+      }
+      handoffKey={result ? matchingResult?.requestId : props.handoffKey}
+      // Returning undefined from a builder still permits Web's empty page fallback.
+      buildPagePayload={waiting || pageFree ? undefined : buildPagePayload}
+      initialPagePayload={undefined}
+      pageMode={waiting || pageFree ? undefined : props.pageMode}
+    />
   );
 }

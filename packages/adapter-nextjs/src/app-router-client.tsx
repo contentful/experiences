@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createNextjsRouteKey, queryFromSearchParams } from './request-context.js';
 import {
   NextjsInitialDataBoundary,
+  NextjsRequestResultBoundary,
   NextjsRequestPresentation,
   NextjsBrowserRoot,
   useNextjsRequestOptions,
@@ -136,12 +137,14 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
 
   function RequestExperiencesRoot(props: BoundNextjsRequestRootProps) {
     return (
-      <AppRouterRequestOwner
-        {...props}
-        livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
-        Root={BrowserRoot}
-        configuredBuilder={rootConfig.buildPagePayload}
-      />
+      <NextjsRequestResultBoundary result={props.result}>
+        <AppRouterRequestOwner
+          {...props}
+          livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
+          Root={BrowserRoot}
+          configuredBuilder={rootConfig.buildPagePayload}
+        />
+      </NextjsRequestResultBoundary>
     );
   }
 
@@ -212,7 +215,11 @@ function AppRouterRequestOwner({
 
 /** Registry-free owner for a server-supplied request result and children. */
 export function NextjsAppRouterRequestRoot({ browser, ...props }: NextjsDefaultRequestRootProps) {
-  return <AppRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />;
+  return (
+    <NextjsRequestResultBoundary result={props.result}>
+      <AppRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />
+    </NextjsRequestResultBoundary>
+  );
 }
 
 export function NextjsAppRouterRequestAnalyticsRoot(props: NextjsDefaultRequestRootProps) {

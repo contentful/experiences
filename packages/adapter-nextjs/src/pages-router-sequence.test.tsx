@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { CONSENT_CACHE_KEY, PERSISTENCE_CONSENT_CACHE_KEY } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -247,36 +248,59 @@ describe('Pages managed request sequence', () => {
     });
   });
 
-  it('waits for readiness before adopting request content', async () => {
-    const { sdk, fetchExperience } = sdkFixture();
-    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
-    router.isReady = false;
-    let result: NextjsRequestResult | undefined;
-    const tree = () => (
-      <NextjsPagesRouterRequestRoot
-        spaceId="space"
-        environmentId="master"
-        browser={{ delivery: { accessToken: 'browser-token' } }}
-        sdk={sdk}
-        result={result}
-      >
-        <bound.request.Experience>
-          {(value) => <output>{value.status}</output>}
-        </bound.request.Experience>
-      </NextjsPagesRouterRequestRoot>
-    );
-    await act(async () => root.render(tree()));
-    expect(container.textContent).not.toBe('success');
-    expect(fetchExperience).not.toHaveBeenCalled();
-    result = startup;
-    await act(async () => root.render(tree()));
-    expect(container.textContent).not.toBe('success');
-    expect(fetchExperience).not.toHaveBeenCalled();
-    router.isReady = true;
-    await act(async () => root.render(tree()));
-    expect(container.textContent).toBe('success');
-    expect(fetchExperience).not.toHaveBeenCalled();
-  });
+  it.each(['bound', 'standalone'] as const)(
+    'waits for readiness before adopting request content (%s)',
+    async (kind) => {
+      const { sdk, fetchExperience } = sdkFixture();
+      const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : NextjsPagesRouterRequestRoot;
+      router.isReady = false;
+      let result: NextjsRequestResult | undefined;
+      const tree = () => (
+        <Owner
+          spaceId="space"
+          environmentId="master"
+          browser={{ delivery: { accessToken: 'browser-token' } }}
+          sdk={sdk}
+          result={result}
+        >
+          <bound.request.Experience>
+            {(value) => <output>{value.status}</output>}
+          </bound.request.Experience>
+        </Owner>
+      );
+      await act(async () => root.render(tree()));
+      expect(container.textContent).not.toBe('success');
+      expect(fetchExperience).not.toHaveBeenCalled();
+      result = startup;
+      await act(async () => root.render(tree()));
+      expect(container.textContent).not.toBe('success');
+      expect(fetchExperience).not.toHaveBeenCalled();
+      router.isReady = true;
+      await act(async () => root.render(tree()));
+      expect(container.textContent).toBe('success');
+      expect(fetchExperience).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])(
+    'requires a request result outside request roots (plain preview root=%s)',
+    (preview) => {
+      const bound = bindNextjsPagesRouterExperiences({
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        livePreview: { enabled: true, loadImplementation: vi.fn() },
+      });
+      const content = <bound.request.Experience />;
+      expect(() =>
+        renderToStaticMarkup(
+          preview ? <bound.ExperiencesRoot>{content}</bound.ExperiencesRoot> : content
+        )
+      ).toThrow('requires a result prop or a request ExperiencesRoot');
+    }
+  );
 
   it('waits for matching analytics props before emitting a direct page', async () => {
     const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();

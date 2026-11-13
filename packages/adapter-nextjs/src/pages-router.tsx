@@ -11,6 +11,7 @@ import {
 import { createNextjsPageContext, createNextjsRouteKey } from './request-context.js';
 import {
   NextjsInitialDataBoundary,
+  NextjsRequestResultBoundary,
   NextjsRequestPresentation,
   NextjsBrowserRoot,
   useServerPreviewRefresh,
@@ -49,15 +50,17 @@ export function bindNextjsPagesRouterExperiences(config: NextjsPagesRouterExperi
 
   function RouteOwner(props: BoundNextjsRequestRootProps) {
     return (
-      <PagesRouterRequestOwner
-        {...props}
-        livePreview={mergeNextjsLivePreview(
-          runtimeConfig.livePreview,
-          props.result?.livePreview ?? props.livePreview
-        )}
-        Root={BrowserRoot}
-        configuredBuilder={runtimeConfig.buildPagePayload}
-      />
+      <NextjsRequestResultBoundary result={props.result}>
+        <PagesRouterRequestOwner
+          {...props}
+          livePreview={mergeNextjsLivePreview(
+            runtimeConfig.livePreview,
+            props.result?.livePreview ?? props.livePreview
+          )}
+          Root={BrowserRoot}
+          configuredBuilder={runtimeConfig.buildPagePayload}
+        />
+      </NextjsRequestResultBoundary>
     );
   }
 
@@ -253,7 +256,11 @@ function ServerPreviewRefresh({ experienceId }: { experienceId?: string }) {
 
 /** Registry-free owner for the normal _app request path. */
 export function NextjsPagesRouterRequestRoot({ browser, ...props }: NextjsDefaultRequestRootProps) {
-  return <PagesRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />;
+  return (
+    <NextjsRequestResultBoundary result={props.result}>
+      <PagesRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />
+    </NextjsRequestResultBoundary>
+  );
 }
 
 export function NextjsPagesRouterRequestAnalyticsRoot(props: NextjsDefaultRequestRootProps) {

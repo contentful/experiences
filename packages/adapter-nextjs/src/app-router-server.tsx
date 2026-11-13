@@ -193,9 +193,9 @@ function createAppRouterServerExperiences<
     }
   );
 
-  function browserResult(result: NextjsAppRouterExperienceResult) {
-    return serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys });
-  }
+  const browserResult = cache((result: NextjsAppRouterExperienceResult) =>
+    serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys })
+  );
 
   function inheritedRootProps() {
     return {
@@ -256,6 +256,7 @@ function createAppRouterServerExperiences<
 
   async function RequestExperience(props: PresentationProps) {
     const result = await loadExperience();
+    if (result.plan === undefined && result.contentError === undefined) return null;
     if (client?.request?.Experience)
       return createElement(client.request.Experience, { ...props, result: browserResult(result) });
     return result.plan ? (
