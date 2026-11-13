@@ -57,7 +57,7 @@ export interface CreatePageContextOptions {
 export type PageContextInput =
   NonNullable<UniversalEventBuilderArgs['page']> | CreatePageContextOptions;
 
-export interface CreateRequestContextOptions {
+export interface CreateEventContextOptions {
   readonly request?: RequestLike;
   /** Explicit headers are authoritative, including removals. */
   readonly headers?: globalThis.Headers;
@@ -120,10 +120,11 @@ export function createPageContext({
   };
 }
 
-/** Derived request page < event context < explicit page; explicit locale wins. No IP inference. */
-export function createRequestContext(
-  options: CreateRequestContextOptions
-): UniversalEventBuilderArgs {
+/**
+ * Builds event metadata for `forRequest({ eventContext })`.
+ * Derived request page < event context < explicit page; explicit locale wins. No IP inference.
+ */
+export function createEventContext(options: CreateEventContextOptions): UniversalEventBuilderArgs {
   const { request, eventContext, page, locale } = options;
   const headers = options.headers ?? request?.headers;
   const url = request?.url ?? headers?.get(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER);

@@ -8,13 +8,13 @@ import {
 } from '@contentful/experiences-node';
 import {
   cookieReaderFromHeader,
-  createRequestContext,
-  type CreateRequestContextOptions,
+  createEventContext,
+  type CreateEventContextOptions,
   type CookieReader,
 } from './request-context.js';
 
 export interface BindExperiencesRequestOptions
-  extends Omit<RequestContext, 'consent' | 'eventContext' | 'locale'>, CreateRequestContextOptions {
+  extends Omit<RequestContext, 'consent' | 'eventContext' | 'locale'>, CreateEventContextOptions {
   readonly consent: ConsentInput;
   readonly cookies?: CookieReader;
   readonly anonymousIdCookieName?: string;
@@ -56,6 +56,6 @@ export function bindExperiencesRequest(
   return sdk.forRequest({
     ...context,
     profile: isPreview ? undefined : (options.profile ?? (id ? { id } : undefined)),
-    eventContext: createRequestContext(options),
+    eventContext: createEventContext(options),
   });
 }

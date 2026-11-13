@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createPageContext,
-  createRequestContext,
+  createEventContext,
   createRouteKey,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from './request-context.js';
@@ -73,7 +73,7 @@ describe('explicit Next request context', () => {
         [NEXTJS_EXPERIENCES_REQUEST_URL_HEADER]: url,
       });
       expect(
-        createRequestContext({
+        createEventContext({
           ...(source === 'request' ? { request: { url, headers } } : { headers }),
         })
       ).toEqual({
@@ -91,7 +91,7 @@ describe('explicit Next request context', () => {
 
   it('does not restore request headers removed by explicit empty headers', () => {
     expect(
-      createRequestContext({
+      createEventContext({
         request: {
           url: 'https://example.com/request',
           headers: new globalThis.Headers({ referer: 'old', 'user-agent': 'old' }),
@@ -138,7 +138,7 @@ describe('explicit Next request context', () => {
         locale: 'de',
         page: { path: '/explicit', searchParams: { q: 'x', utm_source: 'email' } },
       };
-      const result = createRequestContext(options);
+      const result = createEventContext(options);
       expect(result).toMatchObject({
         locale: 'de',
         userAgent: 'explicit',
@@ -152,7 +152,7 @@ describe('explicit Next request context', () => {
       });
       expect(result).not.toHaveProperty('ip');
       expect(
-        createRequestContext({
+        createEventContext({
           ...options,
           page: { ...options.page, origin: 'https://override.test', referrer: '' },
         }).page
@@ -161,7 +161,7 @@ describe('explicit Next request context', () => {
         referrer: '',
       });
       expect(
-        createRequestContext({
+        createEventContext({
           ...options,
           page: { ...options.page, origin: 'https://ignored.test', url: 'http://[invalid' },
         }).page?.url
@@ -171,7 +171,7 @@ describe('explicit Next request context', () => {
 
   it('derives forwarded URL only from explicit supplied headers', () => {
     expect(
-      createRequestContext({
+      createEventContext({
         headers: new globalThis.Headers({
           [NEXTJS_EXPERIENCES_REQUEST_URL_HEADER]: 'https://example.com/forwarded?_rsc=x&q=y#z',
         }),
@@ -183,6 +183,6 @@ describe('explicit Next request context', () => {
       url: 'https://example.com/forwarded?_rsc=x&q=y#z',
       referrer: '',
     });
-    expect(createRequestContext({})).toEqual({});
+    expect(createEventContext({})).toEqual({});
   });
 });

@@ -443,7 +443,20 @@ try {
 
 All Node request context options are accepted, including `resolveOptions`, `personalizationOptions`, `analyticsOptions` and `preview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `personalizationOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
 
-`createPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createRequestContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
+`createPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createEventContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
+
+`createEventContext(options: CreateEventContextOptions)` returns `UniversalEventBuilderArgs` for the Node request's `eventContext` field. When using Node's `forRequest()` directly, nest the result under that field:
+
+```ts
+import { createEventContext } from '@contentful/experiences-nextjs/server';
+
+const request = sdk.forRequest({
+  consent: visitorConsent,
+  eventContext: createEventContext({ request: incomingRequest }),
+});
+```
+
+`bindExperiencesRequest()` performs this composition automatically.
 
 ## Response cookies and private caching
 

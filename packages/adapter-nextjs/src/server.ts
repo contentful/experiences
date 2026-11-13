@@ -7,12 +7,12 @@ export {
 } from './server-request.js';
 export {
   createPageContext,
-  createRequestContext,
+  createEventContext,
   createRouteKey,
   NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
   type CreatePageContextOptions,
-  type CreateRequestContextOptions,
+  type CreateEventContextOptions,
   type PageContextInput,
   type SearchParams,
   type CookieReader,

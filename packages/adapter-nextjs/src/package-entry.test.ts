@@ -160,6 +160,45 @@ describe('published package entries', () => {
     });
   });
 
+  it('exports event context that preserves request metadata through the Node facade', () => {
+    const result = runModule(`
+      const server = await import('${packageName}/server');
+      const sdk = server.configureServerExperiences({
+        spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server-token' }
+      });
+      const request = sdk.forRequest({
+        eventContext: server.createEventContext({
+          request: {
+            url: 'https://example.com/page?tag=a&tag=b',
+            headers: new Headers({ referer: 'https://referrer.test', 'user-agent': 'browser' })
+          }
+        })
+      });
+      try {
+        const event = request.eventBuilder.buildPageView();
+        process.stdout.write(JSON.stringify({
+          page: event.context.page,
+          userAgent: event.context.userAgent,
+          hasOldHelper: 'createRequestContext' in server
+        }));
+      } finally {
+        request.destroy();
+        sdk.destroy();
+      }
+    `);
+    expect(JSON.parse(result)).toEqual({
+      page: {
+        path: '/page',
+        search: '?tag=a&tag=b',
+        query: { tag: ['a', 'b'] },
+        referrer: 'https://referrer.test',
+        url: 'https://example.com/page?tag=a&tag=b',
+      },
+      userAgent: 'browser',
+      hasOldHelper: false,
+    });
+  });
+
   it('preserves the client directive only on the explicit client entry', () => {
     const client = readFileSync(path.join(packageRoot, 'dist/client.js'), 'utf8');
     expect(client).toMatch(/^['"]use client['"];\s/);
@@ -227,6 +266,7 @@ describe('published declarations', () => {
       import { createExperiencesContextHandler, type PreviewResolver, type ExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
         configureServerExperiences, bindExperiencesRequest,
+        createEventContext, type CreateEventContextOptions,
         createRouteKey, serializePlan, serializeHandoff,
         createPrivateFetch, assertPublicRequestPolicy,
         applyPrivateResponseCache, persistAnonymousId,
@@ -249,6 +289,18 @@ describe('published declarations', () => {
       const sdk = configureServerExperiences({
         spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server-token' }
       });
+      const eventContextOptions: CreateEventContextOptions = {
+        request: { url: 'https://example.com/page', headers: new Headers() },
+        locale: 'en-US'
+      };
+      const eventContextRequest: RequestRuntime = sdk.forRequest({
+        consent: false, eventContext: createEventContext(eventContextOptions)
+      });
+      eventContextRequest.destroy();
+      // @ts-expect-error The helper is named for the event metadata it returns.
+      import { createRequestContext } from '${packageName}/server';
+      // @ts-expect-error The options type follows the event-context helper name.
+      import { type CreateRequestContextOptions } from '${packageName}/server';
       const request = bindExperiencesRequest(sdk, { consent: false, locale: 'en-US' });
       const actualRequest: RequestRuntime = request;
       const response = { headers: new Headers() };
