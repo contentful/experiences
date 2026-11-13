@@ -1,8 +1,6 @@
 import { DEFAULT_PAGE_PROPERTIES, type EventBuilderConfig } from '@contentful/experiences-runtime';
 
 type Page = ReturnType<NonNullable<EventBuilderConfig['getPageProperties']>>;
-// Temporary XDA workaround: page context does not accept title, hash, width or height.
-const { title: _title, ...defaultPage } = DEFAULT_PAGE_PROPERTIES;
 
 /**
  * Keeps every value of a repeated query key, as Optimization's
@@ -24,7 +22,7 @@ function getQuery(searchParams: URL['searchParams']): Page['query'] {
  */
 export function getPageProperties(): Page {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return { ...defaultPage };
+    return { ...DEFAULT_PAGE_PROPERTIES };
   }
 
   try {
@@ -32,15 +30,19 @@ export function getPageProperties(): Page {
     const query = getQuery(new URL(location.href).searchParams);
 
     return {
-      ...defaultPage,
+      ...DEFAULT_PAGE_PROPERTIES,
+      title: document.title,
       url: location.href,
       path: location.pathname,
+      hash: location.hash,
+      width: window.innerWidth,
+      height: window.innerHeight,
       query,
       search: location.search,
       referrer: document.referrer,
     };
   } catch {
-    return { ...defaultPage };
+    return { ...DEFAULT_PAGE_PROPERTIES };
   }
 }
 

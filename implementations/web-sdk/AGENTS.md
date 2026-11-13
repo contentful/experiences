@@ -66,9 +66,9 @@ supported product usage or a cross-fetch guarantee.
 - Consent subscriptions update Utilities only and remain caller-owned. No profile
   subscription refreshes content. XDA always forces XPAPI preflight; local adoption,
   storage, admission and generic SDK success do not commit provisional profiles.
-  Keep consent context and use the default Web browser provider's commented omission
-  of title/hash/width/height. Custom providers/arguments remain caller-owned; add no
-  instance wrappers or event sanitizers. Refresh installed SDK artifacts. See
+  Keep consent context and the default Web browser provider's title/hash/width/height
+  metadata. Custom providers/arguments remain caller-owned; add no instance wrappers
+  or event sanitizers. Refresh installed SDK artifacts. See
   [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
   XPAPI is actual commit transport; retain no standalone XPAPI preparation workflow.
 - Automatic tracking uses the existing getTrackingAttributes helper on each plan

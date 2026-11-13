@@ -150,10 +150,9 @@ that explicitly supply a handoff.
 Standalone direct actions and Personalization preflight remain supported.
 See [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
-The default Web page provider omits `title`, `hash`, `width` and `height` under the
-[SDK workaround comment](../../packages/web/src/browser-event-context.ts); the builder preserves
-those page-context omissions while retaining the required `properties.title` string. Refresh installed SDK artifacts to use this behavior; application
-code adds no event stripping.
+The default Web page provider includes `title`, `hash`, `width` and `height`;
+the builder retains the required `properties.title` string. Application code adds
+no event stripping.
 
 HTTP 200 and a returned profile ID alone do not prove personalization. Plans do
 not expose all raw XDA errors. Keep direct API diagnosis outside application

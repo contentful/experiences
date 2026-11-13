@@ -336,10 +336,6 @@ class EventBuilder {
       ...merged,
       title: typeof merged.title === 'string' ? merged.title : '',
     };
-    const contextPage: OptimizationPage =
-      pageProperties.title === undefined ? { ...merged } : merged;
-    if (pageProperties.title === undefined) delete contextPage.title;
-
     warnIfPageContextConflicts(universal.page, merged);
 
     const {
@@ -348,7 +344,7 @@ class EventBuilder {
     } = this.buildUniversalEventProperties({
       ...universal,
       campaign: universal.campaign ?? propertiesCampaign,
-      page: universal.page ?? contextPage,
+      page: universal.page ?? merged,
     });
 
     const context = parseOptimizationSchema(OptimizationPageEventContext, universalContext);

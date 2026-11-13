@@ -172,4 +172,37 @@ describe('EventBuilder', () => {
       properties: {},
     });
   });
+
+  it.each([undefined, 'Chairs'])(
+    'retains the page title fallback or override %s when the provider omits title',
+    (title) => {
+      const providerPage = {
+        path: '/redacted',
+        query: {},
+        referrer: '',
+        search: '',
+        url: 'https://example.test/redacted',
+      };
+      const builder = new EventBuilder({
+        channel: 'web',
+        library: LIBRARY,
+        getPageProperties: () => providerPage,
+      });
+
+      const event = builder.buildPageView(title === undefined ? {} : { properties: { title } });
+
+      expect(event.properties.title).toBe(title ?? '');
+      expect(event.context.page).toEqual({ ...providerPage, title: title ?? '' });
+      expect(providerPage).not.toHaveProperty('title');
+    }
+  );
+
+  it('preserves explicit page context when page properties supply a title', () => {
+    const page = { ...DEFAULT_PAGE_PROPERTIES };
+    const event = createBuilder().buildPageView({ page, properties: { title: 'Chairs' } });
+
+    expect(event.context.page).toEqual(page);
+    expect(event.properties.title).toBe('Chairs');
+    expect(page.title).toBe('');
+  });
 });

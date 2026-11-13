@@ -277,7 +277,7 @@ calling direct `identify()` / `page()` first or waiting for browser commit.
 Independent profile-only reads with a concrete profile can still run concurrently.
 
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
-[documented provider omissions](../runtime/README.md#xda-preflight-and-profile-finalization);
+[documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
 Event-bearing XDA forces XPAPI preflight and does not commit events or
 profile changes. Local adoption and storage do not finalize the returned ID.
@@ -508,14 +508,16 @@ content fetches do not request this bridge hydration.
 
 ## Context providers and redaction
 
-The default event context is read lazily and includes the current URL, path, query
-parameters, search, referrer and User-Agent. Custom providers/explicit arguments
+The default event context is read lazily and includes the current document title,
+URL, path, query parameters, search, hash, viewport width and height, referrer and
+User-Agent. This page context accompanies every built event, including identify,
+track and interaction events, as well as page views. Custom providers/explicit arguments
 remain caller-owned. SPA navigation is reflected without reconstructing the SDK.
 These values can contain sensitive data.
 
 Calling an event method sends these default values to the Optimization service.
-If URLs, query parameters, referrers, or User-Agent values are not approved for
-that destination, configure redacting providers before triggering events.
+If titles, URLs, query parameters, referrers, or other default values are not
+approved for that destination, configure redacting providers before triggering events.
 
 Use `browserContext.getPageProperties` and `browserContext.getUserAgent` to redact or replace the defaults before a value is retained, logged, or sent onward. Do not expose authentication material, raw identifiers, or personal data merely because it is available in the browser.
 
@@ -528,7 +530,7 @@ const experiences = new ContentfulExperiences({
       query: {},
       referrer: '',
       search: '',
-      title: document.title,
+      title: '',
       url: `${window.location.origin}${window.location.pathname}`,
     }),
     getUserAgent: () => undefined,
