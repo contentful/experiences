@@ -155,7 +155,9 @@ A Destination maps URL paths to Experiences through its nodes, so your app route
 - **Personalization.** Both destination forms accept `personalization` (a profile id plus events), the same as by-id. It switches the request from a cacheable GET to a POST.
 - **Scope.** Destination delivery is space-scoped: no `environmentId`, `locale`, `parameters`, or `extensions` on the destination forms.
 - **Preview Sessions.** Free fetches use ordinary Delivery. Configure session capability on a Node/Web runtime owner and render by Experience id, or use the low-level Preview Session helpers; see [Live preview](#live-preview).
-- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. The sitemap is a free function; the Node and Web runtimes have no sitemap method.
+- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. Node and Web runtimes expose the same pagination through their owned Delivery client as `sdk.fetchDestinationSitemap({ destinationId }, { pageNext })`.
+- **Managed integrations.** React `Experience`/`useManagedExperience` and the Next.js request bindings accept `{ destinationId, path }` or `{ destinationId, nodeId }` wherever they accept `{ experienceId }`. Redirects become an explicit `redirect` outcome and missing content a not-found outcome; the SDK never navigates. See [React Destination selectors](./packages/adapter-react/README.md#destination-selectors) and [Next.js: a Destination as the primary](./packages/adapter-nextjs/README.md#a-destination-as-the-primary).
+- **Attribution.** The Destinations API accepts no general extensions, so destination content cannot request the `sourceMap` extension and carries no tracking attribution unless the service returns one. Fetch by Experience id where automatic interaction tracking is required.
 
 ```ts
 const paths: string[] = [];

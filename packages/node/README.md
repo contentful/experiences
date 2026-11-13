@@ -461,7 +461,17 @@ if ('redirect' in result) {
 }
 ```
 
-Destination node and path requests accept `personalization` (a profile id and caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the complete profile XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug.
+Destination node and path requests accept `personalization` (a profile id and type-tagged builder arguments or caller-built events) like by-ID fetches. Consent and event interceptors apply to the events, the request's profile id is sent unless `personalization.profileId` is set, and the complete profile XDA returns is kept for later calls. A redirect result carries no profile. The SDK does not send a locale or an environment identifier on Destination requests. They still use request-scoped resolve settings such as metadata and debug. A missing
+Destination, path or node rejects with `NotFoundError`; the resolved plan's `experienceId`
+names the Experience the Destination served.
+
+An actual server-to-browser transfer of Destination content uses
+`fetchDestinationForHandoff(selector, resolveOptions, { routeKey })`, the same producer as
+`fetchExperienceForHandoff`: it pins `personalization.preflight: true`, rejects explicit
+`false`, and returns `{ handoff, plan?, error? }` with replay surviving content failure.
+A redirect returns `{ handoff, redirect }` without replay or plan: the redirecting route is
+never presented, so do not hand its handoff to the browser. `sdk.fetchDestinationSitemap`
+pages routable paths through the SDK-owned Delivery client.
 
 The runtime owns its Delivery and Preview clients. Configure each with an
 `accessToken`, or configure a tokenless trusted proxy by supplying an explicit

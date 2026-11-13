@@ -16,7 +16,7 @@ The primary fetch + resolve entry point. Fetches an Experience payload and resol
 - **By destination node id**: `{ spaceId, destinationId, nodeId }`.
 - **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id.
 
-The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering. `isDestinationRedirect(result)` narrows it. Every resolved plan records its payload's `sys.id` as `plan.experienceId`, so destination content names the Experience it resolved to.
 
 ```ts
 const result = await fetchExperience(
