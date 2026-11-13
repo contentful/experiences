@@ -54,9 +54,9 @@ and [request contract](../packages/adapter-nextjs/README.md#router-bindings).
 Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
-in client modules. Next bindings accept `livePreview: { enabled, loadImplementation }`
+in client modules. Next bindings accept `preview: { enabled, createClient, ...transport }`
 and own session inference, replacement and mode changes; do not add consumer
-preview-only wrappers/hooks/keys. Request results carry loader-free preview configuration; roots derive sessions
+preview-only wrappers/hooks/keys. Request results carry client-free preview configuration; roots derive sessions
 from existing route/descriptor data. Request history survives owned SDK replacement.
 The server and browser use matching deployment policy and separate credentials. `request.pagePayload` becomes `result.initialPagePayload`; pass
 the complete result without overlays and retain the `requestId` history guard.
@@ -95,8 +95,8 @@ reference use cases or create maintained consumers/apps.
 
 ## Optional Preview Sessions
 
-Use conditional Node/Web `livePreview` initialization from the installed optional
-package. Branch on `isPreview` before visitor work; destroy Node request facades
+Use conditional Node/Web `preview` session initialization. Node snapshots use the
+configured Preview transport; Web supplies the optional package’s `createLivePreviewClient` factory. Branch on `isPreview` before visitor work; destroy Node request facades
 in `finally`. Web uses `fetchExperience()` then `subscribeToPreview()` for updates
 and `states.preview` for status; hybrid retains SSR plans/DOM without a startup
 refetch or profile handoff. Release subscriptions on route

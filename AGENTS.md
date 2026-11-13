@@ -145,19 +145,26 @@ tracking, embedded fetch personalization and handoff preparation/replay before e
 Recreate Web when entering/leaving preview. CPA, `debug` and socket status do not set this policy.
 Static preview without a Session ID requires explicit opt-in; raw `sdk.api` and free fetches remain outside it.
 
-Web owns one Preview Session source/connection and publishes the normal SDK
-signal `states.preview: Observable<PreviewState | undefined>`. It is undefined
-during initialization or when disabled; otherwise it carries optional
-Experience/session IDs, raw `ExperiencePayload` data, error, `live`/`static`/undefined
-status and content revision. `fetchExperience` loads initial/refresh snapshots for
-matching bound IDs. `subscribeToPreview(experienceId, FetchResolveOptions,
+Each SDK Preview context has one active session and one Web connection. The
+single `preview` configuration combines transport credentials, session settings
+and optional `createClient` factory from the Preview package; Web defaults the session from the standard
+`preview_session_id` query parameter, with an optional `preview.sessionId` override.
+Renderers and fetches use normal Experience IDs.
+The package returns one current Experience payload, not a multi-Experience source.
+Node/Web route snapshots and updates by the reported `payload.sys.id`; only
+matching requested/subscribed IDs receive session content, and missing IDs are
+never guessed or broadcast. Other IDs retain their ordinary source.
+`states.preview` exposes shared raw session state.
+`subscribeToPreview(experienceId, FetchResolveOptions,
 listener): Subscription` emits `PreviewUpdate` with optional plan/error, which can
 coexist; status comes from `states.preview`. The binding never fetches snapshots
 or owns per-view state. Web shares in-flight fetching/resolution and owns
 mode/event/profile/lifetime policy; views retain presentation state. Do not add
-SDK per-resource state. `replaceLivePreview` switches sessions. SSR-only adapters
+SDK per-view state. View subscriptions detach independently; SDK destruction
+closes the one context connection. Changing session replaces the context; React
+and Next handle their owned SDK replacement without a consumer key. SSR-only adapters
 observe matching content revisions for server refresh without browser resolution.
-Snapshot runtimes expose inert undefined preview state; other states are unchanged.
+Snapshot runtimes expose inert undefined Preview state; other states are unchanged.
 
 React managed integration uses Optimization's source/presentation controllers
 with the thin binding.
@@ -182,13 +189,13 @@ Built-in browser roots inherit scope and locale, but need explicit browser
 credentials or a trusted authenticated proxy. Existing Runtime Delivery
 configuration remains required even for analytics-only browser use. Advanced
 callbacks/preview setup stay in a client module. Next's managed Live Preview
-configuration is `livePreview: { enabled, loadImplementation }` in server and
-client bindings. Request results carry loader-free configuration; roots infer the primary Experience
+configuration is one `preview` object in server and
+client bindings. Request results carry factory-free configuration; roots infer the primary Experience
 and URL session from existing descriptor/route data;
-owned SDKs switch sessions with `replaceLivePreview` and are recreated on preview
+owned SDKs are recreated on session changes and preview
 mode entry/exit below the stable request-history boundary. Consumers need no
 preview-specific wrapper, hook or key. Explicit browser credentials remain
-separate from server credentials; optional-package imports stay lazy. The
+separate from server credentials; optional-package imports may stay lazy. The
 initializer/resolver path remains available; injected SDK lifetime stays caller-owned. `composeRequest` is an explicit
 application escape hatch after every actual server primary fetch, including RSC and Pages data,
 before cleanup; diagnostic multiple-fetch
@@ -272,9 +279,11 @@ By-ID fetch options can also carry first-class personalization with a profile id
 and existing type-tagged builder arguments or raw built events; Runtime/Node/Web
 consent-gate inputs and build only arguments once. Client accepts raw built events
 only and maps them to XDA's extension body, and Node
-proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. Event-bearing XDA always invokes XPAPI
-with `preflight: true`, with no override; it commits neither events nor profile
-creation/mutation. Newly returned IDs are provisional, and profile-only XDA uses
+proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`; the
+SDK validates and forwards it without selecting a default. Earlier service checks
+observed noncommitting XPAPI preflight; default and override behavior have not
+been reverified with dev.13. Treat newly returned IDs as provisional until
+profile finalization is verified. Profile-only XDA uses
 XPAPI GET internally even when SDK-to-XDA uses POST. Node/Web auto-adopt returned
 IDs locally; adoption does not finalize them. See the canonical
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
@@ -302,8 +311,9 @@ the Node `fetchExperienceForHandoff` producer with `{ routeKey }` as its third
 argument, returning full handoff plus optional plan/error. Web/React optionally
 consume explicitly supplied server handoffs, independently of display.
 
-SSR/CSR XDA events remain uncommitted as a tolerated service bug awaiting upstream
-force-commit support. Add no SDK workaround or current force flag.
+Earlier service checks observed uncommitted SSR/CSR XDA events. Generated
+`personalization.preflight` support does not establish backend commitment; verify
+the deployed contract before changing integration policy. Add no SDK workaround.
 Same-ID Retry is ordinary event-free fetch without builders, event hooks or replay;
 accepted incoming replay delivery retry remains queue-owned. Later reference
 comparison IDs also use ordinary event-free fetch, without an SDK multi-Experience
@@ -311,11 +321,11 @@ or cross-fetch guarantee; official support is one Experience per page, unenforce
 Direct APIs remain callable, not initial prerequisites or compensation.
 Replay is exercised by Node only as the backend of an actual hybrid transfer;
 ordinary Node SSR integrations use normal fetch without producing or consuming
-replay. After the upstream fix, ordinary SSR/CSR events are expected to commit
-through XDA, while hybrid server evaluation retains preflight and browser
-commitment. Any flag or automatic selection follows the actual upstream API and
-supported integration patterns; no override currently exists. The SDK will not
-release until all tracked XDA issues affecting the supported integrations are
+replay. The intended ordinary SSR/CSR flow commits through XDA, while hybrid
+server evaluation retains preflight and browser commitment. The generated
+`personalization.preflight` option is forwarded; this adaptation adds no default
+or automatic mode selection. Integration policy follows verified upstream behavior.
+The SDK will not release until all tracked XDA issues affecting the supported integrations are
 resolved and the corrected service behavior is verified.
 See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for replay, identity, consent, queues and lifetime.
@@ -486,10 +496,11 @@ Retained differences:
 - The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through XPAPI.
   Experiences retains `fetchExperienceForHandoff` because XDA must evaluate the
   consumer-supplied batch and select content; XPAPI remains actual commit transport.
-- SSR/CSR XDA-carried events remain uncommitted pending upstream force-commit
-  support. The content source requires XDA evaluation; the SDK adds no commit
-  workaround or current force flag. Only actual hybrid server-supplied browser
-  replay commits. This difference does not establish full commit parity.
+- Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
+  generated `personalization.preflight` option is now forwarded, but deployed
+  commitment behavior must be verified. The content source requires XDA evaluation;
+  the SDK adds no commit workaround. Hybrid server-supplied browser replay remains
+  an explicit commit path. This difference does not establish full commit parity.
 - The pin retains only current Web initialization identity. Experiences retains
   accepted replay identity across newer initialization: serialized A after B is
   refused without state/event republication or recommit for page/nonpage batches.

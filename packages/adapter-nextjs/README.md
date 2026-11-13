@@ -309,58 +309,63 @@ The maintained [Next reference](../../implementations/nextjs-sdk/README.md) show
 ## Managed Contentful Live Preview
 
 Install the optional `@contentful/experiences-live-preview` package and configure
-the server and client bindings with a lazy loader. Normal SDK imports and
-declarations remain independent of that package.
-
-```ts
-// lib/live-preview.ts — shared configuration, with no credentials.
-export const livePreview = {
-  enabled: process.env.NEXT_PUBLIC_CONTENTFUL_LIVE_PREVIEW_ENABLED === 'true',
-  loadImplementation: () => import('@contentful/experiences-live-preview'),
-};
-```
-
-For App Router, export the client request root as well as the presentation:
+one Preview context in the existing `preview` object. Keep private server credentials
+and explicitly browser-visible credentials separate:
 
 ```tsx
 // lib/experience-client.tsx
 'use client';
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
 import { browserRegistry } from './browser-registry';
-import { livePreview } from './live-preview';
 
-const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview });
+const binding = bindNextjsAppRouterClientExperiences({
+  config: browserRegistry,
+  preview: {
+    accessToken: process.env.NEXT_PUBLIC_CONTENTFUL_PREVIEW_TOKEN!,
+    enabled: true,
+    createClient: createLivePreviewClient,
+  },
+});
 export const { ExperiencesRoot, Experience } = binding.request;
 ```
 
-Add `livePreview` and `preview: { accessToken: process.env.CONTENTFUL_PREVIEW_TOKEN! }`
-to the existing App server configuration. Set an explicitly browser-visible
-`browser.preview` token separately; the Preview Session helper requires
-one even when Delivery uses a trusted proxy. Use the server load/serialization and
-client request components shown in the browser-managed composition above, or
-inject them for automatic forwarding. Without injection, server
-`request.Experience` retains `ServerExperienceRenderer`. Keep context-forwarding
-middleware on the request-aware routes.
+Configure the server binder’s separate `preview` object with its private
+`accessToken` and optional deployment gate. Server snapshots use that normal
+Preview transport; the browser’s synchronous package factory stays in the client
+module. Continue using the server load/serialization and injected client root shown
+above. Client callbacks are never copied from the server. For Pages, supply the same context options to the server binder and
+`bindNextjsPagesRouterExperiences`, retaining the existing GSSP and `_app` composition.
 
-For Pages, add the same `livePreview` and private Preview token to the server
-binder; add `livePreview` and the separately designated browser Preview token to
-`bindNextjsPagesRouterExperiences`. GSSP, `_app` and `<Experience />`
-stay as shown above. Both server families carry only loader-free configuration
-in the existing result; browser roots retain their client loader and derive the
-primary ID and nonempty trimmed `preview_session_id` from the descriptor and route.
-Result-backed roots infer the Preview target from their result. Advanced Web-owned
-Preview can supply `livePreview.experienceId`; shared roots have no content-ID prop.
-Optional `sessionHost` and `resourceResolution` belong to the configuration.
+The root derives one `sessionId` from explicit `preview.sessionId` or the current
+URL's trimmed `preview_session_id`; an explicit session wins. `enabled: false`
+disables session integration while retaining normal Preview transport credentials.
+The Next-only gate is stripped before SDK construction. Missing sessions use ordinary
+mode unless the application explicitly sets `isPreview: true` for static Preview.
+An explicit root session provides mode information before child effects run.
 
-Disabled policy or a missing session selects ordinary mode. Active sessions load
-the optional implementation, retain initial server plans without a startup refetch,
-and use existing `replaceLivePreview` for session changes. Mode entry/exit replaces
-the owned SDK below the request-history guard. No consumer preview wrapper, hook
-or key is needed. Errors appear in `states.preview`; analytics roots observe
-revisions for server refresh without browser resolution. This controls Contentful
-Live Preview content and event suppression, independently of XPAPI preflight.
-Explicit preview options and application resolvers remain available; injected SDK lifetime stays
-application-owned and does not accept managed configuration.
+Experience JSX and complete request results stay unchanged:
+
+```tsx
+<binding.request.ExperiencesRoot result={result}>
+  <binding.request.Experience />
+</binding.request.ExperiencesRoot>
+```
+
+The session contains one current Experience. Its raw payload's `sys.id` controls
+which ordinary ID receives its content; unrelated IDs retain their normal by-ID
+source, and missing identity is never broadcast or guessed from child order.
+Repeated matching views keep their own resolution options. There are no renderer
+session props, target IDs, replacement APIs or per-Experience session records.
+
+Changing sessions creates a new owned SDK context below the existing history guard;
+consumers need no Preview-specific key or wrapper. Both server families project only
+credential/client-free `preview` context metadata through the result. Browser setup
+retains its separately configured token and loader. Server-only presentations observe
+`states.preview` revisions through `usePreviewState()` and refresh when a valid
+payload arrives, without browser resolution. Browser-managed presentations use their
+existing resolved update subscription. Initial server plans and complete-result
+history guards remain in force. Injected SDK lifetime stays application-owned.
 
 ## Explicit supplied-plan rendering
 
@@ -434,9 +439,9 @@ try {
 }
 ```
 
-`consent` is required and independent of any cookie. Cookie identity is read only when persistence consent is explicitly granted (`true` or `{ persistence: true }`). An explicitly supplied `profile` takes precedence and can remain volatile without persistence consent. An explicit `cookies` reader takes precedence over effective `headers`, then request cookies/header. Empty supplied cookies or headers are authoritative and cannot restore an identity removed by the host. Preview (`isPreview: true` or `livePreview`) excludes every visitor profile input and never reads identity cookies. The preview configuration passes unchanged to Node; optional Preview remains lazy and SDK-owned.
+`consent` is required and independent of any cookie. Cookie identity is read only when persistence consent is explicitly granted (`true` or `{ persistence: true }`). An explicitly supplied `profile` takes precedence and can remain volatile without persistence consent. An explicit `cookies` reader takes precedence over effective `headers`, then request cookies/header. Empty supplied cookies or headers are authoritative and cannot restore an identity removed by the host. Preview (`isPreview: true` or a session-bearing `preview`) excludes every visitor profile input and never reads identity cookies. The preview configuration passes unchanged to Node; optional Preview remains lazy and SDK-owned.
 
-All Node request context options are accepted, including `resolveOptions`, `personalizationOptions`, `analyticsOptions` and `livePreview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `personalizationOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
+All Node request context options are accepted, including `resolveOptions`, `personalizationOptions`, `analyticsOptions` and `preview`. The helpers infer no IP from `Forwarded` or `X-Forwarded-For`; trusted IP policy belongs in `personalizationOptions.ip`. Explicit headers are authoritative. Page context precedence is the request URL (or the forwarded URL when no request is supplied), then `eventContext.page`, then explicit `page`. Path-style `page` input inherits an omitted referrer and URL origin from the merged lower-precedence context; its explicit path/search and URL/origin/referrer options take precedence, including an empty referrer. Explicit `locale` overrides event-context locale; explicit event-context `userAgent` overrides the header.
 
 `createNextjsPageContext({ path, origin?, url?, searchParams?, referrer? })` accepts `URLSearchParams` or Next search-param records containing strings/arrays. The supplied `path` determines `page.path`; `searchParams` determines `page.search` and `page.query`, preserving ordered duplicate values in `search` and `query`. A query key with one value maps to a string; repeated keys map to ordered string arrays. Explicit `url` overrides only `page.url` and is returned unchanged, including its encoding and hash. Without `url`, the helper builds it from path/search and optional origin. `createNextjsRouteKey(url)` separately removes `_rsc` and the hash and canonicalizes spaces so `%20` and `+` match. The host retains its base-path, locale-prefix and trailing-slash policy. `createNextjsRequestContext(options)` parses the actual request or supplied forwarded URL into derived pathname/search/query and returns the parsed URL's `toString()` in `page.url`, without framework reads or transport filtering. Derived search retains its original encoding and `_rsc`, and the derived URL retains its hash; Next transport normalization belongs to route keys and the sanitized middleware forwarding boundary. These helpers omit derived page title; explicit caller context remains caller-owned.
 
@@ -448,7 +453,7 @@ Next's response cookie jar is keyed by name. The helper restores raw `Set-Cookie
 
 The standalone `createNextjsAnonymousIdSetCookieHeader(request, options?)` and `persistNextjsAnonymousId(response, request, options?)` expose the cookie decision without changing cache headers. Options are `anonymousIdCookieName`, `cookieOptions` (`path`, `domain`, `sameSite`, `secure`, `httpOnly`, `expires`, `maxAge`) and `deleteWhenProfileCannotPersist`. The latter defaults to `true`, following Optimization; set it to `false` when the host does not own withdrawal deletion at this boundary. Deletion uses the same configured path/domain. Defaults are `ctfl-opt-aid`, path `/`, and `SameSite=Lax`. Standalone cookie helpers retain configurable `httpOnly` for server-scoped identity. Preview never writes or expires identity. No profile means no new cookie.
 
-`createNextjsPrivateFetch(customFetch?)` preserves the custom fetch implementation, input, authorization, method, body, headers and abort signal while overriding cache with `no-store`. It removes positive or indefinite (`false`) Next `revalidate` conflicts and preserves other Next options. Install it only in host-assembled private `delivery.fetch` and, when needed, direct CPA `preview.fetch` configuration. `applyNextjsPrivateResponseCache(response)` sets private/no-store headers without replacing `Vary`. The Preview Session helper has no custom-fetch injection; run session work outside cached functions on a dynamic no-store route.
+`createNextjsPrivateFetch(customFetch?)` preserves the custom fetch implementation, input, authorization, method, body, headers and abort signal while overriding cache with `no-store`. It removes positive or indefinite (`false`) Next `revalidate` conflicts and preserves other Next options. Install it only in host-assembled private `delivery.fetch` and, when needed, direct CPA `preview.fetch` configuration. `applyNextjsPrivateResponseCache(response)` sets private/no-store headers without replacing `Vary`. Session snapshots use that configured Preview transport too; run session work outside cached functions on a dynamic no-store route.
 
 ## Browser serialization
 
@@ -466,7 +471,7 @@ Public/static requests exclude profile/identity, personalization events, replay 
 
 ## Context-only middleware and request reuse
 
-Import `createNextjsExperiencesContextHandler` from `/request-handler`. With no options it sanitizes and forwards context only. With `{ sdk, consent, ...requestOptions }`, `consent` may be a value or resolver receiving `{ request, headers, cookies }`. Optional `livePreview: NextjsLivePreviewResolver` receives `{ request }` and returns a Node `RuntimeLivePreviewOptions` or `undefined`, synchronously or asynchronously; both resolvers run before binding. The existing static `isPreview` option remains available. Explicit `bindNextjsExperiencesRequest` accepts the preview configuration unchanged; the handler accepts the application resolver. Resolver failure aborts binding and cookie work.
+Import `createNextjsExperiencesContextHandler` from `/request-handler`. With no options it sanitizes and forwards context only. With `{ sdk, consent, ...requestOptions }`, `consent` may be a value or resolver receiving `{ request, headers, cookies }`. Optional `preview: NextjsPreviewResolver` receives `{ request }` and returns a Node `RuntimePreviewSessionOptions` or `undefined`, synchronously or asynchronously; both resolvers run before binding. The existing static `isPreview` option remains available. Explicit `bindNextjsExperiencesRequest` accepts the preview configuration unchanged; the handler accepts the application resolver. Resolver failure aborts binding and cookie work.
 
 The handler follows Optimization's pinned Next request-header override mechanics. It honors effective overrides and removed cookies, strips incoming `x-ctfl-exp-*` headers, and sets `x-ctfl-exp-request-url` from the actual normalized request URL. It preserves existing rewrites, response headers/cookies and terminal redirect/error/body responses. Terminal responses skip resolvers and binding. Handler options separately accept the standalone cookie persistence options. At persistence, middleware forces `cookieOptions.httpOnly: false` for shared browser identity, including withdrawal, even when the input sets it to `true`. Configured context binding applies private response caching, persists only the identity already available and destroys its direct local request in `finally`; middleware does not fetch content, submit page/identify events, prepare replay or make commits a prerequisite. The `/request-handler` entry uses Node; it is not an Edge binder. Only trust forwarded URL context from a boundary that runs this sanitization.
 
@@ -522,7 +527,7 @@ The App server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: NextjsRequestResult`:
 `requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
-`contentError` string, `initialPagePayload` and optional loader-free `livePreview` configuration. `requestId` distinguishes fresh results;
+`contentError` string, `initialPagePayload` and optional credential/client-free `preview` context metadata. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
 retains server-local `experienceId` and raw `error`; browser projection excludes
 those fields and sanitizes the optional plan. Analytics roots omit that plan for
@@ -648,10 +653,11 @@ own a page, while committed path/query changes and back/forward do. Canceled
 transitions create no new intent. Startup data is not readopted after leaving its
 initial route; existing React/SDK reset handles the current visitor. Remove old
 attributed DOM before Reset. Managed Live Preview replaces the browser owner on mode entry/exit and switches
-sessions through its existing replacement API; ordinary navigation retains it.
-The managed configuration requires deployment enablement plus a trimmed URL
-session and supplies inactive `isPreview: false` internally. Browser preview
-credentials are separately designated; server implementation loaders are never serialized.
+sessions by creating a new SDK context; ordinary navigation retains it.
+The optional deployment gate defaults to enabled; an explicit session or trimmed
+URL session activates the context. With no active session, the root supplies
+`isPreview: false` unless the application explicitly requests static Preview. Browser preview
+credentials are separately designated; client instances and factories are never serialized.
 
 ## Public cache conveniences
 

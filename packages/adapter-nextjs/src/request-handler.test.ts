@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { MaybePromise, RuntimeLivePreviewOptions } from '@contentful/experiences-node';
+import type { MaybePromise, RuntimePreviewSessionOptions } from '@contentful/experiences-node';
 import {
   createNextjsExperiencesContextHandler,
-  type NextjsLivePreviewResolver,
+  type NextjsPreviewResolver,
 } from './request-handler.js';
 import { configureNextjsServerExperiences } from './server-request.js';
 import {
@@ -190,39 +190,33 @@ describe('Next context middleware', () => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
     const consent = vi.fn(() => true);
-    const livePreview = vi.fn(() => undefined);
+    const preview = vi.fn(() => undefined);
     expect(
-      await createNextjsExperiencesContextHandler({ sdk: runtime, consent, livePreview })(
+      await createNextjsExperiencesContextHandler({ sdk: runtime, consent, preview })(
         new NextRequest('https://example.com'),
         response
       )
     ).toBe(response);
     expect(bind).not.toHaveBeenCalled();
     expect(consent).not.toHaveBeenCalled();
-    expect(livePreview).not.toHaveBeenCalled();
+    expect(preview).not.toHaveBeenCalled();
     expect(response.headers.has(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER)).toBe(false);
   });
 
   it('resolves preview before binding and never writes or expires visitor identity', async () => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
-    const livePreview = {
-      experienceId: 'home',
-      sessionId: 'session',
-      loadImplementation: async () => {
-        throw new Error('must stay lazy');
-      },
-    };
+    const preview = { sessionId: 'session' };
     const result = await createNextjsExperiencesContextHandler({
       sdk: runtime,
       consent: true,
-      livePreview: async ({ request }) => {
+      preview: async ({ request }) => {
         expect(request.url).toBe('https://example.com/');
         expect(bind).not.toHaveBeenCalled();
-        return livePreview;
+        return preview;
       },
     })(new NextRequest('https://example.com', { headers: { cookie: 'ctfl-opt-aid=visitor' } }));
-    expect(bind.mock.calls[0]![0]).toMatchObject({ livePreview, profile: undefined });
+    expect(bind.mock.calls[0]![0]).toMatchObject({ preview, profile: undefined });
     expect(bind.mock.results[0]!.value.isPreview).toBe(true);
     expect(result.headers.has('set-cookie')).toBe(false);
   });
@@ -236,7 +230,7 @@ describe('Next context middleware', () => {
       createNextjsExperiencesContextHandler({
         sdk: runtime,
         consent: false,
-        livePreview: () => {
+        preview: () => {
           throw new Error('preview resolver failed');
         },
       })(new NextRequest('https://example.com'), response)
@@ -248,25 +242,25 @@ describe('Next context middleware', () => {
 });
 
 it.each([false, true])(
-  'keeps the existing static isPreview option when livePreview resolves undefined (%s)',
+  'keeps the existing static isPreview option when preview resolves undefined (%s)',
   async (isPreview) => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
-    const livePreview = vi.fn<NextjsLivePreviewResolver>().mockResolvedValue(undefined);
+    const preview = vi.fn<NextjsPreviewResolver>().mockResolvedValue(undefined);
     await createNextjsExperiencesContextHandler({
       sdk: runtime,
       consent: false,
       isPreview,
-      livePreview,
+      preview,
     })(new NextRequest('https://example.com'));
-    expect(livePreview).toHaveBeenCalledOnce();
-    expect(bind.mock.calls[0]![0]).toMatchObject({ isPreview, livePreview: undefined });
+    expect(preview).toHaveBeenCalledOnce();
+    expect(bind.mock.calls[0]![0]).toMatchObject({ isPreview, preview: undefined });
     expect(bind.mock.results[0]!.value.isPreview).toBe(isPreview);
   }
 );
 
-it('types livePreview as an application resolver returning an initializer or absence', () => {
-  expectTypeOf<NextjsLivePreviewResolver>().returns.toEqualTypeOf<
-    MaybePromise<RuntimeLivePreviewOptions | undefined>
+it('types preview as an application resolver returning an initializer or absence', () => {
+  expectTypeOf<NextjsPreviewResolver>().returns.toEqualTypeOf<
+    MaybePromise<RuntimePreviewSessionOptions | undefined>
   >();
 });

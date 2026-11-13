@@ -160,7 +160,10 @@ describe('Experience', () => {
     source.fetchExperience.mockReturnValueOnce(pending.promise);
     const onExperienceResolved = vi.fn();
     const onExperienceError = vi.fn();
-    await render({ onExperienceResolved, onExperienceError });
+    await render({
+      onExperienceResolved,
+      onExperienceError,
+    });
     const error = new Error('connection interrupted');
     await act(async () => source.preview.emit(previewState({ error, status: 'static' })));
     expect(onExperienceError).toHaveBeenCalledTimes(1);

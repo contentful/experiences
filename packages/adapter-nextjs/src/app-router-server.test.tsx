@@ -8,7 +8,7 @@ import {
 } from './app-router-client.js';
 import { bindNextjsAppRouterServerExperiences } from './app-router-server.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
-import type { NextjsLivePreviewConfig } from './live-preview.js';
+import type { NextjsPreviewConfig } from './preview.js';
 
 const doubles = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -81,32 +81,29 @@ describe('App Router request family', () => {
         'x-ctfl-exp-request-url': 'https://example.com/?preview_session_id=session',
       })
     );
-    const implementation = {} as Awaited<ReturnType<NextjsLivePreviewConfig['loadImplementation']>>;
-    const loadImplementation = vi.fn(() => implementation);
+    const createClient = vi.fn<NonNullable<NextjsPreviewConfig['createClient']>>();
     const binding = bindNextjsAppRouterServerExperiences({
       ...config,
       browser: { delivery: { accessToken: 'browser-token' } },
-      livePreview: {
+      preview: {
+        accessToken: 'preview',
         enabled: true,
-        experienceId: 'fallback',
         sessionHost: 'https://preview.example.com',
         resourceResolution: 'resolved',
-        loadImplementation,
+        createClient,
       },
     });
     const root = await binding.request.ExperiencesRoot({});
-    expect(root.props.result?.livePreview).toEqual({
+    expect(root.props.result?.preview).toEqual({
       enabled: true,
       sessionHost: 'https://preview.example.com',
       resourceResolution: 'resolved',
     });
-    expect(loadImplementation).not.toHaveBeenCalled();
-    expect(doubles.bind.mock.calls[0]![1].livePreview).toEqual({
-      experienceId: 'home',
+    expect(createClient).not.toHaveBeenCalled();
+    expect(doubles.bind.mock.calls[0]![1].preview).toEqual({
       sessionId: 'session',
       sessionHost: 'https://preview.example.com',
       resourceResolution: 'resolved',
-      loadImplementation,
     });
     expect(doubles.bind.mock.calls[0]![1].isPreview).toBe(true);
     expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(config.request.experience, {
@@ -115,12 +112,12 @@ describe('App Router request family', () => {
     expect(doubles.transfer).not.toHaveBeenCalled();
   });
 
-  it('resolves only the active middleware descriptor and keeps the implementation lazy', async () => {
+  it('keeps middleware setup independent of content selection and client creation', async () => {
     const experience = vi.fn(() => ({ experienceId: 'home' }));
     const unrelated = vi.fn(() => {
       throw new Error('request policy must not run in middleware');
     });
-    const loadImplementation = vi.fn();
+    const createClient = vi.fn();
     for (const [enabled, search] of [
       [false, '?preview_session_id=session'],
       [true, ''],
@@ -128,7 +125,7 @@ describe('App Router request family', () => {
     ] as const) {
       const binding = bindNextjsAppRouterServerExperiences({
         ...config,
-        livePreview: { enabled, loadImplementation },
+        preview: { accessToken: 'preview', enabled, createClient },
         request: {
           experience,
           resolveOptions: unrelated,
@@ -137,13 +134,13 @@ describe('App Router request family', () => {
         },
       });
       await binding.requestHandler(new NextRequest('https://example.com/' + search));
-      expect(doubles.bind.mock.calls.at(-1)![1].livePreview).toEqual(
-        enabled && search ? expect.objectContaining({ loadImplementation }) : undefined
+      expect(doubles.bind.mock.calls.at(-1)![1].preview).toEqual(
+        enabled && search ? expect.objectContaining({ sessionId: 'session' }) : undefined
       );
-      expect(experience).toHaveBeenCalledTimes(enabled && search ? 1 : 0);
+      expect(experience).not.toHaveBeenCalled();
     }
     expect(unrelated).not.toHaveBeenCalled();
-    expect(loadImplementation).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
   });
 
   it('explicit/static rendering reads no framework request state', async () => {
@@ -353,7 +350,7 @@ describe('App Router request family', () => {
     else
       expect(root.props.children).toMatchObject({
         props: {
-          children: [{ type: ServerPreviewRefresh, props: { experienceId: 'home' } }, 'Content'],
+          children: [{ type: ServerPreviewRefresh, props: {} }, 'Content'],
         },
       });
     expect(doubles.transfer).toHaveBeenCalledTimes(1);

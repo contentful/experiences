@@ -11,16 +11,25 @@ const env = window.ENVIRONMENT;
 // consent, persistence and delivery. UMD and window.ENVIRONMENT are this app's
 // loading/configuration choices; the delivery token must be safe to expose publicly.
 let previewBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
+const previewImplementation = previewBinding ? await loadPreviewImplementation() : undefined;
 const sdk = new window.ContentfulExperiences({
   spaceId: env.SPACE_ID,
   environmentId: env.ENVIRONMENT_ID,
   locale: env.LOCALE,
   delivery: { accessToken: env.CDA_TOKEN },
   preview: env.LIVE_PREVIEW
-    ? { accessToken: env.LIVE_PREVIEW.accessToken, host: env.LIVE_PREVIEW.host }
-    : undefined,
-  livePreview: previewBinding
-    ? { ...previewBinding, loadImplementation: loadPreviewImplementation }
+    ? {
+        accessToken: env.LIVE_PREVIEW.accessToken,
+        host: env.LIVE_PREVIEW.host,
+        ...(previewBinding
+          ? {
+              sessionId: previewBinding.sessionId,
+              sessionHost: previewBinding.sessionHost,
+              resourceResolution: previewBinding.resourceResolution,
+              createClient: previewImplementation.createLivePreviewClient,
+            }
+          : {}),
+      }
     : undefined,
   isPreview: Boolean(previewBinding),
 });
@@ -117,7 +126,7 @@ async function renderRoute({
   if (disposed) return;
   const nextBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
   const nextIsPreview = Boolean(nextBinding);
-  if (nextIsPreview !== sdk.isPreview) {
+  if (nextIsPreview !== sdk.isPreview || nextBinding?.sessionId !== previewBinding?.sessionId) {
     location.reload();
     return;
   }
@@ -167,16 +176,7 @@ async function renderRoute({
   appMain.setAttribute('aria-busy', 'true');
 
   try {
-    if (sdk.isPreview) {
-      if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
-        await sdk.replaceLivePreview({
-          ...nextBinding,
-          loadImplementation: loadPreviewImplementation,
-        });
-        if (!isCurrent()) return;
-        previewBinding = nextBinding;
-      }
-    }
+    if (sdk.isPreview) previewBinding = nextBinding;
 
     const failed = await loadExperiences(destinations, isCurrent, requestOptions);
     if (!isCurrent()) return;
@@ -395,7 +395,7 @@ function releasePreviewSubscriptions() {
 }
 
 function bindPreview(destinations, isCurrent, failures, rendered) {
-  // Fetch/render first: the source buffers its latest payload while HTTP is pending.
+  // Fetch/render first, then subscribe to the selected Preview Session.
   // The SDK resolves updates and guards stale work; the app owns presentations/errors.
   for (const [experienceId, targets] of destinations) {
     const subscription = sdk.subscribeToPreview(experienceId, resolveOptions, ({ data, error }) => {

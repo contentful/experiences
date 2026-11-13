@@ -6,11 +6,8 @@ import {
   type Config,
   type RequestContext,
 } from './contentful-experiences.js';
-import {
-  EventProfileRequiredError,
-  type RuntimeLivePreviewModule,
-} from '@contentful/experiences-runtime';
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { EventProfileRequiredError } from '@contentful/experiences-runtime';
+import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
 /** A complete Personalization API profile, which Analytics requires. */
@@ -108,142 +105,96 @@ describe('Node ContentfulExperiences', () => {
     expect(personalize).not.toHaveBeenCalled();
   });
 
-  describe('request-owned Live Preview', () => {
+  describe('request-owned Preview Session', () => {
     function previewFixture() {
-      const runtime = createRuntime({ preview: { accessToken: 'preview-token' } });
-      const plan: PortableRenderPlan = {
-        nodes: [],
-        metadata: {},
-        debug: false,
-        diagnostics: [],
-        personalization: { profile: completeProfile('preview-profile') },
-      };
-      const implementation: RuntimeLivePreviewModule = {
-        fetchPreviewSession: vi.fn().mockResolvedValue(plan),
-        createLivePreviewClient: vi.fn(),
-        sendPreviewStatus: vi.fn(),
-      };
-      const loadImplementation = vi.fn(async () => implementation);
-      const livePreview = {
-        experienceId: 'bound',
-        sessionId: 'session',
-        loadImplementation,
-      };
-      const ordinary = vi.spyOn(runtime, 'fetchExperience').mockResolvedValue(plan);
-      return { runtime, plan, implementation, livePreview, loadImplementation, ordinary };
-    }
-
-    it('establishes preview policy before initializing the source', async () => {
-      const f = previewFixture();
-      const upsert = vi.spyOn(f.runtime.api.personalization, 'upsertProfile');
-      const request = f.runtime.forRequest({ livePreview: f.livePreview, consent: true });
-      expect(request.isPreview).toBe(true);
-      await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
-      expect(f.loadImplementation).not.toHaveBeenCalled();
-      expect(upsert).not.toHaveBeenCalled();
-      expect(() => f.runtime.forRequest({ livePreview: f.livePreview, isPreview: false })).toThrow(
-        /isPreview: false/
-      );
-    });
-
-    it('adopts the matching snapshot with request and operation resolve defaults', async () => {
-      const f = previewFixture();
-      const request = f.runtime.forRequest({
-        livePreview: f.livePreview,
-        profile: { id: 'visitor' },
-        resolveOptions: { metadata: { request: true, shared: 'request' } },
-      });
-      await expect(
-        request.fetchExperience(
-          { experienceId: 'bound' },
-          {
-            config: resolverConfig,
-            metadata: { shared: 'operation' },
-            debug: false,
-          }
-        )
-      ).resolves.toBe(f.plan);
-      expect(vi.mocked(f.implementation.fetchPreviewSession).mock.calls[0]?.[2]).toEqual({
-        config: resolverConfig,
-        debug: false,
-        metadata: { source: 'constructor', request: true, shared: 'operation' },
-      });
-      expect(request.profile).toEqual({ id: 'visitor' });
-      expect(f.ordinary).not.toHaveBeenCalled();
-      expect(f.implementation.createLivePreviewClient).not.toHaveBeenCalled();
-      await request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig });
-      expect(f.loadImplementation).toHaveBeenCalledOnce();
-    });
-
-    it('keeps unrelated IDs on the ordinary source', async () => {
-      const f = previewFixture();
-      const request = f.runtime.forRequest({ livePreview: f.livePreview });
-      await expect(
-        request.fetchExperience(
-          { experienceId: 'other', preview: true },
-          {
-            config: resolverConfig,
-          }
-        )
-      ).resolves.toBe(f.plan);
-      expect(f.ordinary).toHaveBeenCalledWith(
-        { experienceId: 'other', preview: true, personalization: undefined, locale: 'en-US' },
-        { config: resolverConfig, metadata: {}, debug: undefined }
-      );
-      expect(f.implementation.fetchPreviewSession).not.toHaveBeenCalled();
-      expect(f.loadImplementation).not.toHaveBeenCalled();
-    });
-
-    it('isolates unrelated fetches from pending and failed preview initialization', async () => {
-      const f = previewFixture();
-      let reject!: (error: Error) => void;
-      f.loadImplementation.mockReturnValue(
-        new Promise((_, fail) => {
-          reject = fail;
+      const payload: ExperiencePayload = { sys: { id: 'edited', type: 'Experience' }, nodes: [] };
+      const snapshot = vi.fn(() => Promise.resolve(payload));
+      class PreviewExperiences extends ContentfulExperiences {
+        protected override fetchPreviewSessionPayload() {
+          return snapshot();
+        }
+      }
+      const runtime = trackRuntime(
+        new PreviewExperiences({
+          spaceId: 'space',
+          environmentId: 'environment',
+          delivery: { accessToken: 'delivery-token' },
+          preview: { accessToken: 'preview-token' },
         })
       );
-      const request = f.runtime.forRequest({ livePreview: f.livePreview });
-      const bound = expect(
-        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
-      ).rejects.toThrow('module unavailable');
-      await expect(
-        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
-      ).resolves.toBe(f.plan);
-      reject(new Error('module unavailable'));
-      await bound;
-      await expect(
-        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig })
-      ).resolves.toBe(f.plan);
-      await expect(
-        request.fetchExperience({ experienceId: 'bound' }, { config: resolverConfig })
-      ).rejects.toThrow('module unavailable');
-      expect(f.loadImplementation).toHaveBeenCalledOnce();
-      expect(f.ordinary).toHaveBeenCalledTimes(2);
+      const ordinary = vi
+        .spyOn(runtime, 'fetchExperience')
+        .mockResolvedValue({ nodes: [] } as never);
+      const resolve = vi.spyOn(runtime, 'resolveExperience');
+      return { runtime, payload, snapshot, ordinary, resolve };
+    }
+
+    it('sets session policy immediately while credentials alone leave ordinary requests active', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({ preview: { sessionId: 'session' }, consent: true });
+      expect(request.isPreview).toBe(true);
+      await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
+      expect(f.snapshot).not.toHaveBeenCalled();
+      expect(f.runtime.forRequest().isPreview).toBe(false);
+      expect(() =>
+        f.runtime.forRequest({ preview: { sessionId: 'session' }, isPreview: false })
+      ).toThrow(/isPreview: false/);
     });
 
-    it('rejects a pending snapshot when its request is disposed', async () => {
+    it('resolves only the edited Experience from one raw snapshot, retaining each call registry', async () => {
       const f = previewFixture();
-      let complete!: (plan: PortableRenderPlan) => void;
-      const started = new Promise<void>((resolve) => {
-        vi.mocked(f.implementation.fetchPreviewSession).mockImplementation(() => {
-          resolve();
-          return new Promise((resolvePlan) => {
-            complete = resolvePlan;
-          });
-        });
+      const request = f.runtime.forRequest({
+        preview: { sessionId: 'session' },
+        profile: { id: 'visitor' },
+        resolveOptions: { metadata: { request: true } },
       });
-      const request = f.runtime.forRequest({ livePreview: f.livePreview });
-      const pending = request.fetchExperience(
-        { experienceId: 'bound' },
+      await request.fetchExperience(
+        { experienceId: 'edited' },
+        { config: resolverConfig, metadata: { operation: true } }
+      );
+      await request.fetchExperience(
+        { experienceId: 'other', preview: true },
         { config: resolverConfig }
       );
-      await started;
+      expect(f.resolve).toHaveBeenCalledWith(f.payload, {
+        config: resolverConfig,
+        metadata: { request: true, operation: true },
+        debug: undefined,
+      });
+      expect(f.ordinary).toHaveBeenCalledWith(
+        { experienceId: 'other', preview: true, personalization: undefined, locale: undefined },
+        expect.anything()
+      );
+      expect(f.snapshot).toHaveBeenCalledOnce();
+      expect(request.profile).toEqual({ id: 'visitor' });
+    });
+
+    it('keeps payloads without an ID out of the requested Experience', async () => {
+      const f = previewFixture();
+      delete f.payload.sys;
+      const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
+      await request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig });
+      expect(f.resolve).not.toHaveBeenCalled();
+      expect(f.ordinary).toHaveBeenCalledOnce();
+    });
+
+    it('discards a snapshot that finishes after request disposal', async () => {
+      const f = previewFixture();
+      let complete!: (payload: ExperiencePayload) => void;
+      f.snapshot.mockReturnValue(
+        new Promise((resolve) => {
+          complete = resolve;
+        })
+      );
+      const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
+      const pending = request.fetchExperience(
+        { experienceId: 'edited' },
+        { config: resolverConfig }
+      );
       request.destroy();
-      request.destroy();
-      complete(f.plan);
+      complete(f.payload);
       await expect(pending).rejects.toThrow(/destroyed/);
-      await expect(request.page()).resolves.toEqual({ accepted: false });
-      expect(f.runtime.forRequest().isPreview).toBe(false);
+      expect(f.resolve).not.toHaveBeenCalled();
     });
   });
 

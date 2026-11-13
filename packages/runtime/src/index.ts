@@ -45,21 +45,20 @@ export type {
   ResolveOptions,
 } from './contentful-experiences.js';
 export type { DeliveryClientOptions } from './create-runtime-delivery-client.js';
-export { getPreviewSessionBinding } from './preview-session-binding.js';
+export { getPreviewSessionBinding, resolvePreviewSessionId } from './preview-session-binding.js';
 export type { PreviewSessionBinding } from './preview-session-binding.js';
 export {
   assertRuntimePreviewRequest,
   createRuntimePreviewClient,
-  fetchRuntimePreviewSession,
-  initializeRuntimeLivePreview,
   mergeRuntimePreviewResolveOptions,
 } from './live-preview.js';
 export type {
-  RuntimeLivePreviewBinding,
-  RuntimeLivePreviewConfig,
-  RuntimeLivePreviewOptions,
-  RuntimeLivePreviewModule,
+  RuntimeLivePreviewOwnerConfig,
+  RuntimePreviewConfig,
+  RuntimePreviewSessionOptions,
   RuntimePreviewClient,
+  RuntimePreviewClientOptions,
+  RuntimePreviewClientFactory,
   RuntimePreviewSessionIdentity,
   RuntimePreviewStatus,
 } from './live-preview.js';

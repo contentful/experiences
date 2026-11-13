@@ -224,7 +224,7 @@ describe('published declarations', () => {
       import { bindNextjsPagesRouterServerExperiences } from '${packageName}/pages-router/server';
       import { bindNextjsPagesRouterExperiences, NextjsPagesRouterRequestRoot, NextjsPagesRouterRequestAnalyticsRoot, type NextjsDefaultRequestRootProps } from '${packageName}/pages-router';
       import { createNextjsPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
-      import { createNextjsExperiencesContextHandler, type NextjsLivePreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
+      import { createNextjsExperiencesContextHandler, type NextjsPreviewResolver, type NextjsExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
         configureNextjsServerExperiences, bindNextjsExperiencesRequest,
         createNextjsRouteKey, serializeNextjsPlan, serializeNextjsHandoff,
@@ -272,19 +272,19 @@ describe('published declarations', () => {
       void [unsupportedBindOptions, unsupportedWithdrawalOptions];
       // @ts-expect-error Consent is required independently of request cookies.
       bindNextjsExperiencesRequest(sdk, { locale: 'en-US' });
-      declare const initializer: NonNullable<Parameters<typeof sdk.forRequest>[0]>['livePreview'];
-      const livePreview: NextjsLivePreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
-      const handlerOptions: NextjsExperiencesContextHandlerOptions = { sdk, consent: false, livePreview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
+      declare const initializer: NonNullable<Parameters<typeof sdk.forRequest>[0]>['preview'];
+      const preview: NextjsPreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
+      const handlerOptions: NextjsExperiencesContextHandlerOptions = { sdk, consent: false, preview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
       const contextHandler = createNextjsExperiencesContextHandler(handlerOptions);
-      const explicitRequest = bindNextjsExperiencesRequest(sdk, { consent: false, livePreview: initializer });
-      // @ts-expect-error Handler livePreview resolves an initializer, not a preview-policy record.
-      const unsupportedPolicy: NextjsLivePreviewResolver = () => ({ isPreview: true });
+      const explicitRequest = bindNextjsExperiencesRequest(sdk, { consent: false, preview: initializer });
+      // @ts-expect-error Handler preview resolves an initializer, not a preview-policy record.
+      const unsupportedPolicy: NextjsPreviewResolver = () => ({ isPreview: true });
       // @ts-expect-error The handler does not accept an initializer directly as its resolver.
-      const unsupportedInitializer: NextjsLivePreviewResolver = initializer!;
+      const unsupportedInitializer: NextjsPreviewResolver = initializer!;
       const unsupportedHandlerOptions: NextjsExperiencesContextHandlerOptions = {
         sdk, consent: false,
-        // @ts-expect-error There is one application-owned livePreview resolver.
-        previewResolver: livePreview
+        // @ts-expect-error There is one application-owned preview resolver.
+        previewResolver: preview
       };
       explicitRequest.destroy();
       void [unsupportedPolicy, unsupportedInitializer, unsupportedHandlerOptions];
@@ -326,11 +326,11 @@ describe('published declarations', () => {
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       } });
-      declare const previewModule: import('@contentful/experiences-runtime').RuntimeLivePreviewModule;
-      const livePreviewConfig: import('${packageName}/app-router/client').NextjsLivePreviewConfig = {
-        enabled: true, loadImplementation: async () => previewModule,
+      declare const createPreviewClient: import('@contentful/experiences-runtime').RuntimePreviewClientFactory;
+      const previewConfig: import('${packageName}/app-router/client').NextjsPreviewConfig = {
+        enabled: true, createClient: createPreviewClient,
       };
-      const appClient = bindNextjsAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
+      const appClient = bindNextjsAppRouterClientExperiences({ config, preview: previewConfig });
       const automaticApp = bindAppServer({
         spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
       }, { request: { Experience: appClient.request.Experience, ExperiencesRoot: appClient.request.ExperiencesRoot } });
@@ -340,7 +340,7 @@ describe('published declarations', () => {
       // @ts-expect-error DOM handlers cannot cross the server-to-client boundary.
       automaticApp.request.Experience({ rootProps: { onClick: () => {} } });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
-        livePreview: livePreviewConfig, request: { experience: { experienceId: 'home' } } });
+        preview: previewConfig, request: { experience: { experienceId: 'home' } } });
       // @ts-expect-error Content identity belongs to Experience, not the shared root.
       appClient.ExperiencesRoot({ experienceId: 'home' });
       // @ts-expect-error Analytics observes the SDK Preview target without a root content ID.
@@ -362,10 +362,19 @@ describe('published declarations', () => {
       };
       const pagesClient = bindNextjsPagesRouterExperiences({
         config, spaceId: 'space', environmentId: 'master',
-        delivery: { accessToken: 'browser' }, livePreview: livePreviewConfig,
+        delivery: { accessToken: 'browser' }, preview: previewConfig,
         consent: { clientDefaults: { consent: false, persistenceConsent: false } }
       });
       declare const result: NextjsRequestResult;
+      const explicitApp = <appClient.request.ExperiencesRoot result={result} isPreview>
+        <appClient.request.Experience />
+        <appClient.Experience experienceId="footer" />
+      </appClient.request.ExperiencesRoot>;
+      const explicitPages = <pagesClient.request.ExperiencesRoot result={result} isPreview>
+        <pagesClient.request.Experience />
+        <pagesClient.Experience experienceId="footer" />
+      </pagesClient.request.ExperiencesRoot>;
+      void [explicitApp, explicitPages];
       {
         const { ExperiencesRoot, Experience } = appClient.request;
         // @ts-expect-error Request roots infer content identity from their result.

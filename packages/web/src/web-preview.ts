@@ -1,140 +1,115 @@
 import {
   createRuntimePreviewClient,
-  initializeRuntimeLivePreview,
   type Config,
-  type RuntimeLivePreviewBinding,
-  type RuntimeLivePreviewOptions,
+  type RuntimePreviewSessionOptions,
 } from '@contentful/experiences-runtime';
-import { preview } from './signals/signals.js';
+import { signal, type Signal } from '@preact/signals-core';
 import type { PreviewState } from './states.js';
 
-/** Owns one Preview Session and publishes through the SDK's normal state signal. */
+/** Finish every cleanup before propagating a subscriber or transport error. */
+export function disposePreview(disposers: Iterable<() => void>): void {
+  const errors: unknown[] = [];
+  for (const dispose of disposers) {
+    try {
+      dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw errors[0];
+}
+
+/** One Preview connection for the SDK's editor session context. */
 export class WebPreview {
-  #ready: Promise<RuntimeLivePreviewBinding>;
-  #experienceId: string;
-  #version = 0;
-  // Local payload sequence; the package exposes no revision shared with HTTP snapshots.
-  #sequence = 0;
+  readonly state;
+  #started = false;
   #destroyed = false;
-  #unsubscribe: (() => void)[] = [];
+  #sequence = 0;
+  readonly #unsubscribe: (() => void)[] = [];
 
   constructor(
-    readonly config: Config,
-    options: RuntimeLivePreviewOptions
+    private readonly config: Config,
+    private readonly options: RuntimePreviewSessionOptions,
+    state: Signal<PreviewState | undefined> = signal()
   ) {
-    this.#experienceId = options.experienceId;
-    this.#ready = this.#initialize(options);
-  }
-  get experienceId(): string {
-    return this.#experienceId;
-  }
-  ready(): Promise<RuntimeLivePreviewBinding> {
-    return this.#ready;
-  }
-  get revision(): number {
-    return this.#version;
+    this.state = state;
+    this.state.value = {
+      sessionId: options.sessionId,
+      data: undefined,
+      error: undefined,
+      status: undefined,
+      revision: 0,
+    };
   }
 
-  async replace(options: RuntimeLivePreviewOptions): Promise<void> {
-    if (this.#destroyed) throw new Error('Preview owner has been destroyed');
-    // The public client has no reconfiguration API; release it to change session/token.
-    this.#stop();
-    preview.value = undefined;
-    this.#experienceId = options.experienceId;
-    this.#ready = this.#initialize(options);
-    await this.#ready;
+  start(): void {
+    if (this.#started || this.#destroyed) return;
+    this.#started = true;
+    void this.#connect().catch((error: unknown) => {
+      if (!this.#destroyed)
+        this.#publish({
+          error: error instanceof Error ? error : new Error(String(error)),
+          status: 'static',
+        });
+    });
+  }
+
+  async #connect(): Promise<void> {
+    const client = await createRuntimePreviewClient(this.options, this.config);
+    if (this.#destroyed) return;
+    if (!client) {
+      this.#publish({ status: 'static' });
+      return;
+    }
+    const own = (stop: () => void) => (this.#destroyed ? stop() : this.#unsubscribe.push(stop));
+    // Status notifications retain the package's last payload; do not undo SDK reset.
+    let lastData: PreviewState['data'];
+    const update = () => {
+      if (this.#destroyed) return;
+      const { data, error } = client.getResult();
+      const changed = data !== lastData;
+      lastData = data;
+      this.#publish({ error, ...(changed ? { data, revision: ++this.#sequence } : {}) });
+    };
+    own(client.subscribe(update));
+    if (this.#destroyed) return;
+    own(
+      client.subscribeStatus((status) => {
+        if (!this.#destroyed) {
+          this.#publish({ status });
+          if (!this.#destroyed && typeof window !== 'undefined')
+            window.parent?.postMessage(
+              { source: 'experiences/live-preview', type: 'status', status },
+              '*'
+            );
+        }
+      })
+    );
+    update();
   }
 
   clear(): void {
-    if (preview.peek()) this.#publish({ data: undefined, error: undefined });
+    this.#publish({ data: undefined, error: undefined });
   }
 
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
-    this.#stop();
-    preview.value = undefined;
+    disposePreview([
+      ...this.#unsubscribe.splice(0),
+      () => {
+        this.state.value = undefined;
+      },
+    ]);
   }
 
-  #initialize(options: RuntimeLivePreviewOptions): Promise<RuntimeLivePreviewBinding> {
-    const version = this.#version;
-    const ready = initializeRuntimeLivePreview(options)
-      .then((binding) => {
-        if (!this.#current(version)) return binding;
-        this.#publish({ experienceId: binding.experienceId, sessionId: binding.sessionId });
-        void this.#connect(binding, version);
-        return binding;
-      })
-      .catch((error: unknown) => {
-        if (this.#current(version))
-          this.#publish({
-            experienceId: options.experienceId,
-            error: asError(error),
-            status: 'static',
-          });
-        throw error;
-      });
-    void ready.catch(() => {}); // State exposes failure even if no fetch joins initialization.
-    return ready;
-  }
-
-  async #connect(binding: RuntimeLivePreviewBinding, version: number): Promise<void> {
-    const own = (unsubscribe: () => void) =>
-      this.#current(version) ? this.#unsubscribe.push(unsubscribe) : unsubscribe();
-    try {
-      const client = await createRuntimePreviewClient(binding, this.config);
-      if (!this.#current(version)) return;
-      // Client results retain data across status/error notifications and offer no clear.
-      // Ignore unchanged payloads so a status notification cannot undo SDK reset.
-      let lastData: PreviewState['data'];
-      const update = () => {
-        if (!this.#current(version)) return;
-        const { data, error } = client.getResult();
-        const changed = data !== lastData;
-        lastData = data;
-        this.#publish({ error, ...(changed ? { data, revision: ++this.#sequence } : {}) });
-      };
-      own(client.subscribe(update));
-      if (!this.#current(version)) return;
-      // Status is a separate subscription; editor reporting is an explicit package call.
-      own(
-        client.subscribeStatus((status) => {
-          if (!this.#current(version)) return;
-          binding.implementation.sendPreviewStatus(status);
-          this.#publish({ status });
-        })
-      );
-      update();
-    } catch (error) {
-      if (this.#current(version)) this.#publish({ error: asError(error), status: 'static' });
-    }
-  }
-
-  #current(version: number): boolean {
-    return !this.#destroyed && version === this.#version;
-  }
-  #stop(): void {
-    this.#version++;
-    for (const unsubscribe of this.#unsubscribe.splice(0)) unsubscribe();
-  }
   #publish(update: Partial<PreviewState>): void {
-    const current = preview.peek();
+    if (this.#destroyed) return;
+    const current = this.state.peek()!;
     if (
-      current &&
       (Object.keys(update) as (keyof PreviewState)[]).every((key) => current[key] === update[key])
     )
       return;
-    preview.value = {
-      data: undefined,
-      error: undefined,
-      status: undefined,
-      revision: this.#sequence,
-      ...current,
-      ...update,
-    };
+    this.state.value = { ...current, ...update };
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

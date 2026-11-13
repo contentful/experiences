@@ -17,7 +17,7 @@ export function App({ environment, log }: { environment: PublicEnvironment; log:
   const { url } = intent;
   const binding = getPreviewBinding(environment, url.href);
   const previewKey = JSON.stringify(binding);
-  const livePreview = useMemo(() => createPreviewConfiguration(binding), [previewKey]);
+  const preview = useMemo(() => createPreviewConfiguration(binding), [previewKey]);
   const isPreview = Boolean(binding);
   const ids = useMemo(
     () =>
@@ -39,10 +39,10 @@ export function App({ environment, log }: { environment: PublicEnvironment; log:
             ? {
                 accessToken: environment.LIVE_PREVIEW.accessToken,
                 host: environment.LIVE_PREVIEW.host,
+                ...preview,
               }
             : undefined
         }
-        livePreview={livePreview}
         routeKey={url.pathname + url.search}
         initialPagePayload={initialPagePayload}
         onStatesReady={log.onStatesReady}

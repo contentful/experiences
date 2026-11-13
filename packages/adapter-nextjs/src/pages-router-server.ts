@@ -25,13 +25,13 @@ import {
   type NextjsServerRequestOverrides,
 } from './server-config.js';
 import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
-import { resolveNextjsLivePreview } from './live-preview.js';
+import { resolveNextjsPreview, resolveNextjsPreviewSession } from './preview.js';
 
 export type { NextjsRequestResult } from './request-result.js';
 export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 
 export interface NextjsPagesRouterServerExperiencesConfig extends NextjsServerExperiencesConfig {
   /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */
@@ -112,11 +112,14 @@ export function bindNextjsPagesRouterServerExperiences<
     cookie,
     browser: _browser,
     request: _policy,
-    livePreview,
+    preview,
     origin,
     ...nodeConfig
   } = options;
-  const sdk = configureNextjsServerExperiences(nodeConfig);
+  const sdk = configureNextjsServerExperiences({
+    ...nodeConfig,
+    preview: resolveNextjsPreview(preview, '/'),
+  });
 
   async function loadExperience(
     nativeContext: GetServerSidePropsContext,
@@ -132,16 +135,7 @@ export function bindNextjsPagesRouterServerExperiences<
     };
     const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
     nativeContext.res.setHeader('Cache-Control', 'private, no-store');
-    const preview =
-      typeof livePreview === 'function'
-        ? await livePreview(context)
-        : livePreview
-          ? resolveNextjsLivePreview(
-              livePreview,
-              context.requestUrl,
-              resolved.descriptor.experienceId
-            )
-          : undefined;
+    const session = resolveNextjsPreviewSession(preview, context.requestUrl);
     if (isNextjsSpeculativeRequest(incoming.headers))
       return serializeNextjsRequestResult(resolved.result, resolved.policy);
     const request = bindNextjsExperiencesRequest(sdk, {
@@ -153,8 +147,8 @@ export function bindNextjsPagesRouterServerExperiences<
           ? false
           : await resolveNextjsServerValue(consent.server, context)),
       locale: overrides.locale ?? options.locale ?? nativeContext.locale,
-      livePreview: preview,
-      isPreview: overrides.isPreview === true || preview !== undefined,
+      preview: session,
+      isPreview: overrides.isPreview === true || session !== undefined,
     });
     try {
       const result = await loadNextjsPrimaryExperience(request, resolved, context, options);

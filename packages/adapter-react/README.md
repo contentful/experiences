@@ -197,19 +197,40 @@ a multi-Experience or cross-fetch guarantee. Next's automatic request convenienc
 manages one primary Experience and consumes its complete result; it adds no
 multiple-fetch controller, result list or identity reconciliation.
 
-Configure optional preview once with Web's `livePreview` configuration and browser-safe
-`preview` credentials on the root. The same `<Experience experienceId={id} />`
-loads snapshots and receives resolved updates through `subscribeToPreview`;
-no independent preview client or renderer branch is needed. Session locale and
-parameters remain server-owned; explicit unsupported overrides reject. Status
-comes from `usePreviewState`, while view resolution/fetch errors come from the
-managed result. Snapshot data can coexist with an active preview error; committed
-notifications report the current plan/error without repeating unchanged results.
-Correcting unsupported preview overrides permits recovery through the existing
-request/update lifecycle. Initial plans and usable content survive preview failures. See
-[Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
-supported options and current transport limits. Switching preview policy requires
-owner replacement; `replaceLivePreview` changes a session within fixed preview mode.
+Configure browser-safe Preview credentials and the optional package’s `createLivePreviewClient` factory once on the root.
+The session defaults to the standard `preview_session_id` query parameter;
+`preview.sessionId` is an optional override. The managed Experience JSX stays unchanged:
+
+```tsx
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
+
+const { ExperiencesRoot, Experience } = createReactExperiences({ config });
+
+<ExperiencesRoot
+  {...browserConfig}
+  preview={{
+    accessToken: browserPreviewToken,
+    createClient: createLivePreviewClient,
+  }}
+>
+  <Experience experienceId={experienceId} />
+</ExperiencesRoot>;
+```
+
+The session selects one current Experience. Its raw payload's `sys.id` is the
+authority: matching views receive resolved updates through `subscribeToPreview`,
+while other IDs retain their ordinary by-ID source. Missing payload identity is
+never broadcast or inferred from child order. Repeated views of the current ID
+keep independent resolution options and presentation state.
+
+`usePreviewState()` observes the context's raw status, payload, revision and error;
+view resolution/fetch errors remain in each managed result. Session locale and
+parameters remain server-owned; unsupported explicit overrides reject. Initial
+plans and usable content survive Preview failures. Changing the selected session
+replaces the owned SDK context when the root renders again; child props and renderer APIs do not
+select sessions. An explicit `isPreview: true` still supports static Preview policy.
+See [Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
+supported options and transport limits.
 
 Optional `beforeInitialPage` retains a standalone callback path and never gates
 managed content. Matching incoming replay supersedes a pending callback, and its
@@ -327,10 +348,9 @@ The factory is pure and safe at module scope. The managed root constructs Web
 after browser commit and destroys it during cleanup, including Strict Mode
 effect replay. Conflicting owners surface the Web singleton error through context.
 Structural configuration is captured for the mounted owner; use a deliberate
-React `key` replacement to change credentials, endpoints, preview policy or the
-preview configuration. Locale props use `setLocale`; consent and other mutable commands use
-actions. Within fixed preview mode, explicit `sdk.replaceLivePreview()` remains
-available on an application-owned concrete Web instance.
+React `key` replacement to change credentials, endpoints or static preview policy.
+Changes to `preview.sessionId` replace the owned context automatically. Locale props use `setLocale`; consent and other mutable commands use
+actions. Direct Web callers create a new SDK context when changing sessions.
 
 `useExperiences()` returns the current `WebExperiencesRuntime` for SDK actions and
 tracking. It is distinct from singular `useExperience()`, the render context.
@@ -428,12 +448,11 @@ immediate historical value when counting new attempts.
 arguments, results, errors and runtime policy. Direct identify/page actions do not
 refresh content or coordinate navigation. Destruction remains an owner operation.
 
-Pass the optional `livePreview` options directly to the managed root's Web
-configuration. The SDK loads the implementation after commit, and `usePreviewState`
-observes the shared source. Pending initialization, source errors, static preview
-and session replacement do not change root readiness. Preview errors remain in
-`states.preview.error`; undefined means disabled or initializing. No initial
-fetch or per-view resolved update binding is introduced by a provider.
+The root's `preview` configuration owns credentials and optional session integration.
+`usePreviewState()` reads the single raw `states.preview` observable without resolving
+content. Pending initialization, static Preview and source errors do not change root
+readiness. A provider does not fetch snapshots or add per-view resolved bindings;
+managed presentations subscribe through their existing controller.
 
 ### Optional router integration
 
@@ -539,27 +558,22 @@ lifetime rules continue to apply.
 
 ### Live preview
 
-Use runtime-owned preview through the public Web SDK. A conditional preview configuration
-binds one Experience ID to a session, while ordinary requests for other IDs keep
-their Delivery source. The application owns the SDK lifetime when using it
-directly, constructs it after browser commit, and disposes its subscriptions
-before destruction:
+Use context-owned Preview through the public Web SDK. The existing `preview` object
+contains credentials plus optional session integration; renderer and fetch IDs stay
+ordinary:
 
 ```ts
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
+
 import { ContentfulExperiences } from '@contentful/experiences-react/web-sdk';
 
 const sdk = new ContentfulExperiences({
   ...browserConfig,
-  livePreview:
-    previewEnabled && sessionId
-      ? {
-          experienceId,
-          sessionId,
-          loadImplementation: () => import('@contentful/experiences-live-preview'),
-        }
-      : undefined,
+  preview: {
+    accessToken: browserPreviewToken,
+    createClient: createLivePreviewClient,
+  },
 });
-
 const plan = await sdk.fetchExperience({ experienceId }, { config: experienceConfig });
 presentPlan(plan);
 const subscription = sdk.subscribeToPreview(
@@ -570,17 +584,17 @@ const subscription = sdk.subscribeToPreview(
     showError(error);
   }
 );
-// On explicit replacement/teardown within a live document:
-// subscription.unsubscribe(); sdk.destroy();
+// Teardown: subscription.unsubscribe(); sdk.destroy();
 ```
 
-Render supplied initial plans before subscribing, without another startup
-snapshot fetch. The update binding does not fetch snapshots or own presentation
-state. `states.preview` carries status, payload, revision and errors; updates can
-contain both a usable plan and an error. Runtime policy suppresses preview
-visitor events. Preview setup, credential/endpoint mapping and transport limits
-are documented in [Web](../web/README.md#shared-source-and-optional-live-preview) and
-[Runtime](../runtime/README.md#optional-runtime-live-preview).
+The SDK uses a session snapshot only when its raw `sys.id` matches the requested ID.
+The shared connection publishes only to matching views; missing identity never
+broadcasts. Supplied initial plans need no startup snapshot fetch. Updates can carry
+both usable content and an error. `states.preview` exposes the single raw context;
+Preview mode suppresses visitor events. Changing sessions creates a new SDK context.
+See [Web](../web/README.md#shared-source-and-optional-live-preview) and
+[Runtime](../runtime/README.md#optional-runtime-live-preview) for endpoint mapping
+and transport limits.
 
 For application-supplied payloads, `useExperiencePlan` remains a general helper:
 

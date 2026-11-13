@@ -60,8 +60,9 @@ export function primaryExperience(
 export function previewConfiguration(binding: ReturnType<typeof previewBinding>) {
   return binding
     ? {
-        ...binding,
-        loadImplementation: () => import('@contentful/experiences-live-preview'),
+        sessionId: binding.sessionId,
+        sessionHost: binding.sessionHost,
+        resourceResolution: binding.resourceResolution,
       }
     : undefined;
 }

@@ -70,7 +70,7 @@ export function useBlockedEventStreamState(): States['blockedEventStream']['curr
   return useExperiencesState('blockedEventStream');
 }
 
-/** Undefined can mean disabled or initializing; preview does not gate readiness. */
+/** Observe the current Preview Session without resolving content. */
 export function usePreviewState(): States['preview']['current'] {
   return useExperiencesState('preview');
 }

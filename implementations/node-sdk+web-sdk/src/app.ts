@@ -80,10 +80,11 @@ for (const [path, route] of Object.entries(routes)) {
       config.livePreviewEnabled && environment.LIVE_PREVIEW
         ? getPreviewSessionBinding(environment.LIVE_PREVIEW, url.searchParams)
         : undefined;
-    const livePreview = binding
+    const preview = binding
       ? {
-          ...binding,
-          loadImplementation: () => import('@contentful/experiences-live-preview'),
+          sessionId: binding.sessionId,
+          sessionHost: binding.sessionHost,
+          resourceResolution: binding.resourceResolution,
         }
       : undefined;
     const request = sdk.forRequest({
@@ -91,7 +92,7 @@ for (const [path, route] of Object.entries(routes)) {
       ...(binding ? {} : readVisitor(req.cookies)),
       locale: environment.LOCALE,
       eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
-      livePreview,
+      preview,
       isPreview: Boolean(binding),
     });
     try {
@@ -117,7 +118,7 @@ for (const [path, route] of Object.entries(routes)) {
       for (const experienceId of new Set([...route.automatic, ...route.manual])) {
         const options = {
           experienceId,
-          ...(binding?.experienceId === experienceId ? {} : { extensions: { sourceMap: {} } }),
+          ...(request.isPreview ? {} : { extensions: { sourceMap: {} } }),
           ...(events ? { personalization: { events } } : {}),
         };
         if (events !== undefined) {
