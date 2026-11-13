@@ -4,6 +4,7 @@ import {
   ContentfulExperiences as Runtime,
   PROFILE_CACHE_KEY,
   ANONYMOUS_ID_COOKIE_LEGACY,
+  ANONYMOUS_ID_COOKIE,
   type PreviewClient,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
@@ -26,6 +27,7 @@ function runtime(config: Partial<Config> = {}) {
   return sdk;
 }
 function preview() {
+  window.history.replaceState(null, '', '?preview_session_id=session');
   let update = () => {};
   let data: ExperiencePayload | undefined;
   let error: Error | undefined;
@@ -54,7 +56,7 @@ function preview() {
     fetch,
     unsubscribe,
     config: {
-      preview: { accessToken: 'preview', sessionId: 'session', createClient, fetch },
+      preview: { accessToken: 'preview', createClient, fetch },
     },
     emit(
       payload: ExperiencePayload = { sys: { type: 'Experience', id: 'hero' }, nodes: [] },
@@ -74,21 +76,34 @@ afterEach(() => {
   window.history.replaceState(null, '', initialUrl);
 });
 
-it('establishes policy immediately and uses the session only for its actual Experience', async () => {
-  window.history.replaceState(null, '', '?preview_session_id=%20editor-session%20');
-  const f = preview(),
-    sdk = runtime({ preview: { ...f.config.preview, sessionId: undefined } });
-  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
-  expect(sdk.isPreview).toBe(true);
-  expect(sdk.states.preview.current?.sessionId).toBe('editor-session');
-  await expect(sdk.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
-  await sdk.fetchExperience({ experienceId: 'hero' }, resolve);
-  expect(ordinary).not.toHaveBeenCalled();
-  expect(sdk.states.profile.current).toBeUndefined();
-  await sdk.fetchExperience({ experienceId: 'other' }, resolve);
-  expect(ordinary).toHaveBeenCalledTimes(1);
-  expect(f.fetch).toHaveBeenCalled();
-});
+it.each([false, true])(
+  'establishes policy immediately and uses the session only for its actual Experience (live: %s)',
+  async (live) => {
+    const f = preview();
+    window.history.replaceState(null, '', '?preview_session_id=%20editor-session%20');
+    const sdk = runtime({
+      preview: { ...f.config.preview, createClient: live ? f.createClient : undefined },
+    });
+    const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+    expect(sdk.isPreview).toBe(true);
+    expect(sdk.states.preview.current?.sessionId).toBe('editor-session');
+    await expect(sdk.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
+    await sdk.fetchExperience({ experienceId: 'hero' }, resolve);
+    expect(ordinary).not.toHaveBeenCalled();
+    expect(sdk.states.profile.current).toBeUndefined();
+    sdk.consent({ persistence: true });
+    expect(sdk.states.persistenceConsent.current).toBe(true);
+    expect(sdk.states.profile.current).toBeUndefined();
+    expect(document.cookie).not.toContain(`${ANONYMOUS_ID_COOKIE}=`);
+    await sdk.fetchExperience({ experienceId: 'other' }, resolve);
+    expect(ordinary).toHaveBeenCalledTimes(1);
+    expect(f.fetch).toHaveBeenCalled();
+    if (!live) {
+      expect(f.createClient).not.toHaveBeenCalled();
+      expect(sdk.states.preview.current?.status).toBe('static');
+    }
+  }
+);
 
 it('isolates content fetches from failed live client creation', async () => {
   const f = preview();
@@ -106,6 +121,76 @@ it('isolates content fetches from failed live client creation', async () => {
   expect(createClient).toHaveBeenCalledOnce();
   expect(ordinary).toHaveBeenCalledTimes(1);
 });
+
+it('shares snapshot failure without published fallback, then retries with fresh snapshots', async () => {
+  const f = preview();
+  const hold = deferred<globalThis.Response>();
+  f.fetch.mockReturnValueOnce(hold.promise);
+  const sdk = runtime({ preview: { ...f.config.preview, maxRetries: 0 } });
+  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+  const pending = Promise.allSettled([
+    sdk.fetchExperience({ experienceId: 'hero' }, resolve),
+    sdk.fetchExperience({ experienceId: 'other' }, resolve),
+  ]);
+  await vi.waitFor(() => expect(f.fetch).toHaveBeenCalledOnce());
+  expect(ordinary).not.toHaveBeenCalled();
+  hold.resolve(new globalThis.Response('', { status: 500 }));
+  const results = await pending;
+  expect(results).toEqual([
+    { status: 'rejected', reason: expect.objectContaining({ name: 'PreviewSessionFetchError' }) },
+    { status: 'rejected', reason: expect.objectContaining({ name: 'PreviewSessionFetchError' }) },
+  ]);
+  expect(ordinary).not.toHaveBeenCalled();
+  expect(sdk.isPreview).toBe(true);
+  expect(sdk.states.profile.current).toBeUndefined();
+  await expect(sdk.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
+
+  await sdk.fetchExperience({ experienceId: 'hero' }, resolve);
+  await sdk.fetchExperience({ experienceId: 'other' }, resolve);
+  expect(f.fetch).toHaveBeenCalledTimes(3);
+  expect(ordinary).toHaveBeenCalledOnce();
+});
+
+it('uses Delivery for a successful snapshot without an ID but rejects matching overrides', async () => {
+  const f = preview();
+  f.fetch.mockResolvedValueOnce(
+    new globalThis.Response(
+      JSON.stringify({
+        sys: { type: 'Experience' },
+        nodes: [],
+      })
+    )
+  );
+  const sdk = runtime(f.config);
+  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  expect(ordinary).toHaveBeenCalledOnce();
+  await expect(
+    sdk.fetchExperience({ experienceId: 'hero', locale: 'de-DE' }, resolve)
+  ).rejects.toThrow(/locale is server-owned/);
+  expect(ordinary).toHaveBeenCalledOnce();
+});
+
+it.each(['reset', 'destroy'] as const)(
+  'discards a pending snapshot after %s',
+  async (operation) => {
+    const f = preview();
+    const hold = deferred<globalThis.Response>();
+    f.fetch.mockReturnValueOnce(hold.promise);
+    const sdk = runtime(f.config);
+    const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+    const pending = sdk.fetchExperience({ experienceId: 'other' }, resolve);
+    await vi.waitFor(() => expect(f.fetch).toHaveBeenCalledOnce());
+    sdk[operation]();
+    hold.resolve(
+      new globalThis.Response(
+        JSON.stringify({ sys: { type: 'Experience', id: 'hero' }, nodes: [] })
+      )
+    );
+    await expect(pending).rejects.toThrow(operation === 'destroy' ? /destroyed/ : /superseded/);
+    expect(ordinary).not.toHaveBeenCalled();
+  }
+);
 
 it('routes the one session stream only to listeners matching the payload Experience ID', async () => {
   const f = preview(),
@@ -215,7 +300,7 @@ it('coalesces equivalent fetches with independent plans and one profile adoption
   const [first, second] = await Promise.all([
     sdk.fetchExperience({ experienceId: 'hero' }, resolveOptions),
     sdk.fetchExperience(
-      { experienceId: 'hero', locale: 'en-US', preview: false, extensions: { sourceMap: {} } },
+      { experienceId: 'hero', locale: 'en-US', extensions: { sourceMap: {} } },
       resolveOptions
     ),
   ]);
@@ -310,8 +395,17 @@ it('honors explicit startup persistence denial while preview never adopts visito
   seedConsent({ events: true, persistence: true });
   window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profileFixture('visitor')));
   document.cookie = `${ANONYMOUS_ID_COOKIE_LEGACY}=visitor; Path=/`;
-  const sdk = runtime({ isPreview: true, defaults: { persistenceConsent: false } });
+  const f = preview();
+  const sdk = runtime({
+    ...f.config,
+    defaults: { persistenceConsent: false, profile: profileFixture('explicit') },
+  });
   expect(sdk.states.persistenceConsent.current).toBe(false);
   expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   expect(document.cookie).not.toContain(`${ANONYMOUS_ID_COOKIE_LEGACY}=`);
+  sdk.consent({ persistence: true });
+  expect(sdk.states.persistenceConsent.current).toBe(true);
+  expect(sdk.states.profile.current?.id).toBe('explicit');
+  expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+  expect(document.cookie).not.toContain(`${ANONYMOUS_ID_COOKIE}=`);
 });

@@ -113,8 +113,10 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
   diagnostic strings, retaining generic diagnostic counts.
   Build and host read app-local `LIVE_PREVIEW_ENABLED`; bundle installed preview
   artifacts only when enabled. Preview requires the flag to be exactly `true` and
-  a nonempty trimmed URL `preview_session_id`. Node and Web must agree and pass
-  explicit `isPreview: Boolean(binding)`, including false. Missing/empty sessions
+  a nonempty trimmed URL `preview_session_id`. Configure Preview capability only
+  when enabled. Node receives the URL session in request-local `preview`; Web
+  infers it from the browser URL, and both derive the same `isPreview` policy.
+  Missing/empty sessions
   or disabled flags use ordinary events, visitor cookies and handoff policy.
   `LIVE_PREVIEW_SESSION_ID` is local convenience storage only; never read it in
   runtime/build code or emit it in browser configuration.

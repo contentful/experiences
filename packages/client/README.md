@@ -14,7 +14,7 @@ The primary fetch + resolve entry point. Fetches an Experience payload and resol
 
 - **By destination path** (recommended for apps): `{ spaceId, destinationId, path }`. The URL path is the Destination path.
 - **By destination node id**: `{ spaceId, destinationId, nodeId }`.
-- **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id, and for preview.
+- **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id.
 
 The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
 
@@ -28,7 +28,7 @@ if ('redirect' in result) return redirect(result.redirect.path);
 // result is a PortableRenderPlan
 ```
 
-`preview: true` with a destination throws `DestinationPreviewNotSupportedError` (a bridge; use the by-id form for preview). It does not fire on the `{ client }` branch.
+Free fetch functions use ordinary Delivery. Preview Session fetching belongs to the Node/Web runtime owners or the low-level Preview Session helpers; there is no per-call preview toggle.
 
 By-ID options accept a first-class `personalization` object containing a profile id and events. Additional Experience Delivery options remain under `extensions`; use `extensions: { sourceMap: {} }` to request a content source map. Client merges both into the XDA request body and uses the POST operation whenever either capability is present.
 
@@ -88,11 +88,11 @@ the renderer's plan; see the [runtime parameters example](../../README.md#runtim
 
 Three positional args group by concern:
 
-| Arg                 | Type                                                                                                                                                                  | Purpose                                                                                |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                                    |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                                                                                                 | How to fetch — inline credentials (with optional preview toggle) or a pre-made client. |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch.      |
+| Arg                 | Type                                                                                                                                                                  | Purpose                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                               |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                          | How to fetch — inline Delivery credentials or a pre-made client.                  |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch. |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte
@@ -102,8 +102,6 @@ const plan = await fetchExperience(
   { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
   {
     accessToken: process.env.CDA_TOKEN!,
-    previewToken: process.env.PREVIEW_TOKEN!, // optional — only required when preview: true
-    preview: false, // flip to true for preview mode; picks previewToken + preview host
   },
   {
     config: experienceConfig,
@@ -139,46 +137,26 @@ absence of other upstream errors. Existing `diagnostics: Error[]`, exceptions,
 404 handling, and profile behavior are unchanged. See the [delivery diagnostic
 guidance](../../README.md#delivery-diagnostics) for safe presentation and disclosure.
 
-#### Preview mode
+#### Preview Sessions
 
-Configure both tokens up front and flip `preview: true` per call to hit the preview API.
-
-```ts
-const experience = await fetchExperience(
-  { spaceId, environmentId, experienceId },
-  {
-    accessToken: process.env.CDA_TOKEN!,
-    previewToken: process.env.PREVIEW_TOKEN!,
-    preview: previewMode, // boolean — flip per request
-  },
-  { config: experienceConfig }
-);
-```
-
-- `preview: false` (or unset) → uses `accessToken` against the delivery host.
-- `preview: true` → uses `previewToken` against the preview host. Throws `fetchExperience() called with preview: true but no previewToken was provided` if `previewToken` is missing.
-- `host` is only for custom base URLs (staging, proxy, per-region). When set, it wins over the `preview`-derived host — so `{ previewToken, preview: true, host: 'https://preview-staging…' }` uses the preview token against your custom URL.
-- With the `{ client }` option, `preview` is ignored (bring your own client, bring your own token/host choice).
+Configure optional `preview` capability on the Node/Web owner once. A nonempty,
+trimmed `preview_session_id` in the browser URL activates preview; server
+integrations read the incoming request URL and pass request-local
+`preview: { sessionId }` to Node's `forRequest()`. Without both configuration and
+an ID, the owner uses ordinary Delivery. See the [Runtime preview contract](../runtime/README.md#optional-runtime-live-preview).
+The separate low-level Preview Session helpers retain their `previewToken` API.
 
 ### `createClient(options)`
 
 Functional constructor over `ContentfulViewDeliveryClient` matching the SDK's option shape. Maps `accessToken → token` and `host → baseUrl`; passes everything else through unchanged. Prefer over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
 
-`createClient` is a one-time setup primitive — it builds a single client bound to a single token, space, and environment, and does not participate in the per-request `preview` toggle. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment. If you need runtime-dynamic swaps between delivery and preview, use `fetchExperience`'s inline-credentials path (`{ accessToken, previewToken, preview }`) instead of pre-building a client via `createClient` and passing `{ client }`.
+`createClient` is a one-time setup primitive — it builds a single client bound to a single token, space, and environment, for ordinary Delivery. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
 
 ```ts
-import { createClient, PREVIEW_HOST } from '@contentful/experiences-react';
+import { createClient } from '@contentful/experiences-react';
 
 // Delivery (default)
 const client = createClient({ accessToken: process.env.CDA_TOKEN!, spaceId, environmentId });
-
-// Preview — use PREVIEW_HOST + a CPA token
-const previewClient = createClient({
-  accessToken: process.env.PREVIEW_TOKEN!,
-  spaceId,
-  environmentId,
-  host: PREVIEW_HOST,
-});
 
 // Custom base URL (staging, proxy, per-region)
 const customClient = createClient({
@@ -202,7 +180,8 @@ PREVIEW_HOST; // 'https://preview.xdn.contentful.com'
 PREVIEW_WEBSOCKET_HOST; // 'wss://preview.xdn.contentful.com'
 ```
 
-`createClient` is the fixed-mode path — one client, one token, one host. If you need to flip between delivery and preview per request (e.g. an `isPreview` URL param), use `fetchExperience`'s inline-credentials form with `preview: boolean` instead of pre-building a client here. See ["Preview mode"](#preview-mode) above.
+`createClient` binds one token and host. Custom hosts and caller-supplied clients
+remain available; neither selects Preview Session policy or replaces its runtime owner.
 
 ### `fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?)`
 

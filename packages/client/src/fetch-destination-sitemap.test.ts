@@ -3,7 +3,7 @@ import {
   ContentfulViewDeliveryClient,
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
-import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
+import { ExperienceFetchError } from './errors.js';
 import { fetchDestinationSitemap } from './fetch-destination-sitemap.js';
 
 const { mockSitemap, mockSitemapPage } = vi.hoisted(() => {
@@ -117,38 +117,6 @@ describe('fetchDestinationSitemap', () => {
     await fetchDestinationSitemap(destinationOptions, { client });
 
     expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-    expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
-      limit: undefined,
-      pageNext: undefined,
-      pagePrev: undefined,
-    });
-  });
-
-  it('throws DestinationPreviewNotSupportedError when preview is true, before any network call', async () => {
-    const rejection: unknown = await fetchDestinationSitemap(destinationOptions, {
-      accessToken: 'delivery-token',
-      previewToken: 'preview-token',
-      preview: true,
-    }).catch((e) => e);
-
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
-    const error = rejection as DestinationPreviewNotSupportedError;
-    expect(error.spaceId).toBe('space-1');
-    expect(error.destinationId).toBe('dest-1');
-    expect(mockSitemap).not.toHaveBeenCalled();
-    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
-
-  it('does not guard preview when a pre-made client is provided', async () => {
-    const client = new ContentfulViewDeliveryClient({
-      token: 'preview-token',
-      spaceId: 'space-1',
-      environmentId: 'master',
-    });
-    vi.mocked(ContentfulViewDeliveryClient).mockClear();
-
-    await fetchDestinationSitemap(destinationOptions, { client, preview: true });
-
     expect(mockSitemap).toHaveBeenCalledWith('dest-1', {
       limit: undefined,
       pageNext: undefined,

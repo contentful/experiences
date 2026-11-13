@@ -95,7 +95,6 @@ export type FetchExperienceOptions = {
   parameters?: ExperienceParameters;
   personalization?: PersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
-  preview?: boolean;
 };
 
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
@@ -172,7 +171,7 @@ export type Config = {
   locale?: string;
   /** Configuration for the runtime-owned Content Delivery API client. */
   delivery: DeliveryClientOptions;
-  /** Optional configuration for the runtime-owned Content Preview API client. */
+  /** Optional Preview Session integration and its runtime-owned transport. */
   preview?: PreviewConfig;
   /** Overrides for the runtime-owned Personalization and Analytics event transport. */
   optimization?: OptimizationConfig;
@@ -209,7 +208,6 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     );
     if (config.preview !== undefined) {
       const {
-        sessionId: _sessionId,
         sessionHost: _sessionHost,
         resourceResolution: _resourceResolution,
         createClient: _createClient,
@@ -309,11 +307,6 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<ExperiencePayload> {
-    if (options.preview === true && this.#previewClient === undefined) {
-      throw new Error(
-        'fetchExperience() called with preview: true but this runtime has no preview client'
-      );
-    }
     requireResolverConfig(resolveOptions);
     const personalization = buildFetchPersonalization(options.personalization, this.eventBuilder);
     return fetchExperiencePayload(
@@ -327,9 +320,7 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
           personalization === undefined ? undefined : serializePersonalization(personalization),
         extensions: options.extensions,
       },
-      options.preview
-        ? (this.#previewClient as ContentfulViewDeliveryClient)
-        : this.#deliveryClient,
+      this.#deliveryClient,
       resolveOptions.debug ?? this.#resolveDefaults.debug
     );
   }

@@ -10,5 +10,7 @@ export const load: LayoutServerLoad = () => ({
     spaceId: env.SPACE_ID ?? '',
     environmentId: env.ENVIRONMENT_ID || 'master',
     accessToken: env.CDA_TOKEN ?? '',
+    // Intentionally browser-visible, as in the live session renderer.
+    previewToken: env.CPA_TOKEN,
   },
 });

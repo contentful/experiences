@@ -1,3 +1,4 @@
+import { resolvePreviewSession } from './preview.js';
 import {
   ANONYMOUS_ID_COOKIE,
   ContentfulExperiences,
@@ -11,10 +12,13 @@ import {
   createEventContext,
   type CreateEventContextOptions,
   type CookieReader,
+  NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from './request-context.js';
 
 export interface BindExperiencesRequestOptions
-  extends Omit<RequestContext, 'consent' | 'eventContext' | 'locale'>, CreateEventContextOptions {
+  extends
+    Omit<RequestContext, 'consent' | 'eventContext' | 'locale' | 'preview'>,
+    CreateEventContextOptions {
   readonly consent: ConsentInput;
   readonly cookies?: CookieReader;
   readonly anonymousIdCookieName?: string;
@@ -37,10 +41,11 @@ export function bindExperiencesRequest(
     anonymousIdCookieName,
     ...context
   } = options;
-  const isPreview =
-    options.isPreview === true ||
-    options.preview?.sessionId !== undefined ||
-    sdk.config.preview?.sessionId !== undefined;
+  const preview = resolvePreviewSession(
+    sdk.config.preview,
+    incoming?.url ?? headers?.get(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER) ?? '/'
+  );
+  const isPreview = preview !== undefined;
   const canReadIdentity =
     !isPreview &&
     options.profile === undefined &&
@@ -55,6 +60,7 @@ export function bindExperiencesRequest(
   const id = reader?.get(anonymousIdCookieName ?? ANONYMOUS_ID_COOKIE)?.value;
   return sdk.forRequest({
     ...context,
+    preview,
     profile: isPreview ? undefined : (options.profile ?? (id ? { id } : undefined)),
     eventContext: createEventContext(options),
   });

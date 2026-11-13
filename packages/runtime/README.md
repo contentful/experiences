@@ -19,7 +19,7 @@ contracts and the generated passthrough result are preserved. Core remains depen
 
 ## Shared base
 
-Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction and handoff preparation require no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID `preview: true` requires a configured Preview client; destination operations remain delivery-only.
+Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations, including Node's `fetchExperienceForHandoff`, require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction requires no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID fetches use Delivery; leaf owners use the configured Preview transport for active Preview Session snapshots. Destination operations remain delivery-only.
 
 The readonly `api` property exposes the full Personalization and Analytics service
 clients as `api.personalization` and `api.analytics`, with their shared `api.config`;
@@ -85,7 +85,8 @@ private handoffs without retaining global flag state.
 The single `preview` configuration contains Preview API transport credentials and
 optional session settings. Node request contexts supply `preview: { sessionId }`;
 Web infers the session from the standard `preview_session_id` browser query
-parameter; `preview.sessionId` optionally overrides it. Configure optional
+parameter. Session identity is request-local and is never configured on the shared SDK.
+Configure optional
 `createClient: createLivePreviewClient` alongside the Preview credentials when
 browser live updates are needed. It accepts the optional package's synchronous
 factory with structural type
@@ -102,8 +103,16 @@ its session explicitly.
 The frozen package exposes one current Experience payload per session and does
 not select by Experience ID. Runtime's owned Preview client therefore reads raw
 snapshots so Node/Web can check `payload.sys.id` before resolving them for a caller.
-Unrelated IDs retain their ordinary source. Web subscriptions use the same identity
-check; payloads without an ID are never broadcast to arbitrary Experiences.
+Only the current successfully acquired raw snapshot determines that match. A
+mismatched or missing ID uses ordinary Delivery. Snapshot acquisition failure rejects
+before identity is known, so it can affect all by-ID requests in the preview context;
+there is no automatic fallback to published content on failure. One Experience per
+page remains recommended. Node retains a successful request-local snapshot and permits
+retry after acquisition failure; Web shares only in-flight snapshot acquisition.
+Managed views retain existing usable content while pending or failed. Web subscriptions
+use the same identity check; payloads without an ID are never broadcast to arbitrary
+Experiences. Snapshot HTTP errors surface through the fetch or managed result;
+`states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
 the optional package as a Runtime dependency. Registries and resolve options stay per call.
@@ -139,17 +148,21 @@ There is no environment fallback, default Session ID or legacy parsing path.
 The helper reads no globals, performs no network work and does not load the
 optional preview package. Applications select deployment policy, supply
 the browser `createClient` factory and own session/mode lifetime. Consumers with known IDs
-can supply the session directly through `preview`. Web's thin wrapper uses the same
+can supply the session directly through Node's request `preview` option. Web's thin wrapper uses the same
 argument order, with optional query parameters defaulting to the current
 browser location only when invoked.
 
 ### Shared limitations
 
-- SDK-created clients support Preview tokens (including suppliers), HTTP `preview.host` → `preview.environment`
-  → Preview default, WebSocket `sessionHost`, and `resourceResolution` are mapped.
-  Tokenless auth and other transport options are unsupported; ordinary transports are unaffected.
+- Runtime-owned snapshot HTTP supports Preview tokens (including suppliers), a tokenless
+  trusted proxy with explicit `preview.host`, and the generated client's transport options.
+  Endpoint precedence is `preview.host` → `preview.environment` → Preview default.
+  The optional WebSocket factory still requires a resolved `preview.accessToken`;
+  `sessionHost` and `resourceResolution` are mapped to its options.
 - Session locale, parameters, and extensions are server-owned. Snapshot HTTP supplies
-  neither cancellation nor raw payloads; owners discard stale results and adopt plans.
+  no per-call cancellation. Runtime's `fetchPreviewSessionPayload` returns raw
+  `ExperiencePayload`; owners check `payload.sys.id` before resolution and discard stale results.
+  The optional package's standalone `fetchPreviewSession` returns resolved plans.
 - Reconnects reuse the client's token; token rotation requires client replacement.
   Protocol `error` frames are logged by the package but are not published through
   `getResult().error`, so SDK error state cannot report them.
@@ -164,14 +177,14 @@ browser location only when invoked.
 These costs follow from the current public package surface. The Preview team can
 decide whether reducing them warrants additional package or protocol support.
 
-| Package surface                                                                | Integration cost                                                                                                                                                                                               | Trade-off for consideration                                                                                             |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| String credentials/endpoints; no injected transport or client reconfiguration  | [Runtime](./src/live-preview.ts) evaluates SDK suppliers before calling a factory; [Web](../web/src/preview-session.ts) replaces the client for session/token changes.                                         | Supplier or transport support could reduce adaptation, with more authentication and lifecycle semantics in the package. |
-| Snapshots return plans; subscriptions and `initialPayload` use raw payloads    | [Web's binding](../web/src/contentful-experiences.ts) resolves streamed payloads separately. Snapshot results cannot directly seed the client's existing payload support.                                      | Optional raw snapshot access could align these paths while retaining convenient resolved snapshots.                     |
-| Snapshot helper has no `AbortSignal`                                           | [Node](../node/src/contentful-experiences.ts) and [Web](../web/src/contentful-experiences.ts) discard obsolete results; HTTP work continues.                                                                   | Cancellation support could stop wasted HTTP work; caller/resolver lifetime checks would still be necessary.             |
-| Separate result/status subscriptions; retained payload with no clear operation | [PreviewSession](../web/src/preview-session.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                            | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.            |
-| No shared snapshot/stream revision or initial-frame identity                   | Web uses a local payload sequence and cannot skip an equivalent first socket payload reliably.                                                                                                                 | Shared identity could avoid redundant initial work, but may require server/protocol changes as well as package changes. |
-| Unbundled ESM distribution                                                     | The [Web](../../implementations/web-sdk/scripts/build-assets.ts) and [hybrid](../../implementations/node-sdk+web-sdk/scripts/build-assets.ts) references prepare browser assets; CJS hosts use dynamic import. | Additional distribution formats could reduce consumer setup at the cost of more package build/release maintenance.      |
+| Package surface                                                                                     | Integration cost                                                                                                                                                                                                                    | Trade-off for consideration                                                                                                   |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| String credentials/endpoints; no injected transport or client reconfiguration                       | [Runtime](./src/live-preview.ts) evaluates SDK suppliers before calling a factory; [Web](../web/src/preview-session.ts) replaces the client for session/token changes.                                                              | Supplier or transport support could reduce adaptation, with more authentication and lifecycle semantics in the package.       |
+| Standalone `fetchPreviewSession` returns plans; subscriptions and `initialPayload` use raw payloads | [Runtime](./src/live-preview.ts) fetches raw snapshots through its owned HTTP client so [Node](../node/src/contentful-experiences.ts) and [Web](../web/src/contentful-experiences.ts) can match `payload.sys.id` before resolution. | Optional raw snapshot access in the Preview package could centralize this path while retaining convenient resolved snapshots. |
+| Snapshot helper has no `AbortSignal`                                                                | [Node](../node/src/contentful-experiences.ts) and [Web](../web/src/contentful-experiences.ts) discard obsolete results; HTTP work continues.                                                                                        | Cancellation support could stop wasted HTTP work; caller/resolver lifetime checks would still be necessary.                   |
+| Separate result/status subscriptions; retained payload with no clear operation                      | [PreviewSession](../web/src/preview-session.ts) combines state and remembers the last client payload so status notifications cannot undo SDK reset.                                                                                 | A combined result or clear operation could reduce this bookkeeping, with more package-owned state semantics.                  |
+| No shared snapshot/stream revision or initial-frame identity                                        | Web uses a local payload sequence and cannot skip an equivalent first socket payload reliably.                                                                                                                                      | Shared identity could avoid redundant initial work, but may require server/protocol changes as well as package changes.       |
+| Unbundled ESM distribution                                                                          | The [Web](../../implementations/web-sdk/scripts/build-assets.ts) and [hybrid](../../implementations/node-sdk+web-sdk/scripts/build-assets.ts) references prepare browser assets; CJS hosts use dynamic import.                      | Additional distribution formats could reduce consumer setup at the cost of more package build/release maintenance.            |
 
 Lazy opt-in, structural types, URL/Experience binding, event/profile suppression,
 in-flight sharing, SSR serialization, rendering and caller cleanup remain SDK/app
@@ -270,8 +283,8 @@ POST carrying events, through XDA or a direct event call. It remains provisional
 until commitment: profile-only XDA uses Personalization API GET internally and
 may return 404 for an uncommitted ID, even when the SDK-to-XDA request is POST.
 Local Node/Web adoption, hydration, storage and queue admission do not prove
-commitment. This contract is distinct from editor `isPreview`, CPA fetching and
-Preview Sessions; those policies remain unchanged.
+commitment. This contract is distinct from editor Preview Sessions; their policies
+remain unchanged.
 
 The active content flow is:
 

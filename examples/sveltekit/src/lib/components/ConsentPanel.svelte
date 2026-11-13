@@ -7,9 +7,11 @@
     environmentId: string;
     /** Reaches the browser, so use a read-only delivery token. */
     accessToken: string;
+    /** Explicitly browser-visible Preview API token. */
+    previewToken?: string;
   }
 
-  let { spaceId, environmentId, accessToken }: Props = $props();
+  let { spaceId, environmentId, accessToken, previewToken }: Props = $props();
 
   let runtime: ContentfulExperiences | undefined;
   let consent = $state<{ events?: boolean; persistence?: boolean }>({});
@@ -51,6 +53,7 @@
       spaceId,
       environmentId,
       delivery: { accessToken },
+      preview: previewToken?.trim() ? { accessToken: previewToken } : undefined,
     });
     runtime = instance;
     const refreshStored = () => {

@@ -124,7 +124,7 @@ describe('ContentfulExperiences', () => {
     expect(options.personalization.events).toEqual([{ type: 'identify', userId: 'visitor' }]);
   });
 
-  it('forwards per-fetch parameters to Delivery and Preview without retaining them', async () => {
+  it('forwards per-fetch parameters to Delivery without retaining them', async () => {
     mockFetchExperiencePayload.mockClear();
     const runtime = createRuntime({
       spaceId: 'space',
@@ -142,7 +142,6 @@ describe('ContentfulExperiences', () => {
       {
         experienceId: 'exp',
         parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } },
-        preview: true,
       },
       { config: { components: {} } }
     );
@@ -321,7 +320,7 @@ describe('ContentfulExperiences', () => {
     );
   });
 
-  it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
+  it('uses Delivery for ordinary by-ID and destination fetches with Preview configured', async () => {
     mockCreateDeliveryClient.mockClear();
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
@@ -342,28 +341,12 @@ describe('ContentfulExperiences', () => {
       { client: delivery },
       expect.anything()
     );
-    await runtime.fetchExperience(
-      { experienceId: 'exp', preview: true },
-      { config: { components: {} } }
-    );
+    await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
     expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(
       expect.objectContaining({ experienceId: 'exp' }),
-      preview,
+      delivery,
       undefined
     );
-    runtime.destroy();
-    const withoutPreview = createRuntime({
-      spaceId: 'space',
-      environmentId: 'env',
-      delivery: { accessToken: 'delivery' },
-      eventBuilder: { channel: 'server' },
-    });
-    expect(() =>
-      withoutPreview.fetchExperience(
-        { experienceId: 'exp', preview: true },
-        { config: { components: {} } }
-      )
-    ).toThrow('fetchExperience()');
   });
 
   it('preserves an explicit generated-client environment for preview clients', () => {

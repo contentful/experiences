@@ -35,7 +35,11 @@ vi.mock('react', async (importOriginal) => ({
   },
 }));
 vi.mock('./server-request.js', () => ({
-  configureServerExperiences: () => ({ spaceId: 'space', environmentId: 'master' }),
+  configureServerExperiences: (config: unknown) => ({
+    spaceId: 'space',
+    environmentId: 'master',
+    config,
+  }),
   bindExperiencesRequest: doubles.bind,
 }));
 
@@ -62,8 +66,11 @@ beforeEach(() => {
   doubles.cookies.mockResolvedValue({ get: () => undefined });
   doubles.fetch.mockResolvedValue(plan);
   doubles.transfer.mockResolvedValue({ plan, handoff });
-  doubles.bind.mockImplementation((_sdk, options) => ({
-    isPreview: options.isPreview,
+  doubles.bind.mockImplementation((sdk, options) => ({
+    isPreview: Boolean(
+      sdk.config.preview &&
+      new URL(options.request.url).searchParams.get('preview_session_id')?.trim()
+    ),
     fetchExperience: doubles.fetch,
     fetchExperienceForHandoff: doubles.transfer,
     destroy: doubles.destroy,
@@ -84,7 +91,6 @@ describe('App Router request family', () => {
       browser: { delivery: { accessToken: 'browser-token' } },
       preview: {
         accessToken: 'preview',
-        enabled: true,
         sessionHost: 'https://preview.example.com',
         resourceResolution: 'resolved',
         createClient,
@@ -92,17 +98,12 @@ describe('App Router request family', () => {
     });
     const root = await binding.request.ExperiencesRoot({});
     expect(root.props.result?.preview).toEqual({
-      enabled: true,
       sessionHost: 'https://preview.example.com',
       resourceResolution: 'resolved',
     });
     expect(createClient).not.toHaveBeenCalled();
-    expect(doubles.bind.mock.calls[0]![1].preview).toEqual({
-      sessionId: 'session',
-      sessionHost: 'https://preview.example.com',
-      resourceResolution: 'resolved',
-    });
-    expect(doubles.bind.mock.calls[0]![1].isPreview).toBe(true);
+    expect(doubles.bind.mock.calls[0]![1].request.url).toContain('preview_session_id=session');
+    expect(doubles.bind.mock.calls[0]![1]).not.toHaveProperty('isPreview');
     expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(config.request.experience, {
       config: config.config,
     });
@@ -115,14 +116,14 @@ describe('App Router request family', () => {
       throw new Error('request policy must not run in middleware');
     });
     const createClient = vi.fn();
-    for (const [enabled, search] of [
+    for (const [configured, search] of [
       [false, '?preview_session_id=session'],
       [true, ''],
       [true, '?preview_session_id=session'],
     ] as const) {
       const binding = bindAppRouterServerExperiences({
         ...config,
-        preview: { accessToken: 'preview', enabled, createClient },
+        preview: configured ? { accessToken: 'preview', createClient } : undefined,
         request: {
           experience,
           resolveOptions: unrelated,
@@ -131,9 +132,8 @@ describe('App Router request family', () => {
         },
       });
       await binding.requestHandler(new NextRequest('https://example.com/' + search));
-      expect(doubles.bind.mock.calls.at(-1)![1].preview).toEqual(
-        enabled && search ? expect.objectContaining({ sessionId: 'session' }) : undefined
-      );
+      expect(doubles.bind.mock.calls.at(-1)![1].request.url).toBe('https://example.com/' + search);
+      expect(doubles.bind.mock.calls.at(-1)![1]).not.toHaveProperty('preview');
       expect(experience).not.toHaveBeenCalled();
     }
     expect(unrelated).not.toHaveBeenCalled();

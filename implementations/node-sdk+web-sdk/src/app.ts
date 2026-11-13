@@ -94,7 +94,6 @@ for (const [path, route] of Object.entries(routes)) {
       preflight: true,
       eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
       preview,
-      isPreview: Boolean(binding),
     });
     try {
       const identifyRequested = !request.isPreview && req.query.userId === 'charles';

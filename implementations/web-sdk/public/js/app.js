@@ -11,7 +11,7 @@ const env = window.ENVIRONMENT;
 // consent, persistence and delivery. UMD and window.ENVIRONMENT are this app's
 // loading/configuration choices; the delivery token must be safe to expose publicly.
 let previewBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
-const previewImplementation = previewBinding ? await loadPreviewImplementation() : undefined;
+const previewImplementation = env.LIVE_PREVIEW ? await loadPreviewImplementation() : undefined;
 const sdk = new window.ContentfulExperiences({
   spaceId: env.SPACE_ID,
   environmentId: env.ENVIRONMENT_ID,
@@ -21,17 +21,11 @@ const sdk = new window.ContentfulExperiences({
     ? {
         accessToken: env.LIVE_PREVIEW.accessToken,
         host: env.LIVE_PREVIEW.host,
-        ...(previewBinding
-          ? {
-              sessionId: previewBinding.sessionId,
-              sessionHost: previewBinding.sessionHost,
-              resourceResolution: previewBinding.resourceResolution,
-              createClient: previewImplementation.createLivePreviewClient,
-            }
-          : {}),
+        sessionHost: env.LIVE_PREVIEW.sessionHost,
+        resourceResolution: env.LIVE_PREVIEW.resourceResolution,
+        createClient: previewImplementation.createLivePreviewClient,
       }
     : undefined,
-  isPreview: Boolean(previewBinding),
 });
 const experienceIds = env.EXPERIENCE_IDS;
 // Reference app: these routes and Experience selections form the demonstration.

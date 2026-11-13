@@ -137,7 +137,7 @@ describe('SourceController', () => {
     expect(controller.getSnapshot().data?.nodes[0]?.props.content.title).toBe('latest');
   });
 
-  it.each(['request', 'resolve', 'registry', 'sdk', 'revision'] as const)(
+  it.each(['request', 'resolve', 'registry', 'sdk', 'revision', 'locale'] as const)(
     'invalidates old results on %s replacement',
     async (kind) => {
       const source = sourceSdk();
@@ -147,6 +147,7 @@ describe('SourceController', () => {
       const fetchExperience = vi.fn().mockResolvedValue(plan('new'));
       const context = { revision: {}, fetchExperience };
       const first = options(source, {
+        effectiveLocale: kind === 'locale' ? 'en-US' : undefined,
         requestContext: kind === 'revision' ? context : undefined,
         resolve: kind === 'resolve' ? { config, metadata: { values: [1] } } : { config },
       });
@@ -158,6 +159,7 @@ describe('SourceController', () => {
       if (kind === 'registry') next.resolve = { config: { components: {} } };
       if (kind === 'sdk') next.sdk = sourceSdk().sdk;
       if (kind === 'revision') next.requestContext = { ...context, revision: {} };
+      if (kind === 'locale') next.effectiveLocale = 'de-DE';
       controller.updateOptions(next);
       await settle();
       const latest = controller.getSnapshot().data;
@@ -166,6 +168,12 @@ describe('SourceController', () => {
       expect(controller.getSnapshot().data).toBe(latest);
       expect(latest).toBeDefined();
       expect(source.bindings[0]?.unsubscribe).toHaveBeenCalled();
+      if (kind === 'locale') {
+        expect(source.fetchExperience.mock.calls.map(([request]) => request)).toEqual([
+          first.request,
+          first.request,
+        ]);
+      }
     }
   );
 

@@ -70,22 +70,18 @@ describe('Web interaction tracking on the server', () => {
 });
 
 describe('Session preview without browser globals', () => {
-  it('uses an explicit boolean before any event work', async () => {
+  it('keeps ordinary policy when no browser URL session is available', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const { ContentfulExperiences } = await import('./index.js');
     runtime = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'environment',
       delivery: { accessToken: 'delivery-token' },
-      isPreview: true,
+      preview: { accessToken: 'preview-token' },
       defaults: { consent: true },
     });
-    expect(runtime.isPreview).toBe(true);
-    await expect(runtime.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
-    await expect(
-      runtime.trackClick({ entityId: 'hero', entityKind: 'ExperienceFragment' })
-    ).resolves.toEqual({ accepted: false, reason: 'preview' });
-    await runtime.flush();
+    expect(runtime.isPreview).toBe(false);
+    expect(runtime.states.preview.current).toBeUndefined();
     runtime.destroy();
     expect(fetch).not.toHaveBeenCalled();
   });

@@ -1,4 +1,3 @@
-/* global URLSearchParams */
 import Link from 'next/link';
 
 import { flag, renderDestinationPage, type SearchParams } from '@/lib/destination-page';
@@ -30,7 +29,7 @@ export default async function HomePage({ searchParams }: PageProps) {
   const debug = flag(sp.debug);
 
   // Carry the toggles onto the destination links.
-  const flags = new URLSearchParams();
+  const flags = new globalThis.URLSearchParams();
   if (personalization) flags.set('personalization', 'true');
   if (debug) flags.set('debug', 'true');
   const withFlags = (href: string) => (flags.size ? `${href}?${flags}` : href);
@@ -43,7 +42,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           This app renders Contentful Experiences with <code>@contentful/experiences-react</code> in
           a Next.js App Router server component. Pages are served from a{' '}
           <strong>Destination</strong>: the URL path is the Destination path. One Experience can
-          also be fetched <strong>by id</strong>, which is the route for preview, live preview and
+          also be fetched <strong>by id</strong>, which is the route for Preview Sessions and
           runtime parameters. The home Experience for this page is rendered below.
         </p>
 
@@ -104,10 +103,6 @@ export default async function HomePage({ searchParams }: PageProps) {
           <li>
             <code style={code}>?personalization=true</code>, <code style={code}>?debug=true</code>,{' '}
             <code style={code}>?locale=de-DE</code>
-          </li>
-          <li>
-            <code style={code}>?preview=true</code>: read from the Preview API (needs{' '}
-            <code>CPA_TOKEN</code>)
           </li>
           <li>
             <code style={code}>?preview_session_id=&lt;id&gt;</code>: live preview. The Contentful

@@ -1,8 +1,8 @@
 'use client';
 
-import { ContentfulExperiences, type BlockedEvent } from '@contentful/experiences-web';
+import { type BlockedEvent } from '@contentful/experiences-web';
+import { useExperiences } from '@contentful/experiences-react/client';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 type Consent = { events?: boolean; persistence?: boolean };
 
@@ -44,25 +44,14 @@ function describe(value: boolean | undefined): string {
   return 'denied';
 }
 
-interface ConsentPanelProps {
-  spaceId: string;
-  environmentId: string;
-  /**
-   * The runtime needs a delivery token, but this panel never fetches an
-   * Experience. The server layout passes the example's existing `CDA_TOKEN`; it
-   * reaches the browser, so use a read-only delivery token.
-   */
-  accessToken: string;
-}
-
 /**
  * Demonstrates consent gating in the Web SDK. Event consent decides which events
  * are sent; persistence consent decides whether the profile is written to
  * LocalStorage. Both choices are stored in LocalStorage, so they survive a reload.
  */
-export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPanelProps) {
-  const isPreview = Boolean(useSearchParams().get('preview_session_id')?.trim());
-  const runtime = useRef<ContentfulExperiences | undefined>(undefined);
+export function ConsentPanel() {
+  const instance = useExperiences();
+  const runtime = useRef<typeof instance | undefined>(undefined);
   const [consent, setConsent] = useState<Consent>({});
   const [profileId, setProfileId] = useState<string | undefined>();
   const [stored, setStored] = useState<string>('(none)');
@@ -70,12 +59,6 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
   const [lastResult, setLastResult] = useState<string>('');
 
   useEffect(() => {
-    const instance = new ContentfulExperiences({
-      spaceId,
-      environmentId,
-      delivery: { accessToken },
-      isPreview,
-    });
     runtime.current = instance;
     const refreshStored = () =>
       setStored(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
@@ -101,11 +84,9 @@ export function ConsentPanel({ spaceId, environmentId, accessToken }: ConsentPan
     // The constructor discovers rendered attribution; preview intent gates every detector.
     return () => {
       subscriptions.forEach((subscription) => subscription.unsubscribe());
-      // Only one Web SDK may be live at a time; release it so a remount can construct another.
-      instance.destroy();
       runtime.current = undefined;
     };
-  }, [spaceId, environmentId, accessToken, isPreview]);
+  }, [instance]);
 
   async function fire(name: string, send: () => Promise<unknown>) {
     try {

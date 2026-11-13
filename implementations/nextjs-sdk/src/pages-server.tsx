@@ -144,12 +144,6 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       },
     },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    preview: {
-      ...nodeConfig.preview,
-      sessionHost: browser.livePreview?.sessionHost,
-      resourceResolution: browser.livePreview?.resourceResolution,
-      enabled: Boolean(browser.livePreview),
-    },
     cookie: { secure: url.protocol === 'https:' },
   }).request.loadExperience(context, { routeKey: createRouteKey(url) });
   const props: PagesReferenceProps = { environment: browser, serverOnly, analytics, experiences };

@@ -58,7 +58,7 @@ and [request contract](../packages/adapter-nextjs/README.md#router-bindings).
 Browser roots inherit scope/locale, not private credentials; supply
 explicit browser Delivery credentials or a trusted proxy, even for analytics-only
 use under the existing Runtime requirement. Advanced preview/callback setup belongs
-in client modules. Next bindings accept `preview: { enabled, createClient, ...transport }`
+in client modules. Next bindings accept deployment-gated `preview: { createClient, ...transport }`
 and own session inference, replacement and mode changes; do not add consumer
 preview-only wrappers/hooks/keys. Request results carry client-free preview configuration; roots derive sessions
 from existing route/descriptor data. Request history survives owned SDK replacement.
@@ -104,7 +104,7 @@ reference use cases or create maintained consumers/apps.
 
 ## Optional Preview Sessions
 
-Use conditional Node/Web `preview` session initialization. Node snapshots use the
+Use deployment-gated Node/Web `preview` capability configuration. Node snapshots use the
 configured Preview transport; Web supplies the optional package’s `createLivePreviewClient` factory. Branch on `isPreview` before visitor work; destroy Node request facades
 in `finally`. Web uses `fetchExperience()` then `subscribeToPreview()` for updates
 and `states.preview` for status; hybrid retains SSR plans/DOM without a startup
@@ -118,9 +118,11 @@ Every app retains `LIVE_PREVIEW_ENABLED` and `LIVE_PREVIEW_SESSION_ID` in local
 convenience value for copying into the URL, never a default or browser projection.
 Activate preview only when the flag is exactly `true` and the URL contains a
 nonempty trimmed `preview_session_id`. Missing/empty URL session or a falsy flag
-keeps ordinary event handling, even with a nonempty session parameter. Pass
-`isPreview: false` explicitly to browser owners in inactive cases, overriding
-automatic URL detection. Sidebar attempts remain subject to normal consent and
+keeps ordinary event handling, even with a nonempty session parameter. Omit `preview`
+configuration entirely for disabled deployments. Web and Next infer
+the URL session; bare Node supplies it in request-local `preview`. SDK-owned
+`isPreview` derives from configured capability and a nonempty session, with no
+application mode override. Sidebar attempts remain subject to normal consent and
 identity requirements; they must not be suppressed by an inactive preview URL.
 See each app README and [Runtime limits](../packages/runtime/README.md#shared-limitations).
 

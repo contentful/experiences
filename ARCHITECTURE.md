@@ -53,29 +53,30 @@ Two consequences of that boundary shape recur throughout the layout below:
 
 ## Package graph
 
-Ten libraries live under `packages/`. `core` and `design` have no package
+Eleven libraries live under `packages/`. `core` and `design` have no package
 dependencies. Client is the sole generated Delivery edge; Runtime imports
 Client and owns Optimization integration. Node and Web are sibling leaves over
-Runtime, Client, and Core. Live Preview is a separate public data source that
-the framework adapters also depend on. Every edge below is a `dependencies`
-entry in the corresponding `package.json`.
+Runtime, Client, and Core. Live Preview is a separate public data source; React
+and Next use an application-supplied factory from that optional package. Every
+edge below is a `dependencies` entry in the corresponding `package.json`.
 
-| Nx project        | Directory                  | npm name                               | Depends on                                                     | Public? |
-| ----------------- | -------------------------- | -------------------------------------- | -------------------------------------------------------------- | ------- |
-| `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | —                                                              | no      |
-| `design`          | `packages/design`          | `@contentful/experiences-design`       | —                                                              | no      |
-| `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, generated `@contentful/experience-delivery`            | no      |
-| `runtime`         | `packages/runtime`         | `@contentful/experiences-runtime`      | `core`, `client`, Optimization API client, `es-toolkit`, `zod` | no      |
-| `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`, `runtime`                                    | yes     |
-| `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`, `runtime`                                    | yes     |
-| `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                               | yes     |
-| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
-| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
-| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`, `runtime`, `live-preview`          | yes     |
+| Nx project        | Directory                  | npm name                               | Depends on                                                        | Public? |
+| ----------------- | -------------------------- | -------------------------------------- | ----------------------------------------------------------------- | ------- |
+| `core`            | `packages/core`            | `@contentful/experiences-sdk-core`     | —                                                                 | no      |
+| `design`          | `packages/design`          | `@contentful/experiences-design`       | —                                                                 | no      |
+| `client`          | `packages/client`          | `@contentful/experiences-client`       | `core`, generated `@contentful/experience-delivery`, `zod`        | no      |
+| `runtime`         | `packages/runtime`         | `@contentful/experiences-runtime`      | `core`, `client`, Optimization API client, `es-toolkit`, `zod`    | no      |
+| `node`            | `packages/node`            | `@contentful/experiences-node`         | `core`, `client`, `runtime`                                       | yes     |
+| `web`             | `packages/web`             | `@contentful/experiences-web`          | `core`, `client`, `runtime`, `@preact/signals-core`, `es-toolkit` | yes     |
+| `live-preview`    | `packages/live-preview`    | `@contentful/experiences-live-preview` | `core`, `client`                                                  | yes     |
+| `adapter-react`   | `packages/adapter-react`   | `@contentful/experiences-react`        | `core`, `design`, `client`, `runtime`, `web`                      | yes     |
+| `adapter-nextjs`  | `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | `adapter-react`, `node`                                           | yes     |
+| `adapter-svelte`  | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | `core`, `design`, `client`, `runtime`, `live-preview`             | yes     |
+| `adapter-angular` | `packages/adapter-angular` | `@contentful/experiences-angular`      | `core`, `design`, `client`, `runtime`, `live-preview`             | yes     |
 
-The graph is acyclic. Framework adapters are leaves and do not depend on one
-another. A future adapter adds a new leaf without changing the existing Core,
-Client, or Runtime ownership boundaries.
+The graph is acyclic. Next builds on the React adapter and Node SDK; React
+builds on Web. A future adapter can reuse an existing adapter or add a new
+rendering leaf without changing Core, Client, or Runtime ownership boundaries.
 
 **Directory name, Nx project name, and npm package name are three separate
 identifiers** (`packages/adapter-react` / `adapter-react` /
@@ -121,8 +122,9 @@ does not own delivery transport, event construction, or connection state.
 payload conversion, errors, and free fetch functions. It does not import
 Runtime. `runtime` depends on Client's public boundary and owns the complete
 `EventBuilder`, Optimization transport, event methods, handoff contracts, and
-the lower-layer shared `ContentfulExperiences` base. Runtime, not Client,
-declares the Optimization API client, `es-toolkit`, and `zod` dependencies.
+the lower-layer shared `ContentfulExperiences` base. Runtime declares the
+Optimization API client, `es-toolkit`, and `zod` dependencies; Client also
+declares `zod` for its own XDA validation.
 Runtime constructors accept `DeliveryClientOptions` configuration, then
 construct and retain their own Delivery, optional Preview, and Optimization
 clients; a caller cannot inject a pre-built delivery client. `accessToken` can
@@ -140,9 +142,10 @@ destination, and event operations. This keeps locale, resolve options, and
 volatile event profile/context from crossing concurrent requests. `web` is a
 sibling public leaf, not a subclass of Node. It owns mutable browser locale,
 browser context providers, and a LocalStorage-persisted profile, and inherits
-the shared runtime's trusted custom-endpoint and direct by-ID CPA preview
-capabilities. Web enforces one live Experiences Web SDK instance per JavaScript
-runtime; the shared Runtime and Node SDK have no singleton restriction.
+the shared runtime's trusted custom-endpoint and Preview Session capabilities.
+Configured Preview capability and a nonempty, trimmed URL `preview_session_id`
+select Web preview; Node receives the session through request-local `preview`.
+Web enforces one live Experiences Web SDK instance per JavaScript runtime; the shared Runtime and Node SDK have no singleton restriction.
 
 Both leaves expose `identify`, `page`, and `track` through the Personalization
 API and interaction methods through Analytics. Node's ordinary methods send
@@ -196,13 +199,16 @@ runtime host is an explicit proxy boundary: generated auth is disabled and the
 proxy owns upstream credentials. A runtime token is sent to its configured
 endpoint. On Web this is intentionally browser-visible only when token scope and
 CORS make that safe; otherwise use the proxy. Raw-client `baseUrl` configuration
-belongs only to the separate adapter/free-function paths. Direct CPA preview
-fetches are separate from the Preview Session HTTP/WebSocket transport that
-`live-preview` owns.
+belongs only to the separate adapter/free-function paths. Ordinary free fetches
+use Delivery and have no preview selector. Node/Web own session policy and use
+the configured Preview transport for HTTP snapshots; the optional `live-preview`
+package supplies the browser WebSocket factory and standalone session helpers.
 
-Framework-adapter barrels do not re-export Node's request facade. `live-preview`
-remains the public framework-neutral Preview Session layer. It owns its HTTP
-loading, WebSocket subscription, external-store state, and errors.
+The ordinary React, Svelte, and Angular barrels do not re-export Node's request
+facade; Next's `/server` entry exposes its request types for server integration.
+`live-preview` remains the public framework-neutral Preview Session layer. Its
+standalone API owns HTTP loading, WebSocket subscription, external-store state,
+and errors; runtime owners coordinate their own snapshot resolution and policy.
 
 ---
 
@@ -217,7 +223,7 @@ loading, WebSocket subscription, external-store state, and errors.
 | Node request state and volatile event context stay request-local | `packages/node/src/*`                                                                               | review and Node concurrency tests                                              |
 | Web browser state and persisted profile stay browser-owned       | `packages/web/src/*`                                                                                | review plus browser and SSR import tests                                       |
 | Frameworks are peers, never deps                                 | `packages/adapter-*/package.json`                                                                   | `publint`, in `adapter-angular`'s Nx `build` target                            |
-| Adapters do not surface Node's request facade                    | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
+| Ordinary rendering barrels do not surface Node's request facade  | `packages/adapter-*/src/index.ts`                                                                   | review                                                                         |
 | Project scope for tags                                           | `project.json#tags` (`scope:adapter`, `scope:runtime-neutral`, `scope:sdk`, `layer:*`, `runtime:*`) | declared only — no `@nx/enforce-module-boundaries` rule in `eslint.config.mjs` |
 
 The `tags` in each `project.json` are the seam for mechanical enforcement: the
@@ -262,7 +268,7 @@ for maintainers validating SDK behavior.
 `lint`, and adds `dependsOn: ["^build"]` to `build` and `dependsOn:
 ["^typecheck"]` to `typecheck` — that is what makes `nx run-many -t build`
 topological. Each package then declares its own target
-commands in `project.json`, because the three adapters do not share a build tool:
+commands in `project.json`; the adapters do not all share a build tool:
 
 | Package           | `build`                               | `test`                                                    |
 | ----------------- | ------------------------------------- | --------------------------------------------------------- |
@@ -271,9 +277,10 @@ commands in `project.json`, because the three adapters do not share a build tool
 | `client`          | `tsup && emit-dual-dts`               | `vitest run`                                              |
 | `runtime`         | `tsup && emit-dual-dts`               | `vitest run`                                              |
 | `node`            | `tsup`                                | `vitest run`                                              |
-| `web`             | `tsup && emit-dual-dts`               | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
+| `web`             | `rslib build && emit-dual-dts`        | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 | `live-preview`    | `tsup`                                | `vitest run`                                              |
 | `adapter-react`   | `tsup`                                | `vitest run`                                              |
+| `adapter-nextjs`  | `tsup`                                | `vitest run`                                              |
 | `adapter-svelte`  | `svelte-package -i src -o dist`       | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 | `adapter-angular` | `ngc -p tsconfig.lib.json && publint` | `vitest run` **and** `vitest run -c vitest.ssr.config.ts` |
 
@@ -329,18 +336,18 @@ tsconfig when a package is added or renamed.
 
 ## Published artifact shape
 
-Every package publishes from its **project root**, not from `dist`. The release
-job restores `packages/*/dist` from the CI build cache without rebuilding after
-the version bump, so publishing from a generated `dist/package.json` would ship
-a stale version. The comment at the top of
-`packages/adapter-angular/tsconfig.lib.json` records this as the reason that
-package uses `ngc` instead of `ng-packagr`.
+Every package publishes from its **project root**, not from `dist`, using its
+source `package.json` for version and export metadata. Release jobs restore
+`packages/*/dist` from the CI build cache, then `scripts/release.ts` writes the
+new versions, rebuilds without the Nx cache, and verifies embedded SDK versions
+before committing, tagging, or publishing. See
+[the release workflow and recovery steps](./CONTRIBUTING.md#releases).
 
 `core`, `client`, `runtime`, and `web` publish bundled ESM and CJS entries
 (`.js` and `.cjs`) with paired `.d.mts` and `.d.cts` declarations. Their build
-targets run `scripts/emit-dual-dts.ts` after tsup to generate the two declaration
-surfaces. Node and the framework adapters keep their existing ESM output; the
-React adapter remains unbundled so its per-file `'use client'` directives survive
+targets run `scripts/emit-dual-dts.ts` after tsup (Core, Client, Runtime) or
+Rslib (Web) to generate the two declaration surfaces. Node and the framework
+adapters keep their existing ESM output; the React adapter remains unbundled so its per-file `'use client'` directives survive
 for RSC. Check each package manifest and build target before generalizing these
 formats to other packages. The four dual-format package export maps select the
 appropriate JavaScript and declaration file for `import` and `require`.
@@ -356,15 +363,16 @@ every branch and calls the other workflows:
 main.yaml
 ├── build.yaml    always     npm ci → npm run build → cache packages/*/dist
 ├── check.yaml    needs build   restore cache → lint → format:check → test
-├── release.yaml     if ref == refs/heads/main    restore cache → nx release --yes
-└── prerelease.yaml  if ref == refs/heads/dev     restore cache → nx release --specifier prerelease --preid dev
+├── release.yaml     if ref == refs/heads/main    restore cache → tsx scripts/release.ts
+└── prerelease.yaml  if ref == refs/heads/dev     restore cache → tsx scripts/release.ts --specifier prerelease --preid dev --tag dev
 ```
 
 The build job hands `packages/*/dist` to every downstream job through one GitHub
 Actions cache key, `build-cache-${{ github.run_id }}`
 — scoped to a single run, so downstream retries reuse its completed build. Both release workflows set
-`fail-on-cache-miss: true`, so a missing cache fails the release rather than
-publishing something unbuilt.
+`fail-on-cache-miss: true`, so a missing cache fails the release before the
+version/rebuild/verification flow starts. Restored build output is not published
+without that fresh rebuild and verification.
 
 Both release workflows read their credentials from Vault
 (`hashicorp/vault-action`, pinned by SHA) and write an `~/.npmrc` that points the

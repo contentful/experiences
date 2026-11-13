@@ -263,7 +263,7 @@ describe('published declarations', () => {
       import { bindPagesRouterServerExperiences } from '${packageName}/pages-router/server';
       import { bindPagesRouterExperiences, PagesRouterRequestRoot, PagesRouterRequestAnalyticsRoot, type DefaultRequestRootProps } from '${packageName}/pages-router';
       import { createPublicPermutationCacheMiddleware } from '${packageName}/cache-middleware';
-      import { createExperiencesContextHandler, type PreviewResolver, type ExperiencesContextHandlerOptions } from '${packageName}/request-handler';
+      import { createExperiencesContextHandler, type ExperiencesContextHandlerOptions } from '${packageName}/request-handler';
       import {
         configureServerExperiences, bindExperiencesRequest,
         createEventContext, type CreateEventContextOptions,
@@ -324,22 +324,18 @@ describe('published declarations', () => {
       void [unsupportedBindOptions, unsupportedWithdrawalOptions];
       // @ts-expect-error Consent is required independently of request cookies.
       bindExperiencesRequest(sdk, { locale: 'en-US' });
-      declare const initializer: NonNullable<Parameters<typeof sdk.forRequest>[0]>['preview'];
-      const preview: PreviewResolver = async ({ request }) => request.url.includes('preview') ? initializer : undefined;
-      const handlerOptions: ExperiencesContextHandlerOptions = { sdk, consent: false, preview, isPreview: true, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
+      const handlerOptions: ExperiencesContextHandlerOptions = { sdk, consent: false, cookieOptions: { httpOnly: true }, deleteWhenProfileCannotPersist: false };
       const contextHandler = createExperiencesContextHandler(handlerOptions);
-      const explicitRequest = bindExperiencesRequest(sdk, { consent: false, preview: initializer });
-      // @ts-expect-error Handler preview resolves an initializer, not a preview-policy record.
-      const unsupportedPolicy: PreviewResolver = () => ({ isPreview: true });
-      // @ts-expect-error The handler does not accept an initializer directly as its resolver.
-      const unsupportedInitializer: PreviewResolver = initializer!;
+      const explicitRequest = bindExperiencesRequest(sdk, { consent: false, request: { url: 'https://example.com/?preview_session_id=session', headers: new Headers() } });
+      // @ts-expect-error Next derives session identity from the incoming request.
+      bindExperiencesRequest(sdk, { consent: false, preview: { sessionId: 'override' } });
       const unsupportedHandlerOptions: ExperiencesContextHandlerOptions = {
         sdk, consent: false,
-        // @ts-expect-error There is one application-owned preview resolver.
-        previewResolver: preview
+        // @ts-expect-error Next derives session identity without an application resolver.
+        preview: () => ({ sessionId: 'override' })
       };
       explicitRequest.destroy();
-      void [unsupportedPolicy, unsupportedInitializer, unsupportedHandlerOptions];
+      void unsupportedHandlerOptions;
       assertPublicRequestPolicy({ cache: { scope: 'static' }, context: { consent: false } });
       void [actualRequest, contextHandler, createRouteKey, serializePlan,
         serializeHandoff, createPrivateFetch];
@@ -380,8 +376,12 @@ describe('published declarations', () => {
       } });
       declare const createPreviewClient: import('@contentful/experiences-runtime').PreviewClientFactory;
       const previewConfig: import('${packageName}/app-router/client').PreviewConfig = {
-        enabled: true, createClient: createPreviewClient,
+        createClient: createPreviewClient,
       };
+      // @ts-expect-error Sessions are selected by the URL, never shared configuration.
+      const explicitSession: typeof previewConfig = { sessionId: 'session' };
+      // @ts-expect-error Preview activation is derived, with no deployment switch.
+      const disabledPreview: typeof previewConfig = { enabled: false };
       const appClient = bindAppRouterClientExperiences({ config, preview: previewConfig });
       const automaticApp = bindAppServer({
         spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
@@ -392,7 +392,22 @@ describe('published declarations', () => {
       // @ts-expect-error DOM handlers cannot cross the server-to-client boundary.
       automaticApp.request.Experience({ rootProps: { onClick: () => {} } });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+        // @ts-expect-error Factory-only browser configuration lacks server transport credentials.
         preview: previewConfig, request: { experience: { experienceId: 'home' } } });
+      const serverPreview: import('${packageName}/server').PreviewConfig = { accessToken: 'preview' };
+      const appPreview: import('${packageName}/app-router/server').PreviewConfig = { accessToken: () => 'preview' };
+      const pagesPreview: import('${packageName}/pages-router/server').PreviewConfig = { host: 'https://example.com/preview' };
+      // @ts-expect-error Server Preview configuration requires credentials or a proxy host.
+      const emptyServerPreview: typeof serverPreview = {};
+      // @ts-expect-error An explicitly undefined token still requires a proxy host.
+      const undefinedAppPreview: typeof appPreview = { accessToken: undefined };
+      // @ts-expect-error Server factories do not supply transport credentials.
+      const factoryPagesPreview: typeof pagesPreview = { createClient: createPreviewClient };
+      for (const preview of [serverPreview, appPreview, pagesPreview]) {
+        bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, preview });
+        bindPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, preview });
+      }
+      void [emptyServerPreview, undefinedAppPreview, factoryPagesPreview];
       // @ts-expect-error Content identity belongs to Experience, not the shared root.
       appClient.ExperiencesRoot({ experienceId: 'home' });
       // @ts-expect-error Analytics observes the SDK Preview target without a root content ID.
@@ -418,15 +433,17 @@ describe('published declarations', () => {
         consent: { clientDefaults: { consent: false, persistenceConsent: false } }
       });
       declare const result: RequestResult;
-      const explicitApp = <appClient.request.ExperiencesRoot result={result} isPreview>
+      const explicitApp = <appClient.request.ExperiencesRoot result={result}>
         <appClient.request.Experience />
         <appClient.Experience experienceId="footer" />
       </appClient.request.ExperiencesRoot>;
-      const explicitPages = <pagesClient.request.ExperiencesRoot result={result} isPreview>
+      const explicitPages = <pagesClient.request.ExperiencesRoot result={result}>
         <pagesClient.request.Experience />
         <pagesClient.Experience experienceId="footer" />
       </pagesClient.request.ExperiencesRoot>;
-      void [explicitApp, explicitPages];
+      // @ts-expect-error Readonly SDK mode is not a root configuration control.
+      const explicitMode = <appClient.request.ExperiencesRoot isPreview />;
+      void [explicitApp, explicitPages, explicitSession, disabledPreview, explicitMode];
       {
         const { ExperiencesRoot, Experience } = appClient.request;
         // @ts-expect-error Request roots infer content identity from their result.

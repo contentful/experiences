@@ -6,11 +6,16 @@ import type {
   OptimizationEventStreamEvent,
   FetchExperienceOptions,
   FetchResolveOptions,
+  PreviewSessionOptions,
 } from '@contentful/experiences-runtime';
 import { ContentfulExperiences, type Config } from './contentful-experiences.js';
 
 // Expose the actual Runtime payload boundary for a no-network spy.
 class TestRuntime extends ContentfulExperiences {
+  override fetchPreviewSessionPayload(session: PreviewSessionOptions): Promise<ExperiencePayload> {
+    return super.fetchPreviewSessionPayload(session);
+  }
+
   override fetchExperiencePayload(
     options: BuiltFetchExperienceOptions,
     resolveOptions: FetchResolveOptions
@@ -34,6 +39,7 @@ function setup(policy: Pick<Config, 'allowedEventTypes' | 'onEventBlocked'> = {}
     ...scope,
     locale: 'en-US',
     delivery: { accessToken: 'token' },
+    preview: { accessToken: 'preview-token' },
     ...policy,
   });
   runtimes.push(sdk);
@@ -344,20 +350,104 @@ describe('Node browser-handoff producer', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it('suppresses preview personalization and commitment while preserving request identity', async () => {
+  it.each([undefined, 'experience'])(
+    'isolates preview personalization and identity with snapshot ID %s',
+    async (experienceId) => {
+      const { sdk, options, fetch, commit } = setup();
+      vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue({
+        ...payload('preview-profile'),
+        sys: { type: 'Experience', id: experienceId },
+      });
+      const request = sdk.forRequest({
+        preview: { sessionId: 'session' },
+        consent: true,
+        profile: { id: 'preview-owner' },
+      });
+      const result = await request.fetchExperienceForHandoff(options, resolver, route);
+      expect(result.handoff).toEqual({ ...scope, cache: { scope: 'private-request' } });
+      expect(result.plan?.personalization?.profile.id).toBe(
+        experienceId ? 'preview-profile' : 'xda-profile'
+      );
+      expect(result.error).toBeUndefined();
+      expect(request.profile).toBeUndefined();
+      expect(request.canPersistProfile).toBe(false);
+      if (experienceId) expect(fetch).not.toHaveBeenCalled();
+      else expect(fetch.mock.calls[0]![0].personalization).toBeUndefined();
+      expect(commit).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['snapshot', 'delivery', 'resolution'] as const)(
+    'returns preview %s failures in an identity-free handoff',
+    async (source) => {
+      const { sdk, options, fetch, commit } = setup();
+      const failure = new TypeError(`${source} content failed`);
+      const snapshot = { ...payload(), sys: { type: 'Experience' as const, id: 'experience' } };
+      const read = vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue(snapshot);
+      const resolve = vi.spyOn(sdk, 'resolveExperience');
+      if (source === 'snapshot') read.mockRejectedValueOnce(failure);
+      if (source === 'delivery') {
+        snapshot.sys.id = 'other';
+        fetch.mockRejectedValueOnce(failure);
+      }
+      if (source === 'resolution') resolve.mockRejectedValueOnce(failure);
+      const request = sdk.forRequest({
+        preview: { sessionId: 'session' },
+        consent: true,
+        profile: { id: 'visitor' },
+      });
+      await expect(request.fetchExperienceForHandoff(options, resolver, route)).resolves.toEqual({
+        handoff: { ...scope, cache: { scope: 'private-request' } },
+        error: failure,
+      });
+      expect(request.isPreview).toBe(true);
+      expect(request.profile).toBeUndefined();
+      expect(request.canPersistProfile).toBe(false);
+      expect(commit).not.toHaveBeenCalled();
+      if (source !== 'delivery') expect(fetch).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps matching preview override validation outside handoff content errors', async () => {
     const { sdk, options, fetch, commit } = setup();
-    const request = sdk.forRequest({
-      isPreview: true,
-      consent: true,
-      profile: { id: 'preview-owner' },
+    vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue({
+      ...payload(),
+      sys: { type: 'Experience', id: 'experience' },
     });
-    const { handoff } = await request.fetchExperienceForHandoff(options, resolver, route);
-    expect(handoff.replay).toBeUndefined();
-    expect(handoff.profileId).toBeUndefined();
-    expect(request.profile?.id).toBe('preview-owner');
-    expect(fetch.mock.calls[0]![0].personalization).toBeUndefined();
+    const resolve = vi.spyOn(sdk, 'resolveExperience');
+    const request = sdk.forRequest({ preview: { sessionId: 'session' } });
+    await expect(
+      request.fetchExperienceForHandoff({ ...options, locale: 'de-DE' }, resolver, route)
+    ).rejects.toThrow(/locale is server-owned/);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();
   });
+
+  it.each(['snapshot', 'resolution'] as const)(
+    'rejects preview handoff disposal during %s instead of returning a content error',
+    async (source) => {
+      const { sdk, options, fetch, commit } = setup();
+      const snapshot = { ...payload(), sys: { type: 'Experience' as const, id: 'experience' } };
+      const read = vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue(snapshot);
+      const resolve = vi.spyOn(sdk, 'resolveExperience');
+      const hold = deferred<ExperiencePayload>();
+      if (source === 'snapshot') read.mockReturnValueOnce(hold.promise);
+      else
+        resolve.mockImplementationOnce(async () => {
+          await hold.promise;
+          throw new Error('late resolution failure');
+        });
+      const request = sdk.forRequest({ preview: { sessionId: 'session' } });
+      const pending = request.fetchExperienceForHandoff(options, resolver, route);
+      if (source === 'resolution') await vi.waitFor(() => expect(resolve).toHaveBeenCalled());
+      request.destroy();
+      hold.resolve(snapshot);
+      await expect(pending).rejects.toThrow(/destroyed/);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+    }
+  );
 
   it('returns a private aggregate without synthesizing event intent', async () => {
     const { request, fetch, commit } = setup();
@@ -447,10 +537,15 @@ describe('Node ordinary XDA fetch', () => {
     async (isPreview) => {
       const onEventBlocked = vi.fn();
       const { sdk, fetch, commit } = setup({ onEventBlocked });
+      vi.spyOn(sdk, 'fetchPreviewSessionPayload').mockResolvedValue(payload());
       const build = vi.spyOn(sdk.eventBuilder, 'buildTrack');
       const hook = vi.fn((event: OptimizationEventStreamEvent) => event);
       sdk.interceptors.event.add(hook);
-      const request = sdk.forRequest({ isPreview, consent: false, profile: { id: 'incoming' } });
+      const request = sdk.forRequest({
+        preview: isPreview ? { sessionId: 'session' } : undefined,
+        consent: false,
+        profile: { id: 'incoming' },
+      });
       await request.fetchExperience(
         {
           experienceId: 'experience',
@@ -467,7 +562,7 @@ describe('Node ordinary XDA fetch', () => {
       expect(build).not.toHaveBeenCalled();
       expect(hook).not.toHaveBeenCalled();
       expect(commit).not.toHaveBeenCalled();
-      expect(request.profile?.id).toBe(isPreview ? 'incoming' : 'xda-profile');
+      expect(request.profile?.id).toBe(isPreview ? undefined : 'xda-profile');
     }
   );
 

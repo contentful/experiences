@@ -69,18 +69,16 @@ async function loadExperience(req: express.Request): Promise<LoadResult> {
   const path = `/${pathname.replace(/^\/+|\/+$/g, '')}`;
   const slug = byId ? decodeURIComponent(byId[1]!) : path;
 
-  const preview = url.searchParams.get('preview');
   const debugParam = url.searchParams.get('debug');
   const debug = debugParam === 'true' || debugParam === '1';
-  const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
+  const sessionId = url.searchParams.get('preview_session_id')?.trim() || undefined;
   const locale = url.searchParams.get('locale') ?? 'en-US';
   const personalizationParam = url.searchParams.get('personalization');
   const personalizationEnabled = personalizationParam === 'true' || personalizationParam === '1';
   const environmentId = process.env['ENVIRONMENT_ID'] || 'master';
-  const previewToken = process.env['CPA_TOKEN'];
+  const previewToken = process.env['CPA_TOKEN']?.trim() || undefined;
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = byId !== null && sessionId !== undefined && previewToken !== undefined;
-  const previewMode = byId !== null && (preview === 'true' || preview === '1' || livePreview);
   // Opaque to the SDK; `card`'s resolveData hook reads both keys.
   const metadata = { slug, locale };
 
@@ -133,11 +131,7 @@ async function loadExperience(req: express.Request): Promise<LoadResult> {
               locale,
               personalization,
             },
-            {
-              accessToken,
-              previewToken,
-              preview: previewMode,
-            },
+            { accessToken },
             resolveOptions
           );
     } else {
@@ -148,9 +142,8 @@ async function loadExperience(req: express.Request): Promise<LoadResult> {
         );
       }
       // The URL path is the Destination path. A Destination resolves to either an
-      // Experience or a redirect the app must follow. Preview is not supported on
-      // Destinations, so no `previewToken` or `preview` flag is passed; use the
-      // /experiences/:id route for preview.
+      // Experience or a redirect the app must follow. Use the /experiences/:id
+      // route for Preview Sessions.
       const result = await fetchExperience(
         { spaceId, destinationId, path, personalization },
         { accessToken },
@@ -188,6 +181,8 @@ app.use(async (req, res, next) => {
       spaceId: process.env['SPACE_ID'] ?? '',
       environmentId: process.env['ENVIRONMENT_ID'] || 'master',
       accessToken: process.env['CDA_TOKEN'] ?? '',
+      // Intentionally browser-visible, as in the live session renderer.
+      previewToken: process.env['CPA_TOKEN'],
     };
     // `consent` rides along on every request; the experience data only on experience routes.
     const response = await angularApp.handle(req, { ...context, consent });

@@ -57,7 +57,7 @@ describe('Preview Session binding', () => {
     binding.sessionId = 'changed';
     expect(getPreviewSessionBinding(input, params)).toEqual({ ...defaults, sessionId: 'session' });
     expect(params.toString()).toBe(original);
-    expect(resolvePreviewSessionId(' explicit ', params)).toBe('explicit');
-    expect(resolvePreviewSessionId('', params)).toBeUndefined();
+    expect(resolvePreviewSessionId(params)).toBe('session');
+    expect(resolvePreviewSessionId()).toBeUndefined();
   });
 });

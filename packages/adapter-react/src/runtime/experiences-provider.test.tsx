@@ -1189,7 +1189,6 @@ describe('React runtime ownership and activation', () => {
     runtime.states.preview = source.state;
     const previewConfig: NonNullable<Config['preview']> = {
       accessToken: 'preview',
-      sessionId: 'session',
       createClient: vi.fn(),
     };
     let preview: States['preview']['current'];

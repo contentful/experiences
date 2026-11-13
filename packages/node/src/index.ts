@@ -12,7 +12,6 @@ export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-i
 export {
   ContentfulViewDelivery,
   DELIVERY_HOST,
-  DestinationPreviewNotSupportedError,
   ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,

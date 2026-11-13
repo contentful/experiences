@@ -3,7 +3,6 @@ import type {
   ContentfulExperiences,
   ConsentInput,
   MaybePromise,
-  PreviewSessionOptions,
 } from '@contentful/experiences-node';
 import { applyPrivateResponseCache } from './cache.js';
 import { persistAnonymousId, type PersistAnonymousIdOptions } from './cookies.js';
@@ -13,7 +12,6 @@ import {
   isSpeculativeRequest,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
   type CookieReader,
-  type RequestLike,
 } from './request-context.js';
 import { bindExperiencesRequest, type BindExperiencesRequestOptions } from './server-request.js';
 
@@ -29,10 +27,6 @@ export interface ExperiencesResolverContext {
   readonly cookies: CookieReader;
 }
 
-export type PreviewResolver = (context: {
-  readonly request: RequestLike;
-}) => MaybePromise<PreviewSessionOptions | undefined>;
-
 export interface ExperiencesContextHandlerOptions
   extends
     Omit<BindExperiencesRequestOptions, 'request' | 'headers' | 'cookies' | 'consent' | 'preview'>,
@@ -40,7 +34,6 @@ export interface ExperiencesContextHandlerOptions
   readonly sdk: ContentfulExperiences;
   readonly consent:
     ConsentInput | ((context: ExperiencesResolverContext) => MaybePromise<ConsentInput>);
-  readonly preview?: PreviewResolver;
 }
 
 export type ExperiencesRequestHandler = (
@@ -85,7 +78,6 @@ export function createExperiencesContextHandler(
         cookies,
         consent:
           typeof options.consent === 'function' ? await options.consent(context) : options.consent,
-        preview: await options.preview?.(context),
       });
     }
     try {

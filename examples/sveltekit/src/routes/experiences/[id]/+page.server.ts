@@ -12,9 +12,8 @@ import { buildPagePersonalization } from '$lib/server/personalization.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, url, request }) => {
-  const preview = url.searchParams.get('preview');
-  const sessionId = url.searchParams.get('preview_session_id') ?? undefined;
-  const previewToken = env.CPA_TOKEN;
+  const sessionId = url.searchParams.get('preview_session_id')?.trim() || undefined;
+  const previewToken = env.CPA_TOKEN?.trim() || undefined;
   const debug = url.searchParams.get('debug') === 'true' || url.searchParams.get('debug') === '1';
   const metadata = { slug: params.id };
   const personalizationParam = url.searchParams.get('personalization');
@@ -35,7 +34,6 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
   }
   const previewSessionOptions = { spaceId, environmentId, previewToken, sessionId };
   const livePreview = sessionId !== undefined && previewToken !== undefined;
-  const previewMode = preview === 'true' || preview === '1' || livePreview;
 
   // Only send a page event when `?personalization=true` is explicitly present.
   const personalization = personalizationEnabled
@@ -73,11 +71,7 @@ export const load: PageServerLoad = async ({ params, url, request }) => {
             locale,
             personalization,
           },
-          {
-            accessToken,
-            previewToken,
-            preview: previewMode,
-          },
+          { accessToken },
           resolveOptions
         );
 
