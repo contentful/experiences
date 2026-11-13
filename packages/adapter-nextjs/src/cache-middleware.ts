@@ -1,6 +1,6 @@
 import type { ExperiencesCacheMetadata, MaybePromise } from '@contentful/experiences-node';
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server.js';
-import { validateNextjsPublicPermutationCacheTags } from './cache-key.js';
+import { validatePublicPermutationCacheTags } from './cache-key.js';
 import { NEXTJS_EXPERIENCES_REQUEST_URL_HEADER, normalizedRequestUrl } from './request-context.js';
 import {
   isMiddlewareContinuation,
@@ -11,36 +11,36 @@ import {
 const REWRITE = 'x-middleware-rewrite';
 const DEFAULT_CACHE_KEY_SEARCH_PARAM = 'ctfl-exp-cache-key';
 
-export type NextjsPublicPermutationCacheMetadata = Extract<
+export type PublicPermutationCacheMetadata = Extract<
   ExperiencesCacheMetadata,
   { scope: 'public-permutation' }
 >;
 
-export interface NextjsPublicPermutationCacheRewriteContext {
-  readonly cache: NextjsPublicPermutationCacheMetadata;
+export interface PublicPermutationCacheRewriteContext {
+  readonly cache: PublicPermutationCacheMetadata;
   readonly encodedCacheKey: string;
   readonly pathname: string;
   readonly request: NextRequest;
 }
 
-export interface NextjsPublicPermutationCacheMiddlewareOptions {
+export interface PublicPermutationCacheMiddlewareOptions {
   /** The application approves all public XDA dimensions; never return visitor identity or replay. */
   readonly resolveCache: (
     request: NextRequest
-  ) => MaybePromise<NextjsPublicPermutationCacheMetadata | undefined>;
-  readonly rewrite?: (context: NextjsPublicPermutationCacheRewriteContext) => string | URL;
+  ) => MaybePromise<PublicPermutationCacheMetadata | undefined>;
+  readonly rewrite?: (context: PublicPermutationCacheRewriteContext) => string | URL;
   readonly cacheKeySearchParam?: string;
 }
 
-export type NextjsPublicPermutationCacheMiddleware = (
+export type PublicPermutationCacheMiddleware = (
   request: NextRequest,
   responseOrEvent?: NextResponse | NextFetchEvent
 ) => MaybePromise<NextResponse>;
 
 /** Edge-compatible routing only; no SDK construction, content fetching or event work. */
-export function createNextjsPublicPermutationCacheMiddleware(
-  options: NextjsPublicPermutationCacheMiddlewareOptions
-): NextjsPublicPermutationCacheMiddleware {
+export function createPublicPermutationCacheMiddleware(
+  options: PublicPermutationCacheMiddlewareOptions
+): PublicPermutationCacheMiddleware {
   return async (request, responseOrEvent) => {
     const existing =
       responseOrEvent instanceof globalThis.Response
@@ -63,7 +63,7 @@ export function createNextjsPublicPermutationCacheMiddleware(
         'Public permutation cache middleware requires public scope and a nonempty key.'
       );
     }
-    validateNextjsPublicPermutationCacheTags(cache.tags);
+    validatePublicPermutationCacheTags(cache.tags);
 
     let rewriteUrl: URL;
     if (options.rewrite) {

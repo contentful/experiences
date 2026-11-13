@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ContentfulExperiences as RuntimeExperiences,
   type FetchExperienceOptions,
-  type BuiltRuntimeFetchExperienceOptions,
+  type BuiltFetchExperienceOptions,
   type FetchResolveOptions,
   withEventConsent,
 } from '@contentful/experiences-runtime';
@@ -24,7 +24,7 @@ import { completeProfile } from './test-fixtures/profile.js';
 const active = new Set<NodeExperiences | WebExperiences>();
 const payloadRuntime = RuntimeExperiences.prototype as unknown as {
   fetchExperiencePayload(
-    options: BuiltRuntimeFetchExperienceOptions,
+    options: BuiltFetchExperienceOptions,
     resolve: FetchResolveOptions
   ): Promise<ExperiencePayload>;
 };

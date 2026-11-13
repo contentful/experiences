@@ -1,10 +1,7 @@
-export {
-  createExperiencesRootSdkBinding,
-  disposeExperiencesRootSdkBinding,
-} from './runtime/experiences-root-sdk-binding.js';
+export { createRootSdkBinding, disposeRootSdkBinding } from './runtime/root-sdk-binding.js';
 export type {
-  ExperiencesRootSdkBinding,
-  CreateInjectedExperiencesRootSdkBindingOptions,
-  CreateOwnedExperiencesRootSdkBindingOptions,
+  RootSdkBinding,
+  CreateInjectedRootSdkBindingOptions,
+  CreateOwnedRootSdkBindingOptions,
   OnStatesReady,
-} from './runtime/experiences-root-sdk-binding.js';
+} from './runtime/root-sdk-binding.js';

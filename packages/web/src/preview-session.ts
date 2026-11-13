@@ -1,7 +1,7 @@
 import {
-  createRuntimePreviewClient,
+  createPreviewClient,
   type Config,
-  type RuntimePreviewSessionOptions,
+  type PreviewSessionOptions,
 } from '@contentful/experiences-runtime';
 import { signal, type Signal } from '@preact/signals-core';
 import type { PreviewState } from './states.js';
@@ -20,7 +20,7 @@ export function disposePreview(disposers: Iterable<() => void>): void {
 }
 
 /** One Preview connection for the SDK's editor session context. */
-export class WebPreview {
+export class PreviewSession {
   readonly state;
   #started = false;
   #destroyed = false;
@@ -29,7 +29,7 @@ export class WebPreview {
 
   constructor(
     private readonly config: Config,
-    private readonly options: RuntimePreviewSessionOptions,
+    private readonly options: PreviewSessionOptions,
     state: Signal<PreviewState | undefined> = signal()
   ) {
     this.state = state;
@@ -55,7 +55,7 @@ export class WebPreview {
   }
 
   async #connect(): Promise<void> {
-    const client = await createRuntimePreviewClient(this.options, this.config);
+    const client = await createPreviewClient(this.options, this.config);
     if (this.#destroyed) return;
     if (!client) {
       this.#publish({ status: 'static' });

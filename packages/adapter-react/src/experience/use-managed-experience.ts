@@ -3,15 +3,12 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-web';
-import { ExperiencesContext } from '../runtime/experiences-context.js';
-import { useExperienceRequestContext } from '../runtime/experience-request-context.js';
+import { RuntimeContext } from '../runtime/context.js';
+import { useRequestContext } from '../runtime/request-context.js';
 import { useObservableState } from '../runtime/use-experiences-state.js';
 import type { Config } from '../registry/types.js';
 import type { SuppliedExperienceProps } from './experience.js';
-import {
-  ExperienceSourceController,
-  type ManagedExperienceSnapshot,
-} from './experience-source-controller.js';
+import { SourceController, type ManagedExperienceSnapshot } from './source-controller.js';
 
 export interface ExperienceNotifications {
   /** Current usable presentation, after React commits it. */
@@ -65,17 +62,17 @@ export function useManagedExperience(options: ManagedExperienceOptions): Managed
 export function useExperienceSource(
   options: ManagedExperienceOptions | SuppliedExperienceProps
 ): ManagedExperienceResult {
-  const context = useContext(ExperiencesContext);
+  const context = useContext(RuntimeContext);
   const managed = options.experienceId !== undefined;
   if (managed && !context)
     throw new Error('Experiences hooks require an ExperiencesRoot or ExperiencesProvider.');
-  const requestContext = useExperienceRequestContext();
+  const requestContext = useRequestContext();
   const locale = useObservableState(managed ? context?.sdk.states.locale : undefined);
   const suppliedData = managed ? undefined : (options.experience ?? undefined);
   const suppliedStatus = suppliedData ? 'success' : 'idle';
   const [controller] = useState(
     () =>
-      new ExperienceSourceController(
+      new SourceController(
         managed ? options.initialPlan : suppliedData,
         managed ? options.initialError : undefined
       )

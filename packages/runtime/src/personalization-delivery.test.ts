@@ -6,12 +6,12 @@ import type {
 import { logger } from '@contentful/optimization-api-client/logger';
 
 import EventBuilder from './event-builder.js';
-import type { PersonalizationRequestState } from './experience-request-state.js';
+import type { PersonalizationRequestState } from './personalization-request-state.js';
 import type { EventInterceptors } from './event-interceptors.js';
 import { PersonalizationDelivery } from './personalization-delivery.js';
 import { resolveQueueFlushPolicy } from './lib/queue/index.js';
 import { withEventConsent } from './prepared-events.js';
-import type { EventApi } from './runtime-event-methods.js';
+import type { EventApi } from './event-methods.js';
 
 const builder = new EventBuilder({
   channel: 'web',

@@ -19,7 +19,7 @@ class TestContentfulExperiences extends ContentfulExperiences {
       Parameters<ContentfulExperiences['hydrateAndTrackCurrentPage']>[0]['replay']
     >['events']
   ) {
-    return this.sendPreparedExperienceEvents(events, undefined, undefined);
+    return this.sendPreparedPersonalizationEvents(events, undefined, undefined);
   }
 }
 

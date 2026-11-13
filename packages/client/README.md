@@ -58,7 +58,7 @@ The generated dev.13 request supports optional `personalization.preflight`.
 Client validates and forwards the boolean without selecting a default. Earlier
 service checks observed noncommitting evaluation; backend defaults and override
 behavior have not been reverified for this version. Treat newly returned IDs as
-provisional until finalization is verified. Profile-only XDA uses XPAPI GET
+provisional until finalization is verified. Profile-only XDA uses Personalization API GET
 internally even when SDK-to-XDA uses POST.
 See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
 for finalization requirements and the subsequent GET limitation. Node's

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockApiClient,
-  mockCreateRuntimeDeliveryClient,
+  mockCreateDeliveryClient,
   mockFetchExperience,
   mockFetchExperiencePayload,
   mockResolveExperience,
@@ -15,15 +15,15 @@ const {
     mockApiClient: vi.fn(function MockApiClient() {
       return mockOptimizationClient;
     }),
-    mockCreateRuntimeDeliveryClient: vi.fn((source) => ({ source })),
+    mockCreateDeliveryClient: vi.fn((source) => ({ source })),
     mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [] }),
     mockFetchExperiencePayload: vi.fn().mockResolvedValue({ nodes: [] }),
     mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
   };
 });
 
-vi.mock('./create-runtime-delivery-client.js', () => ({
-  createRuntimeDeliveryClient: mockCreateRuntimeDeliveryClient,
+vi.mock('./create-delivery-client.js', () => ({
+  createDeliveryClient: mockCreateDeliveryClient,
 }));
 vi.mock('@contentful/experiences-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@contentful/experiences-client')>()),
@@ -181,7 +181,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('constructs each configured client once and applies resolve defaults without mutating locale', async () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     const runtime = createRuntime({
       spaceId: 'space',
@@ -192,15 +192,15 @@ describe('ContentfulExperiences', () => {
       resolveDefaults: { metadata: { site: 'main', shared: 'default' }, debug: true },
       eventBuilder: { channel: 'server' },
     });
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledTimes(2);
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenCalledTimes(2);
+    expect(mockCreateDeliveryClient).toHaveBeenNthCalledWith(
       1,
       { accessToken: 'delivery' },
       { spaceId: 'space', environmentId: 'env' },
       undefined,
       userAgentHeaders
     );
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenNthCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenNthCalledWith(
       2,
       { accessToken: 'preview' },
       { spaceId: 'space', environmentId: 'env' },
@@ -289,7 +289,7 @@ describe('ContentfulExperiences', () => {
 
   it('forwards personalization on destination node and path fetches', async () => {
     const delivery = { id: 'delivery' } as never;
-    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery);
+    mockCreateDeliveryClient.mockReturnValueOnce(delivery);
     const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
@@ -320,10 +320,10 @@ describe('ContentfulExperiences', () => {
   });
 
   it('uses delivery for destinations, preview for preview calls, and reports missing preview clients', async () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
     const delivery = { id: 'delivery' } as never;
     const preview = { id: 'preview' } as never;
-    mockCreateRuntimeDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
+    mockCreateDeliveryClient.mockReturnValueOnce(delivery).mockReturnValueOnce(preview);
     const runtime = createRuntime({
       spaceId: 'space',
       environmentId: 'env',
@@ -365,7 +365,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('preserves an explicit generated-client environment for preview clients', () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     createRuntime({
       spaceId: 'space',
@@ -378,7 +378,7 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
 
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenCalledWith(
       {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
@@ -390,7 +390,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('gives an explicit host precedence over generated-client environment', () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     createRuntime({
       spaceId: 'space',
@@ -404,7 +404,7 @@ describe('ContentfulExperiences', () => {
       eventBuilder: { channel: 'server' },
     });
 
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenCalledWith(
       {
         accessToken: 'preview',
         environment: 'https://preview-environment.example',
@@ -417,7 +417,7 @@ describe('ContentfulExperiences', () => {
   });
 
   it('reports the leaf SDK and application in the user-agent header', () => {
-    mockCreateRuntimeDeliveryClient.mockClear();
+    mockCreateDeliveryClient.mockClear();
 
     createRuntime({
       spaceId: 'space',
@@ -430,7 +430,7 @@ describe('ContentfulExperiences', () => {
       },
     });
 
-    expect(mockCreateRuntimeDeliveryClient).toHaveBeenCalledWith(
+    expect(mockCreateDeliveryClient).toHaveBeenCalledWith(
       expect.anything(),
       { spaceId: 'space', environmentId: 'env' },
       undefined,

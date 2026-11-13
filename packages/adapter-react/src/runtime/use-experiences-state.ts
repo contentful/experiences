@@ -2,7 +2,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import type { States, Observable } from '@contentful/experiences-web';
-import { useExperiences } from './experiences-context.js';
+import { useExperiences } from './context.js';
 
 export function useObservableState<T>(observable: Observable<T> | undefined): T | undefined {
   // Keep each store's cache separate: an abandoned replacement render must not

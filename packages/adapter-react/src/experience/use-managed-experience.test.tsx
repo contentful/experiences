@@ -4,12 +4,9 @@ import { act, StrictMode, Suspense, useLayoutEffect, type ReactNode } from 'reac
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWebSnapshotRuntime, type PortableRenderPlan } from '@contentful/experiences-web';
-import { ExperiencesContext } from '../runtime/experiences-context.js';
-import {
-  ExperienceRequestContext,
-  type ExperienceRequestContextValue,
-} from '../runtime/experience-request-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { RuntimeContext } from '../runtime/context.js';
+import { RequestContext, type RequestContextValue } from '../runtime/request-context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import {
   useManagedExperience,
   type ManagedExperienceOptions,
@@ -29,10 +26,10 @@ function Probe({ options }: { options: ManagedExperienceOptions }) {
 }
 
 describe('useManagedExperience', () => {
-  let root: ReactTestRoot;
+  let root: DomTestRoot;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    root = createReactTestRoot();
+    root = createDomTestRoot();
   });
   afterEach(() => {
     act(() => root.cleanup());
@@ -42,15 +39,15 @@ describe('useManagedExperience', () => {
   const content = (
     source: ReturnType<typeof sourceSdk>,
     options: ManagedExperienceOptions,
-    context?: ExperienceRequestContextValue
+    context?: RequestContextValue
   ): ReactNode => (
-    <ExperiencesContext.Provider
+    <RuntimeContext.Provider
       value={{ sdk: source.sdk, error: undefined, isLive: true, isContentReady: false }}
     >
-      <ExperienceRequestContext.Provider value={context}>
+      <RequestContext.Provider value={context}>
         <Probe options={options} />
-      </ExperienceRequestContext.Provider>
-    </ExperiencesContext.Provider>
+      </RequestContext.Provider>
+    </RuntimeContext.Provider>
   );
 
   it('starts fetch only after the parent layout guard is installed, without a content-readiness gate', async () => {
@@ -103,13 +100,13 @@ describe('useManagedExperience', () => {
     const fetchExperience = vi.fn().mockResolvedValue(plan('unwanted startup refetch'));
     await act(async () =>
       root.render(
-        <ExperiencesContext.Provider
+        <RuntimeContext.Provider
           value={{ sdk: snapshot, error: undefined, isLive: false, isContentReady: false }}
         >
-          <ExperienceRequestContext.Provider value={{ revision: {}, fetchExperience, reset() {} }}>
+          <RequestContext.Provider value={{ revision: {}, fetchExperience, reset() {} }}>
             <Probe options={options} />
-          </ExperienceRequestContext.Provider>
-        </ExperiencesContext.Provider>
+          </RequestContext.Provider>
+        </RuntimeContext.Provider>
       )
     );
     await act(async () => result.refresh());
@@ -173,7 +170,7 @@ describe('useManagedExperience', () => {
     expect(source.preview.listeners.size).toBe(0);
     source.preview.emit(previewState());
     expect(source.fetchExperience).not.toHaveBeenCalled();
-    root = createReactTestRoot();
+    root = createDomTestRoot();
     const error = new Error('initializer failed');
     source.preview.emit(previewState({ error }));
     source.fetchExperience.mockRejectedValue(error);

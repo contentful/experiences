@@ -2,14 +2,14 @@ import { EventBuilder } from '@contentful/experiences-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  NextjsRequestPresentation,
-  NextjsRequestResultBoundary,
-  useNextjsRequestOptions,
+  RequestPresentation,
+  RequestResultBoundary,
+  useRequestOptions,
 } from './router-lifetime.js';
-import type { BoundNextjsExperiencesRootProps, NextjsRequestResult } from './request-result.js';
+import type { BoundRootProps, RequestResult } from './request-result.js';
 
 const initialPagePayload = { properties: { path: '/server' } };
-const result: NextjsRequestResult = {
+const result: RequestResult = {
   requestId: 'initial',
   routeKey: '/page',
   experience: { experienceId: 'primary' },
@@ -33,29 +33,29 @@ const result: NextjsRequestResult = {
 describe('Next request presentation inputs', () => {
   it('inherits the whole result, gives explicit results precedence and requires a root otherwise', () => {
     const explicit = { ...result, requestId: 'explicit' };
-    const observed: (NextjsRequestResult | undefined)[] = [];
+    const observed: (RequestResult | undefined)[] = [];
     function Probe() {
-      observed.push(useNextjsRequestOptions().result, useNextjsRequestOptions(explicit).result);
+      observed.push(useRequestOptions().result, useRequestOptions(explicit).result);
       return null;
     }
     renderToStaticMarkup(
-      <NextjsRequestResultBoundary result={result}>
-        <NextjsRequestPresentation
+      <RequestResultBoundary result={result}>
+        <RequestPresentation
           result={result}
           routeKey="/page"
           Root={({ children }) => <>{children}</>}
           buildRoutePayload={() => undefined}
         >
           <Probe />
-        </NextjsRequestPresentation>
-      </NextjsRequestResultBoundary>
+        </RequestPresentation>
+      </RequestResultBoundary>
     );
     expect(observed[0]).toBe(result);
     expect(observed[1]).toBe(explicit);
     renderToStaticMarkup(
-      <NextjsRequestResultBoundary>
+      <RequestResultBoundary>
         <Probe />
-      </NextjsRequestResultBoundary>
+      </RequestResultBoundary>
     );
     expect(observed.slice(-2)).toEqual([undefined, explicit]);
     expect(() => renderToStaticMarkup(<Probe />)).toThrow(
@@ -75,7 +75,7 @@ describe('Next request presentation inputs', () => {
     'departed',
     'web-route',
   ] as const)('presents %s page intent and preserves the supplied handoff', (source) => {
-    const Root = vi.fn((_props: BoundNextjsExperiencesRootProps) => <></>);
+    const Root = vi.fn((_props: BoundRootProps) => <></>);
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));
     const override = vi.fn(() => ({ properties: { path: '/override' } }));
     const buildRoutePayload = vi.fn(() => ({ properties: { path: '/route' } }));
@@ -92,7 +92,7 @@ describe('Next request presentation inputs', () => {
         }
       : result.experience;
     renderToStaticMarkup(
-      <NextjsRequestPresentation
+      <RequestPresentation
         Root={Root}
         result={
           source === 'web-route'
@@ -132,9 +132,9 @@ describe('Next request presentation inputs', () => {
     expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
   it('retains explicit root handoff and static page arguments without a request result', () => {
-    const Root = vi.fn((_props: BoundNextjsExperiencesRootProps) => <></>);
+    const Root = vi.fn((_props: BoundRootProps) => <></>);
     renderToStaticMarkup(
-      <NextjsRequestPresentation
+      <RequestPresentation
         Root={Root}
         routeKey="/explicit"
         handoff={result.handoff}

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  applyNextjsPrivateResponseCache,
-  assertNextjsPublicRequestPolicy,
-  createNextjsPrivateFetch,
+  applyPrivateResponseCache,
+  assertPublicRequestPolicy,
+  createPrivateFetch,
 } from './cache.js';
 
 describe('explicit cache boundaries', () => {
@@ -10,7 +10,7 @@ describe('explicit cache boundaries', () => {
     const customFetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(new globalThis.Response('ok'));
-    const fetch = createNextjsPrivateFetch(customFetch);
+    const fetch = createPrivateFetch(customFetch);
     const controller = new globalThis.AbortController();
     const input = new globalThis.Request('https://example.com/private', {
       headers: { authorization: 'Bearer custom' },
@@ -43,7 +43,7 @@ describe('explicit cache boundaries', () => {
         'cache-control': 'public, max-age=60',
       }),
     };
-    applyNextjsPrivateResponseCache(response);
+    applyPrivateResponseCache(response);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toBe('RSC, Next-Router-Prefetch');
     expect(response.headers.get('etag')).toBe('value');
@@ -51,14 +51,14 @@ describe('explicit cache boundaries', () => {
 
   it('validates explicit public/static intent without imposing private fetch configuration', () => {
     expect(() =>
-      assertNextjsPublicRequestPolicy({
+      assertPublicRequestPolicy({
         cache: { scope: 'static' },
         context: { consent: false, locale: 'en-US' },
         fetchOptions: { experienceId: 'home' },
       })
     ).not.toThrow();
     expect(() =>
-      assertNextjsPublicRequestPolicy({
+      assertPublicRequestPolicy({
         cache: {
           scope: 'public-permutation',
           key: 'space/master/home/revision/en-US/all-selection-dimensions',
@@ -66,7 +66,7 @@ describe('explicit cache boundaries', () => {
       })
     ).not.toThrow();
     expect(() =>
-      assertNextjsPublicRequestPolicy({ cache: { scope: 'public-permutation', key: ' ' } })
+      assertPublicRequestPolicy({ cache: { scope: 'public-permutation', key: ' ' } })
     ).toThrow('key');
     for (const context of [
       { profile: { id: 'id' } },
@@ -75,18 +75,18 @@ describe('explicit cache boundaries', () => {
         preview: { sessionId: 'session' },
       },
     ]) {
-      expect(() =>
-        assertNextjsPublicRequestPolicy({ cache: { scope: 'static' }, context })
-      ).toThrow('Public/static');
+      expect(() => assertPublicRequestPolicy({ cache: { scope: 'static' }, context })).toThrow(
+        'Public/static'
+      );
     }
     for (const fetchOptions of [
       { experienceId: 'home', personalization: { profile: { id: 'id' } } },
       { experienceId: 'home', personalization: { events: [] } },
       { experienceId: 'home', preview: true },
     ]) {
-      expect(() =>
-        assertNextjsPublicRequestPolicy({ cache: { scope: 'static' }, fetchOptions })
-      ).toThrow('Public/static');
+      expect(() => assertPublicRequestPolicy({ cache: { scope: 'static' }, fetchOptions })).toThrow(
+        'Public/static'
+      );
     }
   });
 });

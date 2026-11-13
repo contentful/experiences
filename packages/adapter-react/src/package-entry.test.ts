@@ -146,15 +146,15 @@ describe('published package entry points', () => {
       const source = `
         import { useCallback } from 'react';
         import {
-          createReactExperiences, useExperiences, useExperiencesContext,
+          createExperiences, useExperiences, useRuntimeContext,
           useExperiencesActions, useConsentState, usePreviewState,
           type OnExperienceNodeRoot, type PortableRenderPlan, type ManagedExperienceResult,
           Experience as UnboundExperience, ManualViewTracking
         } from '@contentful/experiences-react/client';
-        import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
+        import { createRootSdkBinding, disposeRootSdkBinding }
           from '@contentful/experiences-react/host';
         import { ContentfulExperiences, type Config, type WebExperiencesRuntime,
-          type States, type RuntimePreviewConfig }
+          type States, type PreviewConfig }
           from '@contentful/experiences-react/web-sdk';
         import { bindReactRouterExperiences,
           type ReactRouterAutoPageContext, type AutoPageEmissionContext }
@@ -164,9 +164,9 @@ describe('published package entry points', () => {
           from '@contentful/experiences-react/router/tanstack-router';
 
         const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer, Experience, useManagedExperience } =
-          createReactExperiences({ config: { components: {} } });
+          createExperiences({ config: { components: {} } });
         declare const config: Config;
-        declare const preview: RuntimePreviewConfig;
+        declare const preview: PreviewConfig;
         declare const plan: PortableRenderPlan;
         declare const sdk: ContentfulExperiences;
         declare const initialError: Error;
@@ -181,7 +181,7 @@ describe('published package entry points', () => {
           const consent: States['consent']['current'] = useConsentState();
           const preview: States['preview']['current'] = usePreviewState();
           const context: { sdk: WebExperiencesRuntime; error: Error | undefined;
-            isLive: boolean; isContentReady: boolean } = useExperiencesContext();
+            isLive: boolean; isContentReady: boolean } = useRuntimeContext();
           const track: WebExperiencesRuntime['track'] = trackEvent;
           const locale: WebExperiencesRuntime['setLocale'] = setLocale;
           void [consent, preview, context, track, locale, setConsent];
@@ -229,9 +229,9 @@ describe('published package entry points', () => {
         const routerWithExplicitKey = <ReactRouterExperiencesProvider sdk={sdk} routeKey="/" />;
         // @ts-expect-error Use pagePayload/getPagePayload with optional router bindings.
         const routerWithExplicitBuilder = <TanStackRouterExperiencesProvider sdk={sdk} buildPagePayload={() => ({})} />;
-        const binding = createExperiencesRootSdkBinding({ sdk });
+        const binding = createRootSdkBinding({ sdk });
         const concrete: ContentfulExperiences = binding.sdk;
-        disposeExperiencesRootSdkBinding(binding);
+        disposeRootSdkBinding(binding);
         void [owned, injected, concrete, supplied, authoritative, unbound, empty, failed, partial,
           reactRouter, reactRouterInjected, tanStack, tanStackInjected, routerWithExplicitKey, routerWithExplicitBuilder];
         // @ts-expect-error Destruction belongs to the SDK owner.

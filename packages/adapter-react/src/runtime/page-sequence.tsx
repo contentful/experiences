@@ -12,9 +12,9 @@ import type {
 } from '@contentful/experiences-web';
 import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import { useExperiencesContext } from './experiences-context.js';
-import { ExperienceRequestContext } from './experience-request-context.js';
-import { sameValue } from '../experience/experience-source-controller.js';
+import { useRuntimeContext } from './context.js';
+import { RequestContext } from './request-context.js';
+import { sameValue } from '../experience/source-controller.js';
 
 export interface BeforeInitialPageOptions {
   readonly run: (
@@ -25,7 +25,7 @@ export interface BeforeInitialPageOptions {
 }
 
 /** One route/page intent; content freshness and event admission belong to their owners. */
-export function ExperiencesPageSequence({
+export function PageSequence({
   children,
   routeKey,
   buildPagePayload,
@@ -43,7 +43,7 @@ export function ExperiencesPageSequence({
   resetRevision: object;
   onReset: () => void;
 }>) {
-  const { sdk, isLive } = useExperiencesContext();
+  const { sdk, isLive } = useRuntimeContext();
   const latest = useRef({
     buildPagePayload,
     beforeInitialPage,
@@ -234,9 +234,5 @@ export function ExperiencesPageSequence({
     };
   }, [isLive, sdk, routeKey, handoff, requestContext, owner, pageMode, beforeInitialPageEnabled]);
 
-  return (
-    <ExperienceRequestContext.Provider value={requestContext}>
-      {children}
-    </ExperienceRequestContext.Provider>
-  );
+  return <RequestContext.Provider value={requestContext}>{children}</RequestContext.Provider>;
 }

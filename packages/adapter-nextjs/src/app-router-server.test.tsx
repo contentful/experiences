@@ -2,13 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExperienceFetchError } from '@contentful/experiences-node';
 import { ServerExperienceRenderer } from '@contentful/experiences-react/server';
 import { NextRequest } from 'next/server.js';
-import {
-  NextjsAppRouterRequestRoot,
-  NextjsAppRouterRequestAnalyticsRoot,
-} from './app-router-client.js';
-import { bindNextjsAppRouterServerExperiences } from './app-router-server.js';
+import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
+import { bindAppRouterServerExperiences } from './app-router-server.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
-import type { NextjsPreviewConfig } from './preview.js';
+import type { PreviewConfig } from './preview.js';
 
 const doubles = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -38,8 +35,8 @@ vi.mock('react', async (importOriginal) => ({
   },
 }));
 vi.mock('./server-request.js', () => ({
-  configureNextjsServerExperiences: () => ({ spaceId: 'space', environmentId: 'master' }),
-  bindNextjsExperiencesRequest: doubles.bind,
+  configureServerExperiences: () => ({ spaceId: 'space', environmentId: 'master' }),
+  bindExperiencesRequest: doubles.bind,
 }));
 
 const plan = { nodes: [], diagnostics: [], metadata: {}, debug: false };
@@ -81,8 +78,8 @@ describe('App Router request family', () => {
         'x-ctfl-exp-request-url': 'https://example.com/?preview_session_id=session',
       })
     );
-    const createClient = vi.fn<NonNullable<NextjsPreviewConfig['createClient']>>();
-    const binding = bindNextjsAppRouterServerExperiences({
+    const createClient = vi.fn<NonNullable<PreviewConfig['createClient']>>();
+    const binding = bindAppRouterServerExperiences({
       ...config,
       browser: { delivery: { accessToken: 'browser-token' } },
       preview: {
@@ -123,7 +120,7 @@ describe('App Router request family', () => {
       [true, ''],
       [true, '?preview_session_id=session'],
     ] as const) {
-      const binding = bindNextjsAppRouterServerExperiences({
+      const binding = bindAppRouterServerExperiences({
         ...config,
         preview: { accessToken: 'preview', enabled, createClient },
         request: {
@@ -144,7 +141,7 @@ describe('App Router request family', () => {
   });
 
   it('explicit/static rendering reads no framework request state', async () => {
-    const binding = bindNextjsAppRouterServerExperiences(config);
+    const binding = bindAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan });
     expect(rendered.props.experience).toBe(plan);
     expect(doubles.headers).not.toHaveBeenCalled();
@@ -163,7 +160,7 @@ describe('App Router request family', () => {
       expect(context.routeKey).toBe('/?q=a+b');
       expect(doubles.destroy).not.toHaveBeenCalled();
     });
-    const binding = bindNextjsAppRouterServerExperiences(
+    const binding = bindAppRouterServerExperiences(
       { ...config, request: { ...config.request, composeRequest } },
       { request: { ExperiencesRoot: client } }
     );
@@ -199,7 +196,7 @@ describe('App Router request family', () => {
       handoff,
     });
     const client = () => null;
-    const binding = bindNextjsAppRouterServerExperiences(
+    const binding = bindAppRouterServerExperiences(
       {
         ...config,
         cookie: { expires: 7, path: '/scope' },
@@ -232,7 +229,7 @@ describe('App Router request family', () => {
   it('keeps callbacks on the explicit server renderer', async () => {
     const renderError = () => null;
     const renderUnknown = () => null;
-    const binding = bindNextjsAppRouterServerExperiences(config);
+    const binding = bindAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
     expect(rendered.props).toMatchObject({ renderError, renderUnknown });
     const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
@@ -252,7 +249,7 @@ describe('App Router request family', () => {
       doubles.headers.mockResolvedValue(incoming);
       const composeRequest = vi.fn();
       const ClientExperience = vi.fn(() => null);
-      const binding = bindNextjsAppRouterServerExperiences(
+      const binding = bindAppRouterServerExperiences(
         {
           ...config,
           request: { ...config.request, composeRequest },
@@ -277,7 +274,7 @@ describe('App Router request family', () => {
     const composeRequest = vi.fn();
     const initialEvents = vi.fn();
     const pagePayload = { properties: { title: 'Server navigation' } };
-    const binding = bindNextjsAppRouterServerExperiences(
+    const binding = bindAppRouterServerExperiences(
       {
         ...config,
         request: { ...config.request, composeRequest, initialEvents, pagePayload },
@@ -319,7 +316,7 @@ describe('App Router request family', () => {
     const ClientExperience = () => null;
     const browser = { delivery: { host: 'https://example.com/api/delivery' } };
     const cookie = { expires: 7, path: '/scope' };
-    const binding = bindNextjsAppRouterServerExperiences(
+    const binding = bindAppRouterServerExperiences(
       {
         ...config,
         browser,
@@ -331,8 +328,8 @@ describe('App Router request family', () => {
     const root = await binding.request.ExperiencesRoot({ children: 'Content' });
     const presentation = await binding.request.Experience({ as: 'section' });
     const analytics = await binding.request.ExperiencesAnalyticsRoot({});
-    expect(root.type).toBe(NextjsAppRouterRequestRoot);
-    expect(analytics.type).toBe(NextjsAppRouterRequestAnalyticsRoot);
+    expect(root.type).toBe(AppRouterRequestRoot);
+    expect(analytics.type).toBe(AppRouterRequestAnalyticsRoot);
     expect(root.props).toMatchObject({
       spaceId: 'space',
       environmentId: 'master',
@@ -360,7 +357,7 @@ describe('App Router request family', () => {
 
   it('allows each root override independently and requires browser config only for a built-in root', async () => {
     const client = () => null;
-    const binding = bindNextjsAppRouterServerExperiences(config, {
+    const binding = bindAppRouterServerExperiences(config, {
       request: { ExperiencesAnalyticsRoot: client },
     });
     const root = await binding.request.ExperiencesAnalyticsRoot({ children: 'Server content' });
@@ -376,7 +373,7 @@ describe('App Router request family', () => {
     const browser = { delivery: { accessToken: 'browser-token' } };
     const defaults = { consent: false };
     const cookie = { path: '/scope' };
-    const binding = bindNextjsAppRouterServerExperiences(
+    const binding = bindAppRouterServerExperiences(
       {
         ...config,
         browser,
@@ -407,7 +404,7 @@ describe('App Router request family', () => {
 
   it('rejects functions in explicit browser config without projecting server credentials', async () => {
     const browser = { delivery: { accessToken: (() => 'browser-token') as unknown as string } };
-    const binding = bindNextjsAppRouterServerExperiences({ ...config, browser });
+    const binding = bindAppRouterServerExperiences({ ...config, browser });
     await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('Non-JSON value');
   });
 
@@ -415,7 +412,7 @@ describe('App Router request family', () => {
     const error = new Error('resolver failed');
     doubles.transfer.mockResolvedValue({ error, handoff });
     const ClientExperience = () => null;
-    const binding = bindNextjsAppRouterServerExperiences(config, {
+    const binding = bindAppRouterServerExperiences(config, {
       request: { Experience: ClientExperience },
     });
     const result = await binding.request.loadExperience();
@@ -439,7 +436,7 @@ describe('App Router request family', () => {
     'propagates thrown preparation/control-flow failure %s and destroys the facade',
     async (error) => {
       doubles.transfer.mockRejectedValue(error);
-      const binding = bindNextjsAppRouterServerExperiences(config);
+      const binding = bindAppRouterServerExperiences(config);
       await expect(binding.request.loadExperience()).rejects.toBe(error);
       expect(doubles.destroy).toHaveBeenCalledTimes(1);
     }
@@ -447,7 +444,7 @@ describe('App Router request family', () => {
 
   it('propagates composition exceptions without publishing a browser result', async () => {
     const error = new Error('host composition');
-    const binding = bindNextjsAppRouterServerExperiences({
+    const binding = bindAppRouterServerExperiences({
       ...config,
       request: {
         ...config.request,

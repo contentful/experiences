@@ -4,8 +4,8 @@ import { act, StrictMode, Suspense, startTransition, type ReactNode } from 'reac
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { States, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
-import { ExperiencesContext } from './experiences-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { RuntimeContext } from './context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { profileFixture } from '../test/profile.js';
 import * as hooks from './use-experiences-state.js';
 
@@ -69,12 +69,12 @@ function runtime(states: Partial<States>): WebExperiencesRuntime {
 }
 
 describe('Experiences state hooks', () => {
-  let rendered: ReactTestRoot;
+  let rendered: DomTestRoot;
   let container: HTMLDivElement;
 
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    rendered = createReactTestRoot();
+    rendered = createDomTestRoot();
     container = rendered.container;
   });
 
@@ -86,7 +86,7 @@ describe('Experiences state hooks', () => {
   function render(sdk: WebExperiencesRuntime, children: ReactNode) {
     act(() =>
       rendered.render(
-        <ExperiencesContext.Provider value={context(sdk)}>{children}</ExperiencesContext.Provider>
+        <RuntimeContext.Provider value={context(sdk)}>{children}</RuntimeContext.Provider>
       )
     );
   }
@@ -299,11 +299,11 @@ describe('Experiences state hooks', () => {
     await act(async () => {
       startTransition(() =>
         rendered.render(
-          <ExperiencesContext.Provider value={context(runtime({ locale: replacement.store }))}>
+          <RuntimeContext.Provider value={context(runtime({ locale: replacement.store }))}>
             <Suspense fallback="pending">
               <Probe suspend />
             </Suspense>
-          </ExperiencesContext.Provider>
+          </RuntimeContext.Provider>
         )
       );
     });
@@ -331,9 +331,9 @@ describe('Experiences state hooks', () => {
     act(() =>
       rendered.render(
         <StrictMode>
-          <ExperiencesContext.Provider value={context(runtime({ locale: state.store }))}>
+          <RuntimeContext.Provider value={context(runtime({ locale: state.store }))}>
             <Probe />
-          </ExperiencesContext.Provider>
+          </RuntimeContext.Provider>
         </StrictMode>
       )
     );
@@ -351,9 +351,9 @@ describe('Experiences state hooks', () => {
       return <output>{hooks.useProfileState()?.id}</output>;
     }
     const tree = (
-      <ExperiencesContext.Provider value={context(sdk)}>
+      <RuntimeContext.Provider value={context(sdk)}>
         <Probe />
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
     container.innerHTML = renderToString(tree);
     expect(state.read).toHaveBeenCalledTimes(1);

@@ -3,12 +3,12 @@ import type { UniversalEventBuilderArgs } from '@contentful/experiences-node';
 export const NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX = 'x-ctfl-exp-';
 export const NEXTJS_EXPERIENCES_REQUEST_URL_HEADER = `${NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX}request-url`;
 
-export interface NextjsCookieReader {
+export interface CookieReader {
   get(name: string): { readonly value: string } | undefined;
 }
 
 /** @internal An absent effective header is authoritative, including cookie removal. */
-export function cookieReaderFromHeader(header: string | null): NextjsCookieReader {
+export function cookieReaderFromHeader(header: string | null): CookieReader {
   return {
     get(name) {
       for (const part of (header ?? '').split(';')) {
@@ -29,39 +29,39 @@ export function cookieReaderFromHeader(header: string | null): NextjsCookieReade
   };
 }
 
-export interface NextjsRequestLike {
+export interface RequestLike {
   readonly url: string;
   readonly headers: globalThis.Headers;
-  readonly cookies?: NextjsCookieReader;
+  readonly cookies?: CookieReader;
 }
 
 /** Speculative work is never an initialization or writable identity boundary. */
-export function isNextjsSpeculativeRequest(headers: globalThis.Headers): boolean {
+export function isSpeculativeRequest(headers: globalThis.Headers): boolean {
   return (
     headers.get('next-router-prefetch') === '1' ||
     /prefetch/i.test(`${headers.get('purpose') ?? ''} ${headers.get('sec-purpose') ?? ''}`)
   );
 }
 
-export type NextjsSearchParams =
+export type SearchParams =
   globalThis.URLSearchParams | Readonly<Record<string, string | readonly string[] | undefined>>;
 
-export interface CreateNextjsPageContextOptions {
+export interface CreatePageContextOptions {
   readonly path: string;
   readonly origin?: string;
   readonly url?: string;
   readonly referrer?: string;
-  readonly searchParams?: NextjsSearchParams;
+  readonly searchParams?: SearchParams;
 }
 
-export type NextjsPageContextInput =
-  NonNullable<UniversalEventBuilderArgs['page']> | CreateNextjsPageContextOptions;
+export type PageContextInput =
+  NonNullable<UniversalEventBuilderArgs['page']> | CreatePageContextOptions;
 
-export interface CreateNextjsRequestContextOptions {
-  readonly request?: NextjsRequestLike;
+export interface CreateEventContextOptions {
+  readonly request?: RequestLike;
   /** Explicit headers are authoritative, including removals. */
   readonly headers?: globalThis.Headers;
-  readonly page?: NextjsPageContextInput;
+  readonly page?: PageContextInput;
   readonly eventContext?: UniversalEventBuilderArgs;
   readonly locale?: string;
 }
@@ -76,7 +76,7 @@ export function normalizedRequestUrl(input: string | URL): URL {
 }
 
 /** Path and ordered query values; host base-path/locale/trailing-slash policy remains explicit. */
-export function createNextjsRouteKey(input: string | URL): string {
+export function createRouteKey(input: string | URL): string {
   const url = normalizedRequestUrl(input);
   return `${url.pathname}${url.search}`;
 }
@@ -93,13 +93,13 @@ export function queryFromSearchParams(
   );
 }
 
-export function createNextjsPageContext({
+export function createPageContext({
   path,
   origin,
   url,
   referrer,
   searchParams,
-}: CreateNextjsPageContextOptions): NonNullable<UniversalEventBuilderArgs['page']> {
+}: CreatePageContextOptions): NonNullable<UniversalEventBuilderArgs['page']> {
   const params = new globalThis.URLSearchParams();
   if (searchParams instanceof globalThis.URLSearchParams) {
     searchParams.forEach((value, key) => params.append(key, value));
@@ -120,10 +120,11 @@ export function createNextjsPageContext({
   };
 }
 
-/** Derived request page < event context < explicit page; explicit locale wins. No IP inference. */
-export function createNextjsRequestContext(
-  options: CreateNextjsRequestContextOptions
-): UniversalEventBuilderArgs {
+/**
+ * Builds event metadata for `forRequest({ eventContext })`.
+ * Derived request page < event context < explicit page; explicit locale wins. No IP inference.
+ */
+export function createEventContext(options: CreateEventContextOptions): UniversalEventBuilderArgs {
   const { request, eventContext, page, locale } = options;
   const headers = options.headers ?? request?.headers;
   const url = request?.url ?? headers?.get(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER);
@@ -154,7 +155,7 @@ export function createNextjsRequestContext(
           }
         }
       }
-      provided = createNextjsPageContext({
+      provided = createPageContext({
         ...page,
         origin,
         referrer: page.referrer ?? inherited?.referrer,

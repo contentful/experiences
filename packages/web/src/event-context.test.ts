@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getPageProperties } from './browser-event-context.js';
+import { getPageProperties } from './event-context.js';
 
 describe('getPageProperties', () => {
   afterEach(() => {

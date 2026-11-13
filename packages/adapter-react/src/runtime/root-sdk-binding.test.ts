@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createWebSnapshotRuntime, type Config } from '@contentful/experiences-web';
-import {
-  createExperiencesRootSdkBinding,
-  disposeExperiencesRootSdkBinding,
-} from './experiences-root-sdk-binding.js';
+import { createRootSdkBinding, disposeRootSdkBinding } from './root-sdk-binding.js';
 
 // Ownership follows Optimization's optimizationRootRuntime.ts and provider tests
 // at 59add9d6ebff503b9033a59a2eee0149d4b4e925. Experiences additionally disposes
@@ -24,13 +21,13 @@ describe('Experiences host bindings', () => {
     const createSdk = vi.fn(() => runtime);
     const cleanup = vi.fn();
     const onStatesReady = vi.fn(() => cleanup);
-    const binding = createExperiencesRootSdkBinding({ config, createSdk, onStatesReady });
+    const binding = createRootSdkBinding({ config, createSdk, onStatesReady });
 
     expect(createSdk).toHaveBeenCalledExactlyOnceWith(config);
     expect(onStatesReady).toHaveBeenCalledExactlyOnceWith(runtime.states);
     expect(binding).toEqual({ sdk: runtime, ownsInstance: true, cleanup });
     expect(runtime.destroy).not.toHaveBeenCalled();
-    disposeExperiencesRootSdkBinding(binding);
+    disposeRootSdkBinding(binding);
     expect(cleanup).toHaveBeenCalledOnce();
     expect(runtime.destroy).toHaveBeenCalledOnce();
     expect(cleanup.mock.invocationCallOrder[0]).toBeLessThan(
@@ -41,9 +38,9 @@ describe('Experiences host bindings', () => {
   it('cleans subscriptions without destroying an injected SDK', () => {
     const runtime = sdk();
     const cleanup = vi.fn();
-    const binding = createExperiencesRootSdkBinding({ sdk: runtime, onStatesReady: () => cleanup });
+    const binding = createRootSdkBinding({ sdk: runtime, onStatesReady: () => cleanup });
     expect(binding.ownsInstance).toBe(false);
-    disposeExperiencesRootSdkBinding(binding);
+    disposeRootSdkBinding(binding);
     expect(cleanup).toHaveBeenCalledOnce();
     expect(runtime.destroy).not.toHaveBeenCalled();
   });
@@ -55,7 +52,7 @@ describe('Experiences host bindings', () => {
       throw error;
     };
     expect(() =>
-      createExperiencesRootSdkBinding(
+      createRootSdkBinding(
         owned
           ? { config, createSdk: () => runtime, onStatesReady }
           : { sdk: runtime, onStatesReady }
@@ -70,12 +67,12 @@ describe('Experiences host bindings', () => {
     const cleanup = vi.fn(() => {
       throw error;
     });
-    const binding = createExperiencesRootSdkBinding(
+    const binding = createRootSdkBinding(
       owned
         ? { config, createSdk: () => runtime, onStatesReady: () => cleanup }
         : { sdk: runtime, onStatesReady: () => cleanup }
     );
-    expect(() => disposeExperiencesRootSdkBinding(binding)).toThrow(error);
+    expect(() => disposeRootSdkBinding(binding)).toThrow(error);
     expect(cleanup).toHaveBeenCalledOnce();
     expect(runtime.destroy).toHaveBeenCalledTimes(owned ? 1 : 0);
   });
@@ -84,7 +81,7 @@ describe('Experiences host bindings', () => {
     const onStatesReady = vi.fn();
     const error = new Error('construction failed');
     expect(() =>
-      createExperiencesRootSdkBinding({
+      createRootSdkBinding({
         config,
         createSdk: () => {
           throw error;
@@ -93,11 +90,9 @@ describe('Experiences host bindings', () => {
       })
     ).toThrow(error);
     expect(onStatesReady).not.toHaveBeenCalled();
-    expect(() => disposeExperiencesRootSdkBinding(undefined)).not.toThrow();
+    expect(() => disposeRootSdkBinding(undefined)).not.toThrow();
     const runtime = sdk();
-    disposeExperiencesRootSdkBinding(
-      createExperiencesRootSdkBinding({ config, createSdk: () => runtime })
-    );
+    disposeRootSdkBinding(createRootSdkBinding({ config, createSdk: () => runtime }));
     expect(runtime.destroy).toHaveBeenCalledOnce();
   });
 });

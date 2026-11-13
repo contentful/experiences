@@ -5,13 +5,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ManualViewTracking } from '../client.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 
 describe('ManualViewTracking', () => {
-  let view: ReactTestRoot;
+  let view: DomTestRoot;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    view = createReactTestRoot();
+    view = createDomTestRoot();
   });
   afterEach(async () => {
     await act(async () => view.cleanup());

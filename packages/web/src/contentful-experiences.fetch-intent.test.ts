@@ -2,7 +2,7 @@
 
 import {
   ContentfulExperiences as RuntimeExperiences,
-  type BuiltRuntimeFetchExperienceOptions,
+  type BuiltFetchExperienceOptions,
   type FetchExperienceOptions,
   type FetchResolveOptions,
 } from '@contentful/experiences-runtime';
@@ -15,7 +15,7 @@ import { completeProfile } from './test-fixtures/profile.js';
 
 const payloadRuntime = RuntimeExperiences.prototype as unknown as {
   fetchExperiencePayload(
-    options: BuiltRuntimeFetchExperienceOptions,
+    options: BuiltFetchExperienceOptions,
     resolve: FetchResolveOptions
   ): Promise<ExperiencePayload>;
 };

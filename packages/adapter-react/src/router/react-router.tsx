@@ -1,9 +1,9 @@
 'use client';
 
 import { useHref, useLocation, useMatches, type Location } from 'react-router-dom';
-import type { CreateReactExperiencesOptions } from '../experience/create-react-experiences.js';
+import type { CreateExperiencesOptions } from '../experience/create-experiences.js';
 import { createRouterBinding } from './create-router-binding.js';
-import type { RouterExperiencesRootProps, RouterExperiencesProviderProps } from './page-payload.js';
+import type { RouterRootProps, RouterProviderProps } from './page-payload.js';
 
 export type {
   AutoPagePayload,
@@ -21,10 +21,8 @@ export interface ReactRouterAutoPageContext {
   readonly url: string;
 }
 
-export type ReactRouterExperiencesRootProps =
-  RouterExperiencesRootProps<ReactRouterAutoPageContext>;
-export type ReactRouterExperiencesProviderProps =
-  RouterExperiencesProviderProps<ReactRouterAutoPageContext>;
+export type ReactRouterExperiencesRootProps = RouterRootProps<ReactRouterAutoPageContext>;
+export type ReactRouterExperiencesProviderProps = RouterProviderProps<ReactRouterAutoPageContext>;
 
 function useRouteContext(): ReactRouterAutoPageContext {
   const location = useLocation();
@@ -44,6 +42,6 @@ function useRouteContext(): ReactRouterAutoPageContext {
 }
 
 /** Bind once; mount a stable root or injected provider inside the router, above managed content. */
-export function bindReactRouterExperiences(options: CreateReactExperiencesOptions) {
+export function bindReactRouterExperiences(options: CreateExperiencesOptions) {
   return createRouterBinding(options, useRouteContext);
 }

@@ -16,19 +16,19 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { BoundNextjsExperiencesRootProps, NextjsRequestResult } from './request-result.js';
+import type { BoundRootProps, RequestResult } from './request-result.js';
 
-import { resolveNextjsPreview, mergeNextjsPreview } from './preview.js';
+import { resolvePreview, mergePreview } from './preview.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
-const RequestResultContext = createContext<{ result?: NextjsRequestResult } | undefined>(undefined);
+const RequestResultContext = createContext<{ result?: RequestResult } | undefined>(undefined);
 
 /** Only request roots provide inherited results, including an initially empty result. */
-export function NextjsRequestResultBoundary({
+export function RequestResultBoundary({
   result,
   children,
 }: {
-  result?: NextjsRequestResult;
+  result?: RequestResult;
   children: ReactNode;
 }) {
   const value = useMemo(() => ({ result }), [result]);
@@ -36,7 +36,7 @@ export function NextjsRequestResultBoundary({
 }
 
 /** One stable root excludes only restored original bootstrap inputs after departure. */
-export function NextjsInitialDataBoundary({
+export function InitialDataBoundary({
   routeKey,
   requestId,
   children,
@@ -60,17 +60,17 @@ export function NextjsInitialDataBoundary({
   );
 }
 
-export function useNextjsInitialData(requestId: string | undefined) {
+export function useInitialData(requestId: string | undefined) {
   return useContext(InitialDataContext)(requestId);
 }
 
 /** Explicit results override inheritance; history guards apply only to startup seeds. */
-export function useNextjsRequestOptions(supplied?: NextjsRequestResult) {
+export function useRequestOptions(supplied?: RequestResult) {
   const inherited = useContext(RequestResultContext);
   if (supplied === undefined && inherited === undefined)
     throw new Error('request.Experience requires a result prop or a request ExperiencesRoot.');
   const result = supplied ?? inherited?.result;
-  const canAdopt = useNextjsInitialData(result?.requestId);
+  const canAdopt = useInitialData(result?.requestId);
   const error = result?.contentError;
   const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
   return {
@@ -94,14 +94,14 @@ export function useServerPreviewRefresh(refresh: () => void) {
 }
 
 /** Derive one session context from explicit setup or the route, before SDK activation. */
-export function NextjsBrowserRoot({
+export function BrowserRoot({
   preview,
   sdk,
   previewUrl,
   ...props
-}: BoundNextjsExperiencesRootProps & { previewUrl?: string }) {
+}: BoundRootProps & { previewUrl?: string }) {
   if (preview && sdk) throw new TypeError('Managed Preview requires an SDK-owned Next.js root.');
-  const options = resolveNextjsPreview(preview, previewUrl ?? props.routeKey ?? '/');
+  const options = resolvePreview(preview, previewUrl ?? props.routeKey ?? '/');
   if (sdk) return <ExperiencesProvider {...props} sdk={sdk} />;
   return (
     <ExperiencesRoot
@@ -113,7 +113,7 @@ export function NextjsBrowserRoot({
 }
 
 /** Shared whole-result adoption and page builder precedence for both router families. */
-export function NextjsRequestPresentation({
+export function RequestPresentation({
   result,
   Root,
   routeKey,
@@ -122,18 +122,18 @@ export function NextjsRequestPresentation({
   ready = true,
   previewUrl,
   ...props
-}: BoundNextjsExperiencesRootProps & {
-  result?: NextjsRequestResult;
+}: BoundRootProps & {
+  result?: RequestResult;
   previewUrl?: string;
-  Root: typeof NextjsBrowserRoot;
+  Root: typeof BrowserRoot;
   routeKey: string;
   configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
   buildRoutePayload: NonNullable<ExperiencesRootProps['buildPagePayload']>;
   ready?: boolean;
 }) {
-  const canAdopt = useNextjsInitialData(result?.requestId);
+  const canAdopt = useInitialData(result?.requestId);
   const matchingResult = canAdopt && result?.routeKey === routeKey ? result : undefined;
-  const preview = mergeNextjsPreview(props.preview, result?.preview);
+  const preview = mergePreview(props.preview, result?.preview);
   const waiting = !ready || (result !== undefined && result.routeKey !== routeKey);
   const initialPagePayload =
     matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);

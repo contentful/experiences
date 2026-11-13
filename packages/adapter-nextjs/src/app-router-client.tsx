@@ -2,43 +2,43 @@
 
 // Bound families and committed route inputs follow Optimization PR #549 (MIT).
 import {
-  createReactExperiences,
+  createExperiences,
   type Config,
   type ExperiencesRootProps,
 } from '@contentful/experiences-react/client';
 import { usePathname, useSearchParams } from 'next/navigation.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createNextjsRouteKey, queryFromSearchParams } from './request-context.js';
+import { createRouteKey, queryFromSearchParams } from './request-context.js';
 import {
-  NextjsInitialDataBoundary,
-  NextjsRequestResultBoundary,
-  NextjsRequestPresentation,
-  NextjsBrowserRoot,
-  useNextjsRequestOptions,
+  InitialDataBoundary,
+  RequestResultBoundary,
+  RequestPresentation,
+  BrowserRoot,
+  useRequestOptions,
 } from './router-lifetime.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
 
 import type {
-  BoundNextjsExperiencesRootProps,
-  NextjsDefaultRequestRootProps,
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
+  BoundRootProps,
+  DefaultRequestRootProps,
+  BoundRequestRootProps,
+  RequestExperienceProps,
 } from './request-result.js';
-import { mergeNextjsPreview, type NextjsPreviewConfig } from './preview.js';
-export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
+import { mergePreview, type PreviewConfig } from './preview.js';
+export type { PreviewConfig, PreviewContext } from './preview.js';
 export type {
-  BoundNextjsExperiencesRootProps,
-  BoundNextjsRequestRootProps,
-  NextjsRequestExperienceProps,
-  NextjsRequestResult,
+  BoundRootProps,
+  BoundRequestRootProps,
+  RequestExperienceProps,
+  RequestResult,
 } from './request-result.js';
 
-export type { NextjsBrowserConfig } from './browser-config.js';
-export type { NextjsDefaultRequestRootProps } from './request-result.js';
+export type { BrowserConfig } from './browser-config.js';
+export type { DefaultRequestRootProps } from './request-result.js';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
-export interface NextjsClientExperiencesConfig
+export interface ClientConfig
   extends
     Omit<
       ExperiencesRootProps,
@@ -46,23 +46,23 @@ export interface NextjsClientExperiencesConfig
     >,
     Partial<Pick<ExperiencesRootProps, RuntimeIdentity>> {
   readonly config: Config;
-  readonly preview?: NextjsPreviewConfig;
+  readonly preview?: PreviewConfig;
   readonly consent?: { readonly clientDefaults?: ExperiencesRootProps['defaults'] };
 }
 
-export function useNextAppAutoPageInputs() {
+export function useAppAutoPageInputs() {
   const routerPathname = usePathname() ?? '/';
   const search = useSearchParams()?.toString() ?? '';
   const candidate = useMemo(() => {
-    const routeKey = createNextjsRouteKey(`${routerPathname}${search ? `?${search}` : ''}`);
+    const routeKey = createRouteKey(`${routerPathname}${search ? `?${search}` : ''}`);
     const url = new globalThis.URL(routeKey, 'https://nextjs.invalid');
     return { pathname: url.pathname, routeKey, search: url.search };
   }, [routerPathname, search]);
   const [confirmed, setConfirmed] = useState<typeof candidate>();
   const browserRoute =
-    typeof window === 'undefined' ? undefined : createNextjsRouteKey(window.location.href);
+    typeof window === 'undefined' ? undefined : createRouteKey(window.location.href);
   useEffect(() => {
-    if (createNextjsRouteKey(window.location.href) === candidate.routeKey)
+    if (createRouteKey(window.location.href) === candidate.routeKey)
       setConfirmed((previous) =>
         previous?.routeKey === candidate.routeKey ? previous : candidate
       );
@@ -95,56 +95,51 @@ export function useNextAppAutoPageInputs() {
 }
 
 /** Browser credentials/callbacks stay in the module that calls this pure binder. */
-export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperiencesConfig) {
+export function bindAppRouterClientExperiences(options: ClientConfig) {
   const { config, consent, ...rootConfig } = options;
-  const { Experience, ExperienceRenderer, useManagedExperience } = createReactExperiences({
+  const { Experience, ExperienceRenderer, useManagedExperience } = createExperiences({
     config,
   });
 
-  function BrowserRoot(props: BoundNextjsExperiencesRootProps) {
+  function BoundBrowserRoot(props: BoundRootProps) {
     const effective = {
       ...rootConfig,
       ...props,
       defaults: props.defaults ?? consent?.clientDefaults ?? rootConfig.defaults,
     };
-    return (
-      <NextjsBrowserRoot
-        {...effective}
-        preview={mergeNextjsPreview(rootConfig.preview, props.preview)}
-      />
-    );
+    return <BrowserRoot {...effective} preview={mergePreview(rootConfig.preview, props.preview)} />;
   }
 
-  function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
+  function ExperiencesRoot(props: BoundRootProps) {
     const preview = props.preview ?? rootConfig.preview;
     return preview && props.routeKey === undefined ? (
       <AppRouterRequestOwner
         initialPagePayload={rootConfig.initialPagePayload}
         {...props}
-        Root={BrowserRoot}
+        Root={BoundBrowserRoot}
         configuredBuilder={rootConfig.buildPagePayload}
       />
     ) : (
-      <BrowserRoot {...props} />
+      <BoundBrowserRoot {...props} />
     );
   }
 
-  function RequestExperiencesRoot(props: BoundNextjsRequestRootProps) {
+  function RequestExperiencesRoot(props: BoundRequestRootProps) {
     return (
-      <NextjsRequestResultBoundary result={props.result}>
+      <RequestResultBoundary result={props.result}>
         <AppRouterRequestOwner
           {...props}
-          preview={mergeNextjsPreview(rootConfig.preview, props.preview)}
-          Root={BrowserRoot}
+          preview={mergePreview(rootConfig.preview, props.preview)}
+          Root={BoundBrowserRoot}
           configuredBuilder={rootConfig.buildPagePayload}
         />
-      </NextjsRequestResultBoundary>
+      </RequestResultBoundary>
     );
   }
 
-  function RequestExperience({ result: supplied, ...props }: NextjsRequestExperienceProps) {
-    const { routeKey } = useNextAppAutoPageInputs();
-    const { result, ...initial } = useNextjsRequestOptions(supplied);
+  function RequestExperience({ result: supplied, ...props }: RequestExperienceProps) {
+    const { routeKey } = useAppAutoPageInputs();
+    const { result, ...initial } = useRequestOptions(supplied);
     return result?.routeKey === routeKey ? (
       <Experience {...props} {...result.experience} {...initial} />
     ) : (
@@ -152,7 +147,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     );
   }
 
-  function ExperiencesAnalyticsRoot(props: BoundNextjsExperiencesRootProps) {
+  function ExperiencesAnalyticsRoot(props: BoundRootProps) {
     return (
       <ExperiencesRoot {...props} pageMode="analytics">
         <ServerPreviewRefresh />
@@ -161,7 +156,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     );
   }
 
-  function RequestExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
+  function RequestExperiencesAnalyticsRoot(props: BoundRequestRootProps) {
     return (
       <RequestExperiencesRoot {...props} pageMode="analytics">
         <ServerPreviewRefresh />
@@ -188,39 +183,39 @@ function AppRouterRequestOwner({
   Root,
   configuredBuilder,
   ...props
-}: BoundNextjsRequestRootProps &
-  Pick<BoundNextjsExperiencesRootProps, 'handoff' | 'initialPagePayload' | 'snapshot'> & {
-    Root: typeof NextjsBrowserRoot;
+}: BoundRequestRootProps &
+  Pick<BoundRootProps, 'handoff' | 'initialPagePayload' | 'snapshot'> & {
+    Root: typeof BrowserRoot;
     configuredBuilder?: ExperiencesRootProps['buildPagePayload'];
   }) {
-  const inputs = useNextAppAutoPageInputs();
+  const inputs = useAppAutoPageInputs();
   return (
-    <NextjsInitialDataBoundary routeKey={inputs.routeKey} requestId={props.result?.requestId}>
-      <NextjsRequestPresentation
+    <InitialDataBoundary routeKey={inputs.routeKey} requestId={props.result?.requestId}>
+      <RequestPresentation
         {...props}
         Root={Root}
         routeKey={inputs.routeKey}
         configuredBuilder={configuredBuilder}
         buildRoutePayload={inputs.buildPagePayload}
       />
-    </NextjsInitialDataBoundary>
+    </InitialDataBoundary>
   );
 }
 
 /** Registry-free owner for a server-supplied request result and children. */
-export function NextjsAppRouterRequestRoot({ browser, ...props }: NextjsDefaultRequestRootProps) {
+export function AppRouterRequestRoot({ browser, ...props }: DefaultRequestRootProps) {
   return (
-    <NextjsRequestResultBoundary result={props.result}>
-      <AppRouterRequestOwner {...browser} {...props} Root={NextjsBrowserRoot} />
-    </NextjsRequestResultBoundary>
+    <RequestResultBoundary result={props.result}>
+      <AppRouterRequestOwner {...browser} {...props} Root={BrowserRoot} />
+    </RequestResultBoundary>
   );
 }
 
-export function NextjsAppRouterRequestAnalyticsRoot(props: NextjsDefaultRequestRootProps) {
+export function AppRouterRequestAnalyticsRoot(props: DefaultRequestRootProps) {
   return (
-    <NextjsAppRouterRequestRoot {...props} pageMode="analytics">
+    <AppRouterRequestRoot {...props} pageMode="analytics">
       <ServerPreviewRefresh />
       {props.children}
-    </NextjsAppRouterRequestRoot>
+    </AppRouterRequestRoot>
   );
 }

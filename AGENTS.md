@@ -57,7 +57,7 @@ experiences/
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
-    └── mocks/               # Private Personalization/Insights handlers and Contentful maintenance tools
+    └── mocks/               # Private Personalization/Analytics handlers and Contentful maintenance tools
 ```
 
 **`examples/`** is the stable, external-facing surface — every commit to it should keep the customer-facing "clone + bootstrap + run" flow working.
@@ -88,7 +88,7 @@ and the app README for the package boundary, local `.env`, and lifecycle command
 | `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App/Pages request families, built-in roots and React rendering via explicit subpaths.                        |
 | `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
-| `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Insights handlers and explicit Contentful maintenance tools.               |
+| `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Analytics handlers and explicit Contentful maintenance tools.              |
 
 **Customers install the framework adapter for rendering.** The optional `@contentful/experiences-live-preview` package is customer-facing and can be used directly by an application or as an adapter's live-preview data source. The framework adapters declare `core`, `design`, `client`, and `runtime` as dependencies.
 
@@ -210,7 +210,7 @@ canonical [Runtime preview limits](./packages/runtime/README.md#optional-runtime
 React's optional `/router/react-router` and `/router/tanstack-router` entries
 export `bindReactRouterExperiences({ config })` and
 `bindTanStackRouterExperiences({ config })`. Bind once at module scope; each returns
-the `createReactExperiences` result with wrapped `ExperiencesRoot`/`ExperiencesProvider`
+the `createExperiences` result with wrapped `ExperiencesRoot`/`ExperiencesProvider`
 and bound `Experience`, `useManagedExperience` and `ExperienceRenderer`. The entries
 also export matching `*ExperiencesRootProps`, `*ExperiencesProviderProps` and
 `*AutoPageContext` types, plus `AutoPagePayload`, `AutoPageEmissionContext` and
@@ -281,13 +281,13 @@ consent-gate inputs and build only arguments once. Client accepts raw built even
 only and maps them to XDA's extension body, and Node
 proxies it without retaining state. Node and Web filter those events by consent before the request, keeping the profile id. Destination fetches by path and node id accept the same raw built personalization events; all three fetches share consent, interception and profile handling. The generated dev.13 client exposes optional `personalization.preflight`; the
 SDK validates and forwards it without selecting a default. Earlier service checks
-observed noncommitting XPAPI preflight; default and override behavior have not
+observed noncommitting Personalization API preflight; default and override behavior have not
 been reverified with dev.13. Treat newly returned IDs as provisional until
 profile finalization is verified. Profile-only XDA uses
-XPAPI GET internally even when SDK-to-XDA uses POST. Node/Web auto-adopt returned
+Personalization API GET internally even when SDK-to-XDA uses POST. Node/Web auto-adopt returned
 IDs locally; adoption does not finalize them. See the canonical
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Preserve generic retry ambiguity for actual XPAPI commits.
+Preserve generic retry ambiguity for actual Personalization API commits.
 
 Built XDA events retain `context.gdpr`. Web's default browser page provider
 includes `title`, `hash`, `width` and `height`. Shared `buildPageView` keeps the
@@ -370,7 +370,7 @@ Future framework adapters slot in under the same naming pattern: `packages/adapt
 
 Only the actual hybrid Node transfer producer prepares replay. It preserves raw
 final Client events, including supported query arrays, unchanged without an
-additional replay-compatibility check before XDA. Normal SDK builder XPAPI
+additional replay-compatibility check before XDA. Normal SDK builder Personalization API
 validation and Client XDA validation remain; manually built/raw replay retains
 consumer-owned compatibility risk. Receiving browser replay checks still enforce
 schema/order/count, capacity, scope/cache/consent and lifetime. Refusing replay
@@ -464,7 +464,7 @@ update in-memory flags without restoring persisted visitor profile/flags; per-ca
 CPA preview fetches on ordinary instances retain personalization only on the plan. Supplied arrays
 replace the browser snapshot (`[]` clears); omission retains flags unless profile
 identity changes. Treating XDA changes as a complete snapshot follows
-XPAPI/Optimization and remains an assumption pending live-backend verification.
+Personalization API/Optimization and remains an assumption pending live-backend verification.
 Changed values notify subscriptions; changed attribution refreshes exposure.
 Guard asynchronous state interception so stale results cannot overwrite later
 state. Node carries returned changes alongside profile in private handoffs without
@@ -493,9 +493,9 @@ Retained differences:
   exposure runs untracked, preventing event interceptors or subscribers from
   adding unrelated dependencies to the caller's reactive computation. Untracked
   exposure is a local difference from the focused Optimization reference.
-- The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through XPAPI.
+- The pinned `CoreStatelessRequest.prepareRequestHandoff` previews through Personalization API.
   Experiences retains `fetchExperienceForHandoff` because XDA must evaluate the
-  consumer-supplied batch and select content; XPAPI remains actual commit transport.
+  consumer-supplied batch and select content; Personalization API remains actual commit transport.
 - Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
   generated `personalization.preflight` option is now forwarded, but deployed
   commitment behavior must be verified. The content source requires XDA evaluation;
@@ -662,7 +662,7 @@ per-call arguments on `client.experience.*`/`client.destination.*` (e.g.
 `client.experience.get(spaceId, environmentId, id, opts)`) to required fields on
 the generated client's constructor options (`client.experience.get(id, opts)`).
 `packages/client`'s `resolveDeliveryClient` and `packages/runtime`'s
-`createRuntimeDeliveryClient` both construct the generated client per call now,
+`createDeliveryClient` both construct the generated client per call now,
 threading an explicit `identity: { spaceId, environmentId }` through from the
 caller's `personalizationOptions`/`Config` so inline-credential
 clients still get built with the right values. A caller-supplied `{ client }` or

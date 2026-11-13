@@ -11,8 +11,8 @@ import {
   type PortableRenderPlan,
 } from '@contentful/experiences-web';
 import { useExperiences } from '@contentful/experiences-react/client';
-import { bindNextjsPagesRouterExperiences, NextjsPagesRouterRequestRoot } from './pages-router.js';
-import type { NextjsRequestResult } from './request-result.js';
+import { bindPagesRouterExperiences, PagesRouterRequestRoot } from './pages-router.js';
+import type { RequestResult } from './request-result.js';
 
 const router = vi.hoisted(() => ({
   isReady: true,
@@ -25,7 +25,7 @@ const firstId = '3fLAdFb3BYAuImRhcW8k4t';
 const destinationId = '7u2eP09B4BIBToH8UwSHck';
 const destination = '/pages/page-two';
 const plan: PortableRenderPlan = { nodes: [], debug: false, diagnostics: [], metadata: {} };
-const startup: NextjsRequestResult = {
+const startup: RequestResult = {
   requestId: 'startup-request',
   routeKey: '/pages',
   experience: { experienceId: firstId },
@@ -59,7 +59,7 @@ const startup: NextjsRequestResult = {
     },
   },
 };
-const navigation: NextjsRequestResult = {
+const navigation: RequestResult = {
   requestId: 'destination-request',
   routeKey: destination,
   plan,
@@ -115,7 +115,7 @@ describe('Pages managed request sequence', () => {
   it('retains bound consent denial when the root defaults prop is undefined', async () => {
     const keys = [CONSENT_CACHE_KEY, PERSISTENCE_CONSENT_CACHE_KEY];
     for (const key of keys) window.localStorage.setItem(key, 'accepted');
-    const { ExperiencesRoot } = bindNextjsPagesRouterExperiences({
+    const { ExperiencesRoot } = bindPagesRouterExperiences({
       config: { components: {} },
       spaceId: 'space',
       environmentId: 'master',
@@ -131,10 +131,10 @@ describe('Pages managed request sequence', () => {
     const { sdk, fetchExperience } = sdkFixture();
     const {
       request: { ExperiencesRoot, Experience },
-    } = bindNextjsPagesRouterExperiences({
+    } = bindPagesRouterExperiences({
       config: { components: {} },
     });
-    const tree = (experiences: NextjsRequestResult) => (
+    const tree = (experiences: RequestResult) => (
       <ExperiencesRoot
         delivery={{ accessToken: 'browser-token' }}
         spaceId="space"
@@ -182,7 +182,7 @@ describe('Pages managed request sequence', () => {
     const { sdk, fetchExperience } = sdkFixture();
     const {
       request: { ExperiencesRoot, Experience },
-    } = bindNextjsPagesRouterExperiences({
+    } = bindPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>
@@ -225,7 +225,7 @@ describe('Pages managed request sequence', () => {
 
   it('keeps ordinary managed Web content and repeated query values available', async () => {
     const { sdk, fetchExperience } = sdkFixture();
-    const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
+    const bound = bindPagesRouterExperiences({ config: { components: {} } });
     await act(async () =>
       root.render(
         <bound.ExperiencesRoot
@@ -252,10 +252,10 @@ describe('Pages managed request sequence', () => {
     'waits for readiness before adopting request content (%s)',
     async (kind) => {
       const { sdk, fetchExperience } = sdkFixture();
-      const bound = bindNextjsPagesRouterExperiences({ config: { components: {} } });
-      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : NextjsPagesRouterRequestRoot;
+      const bound = bindPagesRouterExperiences({ config: { components: {} } });
+      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : PagesRouterRequestRoot;
       router.isReady = false;
-      let result: NextjsRequestResult | undefined;
+      let result: RequestResult | undefined;
       const tree = () => (
         <Owner
           spaceId="space"
@@ -286,7 +286,7 @@ describe('Pages managed request sequence', () => {
   it.each([false, true])(
     'requires a request result outside request roots (plain preview root=%s)',
     (preview) => {
-      const bound = bindNextjsPagesRouterExperiences({
+      const bound = bindPagesRouterExperiences({
         config: { components: {} },
         spaceId: 'space',
         environmentId: 'master',
@@ -305,11 +305,11 @@ describe('Pages managed request sequence', () => {
   it('waits for matching analytics props before emitting a direct page', async () => {
     const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
     const beforeInitialPage = { run: vi.fn() };
-    const bound = bindNextjsPagesRouterExperiences({
+    const bound = bindPagesRouterExperiences({
       config: { components: {} },
       beforeInitialPage,
     });
-    const tree = (result: NextjsRequestResult) => (
+    const tree = (result: RequestResult) => (
       <bound.request.ExperiencesAnalyticsRoot sdk={sdk} result={result}>
         <p>Server HTML</p>
       </bound.request.ExperiencesAnalyticsRoot>
@@ -337,7 +337,7 @@ describe('Pages managed request sequence', () => {
     const { sdk, fetchExperience } = sdkFixture();
     const {
       request: { ExperiencesAnalyticsRoot },
-    } = bindNextjsPagesRouterExperiences({
+    } = bindPagesRouterExperiences({
       config: { components: {} },
     });
     await act(async () =>
@@ -371,7 +371,7 @@ describe('Pages managed request sequence', () => {
     }
     const {
       request: { ExperiencesRoot },
-    } = bindNextjsPagesRouterExperiences({
+    } = bindPagesRouterExperiences({
       config: { components: {} },
       spaceId: 'space',
       environmentId: 'master',
