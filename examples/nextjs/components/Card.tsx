@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react/client';
+import { useDesignValues } from '@contentful/experiences-nextjs/client';
 
 export interface CardProps {
   title?: string;

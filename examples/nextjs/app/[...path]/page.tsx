@@ -1,4 +1,4 @@
-import { fetchDestinationSitemap } from '@contentful/experiences-react';
+import { fetchDestinationSitemap } from '@contentful/experiences-nextjs/server';
 
 import {
   destinationConfig,
