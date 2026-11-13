@@ -1,5 +1,6 @@
 import { ServerPresentations } from './ServerPresentations';
 import { loadServerPage, contentSeeds } from '../server-loader';
+import { diagnosticPrimary } from '../server-reference';
 import { ClientContentPage } from './ClientContentPage';
 import { ServerUtilities } from './Utilities';
 import { updateServerContent } from '../app/(experiences)/actions';
@@ -7,7 +8,7 @@ import { updateServerContent } from '../app/(experiences)/actions';
 export async function ServerContentPage({ title }: { title: string }) {
   const { result, browserResult, comparisons, serverOnly, analytics, browser } =
     await loadServerPage();
-  const all = [result, ...comparisons];
+  const all = [diagnosticPrimary(result), ...comparisons];
   if (!serverOnly)
     return <ClientContentPage key={result.routeKey} seeds={contentSeeds(all, browserResult)} />;
   const content = (

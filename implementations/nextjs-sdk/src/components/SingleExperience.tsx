@@ -6,6 +6,7 @@ import {
   type RequestExperienceProps,
 } from '@contentful/experiences-nextjs/app-router/client';
 import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
+import type { ManagedExperienceResult } from '@contentful/experiences-nextjs/client';
 import { browserRegistry } from './browser-registry';
 
 const preview =
@@ -36,4 +37,29 @@ export const singleExperienceFallbacks = {
 
 export function ClientRequestExperience(props: RequestExperienceProps) {
   return <AppRequestExperience {...singleExperienceFallbacks} {...props} />;
+}
+
+// Server routing handles initial redirects and 404s; these cover later browser results.
+export const destinationFallbacks = {
+  loadingFallback: singleExperienceFallbacks.loadingFallback,
+  errorFallback: ({ error }: ManagedExperienceResult) => (
+    <p className="placeholder-card" role="alert">
+      {error?.name === 'NotFoundError'
+        ? 'Destination content was not found.'
+        : 'Experience content unavailable.'}
+    </p>
+  ),
+  redirectFallback: ({ redirect }: ManagedExperienceResult) => (
+    <p className="placeholder-card" role="status">
+      Destination redirected to {redirect?.path}.
+    </p>
+  ),
+};
+
+export function ClientDestinationExperience(props: RequestExperienceProps) {
+  return <AppRequestExperience {...destinationFallbacks} {...props} />;
+}
+
+export function PagesDestinationExperience(props: RequestExperienceProps) {
+  return <Experience {...destinationFallbacks} {...props} />;
 }

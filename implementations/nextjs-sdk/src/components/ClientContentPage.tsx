@@ -10,7 +10,7 @@ import {
   type ManagedExperienceResult,
   type OnExperienceNodeRoot,
 } from '@contentful/experiences-nextjs/client';
-import type { ContentSeed } from '../reference';
+import { experienceDescriptor, type ContentSeed } from '../reference';
 import { useReference } from './BrowserRoot';
 import { browserRegistry } from './browser-registry';
 import { ExperiencePresentation } from './ExperiencePresentation';
@@ -30,7 +30,7 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
     identified: false,
   });
   const [hidden, setHidden] = useState(false);
-  const primarySeed = seeds.find((seed) => seed.experience.experienceId === ids[0]);
+  const primarySeed = seeds.find((seed) => experienceDescriptor(seed)?.experienceId === ids[0]);
   const render = (result: ManagedExperienceResult) => (
     <>
       <Utilities
@@ -107,7 +107,7 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
   ) : (
     <Experience
       key={intent.cycle}
-      {...primarySeed?.experience}
+      {...experienceDescriptor(primarySeed)}
       experienceId={ids[0]}
       personalization={intent.personalization}
     >
@@ -151,7 +151,7 @@ function ComparisonSequence({
 }) {
   const { Experience, RequestExperience } = useReference();
   const id = ids[0];
-  const seed = seeds.find((value) => value.experience.experienceId === id);
+  const seed = seeds.find((value) => experienceDescriptor(value)?.experienceId === id);
   if (!ids.length || !ready) return null;
   const render = (result: ManagedExperienceResult) => (
     <>
@@ -166,7 +166,9 @@ function ComparisonSequence({
   return seed && !fresh ? (
     <RequestExperience result={seed}>{render}</RequestExperience>
   ) : (
-    <Experience {...(seed?.experience ?? { experienceId: id, personalization: { events: [] } })}>
+    <Experience
+      {...(experienceDescriptor(seed) ?? { experienceId: id, personalization: { events: [] } })}
+    >
       {render}
     </Experience>
   );

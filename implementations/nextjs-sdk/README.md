@@ -288,6 +288,60 @@ Request-history guards survive SDK replacement. This configuration controls
 Contentful Live Preview content and event suppression, independently of Personalization API
 preflight and rendering-mode commitment policy.
 
+## Destination routes
+
+Destination routes use the same request bindings with a Destination selector as
+`request.experience`, one primary per request, in both routers and both modes:
+
+| Router | Path selector                         | Node selector             |
+| ------ | ------------------------------------- | ------------------------- |
+| App    | `/destination`, `/destination/<path>` | `/destination-node`       |
+| Pages  | `/pages/destination`, `.../<path>`    | `/pages/destination-node` |
+
+The route remainder is the absolute Destination path (`/destination` is `/`); the
+node routes select `DESTINATION_NODE_ID`. As on the diagnostic routes,
+`?mode=server-only` selects `request.mode: 'ssr'` (ordinary Destination fetch with
+page intent and `initialPageOwner: 'server'`); otherwise `'hybrid'` uses the Node
+`fetchDestinationForHandoff` (server preflight, browser replay). Both modes pass
+the complete result to the client request root and presentation, as on
+`/single-experience`. `src/destination-server.tsx` binds the selector and mode as
+functions of the request URL, so App's memoized `request.loadExperience()` is the
+only Destination fetch for the page.
+
+`DESTINATION_ID` enables these routes; it is blank in `.env.example`. When unset,
+the routes render a "not configured" state without an SDK request and every other
+route behaves as before. Optional `DESTINATION_PATH` (default `/coded`),
+`DESTINATION_NODE_ID` (default `sdk-ci-personalized`), `DESTINATION_REDIRECT_PATH`
+(default `/legacy`) and `DESTINATION_MISSING_PATH` (default `/missing`) follow the
+`lib/mocks/scripts/seedDestination.ts` fixture and must be absolute paths. The
+browser projection adds only these non-credential `destination` settings for the
+navigation links. The same-app Delivery proxy additionally permits the configured
+Destination's path and node Experience lookups (space-scoped, no environment) for
+browser Retry. Destination delivery ignores `ENVIRONMENT_ID` and `LOCALE`.
+
+Routing outcomes stay with Next. App pages call `applyAppRouterOutcome` on the
+`loadExperience()` result before rendering request components: a redirect calls
+`redirect()` and a missing path/node (`notFound`) calls `notFound()`, the normal 404. Pages GSSP returns `getPagesRouterOutcome(...)` (`{ redirect }` or
+`{ notFound: true }`) before `{ props }`. Both map the redirect's Destination path
+back to this router's route and keep `?mode=server-only`, so `/destination/legacy`
+lands on `/destination/coded`. Redirect results carry no plan, handoff or page owner.
+Standard links move between Destination routes with client navigation (RSC or
+GSSP data requests run the same server routing); router and mode switches use a
+full document navigation. Later browser results present a not-found or redirect
+fallback; the SDK never navigates. Destination plans carry no source-map
+attribution because the Destinations API accepts no `sourceMap` extension, so
+automatic view, hover and click tracking does not fire for that content. Preview
+Session updates bind by the resolved Experience id; Destinations have no native
+preview. The diagnostic Home/Page Two flows keep selecting by Experience id and
+narrow seeds with `experienceDescriptor`, because request descriptors are now a
+selector union.
+
+The reference tests cover settings, route/path mapping, selectors, mode selection,
+redirect locations and seed narrowing without network access. Production build,
+lint and typecheck pass against the packed SDK. The fixture is created separately
+in the "Experiences SDK CI" space; these routes have not been verified against a
+live Destination.
+
 ## Public server integration
 
 The normal one-Experience examples bind server policy in

@@ -120,7 +120,8 @@ another reference's environment file or spreads `process.env`. `PORT` is local
 hosting configuration, defaulting to 3400, and must be an integer in 1–65535.
 
 The public allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`,
-resolved `EXPERIENCE_IDS` and the optional `LIVE_PREVIEW` projection described below. The first and third default to empty strings;
+resolved `EXPERIENCE_IDS`, the optional `DESTINATION` projection and the optional
+`LIVE_PREVIEW` projection described below. The first and third default to empty strings;
 environment defaults to `master` and locale to `en-US`. The content loader uses
 these values for Delivery requests; the managed root uses the same browser-safe
 Delivery configuration and the SDK's default Optimization endpoints.
@@ -171,6 +172,45 @@ optional configuration, not rendered content or manually supplied visitor profil
 IDs. Home uses all configured IDs in the automatic section and the first in the
 manual section; Page Two uses the last automatically and the first manually. The
 manual section presents that first plan twice to demonstrate separate DOM roots.
+
+## Destination routes
+
+Destination routes exercise managed loading by Destination path and node through
+the same registry-bound `useManagedExperience` as Home, one primary per page:
+
+- `/destination` and `/destination/<path>` select `{ destinationId, path }`, where
+  the Destination path is the route remainder (`/destination` is `/`).
+- `/destination-node` selects `{ destinationId, nodeId }` with `DESTINATION_NODE_ID`.
+
+`DESTINATION_ID` enables them. It is blank in `.env.example`; when unset the routes
+show a "not configured" state and Home/Page Two behave exactly as before. Optional
+`DESTINATION_PATH` (default `/coded`, the navigation link), `DESTINATION_NODE_ID`
+(default `sdk-ci-personalized`), `DESTINATION_REDIRECT_PATH` (default `/legacy`) and
+`DESTINATION_MISSING_PATH` (default `/missing`) override the shared
+`lib/mocks/scripts/seedDestination.ts` fixture values. Paths must be absolute. The
+host projects them as `DESTINATION` through the same explicit allowlist; a
+Destination id is not a credential. Destination delivery is space-scoped, so
+`ENVIRONMENT_ID` and `LOCALE` do not apply to these requests.
+
+The SDK never navigates. A redirect node produces `status: 'redirect'` with no
+content; the page's `onExperienceRedirect` maps `redirect.path` back to
+`/destination<path>` and replaces the history entry through the ordinary Navigation
+intent, so `/destination/legacy` lands on `/destination/coded`. A missing path or
+node surfaces as `result.error` with name `NotFoundError` and is shown as a
+not-found card; other errors use the ordinary error presentation. Utilities'
+Retry reuses the managed selector without events. Ordinary links move between
+destination routes without a document navigation. Destination plans carry no
+source-map attribution because the Destinations API accepts no `sourceMap`
+extension, so automatic view, hover and click tracking does not fire for that
+content; the page says so rather than simulating it. Preview Sessions bind by the
+resolved Experience id; Destinations have no native preview.
+
+After the primary settles, the page lists the first sitemap page (limit 20) from
+the Web SDK's `fetchDestinationSitemap`, which fetches no Experience content.
+
+`npm test` also covers the route/path mapping and the `DESTINATION` projection
+without network access. The fixture is created separately in the "Experiences SDK
+CI" space; this reference has not been verified against a live Destination.
 
 ## Package boundaries and source
 
