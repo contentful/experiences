@@ -122,7 +122,7 @@ Several managed `Experience`s may use Destination selectors at once.
 
 ```tsx
 import { useNavigate, useLocation } from 'react-router-dom';
-import { createExperiences } from '@contentful/experiences-react/client';
+import { createExperiences, isNotFoundError } from '@contentful/experiences-react/client';
 
 const { Experience } = createExperiences({ config: browserRegistry });
 
@@ -134,10 +134,9 @@ function DestinationPage({ destinationId }: { destinationId: string }) {
       destinationId={destinationId}
       path={pathname}
       loadingFallback={<p>Loading…</p>}
-      // A missing Destination, path or node is NotFoundError in the error state.
-      errorFallback={({ error }) => (
-        <p>{error?.name === 'NotFoundError' ? 'Not found' : 'Error'}</p>
-      )}
+      // A missing Destination, path or node is a 404 error; check it with isNotFoundError,
+      // not error.name, which production bundles can rename.
+      errorFallback={({ error }) => <p>{isNotFoundError(error) ? 'Not found' : 'Error'}</p>}
       // The SDK never navigates; route the redirect at the application boundary.
       onExperienceRedirect={({ path }) => navigate(path, { replace: true })}
       redirectFallback={null}

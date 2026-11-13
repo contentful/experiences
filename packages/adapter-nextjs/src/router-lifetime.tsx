@@ -76,9 +76,9 @@ export function useRequestOptions(supplied?: RequestResult) {
   const initialError = useMemo(() => {
     if (error === undefined) return undefined;
     const value = new Error(error);
-    // Keep the not-found outcome distinguishable for client error presentation.
-    if (notFound) value.name = 'NotFoundError';
-    return value;
+    // Keep the not-found outcome distinguishable for client error presentation
+    // through isNotFoundError, as for the delivery client's own 404 errors.
+    return notFound ? Object.assign(value, { name: 'NotFoundError', statusCode: 404 }) : value;
   }, [error, notFound]);
   const redirectPath = result?.redirect?.path;
   const initialRedirect = useMemo(

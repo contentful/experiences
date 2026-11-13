@@ -16,6 +16,7 @@ export {
   NotFoundError,
   PREVIEW_HOST,
   isDestinationRedirect,
+  isNotFoundError,
 } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,

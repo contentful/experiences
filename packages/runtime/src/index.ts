@@ -40,7 +40,7 @@ export {
   isDestinationRequest,
 } from './experience-selector.js';
 export type { ExperienceRequest, ExperienceSelectorKind } from './experience-selector.js';
-export { isDestinationRedirect } from '@contentful/experiences-client';
+export { isDestinationRedirect, isNotFoundError } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,
   DestinationSitemapResult,

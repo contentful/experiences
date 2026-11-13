@@ -103,6 +103,7 @@ export {
   fetchExperience,
   fetchDestinationSitemap,
   isDestinationRedirect,
+  isNotFoundError,
   readSourceMap,
   toExperiencePayload,
   toExperiencePayloadFromDestination,

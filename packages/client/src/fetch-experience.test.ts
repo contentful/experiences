@@ -3,7 +3,7 @@ import {
   ContentfulViewDeliveryClient,
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
-import { ExperienceFetchError } from './errors.js';
+import { ExperienceFetchError, isNotFoundError } from './errors.js';
 import {
   fetchDestinationPayload,
   fetchExperience,
@@ -838,5 +838,17 @@ describe('isDestinationRedirect', () => {
     expect(isDestinationRedirect({ redirect: null })).toBe(false);
     expect(isDestinationRedirect({ nodes: [] })).toBe(false);
     expect(isDestinationRedirect(null)).toBe(false);
+  });
+});
+
+describe('isNotFoundError', () => {
+  it('recognizes delivery 404s by class or status, never by name alone', () => {
+    expect(isNotFoundError(new ContentfulViewDelivery.NotFoundError('missing'))).toBe(true);
+    expect(isNotFoundError(Object.assign(new Error('forwarded'), { statusCode: 404 }))).toBe(true);
+    expect(isNotFoundError(Object.assign(new Error('x'), { name: 'NotFoundError' }))).toBe(false);
+    expect(
+      isNotFoundError(new ExperienceFetchError('down', { spaceId: 's', experienceId: 'e' }))
+    ).toBe(false);
+    expect(isNotFoundError(undefined)).toBe(false);
   });
 });

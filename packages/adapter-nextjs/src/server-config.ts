@@ -1,6 +1,7 @@
 import {
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError as isDeliveryNotFound,
   type ConsentInput,
   type PreviewConfig,
   type Config as NodeConfig,
@@ -98,7 +99,7 @@ export function isContentError(error: unknown): boolean {
 
 /** A missing Experience, Destination, path or node: normal framework 404 handling applies. */
 export function isNotFoundError(error: unknown): boolean {
-  return error instanceof NotFoundError;
+  return error instanceof NotFoundError || isDeliveryNotFound(error);
 }
 
 /** The explicit browser config is the only credential source for built-in client roots. */
