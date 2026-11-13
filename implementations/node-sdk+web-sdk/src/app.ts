@@ -1,7 +1,8 @@
-import { referenceNode, pageContext } from '../dist/shared.js';
+import { destinationHref, destinationPath, referenceNode, pageContext } from '../dist/shared.js';
 import {
   ContentfulExperiences,
   getPreviewSessionBinding,
+  isDestinationRedirect,
   NotFoundError,
   type PortableRenderPlan,
   type ExperiencesHandoff,
@@ -43,6 +44,13 @@ app.locals.documentToHtmlString = documentToHtmlString;
 app.locals.referenceNode = referenceNode;
 app.locals.getTrackingAttributes = getTrackingAttributes;
 app.locals.TRACKING_CLICKABLE_ATTRIBUTE = TRACKING_CLICKABLE_ATTRIBUTE;
+app.locals.destinationLinks = environment.DESTINATION_ID
+  ? [
+      { label: 'By path', href: destinationHref(environment.DESTINATION_PATH) },
+      { label: 'Redirect', href: destinationHref(environment.DESTINATION_REDIRECT_PATH) },
+      { label: 'Missing', href: destinationHref(environment.DESTINATION_MISSING_PATH) },
+    ]
+  : [];
 app.use((request, response, next) => {
   response.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -72,45 +80,52 @@ app.get('/health', (_request, response) => response.type('text/plain').send('ok'
 app.use(rateLimit({ windowMs: 30_000, max: 1000 }));
 app.use(cookieParser());
 
-for (const [path, route] of Object.entries(routes)) {
-  app.get(path, async (req, res) => {
-    const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
-    const page = pageContext(url, req.get('referer') ?? '');
-    const binding =
-      config.livePreviewEnabled && environment.LIVE_PREVIEW
-        ? getPreviewSessionBinding(environment.LIVE_PREVIEW, url.searchParams)
-        : undefined;
-    const preview = binding
-      ? {
-          sessionId: binding.sessionId,
-          sessionHost: binding.sessionHost,
-          resourceResolution: binding.resourceResolution,
-        }
+function createRequest(req: Request) {
+  const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
+  const page = pageContext(url, req.get('referer') ?? '');
+  const binding =
+    config.livePreviewEnabled && environment.LIVE_PREVIEW
+      ? getPreviewSessionBinding(environment.LIVE_PREVIEW, url.searchParams)
       : undefined;
-    const request = sdk.forRequest({
-      // Preview content has no visitor identity/handoff prerequisite.
-      ...(binding ? {} : readVisitor(req.cookies)),
-      locale: environment.LOCALE,
-      preflight: true,
-      eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
-      preview,
-    });
+  const preview = binding
+    ? {
+        sessionId: binding.sessionId,
+        sessionHost: binding.sessionHost,
+        resourceResolution: binding.resourceResolution,
+      }
+    : undefined;
+  const request = sdk.forRequest({
+    // Preview content has no visitor identity/handoff prerequisite.
+    ...(binding ? {} : readVisitor(req.cookies)),
+    locale: environment.LOCALE,
+    preflight: true,
+    eventContext: { page, userAgent: req.get('user-agent') ?? 'node-js-server' },
+    preview,
+  });
+  const identifyRequested = !request.isPreview && req.query.userId === 'charles';
+  const events = request.isPreview
+    ? undefined
+    : [
+        ...(identifyRequested
+          ? [
+              {
+                type: 'identify' as const,
+                userId: 'charles',
+                traits: { identified: true },
+              },
+            ]
+          : []),
+        { type: 'page' as const, properties: page },
+      ];
+  return { url, binding, request, identifyRequested, events };
+}
+
+for (const [path, route] of Object.entries(routes)) {
+  if ('destination' in route) continue;
+  app.get(path, async (req, res) => {
+    const { binding, request, identifyRequested, ...intent } = createRequest(req);
     try {
-      const identifyRequested = !request.isPreview && req.query.userId === 'charles';
-      let events = request.isPreview
-        ? undefined
-        : [
-            ...(identifyRequested
-              ? [
-                  {
-                    type: 'identify' as const,
-                    userId: 'charles',
-                    traits: { identified: true },
-                  },
-                ]
-              : []),
-            { type: 'page' as const, properties: page },
-          ];
+      let events = intent.events;
       const plans = new Map<string, PortableRenderPlan>();
       let handoff: ExperiencesHandoff | undefined;
       let contentError: unknown;
@@ -178,6 +193,109 @@ for (const [path, route] of Object.entries(routes)) {
     res.render('index');
   });
 }
+
+app.get('/destination', async (req, res) => {
+  const { url, binding, request, identifyRequested, events } = createRequest(req);
+  const destinationId = environment.DESTINATION_ID;
+  const path = destinationPath(url.searchParams, environment.DESTINATION_PATH);
+  let redirect: string | undefined;
+  let notFound = false;
+  try {
+    let handoff: ExperiencesHandoff | undefined;
+    const items: { selector: string; plan?: PortableRenderPlan; message?: string }[] = [];
+    if (destinationId) {
+      // Destinations are space-scoped: no locale, parameters or extensions (no source map).
+      const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+      let plan: PortableRenderPlan | undefined;
+      let contentError: unknown;
+      if (events !== undefined) {
+        // Actual server-to-browser transfer for the by-path primary, like the by-ID routes.
+        const result = await request.fetchDestinationForHandoff(
+          { destinationId, path, personalization: { events } },
+          resolveOptions,
+          { routeKey: req.originalUrl }
+        );
+        // A redirect carries a replay-free handoff that is never sent to the browser.
+        if (result.redirect) redirect = result.redirect.path;
+        else {
+          handoff = result.handoff;
+          plan = result.plan;
+          contentError = result.plan ? undefined : (result.error ?? new Error('Unavailable.'));
+        }
+      } else {
+        // Destinations have no native preview; preview requests read ordinary Delivery.
+        try {
+          const result = await request.fetchByDestinationPath(
+            { destinationId, path },
+            resolveOptions
+          );
+          if (isDestinationRedirect(result)) redirect = result.redirect.path;
+          else plan = result;
+        } catch (error) {
+          contentError = error;
+        }
+      }
+      // A missing path is a missing route, mapped to the app's ordinary 404.
+      notFound = contentError instanceof NotFoundError;
+      if (redirect === undefined && !notFound) {
+        items.push({
+          selector: 'path',
+          plan,
+          message: plan ? undefined : 'This Destination path could not be loaded.',
+        });
+        // Reference-only comparison: ordinary event-free fetch, never handoff input.
+        try {
+          const result = await request.fetchByDestinationNode(
+            { destinationId, nodeId: environment.DESTINATION_NODE_ID },
+            resolveOptions
+          );
+          items.push(
+            isDestinationRedirect(result)
+              ? {
+                  selector: 'node',
+                  message: `This Destination node redirects to ${result.redirect.path}.`,
+                }
+              : { selector: 'node', plan: result }
+          );
+        } catch {
+          items.push({ selector: 'node', message: 'This Destination node could not be loaded.' });
+        }
+        if (!plan) res.status(502);
+      }
+    }
+    const bootstrap = JSON.stringify({
+      environment,
+      handoff,
+      preview: request.isPreview ? { binding, initialPlans: {} } : undefined,
+    }).replaceAll('<', '\\u003c');
+    Object.assign(res.locals, {
+      title: routes['/destination'].title,
+      path: '/destination',
+      route: routes['/destination'],
+      plans: new Map(),
+      identifyRequested,
+      bootstrap,
+      destination: {
+        summary: destinationId
+          ? `Path ${path} and node ${environment.DESTINATION_NODE_ID}`
+          : 'Destination not configured. Set DESTINATION_ID in implementations/node-sdk+web-sdk/.env.',
+        items,
+      },
+    });
+  } finally {
+    request.destroy();
+    if (!request.isPreview) writeIdentity(res, request, req.secure);
+  }
+  if (redirect !== undefined) {
+    res.redirect(302, destinationHref(redirect, url.search));
+    return;
+  }
+  if (notFound) {
+    res.status(404).type('text/plain').send('Not found.');
+    return;
+  }
+  res.render('index');
+});
 
 // Consumer integration: only public/ is eligible for static hosting. Reject
 // symlinks that resolve outside it; .env, templates and dependencies stay private.

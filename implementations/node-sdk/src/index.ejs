@@ -107,7 +107,15 @@
           <span class="control-panel__row-value"><%= !isPreview && identifyRequested ? 'Yes' : 'No' %></span>
           <span class="control-panel__row-actions">
             <% if (!isPreview && !identifyRequested) { %>
-              <a href="/?userId=charles">Identify</a>
+              <a href="<%= identifyHref %>">Identify</a>
+            <% } %>
+          </span>
+          <span class="control-panel__row-label">Destination</span>
+          <span class="control-panel__row-value"><%= destinationLinks.length ? 'Configured' : 'Not configured' %></span>
+          <span class="control-panel__row-actions">
+            <a href="/">Experiences</a>
+            <% for (const { label, href } of destinationLinks) { %>
+              <a href="<%= href %>"><%= label %></a>
             <% } %>
           </span>
         </div>
@@ -117,14 +125,29 @@
       </section>
 
       <section id="experiences">
-        <h2>Experiences</h2>
+        <h2><%= locals.destination ? 'Destination' : 'Experiences' %></h2>
 
+        <% if (locals.destination && !destination.configured) { %>
+          <p role="status">Set DESTINATION_ID in this implementation's .env to load Destination content.</p>
+        <% } else if (locals.destination) { %>
+          <p>Path <%= destination.path %> and node <%= destination.nodeId %></p>
+          <% if (destination.sitemap.length) { %>
+            <nav aria-label="Destination paths">
+              <% for (const { path, href } of destination.sitemap) { %>
+                <a href="<%= href %>"><%= path %></a>
+              <% } %>
+            </nav>
+          <% } %>
+        <% } %>
         <div>
-          <% for (const { id, plan } of experiences) { %>
-            <div data-experience-id="<%= id %>">
+          <% for (const { id, plan, attributes = {}, redirect } of experiences) { %>
+            <div <% if (id) { %>data-experience-id="<%= id %>"<% } %>
+              <% for (const [name, value] of Object.entries(attributes)) { %> <%= name %>="<%= value %>"<% } %>>
               <div>
                 <% if (plan) { %>
                   <%- include('nodes', { nodes: plan.nodes }) %>
+                <% } else if (redirect) { %>
+                  <p role="status">This Destination node redirects to <a href="<%= redirect.href %>"><%= redirect.path %></a>.</p>
                 <% } else { %>
                   <p role="status">This Experience could not be loaded.</p>
                 <% } %>

@@ -32,6 +32,9 @@ const defaultExperienceIds = [
 const experienceIds = env.EXPERIENCE_IDS?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
+// Reference app: optional Destination demonstration. Destination ids and paths are not
+// secrets, but they still pass through this explicit allowlist.
+const destinationId = env.DESTINATION_ID?.trim() || undefined;
 const previewEnabled = env.LIVE_PREVIEW_ENABLED === 'true';
 if (previewEnabled && !env.BROWSER_PREVIEW_TOKEN?.trim())
   throw new Error(
@@ -46,6 +49,11 @@ const publicEnvironment = {
   CDA_TOKEN: env.CDA_TOKEN,
   LOCALE: env.LOCALE || 'en-US',
   EXPERIENCE_IDS: experienceIds?.length ? [...new Set(experienceIds)] : defaultExperienceIds,
+  DESTINATION_ID: destinationId,
+  DESTINATION_PATH: env.DESTINATION_PATH?.trim() || '/coded',
+  DESTINATION_NODE_ID: env.DESTINATION_NODE_ID?.trim() || 'sdk-ci-personalized',
+  DESTINATION_REDIRECT_PATH: env.DESTINATION_REDIRECT_PATH?.trim() || '/legacy',
+  DESTINATION_MISSING_PATH: env.DESTINATION_MISSING_PATH?.trim() || '/missing',
   ...(previewEnabled
     ? {
         LIVE_PREVIEW: {

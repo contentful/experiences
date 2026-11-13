@@ -26,8 +26,8 @@ supported product usage or a cross-fetch guarantee.
   errors, extensionless SPA fallback, loopback binding and API-free `/health`.
   Delivery goes directly from browser to default live services; no proxy or
   simulated upstream. CORS OPTIONS is not Experience API noncommitting preflight.
-- Copy only the installed Web UMD/map; bundle Rich Text and the public pure tracking
-  helper separately; optional preview uses a separately bundled installed ESM artifact. Refresh setup after SDK changes to avoid stale installed UMDs.
+- Copy only the installed Web UMD/map; bundle Rich Text, the public pure tracking
+  helper and the pure `isDestinationRedirect` guard (absent from the UMD global) separately; optional preview uses a separately bundled installed ESM artifact. Refresh setup after SDK changes to avoid stale installed UMDs.
   `public/dist` is generated; the vendored theme is authored local source with
   pinned provenance. No adjacent Optimization checkout/package runtime dependency.
 - Runtime-backed Preview Sessions use conditional `preview` session configuration, normal fetch/render,

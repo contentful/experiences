@@ -1,5 +1,6 @@
 import { getPreviewSessionBinding, loadPreviewImplementation } from '/dist/preview.js';
-import { createRoutes } from '/dist/shared.js';
+import { isDestinationRedirect } from '/dist/rich-text.js';
+import { createRoutes, destinationHref, destinationPath } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { cloneTemplate } from './templates.js';
@@ -162,6 +163,10 @@ function routeUrl(path) {
 }
 
 function updateNavigation() {
+  for (const link of appMain.querySelectorAll('[data-destination-links] a')) {
+    link.dataset.routeHref ??= link.getAttribute('href');
+    link.href = routeUrl(link.dataset.routeHref);
+  }
   for (const link of document.querySelectorAll('#app-nav a')) {
     const path = new URL(link.href).pathname;
     link.dataset.routeHref ??= link.getAttribute('href');
@@ -242,7 +247,11 @@ function renderRouteShell(route, focus) {
   disposeRouteAction = () => {};
   const header = cloneTemplate('route-header');
   header.querySelector('header').dataset.testid =
-    location.pathname === '/' ? 'home-view' : 'page-two-view';
+    location.pathname === '/'
+      ? 'home-view'
+      : location.pathname === '/destination'
+        ? 'destination-view'
+        : 'page-two-view';
   header.querySelector('h1').textContent = route?.title ?? 'Page not found';
   // Consumer integration: removing attributed content ends old presentations.
   // Reset calls SDK.reset only AFTER this synchronous replacement.
@@ -251,7 +260,7 @@ function renderRouteShell(route, focus) {
   content.replaceChildren();
   appMain.querySelector('[data-custom-action]').hidden = location.pathname !== '/page-two';
   if (route) {
-    content.appendChild(cloneTemplate('content'));
+    content.appendChild(cloneTemplate(route.destination ? 'destination-content' : 'content'));
   }
   appMain.scrollTop = 0;
   appMain.removeAttribute('aria-busy');
@@ -275,7 +284,14 @@ function createDestinations(route) {
 }
 
 // Reference app: fetch route content; generation guards stale work.
-async function renderRoute({ sendPage = false, events, reset = false, focus = false } = {}) {
+async function renderRoute({
+  sendPage = false,
+  events,
+  reset = false,
+  focus = false,
+  redirectedFrom,
+  redirects = 0,
+} = {}) {
   if (disposed) return;
   const nextBinding = environment.LIVE_PREVIEW
     ? getPreviewSessionBinding(environment.LIVE_PREVIEW)
@@ -309,12 +325,55 @@ async function renderRoute({ sendPage = false, events, reset = false, focus = fa
   if (!reset) previousManual.forEach((element) => sdk.tracking.clearElement('views', element));
   if (!isCurrent() || !route) return;
   wireRouteAction();
-  const destinations = createDestinations(route);
+  const destinations = route.destination ? new Map() : createDestinations(route);
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
   status.textContent = 'Updating content…';
   try {
     if (sdk.isPreview) previewBinding = nextBinding;
+
+    if (route.destination) {
+      const outcome = await loadDestination(isCurrent, requestOptions?.personalization);
+      if (!isCurrent()) return;
+      appMain.removeAttribute('aria-busy');
+      if (outcome.redirect !== undefined && redirects < 3) {
+        // A redirect is an explicit outcome, never content. Navigate to the target path
+        // as the presented page, carrying the intent the redirecting route never presented.
+        history.replaceState(
+          null,
+          '',
+          routeUrl(destinationHref(outcome.redirect, location.search))
+        );
+        void renderRoute({ events, focus, redirectedFrom: outcome.from, redirects: redirects + 1 });
+        return;
+      }
+      if (outcome.notFound) {
+        renderRouteShell(undefined, focus);
+        status.textContent = 'Destination path not found.';
+        return;
+      }
+      if (redirectedFrom !== undefined) {
+        const notice = appMain.querySelector('[data-destination-redirect]');
+        notice.hidden = false;
+        notice.textContent = `Destination path ${redirectedFrom} redirected to ${outcome.path}.`;
+      }
+      if (outcome.redirect !== undefined) {
+        showStatus(appMain.querySelector('[data-destination]'), 'Too many Destination redirects.', {
+          error: true,
+        });
+      } else if (outcome.failed && !sdk.isPreview) {
+        errorPanel.hidden = false;
+        showStatus(errorPanel, 'Some Destination content is unavailable.', {
+          error: true,
+          retry: true,
+        });
+      }
+      status.textContent =
+        outcome.failed || outcome.redirect !== undefined
+          ? 'Some content could not be loaded.'
+          : 'Browser active. Content updated.';
+      return;
+    }
 
     const failed = await loadExperiences(destinations, isCurrent, undefined, requestOptions);
     if (!isCurrent()) return;
@@ -404,6 +463,75 @@ async function loadExperiences(destinations, isCurrent, initialPlans, requestOpt
         : 'Browser active. Content updated.';
   }
   return failures.size > 0;
+}
+
+// Reference app: the by-path primary carries this route's intent once; the by-node
+// comparison and Retry use ordinary event-free fetch. Destinations accept no locale.
+async function loadDestination(isCurrent, personalization) {
+  const parent = appMain.querySelector('[data-destination]');
+  const summary = appMain.querySelector('[data-destination-summary]');
+  const destinationId = environment.DESTINATION_ID;
+  if (!destinationId) {
+    summary.textContent =
+      'Destination not configured. Set DESTINATION_ID in implementations/node-sdk+web-sdk/.env.';
+    return { failed: false };
+  }
+  const path = destinationPath(new URL(location.href).searchParams, environment.DESTINATION_PATH);
+  summary.textContent = `Path ${path} and node ${environment.DESTINATION_NODE_ID}`;
+  const [byPath, byNode] = ['path', 'node'].map((selector) => {
+    const target = document.createElement('div');
+    target.dataset.destinationSelector = selector;
+    showStatus(target, 'Loading Destination content…');
+    parent.appendChild(target);
+    return target;
+  });
+  let profileId = sdk.states.profile.current?.id;
+  let failed = false;
+  try {
+    const result = await sdk.fetchByDestinationPath(
+      {
+        destinationId,
+        path,
+        ...(sdk.isPreview ? {} : { personalization: { ...personalization, profileId } }),
+      },
+      resolveOptions
+    );
+    if (!isCurrent()) return { failed, path };
+    if (isDestinationRedirect(result)) return { redirect: result.redirect.path, from: path };
+    profileId = result.personalization?.profile.id ?? profileId;
+    byPath.replaceChildren(renderExperience(result, result.experienceId ?? '', 'auto'));
+  } catch (error) {
+    if (!isCurrent()) return { failed, path };
+    // The UMD may minify constructor names; Delivery exposes a stable statusCode.
+    if (error?.statusCode === 404) return { notFound: true };
+    failed = true;
+    showStatus(byPath, 'This Destination path could not be loaded or rendered.', { error: true });
+  }
+  try {
+    const result = await sdk.fetchByDestinationNode(
+      {
+        destinationId,
+        nodeId: environment.DESTINATION_NODE_ID,
+        ...(sdk.isPreview ? {} : { personalization: { profileId } }),
+      },
+      resolveOptions
+    );
+    if (!isCurrent()) return { failed, path };
+    if (isDestinationRedirect(result))
+      showStatus(byNode, `This Destination node redirects to ${result.redirect.path}.`);
+    else byNode.replaceChildren(renderExperience(result, result.experienceId ?? '', 'auto'));
+  } catch (error) {
+    if (!isCurrent()) return { failed, path };
+    failed = true;
+    showStatus(
+      byNode,
+      error?.statusCode === 404
+        ? 'This Destination node was not found.'
+        : 'This Destination node could not be loaded or rendered.',
+      { error: true }
+    );
+  }
+  return { failed, path };
 }
 
 function wireRouteAction() {

@@ -76,6 +76,29 @@ function content(server) { %>
       </section>
     <% } %>
   </div>
+<% }
+function destinationContent(server) { %>
+  <div id="content-error" data-testid="content-error" hidden></div>
+  <div class="sections-grid">
+    <section class="page-section" aria-label="Destination content">
+      <header class="page-section__header">
+        <h2>Destination content</h2>
+        <p data-destination-summary><%= server ? destination.summary : '' %></p>
+        <p role="status" data-destination-redirect hidden></p>
+        <% if (destinationLinks.length) { %>
+          <p data-destination-links><% destinationLinks.forEach(({ label, href }, index) => { %><%= index ? ' · ' : '' %><a href="<%= href %>"><%= label %></a><% }); %></p>
+        <% } %>
+        <p>Resolved by path, then by node ID. Destination plans carry no source-map attribution, so automatic view, hover and click tracking finds no scopes in them unless the service returns a source map.</p>
+      </header>
+      <div class="entry-grid entry-grid--experiences" data-destination>
+        <% if (server) for (const item of destination.items) { %>
+          <div data-destination-selector="<%= item.selector %>"><% if (item.plan) { experience(item.plan, item.plan.experienceId, 'auto'); } else { %>
+            <div class="placeholder-card"><p role="status"><%= item.message %></p></div>
+          <% } %></div>
+        <% } %>
+      </div>
+    </section>
+  </div>
 <% } %>
 <!doctype html>
 <html lang="en">
@@ -92,6 +115,7 @@ function content(server) { %>
       <nav class="app-nav" id="app-nav" aria-label="Main navigation">
         <a href="/" data-testid="link-home" <% if (path === '/') { %>aria-current="page" class="active"<% } %>>Home</a>
         <a href="/page-two" data-testid="link-page-two" <% if (path === '/page-two') { %>aria-current="page" class="active"<% } %>>Page Two</a>
+        <a href="/destination" data-testid="link-destination" <% if (path === '/destination') { %>aria-current="page" class="active"<% } %>>Destination</a>
       </nav>
       <div class="app-body">
         <!-- Maintainer: optional browser event attempts; server events are not replayed here. -->
@@ -121,7 +145,7 @@ function content(server) { %>
         </aside>
         <main class="app-main" id="app-main" tabindex="-1">
           <div id="route-header">
-            <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : 'page-two-view' %>">
+            <header class="page-header" data-testid="<%= path === '/' ? 'home-view' : path === '/destination' ? 'destination-view' : 'page-two-view' %>">
             <h1><%= title %></h1>
               <p class="page-header__subtitle">Contentful Experiences · Node + Web SDK</p>
           </header>
@@ -165,7 +189,7 @@ function content(server) { %>
             </div>
             <p class="control-panel__note">Grant/Revoke changes event and persistence consent together. The SDK allows identify and page events before event consent. Identify requested describes URL intent, not confirmed audience membership.</p>
           </section>
-          <div id="route-content"><% content(true); %></div>
+          <div id="route-content"><% if (route.destination) destinationContent(true); else content(true); %></div>
         </main>
       </div>
     </div>
@@ -178,6 +202,9 @@ function content(server) { %>
     </template>
     <template id="tpl-content">
       <% content(false); %>
+    </template>
+    <template id="tpl-destination-content">
+      <% destinationContent(false); %>
     </template>
     <template id="tpl-route-header">
       <header class="page-header">

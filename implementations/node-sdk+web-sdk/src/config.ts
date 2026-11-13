@@ -47,6 +47,13 @@ export const config = {
     CDA_TOKEN: required('CDA_TOKEN'),
     LOCALE: env.LOCALE?.trim() || 'en-US',
     EXPERIENCE_IDS: [...new Set(experienceIds)],
+    // Optional Destination demonstration. Ids and paths are not secrets, but they
+    // still pass through this allowlist; a blank DESTINATION_ID disables the route content.
+    DESTINATION_ID: env.DESTINATION_ID?.trim() || undefined,
+    DESTINATION_PATH: env.DESTINATION_PATH?.trim() || '/coded',
+    DESTINATION_NODE_ID: env.DESTINATION_NODE_ID?.trim() || 'sdk-ci-personalized',
+    DESTINATION_REDIRECT_PATH: env.DESTINATION_REDIRECT_PATH?.trim() || '/legacy',
+    DESTINATION_MISSING_PATH: env.DESTINATION_MISSING_PATH?.trim() || '/missing',
     ...(previewEnabled
       ? {
           LIVE_PREVIEW: {

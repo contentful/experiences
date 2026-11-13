@@ -84,6 +84,61 @@ personalization success. Missing Experiences produce a generic 404; other
 service/render failures produce a generic 502 without exposing response details.
 Empty plans retain their own empty-content message.
 
+## Destinations
+
+`GET /destination?path=/coded` (absent `path` uses `DESTINATION_PATH`) is an actual
+server-to-browser transfer for one Destination path, following the by-ID routes:
+
+- The server facade (still `preflight: true`) calls
+  `request.fetchDestinationForHandoff({ destinationId, path, personalization: { events } },
+resolveOptions, { routeKey: req.originalUrl })` with the request's page and optional
+  `?userId=charles` identify arguments. The producer pins `preflight: true`.
+- The configured node is a reference-only comparison through ordinary event-free
+  `request.fetchByDestinationNode`; it is never handoff input.
+- The bootstrap carries the returned handoff and the existing browser activation passes
+  it to `hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` unchanged.
+  Usable replay survives non-404 content failure (`502`), as on the by-ID routes.
+- **Redirect**: the producer returns `redirect` and a replay-free handoff. The server
+  discards that handoff, ships nothing to the browser, and answers `302` to
+  `/destination?path=<target>`, retaining other query intent. The target response
+  performs its own server evaluation and handoff.
+- **Not found**: a missing path (`NotFoundError` in `result.error`) means the route
+  does not exist, so the server answers the app's ordinary plain `404 Not found.`
+  without rendering or shipping a handoff.
+- Browser-local navigation, Identify, Reset and Retry on this route use ordinary Web
+  `sdk.fetchByDestinationPath` (carrying page or action intent) and event-free
+  `sdk.fetchByDestinationNode`, without a handoff. A browser redirect replaces the URL
+  with the target route and renders it with the intent the redirecting route never
+  presented; a missing path shows the "Page not found" presentation.
+- Destinations are space-scoped: no locale, parameters or extensions, so neither the
+  server nor the browser requests source maps. Destination plans have no `attribution`;
+  automatic view, hover and click tracking finds no scopes and no manual roots are
+  registered, unless the service returns a source map itself. Rendered plans are
+  labeled with `plan.experienceId`.
+- There is no native Destination preview. Under a preview URL the server reads the
+  path through ordinary `request.fetchByDestinationPath` without visitor events or
+  handoff, and the browser binds no preview subscription for Destination content.
+- The Web UMD global is the `ContentfulExperiences` class only, so
+  `scripts/rich-text.ts` also bundles the installed package's pure
+  `isDestinationRedirect` export; `src/shared.ts` holds the SDK-neutral
+  `destinationHref`/`destinationPath` route helpers.
+
+| Setting                     | Default               | Meaning                                 |
+| --------------------------- | --------------------- | --------------------------------------- |
+| `DESTINATION_ID`            | none                  | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/coded`              | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `sdk-ci-personalized` | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/legacy`             | Redirect example link                   |
+| `DESTINATION_MISSING_PATH`  | `/missing`            | Not-found example link                  |
+
+These resolved values join the public bootstrap allowlist. Without `DESTINATION_ID`,
+the other routes are unchanged and `/destination` states that it is not configured,
+without fetching or shipping a handoff. The id comes from the `lib/mocks`
+Destination seed for the "Experiences SDK CI" space. Build, lint and typecheck
+cover this route; neither the server transfer nor browser replay has been verified
+against the live Destination. Whether the Destinations API evaluates intent carried
+by a request that resolves to a redirect is not verified.
+
 ## Optional runtime Live Preview
 
 Configure the existing local `.env` and run `npm run dev` after setup:
@@ -453,7 +508,8 @@ The default Experience IDs are `3fLAdFb3BYAuImRhcW8k4t` (Coded),
 `src/config.ts` parses only this app's `.env` using dotenv. It does not merge
 `process.env` or fall back to sibling/mock configuration. `PORT` overrides belong
 in this file. The ordinary explicit public projection contains only `SPACE_ID`,
-`ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved `EXPERIENCE_IDS`.
+`ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, resolved `EXPERIENCE_IDS`, and the resolved
+[Destination settings](#destinations).
 Only that projection and the finalized handoff are serialized into the
 HTML-safe bootstrap. Never copy management or server-only preview tokens or expose unrelated
 settings. No values are baked into

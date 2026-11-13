@@ -16,6 +16,7 @@
       <nav class="app-nav" id="app-nav" aria-label="Main navigation">
         <a href="/" data-testid="link-home">Home</a>
         <a href="/page-two" data-testid="link-page-two">Page Two</a>
+        <a href="/destination" data-testid="link-destination">Destination</a>
       </nav>
       <div class="app-body">
         <!-- Maintainer: optional attempt diagnostics, driven by tracking.js.
@@ -172,6 +173,37 @@
             Record custom action
           </button>
         </span>
+      </div>
+    </template>
+
+    <template id="tpl-destination">
+      <div class="page-header" data-testid="destination-view">
+        <h1>Destination</h1>
+        <p class="page-header__subtitle" data-destination-summary></p>
+        <p class="page-header__subtitle" role="status" data-destination-redirect hidden></p>
+        <p class="page-header__subtitle" data-destination-links hidden>
+          <a data-destination-link="path">By path</a> ·
+          <a data-destination-link="redirect">Redirect</a> ·
+          <a data-destination-link="missing">Missing</a>
+        </p>
+        <p class="page-header__subtitle" data-destination-sitemap hidden></p>
+      </div>
+    </template>
+
+    <template id="tpl-destination-content">
+      <div id="content-error" data-testid="content-error" hidden></div>
+      <div class="sections-grid">
+        <section class="page-section">
+          <header class="page-section__header">
+            <h2>Destination content</h2>
+            <p>
+              Resolved by path, then by node ID. Destination plans carry no source-map attribution,
+              so automatic view, hover and click tracking finds no scopes in them unless the service
+              returns a source map.
+            </p>
+          </header>
+          <div class="entry-grid entry-grid--experiences" data-destination></div>
+        </section>
       </div>
     </template>
 
