@@ -415,3 +415,34 @@ it('honors explicit startup persistence denial while preview never adopts visito
   expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   expect(document.cookie).not.toContain(`${ANONYMOUS_ID_COOKIE}=`);
 });
+
+it.each(['fetchByDestinationPath', 'fetchByDestinationNode'] as const)(
+  'drops personalization for %s under session preview and keeps ordinary Delivery',
+  async (method) => {
+    const f = preview();
+    const onEventBlocked = vi.fn();
+    const sdk = runtime({ ...f.config, onEventBlocked });
+    const ordinary = vi
+      .spyOn(Runtime.prototype, method)
+      .mockResolvedValue({ ...plan, experienceId: 'hero' });
+    await expect(
+      sdk[method](
+        {
+          destinationId: 'dest',
+          path: '/a',
+          nodeId: 'node',
+          personalization: { profileId: 'visitor', events: [{ type: 'page' }] },
+        } as never,
+        resolve
+      )
+    ).resolves.toMatchObject({ experienceId: 'hero' });
+    expect(sdk.isPreview).toBe(true);
+    expect(ordinary).toHaveBeenCalledOnce();
+    const [request] = ordinary.mock.lastCall! as unknown as [{ personalization?: unknown }];
+    expect(request.personalization).toBeUndefined();
+    expect(onEventBlocked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'preview' }));
+    // No Destination snapshot substitution: native Destination preview does not exist.
+    expect(f.fetch).not.toHaveBeenCalled();
+    expect(sdk.states.profile.current).toBeUndefined();
+  }
+);

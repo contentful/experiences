@@ -150,4 +150,47 @@ describe('Node Destination handoff producer', () => {
     release(payload());
     await expect(pending).rejects.toThrow(/destroyed/);
   });
+
+  it('drops personalization under Preview Session policy and keeps Delivery for Destinations', async () => {
+    const onEventBlocked = vi.fn();
+    const sdk = new TestRuntime({
+      spaceId: 'space',
+      environmentId: 'environment',
+      delivery: { accessToken: 'token' },
+      preview: { accessToken: 'preview-token' },
+      onEventBlocked,
+    });
+    runtimes.push(sdk);
+    const fetch = vi.spyOn(sdk, 'fetchDestinationPayload').mockResolvedValue(payload());
+    const session = vi.spyOn(sdk, 'fetchPreviewSessionPayload' as never);
+    const request = sdk.forRequest({
+      consent: true,
+      preview: { sessionId: 'session' },
+      profile: { id: 'visitor' },
+    });
+    expect(request.isPreview).toBe(true);
+    const plan = await request.fetchByDestinationPath(
+      {
+        destinationId: 'dest',
+        path: '/a',
+        personalization: { profileId: 'visitor', events: [{ type: 'page' }] },
+      },
+      resolver
+    );
+    expect(fetch.mock.lastCall![0].personalization).toBeUndefined();
+    expect(onEventBlocked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'preview' }));
+    expect(session).not.toHaveBeenCalled();
+    // Preview never adopts the returned visitor profile.
+    expect(request.profile).toBeUndefined();
+    expect(plan).toMatchObject({ experienceId: 'resolved-experience' });
+
+    const handoff = await request.fetchDestinationForHandoff(
+      { destinationId: 'dest', nodeId: 'n', personalization: { events: [{ type: 'page' }] } },
+      resolver,
+      route
+    );
+    expect(handoff.handoff.replay).toBeUndefined();
+    expect(handoff.handoff.profileId).toBeUndefined();
+    expect(fetch.mock.lastCall![0].personalization).toBeUndefined();
+  });
 });
