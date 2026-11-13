@@ -72,11 +72,24 @@ export function useRequestOptions(supplied?: RequestResult) {
   const result = supplied ?? inherited?.result;
   const canAdopt = useInitialData(result?.requestId);
   const error = result?.contentError;
-  const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
+  const notFound = result?.notFound === true;
+  const initialError = useMemo(() => {
+    if (error === undefined) return undefined;
+    const value = new Error(error);
+    // Keep the not-found outcome distinguishable for client error presentation
+    // through isNotFoundError, as for the delivery client's own 404 errors.
+    return notFound ? Object.assign(value, { name: 'NotFoundError', statusCode: 404 }) : value;
+  }, [error, notFound]);
+  const redirectPath = result?.redirect?.path;
+  const initialRedirect = useMemo(
+    () => (redirectPath === undefined ? undefined : { path: redirectPath }),
+    [redirectPath]
+  );
   return {
     result,
     initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
+    initialRedirect: canAdopt ? initialRedirect : undefined,
   };
 }
 
@@ -134,6 +147,8 @@ export function RequestPresentation({
   const events = matchingResult?.experience.personalization?.events;
   const pageFree =
     matchingResult?.initialPageOwner === 'server' ||
+    // A redirect result is never presented, so the browser records no page for it.
+    matchingResult?.redirect !== undefined ||
     (events !== undefined && !events.some((event) => event.type === 'page'));
   const builder = props.buildPagePayload ?? configuredBuilder;
   const buildPagePayload = useCallback<NonNullable<ExperiencesRootProps['buildPagePayload']>>(

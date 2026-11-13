@@ -21,6 +21,7 @@ import {
   readConsent,
   serverPreview,
   loadComparisons,
+  diagnosticPrimary,
   type ServerContent,
 } from './server-reference';
 
@@ -59,7 +60,12 @@ export const loadServerPage = cache(async () => {
           ? [{ type: 'identify', userId: 'charles', traits: { identified: true } }]
           : [],
       composeRequest: async (request, primary, { requestUrl }) => {
-        comparisons = await loadComparisons(request, primary, new URL(requestUrl), !serverOnly);
+        comparisons = await loadComparisons(
+          request,
+          diagnosticPrimary(primary),
+          new URL(requestUrl),
+          !serverOnly
+        );
       },
     },
   });

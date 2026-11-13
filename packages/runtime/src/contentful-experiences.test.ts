@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const {
   mockApiClient,
   mockCreateDeliveryClient,
+  mockFetchDestinationPayload,
+  mockFetchDestinationSitemap,
   mockFetchExperience,
   mockFetchExperiencePayload,
   mockResolveExperience,
@@ -17,6 +19,10 @@ const {
     }),
     mockCreateDeliveryClient: vi.fn((source) => ({ source })),
     mockFetchExperience: vi.fn().mockResolvedValue({ nodes: [] }),
+    mockFetchDestinationPayload: vi.fn().mockResolvedValue({ nodes: [], sys: { id: 'resolved' } }),
+    mockFetchDestinationSitemap: vi
+      .fn()
+      .mockResolvedValue({ items: [], limit: 100, pages: { next: 'cursor' } }),
     mockFetchExperiencePayload: vi.fn().mockResolvedValue({ nodes: [] }),
     mockResolveExperience: vi.fn().mockResolvedValue({ nodes: [] }),
   };
@@ -29,6 +35,8 @@ vi.mock('@contentful/experiences-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@contentful/experiences-client')>()),
   fetchExperience: mockFetchExperience,
   fetchExperiencePayload: mockFetchExperiencePayload,
+  fetchDestinationPayload: mockFetchDestinationPayload,
+  fetchDestinationSitemap: mockFetchDestinationSitemap,
 }));
 vi.mock('@contentful/experiences-sdk-core', () => ({ resolveExperience: mockResolveExperience }));
 vi.mock('@contentful/optimization-api-client', () => ({ ApiClient: mockApiClient }));
@@ -285,6 +293,7 @@ describe('ContentfulExperiences', () => {
     }
     expect(mockResolveExperience).not.toHaveBeenCalled();
     expect(mockFetchExperience).not.toHaveBeenCalled();
+    expect(mockFetchDestinationPayload).not.toHaveBeenCalled();
     expect(mockFetchExperiencePayload).not.toHaveBeenCalled();
   });
 
@@ -303,20 +312,100 @@ describe('ContentfulExperiences', () => {
       { destinationId: 'dest', nodeId: 'node', personalization },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchDestinationPayload).toHaveBeenLastCalledWith(
       { spaceId: 'space', destinationId: 'dest', nodeId: 'node', personalization },
-      { client: delivery },
-      expect.anything()
+      delivery,
+      undefined
     );
 
     await runtime.fetchByDestinationPath(
       { destinationId: 'dest', path: '/page', personalization },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchDestinationPayload).toHaveBeenLastCalledWith(
       { spaceId: 'space', destinationId: 'dest', path: '/page', personalization },
-      { client: delivery },
+      delivery,
+      undefined
+    );
+  });
+
+  it('builds type-tagged destination events once and resolves the hydrated Experience', async () => {
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const config = { components: {} };
+    mockResolveExperience.mockClear();
+    mockResolveExperience.mockResolvedValueOnce({ nodes: [], experienceId: 'resolved' });
+
+    const plan = await runtime.fetchByDestinationPath(
+      {
+        destinationId: 'dest',
+        path: '/page',
+        personalization: { events: [{ type: 'page', properties: { path: '/page' } }] },
+      },
+      { config }
+    );
+
+    const [request] = mockFetchDestinationPayload.mock.lastCall!;
+    expect(request.personalization.events).toEqual([
+      expect.objectContaining({ type: 'page', messageId: expect.any(String) }),
+    ]);
+    expect(mockResolveExperience).toHaveBeenCalledWith(
+      { nodes: [], sys: { id: 'resolved' } },
+      config,
       expect.anything()
+    );
+    expect(plan).toEqual({ nodes: [], experienceId: 'resolved' });
+  });
+
+  it('returns destination redirects without resolving them', async () => {
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    mockResolveExperience.mockClear();
+    mockFetchDestinationPayload.mockResolvedValueOnce({ redirect: { path: '/next' } });
+    await expect(
+      runtime.fetchByDestinationNode(
+        { destinationId: 'dest', nodeId: 'node' },
+        { config: { components: {} } }
+      )
+    ).resolves.toEqual({ redirect: { path: '/next' } });
+    expect(mockResolveExperience).not.toHaveBeenCalled();
+  });
+
+  it('pages destination sitemaps through the runtime-owned Delivery client', async () => {
+    const delivery = { id: 'delivery' } as never;
+    mockCreateDeliveryClient.mockReturnValueOnce(delivery);
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    await expect(runtime.fetchDestinationSitemap({ destinationId: 'dest' })).resolves.toEqual({
+      items: [],
+      limit: 100,
+      pages: { next: 'cursor' },
+    });
+    expect(mockFetchDestinationSitemap).toHaveBeenLastCalledWith(
+      { spaceId: 'space', destinationId: 'dest' },
+      { client: delivery },
+      {}
+    );
+    await runtime.fetchDestinationSitemap(
+      { destinationId: 'dest' },
+      { pageNext: 'cursor', limit: 5 }
+    );
+    expect(mockFetchDestinationSitemap).toHaveBeenLastCalledWith(
+      { spaceId: 'space', destinationId: 'dest' },
+      { client: delivery },
+      { pageNext: 'cursor', limit: 5 }
     );
   });
 
@@ -336,10 +425,10 @@ describe('ContentfulExperiences', () => {
       { destinationId: 'dest', nodeId: 'node' },
       { config: { components: {} } }
     );
-    expect(mockFetchExperience).toHaveBeenLastCalledWith(
+    expect(mockFetchDestinationPayload).toHaveBeenLastCalledWith(
       expect.objectContaining({ destinationId: 'dest' }),
-      { client: delivery },
-      expect.anything()
+      delivery,
+      undefined
     );
     await runtime.fetchExperience({ experienceId: 'exp' }, { config: { components: {} } });
     expect(mockFetchExperiencePayload).toHaveBeenLastCalledWith(

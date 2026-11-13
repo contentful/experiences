@@ -3,11 +3,12 @@ import type {
   BoundManagedExperienceProps,
   ExperiencesProviderProps,
   ExperiencesRootProps,
+  ManagedExperienceKey,
 } from '@contentful/experiences-react/client';
 import type {
   ExperiencesHandoff,
+  ExperienceRequest,
   PortableRenderPlan,
-  FetchExperienceOptions,
   Config,
 } from '@contentful/experiences-web';
 
@@ -19,9 +20,17 @@ type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 export interface RequestResult {
   readonly requestId: string;
   readonly routeKey: string;
-  readonly experience: FetchExperienceOptions;
+  /** The primary selector: an Experience id, Destination path or Destination node. */
+  readonly experience: ExperienceRequest;
   readonly plan?: PortableRenderPlan;
   readonly contentError?: string;
+  /** The primary Experience, Destination, path or node does not exist; route to 404. */
+  readonly notFound?: true;
+  /**
+   * The Destination redirected. Never content and never navigated by the SDK: the
+   * application maps it to a framework redirect. Carries no handoff or page owner.
+   */
+  readonly redirect?: { readonly path: string };
   readonly handoff?: ExperiencesHandoff;
   /** The server owns the initial attempt, including consent drops and ambiguous failures. */
   readonly initialPageOwner?: 'server';
@@ -43,7 +52,7 @@ export type BoundRequestRootProps = Omit<
 
 export type RequestExperienceProps = Omit<
   Extract<BoundManagedExperienceProps, { experienceId: string }>,
-  keyof FetchExperienceOptions | 'initialPlan' | 'initialError' | 'resolveOptions'
+  ManagedExperienceKey
 > & { readonly result?: RequestResult };
 
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */

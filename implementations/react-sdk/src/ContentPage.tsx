@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { PublicEnvironment } from '../public-config';
 import type { AttemptLog } from './attempt-log';
 import { ConsentControls } from './ConsentControls';
 import { useComparisonContent } from './content-loader';
@@ -14,12 +15,14 @@ export function ContentPage({
   onIntent,
   ids,
   manualId,
+  destination,
   log,
 }: {
   intent: PageIntent;
   onIntent: OnIntent;
   ids: string[];
   manualId?: string;
+  destination?: PublicEnvironment['DESTINATION'];
   log: AttemptLog;
 }) {
   const result = useManagedExperience({
@@ -48,7 +51,12 @@ export function ContentPage({
     );
   }
   return (
-    <PageShell url={intent.url} log={log} loading={result.status === 'loading'}>
+    <PageShell
+      url={intent.url}
+      log={log}
+      destination={destination}
+      loading={result.status === 'loading'}
+    >
       <ConsentControls
         intent={intent}
         onIntent={onIntent}

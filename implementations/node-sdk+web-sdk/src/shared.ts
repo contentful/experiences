@@ -5,7 +5,24 @@ type Node = PortableRenderPlan['nodes'][number];
 export const createRoutes = (ids: string[]) => ({
   '/': { title: 'Home', automatic: ids, manual: ids.slice(0, 1) },
   '/page-two': { title: 'Page Two', automatic: ids.slice(-1), manual: ids.slice(0, 1) },
+  // One Destination path (from ?path=) plus a by-node comparison; no Experience IDs.
+  '/destination': { title: 'Destination', automatic: [], manual: [], destination: true },
 });
+
+// The app route that renders one Destination path. Other query intent is retained.
+export function destinationHref(path: string, search = '') {
+  const retained = search
+    .replace(/^\?/, '')
+    .split('&')
+    .filter((part) => part && !part.startsWith('path='));
+  return `/destination?${[`path=${encodeURIComponent(path)}`, ...retained].join('&')}`;
+}
+
+export function destinationPath(query: { get(name: string): string | null }, fallback: string) {
+  const requested = query.get('path')?.trim();
+  if (!requested) return fallback;
+  return requested.startsWith('/') ? requested : `/${requested}`;
+}
 
 // SDK-neutral preparation only. Encoding SDK tracking attributes stays in adapters.
 export function referenceNode(node: Node, identity: string, manual: boolean) {

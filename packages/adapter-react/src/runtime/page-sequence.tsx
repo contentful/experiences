@@ -10,11 +10,15 @@ import type {
   ExperiencesHandoff,
   WebExperiencesRuntime,
 } from '@contentful/experiences-web';
-import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-runtime';
+import type {
+  DestinationRedirectResult,
+  ExperienceRequest,
+  FetchResolveOptions,
+} from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { useRuntimeContext } from './context.js';
 import { RequestContext } from './request-context.js';
-import { sameValue } from '../experience/source-controller.js';
+import { fetchExperienceRequest, sameValue } from '../experience/source-controller.js';
 
 export interface BeforeInitialPageOptions {
   readonly run: (
@@ -69,9 +73,9 @@ export function PageSequence({
     let pageIntent = false;
     let pending:
       | {
-          request: FetchExperienceOptions;
+          request: ExperienceRequest;
           resolve: FetchResolveOptions;
-          promise: Promise<PortableRenderPlan>;
+          promise: Promise<PortableRenderPlan | DestinationRedirectResult>;
         }
       | undefined;
     return {
@@ -82,11 +86,12 @@ export function PageSequence({
       reset: onReset,
       fetchExperience(
         runtime: ContentfulExperiences,
-        request: FetchExperienceOptions,
+        request: ExperienceRequest,
         resolve: FetchResolveOptions,
         isRefresh: boolean
-      ): Promise<PortableRenderPlan> {
-        // One supported Experience per page. Only its pending initial intent joins;
+      ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+        // One supported primary per page, by Experience id or Destination. Only its
+        // pending initial intent joins;
         // Retry and application comparison requests have no cross-fetch contract.
         if (
           !isRefresh &&
@@ -123,12 +128,14 @@ export function PageSequence({
           owner.initialEmission = false;
           pageIntent = true;
         }
-        const promise = isInitial
-          ? runtime.fetchExperience(options, resolve, {
-              routeKey,
-              isCurrent: () => activeRequest.current === requestContext,
-            })
-          : runtime.fetchExperience(options, resolve);
+        const promise = fetchExperienceRequest(
+          runtime,
+          options,
+          resolve,
+          isInitial
+            ? { routeKey, isCurrent: () => activeRequest.current === requestContext }
+            : undefined
+        );
         if (isInitial) {
           pending = { request, resolve, promise };
           void promise

@@ -9,7 +9,7 @@ import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
-import type { BrowserEnvironment } from './reference';
+import { destinationSettings, type BrowserEnvironment } from './reference';
 
 const defaultExperienceIds = [
   '3fLAdFb3BYAuImRhcW8k4t',
@@ -42,6 +42,7 @@ function configureServer() {
     throw new Error('ORIGIN must be an HTTP(S) origin without credentials, path, query or hash.');
   }
   const livePreviewEnabled = env.LIVE_PREVIEW_ENABLED === 'true';
+  const destination = destinationSettings(env);
   const config = {
     origin: origin.origin,
     spaceId: required('SPACE_ID'),
@@ -49,6 +50,7 @@ function configureServer() {
     delivery: { accessToken: required('CDA_TOKEN') },
     locale: env.LOCALE?.trim() || 'en-US',
     experienceIds,
+    destination,
     preview: livePreviewEnabled
       ? { accessToken: required('PREVIEW_TOKEN'), host: env.PREVIEW_HOST?.trim() || undefined }
       : undefined,
@@ -99,6 +101,7 @@ function configureServer() {
         : {}),
     },
     experienceIds,
+    ...(destination ? { destination } : {}),
     ...(config.livePreview ? { livePreview: config.livePreview } : {}),
   };
   return { config, nodeConfig, browser, sdk: configureServerExperiences(nodeConfig) };

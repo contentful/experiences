@@ -24,6 +24,8 @@
     "fetch:ctfl:experiences": "tsx ./scripts/fetchExperiences.ts",
     "fetch:ctfl": "npm run fetch:ctfl:space && npm run fetch:ctfl:experiences",
     "generate:ctfl:types": "tsx ./scripts/generateTypeDefinition.ts && tsx ./scripts/copyGeneratedTypeDefinition.ts",
+    "seed:ctfl:destination": "read -p 'This will create or update the reference Destination in your space! Do you really want to do this? (y/N)' yn && [ \"$yn\" = 'y' ] && npm run seed:ctfl:destination:confirmed",
+    "seed:ctfl:destination:confirmed": "tsx ./scripts/seedDestination.ts",
     "upload:ctfl:space": "read -p 'This will overwrite your space data! Do you really want to do this? (y/N)' yn && [ \"$yn\" = 'y' ] && npm run upload:ctfl:space:confirmed",
     "upload:ctfl:space:confirmed": "contentful space import --config .contentfulrc.json --content-file ./src/contentful/data/space/ctfl-space-data.json --include-experience-orchestration --upload-assets --assets-directory ./src/contentful/data/space",
     "typecheck": "tsc --noEmit",

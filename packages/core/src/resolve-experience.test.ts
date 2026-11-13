@@ -92,6 +92,15 @@ describe('resolveExperience — IR construction', () => {
     expect(plan.nodes[0]!.slots.children![0]!.props.content.text).toBe('Hello');
   });
 
+  it('copies a nonempty payload sys.id onto the plan as experienceId', async () => {
+    const withId = await resolveExperience({ nodes: [], sys: { id: 'exp-1' } }, emptyConfig);
+    expect(withId.experienceId).toBe('exp-1');
+    const blank = await resolveExperience({ nodes: [], sys: { id: ' ' } }, emptyConfig);
+    expect(blank).not.toHaveProperty('experienceId');
+    const missing = await resolveExperience({ nodes: [] }, emptyConfig);
+    expect(missing).not.toHaveProperty('experienceId');
+  });
+
   it('extracts the registration id from component.sys.urn', async () => {
     const payload: ExperiencePayload = {
       nodes: [componentNode('contentful-button', { id: 'b' })],

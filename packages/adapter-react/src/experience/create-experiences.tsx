@@ -18,7 +18,7 @@ export interface CreateExperiencesOptions {
 export type BoundExperienceRendererProps = Omit<ClientExperienceRendererProps, 'config'>;
 type WithoutConfig<Props> = Props extends unknown ? Omit<Props, 'config'> : never;
 export type BoundManagedExperienceProps = WithoutConfig<ManagedExperienceProps>;
-export type BoundManagedExperienceOptions = Omit<ManagedExperienceOptions, 'config'>;
+export type BoundManagedExperienceOptions = WithoutConfig<ManagedExperienceOptions>;
 
 /** Pure registry binding; SDK construction happens only when an owner activates. */
 export function createExperiences({ config }: CreateExperiencesOptions) {
@@ -29,7 +29,7 @@ export function createExperiences({ config }: CreateExperiencesOptions) {
     return <ManagedExperience {...props} config={config} />;
   }
   function useManagedExperience(options: BoundManagedExperienceOptions) {
-    return useUnboundManagedExperience({ ...options, config });
+    return useUnboundManagedExperience({ ...options, config } as ManagedExperienceOptions);
   }
   return {
     ExperiencesRoot,

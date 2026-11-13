@@ -5,6 +5,14 @@ const defaultExperienceIds = [
   '7u2eP09B4BIBToH8UwSHck',
 ];
 
+// Optional Destination routes; absolute paths, defaults match the shared fixture.
+function destinationPath(value: string | undefined, fallback: string) {
+  const path = value?.trim() || fallback;
+  if (!path.startsWith('/') || path.startsWith('//'))
+    throw new Error('Destination paths must be absolute and start with a single /.');
+  return path;
+}
+
 // Consumer integration: this is the entire browser allowlist. Never spread an
 // environment object or include management/server-only preview credentials.
 export function getPublicEnvironment(env: Record<string, string>) {
@@ -22,6 +30,16 @@ export function getPublicEnvironment(env: Record<string, string>) {
     CDA_TOKEN: env.CDA_TOKEN?.trim() || '',
     LOCALE: env.LOCALE?.trim() || 'en-US',
     EXPERIENCE_IDS: ids?.length ? [...new Set(ids)] : [...defaultExperienceIds],
+    // A Destination id is not a credential; unset keeps destination routes unconfigured.
+    DESTINATION: env.DESTINATION_ID?.trim()
+      ? {
+          id: env.DESTINATION_ID.trim(),
+          path: destinationPath(env.DESTINATION_PATH, '/getting-started'),
+          nodeId: env.DESTINATION_NODE_ID?.trim() || 'spring-offers',
+          redirectPath: destinationPath(env.DESTINATION_REDIRECT_PATH, '/quick-start'),
+          missingPath: destinationPath(env.DESTINATION_MISSING_PATH, '/retired-page'),
+        }
+      : undefined,
     ...(previewEnabled
       ? {
           LIVE_PREVIEW: {

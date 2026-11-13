@@ -202,6 +202,10 @@ Wrap each node in your framework's error boundary, so a component that throws re
 - `plan.deliveryDiagnostics` lists upstream field-resolution errors, such as a content binding that failed to resolve. Its messages can contain private data: show a count or generic warning by default and keep the details out of logs and client payloads.
 - When `debug` is on, render a panel with the resolved plan and the collected diagnostics after the tree.
 
+### Destinations
+
+Treat a Destination as another selector for the same fetch, not a separate pipeline. `fetchByDestinationPath({ destinationId, path })` and `fetchByDestinationNode({ destinationId, nodeId })` (on `-node` request facades and `-web`) return either a `PortableRenderPlan`, rendered exactly like a by-id plan, or `{ redirect: { path } }`. Check with `isDestinationRedirect`. Never render a redirect as content and never navigate from the adapter: expose it as an explicit outcome (React uses `status: 'redirect'` plus `onExperienceRedirect`) and let the application or framework router act. A missing Destination, path or node rejects with `NotFoundError`; map it to the framework's 404 the same way as a missing Experience. Destination requests take only `personalization` (no locale, parameters or extensions), so their plans have no source-map attribution. Bind Preview Session updates for destination content by `plan.experienceId`, the resolved Experience id.
+
 ### Optional
 
 - **Tracking attributes**: use `getTrackingAttributes` from `@contentful/experiences-web/tracking-attributes`: spread `getTrackingAttributes(plan.attribution)` onto each Experience container, and `getTrackingAttributes(node.attribution)` onto each component's outermost elements. Node scope keys resolve through the nearest Experience container; give repeated presentations of the same plan separate containers so their interactions remain independent. Attribution is present only when the fetch requests `extensions: { sourceMap: {} }`.

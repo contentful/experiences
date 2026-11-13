@@ -93,8 +93,8 @@ function App({
 ```
 
 `useManagedExperience({ experienceId, ...requestOptions })` returns
-`{ status, data, error, refresh, retry }`; status is `idle`, `loading`, `success` or
-`error`. Use the hook or the component's `children(result)` callback for custom
+`{ status, data, error, redirect, refresh, retry }`; status is `idle`, `loading`,
+`success`, `error` or `redirect`. Use the hook or the component's `children(result)` callback for custom
 presentation, including a usable plan alongside an error or refresh indicator.
 The unbound component/hook accepts `config`; the factory supplies it once.
 `loadingFallback` and `errorFallback` each accept a `ReactNode` or a function
@@ -102,6 +102,62 @@ receiving the full `ManagedExperienceResult`; `children(result)` receives that
 same result and takes precedence over default rendering. Without custom children,
 usable `data` takes precedence over either fallback, including when an error
 coexists with content.
+
+### Destination selectors
+
+A managed source selects its content in one of three ways, through the same
+controller, loading/error states, server seeds, refresh/retry, notifications and
+renderer:
+
+| Selector (`ExperienceSelector`)                                         | Content                                                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `{ experienceId, locale?, parameters?, extensions?, personalization? }` | One Experience by id; the only selector with Preview Session snapshots by request id. |
+| `{ destinationId, path, personalization? }`                             | The Experience a Destination serves at an absolute path.                              |
+| `{ destinationId, nodeId, personalization? }`                           | The Experience a Destination node serves.                                             |
+
+Destination selectors are space-scoped: no `locale`, `parameters` or `extensions`.
+Changing any selector field, including switching kind with an equal locator, is a
+new descriptor; a superseded request cannot publish its content, redirect or error.
+Several managed `Experience`s may use Destination selectors at once.
+
+```tsx
+import { useNavigate, useLocation } from 'react-router-dom';
+import { createExperiences, isNotFoundError } from '@contentful/experiences-react/client';
+
+const { Experience } = createExperiences({ config: browserRegistry });
+
+function DestinationPage({ destinationId }: { destinationId: string }) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  return (
+    <Experience
+      destinationId={destinationId}
+      path={pathname}
+      loadingFallback={<p>Loading…</p>}
+      // A missing Destination, path or node is a 404 error; check it with isNotFoundError,
+      // not error.name, which production bundles can rename.
+      errorFallback={({ error }) => <p>{isNotFoundError(error) ? 'Not found' : 'Error'}</p>}
+      // The SDK never navigates; route the redirect at the application boundary.
+      onExperienceRedirect={({ path }) => navigate(path, { replace: true })}
+      redirectFallback={null}
+    />
+  );
+}
+```
+
+A Destination redirect is an explicit outcome: `status: 'redirect'`,
+`redirect: { path }` and `data: undefined`. It never renders as content.
+`redirectFallback` (a node or `(result) => node`, default nothing) is presented
+instead, and `onExperienceRedirect(redirect, result)` runs after commit. Server
+integrations seed a redirect with `initialRedirect`, as they seed content with
+`initialPlan` and failures with `initialError`, so the browser does not fetch again.
+
+The resolved plan carries the served Experience id as `plan.experienceId`. Destinations
+have no native preview: the Destination tree and redirects come from published
+Delivery, and active Preview Session content for the resolved Experience id updates the
+presentation through the same binding as by-id sources. Destination plans also carry no
+source-map attribution, because the Destinations API accepts no general extensions;
+see the Web SDK's [destination limitations](../web/README.md#errors-and-destinations).
 
 Both the hook and `Experience` accept committed presentation notifications,
 exported together as the `ExperienceNotifications` type from `/client`:
@@ -117,6 +173,7 @@ interface PresentationNotifications {
     result: ManagedExperienceResult & { readonly data: PortableRenderPlan }
   ) => void;
   onExperienceError?: (error: Error, result: ManagedExperienceResult) => void;
+  onExperienceRedirect?: (redirect: { path: string }, result: ManagedExperienceResult) => void;
 }
 ```
 

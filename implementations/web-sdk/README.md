@@ -5,7 +5,8 @@ SDK as a classic UMD script. Browser application files are vanilla JavaScript;
 the HTTP server and asset builder use TypeScript. The app lives outside the root
 npm workspaces and declares its own dependencies and tools.
 
-Home and Page Two render live Experience plans through one Web SDK instance.
+Home and Page Two render live Experience plans through one Web SDK instance; the
+optional [Destination route](#destinations) resolves content by path and node.
 Utilities provides Grant/Revoke consent, Identify, and Reset. Navigation supports
 direct URLs and back/forward. The Tracking sidebar observes SDK event attempts;
 automatic discovery and manual element registration use the public SDK tracking API.
@@ -92,6 +93,52 @@ custom-element contract in this vanilla DOM renderer. No persistent success bann
 is shown; a route-wide panel appears only for errors that need a retry. App-owned consent
 subscriptions are disposed before SDK destruction on final page exit; a back/forward
 cache suspension preserves the instance for resumption.
+
+## Destinations
+
+The Destination route (`/destination?path=/getting-started`; absent `path` uses
+`DESTINATION_PATH`) resolves one path through ordinary `sdk.fetchByDestinationPath`,
+then the configured node through `sdk.fetchByDestinationNode`. The by-path primary
+carries the route's page and optional initial identify arguments, or the Identify
+action's nonpage intent, exactly like the first by-ID fetch on other routes. The
+by-node comparison and Retry content are ordinary event-free fetches. The SDK applies
+the same consent, interception, profile and concurrent request sharing as by-ID
+fetches. Destinations are space-scoped, so the app passes no locale, parameters or
+extensions, and they have no native preview: with a preview session URL, this route
+reads ordinary Delivery content without visitor events or preview subscriptions.
+
+- **Redirect**: the result is narrowed with `isDestinationRedirect`. The app never
+  renders it; it replaces the URL with `/destination?path=<target>` and renders the
+  target, carrying the intent the redirecting route never presented and stating
+  which path redirected. After three consecutive redirects the route stops with an error. A
+  redirecting by-node comparison is reported as a redirect, not content.
+- **Not found**: a missing path (Delivery `statusCode` 404) uses the existing
+  "Page not found" presentation. A missing node reports its own error.
+- Each rendered plan is labeled with `plan.experienceId`, the Experience the
+  Destination served. The first page of `sdk.fetchDestinationSitemap` links the
+  Destination's paths; a sitemap failure only omits those links.
+- The Destinations API accepts no general extensions, so Web cannot request source
+  maps: Destination plans have no `attribution`, and automatic view, hover and click
+  tracking finds no scopes in them unless the service returns a source map itself.
+  The app does not fabricate attribution or manually register Destination content.
+- The Web UMD global is the `ContentfulExperiences` class only, so `scripts/rich-text.ts`
+  also bundles the installed package's pure `isDestinationRedirect` export.
+
+| Setting                     | Default            | Meaning                                 |
+| --------------------------- | ------------------ | --------------------------------------- |
+| `DESTINATION_ID`            | none               | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/getting-started` | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `spring-offers`    | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/quick-start`     | Redirect example link                   |
+| `DESTINATION_MISSING_PATH`  | `/retired-page`    | Not-found example link                  |
+
+These values are browser-visible configuration, injected through the explicit
+allowlist. Without `DESTINATION_ID`, the other routes are unchanged and the
+Destination route states that it is not configured, without fetching. The id comes
+from the `lib/mocks` Destination seed for the "Experiences SDK CI" space. Build, lint
+and typecheck cover this route; it has not been verified against the live
+Destination. Whether the Destinations API evaluates or commits intent carried by a
+request that resolves to a redirect is not verified.
 
 ## Optional runtime Live Preview
 
@@ -294,8 +341,8 @@ or server-only preview credentials. Launch commands read only this app's configu
 
 The server parses `.env` with dotenv, falling back to the credential-free
 `.env.example`, and fails with a setting name when required values are missing.
-Its ordinary projection injects exactly `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, and resolved
-`EXPERIENCE_IDS` as `window.ENVIRONMENT` into private/no-store HTML. JSON escapes
+Its ordinary projection injects exactly `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`, resolved
+`EXPERIENCE_IDS`, and the resolved [Destination settings](#destinations) as `window.ENVIRONMENT` into private/no-store HTML. JSON escapes
 `<` before insertion into the script element. No environment values are baked
 into source or generated assets. Environment files are ignored by Git and cannot
 be served by the public-file server.
@@ -323,8 +370,8 @@ default `preflight: false` to commit admitted intent. It has no Node server hand
   build to create `rich-text.js` from `scripts/rich-text.ts` with
   `emptyOutDir: false`. `public/js/experiences.js` imports the generated module
   and renders live Rich Text documents. The same tiny ES module also exports the
-  installed SDK's pure tracking-attribute helper and clickable constant; the UMD
-  constructor distribution is unchanged.
+  installed SDK's pure tracking-attribute helper and clickable constant, plus the
+  pure `isDestinationRedirect` guard; the UMD constructor distribution is unchanged.
 - `src/preview.ts`: app-local browser entry for the installed Web SDK's isolated
   `/preview-session-binding` helper and lazy optional-package loader. Web reads
   current browser parameters. Application runtime code consumes only
@@ -409,3 +456,11 @@ Automatic setup through rendered plan containers is the current standard.
   locations. Install with `npm install --workspaces=false --package-lock=false
 --ignore-scripts` there, then use local npm commands; no root tool is needed to
   build/check/run an already configured copy.
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=web-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

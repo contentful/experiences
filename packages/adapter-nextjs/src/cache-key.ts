@@ -3,15 +3,50 @@ import type {
   FetchExperienceOptions,
 } from '@contentful/experiences-node';
 
-export interface CacheKeyInput {
+/** Exactly one primary selector; Destination keys never collide with Experience ids. */
+export type CacheKeySelector =
+  | { readonly experienceId: string; readonly destinationId?: never }
+  | {
+      readonly experienceId?: never;
+      readonly destinationId: string;
+      readonly path: string;
+      readonly nodeId?: never;
+    }
+  | {
+      readonly experienceId?: never;
+      readonly destinationId: string;
+      readonly nodeId: string;
+      readonly path?: never;
+    };
+
+export type CacheKeyInput = CacheKeySelector & {
   readonly spaceId: string;
   readonly environmentId: string;
-  readonly experienceId: string;
   readonly contentRevision: string | number;
   readonly locale: string;
   readonly parameters?: FetchExperienceOptions['parameters'];
   /** Application-approved public dimensions; no raw identity or replay. */
   readonly selectionDimensions: Readonly<Record<string, string | number | boolean>>;
+};
+
+function selectorKey(input: CacheKeyInput): unknown {
+  if (input.experienceId !== undefined) {
+    if (input.destinationId !== undefined)
+      throw new TypeError('A cache key selects either experienceId or a Destination.');
+    // Unchanged from earlier keys, so existing by-ID cache entries stay addressable.
+    return scalar(input.experienceId, 'experienceId');
+  }
+  const { destinationId, path, nodeId } = input as {
+    destinationId?: unknown;
+    path?: unknown;
+    nodeId?: unknown;
+  };
+  if ((path === undefined) === (nodeId === undefined))
+    throw new TypeError('A Destination cache key requires exactly one of path or nodeId.');
+  // An object, never a string, so it cannot equal any Experience id slot.
+  return path !== undefined
+    ? { destinationId: scalar(destinationId, 'destinationId'), path: scalar(path, 'path') }
+    : { destinationId: scalar(destinationId, 'destinationId'), nodeId: scalar(nodeId, 'nodeId') };
 }
 
 const scalar = (value: unknown, path: string, allowBoolean = false): unknown => {
@@ -54,7 +89,7 @@ export function createCacheKey(input: CacheKeyInput): string {
     JSON.stringify([
       input.spaceId,
       input.environmentId,
-      input.experienceId,
+      selectorKey(input),
       scalar(input.contentRevision, 'contentRevision'),
       input.locale,
       parameters,

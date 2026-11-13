@@ -1142,7 +1142,23 @@ from both the package root and `@contentful/experiences-web/runtime`.
 
 ## Errors and destinations
 
-Missing Experiences surface the delivery client's `NotFoundError`; other delivery and resolution errors propagate so the application can apply its normal error policy. Destination operations use the delivery service and return either a resolved plan or a redirect result; route redirects at the application boundary.
+Missing Experiences surface the delivery client's `NotFoundError`; other delivery and resolution errors propagate so the application can apply its normal error policy. Destination operations use the delivery service and return either a resolved plan or a redirect result; route redirects at the application boundary. `isDestinationRedirect(result)` narrows the redirect, and the resolved plan's `experienceId` names the Experience the Destination served.
+
+`fetchByDestinationPath` and `fetchByDestinationNode` share by-ID consent, interception,
+identity, lifecycle and concurrent request sharing. Concurrent event-free requests for the
+same selector, visitor scope and resolve options share one Delivery request and receive
+separate copies of its plan or redirect. Event-bearing requests are never combined, and an
+Experience id, a Destination path and a Destination node never share a request even when
+their locator strings are equal. `fetchDestinationSitemap({ destinationId }, { limit,
+pageNext, pagePrev })` pages a Destination's routable paths through the SDK-owned Delivery
+client.
+
+Destination limitations follow the current Destinations Delivery API: requests are
+space-scoped and carry no locale, parameters or general extensions. Web therefore cannot
+request the `sourceMap` extension for destination content, so destination plans have no
+`attribution` and automatic view, hover and click tracking finds no scopes in them, unless
+the service returns a source map on its own. Fetch by Experience id when attribution is
+required. There is no native Destination preview.
 
 Preview Session snapshot HTTP errors reject the fetch and appear in managed results;
 connection/update errors are exposed through `states.preview` while preview policy stays active.

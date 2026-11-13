@@ -21,9 +21,13 @@ supported product usage or a cross-fetch guarantee.
 - Runtime reads only this app's ignored `.env` via dotenv. Preserve it during
   installation and cleanup. Keep `.env.example` credential-free. The ordinary public
   configuration allowlist is `SPACE_ID`, `ENVIRONMENT_ID`, `CDA_TOKEN`, `LOCALE`,
-  resolved `EXPERIENCE_IDS`. `PORT` and unrelated settings stay private. CDA_TOKEN
+  resolved `EXPERIENCE_IDS` and resolved `DESTINATION_*` settings. `PORT` and
+  unrelated settings stay private. CDA_TOKEN
   must be appropriate for public browser use; never copy management or server-only preview credentials.
-- Serve only public assets, explicit Home/Page Two routes, and API-free health.
+- Serve only public assets, explicit Home/Page Two/Destination routes, and API-free health.
+  The Destination route uses `fetchDestinationForHandoff` for its by-path primary and
+  never ships the replay-free handoff of a redirect (answer 302). A missing path renders
+  with 404 and keeps its evaluated replay, exactly like a missing by-ID Experience.
   Bind to loopback. Missing routes/assets return 404; never serve the app directory.
 - Server integration is actual EJS SSR and an actual server-to-browser transfer.
   Supply page/optional identify intent once through Node `fetchExperienceForHandoff`

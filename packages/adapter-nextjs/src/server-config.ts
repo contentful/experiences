@@ -1,9 +1,11 @@
 import {
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError as isDeliveryNotFound,
   type ConsentInput,
   type PreviewConfig,
   type Config as NodeConfig,
+  type ExperienceRequest,
   type RequestRuntime,
   type FetchExperienceOptions,
   type FetchResolveOptions,
@@ -30,14 +32,23 @@ export interface ServerRequestContext {
 export type ServerValue<T> = T | ((context: ServerRequestContext) => T | Promise<T>);
 
 export interface ServerRequestResult extends RequestResult {
-  readonly experienceId: string;
+  /**
+   * The primary Experience id: the requested id, or for a Destination the id it
+   * resolved to. Absent for a Destination redirect, failure or speculative request.
+   */
+  readonly experienceId?: string;
   readonly error?: unknown;
 }
 
 export interface ServerRequestPolicy {
   /** SSR commits on the server; hybrid previews there and commits browser replay. */
   readonly mode?: ServerValue<'ssr' | 'hybrid'>;
-  readonly experience: ServerValue<FetchExperienceOptions>;
+  /**
+   * The one primary per request: `{ experienceId, ... }`, `{ destinationId, path }` or
+   * `{ destinationId, nodeId }`. Destination selectors are space-scoped and carry only
+   * personalization.
+   */
+  readonly experience: ServerValue<ExperienceRequest>;
   readonly resolveOptions?: ServerValue<Omit<FetchResolveOptions, 'config'>>;
   readonly metadataKeys?: readonly string[];
   readonly initialEvents?: ServerValue<
@@ -86,6 +97,11 @@ export function isContentError(error: unknown): boolean {
   return error instanceof ExperienceFetchError || error instanceof NotFoundError;
 }
 
+/** A missing Experience, Destination, path or node: normal framework 404 handling applies. */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof NotFoundError || isDeliveryNotFound(error);
+}
+
 /** The explicit browser config is the only credential source for built-in client roots. */
 export function browserRootConfig(options: ServerConfig): BrowserConfig {
   if (!options.browser)
@@ -105,6 +121,8 @@ export function serializeRequestResult(
       experience: result.experience,
       ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
+      ...(result.notFound ? { notFound: true } : {}),
+      ...(result.redirect ? { redirect: { path: result.redirect.path } } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
       ...(result.initialPageOwner ? { initialPageOwner: result.initialPageOwner } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),

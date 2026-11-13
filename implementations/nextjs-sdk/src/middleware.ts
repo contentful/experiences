@@ -12,5 +12,9 @@ export const config = {
     '/pages/page-two',
     '/single-experience',
     '/pages/single-experience',
+    '/destination/:path*',
+    '/destination-node',
+    '/pages/destination/:path*',
+    '/pages/destination-node',
   ],
 };

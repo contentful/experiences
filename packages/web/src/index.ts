@@ -19,9 +19,14 @@ export {
   ExperienceFetchError,
   NotFoundError,
   PREVIEW_HOST,
+  isDestinationRedirect,
+  isNotFoundError,
 } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
   ExperienceRequestExtensions,
   ExperienceParameters,
   ExperienceParameterValue,
@@ -34,6 +39,7 @@ export {
   resolveFlagChange,
   ChangeArray,
   VariableChange,
+  getExperienceSelectorKind,
 } from '@contentful/experiences-runtime';
 export type {
   Json,
@@ -60,6 +66,10 @@ export type {
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationOptions,
+  FetchDestinationSitemapOptions,
+  ExperienceRequest,
+  ExperienceSelectorKind,
   FetchExperienceOptions,
   PersonalizationOptions,
   FetchResolveOptions,

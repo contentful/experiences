@@ -5,12 +5,17 @@ import {
   type ServerExperienceRendererProps,
 } from '@contentful/experiences-react/server';
 import {
+  isDestinationRedirect,
+  type ExperienceRequest,
   type ExperiencesHandoff,
-  type FetchExperienceOptions,
+  type FetchDestinationOptions,
   type FetchResolveOptions,
   type PortableRenderPlan,
 } from '@contentful/experiences-node';
 import { cookies, headers } from 'next/headers.js';
+import { notFound, redirect } from 'next/navigation.js';
+import { getRequestOutcome, type RedirectLocation } from './request-outcome.js';
+import type { RequestResult } from './request-result.js';
 import { cache, createElement, type ComponentType } from 'react';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
 import type { BoundRequestRootProps, RequestExperienceProps } from './request-result.js';
@@ -44,6 +49,23 @@ export { serializeRequestResult } from './server-config.js';
 export type { CookieConfig } from './cookies.js';
 export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
 export type { PreviewConfig, PreviewContext } from './server-config.js';
+export { getRequestOutcome } from './request-outcome.js';
+export type { RedirectLocation, RequestOutcome } from './request-outcome.js';
+
+/**
+ * Route a primary Destination redirect with App Router `redirect()` and a missing
+ * Experience, Destination, path or node with `notFound()`. Call it in the page or
+ * layout before presenting the result; otherwise it returns the result unchanged.
+ */
+export function applyAppRouterOutcome<Result extends RequestResult>(
+  result: Result,
+  options: { readonly redirectLocation?: RedirectLocation } = {}
+): Result {
+  const outcome = getRequestOutcome(result, options.redirectLocation);
+  if (outcome?.kind === 'redirect') redirect(outcome.location);
+  if (outcome?.kind === 'not-found') notFound();
+  return result;
+}
 
 export type AppRouterRequestContext = ServerRequestContext;
 export type AppRouterServerConfig = ServerConfig;
@@ -84,7 +106,7 @@ export type ServerRequestClientExperienceProps = Omit<
 export type ServerExperienceProps = Omit<ServerExperienceRendererProps, 'experience' | 'config'> &
   (
     | { readonly experience: PortableRenderPlan }
-    | (FetchExperienceOptions & {
+    | (ExperienceRequest & {
         readonly experience?: never;
         readonly cache?: Exclude<ExperiencesHandoff['cache'], { scope: 'private-request' }>;
         readonly resolveOptions?: Omit<FetchResolveOptions, 'config'>;
@@ -254,6 +276,9 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
     }
     const {
       experienceId,
+      destinationId,
+      path,
+      nodeId,
       locale,
       parameters,
       personalization,
@@ -261,14 +286,24 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       resolveOptions,
       cache: cachePolicy,
       ...presentation
-    } = props;
-    const descriptor = {
-      experienceId,
-      locale,
-      parameters,
-      personalization,
-      extensions,
-    };
+    } = props as ExperienceRequest & {
+      experienceId?: string;
+      destinationId?: string;
+      path?: string;
+      nodeId?: string;
+      locale?: string;
+      parameters?: never;
+      extensions?: never;
+      resolveOptions?: Omit<FetchResolveOptions, 'config'>;
+      cache?: Exclude<ExperiencesHandoff['cache'], { scope: 'private-request' }>;
+    } & Omit<ServerExperienceRendererProps, 'experience' | 'config'>;
+    const descriptor = (
+      experienceId !== undefined
+        ? { experienceId, locale, parameters, personalization, extensions }
+        : nodeId !== undefined
+          ? { destinationId, nodeId, personalization }
+          : { destinationId, path, personalization }
+    ) as ExperienceRequest;
     if (cachePolicy)
       assertPublicRequestPolicy({
         cache: cachePolicy,
@@ -276,8 +311,22 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       });
     const request = sdk.forRequest({ consent: false });
     try {
-      const plan = await request.fetchExperience(descriptor, { ...resolveOptions, config });
-      return <ServerExperienceRenderer {...presentation} experience={plan} config={config} />;
+      const resolve = { ...resolveOptions, config };
+      const result: PortableRenderPlan | { redirect: { path: string } } =
+        'experienceId' in descriptor && descriptor.experienceId !== undefined
+          ? await request.fetchExperience(descriptor, resolve)
+          : 'nodeId' in descriptor
+            ? await request.fetchByDestinationNode(
+                descriptor as FetchDestinationOptions & { nodeId: string },
+                resolve
+              )
+            : await request.fetchByDestinationPath(
+                descriptor as FetchDestinationOptions & { path: string },
+                resolve
+              );
+      // A redirect is never content; route it with request.loadExperience and applyAppRouterOutcome.
+      if (isDestinationRedirect(result)) return null;
+      return <ServerExperienceRenderer {...presentation} experience={result} config={config} />;
     } finally {
       request.destroy();
     }

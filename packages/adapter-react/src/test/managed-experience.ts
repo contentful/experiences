@@ -7,6 +7,9 @@ import {
   type Observable,
   type PreviewState,
   type PreviewUpdate,
+  type DestinationRedirectResult,
+  type FetchByDestinationNodeOptions,
+  type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
   type FetchResolveOptions,
 } from '@contentful/experiences-web';
@@ -85,6 +88,22 @@ export function sourceSdk() {
       (request: FetchExperienceOptions, resolve: FetchResolveOptions) => Promise<PortableRenderPlan>
     >()
     .mockResolvedValue(plan());
+  const fetchByDestinationPath = vi
+    .fn<
+      (
+        request: FetchByDestinationPathOptions,
+        resolve: FetchResolveOptions
+      ) => Promise<PortableRenderPlan | DestinationRedirectResult>
+    >()
+    .mockResolvedValue({ ...plan(), experienceId: 'resolved' });
+  const fetchByDestinationNode = vi
+    .fn<
+      (
+        request: FetchByDestinationNodeOptions,
+        resolve: FetchResolveOptions
+      ) => Promise<PortableRenderPlan | DestinationRedirectResult>
+    >()
+    .mockResolvedValue({ ...plan(), experienceId: 'resolved' });
   const subscribeToPreview = vi.fn<ContentfulExperiences['subscribeToPreview']>(
     (_id, _resolve, listener) => {
       let active = true;
@@ -120,9 +139,22 @@ export function sourceSdk() {
       profile: profile.state,
     },
     fetchExperience,
+    fetchByDestinationPath,
+    fetchByDestinationNode,
     subscribeToPreview,
   } as unknown as ContentfulExperiences;
-  return { sdk, preview, consent, locale, profile, fetchExperience, subscribeToPreview, bindings };
+  return {
+    sdk,
+    preview,
+    consent,
+    locale,
+    profile,
+    fetchExperience,
+    fetchByDestinationPath,
+    fetchByDestinationNode,
+    subscribeToPreview,
+    bindings,
+  };
 }
 
 export function previewState(overrides: Partial<PreviewState> = {}): PreviewState {

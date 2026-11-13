@@ -40,6 +40,45 @@ errors the runtime does not surface remain an SDK limitation. Responses are
 private/no-store and profiles remain request-local. The rate limiter matches
 Optimization's 1000 requests per 30 seconds.
 
+## Destinations
+
+`GET /destination?path=/getting-started` resolves one Destination path through the request
+facade's ordinary `request.fetchByDestinationPath`, then the configured node through
+`request.fetchByDestinationNode`. Absent `path` uses `DESTINATION_PATH`. The by-path
+primary carries this request's page and optional `?userId=charles` identify arguments
+in `personalization.events`, exactly like the first by-ID fetch on `/`; the by-node
+comparison is an ordinary event-free fetch with the returned profile ID. Destinations
+are space-scoped, so the route passes no locale, parameters or extensions. They have
+no native preview, so the route configures no Preview Session.
+
+- **Redirect**: `isDestinationRedirect(result)` narrows `{ redirect: { path } }`, and the
+  app answers `302` to `/destination?path=<target>`, retaining other query intent.
+  A redirect is never rendered as content. A redirecting by-node comparison shows a
+  link to its target instead of content.
+- **Not found**: a missing path rejects with `NotFoundError`; the existing error handler
+  answers `404`.
+- Each rendered plan reports the Experience it served through `plan.experienceId`
+  (`data-experience-id`). The first page of `sdk.fetchDestinationSitemap` links the
+  Destination's paths; a sitemap failure only omits those links.
+
+Configure the existing local `.env`:
+
+| Setting                     | Default            | Meaning                                 |
+| --------------------------- | ------------------ | --------------------------------------- |
+| `DESTINATION_ID`            | none               | Enables the route content when nonblank |
+| `DESTINATION_PATH`          | `/getting-started` | Path rendered when `?path=` is absent   |
+| `DESTINATION_NODE_ID`       | `spring-offers`    | By-node comparison                      |
+| `DESTINATION_REDIRECT_PATH` | `/quick-start`     | Utilities redirect example link         |
+| `DESTINATION_MISSING_PATH`  | `/retired-page`    | Utilities not-found example link        |
+
+Without `DESTINATION_ID`, startup and `/` are unchanged and `/destination` reports
+that the Destination is not configured. The Destination id is created by the
+`lib/mocks` Destination seed for the "Experiences SDK CI" space; copy it into this
+app's `.env`. Typecheck and lint cover this route; it has not been verified against
+the live Destination. Whether the Destinations API evaluates or commits the page
+intent carried by a request that resolves to a redirect is not verified; the
+redirect target request carries its own page.
+
 ## Optional Preview Session snapshots
 
 Configure the existing local `.env`:
@@ -241,3 +280,11 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 
 - [Node SDK](../../packages/node/README.md)
 - [Local package artifacts](../../CONTRIBUTING.md#local-npm-artifacts)
+
+## Live E2E checks
+
+The opt-in [reference E2E suite](../e2e/README.md) drives this app against live services
+and the seeded reference Destination. It needs `SPACE_ID`, `CDA_TOKEN` and `DESTINATION_ID`
+in this app's `.env` and runs only on request:
+`npx nx run implementation-e2e:e2e -- --project=node-sdk`. It is not part of this app's
+`build`, `lint` or `typecheck` targets and adds nothing to the app itself.

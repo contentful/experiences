@@ -1,4 +1,5 @@
 import { getPreviewSessionBinding, loadPreviewImplementation } from '/dist/preview.js';
+import { isDestinationRedirect } from '/dist/rich-text.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { createTrackingLog } from './tracking.js';
@@ -42,6 +43,8 @@ const routes = {
     auto: experienceIds.slice(-1),
     grids: ['page-two-auto-grid', 'page-two-manual-grid'],
   },
+  // Reference app: one Destination path (from ?path=) plus a by-node comparison.
+  '/destination': { template: 'destination', title: 'Destination', destination: true },
 };
 // Maintainer: optional attempt diagnostics, subscribed before the first event.
 const trackingLog = createTrackingLog(sdk);
@@ -97,6 +100,16 @@ function routeUrl(path) {
   return url.pathname + url.search;
 }
 
+function destinationHref(path) {
+  return routeUrl(`/destination?path=${encodeURIComponent(path)}`);
+}
+
+function destinationPath() {
+  const requested = new URL(location.href).searchParams.get('path')?.trim();
+  if (!requested) return env.DESTINATION_PATH;
+  return requested.startsWith('/') ? requested : `/${requested}`;
+}
+
 function showStatus(target, text, { error = false, retry = false } = {}) {
   const content = cloneTemplate('status');
   const message = content.firstElementChild;
@@ -116,6 +129,8 @@ async function renderRoute({
   events,
   focus = false,
   reset = false,
+  redirectedFrom,
+  redirects = 0,
 } = {}) {
   if (disposed) return;
   const nextBinding = env.LIVE_PREVIEW ? getPreviewSessionBinding(env.LIVE_PREVIEW) : undefined;
@@ -164,13 +179,43 @@ async function renderRoute({
     previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
   if (!isCurrent() || !route) return;
 
+  if (route.destination) renderDestinationHeader(redirectedFrom);
   wireRouteControls(path, focus);
-  const destinations = createDestinations(route);
+  const destinations = route.destination ? new Map() : createDestinations(route);
   const errorPanel = document.getElementById('content-error');
   appMain.setAttribute('aria-busy', 'true');
 
   try {
     if (sdk.isPreview) previewBinding = nextBinding;
+
+    if (route.destination) {
+      const outcome = await loadDestination(isCurrent, requestOptions?.personalization);
+      if (!isCurrent()) return;
+      appMain.removeAttribute('aria-busy');
+      if (outcome.redirect !== undefined && redirects < 3) {
+        // A redirect is an explicit outcome, never content. Navigate to the target path
+        // as the presented page, carrying the intent the redirecting route never presented.
+        history.replaceState(null, '', destinationHref(outcome.redirect));
+        void renderRoute({ events, focus, redirectedFrom: outcome.from, redirects: redirects + 1 });
+        return;
+      }
+      if (outcome.notFound) {
+        renderRouteShell(path, undefined);
+        return;
+      }
+      if (outcome.redirect !== undefined) {
+        showStatus(appMain.querySelector('[data-destination]'), 'Too many Destination redirects.', {
+          error: true,
+        });
+      } else if (outcome.failed && !sdk.isPreview) {
+        errorPanel.hidden = false;
+        showStatus(errorPanel, 'Some Destination content is unavailable.', {
+          error: true,
+          retry: true,
+        });
+      }
+      return;
+    }
 
     const failed = await loadExperiences(destinations, isCurrent, requestOptions);
     if (!isCurrent()) return;
@@ -227,9 +272,33 @@ function renderRouteShell(path, route) {
     appMain.replaceChildren(
       cloneTemplate(route.template),
       cloneTemplate('utilities'),
-      cloneTemplate('content')
+      cloneTemplate(route.destination ? 'destination-content' : 'content')
     );
   }
+}
+
+function renderDestinationHeader(redirectedFrom) {
+  const summary = appMain.querySelector('[data-destination-summary]');
+  if (!env.DESTINATION_ID) {
+    summary.textContent =
+      'Destination not configured. Set DESTINATION_ID in implementations/web-sdk/.env and restart.';
+    return;
+  }
+  summary.textContent = `Path ${destinationPath()} and node ${env.DESTINATION_NODE_ID}`;
+  if (redirectedFrom !== undefined) {
+    const notice = appMain.querySelector('[data-destination-redirect]');
+    notice.hidden = false;
+    notice.textContent = `Destination path ${redirectedFrom} redirected to ${destinationPath()}.`;
+  }
+  const links = appMain.querySelector('[data-destination-links]');
+  links.hidden = false;
+  const paths = {
+    path: env.DESTINATION_PATH,
+    redirect: env.DESTINATION_REDIRECT_PATH,
+    missing: env.DESTINATION_MISSING_PATH,
+  };
+  for (const link of links.querySelectorAll('[data-destination-link]'))
+    link.href = destinationHref(paths[link.dataset.destinationLink]);
 }
 
 function wireRouteControls(path, focus) {
@@ -319,6 +388,97 @@ async function loadExperiences(destinations, isCurrent, requestOptions) {
   }
   if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
   return failures.size > 0;
+}
+
+// Reference app: the by-path primary carries this route's intent once; the by-node
+// comparison and Retry use ordinary event-free fetch. Destinations accept no locale.
+async function loadDestination(isCurrent, personalization) {
+  const parent = appMain.querySelector('[data-destination]');
+  if (!env.DESTINATION_ID) {
+    showStatus(parent, 'Destination content is not configured.');
+    return { failed: false };
+  }
+  const destinationId = env.DESTINATION_ID;
+  const path = destinationPath();
+  const [byPath, byNode] = ['path', 'node'].map((selector) => {
+    const target = document.createElement('div');
+    target.dataset.destinationSelector = selector;
+    showStatus(target, 'Loading Destination content…');
+    parent.appendChild(target);
+    return target;
+  });
+  void loadDestinationSitemap(destinationId, isCurrent);
+  let profileId = sdk.states.profile.current?.id;
+  let failed = false;
+  try {
+    const result = await sdk.fetchByDestinationPath(
+      {
+        destinationId,
+        path,
+        ...(sdk.isPreview ? {} : { personalization: { ...personalization, profileId } }),
+      },
+      resolveOptions
+    );
+    if (!isCurrent()) return { failed };
+    if (isDestinationRedirect(result)) return { redirect: result.redirect.path, from: path };
+    profileId = result.personalization?.profile.id ?? profileId;
+    renderDestinationPlan(result, byPath);
+  } catch (error) {
+    if (!isCurrent()) return { failed };
+    // The UMD may minify constructor names; Delivery exposes a stable statusCode.
+    if (error?.statusCode === 404) return { notFound: true };
+    failed = true;
+    showStatus(byPath, 'This Destination path could not be loaded or rendered.', { error: true });
+  }
+  try {
+    const result = await sdk.fetchByDestinationNode(
+      {
+        destinationId,
+        nodeId: env.DESTINATION_NODE_ID,
+        ...(sdk.isPreview ? {} : { personalization: { profileId } }),
+      },
+      resolveOptions
+    );
+    if (!isCurrent()) return { failed };
+    if (isDestinationRedirect(result)) {
+      showStatus(byNode, `This Destination node redirects to ${result.redirect.path}.`);
+    } else renderDestinationPlan(result, byNode);
+  } catch (error) {
+    if (!isCurrent()) return { failed };
+    failed = true;
+    showStatus(
+      byNode,
+      error?.statusCode === 404
+        ? 'This Destination node was not found.'
+        : 'This Destination node could not be loaded or rendered.',
+      { error: true }
+    );
+  }
+  return { failed };
+}
+
+function renderDestinationPlan(plan, target) {
+  // Destination plans normally carry no attribution, so these attributes stay empty.
+  target.replaceChildren(renderExperience(plan, plan.experienceId ?? '', 'auto'));
+}
+
+async function loadDestinationSitemap(destinationId, isCurrent) {
+  const sitemap = appMain.querySelector('[data-destination-sitemap]');
+  try {
+    const { items } = await sdk.fetchDestinationSitemap({ destinationId });
+    if (!isCurrent() || !items.length) return;
+    sitemap.replaceChildren(document.createTextNode('Paths: '));
+    items.forEach(({ path }, index) => {
+      if (index) sitemap.append(' · ');
+      const link = document.createElement('a');
+      link.href = destinationHref(path);
+      link.textContent = path;
+      sitemap.append(link);
+    });
+    sitemap.hidden = false;
+  } catch {
+    // The sitemap only links paths; Destination content reports its own errors.
+  }
 }
 
 function renderPresentations(plan, experienceId, targets) {

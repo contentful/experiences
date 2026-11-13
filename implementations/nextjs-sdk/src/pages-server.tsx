@@ -14,6 +14,7 @@ import { getServer } from './config';
 import {
   readConsent,
   contentSeeds,
+  diagnosticPrimary,
   serverPreview,
   loadComparisons,
   type ServerContent,
@@ -128,7 +129,8 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
         ...(action && !preview ? { personalization: { events } } : {}),
       },
 
-      composeRequest: async (request, primary) => {
+      composeRequest: async (request, result) => {
+        const primary = diagnosticPrimary(result);
         comparisons = await loadComparisons(request, primary, url, !serverOnly);
         if (serverOnly)
           html = renderToStaticMarkup(

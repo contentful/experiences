@@ -17,7 +17,7 @@ import {
   type Config,
   type ResolveToken,
   type ExperienceTemplates,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-nextjs/server';
 
 import { Button } from '@/components/Button';
 import { Card, type CardProps } from '@/components/Card';

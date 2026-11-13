@@ -1,4 +1,5 @@
 import {
+  isDestinationRedirect,
   serializePersonalization,
   type DestinationRedirectResult,
   type PersonalizationOptions as BuiltPersonalizationOptions,
@@ -13,6 +14,8 @@ import {
   withEventConsent,
   type OptimizationEventStreamEvent,
   type FetchExperienceForHandoffResult,
+  type FetchDestinationForHandoffResult,
+  getExperienceSelectorKind,
   hasEventTypeConsent,
   methodForEventType,
   toConsentState,
@@ -37,6 +40,8 @@ import {
   type EventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
+  type FetchDestinationOptions,
+  type BuiltFetchDestinationOptions,
   type FetchExperienceOptions,
   type FetchResolveOptions,
   type ResolveDefaults,
@@ -152,6 +157,15 @@ export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods
     resolveOptions: FetchResolveOptions,
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult>;
+  /**
+   * The Destination form of `fetchExperienceForHandoff`, with the same preflight and
+   * replay rules. A redirect returns `redirect` and a handoff without replay.
+   */
+  fetchDestinationForHandoff(
+    options: FetchDestinationOptions,
+    resolveOptions: FetchResolveOptions,
+    replay: { readonly routeKey: string }
+  ): Promise<FetchDestinationForHandoffResult>;
   fetchByDestinationNode(
     options: FetchByDestinationNodeOptions,
     resolveOptions: FetchResolveOptions
@@ -189,6 +203,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       (bindings) => this.createEventMethods(bindings),
       this.#consentPolicy,
       (options, resolveOptions) => this.fetchExperiencePayload(options, resolveOptions),
+      (options, resolveOptions) => this.fetchDestinationPayload(options, resolveOptions),
       (session) => this.fetchPreviewSessionPayload(session)
     );
   }
@@ -228,6 +243,10 @@ class RequestBoundExperiences implements RequestRuntime {
       options: BuiltFetchExperienceOptions,
       resolveOptions: FetchResolveOptions
     ) => Promise<ExperiencePayload>,
+    private readonly fetchDestinationPayload: (
+      options: BuiltFetchDestinationOptions,
+      resolveOptions: FetchResolveOptions
+    ) => Promise<ExperiencePayload | DestinationRedirectResult>,
     private readonly fetchSessionPayload: (
       session: PreviewSessionOptions
     ) => Promise<ExperiencePayload>
@@ -371,11 +390,60 @@ class RequestBoundExperiences implements RequestRuntime {
     );
   }
 
-  async fetchExperienceForHandoff(
+  fetchExperienceForHandoff(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions,
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult> {
+    return this.fetchForHandoff(
+      options,
+      resolveOptions,
+      replay,
+      (request, resolve) => this.fetchPayload(request, resolve),
+      async (resolve) => ({
+        plan: await this.fetchPersonalized(options, (request) =>
+          this.runtime.fetchExperience(request, resolve)
+        ),
+      })
+    );
+  }
+
+  fetchDestinationForHandoff(
+    options: FetchDestinationOptions,
+    resolveOptions: FetchResolveOptions,
+    replay: { readonly routeKey: string }
+  ): Promise<FetchDestinationForHandoffResult> {
+    if (getExperienceSelectorKind(options) === 'experience')
+      throw new TypeError('A Destination handoff requires a Destination selector');
+    return this.fetchForHandoff(
+      options,
+      resolveOptions,
+      replay,
+      // Omit<> collapses the selector union; the request keeps the caller's selector.
+      (request, resolve) =>
+        this.fetchDestinationPayload(request as BuiltFetchDestinationOptions, resolve),
+      async (resolve) => {
+        const result = await ('nodeId' in options
+          ? this.fetchByDestinationNode(options, resolve)
+          : this.fetchByDestinationPath(options, resolve));
+        return isDestinationRedirect(result) ? { redirect: result.redirect } : { plan: result };
+      }
+    );
+  }
+
+  /** One handoff producer for every selector: identical preflight, replay and identity rules. */
+  private async fetchForHandoff<TOptions extends FetchExperienceOptions | FetchDestinationOptions>(
+    options: TOptions,
+    resolveOptions: FetchResolveOptions,
+    replay: { readonly routeKey: string },
+    load: (
+      request: BuiltFetchOptions<TOptions>,
+      resolve: FetchResolveOptions
+    ) => Promise<ExperiencePayload | DestinationRedirectResult>,
+    fetchPreviewContent: (
+      resolve: FetchResolveOptions
+    ) => Promise<Pick<FetchDestinationForHandoffResult, 'plan' | 'redirect'>>
+  ): Promise<FetchDestinationForHandoffResult> {
     this.assertActive();
     if (
       options.personalization?.preflight !== undefined &&
@@ -394,27 +462,10 @@ class RequestBoundExperiences implements RequestRuntime {
     };
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
     if (this.isPreview) {
-      let payload: ExperiencePayload;
-      try {
-        payload = await this.readPreviewSnapshot();
-      } catch (error) {
-        this.assertActive();
-        return { handoff, error };
-      }
-      // Matching Preview overrides are invocation errors, not content failures.
-      const load = this.preparePreview(payload, options, resolve);
-      try {
-        const plan = await (load !== undefined
-          ? load()
-          : this.fetchPersonalized(options, (request) =>
-              this.runtime.fetchExperience(request, resolve)
-            ));
-        this.assertActive();
-        return { handoff, plan };
-      } catch (error) {
-        this.assertActive();
-        return { handoff, error };
-      }
+      return {
+        handoff,
+        ...(await this.fetchPreviewHandoffContent(options, resolve, fetchPreviewContent)),
+      };
     }
     const profileRevision = this.#profileRevision;
     let expectedProfileId = this.#profile?.id;
@@ -423,7 +474,7 @@ class RequestBoundExperiences implements RequestRuntime {
       gated.personalization = { ...gated.personalization, preflight: true };
     }
     const personalization = gated.personalization;
-    let request: BuiltFetchOptions<FetchExperienceOptions>;
+    let request: BuiltFetchOptions<TOptions>;
     if (this.runtime.interceptors.event.count() > 0 && personalization?.events !== undefined) {
       const events: OptimizationEventStreamEvent[] = [];
       for (const event of personalization.events) {
@@ -431,28 +482,27 @@ class RequestBoundExperiences implements RequestRuntime {
         events.push(await this.runtime.interceptors.event.run(event));
         this.assertActive();
       }
-      request = this.finalizePersonalizationEvents<FetchExperienceOptions>(gated, {
+      request = this.finalizePersonalizationEvents<TOptions>(gated, {
         ...personalization,
         events,
       });
     } else {
-      request = this.finalizePersonalizationEvents<FetchExperienceOptions>(gated);
+      request = this.finalizePersonalizationEvents<TOptions>(gated);
     }
     this.assertActive();
     const profileId = request.personalization?.profileId;
-    if (!this.isPreview) {
-      handoff = { ...handoff, profileId };
-      if (request.personalization?.events?.length) {
-        handoff = {
+    handoff = { ...handoff, profileId };
+    const replayHandoff: ExperiencesHandoff = request.personalization?.events?.length
+      ? {
           ...handoff,
           replay: {
             routeKey,
             events: request.personalization.events,
-            locale: request.locale ?? this.locale,
+            locale: (request as { locale?: string }).locale ?? this.locale,
           },
-        };
-      }
-    }
+        }
+      : handoff;
+    handoff = replayHandoff;
     const assertCurrent = () => {
       this.assertActive();
       if (this.#profile?.id !== expectedProfileId && this.#profile?.id !== profileId) {
@@ -461,10 +511,15 @@ class RequestBoundExperiences implements RequestRuntime {
     };
     try {
       assertCurrent();
-      const payload = await this.fetchPayload(request, resolve);
+      const payload = await load(request, resolve);
       assertCurrent();
+      if (isDestinationRedirect(payload)) {
+        // The redirecting route is never presented, so its evaluated intent is not replayed.
+        const { replay: _replay, ...withoutReplay } = handoff;
+        return { handoff: withoutReplay, redirect: payload.redirect };
+      }
       const returnedProfile = payload.extensions?.personalization?.profile;
-      if (!this.isPreview && returnedProfile !== undefined) {
+      if (returnedProfile !== undefined) {
         const profile = EventProfileSchema.parse(returnedProfile);
         handoff = { ...handoff, profileId: profile.id, state: { profile } };
         if (this.#profileRevision === profileRevision) {
@@ -473,7 +528,7 @@ class RequestBoundExperiences implements RequestRuntime {
         }
       }
       const changes = payload.extensions?.personalization?.changes;
-      if (!this.isPreview && changes !== undefined) {
+      if (changes !== undefined) {
         handoff = { ...handoff, state: { ...handoff.state, changes: ChangeArray.parse(changes) } };
       }
       const plan = await this.runtime.resolveExperience(payload, resolve);
@@ -482,6 +537,37 @@ class RequestBoundExperiences implements RequestRuntime {
     } catch (error) {
       assertCurrent();
       return { handoff, error };
+    }
+  }
+
+  /** Preview content has its own error boundary and never prepares visitor state or replay. */
+  private async fetchPreviewHandoffContent(
+    options: FetchExperienceOptions | FetchDestinationOptions,
+    resolve: FetchResolveOptions,
+    fetchContent: (
+      resolve: FetchResolveOptions
+    ) => Promise<Pick<FetchDestinationForHandoffResult, 'plan' | 'redirect'>>
+  ): Promise<Pick<FetchDestinationForHandoffResult, 'plan' | 'redirect' | 'error'>> {
+    let preview: (() => Promise<PortableRenderPlan>) | undefined;
+    if ('experienceId' in options) {
+      let payload: ExperiencePayload;
+      try {
+        payload = await this.readPreviewSnapshot();
+      } catch (error) {
+        this.assertActive();
+        return { error };
+      }
+      // Matching Preview overrides are invocation errors, not content failures.
+      preview = this.preparePreview(payload, options, resolve);
+    }
+    try {
+      const content =
+        preview !== undefined ? { plan: await preview() } : await fetchContent(resolve);
+      this.assertActive();
+      return content;
+    } catch (error) {
+      this.assertActive();
+      return { error };
     }
   }
 

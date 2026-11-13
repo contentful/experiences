@@ -13,6 +13,7 @@ import { getServer } from './config';
 import {
   consentCookies,
   consentDecision,
+  experienceDescriptor,
   previewBinding,
   previewConfiguration,
   routeIds,
@@ -26,12 +27,30 @@ export interface ServerContent {
   error?: unknown;
 }
 
+/**
+ * Diagnostic Home/Page Two primaries always select by Experience id, so the result
+ * names it. Destination routes use the request components directly instead.
+ */
+export function diagnosticPrimary(result: {
+  experienceId?: string;
+  plan?: PortableRenderPlan;
+  error?: unknown;
+}): ServerContent {
+  if (result.experienceId === undefined)
+    throw new Error('Diagnostic routes select their primary by Experience id.');
+  return {
+    experienceId: result.experienceId,
+    ...(result.plan ? { plan: result.plan } : {}),
+    ...(result.error !== undefined ? { error: result.error } : {}),
+  };
+}
+
 export function contentSeeds(
   contents: readonly ServerContent[],
   result: RequestResult
 ): ContentSeed[] {
   return contents.map(({ experienceId, plan, error }) => {
-    if (experienceId === result.experience.experienceId) return result;
+    if (experienceDescriptor(result)?.experienceId === experienceId) return result;
     return {
       requestId: result.requestId,
       routeKey: result.routeKey,

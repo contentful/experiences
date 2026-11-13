@@ -655,8 +655,32 @@ Free fetch functions use ordinary Delivery and accept no `ClientOptions.preview`
 or `previewToken`. Preview Session support belongs to runtime owners and existing low-level
 helpers; preserve their `previewToken` credential API. The Node and Web runtimes
 expose per-request destination fetches (`fetchByDestinationNode` /
-`fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only —
-there is no sitemap method on either runtime.
+`fetchByDestinationPath`) and runtime-owned sitemap pagination
+(`fetchDestinationSitemap({ destinationId }, pagination)`); the free function remains.
+
+**Destinations are a selector, not a parallel stack.** `ExperienceRequest` is
+`FetchExperienceOptions | FetchDestinationOptions`; `getExperienceSelectorKind`
+classifies it (`experience`, `destination-path`, `destination-node`) and rejects
+ambiguous selectors and by-ID-only fields on Destinations. Destination fetches share
+by-ID personalization inputs, consent, interception, identity, lifecycle guards and Web
+concurrent sharing; source keys and Next cache keys include the selector kind so
+equal locators never combine, and event-bearing requests never share. Node
+`fetchDestinationForHandoff` is the same handoff producer as `fetchExperienceForHandoff`
+(pinned preflight, replay survives content failure); a redirect returns no replay.
+`PortableRenderPlan.experienceId` carries the resolved payload `sys.id`, used for
+Preview Session binding of destination content and Next's `ServerRequestResult.experienceId`.
+React managed sources accept the three selectors, with `status: 'redirect'`,
+`redirect`, `onExperienceRedirect`, `redirectFallback` and `initialRedirect`; a redirect
+never renders as content and the SDK never navigates. Next `request.experience` is the
+one primary selector; results carry `redirect` (no plan, handoff, page owner or page
+payload) and `notFound`, mapped at the app boundary by `applyAppRouterOutcome` /
+`getPagesRouterOutcome`. Upstream limits stay explicit, with no service-side
+workarounds: Destination requests are space-scoped and send no locale, parameters or
+general extensions (so no `sourceMap` and no attribution unless the service returns
+one), there is no native Destination preview, and the generated Destination
+personalization type does not declare `preflight` (forwarded by body passthrough;
+verify the deployed behavior). The reference Destination fixture is maintained by
+`lib/mocks` `seed:ctfl:destination`.
 
 **Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, printed by the bootstrap for you to paste into the example's env file) and fetch by Experience id only at `/experiences/[id]`. Preview lives on that route in the server-rendered examples; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route. The Next.js, SvelteKit, and Angular examples also show a demo hub at `/` (the route list and the `?personalization` and `?debug` options) above the home node.
 
@@ -831,6 +855,10 @@ direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
 
+Package tests never use the network. The only live end-to-end checks are the opt-in
+[reference implementation E2E suite](./implementations/e2e/README.md) (`npm run
+implementation:e2e`), which is excluded from every default and CI target.
+
 Vitest. Tests live next to source (`src/foo.test.ts`). The `node` environment is fine for everything (we use `react-dom/server` for renderer tests — no jsdom needed).
 
 ### Build
@@ -916,6 +944,19 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Node identity-cookie example used a removed handoff API (fixed)
+
+The example previously called `prepareRequestHandoff()` without an actual browser
+transfer. It now sends an ordinary `request.page()` event, writes the cookie from
+`request.profile?.id`, and destroys each request facade in `finally`.
+
+### Next example preview rendered outside its provider during SSR (fixed)
+
+The layout's `Suspense` fallback renders page children before its browser root.
+Preview presentations now render the supplied server plan until hydration, then
+activate managed preview under that root. Rendering a managed `Experience` in the
+fallback caused a missing-provider error and an HTTP 500.
+
 ### Managed page consent retry
 
 Web's current-page tracker owns XDA page admission and deduplication. React supplies
@@ -974,6 +1015,10 @@ Not caught: a throw inside the _customer_ component's own internals on a later c
 npm test                                         # all packages
 npx nx run-many -t test --projects=adapter-react # one package
 ```
+
+Live reference checks are opt-in only: `npm run implementation:install`, then
+`npx nx run implementation-e2e:e2e-install` once and `npm run implementation:e2e`
+(see [implementations/e2e](./implementations/e2e/README.md)).
 
 `adapter-svelte` runs **two** Vitest projects, and its `test` target runs both:
 

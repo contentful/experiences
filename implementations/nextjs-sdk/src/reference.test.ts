@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { primaryExperience, type BrowserEnvironment } from './reference';
+import {
+  destinationPathForRoute,
+  destinationRedirectLocation,
+  destinationRoute,
+  destinationSelector,
+  destinationSettings,
+  experienceDescriptor,
+  primaryExperience,
+  referenceRequestMode,
+  type BrowserEnvironment,
+} from './reference';
 
 const environment: BrowserEnvironment = {
   web: {
@@ -62,4 +72,106 @@ test('active preview retains the caller fallback if no nonempty preview ID is co
     ),
     { experienceId: 'default-fallback' }
   );
+});
+
+const destination = destinationSettings({ DESTINATION_ID: ' destination ' })!;
+
+test('Destination routes stay unconfigured without DESTINATION_ID', () => {
+  for (const id of [undefined, '', '  '])
+    assert.equal(destinationSettings({ DESTINATION_ID: id, DESTINATION_PATH: '/x' }), undefined);
+});
+
+test('Destination settings use fixture defaults, trimmed overrides and absolute paths', () => {
+  assert.deepEqual(destination, {
+    id: 'destination',
+    path: '/getting-started',
+    nodeId: 'spring-offers',
+    redirectPath: '/quick-start',
+    missingPath: '/retired-page',
+  });
+  assert.deepEqual(
+    destinationSettings({
+      DESTINATION_ID: 'd',
+      DESTINATION_PATH: ' /spring-offers ',
+      DESTINATION_NODE_ID: ' home ',
+      DESTINATION_REDIRECT_PATH: '/old',
+      DESTINATION_MISSING_PATH: '/gone',
+    }),
+    {
+      id: 'd',
+      path: '/spring-offers',
+      nodeId: 'home',
+      redirectPath: '/old',
+      missingPath: '/gone',
+    }
+  );
+  for (const path of ['coded', '//getting-started'])
+    assert.throws(() => destinationSettings({ DESTINATION_ID: 'd', DESTINATION_PATH: path }));
+});
+
+test('each router maps its route remainder to a Destination path and back', () => {
+  for (const [router, prefix] of [
+    ['app', '/destination'],
+    ['pages', '/pages/destination'],
+  ] as const) {
+    assert.equal(destinationPathForRoute(prefix, router), '/');
+    assert.equal(destinationPathForRoute(`${prefix}/getting-started`, router), '/getting-started');
+    assert.equal(destinationPathForRoute(`${prefix}-node`, router), undefined);
+    assert.equal(destinationPathForRoute(`${prefix}s`, router), undefined);
+    for (const path of ['/', '/getting-started', '/a/b'])
+      assert.equal(destinationPathForRoute(destinationRoute(path, router), router), path);
+  }
+  assert.equal(destinationPathForRoute('/destination/getting-started', 'pages'), undefined);
+  assert.equal(
+    destinationRoute('/getting-started', 'app', true),
+    '/destination/getting-started?mode=server-only'
+  );
+});
+
+test('one primary selector per request: the route path, otherwise the configured node', () => {
+  const url = (path: string) => new URL(path, 'https://reference.invalid');
+  assert.deepEqual(destinationSelector(destination, url('/destination/quick-start'), 'app'), {
+    destinationId: 'destination',
+    path: '/quick-start',
+  });
+  assert.deepEqual(destinationSelector(destination, url('/pages/destination'), 'pages'), {
+    destinationId: 'destination',
+    path: '/',
+  });
+  assert.deepEqual(destinationSelector(destination, url('/destination-node'), 'app'), {
+    destinationId: 'destination',
+    nodeId: 'spring-offers',
+  });
+});
+
+test('mode selection and redirect locations keep the requested rendering mode', () => {
+  const url = (search: string) => new URL(`https://reference.invalid/destination${search}`);
+  assert.equal(referenceRequestMode(url('')), 'hybrid');
+  assert.equal(referenceRequestMode(url('?mode=server-only')), 'ssr');
+  assert.equal(referenceRequestMode(url('?mode=preserve-server')), 'hybrid');
+  assert.equal(
+    destinationRedirectLocation('app')('/getting-started', {
+      routeKey: '/destination/quick-start',
+    }),
+    '/destination/getting-started'
+  );
+  assert.equal(
+    destinationRedirectLocation('pages')('/', {
+      routeKey: '/pages/destination/quick-start?mode=server-only',
+    }),
+    '/pages/destination?mode=server-only'
+  );
+});
+
+test('diagnostic seeds read only by-id descriptors', () => {
+  const seed = (
+    experience: { experienceId: string } | { destinationId: string; path: string }
+  ) => ({
+    requestId: 'request',
+    routeKey: '/',
+    experience,
+  });
+  assert.deepEqual(experienceDescriptor(seed({ experienceId: 'id' })), { experienceId: 'id' });
+  assert.equal(experienceDescriptor(seed({ destinationId: 'd', path: '/' })), undefined);
+  assert.equal(experienceDescriptor(undefined), undefined);
 });

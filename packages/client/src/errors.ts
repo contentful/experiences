@@ -1,3 +1,5 @@
+import { ContentfulViewDelivery } from '@contentful/experience-delivery';
+
 /**
  * Thrown by `fetchExperience` for a fetch failure that is not "experience not
  * found" — network failure, an invalid/expired token, a 5xx from the
@@ -15,6 +17,20 @@
  * branches — the destinations delivery endpoints are space-scoped only, with
  * no environment segment, unlike the by-id path.
  */
+/**
+ * Whether an error means the requested Experience, Destination, path or node does not
+ * exist. Prefer this over `error.name`: bundlers can rename the delivery client's
+ * error classes, and forwarded server results carry a plain error with `statusCode: 404`.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  if (error instanceof ContentfulViewDelivery.NotFoundError) return true;
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    (error as { statusCode?: unknown }).statusCode === 404
+  );
+}
+
 export class ExperienceFetchError extends Error {
   readonly spaceId: string;
   readonly environmentId: string | undefined;

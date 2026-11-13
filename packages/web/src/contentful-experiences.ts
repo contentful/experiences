@@ -25,6 +25,7 @@ import {
   type EventMethods as RuntimeEventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
+  type FetchDestinationOptions,
   type FetchExperienceOptions,
   type PersonalizationOptions,
   buildFetchPersonalization,
@@ -198,7 +199,7 @@ type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: ReturnType<typeof buildFetchPersonalization>;
 };
 
-function clonePlan(plan: PortableRenderPlan): PortableRenderPlan {
+function clonePlan<T extends PortableRenderPlan | DestinationRedirectResult>(plan: T): T {
   return cloneDeepWith(plan, (value) => {
     if (!(value instanceof Error)) return undefined;
     // Error causes can contain caller-owned functions and other opaque values.
@@ -225,7 +226,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #snapshotRevision = 0;
   readonly #pendingContent = new Map<
     FetchResolveOptions['config'],
-    Map<string, Promise<PortableRenderPlan>>
+    Map<string, Promise<PortableRenderPlan | DestinationRedirectResult>>
   >();
   #contentLifetime = 0;
   #profileRevision = 0;
@@ -664,23 +665,24 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return (this.#previewSnapshot = pending);
   }
 
-  #shareContent(
+  #shareContent<TResult extends PortableRenderPlan | DestinationRedirectResult>(
     key: string | undefined,
     resolve: FetchResolveOptions,
-    load: () => Promise<PortableRenderPlan>
-  ): Promise<PortableRenderPlan> {
+    load: () => Promise<TResult>
+  ): Promise<TResult> {
     if (key === undefined) return load();
     let pending = this.#pendingContent.get(resolve.config);
     if (!pending) this.#pendingContent.set(resolve.config, (pending = new Map()));
     const existing = pending.get(key);
-    if (existing) return existing.then(clonePlan);
+    // Keys partition selector kinds, so a shared entry has this caller's result type.
+    if (existing) return existing.then((value) => clonePlan(value) as TResult);
     const promise = load().finally(() => {
       if (pending.get(key) === promise) pending.delete(key);
       if (!pending.size && this.#pendingContent.get(resolve.config) === pending)
         this.#pendingContent.delete(resolve.config);
     });
     pending.set(key, promise);
-    return promise.then(clonePlan);
+    return promise.then((value) => clonePlan(value) as TResult);
   }
 
   override async fetchExperience(
@@ -726,10 +728,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.#fetchPersonalized(options, {
-      currentPage,
-      send: (final) => super.fetchByDestinationNode(final, resolveOptions),
-    });
+    return this.#fetchDestination(
+      options,
+      resolveOptions,
+      (final) => super.fetchByDestinationNode(final, resolveOptions),
+      currentPage
+    );
   }
 
   override fetchByDestinationPath(
@@ -737,9 +741,44 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    return this.#fetchDestination(
+      options,
+      resolveOptions,
+      (final) => super.fetchByDestinationPath(final, resolveOptions),
+      currentPage
+    );
+  }
+
+  /**
+   * Destination fetches share consent, interception, identity and concurrent request
+   * sharing with by-ID fetches. They cannot request the source-map extension: the
+   * Destinations API accepts no general extensions, so automatic tracking has no
+   * attribution unless the service returns a source map on its own.
+   */
+  #fetchDestination<TOptions extends FetchByDestinationNodeOptions | FetchByDestinationPathOptions>(
+    options: TOptions,
+    resolveOptions: FetchResolveOptions,
+    send: (
+      final: BuiltFetchOptions<TOptions>
+    ) => Promise<PortableRenderPlan | DestinationRedirectResult>,
+    currentPage?: Pick<CurrentPageOptions, 'routeKey' | 'isCurrent'>
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.#fetchPersonalized(options, {
       currentPage,
-      send: (final) => super.fetchByDestinationPath(final, resolveOptions),
+      send,
+      share: (load, final, revision) => {
+        const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
+        const key =
+          options.personalization?.events !== undefined
+            ? undefined
+            : getExperienceSourceKey(
+                { request: final as unknown as FetchDestinationOptions, revision },
+                resolve,
+                0,
+                'delivery'
+              );
+        return this.#shareContent(key, resolve, load);
+      },
     });
   }
 

@@ -1,0 +1,21 @@
+{
+  "name": "@implementation/experiences-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Opt-in live-service E2E checks for the maintained Experiences reference implementations",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "browsers": "./node_modules/.bin/playwright install chromium",
+    "e2e": "./node_modules/.bin/playwright test",
+    "typecheck": "./node_modules/.bin/tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

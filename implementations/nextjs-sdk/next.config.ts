@@ -12,7 +12,16 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   env: { NEXT_PUBLIC_LIVE_PREVIEW_ENABLED: String(livePreviewEnabled) },
   async headers() {
-    return ['/', '/page-two', '/pages', '/pages/page-two'].map((source) => ({
+    return [
+      '/',
+      '/page-two',
+      '/pages',
+      '/pages/page-two',
+      '/destination/:path*',
+      '/destination-node',
+      '/pages/destination/:path*',
+      '/pages/destination-node',
+    ].map((source) => ({
       source,
       headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
     }));

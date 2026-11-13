@@ -4,7 +4,8 @@ import { getServer } from '../../../../config';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Real Delivery passthrough, limited to this app's scope and configured IDs.
+// Real Delivery passthrough, limited to this app's scope, configured IDs and the
+// configured Destination's path/node Experience lookups (Destinations are space-scoped).
 // Browser clients omit bearer auth; only this server supplies the private token.
 async function proxy(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   if (['access_token', 'preview'].some((key) => request.nextUrl.searchParams.has(key)))
@@ -13,16 +14,23 @@ async function proxy(request: NextRequest, { params }: { params: Promise<{ path:
   const path = (await params).path;
   if (request.headers.get('origin') && request.headers.get('origin') !== config.origin)
     return new NextResponse('Invalid origin', { status: 403 });
-  if (
-    path.length !== 6 ||
-    path[0] !== 'spaces' ||
-    path[1] !== config.spaceId ||
-    path[2] !== 'environments' ||
-    path[3] !== config.environmentId ||
-    path[4] !== 'experiences' ||
-    !config.experienceIds.includes(path[5])
-  )
-    return new NextResponse('Unknown Experience', { status: 404 });
+  const experience =
+    path.length === 6 &&
+    path[0] === 'spaces' &&
+    path[1] === config.spaceId &&
+    path[2] === 'environments' &&
+    path[3] === config.environmentId &&
+    path[4] === 'experiences' &&
+    config.experienceIds.includes(path[5]);
+  const destination =
+    config.destination !== undefined &&
+    path[0] === 'spaces' &&
+    path[1] === config.spaceId &&
+    path[2] === 'destinations' &&
+    path[3] === config.destination.id &&
+    path.at(-1) === 'experiences' &&
+    (path.length === 5 || (path.length === 7 && path[4] === 'nodes'));
+  if (!experience && !destination) return new NextResponse('Unknown Experience', { status: 404 });
   const url = new URL(path.map(encodeURIComponent).join('/'), 'https://xdn.contentful.com/');
   url.search = request.nextUrl.search;
   const headers = new Headers({ Authorization: `Bearer ${config.delivery.accessToken}` });

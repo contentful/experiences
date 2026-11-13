@@ -2,6 +2,7 @@
 // f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). XDA owns content evaluation.
 import type { GetServerSidePropsContext } from 'next';
 import type { RequestResult } from './request-result.js';
+import { getRequestOutcome, type RedirectLocation } from './request-outcome.js';
 import {
   createAnonymousIdSetCookieHeader,
   toAnonymousIdCookieOptions,
@@ -28,6 +29,27 @@ export { serializeRequestResult } from './server-config.js';
 export type { CookieConfig } from './cookies.js';
 export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
 export type { PreviewConfig, PreviewContext } from './server-config.js';
+export { getRequestOutcome } from './request-outcome.js';
+export type { RedirectLocation, RequestOutcome } from './request-outcome.js';
+
+/**
+ * The native GSSP result for a primary Destination redirect (`{ redirect }`) or a
+ * missing Experience, Destination, path or node (`{ notFound: true }`); `undefined`
+ * when the page should render `{ props: { result } }`.
+ */
+export function getPagesRouterOutcome(
+  result: RequestResult,
+  options: { readonly redirectLocation?: RedirectLocation; readonly permanent?: boolean } = {}
+):
+  | { readonly redirect: { readonly destination: string; readonly permanent: boolean } }
+  | { readonly notFound: true }
+  | undefined {
+  const outcome = getRequestOutcome(result, options.redirectLocation);
+  if (outcome?.kind === 'redirect')
+    return { redirect: { destination: outcome.location, permanent: options.permanent ?? false } };
+  if (outcome?.kind === 'not-found') return { notFound: true };
+  return undefined;
+}
 
 export interface PagesRouterServerConfig extends ServerConfig {
   /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */

@@ -2,6 +2,8 @@
 
 import { useCallback, useLayoutEffect, useState, type MouseEvent } from 'react';
 import type { FetchExperienceOptions } from '@contentful/experiences-web';
+import type { PublicEnvironment } from '../public-config';
+import { DESTINATION_NODE_ROUTE, destinationRoute, isAppRoute } from './routes';
 
 export interface PageIntent {
   url: URL;
@@ -60,7 +62,7 @@ export function useNavigation() {
     const link = (event.target as Element).closest<HTMLAnchorElement>('a[href]');
     if (!link || link.target || link.hasAttribute('download')) return;
     const url = new URL(link.href);
-    if (url.origin !== window.location.origin || !['/', '/page-two'].includes(url.pathname)) return;
+    if (url.origin !== window.location.origin || !isAppRoute(url.pathname)) return;
     event.preventDefault();
     if (url.href !== window.location.href) onIntent(url, undefined, 'push');
   }
@@ -76,18 +78,34 @@ export function routeUrl(path: string, current: URL) {
   return url.pathname + url.search;
 }
 
-export function Navigation({ url }: { url: URL }) {
+export function Navigation({
+  url,
+  destination,
+}: {
+  url: URL;
+  destination?: PublicEnvironment['DESTINATION'];
+}) {
+  const links = [
+    { path: '/', label: 'Home', testId: 'link-home' },
+    { path: '/page-two', label: 'Page Two', testId: 'link-page-two' },
+    {
+      path: destinationRoute(destination?.path ?? '/getting-started'),
+      label: 'Destination path',
+      testId: 'link-destination',
+    },
+    { path: DESTINATION_NODE_ROUTE, label: 'Destination node', testId: 'link-destination-node' },
+  ];
   return (
     <nav className="app-nav" id="app-nav" aria-label="Main navigation">
-      {['/', '/page-two'].map((path) => (
+      {links.map(({ path, label, testId }) => (
         <a
           key={path}
           href={routeUrl(path, url)}
           className={url.pathname === path ? 'active' : undefined}
           aria-current={url.pathname === path ? 'page' : undefined}
-          data-testid={path === '/' ? 'link-home' : 'link-page-two'}
+          data-testid={testId}
         >
-          {path === '/' ? 'Home' : 'Page Two'}
+          {label}
         </a>
       ))}
     </nav>

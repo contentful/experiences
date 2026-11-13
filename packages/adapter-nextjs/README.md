@@ -304,6 +304,107 @@ configuration requires the advanced client-module binding described below.
 The maintained [Next reference](../../implementations/nextjs-sdk/README.md) shows
 `/single-experience` and `/pages/single-experience` beside its diagnostics.
 
+### A Destination as the primary
+
+`request.experience` selects exactly one primary per request: an Experience id, or a
+Destination path or node (`{ destinationId, path }` / `{ destinationId, nodeId }`).
+A single selector field keeps the one-primary rule structural: a per-call override
+replaces the bound selector instead of combining with it. Destination selectors are
+space-scoped and carry only `personalization`; ambiguous selectors throw before any
+fetch. Everything else is unchanged: one memoized server fetch, automatic page intent,
+`composeRequest`, complete result forwarding, route identity, cookies and private
+serialization. `request.mode: 'ssr'` uses an ordinary Destination fetch with the
+existing commitment policy and server page ownership; `'hybrid'` uses Node's
+`fetchDestinationForHandoff` for server preflight and browser replay, without a
+second automatic browser page. Retry stays event-free.
+
+The result adds two routing outcomes, which travel through `serializeRequestResult`
+and Pages props:
+
+- `redirect: { path }` — the Destination redirected. It carries no plan, handoff,
+  `initialPageOwner` or page payload, and browser request roots record no page for it.
+- `notFound: true` — the Experience, Destination, path or node does not exist
+  (`NotFoundError`), alongside the usual `contentError`.
+
+`experienceId` on the server result is the Destination's resolved Experience id
+(absent for a redirect or failure), and the browser plan carries it as
+`plan.experienceId` for Preview Session binding. The SDK never navigates. Map the
+outcomes to framework routing at the page boundary:
+
+```tsx
+// lib/experience-server.tsx — the bound primary follows the request URL.
+export const binding = bindAppRouterServerExperiences({
+  ...serverOptions,
+  request: {
+    experience: ({ requestUrl }) => ({
+      destinationId: process.env.DESTINATION_ID!,
+      path: new URL(requestUrl).pathname,
+    }),
+  },
+});
+export const { ExperiencesRoot, Experience } = binding.request;
+```
+
+```tsx
+// app/[[...path]]/page.tsx — App Router
+import { applyAppRouterOutcome } from '@contentful/experiences-nextjs/app-router/server';
+import { binding, ExperiencesRoot, Experience } from '../../lib/experience-server';
+
+export const dynamic = 'force-dynamic';
+
+export default async function Page() {
+  // The same memoized load the request components use: one Destination fetch.
+  applyAppRouterOutcome(await binding.request.loadExperience()); // redirect() or notFound()
+  return (
+    <ExperiencesRoot>
+      <Experience />
+    </ExperiencesRoot>
+  );
+}
+```
+
+App Router memoizes `loadExperience` per render by argument identity, so call it
+without overrides here: a per-call `experience` override object would start a separate
+load from the one the request components share. Extend the context middleware matcher
+to the Destination routes.
+
+```tsx
+// pages/[[...path]].tsx — Pages Router
+import type { GetServerSideProps } from 'next';
+import {
+  getPagesRouterOutcome,
+  type RequestResult,
+} from '@contentful/experiences-nextjs/pages-router/server';
+import { pagesExperiences } from '../lib/pages-experience-server';
+import { Experience } from '../lib/pages-experience-client';
+
+export const getServerSideProps: GetServerSideProps<{ result: RequestResult }> = async (
+  context
+) => {
+  const segments = context.params?.path;
+  const path = `/${(Array.isArray(segments) ? segments : []).join('/')}`;
+  const result = await pagesExperiences.request.loadExperience(context, {
+    experience: { destinationId: process.env.DESTINATION_ID!, path },
+  });
+  // { redirect: { destination, permanent } }, { notFound: true }, or render.
+  return getPagesRouterOutcome(result) ?? { props: { result } };
+};
+
+export default function Page() {
+  return <Experience />;
+}
+```
+
+Both helpers accept `redirectLocation(path, result)` to map a Destination path to the
+application URL (for example a base path or locale prefix); Pages also accepts
+`permanent`. `getRequestOutcome(result)` returns the same decision as data for custom
+routing. If a page renders a redirect result anyway, the request `Experience` presents
+its `redirectFallback` (nothing by default), never content. Destination content has no
+native preview and no source-map attribution; see the
+[React Destination selectors](../adapter-react/README.md#destination-selectors).
+`createCacheKey` and `createPublicPermutationCacheMetadata` accept the Destination
+selector instead of `experienceId`, and never collide with Experience id keys.
+
 ## Managed Contentful Live Preview
 
 Install the optional `@contentful/experiences-live-preview` package and configure
