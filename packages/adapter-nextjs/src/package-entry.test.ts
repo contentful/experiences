@@ -331,6 +331,14 @@ describe('published declarations', () => {
         enabled: true, loadImplementation: async () => previewModule,
       };
       const appClient = bindNextjsAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
+      const automaticApp = bindAppServer({
+        spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+      }, { request: { Experience: appClient.request.Experience, ExperiencesRoot: appClient.request.ExperiencesRoot } });
+      automaticApp.request.Experience({ as: 'section', rootProps: { id: 'content' } });
+      // @ts-expect-error Client renderer callbacks belong in the injected client module.
+      automaticApp.request.Experience({ renderError: () => null });
+      // @ts-expect-error DOM handlers cannot cross the server-to-client boundary.
+      automaticApp.request.Experience({ rootProps: { onClick: () => {} } });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
         livePreview: livePreviewConfig, request: { experience: { experienceId: 'home' } } });
       // @ts-expect-error Content identity belongs to Experience, not the shared root.
@@ -364,7 +372,7 @@ describe('published declarations', () => {
         ExperiencesRoot({ experienceId: 'home' });
         // @ts-expect-error Request analytics roots do not select an Experience.
         appClient.request.ExperiencesAnalyticsRoot({ experienceId: 'home' });
-        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
+        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /><Experience /></ExperiencesRoot>;
         void tree;
         // @ts-expect-error Descriptor overlays cannot change the supplied request result.
         Experience({ result, experienceId: 'different' });
@@ -383,7 +391,7 @@ describe('published declarations', () => {
         pagesClient.ExperiencesRoot({ experienceId: 'home' });
         // @ts-expect-error Ordinary Pages analytics does not select content.
         pagesClient.ExperiencesAnalyticsRoot({ experienceId: 'home' });
-        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /></ExperiencesRoot>;
+        const tree = <ExperiencesRoot result={result}><Experience result={result} as="section" /><Experience /></ExperiencesRoot>;
         const analytics = <ExperiencesAnalyticsRoot result={result}><p>Server content</p></ExperiencesAnalyticsRoot>;
         void [tree, analytics];
         pagesClient.Experience({ experienceId: 'home', initialPlan: plan, parameters: { variant: 'home' } });
