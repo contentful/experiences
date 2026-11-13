@@ -350,9 +350,9 @@ describe('published declarations', () => {
         consent: { server: false, clientDefaults: { consent: false, persistenceConsent: false } },
         request: { experience: { experienceId: 'home' }, resolveOptions: { metadata: { server: true }, debug: false } }
       });
-      browserApp.request.loadExperience({ resolveOptions: { debug: true } });
-      browserApp.request.loadExperience({ experience: { destinationId: 'site', path: '/page', locale: 'de-DE' } });
-      browserApp.request.loadExperience({ experience: { destinationId: 'site', nodeId: 'node' } });
+      browserApp.request.loadExperience({ mode: 'ssr' }).then(primary => { const id: string = primary.experienceId; void id; });
+      browserApp.request.loadExperience({ experience: { experienceId: 'other', locale: 'de-DE' } });
+      browserApp.request.loadExperience({ experience: { destinationId: 'site', nodeId: 'node' } }).then(primary => { const node: string = primary.experience.nodeId; void node; });
       appServer.Experience({ destinationId: 'site', path: '/page' });
       // @ts-expect-error Source selectors remain exclusive.
       browserApp.request.loadExperience({ experience: { experienceId: 'home', destinationId: 'site', path: '/page' } });
@@ -374,13 +374,47 @@ describe('published declarations', () => {
       // @ts-expect-error Custom components belong in the client binding.
       Experience({ as: () => null });
       appServer.Experience({ experience: plan, renderError: () => null });
-      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: {
-        experience: { experienceId: 'home' },
+      const composedApp = bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, request: {
+        experience: { experienceId: 'home', locale: 'en', parameters: { variant: 'home' } },
         composeRequest: async (request, primary, context) => {
           const facade: RequestRuntime = request;
-          void [facade, primary.plan, primary.error, context.routeKey];
+          // @ts-expect-error Composition is shared by default and overridden selectors.
+          const id: string = primary.experienceId;
+          void [facade, id, primary.plan, primary.error, context.routeKey];
         }
       } });
+      import { serializeRequestResult } from '${packageName}/app-router/server';
+      composedApp.request.loadExperience({ experience: { experienceId: 'other' } }).then(primary => {
+        const id: string = primary.experienceId;
+        const descriptorId: string = serializeRequestResult(primary).experience.experienceId;
+        void [id, descriptorId];
+      });
+      const sourceDefaults = { spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config };
+      composedApp.request.loadExperience().then(primary => { const id: string = primary.experienceId; void id; });
+      composedApp.request.loadExperience(undefined).then(primary => { const id: string = primary.experienceId; void id; });
+      composedApp.request.loadExperience({ experience: async context => ({ destinationId: 'site', path: context.routeKey }) }).then(primary => {
+        const path: string = primary.experience.path;
+        // @ts-expect-error A Destination override may redirect or fail without an ID.
+        const id: string = primary.experienceId;
+        void [id, path];
+      });
+      declare const optionalSelector: import('${packageName}/app-router/server').ServerRequestOverrides | undefined;
+      declare const conditionalOverride: { experience: { destinationId: string; path: string } } | { consent: boolean };
+      composedApp.request.loadExperience(optionalSelector).then(primary => {
+        // @ts-expect-error An optional selector can choose the default or a Destination.
+        const id: string = primary.experienceId; void id;
+      });
+      composedApp.request.loadExperience(conditionalOverride).then(primary => {
+        // @ts-expect-error Conditional overrides can select a Destination or the default.
+        const id: string = primary.experienceId; void id;
+      });
+      const destinationApp = bindAppServer({ ...sourceDefaults, request: { experience: { destinationId: 'site', path: '/' } } });
+      destinationApp.request.loadExperience({ experience: { experienceId: 'other' } }).then(primary => { const id: string = primary.experienceId; void id; });
+      const mixedApp = bindAppServer({ ...sourceDefaults, request: { experience: () => Math.random() ? { experienceId: 'home' } : { destinationId: 'site', nodeId: 'node' } } });
+      mixedApp.request.loadExperience().then(primary => {
+        // @ts-expect-error Mixed defaults retain optional identity.
+        const id: string = primary.experienceId; void id;
+      });
       declare const createPreviewClient: import('@contentful/experiences-runtime').PreviewClientFactory;
       const previewConfig: import('${packageName}/app-router/client').PreviewConfig = {
         createClient: createPreviewClient,
@@ -425,7 +459,13 @@ describe('published declarations', () => {
       AppRouterRequestRoot({ ...standaloneRoot, experienceId: 'home' });
       // @ts-expect-error Standalone analytics roots observe the SDK, not a supplied content ID.
       AppRouterRequestAnalyticsRoot({ ...standaloneRoot, experienceId: 'home' });
-      const pagesServer = bindPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, origin: 'https://example.com', request: { experience: { experienceId: 'home' } } });
+      const pagesServer = bindPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, origin: 'https://example.com', request: { experience: async () => ({ experienceId: 'home' }), composeRequest: (_request, primary) => { const id: string | undefined = primary.experienceId; void id; } } });
+      pagesServer.request.loadExperience({} as import('next').GetServerSidePropsContext).then(primary => { const id: string = primary.experience.experienceId; void id; });
+      pagesServer.request.loadExperience({} as import('next').GetServerSidePropsContext, { experience: async context => ({ destinationId: 'site', path: context.routeKey }) }).then(primary => { const path: string = primary.experience.path; void path; });
+      const pagesWithoutOrigin = bindPagesRouterServerExperiences({ ...sourceDefaults });
+      // @ts-expect-error A Pages origin remains required on the binding or loader call.
+      pagesWithoutOrigin.request.loadExperience({} as import('next').GetServerSidePropsContext);
+      pagesWithoutOrigin.request.loadExperience({} as import('next').GetServerSidePropsContext, { origin: 'https://example.com' });
       declare const pagesOptions: Parameters<typeof pagesServer.request.loadExperience>[1];
       const composedPagesOptions: typeof pagesOptions = {
         ...pagesOptions,

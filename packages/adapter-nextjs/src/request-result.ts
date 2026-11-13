@@ -15,11 +15,18 @@ import type { PreviewConfig, PreviewContext } from './preview.js';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
+/** Projection retains the selector family, not caller-specific personalization fields. */
+export type RequestExperience<E extends FetchExperienceOptions> = E extends { experienceId: string }
+  ? Extract<FetchExperienceOptions, { experienceId: string }>
+  : E extends { nodeId: string }
+    ? Extract<FetchExperienceOptions, { nodeId: string }>
+    : Extract<FetchExperienceOptions, { path: string }>;
+
 /** Detached request data shared by the router root and content presentation. */
-export interface RequestResult {
+export interface RequestResult<E extends FetchExperienceOptions = FetchExperienceOptions> {
   readonly requestId: string;
   readonly routeKey: string;
-  readonly experience: FetchExperienceOptions;
+  readonly experience: RequestExperience<E>;
   readonly plan?: PortableRenderPlan;
   readonly redirect?: { readonly path: string };
   readonly contentError?: string;

@@ -696,6 +696,12 @@ explicit hosts can use `serializeRequestResult(result, { metadataKeys? })`
 when assembling their own browser boundary. Preparation, configuration, callback
 and unexpected errors propagate; expected Delivery failures can coexist with a
 usable plan/handoff and a browser-safe `contentError`.
+
+Both bindings infer each loader result from its selected Experience, including async
+selectors and per-call overrides. By-ID selections retain definite server result IDs;
+Destination or mixed selections retain optional IDs. `composeRequest` receives the
+general result because the same callback runs for any selected override.
+
 Static/ISR uses the existing explicit fetch/renderer, serializers and public cache
 validation; native `revalidate`, redirects and errors remain application-owned.
 

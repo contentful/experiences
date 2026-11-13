@@ -36,6 +36,7 @@ import {
   type ServerRequestContext,
   type ServerRequestOverrides,
   type ServerRequestResult,
+  type SelectedExperience,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
 import { mergePreview } from './preview.js';
@@ -47,7 +48,8 @@ export type { ServerRequestOverrides, ServerRequestPolicy } from './server-confi
 export type { PreviewConfig, PreviewContext } from './server-config.js';
 
 export type AppRouterRequestContext = ServerRequestContext;
-export type AppRouterServerConfig = ServerConfig;
+export type AppRouterServerConfig<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  ServerConfig<E>;
 
 export interface AppRouterServerOptions {
   readonly request?: {
@@ -62,7 +64,8 @@ export type BoundServerRequestRootProps = Omit<
   'sdk' | 'onStatesReady' | 'beforeInitialPage' | 'buildPagePayload' | 'result'
 >;
 
-export type AppRouterExperienceResult = ServerRequestResult;
+export type AppRouterExperienceResult<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  ServerRequestResult<E>;
 
 /** Server renderer callbacks stay on the server; DOM handlers belong in client components. */
 export type ServerRequestExperienceProps = Omit<
@@ -92,19 +95,23 @@ export type ServerExperienceProps = Omit<ServerExperienceRendererProps, 'experie
       })
   );
 
-export function bindAppRouterServerExperiences(
-  options: AppRouterServerConfig,
+export function bindAppRouterServerExperiences<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(
+  options: AppRouterServerConfig<E>,
   client?: AppRouterServerOptions & {
     readonly request?: NonNullable<AppRouterServerOptions['request']> & {
       readonly Experience?: never;
     };
   }
-): ReturnType<typeof createAppRouterServerExperiences<ServerRequestExperienceProps>>;
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestExperienceProps, E>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.
-export function bindAppRouterServerExperiences(
-  options: AppRouterServerConfig,
+export function bindAppRouterServerExperiences<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(
+  options: AppRouterServerConfig<E>,
   client: AppRouterServerOptions
-): ReturnType<typeof createAppRouterServerExperiences<ServerRequestClientExperienceProps>>;
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestClientExperienceProps, E>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
 export function bindAppRouterServerExperiences(
   options: AppRouterServerConfig,
@@ -113,10 +120,10 @@ export function bindAppRouterServerExperiences(
   return createAppRouterServerExperiences(options, client);
 }
 
-function createAppRouterServerExperiences<PresentationProps extends ServerRequestExperienceProps>(
-  options: AppRouterServerConfig,
-  client?: AppRouterServerOptions
-) {
+function createAppRouterServerExperiences<
+  PresentationProps extends ServerRequestExperienceProps,
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(options: AppRouterServerConfig, client?: AppRouterServerOptions) {
   const {
     config,
     consent,
@@ -310,7 +317,12 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
     ExperiencesRoot,
     ExperiencesAnalyticsRoot,
     request: {
-      loadExperience,
+      loadExperience: loadExperience as {
+        (overrides?: undefined): Promise<AppRouterExperienceResult<E>>;
+        <O extends ServerRequestOverrides | undefined>(
+          overrides: O & NoInfer<ServerRequestOverrides | undefined>
+        ): Promise<AppRouterExperienceResult<SelectedExperience<E, O>>>;
+      },
       Experience: RequestExperience,
       ExperiencesRoot: RequestExperiencesRoot,
       ExperiencesAnalyticsRoot: RequestExperiencesAnalyticsRoot,

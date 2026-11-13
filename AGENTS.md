@@ -920,6 +920,12 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Next request result source typing (fixed)
+
+Managed load results retain the supplied selector type or configured default.
+Shared composition callbacks observe general results; reference diagnostics use
+their known by-ID selection without altering SDK request results.
+
 ### Upstream Destination source maps and profile finalization
 
 Live verification found Destination source-map requests returned no source map or

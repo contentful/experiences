@@ -128,7 +128,8 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
         ...(action && !preview ? { personalization: { events } } : {}),
       },
 
-      composeRequest: async (request, primary) => {
+      composeRequest: async (request, { plan, error }) => {
+        const primary = { experienceId: experience.experienceId, plan, error };
         comparisons = await loadComparisons(request, primary, url, !serverOnly);
         if (serverOnly)
           html = renderToStaticMarkup(

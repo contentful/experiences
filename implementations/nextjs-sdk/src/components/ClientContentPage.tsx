@@ -107,8 +107,7 @@ export function ClientContentPage({ seeds }: { seeds: readonly ContentSeed[] }) 
   ) : (
     <Experience
       key={intent.cycle}
-      {...primarySeed?.experience}
-      experienceId={ids[0]}
+      {...(primarySeed?.experience ?? { experienceId: ids[0] })}
       personalization={intent.personalization}
     >
       {render}
