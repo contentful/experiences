@@ -78,6 +78,10 @@ export function useRequestOptions(supplied?: RequestResult) {
     initialRedirect: canAdopt ? result?.redirect : undefined,
     initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
+    resolveOptions: result?.plan && {
+      metadata: result.plan.metadata,
+      debug: result.plan.debug,
+    },
   };
 }
 

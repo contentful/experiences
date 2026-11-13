@@ -136,9 +136,7 @@ The signature is three grouped params: what to fetch (a Destination path or an E
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-A working version is at [`examples/nextjs/lib/destination-page.tsx`](./examples/nextjs/lib/destination-page.tsx), used by the hub at [`app/page.tsx`](./examples/nextjs/app/page.tsx) and the [`app/[...path]/page.tsx`](./examples/nextjs/app/[...path]/page.tsx) catch-all, with the by-id route at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx).
-
-The Next example uses request-scoped Node fetching and supplied-plan server rendering, with managed browser Preview Sessions. The [Vite React example](./examples/vite-react) uses managed `Experience` loading for both selectors. See the [Next adapter guide](./packages/adapter-nextjs/README.md) for the complete managed request composition.
+For a complete managed Next.js application, start with [`examples/nextjs`](./examples/nextjs). Its App Router bindings own request fetching, rendering, browser state, and Preview Sessions for Destination and by-id selectors. The [Vite React example](./examples/vite-react/src/App.tsx) uses one `ExperiencesRoot` and the default managed `Experience` for both selectors. See the [Next adapter guide](./packages/adapter-nextjs/README.md) for the managed request composition.
 
 ## Destinations
 
@@ -192,7 +190,7 @@ Managed React accepts either `destinationId` with `path`, `destinationId` with
 `nodeId`, or `experienceId`. Pass the path without a query string; use the root's
 `routeKey` for browser route identity. Configure `onRedirect` on `createExperiences`
 or the managed component to navigate when `result.redirect` is present. See the
-[managed Vite example](./examples/vite-react/src/ExperiencePage.tsx).
+[managed Vite example](./examples/vite-react/src/App.tsx).
 
 ---
 
@@ -691,7 +689,7 @@ Returning `undefined` means "not resolvable": the SDK retains the raw token in t
 
 When the simple path isn't enough, a few optional features cover most production needs. Per-page `metadata` flows into resolvers. `debug` mode surfaces what the SDK saw (visible missing-component boxes, verbose logs, a JSON dump panel). Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working route is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` and `?locale=en-US` too.)
+A managed route with these options is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` and `?locale=en-US` too.)
 
 ```tsx
 // app/experiences/[id]/page.tsx
@@ -1186,18 +1184,18 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for managed App/Pages integration.
 
-| Example                                          | Stack                           | Shows                                                                                                                            |
-| ------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Destination routing with sitemap SSG and redirects; by-id route for preview; async `resolveData`, design tokens                  |
-| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                                                  |
-| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                   |
-| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered |
-| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Destination routing, fetched, resolved, and rendered entirely in the browser; styled-components for CSS-in-JS                    |
-| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                                                |
-| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                        |
-| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                      |
+| Example                                          | Stack                           | Shows                                                                                                                               |
+| ------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15.5 (App Router)       | Managed dynamic Destination and by-id requests, redirects, Preview Sessions, consent and events; async `resolveData`, design tokens |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | Destination routing, by-id preview, async `resolveData`, and design tokens                                                          |
+| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                      |
+| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered    |
+| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | One managed root and `Experience` for Destination and by-id loading in the browser; styled-components for CSS-in-JS                 |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Browser fetch, resolve, and render for Destination and by-id selectors, mirroring the SvelteKit app                                 |
+| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                           |
+| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                         |
 
-The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id (the route for preview). They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
+The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id. The Next.js example supports Preview Sessions through both selectors; the other server-rendered examples use the by-id route for preview. The client-only Vite examples have no Preview Session setup. They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
 
 ```sh
 npm install --ignore-scripts
@@ -1217,7 +1215,7 @@ npm run dev
 
 Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). See each example's README for its file map and route-by-route walkthrough.
 
-**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token for optional Preview Session capability; open the by-id route with `preview_session_id` to activate it. See each example's README for details.
+**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token for optional Preview Session capability; open a supported preview route with `preview_session_id` to activate it (Destination or by-id in Next.js; by-id in the other server-rendered examples). Next.js also requires explicit `NEXT_PUBLIC_*` scope and browser-designated credentials for its managed browser owner; private server credentials are configured separately. See each example's README for details.
 
 **Examples vs. reference implementations.** The repo also has an `implementations/` directory. Those are reference implementations for SDK maintainers: standalone apps that install locally packed SDK tarballs to validate SDK behavior before release. They are not integration guides; use `examples/`. See [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the difference.
 

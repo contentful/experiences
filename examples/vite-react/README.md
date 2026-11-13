@@ -4,8 +4,8 @@ A client-only Vite + React 19 single-page app demonstrating `@contentful/experie
 
 ## What it shows
 
-- **Managed client-side fetch and resolve** in [`src/ExperiencePage.tsx`](./src/ExperiencePage.tsx): `createExperiences({ config, onRedirect })` binds the registry once, and one `ExperiencesRoot` owns the SDK used by `Experience`. The `card` component's async `resolveData` runs in the browser too.
-- **Client rendering** with the bound `ExperienceRenderer`, with explicit loading, redirect, not-found, and error states. The managed owner keeps the last usable plan during refresh errors.
+- **Managed client-side fetch and resolve** in [`src/App.tsx`](./src/App.tsx): `createExperiences({ config, onRedirect })` binds the registry once, and one `ExperiencesRoot` owns the SDK used by `Experience`. Pass a complete SDK selector to `<Experience {...selector} />`; it fetches, resolves, and renders without a render callback or a separate renderer. The `card` component's async `resolveData` runs in the browser too.
+- **Client rendering** with the default managed presentation and small loading, not-found, and error fallbacks. The SDK follows redirects through the bound callback and keeps the last usable plan during refresh errors.
 - **Debug mode via `?debug=true`**: verbose SDK logging, visible `MissingComponent` boxes, and `<DebugExperience>`.
 - **Design values as props**: every component declares the design keys it consumes as named props, as in the Next.js example.
 - **CSS-in-JS**: [`src/components/Card.tsx`](./src/components/Card.tsx) is styled with styled-components. Resolved design values arrive as props and pass into the styled components as transient (`$`-prefixed) props, so they never reach the DOM. The other components use inline styles.

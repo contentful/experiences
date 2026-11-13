@@ -40,9 +40,9 @@ experiences/
 │   ├── adapter-svelte/       # @contentful/experiences-svelte (customer-facing)
 │   └── adapter-angular/      # @contentful/experiences-angular (customer-facing)
 ├── examples/                # Customer-facing example apps
-│   ├── nextjs/               # Next.js 15 example (external developers run this)
-│   ├── sveltekit/            # SvelteKit 2 example (1:1 parity with nextjs)
-│   ├── angular/              # Angular 22 + @angular/ssr example (parity with both)
+│   ├── nextjs/               # Next.js 15.5 managed App Router example
+│   ├── sveltekit/            # SvelteKit 2 example (shared demo content)
+│   ├── angular/              # Angular 22 + @angular/ssr example
 │   ├── astro/                # Astro 7 example on the React custom-renderer entry
 │   ├── vite-react/           # Vite + React client-only example
 │   ├── vite-svelte/          # Vite + Svelte client-only example
@@ -662,7 +662,7 @@ expose per-request destination fetches (`fetchByDestinationNode` /
 `fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only —
 there is no sitemap method on either runtime.
 
-**Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, printed by the bootstrap for you to paste into the example's env file) and fetch by Experience id only at `/experiences/[id]`. Preview lives on that route in the server-rendered examples; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped, so `ENVIRONMENT_ID` affects only the by-id route. The Next.js, SvelteKit, and Angular examples also show a demo hub at `/` (the route list and the `?personalization` and `?debug` options) above the home node.
+**Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, printed by the bootstrap for you to paste into the example's env file) and fetch by Experience id only at `/experiences/[id]`. Next.js uses managed App Router bindings for both selectors, including Preview Sessions; the other server-rendered examples keep preview on the by-id route. Vite React uses one managed root and `Experience` for both selectors; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped; configured `ENVIRONMENT_ID` also governs whether Destination preview can use matching session content, which requires `master`. The Next.js, SvelteKit, and Angular examples also show a demo hub at `/` (the route list and the `?personalization` and `?debug` options) above the home node.
 
 ### Why does `fetchExperience` retain a custom `host`?
 
@@ -943,10 +943,11 @@ transfer. It now sends an ordinary `request.page()` event, writes the cookie fro
 
 ### Next example preview rendered outside its provider during SSR (fixed)
 
-The layout's `Suspense` fallback renders page children before its browser root.
-Preview presentations now render the supplied server plan until hydration, then
-activate managed preview under that root. Rendering a managed `Experience` in the
-fallback caused a missing-provider error and an HTTP 500.
+Rendering a managed `Experience` in a layout's `Suspense` fallback before its
+browser root caused a missing-provider error and an HTTP 500. The example now
+uses the managed App Router request composition: the server binding injects the
+client request root and presentation, keeping ordinary and Preview Session
+rendering under the same request owner.
 
 ### Managed page consent retry
 

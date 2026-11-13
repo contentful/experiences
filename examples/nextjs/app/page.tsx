@@ -23,6 +23,8 @@ const code = { background: '#f3f4f6', padding: '1px 4px', borderRadius: 4 } as c
  * renders the Destination's home node (empty path) underneath, so `/` is both
  * the start page and the home page.
  */
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const personalization = flag(sp.personalization);
@@ -40,7 +42,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         <h1 style={{ marginTop: 0 }}>Contentful Experiences — Next.js example</h1>
         <p style={muted}>
           This app renders Contentful Experiences with <code>@contentful/experiences-nextjs</code>{' '}
-          in a Next.js App Router server component. Pages are served from a{' '}
+          with managed Next.js App Router bindings. Pages are served from a{' '}
           <strong>Destination</strong>: the URL path is the Destination path. One Experience can
           also be fetched <strong>by id</strong>, which is the route for Preview Sessions and
           runtime parameters. The home Experience for this page is rendered below.
@@ -55,7 +57,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 value="true"
                 defaultChecked={personalization}
               />
-              Personalization (simulates an EU visitor)
+              Simulate an EU visitor
             </label>
           </p>
           <p style={{ marginTop: 0 }}>
@@ -85,8 +87,8 @@ export default async function HomePage({ searchParams }: PageProps) {
         </ul>
         <p style={muted}>
           Options: <code style={code}>?personalization=true</code>,{' '}
-          <code style={code}>?debug=true</code>, <code style={code}>?locale=de-DE</code> (content
-          locale and resolver metadata). Destinations do not support preview.
+          <code style={code}>?debug=true</code>, <code style={code}>?locale=de-DE</code> (content,
+          resolver and event locale). Preview is demonstrated on the by-id route.
         </p>
 
         <h2>By Experience id</h2>
@@ -106,7 +108,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </li>
           <li>
             <code style={code}>?preview_session_id=&lt;id&gt;</code>: live preview. The Contentful
-            app supplies the id (needs <code>CPA_TOKEN</code>)
+            app supplies the id (needs server and browser preview credentials)
           </li>
           <li>
             <code style={code}>?parameter_demo=true</code>: show the runtime parameters form. The
@@ -115,7 +117,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         </ul>
       </main>
 
-      {await renderDestinationPage([], sp)}
+      {await renderDestinationPage()}
     </>
   );
 }
