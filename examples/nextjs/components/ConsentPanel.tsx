@@ -1,7 +1,7 @@
 'use client';
 
 import { type BlockedEvent } from '@contentful/experiences-web';
-import { useExperiences } from '@contentful/experiences-react/client';
+import { useExperiences } from '@contentful/experiences-nextjs/client';
 import { useEffect, useRef, useState } from 'react';
 
 type Consent = { events?: boolean; persistence?: boolean };

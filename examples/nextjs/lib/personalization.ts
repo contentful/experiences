@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { EventBuilder } from '@contentful/experiences-react';
+import { EventBuilder } from '@contentful/experiences-nextjs/server';
 
 const eventBuilder = new EventBuilder({
   channel: 'server',

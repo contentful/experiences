@@ -1,14 +1,14 @@
 # Next.js example: Contentful Experiences
 
-A Next.js 15 App Router app demonstrating `@contentful/experiences-react` rendering an Experience payload fetched from XDA. Pages are served from a **Destination**: the URL path is the Destination path, and the SDK resolves it to an Experience. Fetching by Experience id is available as a secondary route.
+A Next.js 15 App Router app demonstrating `@contentful/experiences-nextjs` rendering an Experience payload fetched from XDA. Pages are served from a **Destination**: the URL path is the Destination path, and the SDK resolves it to an Experience. Fetching by Experience id is available as a secondary route.
 
 ## What it shows
 
 - **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
 - **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
 - **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` fetches one Experience by id. It is the route for Preview Sessions and runtime parameters, none of which Destinations support.
-- **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-react`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
-- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-react`.
+- **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-nextjs/server`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
+- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-nextjs/server`.
 - **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then a managed `Experience` receives Preview Session updates in the browser.
 - **Runtime parameters via `?parameter_demo=true`**: a JSON form forwards scalar/Record values to `fetchExperience`; submitting changed values refetches and renders a new plan.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
@@ -262,7 +262,11 @@ export function Section({ direction = 'column', gap, backgroundColor, children }
 
 ```tsx
 // lib/experience-config.tsx: adapter layer
-import { defineComponent, type Config, type ResolveToken } from '@contentful/experiences-react';
+import {
+  defineComponent,
+  type Config,
+  type ResolveToken,
+} from '@contentful/experiences-nextjs/server';
 import { Heading } from '@/components/Heading';
 import { Page } from '@/components/Page';
 import { designTokens } from '@/lib/design-tokens';
@@ -377,7 +381,7 @@ nothing wraps them. `payload.sys.experienceTemplate` is never read; it is presen
 in both cases, so the node list is what distinguishes them.
 
 ```tsx
-import { defineExperienceTemplate } from '@contentful/experiences-react';
+import { defineExperienceTemplate } from '@contentful/experiences-nextjs/server';
 import { Page } from './Page';
 
 const experienceTemplates = {

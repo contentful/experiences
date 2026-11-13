@@ -39,8 +39,8 @@ export default async function HomePage({ searchParams }: PageProps) {
       <main style={panel}>
         <h1 style={{ marginTop: 0 }}>Contentful Experiences — Next.js example</h1>
         <p style={muted}>
-          This app renders Contentful Experiences with <code>@contentful/experiences-react</code> in
-          a Next.js App Router server component. Pages are served from a{' '}
+          This app renders Contentful Experiences with <code>@contentful/experiences-nextjs</code>{' '}
+          in a Next.js App Router server component. Pages are served from a{' '}
           <strong>Destination</strong>: the URL path is the Destination path. One Experience can
           also be fetched <strong>by id</strong>, which is the route for Preview Sessions and
           runtime parameters. The home Experience for this page is rendered below.

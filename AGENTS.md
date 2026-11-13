@@ -916,6 +916,19 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Node identity-cookie example used a removed handoff API (fixed)
+
+The example previously called `prepareRequestHandoff()` without an actual browser
+transfer. It now sends an ordinary `request.page()` event, writes the cookie from
+`request.profile?.id`, and destroys each request facade in `finally`.
+
+### Next example preview rendered outside its provider during SSR (fixed)
+
+The layout's `Suspense` fallback renders page children before its browser root.
+Preview presentations now render the supplied server plan until hydration, then
+activate managed preview under that root. Rendering a managed `Experience` in the
+fallback caused a missing-provider error and an HTTP 500.
+
 ### Managed page consent retry
 
 Web's current-page tracker owns XDA page admission and deduplication. React supplies
